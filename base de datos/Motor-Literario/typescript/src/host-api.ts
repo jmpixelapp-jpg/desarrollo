@@ -681,7 +681,7 @@ export class HostEngineApi {
         this.liveSubmissionTimes.delete(result.ticketId);
         try {
           const monitored = this.liveAuthorMonitor.recordCommit(result);
-          if (monitored) this.scheduleLiveAuthorMonitorCheckpoint(result.documentId);
+          if (monitored) this.scheduleLiveAuthorMonitorCheckpoint(monitored.documentId);
         } catch { /* El monitor nunca debe detener la cola durable. */ }
         try { options.callbacks?.onCommit?.(result); } catch { /* El callback del anfitrión no debe detener la cola. */ }
       }

@@ -73,7 +73,18 @@ test("limita la muestra y clasifica referencias a ideas fuera del snapshot", asy
       originDocumentId: "chapter",
       sourceProjectName: "Book",
       evidence: [],
-      relatedIdeaIds: index === 0 ? ["idea-2004"] : [],
+      relatedIdeaIds: index < 20
+        ? index === 0
+          ? [
+              ...Array.from({ length: 499 }, (_, targetIndex) =>
+                "idea-" + String(targetIndex + 20).padStart(4, "0")
+              ),
+              "idea-2004"
+            ]
+          : Array.from({ length: 500 }, (_, targetIndex) =>
+              "idea-" + String(targetIndex + index + 20).padStart(4, "0")
+            )
+        : [],
       relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
     }))
@@ -90,19 +101,27 @@ test("limita la muestra y clasifica referencias a ideas fuera del snapshot", asy
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(graph.ideaCount, 2_000);
     assert.equal(graph.omittedIdeaCount, 5);
-    assert.equal(graph.weakComponentCount, 2_000);
-    assert.equal(graph.omittedWeakComponentCount, 1_900);
+    assert.equal(graph.weakComponentCount, 1_462);
+    assert.equal(graph.omittedWeakComponentCount, 1_362);
     assert.equal(graph.weakComponents.length, 100);
-    assert.equal(graph.largestWeakComponentSize, 1);
-    assert.equal(graph.isolatedWithinSnapshotNodeCount, 2_000);
-    assert.equal(graph.referenceCount, 1);
-    assert.equal(graph.includedReferenceCount, 0);
+    assert.equal(graph.largestWeakComponentSize, 539);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 1_461);
+    assert.equal(graph.referenceCount, 10_000);
+    assert.equal(graph.includedReferenceCount, 9_999);
     assert.equal(graph.notIncludedReferenceCount, 1);
-    assert.deepEqual(graph.references, [{
+    assert.equal(graph.referenceSampleCount, 5_000);
+    assert.equal(graph.omittedReferenceSampleCount, 5_000);
+    assert.equal(graph.referencesTruncated, true);
+    assert.deepEqual(graph.references[499], {
       fromIdeaId: "idea-0000",
       toIdeaId: "idea-2004",
       resolution: "not-in-snapshot"
-    }]);
+    });
+    assert.deepEqual(graph.references[500], {
+      fromIdeaId: "idea-0001",
+      toIdeaId: "idea-0021",
+      resolution: "included-in-snapshot"
+    });
     assert.equal(graph.nodes[0].notIncludedOutgoingReferenceCount, 1);
   } finally {
     api.dispose();

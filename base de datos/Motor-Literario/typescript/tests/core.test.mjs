@@ -11202,6 +11202,82 @@ test("limita las muestras del flujo de diálogo sin truncar conteos ni transicio
   assert.equal(flow.evidenceTruncated,true);
 });
 
+test("agrega el flujo de diálogo por escena con proporciones ponderadas y cobertura", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "La casa estaba en silencio.",
+    "",
+    "—Ven conmigo, Ana.",
+    "",
+    "«No iré», respondió Ana.",
+    "",
+    "La puerta quedó abierta.",
+    "***",
+    "ESCENA 2",
+    "«Regresaré pronto».",
+    "",
+    "El tren salió de la estación."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow-summary",documentId:"chapter",revision:1,text
+  });
+  const summary = result.sceneDialogueFlowSummary;
+  assert.equal(summary.sceneCount,2);
+  assert.equal(summary.totalParagraphCount,6);
+  assert.deepEqual(summary.classificationCounts,{
+    narrativeOnly:3,dialogueOnly:2,mixed:1
+  });
+  assert.equal(summary.dialogueBearingParagraphCount,3);
+  assert.equal(summary.dialogueBearingParagraphRatio,0.5);
+  assert.equal(summary.scenesWithDialogueParagraphs,2);
+  assert.equal(summary.sceneShareWithDialogueParagraphs,1);
+  assert.deepEqual(summary.classificationTransitionCounts,{
+    narrativeOnlyToNarrativeOnly:0,
+    narrativeOnlyToDialogueOnly:1,
+    narrativeOnlyToMixed:0,
+    dialogueOnlyToNarrativeOnly:1,
+    dialogueOnlyToDialogueOnly:0,
+    dialogueOnlyToMixed:1,
+    mixedToNarrativeOnly:1,
+    mixedToDialogueOnly:0,
+    mixedToMixed:0
+  });
+  assert.equal(summary.classificationChangeCount,4);
+  assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.sceneIndex),[1,2]);
+  assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.dialogueBearingParagraphCount),[2,1]);
+});
+
+test("mantiene vacío el resumen de flujo cuando no hay escenas explícitas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow-summary-empty",documentId:"chapter",revision:1,
+    text:"Un fragmento sin encabezados explícitos."
+  });
+  assert.deepEqual(result.sceneDialogueFlowSummary,{
+    sceneCount:0,
+    totalParagraphCount:0,
+    classificationCounts:{narrativeOnly:0,dialogueOnly:0,mixed:0},
+    dialogueBearingParagraphCount:0,
+    dialogueBearingParagraphRatio:0,
+    scenesWithDialogueParagraphs:0,
+    sceneShareWithDialogueParagraphs:0,
+    classificationTransitionCounts:{
+      narrativeOnlyToNarrativeOnly:0,
+      narrativeOnlyToDialogueOnly:0,
+      narrativeOnlyToMixed:0,
+      dialogueOnlyToNarrativeOnly:0,
+      dialogueOnlyToDialogueOnly:0,
+      dialogueOnlyToMixed:0,
+      mixedToNarrativeOnly:0,
+      mixedToDialogueOnly:0,
+      mixedToMixed:0
+    },
+    classificationChangeCount:0,
+    sceneSnapshots:[]
+  });
+});
+
 test("compara el flujo de párrafos dialogados entre escenas explícitas contiguas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

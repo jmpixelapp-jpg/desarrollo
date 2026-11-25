@@ -419,6 +419,32 @@ export interface LiterarySceneDialogueFlowTransition {
   readonly classificationTransitionCountDelta: LiterarySceneDialogueFlowProfile["classificationTransitionCounts"];
   readonly classificationChangeCountDelta: number;
 }
+
+export interface LiterarySceneDialogueFlowSnapshot {
+  readonly sceneIndex: number;
+  readonly paragraphCount: number;
+  readonly classificationCounts: LiterarySceneDialogueFlowProfile["classificationCounts"];
+  readonly dialogueBearingParagraphCount: number;
+  readonly dialogueBearingParagraphRatio: number;
+  readonly classificationTransitionCounts: LiterarySceneDialogueFlowProfile["classificationTransitionCounts"];
+  readonly classificationChangeCount: number;
+}
+export interface LiterarySceneDialogueFlowSummary {
+  readonly sceneCount: number;
+  readonly totalParagraphCount: number;
+  readonly classificationCounts: LiterarySceneDialogueFlowProfile["classificationCounts"];
+  readonly dialogueBearingParagraphCount: number;
+  /** Fracción agregada ponderada por párrafos, no media simple de porcentajes por escena. */
+  readonly dialogueBearingParagraphRatio: number;
+  readonly scenesWithDialogueParagraphs: number;
+  /** Fracción de escenas con al menos un párrafo dialogado o mixto. */
+  readonly sceneShareWithDialogueParagraphs: number;
+  readonly classificationTransitionCounts: LiterarySceneDialogueFlowProfile["classificationTransitionCounts"];
+  /** Suma de cambios entre párrafos consecutivos dentro de cada escena; no cruza límites de escena. */
+  readonly classificationChangeCount: number;
+  readonly sceneSnapshots: readonly LiterarySceneDialogueFlowSnapshot[];
+}
+
 export interface LiterarySceneDialogueSegment {
   /** Índice local al conjunto de segmentos de diálogo de esta escena. */
   readonly segmentIndex: number;
@@ -516,6 +542,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneDialogueTransitions: readonly LiterarySceneDialogueTransition[];
   /** Cambios de distribución de párrafos narrativos, dialogados y mixtos entre escenas contiguas. */
   readonly sceneDialogueFlowTransitions: readonly LiterarySceneDialogueFlowTransition[];
+  /** Totales y cobertura agregada del flujo de párrafos en todas las escenas explícitas. */
+  readonly sceneDialogueFlowSummary: LiterarySceneDialogueFlowSummary;
   /** Firmas de cadencia recurrentes entre escenas explícitas del fragmento analizado. */
   readonly sceneCadenceMotifs: LiterarySceneCadenceMotifAnalysis;
   /** Variaciones de señales gramaticales entre escenas contiguas; no demuestra cambio de narrador. */
@@ -1045,6 +1073,79 @@ function analyzeExplicitScenes(
     ),
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
   });});
+}
+
+function buildSceneDialogueFlowSummary(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneDialogueFlowSummary {
+  const classificationCounts = {narrativeOnly:0,dialogueOnly:0,mixed:0};
+  const classificationTransitionCounts = {
+    narrativeOnlyToNarrativeOnly:0,
+    narrativeOnlyToDialogueOnly:0,
+    narrativeOnlyToMixed:0,
+    dialogueOnlyToNarrativeOnly:0,
+    dialogueOnlyToDialogueOnly:0,
+    dialogueOnlyToMixed:0,
+    mixedToNarrativeOnly:0,
+    mixedToDialogueOnly:0,
+    mixedToMixed:0
+  };
+  let totalParagraphCount = 0;
+  let dialogueBearingParagraphCount = 0;
+  let scenesWithDialogueParagraphs = 0;
+  let classificationChangeCount = 0;
+  const sceneSnapshots: LiterarySceneDialogueFlowSnapshot[] = [];
+  for (const scene of scenes) {
+    const flow = scene.dialogueFlowSignals;
+    totalParagraphCount += flow.paragraphCount;
+    dialogueBearingParagraphCount += flow.dialogueBearingParagraphCount;
+    classificationCounts.narrativeOnly += flow.classificationCounts.narrativeOnly;
+    classificationCounts.dialogueOnly += flow.classificationCounts.dialogueOnly;
+    classificationCounts.mixed += flow.classificationCounts.mixed;
+    classificationTransitionCounts.narrativeOnlyToNarrativeOnly +=
+      flow.classificationTransitionCounts.narrativeOnlyToNarrativeOnly;
+    classificationTransitionCounts.narrativeOnlyToDialogueOnly +=
+      flow.classificationTransitionCounts.narrativeOnlyToDialogueOnly;
+    classificationTransitionCounts.narrativeOnlyToMixed +=
+      flow.classificationTransitionCounts.narrativeOnlyToMixed;
+    classificationTransitionCounts.dialogueOnlyToNarrativeOnly +=
+      flow.classificationTransitionCounts.dialogueOnlyToNarrativeOnly;
+    classificationTransitionCounts.dialogueOnlyToDialogueOnly +=
+      flow.classificationTransitionCounts.dialogueOnlyToDialogueOnly;
+    classificationTransitionCounts.dialogueOnlyToMixed +=
+      flow.classificationTransitionCounts.dialogueOnlyToMixed;
+    classificationTransitionCounts.mixedToNarrativeOnly +=
+      flow.classificationTransitionCounts.mixedToNarrativeOnly;
+    classificationTransitionCounts.mixedToDialogueOnly +=
+      flow.classificationTransitionCounts.mixedToDialogueOnly;
+    classificationTransitionCounts.mixedToMixed +=
+      flow.classificationTransitionCounts.mixedToMixed;
+    classificationChangeCount += flow.classificationChangeCount;
+    if (flow.dialogueBearingParagraphCount > 0) scenesWithDialogueParagraphs++;
+    sceneSnapshots.push({
+      sceneIndex:scene.sceneIndex,
+      paragraphCount:flow.paragraphCount,
+      classificationCounts:{...flow.classificationCounts},
+      dialogueBearingParagraphCount:flow.dialogueBearingParagraphCount,
+      dialogueBearingParagraphRatio:flow.dialogueBearingParagraphRatio,
+      classificationTransitionCounts:{...flow.classificationTransitionCounts},
+      classificationChangeCount:flow.classificationChangeCount
+    });
+  }
+  return {
+    sceneCount:scenes.length,
+    totalParagraphCount,
+    classificationCounts,
+    dialogueBearingParagraphCount,
+    dialogueBearingParagraphRatio:roundMetric(totalParagraphCount > 0
+      ? dialogueBearingParagraphCount/totalParagraphCount : 0),
+    scenesWithDialogueParagraphs,
+    sceneShareWithDialogueParagraphs:roundMetric(scenes.length > 0
+      ? scenesWithDialogueParagraphs/scenes.length : 0),
+    classificationTransitionCounts,
+    classificationChangeCount,
+    sceneSnapshots
+  };
 }
 
 function buildSceneDialogueFlowTransitions(
@@ -2098,6 +2199,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneCadenceTransitions = buildSceneCadenceTransitions(explicitScenes);
   const sceneDialogueTransitions = buildSceneDialogueTransitions(explicitScenes);
   const sceneDialogueFlowTransitions = buildSceneDialogueFlowTransitions(explicitScenes);
+  const sceneDialogueFlowSummary = buildSceneDialogueFlowSummary(explicitScenes);
   const sceneCadenceMotifs = buildSceneCadenceMotifs(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
@@ -2280,6 +2382,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneCadenceTransitions,
     sceneDialogueTransitions,
     sceneDialogueFlowTransitions,
+    sceneDialogueFlowSummary,
     sceneCadenceMotifs,
     sceneVoiceTransitions,
     sceneVoiceProfile,

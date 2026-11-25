@@ -171,3 +171,10 @@ Esta clasificación es estructural y léxica: depende de los segmentos de diálo
 La propiedad `sceneDialogueFlowTransitions` compara el perfil de párrafos de cada par de escenas explícitas contiguas. Expone el número de párrafos, la cantidad y proporción de párrafos con diálogo reconocido, y las diferencias (siguiente menos anterior) para esas medidas. Incluye deltas por clase (`narrative-only`, `dialogue-only`, `mixed`), por cada transición entre clases consecutivas y para el número de cambios de clase.
 
 Los deltas de conteo son enteros con signo; el delta de proporción se redondea a tres decimales. Las transiciones solo comparan escenas contiguas disponibles y no saltan escenas intermedias. Si hay menos de dos escenas explícitas, la lista queda vacía. Estas diferencias describen la distribución de párrafos que contienen palabras reconocidas y no permiten inferir hablantes, turnos conversacionales, intención, tensión ni calidad narrativa.
+
+
+### Resumen agregado del flujo de diálogo
+
+La propiedad `sceneDialogueFlowSummary` agrega los perfiles de todas las escenas explícitas analizadas. Informa el total de párrafos con palabras, conteos acumulados para las clases narrativa, dialogada y mixta, la cantidad y proporción global de párrafos con diálogo reconocido y la cantidad y fracción de escenas que contienen al menos un párrafo dialogado o mixto.
+
+La proporción global se calcula como el total de párrafos con diálogo dividido por el total de párrafos con palabras; es una medida ponderada por número de párrafos y no el promedio de las proporciones de cada escena. Las matrices de transición y el número de cambios se suman dentro de cada escena, sin crear enlaces entre el último párrafo de una escena y el primero de la siguiente. `sceneSnapshots` conserva un resumen independiente en orden de escena. Si no existen escenas explícitas, todos los conteos y proporciones son cero y la lista de instantáneas queda vacía.

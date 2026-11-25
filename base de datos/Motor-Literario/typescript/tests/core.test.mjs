@@ -3163,6 +3163,13 @@ test("versiona cambios explícitos de etiqueta y participantes de acontecimiento
   });
   assert.deepEqual(second.participants,["bruno"]);
 
+  const unchanged=await api.updateNarrativeEvent({
+    eventId:"alarm",label:"La alarma se activa",participants:["bruno"],
+    changedBy:"writer-1",changedAt:130
+  });
+  assert.deepEqual(unchanged.participants,["bruno"]);
+  assert.equal((await api.getEventLifecycleHistory("alarm")).length,2);
+
   const history=await api.getEventLifecycleHistory("alarm");
   assert.equal(history.length,2);
   assert.deepEqual(history.map(item=>item.revision),[1,2]);

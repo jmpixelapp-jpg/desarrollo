@@ -14,3 +14,4 @@ export * from "./mldb-records";
 
 export * from "./literary-analysis";
 export * from "./bridge-client";
+export * from "./live-author-monitor";

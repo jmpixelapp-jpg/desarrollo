@@ -176,13 +176,25 @@ function writeError(error) {
 
 async function pollExternalNarrativeChanges() {
   if (!store || store.closed || shuttingDown) return;
-  const currentDataVersion = store.getDataVersion();
+
+  // Lee una instantánea estable: si otra conexión confirma una escritura
+  // mientras se consultan las versiones de proyectos, se reintenta en el
+  // siguiente ciclo sin avanzar el punto de control ni perder el aviso.
+  const dataVersionBefore = store.getDataVersion();
+  const narrativeVersions = new Map();
+  for (const projectId of projects.keys()) {
+    narrativeVersions.set(projectId, store.getNarrativeVersion(projectId));
+  }
+  const dataVersionAfter = store.getDataVersion();
+  if (dataVersionBefore !== dataVersionAfter) return;
+
   const externalCommit = lastObservedDataVersion !== undefined &&
-    currentDataVersion !== lastObservedDataVersion;
-  lastObservedDataVersion = currentDataVersion;
+    dataVersionAfter !== lastObservedDataVersion;
+  lastObservedDataVersion = dataVersionAfter;
 
   for (const [projectId, record] of projects) {
-    const currentNarrativeVersion = store.getNarrativeVersion(projectId);
+    const currentNarrativeVersion = narrativeVersions.get(projectId);
+    if (currentNarrativeVersion === undefined) continue;
     const previousNarrativeVersion = lastNarrativeVersions.get(projectId);
     if (externalCommit && previousNarrativeVersion !== undefined &&
         currentNarrativeVersion !== previousNarrativeVersion) {

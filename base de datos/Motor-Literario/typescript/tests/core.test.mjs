@@ -10345,6 +10345,63 @@ test("compara variaciones de señales gramaticales entre escenas contiguas", asy
   });
 });
 
+test("resume el ritmo de cada escena y compara sus cambios por separado de las señales gramaticales", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "Yo camino despacio por la calle vacía. Yo miro las ventanas de las casas. Yo escucho el viento entre los árboles.",
+    "***",
+    "ESCENA 2",
+    "Elena contempló el horizonte mientras la tormenta avanzaba sobre las montañas y las luces distantes desaparecían detrás de una cortina de lluvia que cubría lentamente el valle entero. Ella cerró la puerta y esperó."
+  ].join("\n");
+  const baseOffset = 400;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-rhythm",documentId:"chapter",revision:2,text,baseOffset
+  });
+  const [first,second] = result.explicitScenes;
+
+  assert.equal(first.rhythmSignals.sentenceCount,3);
+  assert.equal(first.rhythmSignals.averageWordsPerSentence,7);
+  assert.equal(first.rhythmSignals.rhythmProfile,"fragmented");
+  assert.equal(first.rhythmSignals.shortSentenceCount,3);
+  assert.equal(first.rhythmSignals.transitions.length,0);
+  assert.equal(second.rhythmSignals.sentenceCount,2);
+  assert.equal(second.rhythmSignals.averageWordsPerSentence,17);
+  assert.equal(second.rhythmSignals.rhythmProfile,"balanced");
+  assert.equal(second.rhythmSignals.shortestSentenceWords,6);
+  assert.equal(second.rhythmSignals.longestSentenceWords,28);
+  assert.deepEqual(
+    second.rhythmSignals.transitions.map(({beforeSentenceIndex,afterSentenceIndex,direction}) => ({
+      beforeSentenceIndex,afterSentenceIndex,direction
+    })),
+    [{beforeSentenceIndex:1,afterSentenceIndex:2,direction:"acceleration"}]
+  );
+  assert.equal(second.rhythmSignals.transitions[0].occurrences[0].start,
+    baseOffset+text.indexOf("Elena contempló"));
+  assert.equal(second.rhythmSignals.transitions[0].occurrences[1].start,
+    baseOffset+text.indexOf("Ella cerró"));
+
+  assert.deepEqual(result.sceneRhythmTransitions,[{
+    fromSceneIndex:1,toSceneIndex:2,
+    previousRhythmProfile:"fragmented",nextRhythmProfile:"balanced",rhythmProfileChanged:true,
+    previousAverageWordsPerSentence:7,nextAverageWordsPerSentence:17,
+    averageWordsPerSentenceDelta:10,
+    previousSentenceCount:3,nextSentenceCount:2,sentenceCountDelta:-1,
+    previousTransitionCount:0,nextTransitionCount:1,transitionCountDelta:1
+  }]);
+  assert.deepEqual(
+    result.sceneVoiceTransitions.map(({fromSceneIndex,toSceneIndex,previousClassification,nextClassification}) => ({
+      fromSceneIndex,toSceneIndex,previousClassification,nextClassification
+    })),
+    [{
+      fromSceneIndex:1,toSceneIndex:2,
+      previousClassification:"first-person-signals",nextClassification:"third-person-signals"
+    }]
+  );
+  assert.equal(first.voiceSignals.counts.firstPerson,3);
+  assert.equal(second.voiceSignals.counts.thirdPerson,1);
+});
+
 test("detecta tramos estables y alternancias de señales gramaticales entre escenas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

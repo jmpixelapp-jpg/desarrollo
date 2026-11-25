@@ -125,6 +125,21 @@ export interface LiteraryRhythmTransition {
   readonly occurrences: readonly [LiteraryAnalysisOccurrence, LiteraryAnalysisOccurrence];
 }
 export type LiteraryRhythmProfile = "fragmented" | "balanced" | "extended" | "insufficient-text";
+export interface LiterarySceneRhythmProfile {
+  readonly sentenceCount: number;
+  readonly averageWordsPerSentence: number;
+  readonly medianWordsPerSentence: number;
+  /** Desviación estándar poblacional de la longitud de las oraciones de esta escena. */
+  readonly sentenceLengthStandardDeviation: number;
+  readonly shortestSentenceWords: number;
+  readonly longestSentenceWords: number;
+  readonly shortSentenceCount: number;
+  readonly mediumSentenceCount: number;
+  readonly longSentenceCount: number;
+  readonly rhythmProfile: LiteraryRhythmProfile;
+  /** Contrastes entre oraciones consecutivas dentro de esta escena, con offsets UTF-16 absolutos. */
+  readonly transitions: readonly LiteraryRhythmTransition[];
+}
 export type LiteraryDialogueDensity = "none" | "low" | "moderate" | "high";
 
 export type LiteraryStructureMarkerType =
@@ -184,6 +199,22 @@ export interface LiteraryCharacterCoMentionPattern {
   readonly characterIds: readonly [string, string];
   readonly sharedSceneCount: number;
   readonly sceneIndexes: readonly number[];
+}
+export interface LiterarySceneRhythmTransition {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  readonly previousRhythmProfile: LiteraryRhythmProfile;
+  readonly nextRhythmProfile: LiteraryRhythmProfile;
+  readonly rhythmProfileChanged: boolean;
+  readonly previousAverageWordsPerSentence: number;
+  readonly nextAverageWordsPerSentence: number;
+  readonly averageWordsPerSentenceDelta: number;
+  readonly previousSentenceCount: number;
+  readonly nextSentenceCount: number;
+  readonly sentenceCountDelta: number;
+  readonly previousTransitionCount: number;
+  readonly nextTransitionCount: number;
+  readonly transitionCountDelta: number;
 }
 export interface LiterarySceneVoiceTransition {
   readonly fromSceneIndex: number;
@@ -252,6 +283,8 @@ export interface LiteraryExplicitSceneSegment {
   readonly wordCount: number;
   /** Palabras de narración fuera de los rangos de diálogo reconocidos. */
   readonly narrativeWordCount: number;
+  /** Ritmo de las oraciones completas de la escena; incluye diálogo y mantiene evidencia propia. */
+  readonly rhythmSignals: LiterarySceneRhythmProfile;
   /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
   readonly characterMentions: readonly LiterarySceneCharacterMention[];
   readonly eventLinks: readonly LiterarySceneEventLink[];
@@ -272,6 +305,8 @@ export interface LiteraryAnalysisResult {
   readonly explicitScenes: readonly LiteraryExplicitSceneSegment[];
   /** Comparaciones descriptivas entre escenas explícitas contiguas, nunca diagnósticos de contradicción. */
   readonly sceneContinuity: readonly LiterarySceneContinuityTransition[];
+  /** Variaciones métricas del ritmo entre escenas contiguas, independientes de las señales gramaticales. */
+  readonly sceneRhythmTransitions: readonly LiterarySceneRhythmTransition[];
   /** Variaciones de señales gramaticales entre escenas contiguas; no demuestra cambio de narrador. */
   readonly sceneVoiceTransitions: readonly LiterarySceneVoiceTransition[];
   /** Resumen cuantitativo de señales gramaticales a lo largo de las escenas explícitas. */
@@ -608,6 +643,8 @@ function analyzeExplicitScenes(
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[],
   knownEvents: readonly LiteraryAnalysisKnownEvent[],
   dialogueRanges: readonly LocalRange[],
+  sentenceRanges: readonly LocalRange[],
+  sentenceWordCounts: readonly number[],
   documentId: string,
   revision: number
 ): LiteraryExplicitSceneSegment[] {
@@ -632,7 +669,24 @@ function analyzeExplicitScenes(
   const boundedRanges = boundedScenes.map(scene => scene.contentRange);
   const wordCounts = countTokensPerRange(tokens,boundedRanges);
   const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,boundedRanges,dialogueRanges);
+  let sentenceCursor = 0;
   return boundedScenes.map((scene,index) => {
+    while (sentenceCursor < sentenceRanges.length &&
+      sentenceRanges[sentenceCursor]!.end <= scene.contentRange.start) sentenceCursor++;
+    const sceneSentenceRanges: LocalRange[] = [];
+    const sceneSentenceWordCounts: number[] = [];
+    let currentSentence = sentenceCursor;
+    while (currentSentence < sentenceRanges.length &&
+      sentenceRanges[currentSentence]!.start < scene.contentRange.end) {
+      const sentenceRange = sentenceRanges[currentSentence]!;
+      if (sentenceRange.start >= scene.contentRange.start &&
+          sentenceRange.end <= scene.contentRange.end) {
+        sceneSentenceRanges.push(sentenceRange);
+        sceneSentenceWordCounts.push(sentenceWordCounts[currentSentence] ?? 0);
+      }
+      currentSentence++;
+    }
+    sentenceCursor = currentSentence;
     const characterMentions = findSceneCharacterMentions(
       text,scene.contentRange,baseOffset,knownCharacters
     );
@@ -650,12 +704,42 @@ function analyzeExplicitScenes(
     },
     wordCount:wordCounts[index] ?? 0,
     narrativeWordCount:narrativeWordCounts[index] ?? 0,
+    rhythmSignals:summarizeSceneRhythm(sceneSentenceRanges,sceneSentenceWordCounts,baseOffset),
     characterMentions,
     eventLinks:findSceneEventLinks(
       scene.contentRange,baseOffset,documentId,revision,characterMentions,knownEvents
     ),
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
   });});
+}
+
+function buildSceneRhythmTransitions(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneRhythmTransition[] {
+  const transitions: LiterarySceneRhythmTransition[] = [];
+  for (let index = 1; index < scenes.length; index++) {
+    const previous = scenes[index - 1]!;
+    const next = scenes[index]!;
+    transitions.push({
+      fromSceneIndex:previous.sceneIndex,
+      toSceneIndex:next.sceneIndex,
+      previousRhythmProfile:previous.rhythmSignals.rhythmProfile,
+      nextRhythmProfile:next.rhythmSignals.rhythmProfile,
+      rhythmProfileChanged:previous.rhythmSignals.rhythmProfile !== next.rhythmSignals.rhythmProfile,
+      previousAverageWordsPerSentence:previous.rhythmSignals.averageWordsPerSentence,
+      nextAverageWordsPerSentence:next.rhythmSignals.averageWordsPerSentence,
+      averageWordsPerSentenceDelta:roundMetric(
+        next.rhythmSignals.averageWordsPerSentence-previous.rhythmSignals.averageWordsPerSentence
+      ),
+      previousSentenceCount:previous.rhythmSignals.sentenceCount,
+      nextSentenceCount:next.rhythmSignals.sentenceCount,
+      sentenceCountDelta:next.rhythmSignals.sentenceCount-previous.rhythmSignals.sentenceCount,
+      previousTransitionCount:previous.rhythmSignals.transitions.length,
+      nextTransitionCount:next.rhythmSignals.transitions.length,
+      transitionCountDelta:next.rhythmSignals.transitions.length-previous.rhythmSignals.transitions.length
+    });
+  }
+  return transitions;
 }
 
 function buildSceneContinuity(
@@ -1206,6 +1290,49 @@ function findRhythmTransitions(
   return candidates.slice(0, 20);
 }
 
+function summarizeSceneRhythm(
+  sentenceRanges: readonly LocalRange[],
+  sentenceWordCounts: readonly number[],
+  baseOffset: number
+): LiterarySceneRhythmProfile {
+  const sentenceCount = sentenceWordCounts.length;
+  const totalWords = sentenceWordCounts.reduce((total,count) => total + count,0);
+  const average = sentenceCount > 0 ? totalWords / sentenceCount : 0;
+  const ordered = [...sentenceWordCounts].sort((a,b) => a-b);
+  const middle = Math.floor(ordered.length / 2);
+  const median = ordered.length === 0 ? 0 : ordered.length % 2 === 0
+    ? (ordered[middle - 1]! + ordered[middle]!) / 2
+    : ordered[middle]!;
+  const variance = sentenceCount > 0
+    ? sentenceWordCounts.reduce((sum,count) => sum + (count-average)**2,0) / sentenceCount
+    : 0;
+  const shortest = sentenceCount > 0
+    ? sentenceWordCounts.reduce((minimum,count) => Math.min(minimum,count),Number.POSITIVE_INFINITY)
+    : 0;
+  const longest = sentenceCount > 0
+    ? sentenceWordCounts.reduce((maximum,count) => Math.max(maximum,count),0)
+    : 0;
+  let rhythmProfile: LiteraryRhythmProfile = "insufficient-text";
+  if (totalWords >= 20 && sentenceCount >= 2) {
+    if (average < 9) rhythmProfile = "fragmented";
+    else if (average >= 22) rhythmProfile = "extended";
+    else rhythmProfile = "balanced";
+  }
+  return {
+    sentenceCount,
+    averageWordsPerSentence:roundMetric(average),
+    medianWordsPerSentence:roundMetric(median),
+    sentenceLengthStandardDeviation:roundMetric(Math.sqrt(variance)),
+    shortestSentenceWords:shortest,
+    longestSentenceWords:longest,
+    shortSentenceCount:sentenceWordCounts.filter(count => count <= 8).length,
+    mediumSentenceCount:sentenceWordCounts.filter(count => count >= 9 && count <= 24).length,
+    longSentenceCount:sentenceWordCounts.filter(count => count >= 25).length,
+    rhythmProfile,
+    transitions:findRhythmTransitions(sentenceRanges,sentenceWordCounts,baseOffset)
+  };
+}
+
 function collectSensorySignals(
   tokens: readonly WordToken[], baseOffset: number
 ): LiterarySensorySignal[] {
@@ -1287,6 +1414,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const paragraphRanges = findParagraphRanges(text);
   const dialogueSegments = findDialogueSegments(text);
   const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
+  const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges);
   const localStructureMarkers = detectLiteraryStructure(text);
   const structuralMarkers: LiteraryStructureMarker[] = localStructureMarkers.map(marker => ({
     markerType:marker.markerType,
@@ -1296,15 +1424,16 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   }));
   const explicitScenes = analyzeExplicitScenes(
     text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? [],
-    input.knownEvents ?? [],dialogueRanges,input.documentId,input.revision
+    input.knownEvents ?? [],dialogueRanges,sentenceRanges,sentenceWordCounts,
+    input.documentId,input.revision
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
+  const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
   const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
-  const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
 
   const wordGroups = new Map<string, WordToken[]>();
@@ -1476,6 +1605,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     structuralMarkers,
     explicitScenes,
     sceneContinuity,
+    sceneRhythmTransitions,
     sceneVoiceTransitions,
     sceneVoiceProfile,
     sceneVoiceSequences,
@@ -1493,6 +1623,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La presencia de personajes se basa en nombres y alias literales no ambiguos del catálogo del proyecto; no implica que el personaje actúe, hable o sea el punto de vista de la escena.",
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",
       "La continuidad compara solo escenas explícitas contiguas: las menciones literales y la evidencia por ID de acontecimiento describen cobertura textual, no presencia física, cronología ni contradicciones.",
+      "Las variaciones métricas del ritmo comparan longitud y cambios entre oraciones completas de escenas explícitas; incluyen diálogo y no implican por sí solas tensión, intención ni calidad narrativa.",
       "Las variaciones gramaticales entre escenas comparan conteos de pronombres explícitos fuera del diálogo reconocido; no demuestran un cambio de narrador, focalización ni voz autoral.",
       "El perfil de voz agrega señales y clasificaciones por escena explícita; la cobertura indica en cuántas escenas aparece una categoría, no la identidad ni continuidad de una voz narrativa.",
       "Los tramos estables requieren tres escenas con la misma clasificación única y las alternancias requieren cuatro escenas con dos clasificaciones únicas que se turnan; las señales mixtas o indeterminadas interrumpen los patrones y estos no identifican narradores.",

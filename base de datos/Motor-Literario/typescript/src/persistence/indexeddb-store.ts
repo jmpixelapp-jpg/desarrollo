@@ -259,8 +259,12 @@ function validatePersonalIdeaLibraryContext(
       !Array.isArray(context.relatedEntities)) {
     throw new Error(`Registro de ${label} malformado: contexto de biblioteca inválido.`);
   }
-  const relatedIdeas = validateProjectRecords(context.relatedIdeas, projectId, `${label} relacionadas`);
-  const relatedEntities = validateProjectRecords(context.relatedEntities, projectId, `${label} relacionadas`);
+  const relatedIdeas = validateProjectRecords<NarrativeIdea>(
+    context.relatedIdeas, projectId, `${label} relacionadas`
+  );
+  const relatedEntities = validateProjectRecords<NarrativeEntity>(
+    context.relatedEntities, projectId, `${label} relacionadas`
+  );
   const ideaIds = new Set<string>();
   for (const idea of relatedIdeas) {
     if (ideaIds.has(idea.id)) {
@@ -306,13 +310,14 @@ function remapPersonalIdeaEntriesForEntityMerge(
   if (!Array.isArray(entries)) {
     throw new Error("Biblioteca personal inconsistente: no se pudo leer el conjunto de ideas del proyecto.");
   }
+  const typedEntries = entries as readonly PersonalIdeaLibraryEntry[];
   const absorbedIdentityIds = new Set<string>([
     sourceEntityId, ...(mergedEntity.mergedFromIds ?? [])
   ]);
   const mergedIdentityIds = new Set<string>([mergedEntity.id, ...absorbedIdentityIds]);
   const archivedIdeaIds = new Set<string>();
   const identities = new Set<string>();
-  for (const entry of entries) {
+  for (const entry of typedEntries) {
     if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
         typeof entry.sourceProjectName !== "string" || !entry.sourceProjectName.trim() ||
         entry.category !== entry.sourceProjectName || !entry.idea ||
@@ -329,7 +334,7 @@ function remapPersonalIdeaEntriesForEntityMerge(
     archivedIdeaIds.add(identity);
   }
 
-  return entries.map(entry => {
+  return typedEntries.map(entry => {
     if (!entry.context) {
       // Las entradas antiguas carecen de instantáneas. No inventamos contexto,
       // pero sí redirigimos cualquier ID histórico absorbido por esta identidad.
@@ -626,7 +631,7 @@ async function saveNarrativeRecordWithEntityReferences<T extends { readonly proj
  * No transmite manuscritos ni depende de servicios de terceros.
  */
 export class IndexedDbProjectStore implements ProjectStore {
-  private database?: Promise<IDBDatabase>;
+  private database: Promise<IDBDatabase> | undefined;
 
   private open(): Promise<IDBDatabase> {
     if (typeof indexedDB === "undefined") {

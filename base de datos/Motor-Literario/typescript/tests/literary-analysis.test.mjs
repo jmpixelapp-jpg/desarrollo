@@ -444,13 +444,13 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
         eventId: "storm",
         label: "La tormenta",
         participants: ["ana", "milo"],
-        evidence: [evidence("La tormenta"), evidence("la tormenta", 1)]
+        evidence: [evidence("La tormenta"), evidence("la tormenta")]
       },
       {
         eventId: "collapse",
         label: "El derrumbe",
         participants: ["ana", "luisa"],
-        evidence: [evidence("el derrumbe"), evidence("El derrumbe", 1)]
+        evidence: [evidence("el derrumbe"), evidence("El derrumbe")]
       }
     ]
   });

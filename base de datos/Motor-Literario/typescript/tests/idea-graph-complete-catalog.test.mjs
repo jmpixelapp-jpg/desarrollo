@@ -1499,6 +1499,7 @@ test("la caché del grafo se invalida cuando cambian los vínculos declarados", 
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.relatedIdeaIds = [];
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.referenceCount, 4);
@@ -1582,8 +1583,9 @@ test("el grafo resuelve referencias externas cuando el catálogo incorpora el de
       relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 8 }]
     });
+    await api.refreshNarrativeKnowledge();
 
-    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph
     const ghostReferenceAfter = after.references.find(reference => reference.toIdeaId === "ghost");
     assert.equal(after.ideaCount, 5);
     assert.equal(after.referenceCount, 6);
@@ -1615,6 +1617,7 @@ test("el grafo reclasifica como externas las referencias al retirar una idea del
 
     const bridgeIndex = ideas.findIndex(idea => idea.id === "bridge");
     ideas.splice(bridgeIndex, 1);
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.ideaCount, 3);
@@ -1653,6 +1656,7 @@ test("la caché del grafo incorpora cambios de texto en el análisis de resonanc
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.text = "nube azul horizonte distante";
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.lexicalResonances.analyzedIdeaCount, 4);
@@ -1684,6 +1688,7 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.status = "discarded";
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     const discardedProfile = after.statusProfiles.find(profile => profile.status === "discarded");

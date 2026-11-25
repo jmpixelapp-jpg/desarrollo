@@ -3018,14 +3018,25 @@ export class HostEngineApi {
 
   private async persistIdeaUpdate(
     store: Required<Pick<
-      import("./contracts").ProjectStore,
-      "saveIdea" | "saveIdeaIfUnchanged" | "loadIdeas"
-    >>,
+      import("./contracts").ProjectStore, "saveIdea" | "loadIdeas"
+    >> & Pick<
+      import("./contracts").ProjectStore, "saveIdeaIfUnchanged" | "updateIdeaIfUnchanged"
+    >,
     updated: NarrativeIdea,
     expectedCurrent?: NarrativeIdea
   ): Promise<void> {
     try {
-      await store.saveIdeaIfUnchanged(updated, expectedCurrent);
+      if (store.saveIdeaIfUnchanged) {
+        await store.saveIdeaIfUnchanged(updated, expectedCurrent);
+      } else if (expectedCurrent && store.updateIdeaIfUnchanged) {
+        await store.updateIdeaIfUnchanged(updated, expectedCurrent);
+      } else {
+        await this.persistNarrativeRecord(
+          updated, expectedCurrent, "idea",
+          projectId => store.loadIdeas(projectId),
+          record => store.saveIdea(record)
+        );
+      }
     } catch (error) {
       this.narrativeIdeas.clear();
       this.ideasLoaded = false;
@@ -3035,14 +3046,58 @@ export class HostEngineApi {
     }
   }
 
+  /**
+   * Compatibilidad para adaptadores externos anteriores al contrato CAS.
+   * SQLite e IndexedDB siempre usan sus operaciones atómicas; el camino
+   * de lectura-comprobación-escritura solo se utiliza en adaptadores legacy.
+   */
+  private async persistNarrativeRecord<T extends { readonly projectId: string; readonly id: string }>(
+    updated: T,
+    expectedCurrent: T | undefined,
+    label: string,
+    load: (projectId: string) => Promise<readonly T[]>,
+    save: (record: T) => Promise<void>,
+    saveIfUnchanged?: (record: T, expected?: T) => Promise<void>
+  ): Promise<void> {
+    if (saveIfUnchanged) {
+      await saveIfUnchanged(updated, expectedCurrent);
+      return;
+    }
+    if (expectedCurrent && (
+      expectedCurrent.projectId !== updated.projectId || expectedCurrent.id !== updated.id
+    )) {
+      throw new Error("La actualización debe conservar la identidad del registro narrativo.");
+    }
+    const records = requireProjectScopedRecords(await load(updated.projectId), updated.projectId, label);
+    const current = records.find(record => record.id === updated.id);
+    const unchanged = expectedCurrent === undefined
+      ? current === undefined
+      : current !== undefined && JSON.stringify(current) === JSON.stringify(expectedCurrent);
+    if (!unchanged) {
+      throw new Error(
+        `El registro de ${label} cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarlo.`
+      );
+    }
+    await save(updated);
+  }
+
   private async persistEntityUpdate(
     updated: NarrativeEntity,
     expectedCurrent?: NarrativeEntity
   ): Promise<void> {
-    const save = this.store.saveEntityIfUnchanged;
-    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de entidades narrativas.");
+    const store = this.store;
+    if (!store.saveEntity || !store.loadEntities) {
+      throw new Error("El almacenamiento no admite escritura de entidades narrativas.");
+    }
     try {
-      await save.call(this.store, updated, expectedCurrent);
+      await this.persistNarrativeRecord(
+        updated, expectedCurrent, "entidad",
+        projectId => store.loadEntities!(projectId),
+        record => store.saveEntity!(record),
+        store.saveEntityIfUnchanged
+          ? (record, expected) => store.saveEntityIfUnchanged!(record, expected)
+          : undefined
+      );
     } catch (error) {
       this.invalidateNarrativeKnowledgeCaches();
       throw error;
@@ -3053,10 +3108,19 @@ export class HostEngineApi {
     updated: NarrativeRelation,
     expectedCurrent?: NarrativeRelation
   ): Promise<void> {
-    const save = this.store.saveRelationIfUnchanged;
-    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de relaciones narrativas.");
+    const store = this.store;
+    if (!store.saveRelation || !store.loadRelations) {
+      throw new Error("El almacenamiento no admite escritura de relaciones narrativas.");
+    }
     try {
-      await save.call(this.store, updated, expectedCurrent);
+      await this.persistNarrativeRecord(
+        updated, expectedCurrent, "relación",
+        projectId => store.loadRelations!(projectId),
+        record => store.saveRelation!(record),
+        store.saveRelationIfUnchanged
+          ? (record, expected) => store.saveRelationIfUnchanged!(record, expected)
+          : undefined
+      );
     } catch (error) {
       this.narrativeRelations.clear();
       this.relationsLoaded = false;
@@ -3069,10 +3133,19 @@ export class HostEngineApi {
     updated: NarrativeEvent,
     expectedCurrent?: NarrativeEvent
   ): Promise<void> {
-    const save = this.store.saveEventIfUnchanged;
-    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de acontecimientos.");
+    const store = this.store;
+    if (!store.saveEvent || !store.loadEvents) {
+      throw new Error("El almacenamiento no admite escritura de acontecimientos.");
+    }
     try {
-      await save.call(this.store, updated, expectedCurrent);
+      await this.persistNarrativeRecord(
+        updated, expectedCurrent, "acontecimiento",
+        projectId => store.loadEvents!(projectId),
+        record => store.saveEvent!(record),
+        store.saveEventIfUnchanged
+          ? (record, expected) => store.saveEventIfUnchanged!(record, expected)
+          : undefined
+      );
     } catch (error) {
       this.narrativeEvents.clear();
       this.eventsLoaded = false;
@@ -3086,10 +3159,19 @@ export class HostEngineApi {
     updated: NarrativeAssertion,
     expectedCurrent?: NarrativeAssertion
   ): Promise<void> {
-    const save = this.store.saveAssertionIfUnchanged;
-    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de afirmaciones.");
+    const store = this.store;
+    if (!store.saveAssertion || !store.loadAssertions) {
+      throw new Error("El almacenamiento no admite escritura de afirmaciones narrativas.");
+    }
     try {
-      await save.call(this.store, updated, expectedCurrent);
+      await this.persistNarrativeRecord(
+        updated, expectedCurrent, "afirmación",
+        projectId => store.loadAssertions!(projectId),
+        record => store.saveAssertion!(record),
+        store.saveAssertionIfUnchanged
+          ? (record, expected) => store.saveAssertionIfUnchanged!(record, expected)
+          : undefined
+      );
     } catch (error) {
       this.narrativeAssertions.clear();
       this.assertionsLoaded = false;

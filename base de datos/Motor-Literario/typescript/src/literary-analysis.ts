@@ -2860,6 +2860,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La distribución de menciones resume solo coincidencias literales en escenas explícitas; los intervalos sin mención y las rachas observadas no demuestran ausencia, entrada o salida del personaje, protagonismo ni arco narrativo.",
       "La mención nominal de un participante se comprueba en el contenido completo de la escena vinculada, no exige solapamiento con el rango exacto de evidencia.",
       "Los perfiles de evidencia por participante agrupan únicamente asociaciones de acontecimiento declaradas por el proyecto y rangos vigentes de la misma revisión; no demuestran presencia física, acción, diálogo ni interacción.",
+      "Las escenas con más de 100 acontecimientos enlazados se identifican con eventLinksTruncated; los perfiles agregados informan qué escenas de origen tienen esa muestra recortada.",
       "Los rangos de evidencia se cuentan antes de limitar las muestras UTF-16, pero el resumen hereda el máximo de 100 vínculos por escena y 200 asociaciones participante/acontecimiento.",
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",
       "La continuidad compara solo escenas explícitas contiguas: las menciones literales y la evidencia por ID de acontecimiento describen cobertura textual, no presencia física, cronología ni contradicciones.",

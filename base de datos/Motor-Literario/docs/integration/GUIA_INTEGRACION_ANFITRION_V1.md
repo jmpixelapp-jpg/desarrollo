@@ -12,15 +12,15 @@ Esta guía describe cómo conectar el Motor Literario con el programa que crea l
 
 La línea vigente del producto es TypeScript/JavaScript. El contrato de integración es la clase `HostEngineApi`, usando el adaptador `IndexedDbProjectStore` para persistencia local.
 
-La integración soportada actualmente consiste en importar el punto de entrada TypeScript del motor dentro del proceso/runtime JavaScript de la aplicación anfitriona, o incorporarlo a su compilación como módulo local. La API no observa el editor automáticamente: el anfitrión debe enviar cada cambio mediante `onEditorChange()`.
+Hay dos modalidades soportadas. Cuando el motor se ejecuta dentro del mismo runtime JavaScript que el editor, el anfitrión importa `HostEngineApi` y usa el adaptador `IndexedDbProjectStore`. Cuando la aplicación anfitriona y el motor deben ejecutarse como procesos separados, se usa el **puente de procesos JSON-RPC v1**, que ya está implementado: [Contrato del puente entre procesos](BRIDGE_PROCESS_PROTOCOL_V1.md). El anfitrión inicia el proceso compañero y se comunica con él por stdin/stdout mediante `MotorLiterarioBridgeClient`. En ambas modalidades, el anfitrión debe transmitir cada cambio del editor; el motor no observa la interfaz por sí solo.
 
-**No usar como contrato vigente el documento JSON-RPC histórico.** `specifications/HOST_JSONRPC_PROTOCOL_V0.1.md` describe un prototipo anterior en Rust, con almacenamiento y offsets distintos. No es un transporte implementado para la línea TypeScript actual. Si ambos programas deben ejecutarse en procesos separados, hace falta diseñar e implementar un puente IPC/API sobre este contrato TypeScript; no se debe conectar el anfitrión al protocolo Rust suponiendo que sea equivalente.
+**No usar como contrato vigente el documento JSON-RPC histórico.** `specifications/HOST_JSONRPC_PROTOCOL_V0.1.md` describe un prototipo anterior en Rust, con almacenamiento y offsets distintos. No es el transporte TypeScript actual.
 
 ### Distribución del módulo
 
-El punto de entrada público es `typescript/src/index.ts`. Expone `HostEngineApi`, `IndexedDbProjectStore`, `MOTOR_LITERARIO_API_VERSION` y los contratos tipados.
+El punto de entrada público es `typescript/src/index.ts`. Expone `HostEngineApi`, `IndexedDbProjectStore`, `MotorLiterarioBridgeClient`, `MOTOR_LITERARIO_API_VERSION` y los contratos tipados. Para procesos separados, distribuir además `typescript/bridge/stdio-server.mjs`, `typescript/bridge/sqlite-project-store.mjs` y el bundle `typescript/dist/motor-literario.js`.
 
-El paquete TypeScript del repositorio sigue marcado como privado (`private: true`) y no declara todavía metadatos de publicación, `exports` ni un paquete npm distribuible. El build genera el módulo ESM de Vite en `typescript/dist/motor-literario.js`, pero el script actual no genera declaraciones `.d.ts`. Por eso, para conservar el tipado en la primera integración, se recomienda incluir el directorio `typescript/src/` en la compilación del anfitrión (por ejemplo, mediante un alias o dependencia local al repositorio) y apuntar siempre a `src/index.ts`. No instalar `motor-literario-core` desde npm: no es un paquete publicado.
+El paquete TypeScript del repositorio sigue marcado como privado (`private: true`) y no declara todavía metadatos de publicación, `exports` ni un paquete npm distribuible. Para integración dentro del mismo runtime, se puede incluir `typescript/src/` en la compilación del anfitrión y apuntar a `src/index.ts`. Para integración entre procesos, el anfitrión importa `MotorLiterarioBridgeClient` desde el bundle ESM `typescript/dist/motor-literario.js` y ejecuta el servidor compañero incluido en `typescript/bridge/`. No instalar `motor-literario-core` desde npm: no es un paquete publicado.
 
 ## 2. Responsabilidades de cada programa
 
@@ -97,7 +97,7 @@ No se deben derivar estas identidades del título, nombre de usuario, ruta del a
 
 `IndexedDbProjectStore` requiere que exista IndexedDB en el runtime. La base se abre de forma diferida y aplica las migraciones al abrirla. En el navegador, IndexedDB pertenece al origen y al perfil local donde corre la aplicación; no es una base compartida entre dominios, perfiles o dispositivos. El anfitrión no debe modificar directamente los almacenes internos ni duplicar sus migraciones.
 
-Si el anfitrión no corre en un entorno con IndexedDB, necesita implementar un adaptador completo que cumpla `ProjectStore` y sus garantías transaccionales antes de sustituir `IndexedDbProjectStore`. No se debe conectar una base remota o un servicio externo sin una decisión de arquitectura y privacidad expresa.
+Para procesos separados no se usa IndexedDB: el proceso compañero utiliza el adaptador SQLite local incorporado, basado en `node:sqlite`, sin dependencias npm adicionales en runtime. El archivo SQLite y el almacén IndexedDB de una ejecución dentro del navegador son bases físicas diferentes y no se sincronizan automáticamente. El contrato, la identidad y las estructuras lógicas MLDB se mantienen; la guía del puente documenta su esquema físico, versión y procedimiento de inicio. No se debe conectar una base remota o un servicio externo sin una decisión de arquitectura y privacidad expresa.
 
 ## 4. Apertura y recuperación de documentos
 
@@ -328,11 +328,12 @@ No interpretar `queued` como `applied`, ni un diagnóstico de una revisión ante
 
 ## 9. Privacidad, almacenamiento y copias de seguridad
 
-- El adaptador incluido utiliza IndexedDB local y no envía manuscritos a servicios de terceros.
+- En modo mismo proceso, el adaptador incluido utiliza IndexedDB local. En modo de procesos separados, el puente utiliza SQLite local y pipes privados del proceso hijo; no abre puertos ni envía manuscritos a servicios de terceros.
 - Todas las consultas narrativas están limitadas al `projectId` de la instancia; la biblioteca personal está limitada al `writerId` autenticado.
 - No compartir IDs de proyecto entre escritores distintos ni permitir que la interfaz elija un `writerId` arbitrario.
-- No escribir directamente en `motor-literario-local`, sus object stores, claves o índices. Las migraciones pertenecen al adaptador.
-- IndexedDB está ligado al origen y perfil local. El almacenamiento del navegador puede ser eliminado por el usuario, el sistema o políticas del entorno.
+- No escribir directamente en `motor-literario-local`, sus object stores, claves o índices, ni en `bridge_records`/`bridge_document_heads`. Las migraciones pertenecen a cada adaptador.
+- IndexedDB está ligado al origen y perfil local. El archivo SQLite del puente está ligado a la ruta local proporcionada al proceso compañero. Son bases físicas independientes y no se fusionan automáticamente.
+- Al copiar el archivo SQLite para una copia de seguridad, detener antes el puente con `bridge.shutdown` y esperar el cierre del proceso; no copiar solo el archivo principal mientras SQLite está activo y puede tener datos en WAL.
 - La API pública actual no incluye exportación/importación integral ni restauración asistida de toda la base. La aplicación anfitriona debe implementar y probar su mecanismo de backup/restore antes de confiar manuscritos irremplazables al entorno de producción. No copiar object stores en caliente ni asumir que el archivo del manuscrito contiene todo el conocimiento MLDB.
 
 El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar.
@@ -341,7 +342,10 @@ El anfitrión debe proporcionar copias de seguridad independientes tanto del man
 
 La integración no debe declararse terminada hasta comprobar, en el programa anfitrión real, todos estos puntos:
 
-- [ ] Importa el motor mediante `typescript/src/index.ts` y verifica `MOTOR_LITERARIO_API_VERSION`.
+- [ ] Elige y documenta la modalidad de ejecución: `HostEngineApi` en el mismo runtime, o el puente JSON-RPC de `BRIDGE_PROCESS_PROTOCOL_V1.md` para procesos separados.
+- [ ] En modalidad de procesos separados, inicia el servidor por stdin/stdout, verifica `bridge.hello` y recibe `engine.analysis`/`engine.commit`.
+- [ ] En modalidad de procesos separados, asigna una ruta privada al archivo SQLite, confirma recuperación después de reiniciar el proceso y aplica permisos del sistema operativo.
+- [ ] Importa el motor o el cliente mediante `typescript/src/index.ts` y verifica `MOTOR_LITERARIO_API_VERSION`.
 - [ ] Crea una instancia por proyecto y proporciona `projectId`, `projectName` y el `writerId` autenticado.
 - [ ] Abre un documento con snapshot, revisión y secuencia autoritativos.
 - [ ] Envía inserciones, eliminaciones, reemplazos y ediciones multilínea con offsets UTF-16.

@@ -884,7 +884,8 @@
       "implementationStatus": "implemented",
       "objectStores": [
         "documents",
-        "changes"
+        "changes",
+        "document-diagnostics"
       ],
       "keyPath": [
         [

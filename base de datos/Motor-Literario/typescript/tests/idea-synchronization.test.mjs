@@ -181,6 +181,35 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
   api.dispose();
 });
 
+test("revalida el máximo de referencias después de un conflicto CAS", async () => {
+  const existingIds = Array.from({ length: 499 }, (_, index) =>
+    "idea-existing-" + String(index).padStart(3, "0")
+  );
+  const store = new RacingStore([
+    idea("idea-source", { relatedIdeaIds: existingIds }),
+    ...existingIds.map(id => idea(id)),
+    idea("idea-concurrent"),
+    idea("idea-local")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.onNextConflict = current => ({
+    ...current,
+    relatedIdeaIds: [...current.relatedIdeaIds, "idea-concurrent"]
+  });
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-local", true),
+    /no puede conservar más de 500 vínculos por categoría/
+  );
+  const persisted = store.ideas.get(projectId + ":idea-source");
+  assert.equal(persisted.relatedIdeaIds.length, 500);
+  assert.equal(persisted.relatedIdeaIds.includes("idea-concurrent"), true);
+  assert.equal(persisted.relatedIdeaIds.includes("idea-local"), false);
+  assert.equal(store.writes, 1);
+  api.dispose();
+});
+
 test("limita a tres intentos los conflictos CAS consecutivos y conserva las escrituras externas", async () => {
   const store = new RacingStore([
     idea("idea-source"), idea("idea-local"),

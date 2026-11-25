@@ -4499,6 +4499,7 @@ function buildCharacterNarrativeTrajectories(
   knownIdeas: readonly LiteraryAnalysisKnownIdea[],
   omittedRelationCount: number,
   omittedIdeaCount: number,
+  omittedProjectIdeaCount: number,
   omittedProjectEventCount: number
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
@@ -4674,7 +4675,7 @@ function buildCharacterNarrativeTrajectories(
         : relatedIdeaStateDivergenceCount > 0
           ? "mixed-status" as const
           : hasUnresolvedRelatedIdeas
-            ? omittedIdeaCount > 0
+            ? omittedIdeaCount > 0 || omittedProjectIdeaCount > 0
               ? "unknown-due-to-incomplete-snapshot" as const
               : "targets-not-in-snapshot" as const
             : "same-status" as const;
@@ -6260,7 +6261,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
   for (const event of input.knownProjectEvents ?? []) {
     if (!event || event.projectId !== input.projectId ||
         typeof event.eventId !== "string" || !event.eventId.trim() ||
-        projectEventIds.has(event.eventId) ||
         typeof event.label !== "string" || !event.label.trim() ||
         !Array.isArray(event.participants) || event.participants.length > 500 ||
         event.participants.some((participant: string) => typeof participant !== "string" || !participant.trim()) ||
@@ -6278,8 +6278,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
           (!event.timeReference ||
             !["calendar","story-day"].includes(event.timeReference.basis) ||
             !["date","year","day-index"].includes(event.timeReference.precision) ||
-            typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim() ||
-            !Number.isFinite(event.timeReference.orderValue)))) {
+            typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim()))) {
       throw new Error("El catálogo global de acontecimientos del análisis literario es inválido.");
     }
     projectEventIds.add(event.eventId);
@@ -6504,7 +6503,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
     input.documentId,input.revision,input.knownRelations ?? [],input.knownIdeas ?? [],
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0,
-    input.knownProjectEventsOmittedCount ?? 0
+    input.knownProjectIdeasOmittedCount ?? 0,input.knownProjectEventsOmittedCount ?? 0
   );
   const knownIdeaTextById = new Map(
     (input.knownIdeas ?? []).map(idea => [idea.ideaId, idea.text] as const)

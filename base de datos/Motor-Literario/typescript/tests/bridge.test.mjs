@@ -241,6 +241,68 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
 });
 
 
+test("BridgeClient ofrece operaciones tipadas para consultar, enlazar y cambiar ideas", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-idea-client-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    const projectId = "bridge-idea-client";
+    await client.openProject({
+      projectId,
+      projectName: "Libro de API tipada",
+      writerId: "writer-bridge-idea-client"
+    });
+    await client.openDocument(projectId, {
+      documentId: "chapter-1",
+      text: [
+        "El personaje Ana llegó al pueblo.",
+        "IDEA: La ciudad celebra la llegada del verano.",
+        "IDEA: El reloj se detiene a medianoche."
+      ].join("\\n"),
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject(projectId);
+
+    const ideas = await client.getNarrativeIdeas(projectId);
+    const entities = await client.getNarrativeEntities(projectId);
+    assert.equal(ideas.length, 2);
+    const [first, second] = ideas;
+    const ana = entities.find(entity => entity.canonicalName === "Ana");
+    assert.ok(ana);
+
+    const entityLinked = await client.setNarrativeIdeaEntityLink(
+      projectId, first.id, ana.id, true
+    );
+    assert.deepEqual(entityLinked.relatedEntityIds, [ana.id]);
+
+    const ideaLinked = await client.setNarrativeIdeaLink(
+      projectId, first.id, second.id, true
+    );
+    assert.deepEqual(ideaLinked.relatedIdeaIds, [second.id]);
+
+    const incorporated = await client.setNarrativeIdeaStatus(
+      projectId, first.id, "incorporated"
+    );
+    assert.equal(incorporated.status, "incorporated");
+    assert.deepEqual(
+      incorporated.statusHistory.map(item => item.status),
+      ["IDEA", "incorporated"]
+    );
+
+    const reloaded = await client.getNarrativeIdeas(projectId);
+    assert.deepEqual(reloaded.find(item => item.id === first.id), incorporated);
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
 test("la finalización compacta devuelve un recibo resumido y permite leer las ideas por páginas", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-compact-finalization-"));
   const databasePath = resolve(directory, "motor.sqlite");

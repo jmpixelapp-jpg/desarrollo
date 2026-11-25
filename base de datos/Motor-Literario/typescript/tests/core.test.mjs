@@ -419,6 +419,9 @@ test("recibe cambios, confirma persistencia y analiza sin modificar el texto", a
   assert.equal(commits.length, 1);
   assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1")?.committedChanges, 1);
   assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1")?.pendingChanges, 0);
+  await api.flushPendingChanges();
+  assert.equal(api.closeLiveAuthorMonitorDocument("chapter-1").pendingChanges, 0);
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1"), undefined);
 });
 
 test("rechaza desbordamiento de cola sin descartar silenciosamente cambios", async () => {

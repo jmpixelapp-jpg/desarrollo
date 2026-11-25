@@ -1532,3 +1532,56 @@ test("distingue IDs Unicode distintos aunque el orden lingüístico los equipare
   assert.equal(graph.reciprocalReferencePairCount, 0);
   assert.equal(graph.references[0].resolution, "included-in-snapshot");
 });
+
+
+test("el grafo de ideas es determinista ante permutaciones del catálogo y sus referencias", () => {
+  const makeIdea = (ideaId, relatedIdeaIds = []) => ({
+    projectId: "literary-analysis-test",
+    ideaId,
+    text: "Idea " + ideaId,
+    status: "IDEA",
+    originDocumentId: "chapter-one",
+    sourceProjectName: "Libro",
+    relatedEntityIds: [],
+    relatedIdeaIds,
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
+  const catalog = [
+    makeIdea("idea-c", ["idea-a", "external-z"]),
+    makeIdea("idea-a", ["idea-b"]),
+    makeIdea("idea-b", ["idea-c", "idea-a"]),
+    makeIdea("idea-d")
+  ];
+  const analyzeCatalog = knownIdeas => analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nUna idea permanece.",
+    knownIdeas
+  }).ideaGraph;
+
+  const baseline = analyzeCatalog(catalog);
+  const permuted = analyzeCatalog([
+    makeIdea("idea-d"),
+    makeIdea("idea-b", ["idea-a", "idea-c"]),
+    makeIdea("idea-a", ["idea-b"]),
+    makeIdea("idea-c", ["external-z", "idea-a"])
+  ]);
+
+  assert.deepEqual(permuted, baseline);
+  assert.deepEqual(baseline.nodes.map(node => node.ideaId), [
+    "idea-a", "idea-b", "idea-c", "idea-d"
+  ]);
+  assert.deepEqual(baseline.references, [
+    { fromIdeaId: "idea-a", toIdeaId: "idea-b", resolution: "included-in-snapshot" },
+    { fromIdeaId: "idea-b", toIdeaId: "idea-a", resolution: "included-in-snapshot" },
+    { fromIdeaId: "idea-b", toIdeaId: "idea-c", resolution: "included-in-snapshot" },
+    { fromIdeaId: "idea-c", toIdeaId: "external-z", resolution: "not-in-snapshot" },
+    { fromIdeaId: "idea-c", toIdeaId: "idea-a", resolution: "included-in-snapshot" }
+  ]);
+});

@@ -336,14 +336,14 @@ test("convierte un error al leer el snapshot en pausa segura sin propagarlo al e
 });
 
 
-test("mantiene orden FIFO entre suscriptores ante transacciones reentrantes síncronas", () => {
+test("mantiene orden FIFO y snapshot coherente entre suscriptores ante reentrada síncrona", () => {
   const f = fixture("abc");
   const firstSeen = [];
   const secondSeen = [];
   let emittedNested = false;
 
   const stopFirst = f.source.subscribeChanges(change => {
-    firstSeen.push(change.sequence);
+    firstSeen.push([change.sequence, f.source.getState().sequence]);
     if (change.sequence === 1 && !emittedNested) {
       emittedNested = true;
       f.editor.apply("edit", "tx-reentrant", {
@@ -352,15 +352,15 @@ test("mantiene orden FIFO entre suscriptores ante transacciones reentrantes sín
     }
   });
   const stopSecond = f.source.subscribeChanges(change => {
-    secondSeen.push(change.sequence);
+    secondSeen.push([change.sequence, f.source.getState().sequence]);
   });
 
   f.editor.apply("edit", "tx-outer", {
     start: 3, end: 3, replacement: "!"
   });
 
-  assert.deepEqual(firstSeen, [1, 2]);
-  assert.deepEqual(secondSeen, [1, 2]);
+  assert.deepEqual(firstSeen, [[1, 1], [2, 2]]);
+  assert.deepEqual(secondSeen, [[1, 1], [2, 2]]);
   assert.equal(f.source.getState().sequence, 2);
   assert.equal(f.source.getState().needsResync, false);
 

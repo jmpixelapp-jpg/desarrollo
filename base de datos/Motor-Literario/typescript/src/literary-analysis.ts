@@ -3101,7 +3101,11 @@ function buildCharacterNarrativeTrajectories(
   attributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis,
   eventEvidence: LiteraryCharacterEventEvidenceAnalysis,
   dependencies: LiteraryEventDependencyAnalysis,
-  projectEvents: readonly LiteraryAnalysisKnownProjectEvent[]
+  projectEvents: readonly LiteraryAnalysisKnownProjectEvent[],
+  knownRelations: readonly LiteraryAnalysisKnownRelation[],
+  knownIdeas: readonly LiteraryAnalysisKnownIdea[],
+  omittedRelationCount: number,
+  omittedIdeaCount: number
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
   for (const profile of attributeEvolution.profiles) {
@@ -3114,6 +3118,71 @@ function buildCharacterNarrativeTrajectories(
     const profiles = eventsByCharacter.get(profile.entityId) ?? [];
     profiles.push(profile);
     eventsByCharacter.set(profile.entityId,profiles);
+  }
+  const characterById = new Map(knownCharacters.map(character => [character.entityId,character]));
+  const relationshipsByCharacter = new Map<string,LiteraryCharacterRelationshipProfile[]>();
+  for (const relation of knownRelations) {
+    const linkEndpoints = [
+      ...(characterById.has(relation.fromEntityId)
+        ? [{entityId:relation.fromEntityId,otherEntityId:relation.toEntityId,direction:relation.fromEntityId===relation.toEntityId ? "self" as const : "outgoing" as const}]
+        : []),
+      ...(relation.toEntityId !== relation.fromEntityId && characterById.has(relation.toEntityId)
+        ? [{entityId:relation.toEntityId,otherEntityId:relation.fromEntityId,direction:"incoming" as const}]
+        : [])
+    ];
+    for (const endpoint of linkEndpoints) {
+      const otherCharacter = characterById.get(endpoint.otherEntityId);
+      const profile:LiteraryCharacterRelationshipProfile = {
+        relationId:relation.relationId,
+        direction:endpoint.direction,
+        otherEntityId:endpoint.otherEntityId,
+        otherCharacterName:otherCharacter?.canonicalName ?? null,
+        relationType:relation.relationType,
+        evidenceStatus:relation.evidenceCount>0
+          ? "active-evidence"
+          : relation.staleEvidenceCount>0 ? "stale-only" : "no-evidence",
+        evidenceCount:relation.evidenceCount,
+        staleEvidenceCount:relation.staleEvidenceCount,
+        evidenceSamples:relation.evidence.slice(0,20).map(item => ({
+          documentId:item.documentId,
+          revision:item.revision,
+          occurrence:{start:item.start,end:item.end},
+          excerpt:item.excerpt
+        })),
+        evidenceTruncated:relation.evidenceCount>relation.evidence.length,
+        historyStatus:"current-record-only"
+      };
+      const profiles=relationshipsByCharacter.get(endpoint.entityId) ?? [];
+      profiles.push(profile);
+      relationshipsByCharacter.set(endpoint.entityId,profiles);
+    }
+  }
+  const decisionsByCharacter = new Map<string,LiteraryCharacterDocumentedDecision[]>();
+  for (const idea of knownIdeas) {
+    for (const entityId of idea.relatedEntityIds) {
+      const decision:LiteraryCharacterDocumentedDecision = {
+        ideaId:idea.ideaId,
+        text:idea.text,
+        status:idea.status,
+        originDocumentId:idea.originDocumentId,
+        sourceProjectName:idea.sourceProjectName,
+        relatedIdeaIds:idea.relatedIdeaIds,
+        evidenceCount:idea.evidenceCount,
+        staleEvidenceCount:idea.staleEvidenceCount,
+        evidenceSamples:idea.evidence.slice(0,20).map(item => ({
+          documentId:item.documentId,
+          revision:item.revision,
+          occurrence:{start:item.start,end:item.end},
+          excerpt:item.excerpt
+        })),
+        statusHistory:idea.statusHistory,
+        omittedStatusHistoryCount:idea.omittedStatusHistoryCount,
+        writerDecisionCount:idea.statusHistory.filter(change => change.reason==="writer").length
+      };
+      const decisions=decisionsByCharacter.get(entityId) ?? [];
+      decisions.push(decision);
+      decisionsByCharacter.set(entityId,decisions);
+    }
   }
   const relationsByCharacter = new Map<string,LiteraryCharacterCausalRelation[]>();
   for (const candidate of dependencies.candidates) {
@@ -3232,6 +3301,10 @@ function buildCharacterNarrativeTrajectories(
       observedSceneIndexes,
       incompleteSceneIndexes,
       attributes:attributeProfiles,
+      relationships:[...(relationshipsByCharacter.get(character.entityId) ?? [])]
+        .sort((a,b) => a.relationId.localeCompare(b.relationId,"en") || a.direction.localeCompare(b.direction,"en")),
+      documentedDecisions:[...(decisionsByCharacter.get(character.entityId) ?? [])]
+        .sort((a,b) => a.ideaId.localeCompare(b.ideaId,"en")),
       eventParticipation:eventProfiles,
       projectEventTimeline:buildCharacterProjectEventTimeline(character.entityId,projectEvents),
       causalRelations,
@@ -3257,6 +3330,10 @@ function buildCharacterNarrativeTrajectories(
     omittedEventAssociationCount:eventEvidence.omittedAssociationCount,
     omittedCausalCandidateCount:dependencies.omittedCandidateCount,
     omittedProjectEventCount:input.knownProjectEventsOmittedCount ?? 0,
+    relationshipRecordCount:knownRelations.length+omittedRelationCount,
+    omittedRelationshipCount:omittedRelationCount,
+    linkedIdeaCount:knownIdeas.length,
+    omittedIdeaCount,
     causalCandidateCount:dependencies.candidateCount,
     trajectories:trajectories.slice(0,200)
   };
@@ -4685,7 +4762,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const characterNarrativeTrajectories = buildCharacterNarrativeTrajectories(
     explicitScenes,input.knownCharacters ?? [],characterAttributeEvolution,
-    characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? []
+    characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
+    input.knownRelations ?? [],input.knownIdeas ?? [],
+    input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);

@@ -155,9 +155,9 @@ test("el grafo global actualiza la consistencia al ampliarse el historial de una
     const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
     assert.equal(afterBridge.currentStatusHistoryConsistency, "consistent");
     assert.equal(after.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 3);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 1);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 0.75);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 4);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 0);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 1);
   } finally {
     api.dispose();
   }

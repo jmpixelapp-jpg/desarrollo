@@ -2734,6 +2734,10 @@ test("el grafo identifica puntos de articulación en cadenas de referencias", ()
     { fromStatus: "IDEA", toStatus: "incorporated", referenceCount: 1 },
     { fromStatus: "incorporated", toStatus: "IDEA", referenceCount: 1 }
   ]);
+  assert.equal(node("a").distinctOutgoingIdeaCount, 1);
+  assert.equal(node("b").distinctIncomingIdeaCount, 1);
+  assert.equal(graph.directedBranchNodeCount, 0);
+  assert.equal(graph.directedConvergenceNodeCount, 0);
   assert.equal(graph.articulationPointCount, 1);
   assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);
 });

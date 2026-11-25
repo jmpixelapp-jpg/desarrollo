@@ -1550,6 +1550,7 @@ export class HostEngineApi {
         }
       }
     }
+    const knownAssertions = await this.getNarrativeAssertions();
     return analyzeLiteraryFragment({
       projectId,
       documentId,
@@ -1558,7 +1559,8 @@ export class HostEngineApi {
       baseOffset: start,
       knownCharacters,
       knownEvents,
-      knownEventLifecycles
+      knownEventLifecycles,
+      knownAssertions
     });
   }
 

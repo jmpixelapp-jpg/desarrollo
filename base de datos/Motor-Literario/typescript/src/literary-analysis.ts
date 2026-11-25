@@ -246,6 +246,29 @@ export interface LiteraryCharacterCoMentionPattern {
   readonly sharedSceneCount: number;
   readonly sceneIndexes: readonly number[];
 }
+export interface LiteraryCharacterMentionDistribution {
+  readonly entityId: string;
+  readonly canonicalName: string;
+  /** Escenas explícitas con al menos una mención literal no ambigua. */
+  readonly sceneIndexes: readonly number[];
+  readonly sceneCount: number;
+  readonly firstSceneIndex: number;
+  readonly lastSceneIndex: number;
+  /** Escenas intermedias sin una mención literal detectada; no equivale a ausencia del personaje. */
+  readonly interveningSceneCount: number;
+  /** Mayor número de escenas explícitas consecutivas con mención literal. */
+  readonly longestConsecutiveSceneRun: number;
+  /** Fracción de escenas explícitas del fragmento con mención literal. */
+  readonly sceneCoverageRatio: number;
+}
+export interface LiteraryCharacterMentionDistributionAnalysis {
+  readonly explicitSceneCount: number;
+  /** Identidades con al menos una mención literal no ambigua en las escenas analizadas. */
+  readonly characterCount: number;
+  readonly omittedCharacterCount: number;
+  /** Perfiles ordenados por cobertura, racha consecutiva y, finalmente, ID estable. */
+  readonly characters: readonly LiteraryCharacterMentionDistribution[];
+}
 export interface LiterarySceneCadenceTransition {
   readonly fromSceneIndex: number;
   readonly toSceneIndex: number;
@@ -603,6 +626,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneVoiceSequences: readonly LiterarySceneVoiceSequencePattern[];
   /** Pares de personajes mencionados en las mismas escenas; no implica interacción o relación. */
   readonly characterCoMentions: readonly LiteraryCharacterCoMentionPattern[];
+  /** Distribución de menciones literales de personajes conocidos a lo largo de las escenas explícitas. */
+  readonly characterMentionDistributions: LiteraryCharacterMentionDistributionAnalysis;
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -1882,6 +1907,66 @@ function findCharacterCoMentionPatterns(
     }));
 }
 
+function buildCharacterMentionDistributions(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiteraryCharacterMentionDistributionAnalysis {
+  const groups = new Map<string,{
+    readonly entityId: string;
+    readonly canonicalName: string;
+    sceneIndexes: number[];
+  }>();
+  for (const scene of scenes) {
+    for (const mention of scene.characterMentions) {
+      const group = groups.get(mention.entityId) ?? {
+        entityId:mention.entityId,
+        canonicalName:mention.canonicalName,
+        sceneIndexes:[]
+      };
+      if (group.sceneIndexes[group.sceneIndexes.length-1] !== scene.sceneIndex) {
+        group.sceneIndexes.push(scene.sceneIndex);
+      }
+      groups.set(mention.entityId,group);
+    }
+  }
+
+  const characters = [...groups.values()].map(group => {
+    const sceneIndexes = [...group.sceneIndexes];
+    const firstSceneIndex = sceneIndexes[0] ?? 0;
+    const lastSceneIndex = sceneIndexes[sceneIndexes.length-1] ?? 0;
+    let longestConsecutiveSceneRun = 0;
+    let currentRun = 0;
+    let previousSceneIndex = Number.NEGATIVE_INFINITY;
+    for (const sceneIndex of sceneIndexes) {
+      currentRun = sceneIndex === previousSceneIndex+1 ? currentRun+1 : 1;
+      longestConsecutiveSceneRun = Math.max(longestConsecutiveSceneRun,currentRun);
+      previousSceneIndex = sceneIndex;
+    }
+    return {
+      entityId:group.entityId,
+      canonicalName:group.canonicalName,
+      sceneIndexes,
+      sceneCount:sceneIndexes.length,
+      firstSceneIndex,
+      lastSceneIndex,
+      interveningSceneCount:Math.max(0,lastSceneIndex-firstSceneIndex+1-sceneIndexes.length),
+      longestConsecutiveSceneRun,
+      sceneCoverageRatio:scenes.length > 0
+        ? roundMetric(sceneIndexes.length/scenes.length) : 0
+    };
+  }).sort((a,b) =>
+    b.sceneCount-a.sceneCount ||
+    b.longestConsecutiveSceneRun-a.longestConsecutiveSceneRun ||
+    a.entityId.localeCompare(b.entityId,"en")
+  );
+
+  return {
+    explicitSceneCount:scenes.length,
+    characterCount:characters.length,
+    omittedCharacterCount:Math.max(0,characters.length-100),
+    characters:characters.slice(0,100)
+  };
+}
+
 function mergeRanges(ranges: readonly LocalRange[]): LocalRange[] {
   const ordered = [...ranges].filter(range => range.end > range.start)
     .sort((a,b) => a.start - b.start || a.end - b.end);
@@ -2371,6 +2456,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
   const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
+  const characterMentionDistributions = buildCharacterMentionDistributions(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
@@ -2554,6 +2640,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneVoiceProfile,
     sceneVoiceSequences,
     characterCoMentions,
+    characterMentionDistributions,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),

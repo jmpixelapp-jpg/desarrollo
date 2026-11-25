@@ -1086,7 +1086,10 @@ test("integra relaciones documentadas y decisiones explícitas del escritor en l
 
 
 test("construye el grafo explícito de ideas y distingue referencias externas del snapshot", () => {
-  const makeIdea = (ideaId, relatedIdeaIds = [], status = "IDEA") => ({
+  const makeIdea = (
+    ideaId, relatedIdeaIds = [], status = "IDEA",
+    evidenceCount = 0, staleEvidenceCount = 0
+  ) => ({
     projectId: "literary-analysis-test",
     ideaId,
     text: "Idea " + ideaId,
@@ -1095,8 +1098,8 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
     sourceProjectName: "Libro",
     relatedEntityIds: [],
     relatedIdeaIds,
-    evidenceCount: 0,
-    staleEvidenceCount: 0,
+    evidenceCount,
+    staleEvidenceCount,
     evidence: [],
     statusHistory: status === "IDEA"
       ? [{ status: "IDEA", reason: "initial", changedAt: 1 }]
@@ -1114,9 +1117,9 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
     text: "Escena 1\\nAna espera.",
     knownIdeas: [
       makeIdea("idea-a", ["idea-b"]),
-      makeIdea("idea-b", ["idea-a", "context-not-loaded"], "incorporated"),
-      makeIdea("idea-c"),
-      makeIdea("idea-d", ["idea-c"], "discarded")
+      makeIdea("idea-b", ["idea-a", "context-not-loaded"], "incorporated", 2, 1),
+      makeIdea("idea-c", [], "IDEA", 0, 1),
+      makeIdea("idea-d", ["idea-c"], "discarded", 1, 0)
     ],
     knownIdeasOmittedCount: 3
   });
@@ -1134,7 +1137,12 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       notIncludedOutgoingReferenceCount: 0,
       statusHistoryRecordCount: 2,
       omittedStatusHistoryCount: 0,
-      writerDecisionCount: 0
+      writerDecisionCount: 0,
+      activeEvidenceCount: 0,
+      staleEvidenceCount: 1,
+      ideasWithActiveEvidenceCount: 0,
+      ideasWithStaleEvidenceCount: 1,
+      ideasWithoutActiveEvidenceCount: 2
     },
     {
       status: "incorporated",
@@ -1147,7 +1155,12 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       notIncludedOutgoingReferenceCount: 1,
       statusHistoryRecordCount: 2,
       omittedStatusHistoryCount: 0,
-      writerDecisionCount: 1
+      writerDecisionCount: 1,
+      activeEvidenceCount: 2,
+      staleEvidenceCount: 1,
+      ideasWithActiveEvidenceCount: 1,
+      ideasWithStaleEvidenceCount: 1,
+      ideasWithoutActiveEvidenceCount: 0
     },
     {
       status: "discarded",
@@ -1160,13 +1173,19 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       notIncludedOutgoingReferenceCount: 0,
       statusHistoryRecordCount: 2,
       omittedStatusHistoryCount: 0,
-      writerDecisionCount: 1
+      writerDecisionCount: 1,
+      activeEvidenceCount: 1,
+      staleEvidenceCount: 0,
+      ideasWithActiveEvidenceCount: 1,
+      ideasWithStaleEvidenceCount: 0,
+      ideasWithoutActiveEvidenceCount: 0
     }
   ]);
   assert.equal(graph.omittedIdeaCount, 3);
   assert.equal(graph.referenceCount, 4);
   assert.equal(graph.includedReferenceCount, 3);
   assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.reciprocalReferencePairCount, 1);
   assert.equal(graph.sourceNodeCount, 1);
   assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
   assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
@@ -1186,7 +1205,9 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       notIncludedOutgoingReferenceCount: 0,
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
       omittedStatusHistoryCount: 0,
-      writerDecisionCount: 0
+      writerDecisionCount: 0,
+      activeEvidenceCount: 0,
+      staleEvidenceCount: 0
     },
     {
       ideaId: "idea-b", status: "incorporated",
@@ -1197,7 +1218,9 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
         { status: "incorporated", reason: "writer", changedAt: 2 }
       ],
       omittedStatusHistoryCount: 0,
-      writerDecisionCount: 1
+      writerDecisionCount: 1,
+      activeEvidenceCount: 2,
+      staleEvidenceCount: 1
     },
     {
       ideaId: "idea-c", status: "IDEA",
@@ -1205,7 +1228,9 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       notIncludedOutgoingReferenceCount: 0,
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
       omittedStatusHistoryCount: 0,
-      writerDecisionCount: 0
+      writerDecisionCount: 0,
+      activeEvidenceCount: 0,
+      staleEvidenceCount: 1
     },
     {
       ideaId: "idea-d", status: "discarded",
@@ -1216,7 +1241,9 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
         { status: "discarded", reason: "writer", changedAt: 2 }
       ],
       omittedStatusHistoryCount: 0,
-      writerDecisionCount: 1
+      writerDecisionCount: 1,
+      activeEvidenceCount: 1,
+      staleEvidenceCount: 0
     }
   ]);
   assert.deepEqual(graph.references, [

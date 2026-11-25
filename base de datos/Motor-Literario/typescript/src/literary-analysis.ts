@@ -643,8 +643,6 @@ function analyzeExplicitScenes(
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[],
   knownEvents: readonly LiteraryAnalysisKnownEvent[],
   dialogueRanges: readonly LocalRange[],
-  sentenceRanges: readonly LocalRange[],
-  sentenceWordCounts: readonly number[],
   documentId: string,
   revision: number
 ): LiteraryExplicitSceneSegment[] {
@@ -669,24 +667,13 @@ function analyzeExplicitScenes(
   const boundedRanges = boundedScenes.map(scene => scene.contentRange);
   const wordCounts = countTokensPerRange(tokens,boundedRanges);
   const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,boundedRanges,dialogueRanges);
-  let sentenceCursor = 0;
   return boundedScenes.map((scene,index) => {
-    while (sentenceCursor < sentenceRanges.length &&
-      sentenceRanges[sentenceCursor]!.end <= scene.contentRange.start) sentenceCursor++;
-    const sceneSentenceRanges: LocalRange[] = [];
-    const sceneSentenceWordCounts: number[] = [];
-    let currentSentence = sentenceCursor;
-    while (currentSentence < sentenceRanges.length &&
-      sentenceRanges[currentSentence]!.start < scene.contentRange.end) {
-      const sentenceRange = sentenceRanges[currentSentence]!;
-      if (sentenceRange.start >= scene.contentRange.start &&
-          sentenceRange.end <= scene.contentRange.end) {
-        sceneSentenceRanges.push(sentenceRange);
-        sceneSentenceWordCounts.push(sentenceWordCounts[currentSentence] ?? 0);
-      }
-      currentSentence++;
-    }
-    sentenceCursor = currentSentence;
+    const sceneText = text.slice(scene.contentRange.start,scene.contentRange.end);
+    const sceneSentenceRanges = findSentenceRanges(sceneText).map(range => ({
+      start:scene.contentRange.start+range.start,
+      end:scene.contentRange.start+range.end
+    }));
+    const sceneSentenceWordCounts = countTokensPerRange(tokens,sceneSentenceRanges);
     const characterMentions = findSceneCharacterMentions(
       text,scene.contentRange,baseOffset,knownCharacters
     );
@@ -1414,7 +1401,6 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const paragraphRanges = findParagraphRanges(text);
   const dialogueSegments = findDialogueSegments(text);
   const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
-  const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges);
   const localStructureMarkers = detectLiteraryStructure(text);
   const structuralMarkers: LiteraryStructureMarker[] = localStructureMarkers.map(marker => ({
     markerType:marker.markerType,
@@ -1424,8 +1410,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   }));
   const explicitScenes = analyzeExplicitScenes(
     text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? [],
-    input.knownEvents ?? [],dialogueRanges,sentenceRanges,sentenceWordCounts,
-    input.documentId,input.revision
+    input.knownEvents ?? [],dialogueRanges,input.documentId,input.revision
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
@@ -1434,6 +1419,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
+  const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
 
   const wordGroups = new Map<string, WordToken[]>();

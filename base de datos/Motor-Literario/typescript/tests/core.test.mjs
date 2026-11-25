@@ -3262,7 +3262,7 @@ test("IndexedDB rechaza IDs duplicados dentro del contexto de una entrada archiv
     const store = new IndexedDbProjectStore();
     await assert.rejects(
       store.loadPersonalIdeas("writer-context"),
-      /contexto repite una idea relacionada/
+      /identificadores duplicados/
     );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
@@ -5840,7 +5840,10 @@ test("IndexedDB conserva contexto de ideas y entidades relacionadas después de 
       archived[0].context.relatedEntities.map(entity => entity.id),
       ["ana", "luz"]
     );
-    assert.equal(projectIdeas.length, 0);
+    // Solo se transfieren las ideas IDEA; las incorporadas y descartadas
+    // permanecen en el conocimiento del libro de origen.
+    assert.equal(projectIdeas.length, 2);
+    assert.deepEqual(projectIdeas.map(idea => idea.id).sort(), ["discarded", "kept"]);
     entities.clear(); // Simula la eliminación de las fichas del libro ya finalizado.
 
     const reopenedStore = new IndexedDbProjectStore();

@@ -6868,9 +6868,32 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidaciÃ³n atÃ
       }
     ]
   };
+  const archivedForReceipt = collections["personal-idea-library"]
+    .filter(entry => entry.writerId === "writer-canonical" && entry.sourceProjectId === "canonical-relation")
+    .sort((first, second) => first.idea.id.localeCompare(second.idea.id));
+  const checksum = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  const archivedIdeaIds = archivedForReceipt.map(entry => entry.idea.id);
+  const originalReceipt = {
+    writerId: "writer-canonical",
+    sourceProjectId: "canonical-relation",
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro",
+    finalizedAt: 20,
+    archivedIdeaIds,
+    archiveChecksum: checksum(JSON.stringify(archivedIdeaIds)),
+    archiveContentChecksum: checksum(JSON.stringify(archivedForReceipt))
+  };
+  collections["writer-library-finalization-receipts"] = [originalReceipt];
   const puts = [];
   const deletes = [];
-  let pendingReads = 6;
+  let pendingReads = 7;
   let transaction;
   const database = {
     onversionchange: null,
@@ -6899,6 +6922,18 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidaciÃ³n atÃ
                   return request;
                 }
               };
+            },
+            get(key) {
+              const request = {};
+              queueMicrotask(() => {
+                request.result = structuredClone((collections["writer-library-finalization-receipts"] ?? [])
+                  .find(item => item.writerId === key[0] &&
+                    item.sourceProjectId === key[1] && item.receiptId === key[2]));
+                request.onsuccess?.();
+                pendingReads--;
+                if (pendingReads === 0) queueMicrotask(() => transaction.oncomplete?.());
+              });
+              return request;
             },
             put(record) { puts.push({ store: name, record: structuredClone(record) }); },
             delete(key) { deletes.push({ store: name, key }); }
@@ -6963,6 +6998,17 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidaciÃ³n atÃ
     assert.deepEqual(archived.record.idea.statusHistory, [{ status: "IDEA", changedAt: 4, reason: "initial" }]);
     assert.equal(archived.record.category, "Libro");
     assert.equal(archived.record.archivedAt, 20);
+    const updatedReceipt = puts.find(item => item.store === "writer-library-finalization-receipts");
+    assert.ok(updatedReceipt, "el recibo debe actualizarse en la misma transacciÃ³n");
+    assert.notEqual(updatedReceipt.record.archiveContentChecksum, originalReceipt.archiveContentChecksum);
+    const updatedEntries = archivedForReceipt.map(entry =>
+      puts.find(item => item.store === "personal-idea-library" && item.record.idea.id === entry.idea.id)?.record ?? entry
+    );
+    assert.equal(
+      updatedReceipt.record.archiveContentChecksum,
+      checksum(JSON.stringify(updatedEntries)),
+      "el recibo debe reflejar los snapshots ya consolidados"
+    );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;

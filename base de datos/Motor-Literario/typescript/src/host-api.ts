@@ -843,7 +843,7 @@ export class HostEngineApi {
           }
         }
       }
-      if (this.store.saveIdea && this.store.loadIdeas && this.store.updateIdeaIfUnchanged) {
+      if (this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas) {
         const store = this.requireIdeaStore();
         if (!this.ideasLoaded) {
           const records = requireProjectScopedRecords(await store.loadIdeas(project.projectId), project.projectId, "ideas");

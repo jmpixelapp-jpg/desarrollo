@@ -582,7 +582,10 @@ export interface LiteraryCharacterTrajectorySceneSnapshot {
   readonly causalCandidateIds: readonly string[];
   readonly relationshipIds: readonly string[];
   readonly documentedDecisionIdeaIds: readonly string[];
-  readonly incompleteReasons: readonly ("mention-truncation" | "event-truncation")[];
+  readonly incompleteReasons: readonly (
+    | "mention-truncation" | "event-truncation"
+    | "relationship-evidence-truncation" | "decision-evidence-truncation"
+  )[];
 }
 export interface LiteraryCharacterProjectEventTimelineEvidence {
   readonly eventId: string;
@@ -663,6 +666,7 @@ export interface LiteraryCharacterDocumentedDecision {
   readonly evidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly evidenceSamples: readonly LiteraryCharacterRelationshipEvidence[];
+  readonly evidenceTruncated: boolean;
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
   readonly omittedStatusHistoryCount: number;
   /** Cambios de estado registrados explícitamente con reason=writer. */
@@ -3105,6 +3109,8 @@ function buildCharacterNarrativeTrajectories(
   eventEvidence: LiteraryCharacterEventEvidenceAnalysis,
   dependencies: LiteraryEventDependencyAnalysis,
   projectEvents: readonly LiteraryAnalysisKnownProjectEvent[],
+  documentId: string,
+  revision: number,
   knownRelations: readonly LiteraryAnalysisKnownRelation[],
   knownIdeas: readonly LiteraryAnalysisKnownIdea[],
   omittedRelationCount: number,
@@ -3178,6 +3184,7 @@ function buildCharacterNarrativeTrajectories(
           occurrence:{start:item.start,end:item.end},
           excerpt:item.excerpt
         })),
+        evidenceTruncated:idea.evidenceCount>idea.evidence.length,
         statusHistory:idea.statusHistory,
         omittedStatusHistoryCount:idea.omittedStatusHistoryCount,
         writerDecisionCount:idea.statusHistory.filter(change => change.reason==="writer").length
@@ -3225,6 +3232,8 @@ function buildCharacterNarrativeTrajectories(
           (b.candidate.sceneIndex ?? Number.MAX_SAFE_INTEGER) ||
         a.candidateId.localeCompare(b.candidateId,"en")
       );
+    const characterRelationships=relationshipsByCharacter.get(character.entityId) ?? [];
+    const characterDecisions=decisionsByCharacter.get(character.entityId) ?? [];
     const scenesWithEvidence: LiteraryCharacterTrajectorySceneSnapshot[] = scenes.map(scene => {
       const mention = scene.characterMentions.find(item => item.entityId === character.entityId);
       const linkedEvents = scene.eventLinks
@@ -3258,14 +3267,43 @@ function buildCharacterNarrativeTrajectories(
       const causalCandidateIds = causalRelations
         .filter(item => item.candidate.sceneIndex === scene.sceneIndex)
         .map(item => item.candidateId);
-      const incompleteReasons: Array<"mention-truncation" | "event-truncation"> = [];
+      const matchingRelationships=characterRelationships.filter(profile =>
+        profile.evidenceSamples.some(evidence =>
+          evidence.documentId===documentId &&
+          evidence.revision===revision &&
+          evidence.occurrence.end>scene.contentRange.start &&
+          evidence.occurrence.start<scene.contentRange.end
+        )
+      );
+      const relationshipIds=matchingRelationships.map(item => item.relationId);
+      const matchingDecisions=characterDecisions.filter(decision =>
+        decision.evidenceSamples.some(evidence =>
+          evidence.documentId===documentId &&
+          evidence.revision===revision &&
+          evidence.occurrence.end>scene.contentRange.start &&
+          evidence.occurrence.start<scene.contentRange.end
+        )
+      );
+      const documentedDecisionIdeaIds=matchingDecisions.map(item => item.ideaId);
+      const incompleteReasons: Array<
+        "mention-truncation" | "event-truncation" |
+        "relationship-evidence-truncation" | "decision-evidence-truncation"
+      > = [];
       if (scene.characterMentionsTruncated) incompleteReasons.push("mention-truncation");
       if (scene.eventLinksTruncated) incompleteReasons.push("event-truncation");
+      if (matchingRelationships.some(item => item.evidenceTruncated)) {
+        incompleteReasons.push("relationship-evidence-truncation");
+      }
+      if (matchingDecisions.some(item => item.evidenceTruncated)) {
+        incompleteReasons.push("decision-evidence-truncation");
+      }
       const hasDocumentedEvidence =
         mention !== undefined ||
         linkedEvents.length > 0 ||
         attributeValues.length > 0 ||
-        causalCandidateIds.length > 0;
+        causalCandidateIds.length > 0 ||
+        relationshipIds.length > 0 ||
+        documentedDecisionIdeaIds.length > 0;
       return {
         sceneIndex:scene.sceneIndex,
         evidenceStatus:hasDocumentedEvidence
@@ -3279,6 +3317,8 @@ function buildCharacterNarrativeTrajectories(
         eventEvidenceRangeCount,
         attributeValues,
         causalCandidateIds,
+        relationshipIds,
+        documentedDecisionIdeaIds,
         incompleteReasons
       };
     });
@@ -3301,6 +3341,7 @@ function buildCharacterNarrativeTrajectories(
         (total,profile) => total+profile.assertionCount,0
       ),
       causalCandidateCount:causalRelations.length,
+      writerDecisionCount:characterDecisions.reduce((total,item) => total+item.writerDecisionCount,0),
       observedSceneIndexes,
       incompleteSceneIndexes,
       attributes:attributeProfiles,
@@ -4766,7 +4807,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const characterNarrativeTrajectories = buildCharacterNarrativeTrajectories(
     explicitScenes,input.knownCharacters ?? [],characterAttributeEvolution,
     characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
-    input.knownRelations ?? [],input.knownIdeas ?? [],
+    input.documentId,input.revision,input.knownRelations ?? [],input.knownIdeas ?? [],
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);

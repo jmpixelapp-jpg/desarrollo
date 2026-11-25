@@ -754,6 +754,8 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
 export interface LiteraryIdeaGraphNode {
   readonly ideaId: string;
   readonly status: NarrativeIdea["status"];
+  /** Referencias directas conservadas para inspección del nodo y sus ciclos. */
+  readonly relatedIdeaIds: readonly string[];
   /** Consistencia entre el estado actual y el último registro visible; unknown si falta historial o está truncado. */
   readonly currentStatusHistoryConsistency: "consistent" | "mismatch" | "unknown";
   /** Historial visible de estados; puede estar acotado por omittedStatusHistoryCount. */
@@ -3728,6 +3730,7 @@ function buildLiteraryIdeaGraph(
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => ({
     ideaId: idea.ideaId,
     status: idea.status,
+    relatedIdeaIds: [...idea.relatedIdeaIds],
     incomingReferenceCount: incoming[index]!,
     includedOutgoingReferenceCount: adjacency[index]!.length,
     notIncludedOutgoingReferenceCount: outgoingExternal[index]!,
@@ -4533,7 +4536,7 @@ function buildCharacterNarrativeTrajectories(
         ? "both-events-participant"
         : inCause ? "cause-event-participant" : "consequence-event-participant";
       const relations = relationsByCharacter.get(entityId) ?? [];
-      relations.push({candidateId:candidate.candidateId,characterRole,candidate});
+      relations.push({candidateId:candidate.candidateId,characterRole,candidate,temporalConsistency:"insufficient-data"});
       relationsByCharacter.set(entityId,relations);
     }
   }
@@ -6084,7 +6087,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
-        idea.relatedIdeaIds.includes(idea.ideaId) ||
+        
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
@@ -6114,7 +6117,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
-        idea.relatedIdeaIds.includes(idea.ideaId) ||
+        
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||

@@ -200,13 +200,14 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
 
   const revised = analyzeGraph([{
     ...original,
+    status: "incorporated",
     evidenceCount: 4,
     staleEvidenceCount: 2,
     writerDecisionCount: 3,
     omittedStatusHistoryCount: 1,
     statusHistory: [
       ...original.statusHistory,
-      { status: "IDEA", reason: "reconsidered", changedAt: 2 }
+      { status: "incorporated", reason: "writer", changedAt: 2 }
     ]
   }]);
   assert.equal(revised.nodes[0].activeEvidenceCount, 4);

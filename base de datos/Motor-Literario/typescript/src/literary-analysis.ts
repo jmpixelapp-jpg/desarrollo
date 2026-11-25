@@ -804,8 +804,7 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly terminalWithinSnapshotNodeCount: number;
   /** Nodos aislados únicamente respecto del conjunto de ideas incluido. */
   readonly isolatedWithinSnapshotNodeCount: number;
-  /** Grupos conectados ignorando la dirección de los vínculos explícitos. */
-  /** Componentes débilmente conexos dentro del snapshot, no del catálogo omitido. */
+  /** Componentes débilmente conexos dentro del snapshot; ignoran la dirección y no incluyen nodos omitidos. */
   readonly weakComponentCount: number;
   /** Componentes del snapshot no visibles por el límite de muestras. */
   readonly omittedWeakComponentCount: number;

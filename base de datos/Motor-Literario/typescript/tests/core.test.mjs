@@ -10613,6 +10613,68 @@ test("agrega patrones de co-mención de personajes por escena sin inferir relaci
   ]);
 });
 
+test("resume la distribución de menciones literales de personajes entre escenas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","Ana observa el camino.","***",
+    "ESCENA 2","Ana llama a Bruno.","***",
+    "ESCENA 3","Carla espera junto al río.","***",
+    "ESCENA 4","Ana vuelve. Bruno escucha.","***",
+    "ESCENA 5","Ana recuerda la llegada."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"character-mention-distribution",documentId:"chapter",revision:9,text,
+    knownCharacters:[
+      {entityId:"ana",canonicalName:"Ana"},
+      {entityId:"bruno",canonicalName:"Bruno"},
+      {entityId:"carla",canonicalName:"Carla"},
+      {entityId:"diego",canonicalName:"Diego"}
+    ]
+  });
+
+  assert.deepEqual(result.characterMentionDistributions,{
+    explicitSceneCount:5,
+    characterCount:3,
+    omittedCharacterCount:0,
+    characters:[
+      {
+        entityId:"ana",canonicalName:"Ana",sceneIndexes:[1,2,4,5],
+        sceneCount:4,firstSceneIndex:1,lastSceneIndex:5,
+        interveningSceneCount:1,longestConsecutiveSceneRun:2,
+        sceneCoverageRatio:0.8
+      },
+      {
+        entityId:"bruno",canonicalName:"Bruno",sceneIndexes:[2,4],
+        sceneCount:2,firstSceneIndex:2,lastSceneIndex:4,
+        interveningSceneCount:1,longestConsecutiveSceneRun:1,
+        sceneCoverageRatio:0.4
+      },
+      {
+        entityId:"carla",canonicalName:"Carla",sceneIndexes:[3],
+        sceneCount:1,firstSceneIndex:3,lastSceneIndex:3,
+        interveningSceneCount:0,longestConsecutiveSceneRun:1,
+        sceneCoverageRatio:0.2
+      }
+    ]
+  });
+  assert.equal(
+    result.characterMentionDistributions.characters.some(item => item.entityId === "diego"),
+    false
+  );
+});
+
+test("la distribución de menciones queda vacía sin escenas explícitas ni coincidencias", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"character-mention-distribution-empty",documentId:"chapter",revision:1,
+    text:"Ana camina por la plaza.",
+    knownCharacters:[{entityId:"ana",canonicalName:"Ana"}]
+  });
+  assert.deepEqual(result.characterMentionDistributions,{
+    explicitSceneCount:0,characterCount:0,omittedCharacterCount:0,characters:[]
+  });
+});
+
 test("clasifica señales gramaticales por escena y excluye el diálogo", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

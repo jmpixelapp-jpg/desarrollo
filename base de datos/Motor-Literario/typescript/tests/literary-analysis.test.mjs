@@ -920,6 +920,78 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
   assert.equal(result.characterNarrativeTrajectories.notIncludedIdeaReferenceCount, 1);
 });
 
+test("construye el grafo explícito de ideas y distingue referencias externas del snapshot", () => {
+  const makeIdea = (ideaId, relatedIdeaIds = [], status = "IDEA") => ({
+    projectId: "literary-analysis-test",
+    ideaId,
+    text: "Idea " + ideaId,
+    status,
+    originDocumentId: "chapter-one",
+    sourceProjectName: "Libro",
+    relatedEntityIds: [],
+    relatedIdeaIds,
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: [],
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nAna espera.",
+    knownIdeas: [
+      makeIdea("idea-a", ["idea-b"]),
+      makeIdea("idea-b", ["idea-a", "context-not-loaded"], "incorporated"),
+      makeIdea("idea-c"),
+      makeIdea("idea-d", ["idea-c"], "discarded")
+    ],
+    knownIdeasOmittedCount: 3
+  });
+  const graph = result.ideaGraph;
+  assert.equal(graph.ideaCount, 4);
+  assert.equal(graph.omittedIdeaCount, 3);
+  assert.equal(graph.referenceCount, 4);
+  assert.equal(graph.includedReferenceCount, 3);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.sourceNodeCount, 1);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+  assert.equal(graph.cycleCount, 1);
+  assert.deepEqual(graph.cycles, [{ ideaIds: ["idea-a", "idea-b"] }]);
+  assert.deepEqual(graph.nodes, [
+    {
+      ideaId: "idea-a", status: "IDEA",
+      incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0
+    },
+    {
+      ideaId: "idea-b", status: "incorporated",
+      incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 1
+    },
+    {
+      ideaId: "idea-c", status: "IDEA",
+      incomingReferenceCount: 1, includedOutgoingReferenceCount: 0,
+      notIncludedOutgoingReferenceCount: 0
+    },
+    {
+      ideaId: "idea-d", status: "discarded",
+      incomingReferenceCount: 0, includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0
+    }
+  ]);
+  assert.deepEqual(graph.references, [
+    { fromIdeaId: "idea-a", toIdeaId: "idea-b", resolution: "included-in-snapshot" },
+    { fromIdeaId: "idea-b", toIdeaId: "context-not-loaded", resolution: "not-in-snapshot" },
+    { fromIdeaId: "idea-b", toIdeaId: "idea-a", resolution: "included-in-snapshot" },
+    { fromIdeaId: "idea-d", toIdeaId: "idea-c", resolution: "included-in-snapshot" }
+  ]);
+  assert.equal(graph.referencesTruncated, false);
+});
+
 test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálogo de personajes", () => {
   const text = "Escena 1\nAna observó la puerta.";
   const base = {
@@ -967,7 +1039,7 @@ test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
-    text: "Escena 1\\nAna espera.",
+    text: "Escena 1\nAna espera.",
     knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }]
   };
   const idea = {

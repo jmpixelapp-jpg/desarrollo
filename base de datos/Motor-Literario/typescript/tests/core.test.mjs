@@ -10681,8 +10681,11 @@ test("traza evidencia de acontecimientos por participante sin inferir presencia 
 
   assert.equal(result.explicitScenes[0].eventLinks[0].matchingEvidenceCount,1);
   assert.equal(result.explicitScenes[0].eventLinks[0].matchingEvidenceTruncated,false);
+  assert.equal(result.explicitScenes[0].eventLinksTruncated,false);
   assert.deepEqual(result.characterEventEvidenceProfiles,{
     explicitSceneCount:4,
+    sourceTruncatedSceneCount:0,
+    sourceTruncatedSceneIndexes:[],
     associationCount:3,
     omittedAssociationCount:0,
     characterCount:2,
@@ -10746,8 +10749,38 @@ test("conserva el conteo total de evidencia cuando sus rangos se limitan a veint
   assert.equal(event.matchingEvidenceCount,25);
   assert.equal(event.matchingEvidence.length,20);
   assert.equal(event.matchingEvidenceTruncated,true);
+  assert.equal(result.explicitScenes[0].eventLinksTruncated,false);
+  assert.equal(result.characterEventEvidenceProfiles.sourceTruncatedSceneCount,0);
   assert.equal(result.characterEventEvidenceProfiles.profiles[0].canonicalName,null);
   assert.equal(result.characterEventEvidenceProfiles.profiles[0].totalEvidenceRangeCount,25);
+});
+
+test("informa escenas con más de cien acontecimientos enlazados y perfiles omitidos", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "ESCENA 1\nLa alarma sonó.";
+  const start = text.indexOf("La alarma");
+  const knownEvents = Array.from({length:101},(_,index) => ({
+    eventId:"event-"+String(index).padStart(3,"0"),
+    label:"Acontecimiento "+index,
+    participants:["character-a","character-b","character-c"],
+    evidence:[{
+      documentId:"chapter",revision:1,start,end:text.length,excerpt:"La alarma sonó."
+    }]
+  }));
+  const result = analyzeLiteraryFragment({
+    projectId:"event-link-scene-limit",documentId:"chapter",revision:1,text,knownEvents
+  });
+
+  assert.equal(result.explicitScenes[0].eventLinks.length,100);
+  assert.equal(result.explicitScenes[0].eventLinksTruncated,true);
+  assert.equal(result.characterEventEvidenceProfiles.explicitSceneCount,1);
+  assert.equal(result.characterEventEvidenceProfiles.sourceTruncatedSceneCount,1);
+  assert.deepEqual(result.characterEventEvidenceProfiles.sourceTruncatedSceneIndexes,[1]);
+  assert.equal(result.characterEventEvidenceProfiles.associationCount,300);
+  assert.equal(result.characterEventEvidenceProfiles.omittedAssociationCount,100);
+  assert.equal(result.characterEventEvidenceProfiles.characterCount,3);
+  assert.equal(result.characterEventEvidenceProfiles.eventCount,100);
+  assert.equal(result.characterEventEvidenceProfiles.profiles.length,200);
 });
 
 test("agrega patrones de co-mención de personajes por escena sin inferir relaciones", async () => {

@@ -25,12 +25,12 @@ class DictionaryMemoryStore {
     this.dictionaries.set(key, structuredClone(dictionary));
   }
   async loadDictionaryEntries(projectId, dictionaryId) {
-    if (!this.dictionaries.has(JSON.stringify([projectId, dictionaryId]))) throw new Error("dictionary_missing");
+    if (!this.dictionaries.has(JSON.stringify([projectId, dictionaryId]))) throw new Error("El diccionario no existe en el proyecto activo.");
     return [...this.entries.values()].filter(item => item.projectId === projectId && item.dictionaryId === dictionaryId)
       .map(item => structuredClone(item));
   }
   async saveDictionaryEntry(entry, expectedCurrent) {
-    if (!this.dictionaries.has(JSON.stringify([entry.projectId, entry.dictionaryId]))) throw new Error("dictionary_missing");
+    if (!this.dictionaries.has(JSON.stringify([entry.projectId, entry.dictionaryId]))) throw new Error("El diccionario no existe en el proyecto activo.");
     const key = JSON.stringify([entry.projectId, entry.id]);
     const current = this.entries.get(key);
     if (expectedCurrent === undefined) {
@@ -48,6 +48,9 @@ class DictionaryMemoryStore {
     );
     if (duplicate) throw new Error("duplicate_form");
     this.entries.set(key, structuredClone(entry));
+  }
+  async saveEntity(entity) {
+    this.entities.set(JSON.stringify([entity.projectId, entity.id]), structuredClone(entity));
   }
   async loadEntities(projectId) {
     return [...this.entities.values()].filter(item => item.projectId === projectId).map(item => structuredClone(item));

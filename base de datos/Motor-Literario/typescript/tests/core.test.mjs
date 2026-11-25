@@ -2172,7 +2172,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 12);
+      assert.equal(version, 13);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2194,7 +2194,9 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "personal-idea-library", keyPath: ["writerId", "sourceProjectId", "idea.id"] },
       { name: "writer-library-finalization-receipts", keyPath: ["writerId", "sourceProjectId", "receiptId"] },
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
-      { name: "document-diagnostics", keyPath: ["projectId", "documentId"] }
+      { name: "document-diagnostics", keyPath: ["projectId", "documentId"] },
+      { name: "project-dictionaries", keyPath: ["projectId", "id"] },
+      { name: "dictionary-entries", keyPath: ["projectId", "id"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
       ["documents", "by-project"],
@@ -2210,7 +2212,12 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["writer-library-finalization-receipts", "by-writer-source"],
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
-      ["document-diagnostics", "by-project"]
+      ["document-diagnostics", "by-project"],
+      ["project-dictionaries", "by-project"],
+      ["project-dictionaries", "by-project-language-name"],
+      ["dictionary-entries", "by-project"],
+      ["dictionary-entries", "by-dictionary"],
+      ["dictionary-entries", "by-dictionary-normalized"]
     ]);
     assert.equal(createdIndexes.find(index => index.name === "by-document-sequence")?.unique, true);
   } finally {
@@ -2272,7 +2279,8 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   const names = [
     "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
-    "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics"
+    "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
+    "project-dictionaries", "dictionary-entries"
   ];
   const stores = new Map(names.map(name => [name, {
     indexNames: { contains: () => false },
@@ -2321,7 +2329,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 12);
+    assert.equal(openedVersion, 13);
     const expected = [
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
@@ -2355,7 +2363,8 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
   const names = [
     "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
-    "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics"
+    "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
+    "project-dictionaries", "dictionary-entries"
   ];
   const deleted = [];
   const created = [];

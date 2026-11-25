@@ -62,7 +62,7 @@ export interface DictionaryEntryInput {
 }
 
 export function normalizeDictionaryName(value: string): string {
-  return value.normalize("NFKC").trim().replace(/\\s+/gu, " ").toLowerCase();
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
 }
 
 export function normalizeDictionarySurface(value: string): string {

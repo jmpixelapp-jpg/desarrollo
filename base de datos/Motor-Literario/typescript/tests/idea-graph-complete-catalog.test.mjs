@@ -27,7 +27,15 @@ const store = {
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] }
+      statusHistory:[
+        {status:"IDEA",reason:"initial",changedAt:1},
+        {status:"IDEA",reason:"writer",changedAt:2},
+        {status:"incorporated",reason:"writer",changedAt:3},
+        {status:"IDEA",reason:"writer",changedAt:4},
+        {status:"discarded",reason:"writer",changedAt:5},
+        {status:"incorporated",reason:"writer",changedAt:6},
+        {status:"IDEA",reason:"writer",changedAt:7}
+      ] }
   ],
   async saveDocument(doc) { this.documents.set(doc.projectId+":"+doc.documentId,structuredClone(doc)); },
   async loadDocument(project,id) {
@@ -54,6 +62,9 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
     assert.equal(bridgeNode.observedStatusTransitionCount, 3);
     assert.equal(bridgeNode.statusReversalCount, 1);
+    const soloNode = result.ideaGraph.nodes.find(node => node.ideaId === "solo");
+    assert.equal(soloNode.observedStatusTransitionCount, 5);
+    assert.equal(soloNode.statusReversalCount, 3);
     assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
     assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
     assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);

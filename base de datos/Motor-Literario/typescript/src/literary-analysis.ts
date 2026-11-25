@@ -3596,9 +3596,39 @@ function buildLiteraryIdeaGraph(
  * El filtro de frecuencia usa el 40% del catálogo, con mínimo dos y máximo
  * cuarenta ideas, para adaptarse tanto a libros pequeños como a catálogos amplios.
  */
+// Caché de una sola instantánea: la clave conserva exactamente los campos léxicos
+// relevantes y el resultado almacenado nunca se expone directamente al consumidor.
+let literaryIdeaLexicalResonanceCacheKey: string | undefined;
+let literaryIdeaLexicalResonanceCacheValue: LiteraryIdeaLexicalResonanceAnalysis | undefined;
+
 function buildLiteraryIdeaLexicalResonances(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[]
 ): LiteraryIdeaLexicalResonanceAnalysis {
+  // La clave es exacta (no un hash): un cambio de texto, ID, orden o estado
+  // de omisión invalida la entrada sin depender de probabilidades de colisión.
+  let cacheable = ideas.length <= 2_000;
+  let cacheKey = "";
+  let cacheTextUnits = 0;
+  if (cacheable) {
+    for (const idea of ideas) {
+      const text = typeof idea.text === "string" ? idea.text : undefined;
+      if (text !== undefined) {
+        cacheTextUnits += text.length;
+        if (cacheTextUnits > MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS) {
+          cacheable = false;
+          break;
+        }
+      }
+      cacheKey += `${idea.ideaId.length}:${idea.ideaId}`;
+      cacheKey += idea.textOmitted === "budget" ? "B" : text === undefined
+        ? "N" : `T${text.length}:${text}`;
+    }
+  }
+  if (cacheable && cacheKey === literaryIdeaLexicalResonanceCacheKey &&
+      literaryIdeaLexicalResonanceCacheValue) {
+    return structuredClone(literaryIdeaLexicalResonanceCacheValue);
+  }
+
   const compareTerms = (left: string, right: string): number => {
     const localized = left.localeCompare(right, "es");
     return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
@@ -3800,7 +3830,7 @@ function buildLiteraryIdeaLexicalResonances(
     };
   });
 
-  return {
+  const result: LiteraryIdeaLexicalResonanceAnalysis = {
     inputIdeaCount: ideas.length,
     analyzedIdeaCount: prepared.length,
     ideasWithoutTextCount,
@@ -3817,6 +3847,14 @@ function buildLiteraryIdeaLexicalResonances(
     ),
     resonances
   };
+  if (cacheable) {
+    literaryIdeaLexicalResonanceCacheKey = cacheKey;
+    literaryIdeaLexicalResonanceCacheValue = structuredClone(result);
+  } else {
+    literaryIdeaLexicalResonanceCacheKey = undefined;
+    literaryIdeaLexicalResonanceCacheValue = undefined;
+  }
+  return result;
 }
 
 function buildCharacterNarrativeTrajectories(

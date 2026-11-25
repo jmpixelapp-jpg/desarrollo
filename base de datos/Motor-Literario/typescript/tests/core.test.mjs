@@ -11808,6 +11808,31 @@ test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas
         objectStore(name) {
           assert.equal(name, "personal-idea-library");
           return {
+            get(key) {
+              const request = {};
+              pending++;
+              completeQueued = false;
+              queueMicrotask(() => {
+                const value = entries.find(item =>
+                  item.writerId === key[0] &&
+                  item.sourceProjectId === key[1] &&
+                  item.idea.id === key[2]
+                );
+                request.result = value ? structuredClone(value) : undefined;
+                request.onsuccess?.();
+                pending--;
+                if (pending === 0 && !completeQueued) {
+                  completeQueued = true;
+                  queueMicrotask(() => {
+                    if (pending === 0 && !completed) {
+                      completed = true;
+                      transaction.oncomplete?.();
+                    }
+                  });
+                }
+              });
+              return request;
+            },
             index(indexName) {
               assert.equal(indexName, "by-writer");
               return {
@@ -11845,6 +11870,12 @@ test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas
     assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
     assert.equal(second.nextCursor, null);
     assert.equal(seekCalls, 1, "la segunda página salta directamente tras la clave compuesta del cursor");
+
+    const linked = await store.loadPersonalIdeasByKeys(writerId, [
+      { sourceProjectId: "book-pages", ideaId: "idea-c" },
+      { sourceProjectId: "book-pages", ideaId: "missing-idea" }
+    ]);
+    assert.deepEqual(linked.map(item => item.idea.id), ["idea-c"]);
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;

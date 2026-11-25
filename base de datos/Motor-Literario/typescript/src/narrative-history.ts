@@ -31,7 +31,7 @@ export function extractNarrativeAssertions(
   for (const entity of validatedEntities) {
     if (!entity || entity.projectId !== projectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
-        entity.kind !== "character" && entity.kind !== "place" && entity.kind !== "object" ||
+        (typeof entity.kind !== "string" || !entity.kind.trim()) ||
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
         typeof entity.normalizedName !== "string" || !entity.normalizedName.trim() ||
         !Array.isArray(entity.aliases) ||

@@ -95,7 +95,7 @@ function validateNarrativeEvidenceList(evidence: readonly TextEvidence[], label:
 
 function validateNarrativeEntityRecord(entity: NarrativeEntity, label: string): void {
   validateProjectRecord(entity, label);
-  if (!["character", "place", "object"].includes(entity.kind) ||
+  if (typeof entity.kind !== "string" || !entity.kind.trim() || entity.kind.length > 128 ||
       typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
       typeof entity.normalizedName !== "string" || !entity.normalizedName.trim() ||
       normalizeEntityName(entity.canonicalName) !== entity.normalizedName ||

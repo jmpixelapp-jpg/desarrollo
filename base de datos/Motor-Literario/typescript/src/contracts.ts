@@ -100,6 +100,28 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Fragmentos estables con posiciones UTF-16 recalculables. */
+  loadManuscriptFragments?(projectId: string, documentId?: string): Promise<readonly ManuscriptFragment[]>;
+  saveManuscriptFragment?(fragment: ManuscriptFragment, expectedCurrent?: ManuscriptFragment): Promise<void>;
+
+  /** Atributos dinámicos de fichas y relaciones. */
+  loadRecordAttributes?(projectId: string, recordId: string): Promise<readonly RecordAttribute[]>;
+  saveRecordAttribute?(attribute: RecordAttribute, expectedCurrent?: RecordAttribute): Promise<void>;
+  loadRelationAttributes?(projectId: string, relationId: string): Promise<readonly RelationAttribute[]>;
+  saveRelationAttribute?(attribute: RelationAttribute, expectedCurrent?: RelationAttribute): Promise<void>;
+
+  /** Sugerencias estructuradas asociadas a proyecto, documento y revisión. */
+  loadActiveSuggestions?(projectId: string, documentId?: string, status?: ActiveSuggestion["status"]): Promise<readonly ActiveSuggestion[]>;
+  saveActiveSuggestion?(suggestion: ActiveSuggestion, expectedCurrent?: ActiveSuggestion): Promise<void>;
+
+  /** Autorizaciones globales append-only ligadas al escritor autenticado. */
+  loadImportAuthorizations?(writerId: string): Promise<readonly ImportAuthorization[]>;
+  appendImportAuthorization?(authorization: ImportAuthorization): Promise<void>;
+
+  /** Historial de las migraciones nativas aplicadas a IndexedDB. */
+  loadSchemaMigrations?(): Promise<readonly SchemaMigration[]>;
+
+
   /** Historial append-only de etiquetas y estados de fichas y relaciones. */
   loadRecordLifecycles?(projectId: string, recordId: string): Promise<readonly RecordLifecycle[]>;
   appendRecordLifecycle?(item: RecordLifecycle): Promise<void>;

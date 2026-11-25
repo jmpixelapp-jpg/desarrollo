@@ -79,7 +79,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
     value.start >= 0 && value.end >= value.start && typeof value.excerpt === "string" &&
     (value.status === undefined || value.status === "stale"));
   if (collection === "entidades") {
-    if (!["character", "place", "object"].includes(item.kind) ||
+    if (typeof item.kind !== "string" || !item.kind.trim() || item.kind.length > 128 ||
         typeof item.canonicalName !== "string" || !item.canonicalName.trim() ||
         typeof item.normalizedName !== "string" || !item.normalizedName.trim() ||
         normalizeEntityName(item.canonicalName) !== item.normalizedName ||
@@ -270,7 +270,7 @@ function isValidPersonalIdeaContext(
   for (const entity of context.relatedEntities) {
     if (!entity || entity.projectId !== sourceProjectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
-        !["character", "place", "object"].includes(entity.kind) ||
+        (typeof entity.kind !== "string" || !entity.kind.trim() || entity.kind.length > 128) ||
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
         typeof entity.normalizedName !== "string" || !entity.normalizedName.trim() ||
         normalizeEntityName(entity.canonicalName) !== entity.normalizedName ||

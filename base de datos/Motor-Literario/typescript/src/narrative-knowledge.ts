@@ -1,6 +1,7 @@
 /** Conocimiento narrativo aislado por proyecto y respaldado por evidencia textual. */
 
-export type NarrativeEntityType = "character" | "place" | "object";
+/** Tipo abierto: la extracción automática reconoce algunos tipos, pero el escritor puede registrar otros. */
+export type NarrativeEntityType = string;
 export type NarrativeKnowledgeKind = NarrativeEntityType | "event" | "relationship" | "idea";
 
 export interface TextEvidence {
@@ -206,7 +207,7 @@ function validateNarrativeExtractionContext(
   for (const entity of entities) {
     if (!entity || entity.projectId !== projectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
-        !["character", "place", "object"].includes(entity.kind) ||
+        (typeof entity.kind !== "string" || !entity.kind.trim() || entity.kind.length > 128) ||
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
         typeof entity.normalizedName !== "string" || !entity.normalizedName.trim() ||
         !Array.isArray(entity.aliases) ||

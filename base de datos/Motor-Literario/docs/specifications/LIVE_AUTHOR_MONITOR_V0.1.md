@@ -225,24 +225,38 @@ const source = new LiveAuthorMonitorTextAreaSource({
   onError: error => reportEditorSynchronizationError(error)
 });
 
-const stopChanges = bindLiveAuthorMonitorEditorChanges({
+let retryScheduled = false;
+const binding = bindLiveAuthorMonitorEditorChanges({
   source,
   sink: api,
   onAdmission: (change, admission) => {
-    if (admission.status === "rejected") {
-      // queue_full es reintentable: conservar el delta exacto y reintentarlo
-      // en orden antes de enviar deltas posteriores.
-      retainRejectedDelta(change, admission);
-      if (admission.reason !== "queue_full") {
-        source.requireResynchronization("El motor rechazó un delta que requiere reconciliación.");
+    if (admission.status !== "rejected") return;
+    if (admission.reason === "queue_full") {
+      // El enlace retiene este delta y todos los posteriores. Vaciar la cola
+      // durable y reintentar conserva el orden y la revisión base.
+      if (!retryScheduled) {
+        retryScheduled = true;
+        void api.flushPendingChanges().then(() => {
+          retryScheduled = false;
+          binding.retryPending();
+        }).catch(error => {
+          retryScheduled = false;
+          reportEditorSynchronizationError(error, change);
+        });
       }
+      return;
     }
+
+    // Tras resolver el conflicto y hacer coincidir el textarea con el snapshot:
+    // source.resynchronize(snapshot);
+    // binding.discardPendingAfterResynchronization();
+    source.requireResynchronization("El motor rechazó un delta que requiere reconciliación.");
   },
   onError: (error, change) => reportEditorSynchronizationError(error, change)
 });
 
 // Al desmontar el editor:
-stopChanges();
+binding();
 source.dispose();
 \`\`\`
 
@@ -253,7 +267,8 @@ Reglas del adaptador:
 - Admite inserción, pegado, reemplazo de selección y borrado hacia atrás/adelante. Los offsets y las longitudes son unidades UTF-16, incluidos los pares sustitutos.
 - No inventa rangos si falta \`beforeinput\`, cambia el valor por código sin una operación equivalente o no puede determinar la dirección de borrado: suspende el stream y notifica \`onError\`.
 - \`historyUndo\` y \`historyRedo\` requieren el contrato de historial del editor anfitrión. Tras reconciliar el contenido visible con un snapshot del motor, llamar a \`source.resynchronize(snapshot)\`.
-- En una respuesta \`queue_full\`, el anfitrión conserva el delta rechazado y lo reintenta en orden; no debe enviar un delta posterior antes de recuperar el anterior. Los rechazos no recuperables suspenden el adaptador mediante \`requireResynchronization\`.
-- La función de desmontaje retira listeners; \`dispose()\` libera el adaptador. Ninguno cierra el documento ni dispone \`HostEngineApi\`.
+- El enlace retiene en FIFO cualquier delta rechazado o cuyo envío arroje un error; mientras exista backlog, no envía eventos posteriores. \`retryPending()\` reanuda el envío en orden cuando el anfitrión detecta capacidad; \`getPendingChanges()\` permite inspeccionar el backlog.
+- \`discardPendingAfterResynchronization()\` solo se usa después de reconciliar el texto visible y el motor con un snapshot autoritativo. No se usa para resolver un \`queue_full\` temporal.
+- La función devuelta sigue siendo invocable como \`binding()\`; cancela el stream y libera el backlog. \`source.dispose()\` retira listeners. Ninguno cierra el documento ni dispone \`HostEngineApi\`.
 
-La prueba dedicada \`typescript/tests/live-author-monitor-textarea-source.test.mjs\` cubre rangos, secuencias, reemplazos, borrados, UTF-16, undo/redo, resincronización, errores de entrada y desmontaje. Los editores que manejan su propio historial/composición deben implementar la misma interfaz \`subscribeChanges\` con sus operaciones transaccionales nativas.
+Las pruebas dedicadas \`live-author-monitor-textarea-source.test.mjs\` y \`live-author-monitor-change-binding.test.mjs\` cubren rangos, secuencias, reemplazos, borrados, UTF-16, undo/redo, resincronización, errores y contrapresión FIFO. Los editores que manejan su propio historial/composición deben implementar la misma interfaz \`subscribeChanges\` con sus operaciones transaccionales nativas.

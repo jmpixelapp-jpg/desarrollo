@@ -12,7 +12,6 @@ on:
       - "base de datos/Motor-Literario/MLDB/storage_mapping_v0.4.2.json"
       - "base de datos/Motor-Literario/typescript/tests/live-author-monitor*.test.mjs"
       - "base de datos/Motor-Literario/typescript/tests/storage-implementation-audit.test.mjs"
-      - "base de datos/Motor-Literario/typescript/tests/storage-implementation-audit.test.mjs"
       - ".github/workflows/live-author-monitor.yml"
   pull_request:
     paths:
@@ -51,4 +50,4 @@ jobs:
       - name: Build runtime bundle
         run: npx vite build
       - name: Run monitor-specific tests
-        run: node --test tests/live-author-monitor*.test.mjs tests/storage-implementation-audit.test.mjs tests/storage-implementation-audit.test.mjs
+        run: node --test tests/live-author-monitor*.test.mjs tests/storage-implementation-audit.test.mjs

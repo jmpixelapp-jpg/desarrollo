@@ -204,3 +204,33 @@ test("fusionar ideas combina referencias explícitas sin duplicarlas y respeta e
     /referencias explícitas a ideas superan el límite de 500/
   );
 });
+
+test("fusionar ideas conserva referencias a entidades y aplica un límite conjunto", async () => {
+  const { mergeNarrativeIdea, MAX_NARRATIVE_IDEA_REFERENCES } =
+    await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    relatedEntityIds: ["entity-a", "entity-shared"],
+    relatedIdeaIds: ["idea-a"]
+  });
+  const incoming = baseIdea({
+    relatedEntityIds: ["entity-shared", "entity-b"],
+    relatedIdeaIds: ["idea-a", "idea-b"]
+  });
+
+  const merged = mergeNarrativeIdea(previous, incoming);
+  assert.deepEqual(merged.relatedEntityIds, ["entity-a", "entity-shared", "entity-b"]);
+  assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-b"]);
+
+  const atLimit = baseIdea({
+    relatedEntityIds: Array.from(
+      { length: MAX_NARRATIVE_IDEA_REFERENCES - 1 },
+      (_, index) => "entity-" + index
+    ),
+    relatedIdeaIds: ["idea-last"]
+  });
+  const overflow = baseIdea({ relatedIdeaIds: ["another-idea"] });
+  assert.throws(
+    () => mergeNarrativeIdea(atLimit, overflow),
+    /referencias explícitas de la idea superan el límite de 500/
+  );
+});

@@ -239,6 +239,28 @@ test("no descarta backlog ni reinicia el adaptador mientras el motor tiene cambi
   f.integration.dispose();
 });
 
+
+test("no permite desmontar con deltas pendientes y permite continuar tras admitirlos", () => {
+  const f = fixture();
+  f.setRejectNext(true);
+  f.element.edit(5, 5, "hello!");
+
+  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1]);
+  assert.throws(() => f.integration.dispose(), /cambios sin admitir/);
+  assert.equal(f.element.listeners.get("beforeinput").size, 1);
+  assert.equal(f.retryListeners.size, 1);
+  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1]);
+
+  f.publishRetrySignal();
+  assert.deepEqual(f.integration.getPendingChanges(), []);
+  assert.equal(f.monitor.getSnapshot("chapter-1").durableSequence, 1);
+
+  f.integration.dispose();
+  assert.equal(f.element.listeners.get("beforeinput").size, 0);
+  assert.equal(f.element.listeners.get("input").size, 0);
+  assert.equal(f.retryListeners.size, 0);
+});
+
 test("rechaza montar sobre un documento inexistente", () => {
   const element = new FakeTextArea("hello");
   const invalidHost = {

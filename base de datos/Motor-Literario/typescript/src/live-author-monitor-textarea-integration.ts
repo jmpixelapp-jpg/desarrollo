@@ -14,15 +14,18 @@ import {
   type LiveAuthorMonitorTextAreaSourceState
 } from "./live-author-monitor-textarea-source";
 
-export interface LiveAuthorMonitorTextAreaSyncState {
+export interface LiveAuthorMonitorEditorSyncState {
   readonly sequence: number;
   readonly pendingSequence: number;
   readonly needsResync: boolean;
 }
 
-export interface LiveAuthorMonitorTextAreaHostApi {
+/** Alias compatible para integraciones que usan HTMLTextAreaElement. */
+export type LiveAuthorMonitorTextAreaSyncState = LiveAuthorMonitorEditorSyncState;
+
+export interface LiveAuthorMonitorEditorHostApi {
   getSnapshot(documentId: string): DocumentSnapshot | undefined;
-  getDocumentSyncState(documentId: string): LiveAuthorMonitorTextAreaSyncState | undefined;
+  getDocumentSyncState(documentId: string): LiveAuthorMonitorEditorSyncState | undefined;
   onEditorChange(change: EditorChange): ChangeAdmission;
   getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined;
   ensureLiveAuthorMonitorDocument(documentId: string): LiveAuthorMonitorSnapshot;
@@ -30,10 +33,13 @@ export interface LiveAuthorMonitorTextAreaHostApi {
   resynchronizeLiveAuthorMonitor(snapshot: DocumentSnapshot): LiveAuthorMonitorSnapshot;
 }
 
+/** Alias compatible con el contrato histórico del adaptador textarea. */
+export type LiveAuthorMonitorTextAreaHostApi = LiveAuthorMonitorEditorHostApi;
+
 export interface LiveAuthorMonitorTextAreaIntegrationOptions {
   readonly element: HTMLTextAreaElement;
   readonly documentId: string;
-  readonly hostApi: LiveAuthorMonitorTextAreaHostApi;
+  readonly hostApi: LiveAuthorMonitorEditorHostApi;
   readonly onAdmission?: (change: EditorChange, admission: ChangeAdmission) => void;
   /** Estado de la cola FIFO para indicadores visuales; nunca contiene texto del manuscrito. */
   readonly onBackpressure?: (snapshot: LiveAuthorMonitorBackpressureSnapshot) => void;

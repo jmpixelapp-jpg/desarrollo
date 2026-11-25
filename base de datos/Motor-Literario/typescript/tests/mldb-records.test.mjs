@@ -60,7 +60,7 @@ class MldbRecordsMemoryStore {
       if (match) this.recordNames.set(this.key(match.projectId, match.id), { ...match, isPrimary: true });
       else {
         const name = {
-          projectId: record.projectId, id: "primary:" + record.id,
+          projectId: record.projectId, id: "primary:" + record.id + ":" + record.currentVersion,
           recordId: record.id, name: record.primaryName, nameKind: "primary",
           isPrimary: true, provenanceKind: record.provenanceKind
         };

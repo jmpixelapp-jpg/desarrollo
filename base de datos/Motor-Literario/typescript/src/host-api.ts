@@ -684,6 +684,8 @@ export interface HostCallbacks {
   readonly onCommit?: (result: CommitResult) => void;
   readonly onKnowledgeError?: (error: unknown) => void;
   readonly onKnowledgeChanged?: (projectId: string) => void;
+  /** Notifica que cambió la biblioteca del escritor autenticado; la UI debe volver a consultar sus páginas. */
+  readonly onPersonalIdeaLibraryChanged?: (writerId: string) => void;
 }
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
@@ -699,8 +701,10 @@ export class HostEngineApi {
   private project?: ProjectIdentity;
   private readonly store: HostEngineOptions["store"];
   private unsubscribeNarrativeChanges: (() => void) | undefined;
+  private unsubscribePersonalIdeaLibraryChanges: (() => void) | undefined;
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
   private readonly onKnowledgeChanged: HostCallbacks["onKnowledgeChanged"];
+  private readonly onPersonalIdeaLibraryChanged: HostCallbacks["onPersonalIdeaLibraryChanged"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
@@ -750,6 +754,7 @@ export class HostEngineApi {
     this.store = options.store;
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
+    this.onPersonalIdeaLibraryChanged = options.callbacks?.onPersonalIdeaLibraryChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
     this.engine = new LiteraryEngine({
       store: options.store,
@@ -3082,6 +3087,11 @@ export class HostEngineApi {
         )) {
           throw new Error("Integridad de biblioteca: la transferencia no conservó el contexto relacionado del libro.");
         }
+        if (validatedEntries.length > 0) {
+          try { this.onPersonalIdeaLibraryChanged?.(writerId); } catch (error) {
+            this.onKnowledgeError?.(error);
+          }
+        }
         return cloneNarrativeRecords(validatedEntries);
       } finally {
         // Un adaptador pudo confirmar la transacción y devolver una respuesta inválida.
@@ -3632,6 +3642,7 @@ export class HostEngineApi {
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryPagedQuery: Boolean(this.store.loadPersonalIdeasPage),
+      personalIdeaLibraryChangeNotifications: Boolean(this.store.subscribePersonalIdeaLibraryChanges),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
       ),
@@ -3679,6 +3690,7 @@ export class HostEngineApi {
     }
     this.engine.initializeProject(identity);
     this.unsubscribeNarrativeChanges?.();
+    this.unsubscribePersonalIdeaLibraryChanges?.();
     this.project = Object.freeze({ ...identity });
     const subscribe = this.store.subscribeNarrativeChanges;
     this.unsubscribeNarrativeChanges = subscribe?.call(this.store, projectId => {
@@ -3689,12 +3701,23 @@ export class HostEngineApi {
           this.onKnowledgeError?.(error);
         });
     });
+    const subscribeLibrary = this.store.subscribePersonalIdeaLibraryChanges;
+    this.unsubscribePersonalIdeaLibraryChanges = subscribeLibrary?.call(this.store, writerId => {
+      if (this.project?.writerId !== writerId) return;
+      try {
+        this.onPersonalIdeaLibraryChanged?.(writerId);
+      } catch (error) {
+        this.onKnowledgeError?.(error);
+      }
+    });
   }
 
-  /** Libera el suscriptor opcional de sincronización entre pestañas. */
+  /** Libera los suscriptores opcionales de sincronización entre pestañas. */
   dispose(): void {
     this.unsubscribeNarrativeChanges?.();
     this.unsubscribeNarrativeChanges = undefined;
+    this.unsubscribePersonalIdeaLibraryChanges?.();
+    this.unsubscribePersonalIdeaLibraryChanges = undefined;
   }
 
   /** La identidad del escritor nunca se recibe como argumento de una consulta de biblioteca. */

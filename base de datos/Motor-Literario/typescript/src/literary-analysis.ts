@@ -804,6 +804,8 @@ export interface LiteraryIdeaLexicalResonance {
   readonly jaccardSimilarity: number;
   /** Jaccard ponderado por frecuencias: suma de mínimos dividida por suma de máximos. */
   readonly frequencyWeightedJaccardSimilarity: number;
+  /** Coseno entre vectores de frecuencias de términos normalizados. */
+  readonly frequencyCosineSimilarity: number;
   /** Proporción del vocabulario distinto de cada idea presente también en la otra. */
   readonly leftVocabularyCoverage: number;
   readonly rightVocabularyCoverage: number;
@@ -4036,6 +4038,9 @@ function buildLiteraryIdeaLexicalResonances(
     let rightSharedFrequency = 0;
     let leftTotalFrequency = 0;
     let rightTotalFrequency = 0;
+    let frequencyDotProduct = 0;
+    let leftFrequencyMagnitudeSquared = 0;
+    let rightFrequencyMagnitudeSquared = 0;
     for (const [term, leftFrequency] of leftFrequencies) {
       const rightFrequency = rightFrequencies.get(term) ?? 0;
       const sharedFrequency = Math.min(leftFrequency, rightFrequency);
@@ -4043,13 +4048,20 @@ function buildLiteraryIdeaLexicalResonances(
       weightedUnion += Math.max(leftFrequency, rightFrequency);
       leftSharedFrequency += sharedFrequency;
       leftTotalFrequency += leftFrequency;
+      frequencyDotProduct += leftFrequency * rightFrequency;
+      leftFrequencyMagnitudeSquared += leftFrequency * leftFrequency;
+      rightFrequencyMagnitudeSquared += rightFrequency * rightFrequency;
     }
     for (const [term, rightFrequency] of rightFrequencies) {
       rightTotalFrequency += rightFrequency;
-      if (!leftFrequencies.has(term)) weightedUnion += rightFrequency;
-      else rightSharedFrequency += Math.min(
-        rightFrequency, leftFrequencies.get(term)!
-      );
+      if (!leftFrequencies.has(term)) {
+        weightedUnion += rightFrequency;
+        rightFrequencyMagnitudeSquared += rightFrequency * rightFrequency;
+      } else {
+        rightSharedFrequency += Math.min(
+          rightFrequency, leftFrequencies.get(term)!
+        );
+      }
     }
     return {
       leftIdeaId: pair.leftIdeaId,
@@ -4060,6 +4072,13 @@ function buildLiteraryIdeaLexicalResonances(
       jaccardSimilarity: pair.jaccardSimilarity,
       frequencyWeightedJaccardSimilarity: roundMetric(
         weightedUnion > 0 ? weightedIntersection / weightedUnion : 0
+      ),
+      frequencyCosineSimilarity: roundMetric(
+        leftFrequencyMagnitudeSquared > 0 && rightFrequencyMagnitudeSquared > 0
+          ? frequencyDotProduct / Math.sqrt(
+            leftFrequencyMagnitudeSquared * rightFrequencyMagnitudeSquared
+          )
+          : 0
       ),
       leftVocabularyCoverage: roundMetric(
         pair.leftTermCount > 0 ? pair.sharedTermCount / pair.leftTermCount : 0

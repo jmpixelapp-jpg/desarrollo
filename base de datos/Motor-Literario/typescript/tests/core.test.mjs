@@ -2189,7 +2189,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "narrative-events", keyPath: ["projectId", "id"] },
       { name: "narrative-ideas", keyPath: ["projectId", "id"] },
       { name: "personal-idea-library", keyPath: ["writerId", "sourceProjectId", "idea.id"] },
-      { name: "narrative-assertions", keyPath: ["projectId", "id"] }
+      { name: "narrative-assertions", keyPath: ["projectId", "id"] },
+      { name: "document-diagnostics", keyPath: ["projectId", "documentId"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
       ["documents", "by-project"],
@@ -2202,7 +2203,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["personal-idea-library", "by-writer-source"],
       ["personal-idea-library", "by-source-project"],
       ["narrative-assertions", "by-project"],
-      ["narrative-assertions", "by-entity"]
+      ["narrative-assertions", "by-entity"],
+      ["document-diagnostics", "by-project"]
     ]);
     assert.equal(createdIndexes.find(index => index.name === "by-document-sequence")?.unique, true);
   } finally {

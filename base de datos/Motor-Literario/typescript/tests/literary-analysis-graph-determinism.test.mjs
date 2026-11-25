@@ -605,3 +605,27 @@ test("el catálogo vacío mantiene métricas de cobertura coherentes y no invent
   assert.deepEqual(graph.nodes, []);
   assert.deepEqual(graph.references, []);
 });
+
+
+test("la convergencia a dos saltos declara el truncamiento al agotar su presupuesto", () => {
+  const destinations = Array.from({ length: 500 }, (_, index) =>
+    "destination-" + String(index).padStart(3, "0")
+  );
+  const sources = Array.from({ length: 1_001 }, (_, index) =>
+    idea("source-" + String(index).padStart(4, "0"), ["branch-a", "branch-b"])
+  );
+  const catalog = [
+    ...sources,
+    idea("branch-a", destinations),
+    idea("branch-b", destinations),
+    ...destinations.map(id => idea(id))
+  ];
+
+  const graph = analyze(catalog);
+
+  assert.equal(graph.ideaCount, 1_503);
+  assert.equal(graph.twoHopConvergenceAnalysisStatus, "truncated-by-work-budget");
+  // El último origen no se completa: estos agregados son parciales al truncarse.
+  assert.equal(graph.twoHopConvergentSourceCount, 1_000);
+  assert.equal(graph.twoHopSharedDestinationCount, 500_000);
+});

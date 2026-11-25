@@ -10239,6 +10239,37 @@ test("agrega patrones de co-mención de personajes por escena sin inferir relaci
   ]);
 });
 
+test("clasifica señales gramaticales por escena y excluye el diálogo", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "Yo recuerdo el camino. «Él conoce la salida», dijo Ana.",
+    "***",
+    "ESCENA 2",
+    "Ella caminaba hacia el río. Tú observabas desde lejos."
+  ].join("\n");
+  const baseOffset = 125;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-voice-signals",documentId:"chapter",revision:4,text,baseOffset
+  });
+
+  assert.equal(result.explicitScenes.length,2);
+  assert.deepEqual(result.explicitScenes[0].voiceSignals.counts,{
+    firstPerson:1,secondPerson:0,thirdPerson:0
+  });
+  assert.equal(result.explicitScenes[0].voiceSignals.classification,"first-person-signals");
+  assert.deepEqual(result.explicitScenes[1].voiceSignals.counts,{
+    firstPerson:0,secondPerson:1,thirdPerson:1
+  });
+  assert.equal(result.explicitScenes[1].voiceSignals.classification,"mixed-signals");
+  assert.ok(result.explicitScenes.every(scene =>
+    scene.voiceSignals.samples.every(sample =>
+      sample.start >= scene.contentRange.start && sample.end <= scene.contentRange.end
+    )
+  ));
+  assert.equal(result.explicitScenes[0].voiceSignals.samples.some(sample => sample.term === "Él"),false);
+});
+
 test("compara señales literales entre escenas explícitas contiguas sin inferir ausencias", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

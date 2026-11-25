@@ -57,6 +57,12 @@ Se reconocen encabezados de parte/libro, capítulo, acto y escena cuando aparece
 La API anfitriona entrega al analizador las fichas de personajes del proyecto activo (nombre canónico y alias). En cada escena explícita se localizan coincidencias literales completas, sin distinguir mayúsculas y minúsculas, y se devuelven los IDs de identidad, variantes de nombre y offsets UTF-16. Se exige identidad única del nombre o alias: si dos personajes reclaman la misma forma, esa coincidencia se omite en vez de asignarse por conjetura. El análisis no usa pronombres para atribuir presencia ni interpreta mención como participación, diálogo o focalización. El catálogo acepta hasta 500 fichas por análisis, hasta 40 personajes por escena y hasta 20 ocurrencias por personaje.
 
 
+## Señales gramaticales por escena
+
+Cada escena explícita incluye `voiceSignals`, calculado sobre sus tokens y fuera de los rangos de diálogo reconocidos. Devuelve conteos de pronombres explícitos de primera, segunda y tercera persona, una clasificación descriptiva y hasta 40 muestras con offsets UTF-16 absolutos. La clasificación es `undetermined` cuando no hay señales, y `mixed-signals` cuando aparecen varias categorías.
+
+Estas señales no identifican al narrador ni la focalización: pueden corresponder a narración citada, estilo indirecto u otros usos gramaticales. La exclusión del diálogo depende de los formatos que reconoce el detector y no garantiza separar todas las voces de un texto.
+
 ## Acontecimientos y continuidad entre escenas
 
 La API anfitriona aporta acontecimientos persistidos del proyecto activo. Una escena solo recibe un vínculo cuando existe evidencia no obsoleta del mismo documento y de la revisión exacta analizada cuyo rango UTF-16 se solapa con el contenido de la escena. Cada vínculo conserva el ID y etiqueta del acontecimiento, los rangos coincidentes y sus participantes declarados. Para cada participante se informa por separado si también aparece por nombre/alias en las menciones literales de esa escena. La falta de mención no se interpreta como ausencia ni contradicción. La evidencia de otras revisiones, otros documentos o marcada como obsoleta se descarta. El catálogo admite hasta 2.000 acontecimientos, 500 participantes y 200 evidencias por acontecimiento; cada escena devuelve como máximo 100 vínculos y 20 rangos por vínculo.

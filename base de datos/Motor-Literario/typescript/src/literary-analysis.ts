@@ -195,6 +195,8 @@ export interface LiteraryExplicitSceneSegment {
   /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
   readonly characterMentions: readonly LiterarySceneCharacterMention[];
   readonly eventLinks: readonly LiterarySceneEventLink[];
+  /** Señales de pronombres explícitos fuera del diálogo, limitadas al contenido de esta escena. */
+  readonly voiceSignals: LiteraryVoiceSignal;
 }
 export interface LiteraryAnalysisResult {
   readonly projectId: string;
@@ -539,6 +541,7 @@ function analyzeExplicitScenes(
   markers: readonly LocalLiteraryStructureMarker[],
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[],
   knownEvents: readonly LiteraryAnalysisKnownEvent[],
+  dialogueRanges: readonly LocalRange[],
   documentId: string,
   revision: number
 ): LiteraryExplicitSceneSegment[] {
@@ -580,7 +583,8 @@ function analyzeExplicitScenes(
     characterMentions,
     eventLinks:findSceneEventLinks(
       scene.contentRange,baseOffset,documentId,revision,characterMentions,knownEvents
-    )
+    ),
+    voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
   });});
 }
 
@@ -756,12 +760,21 @@ function countTokensInRanges(tokens: readonly WordToken[], ranges: readonly Loca
   return countTokensPerRange(tokens, ranges).reduce((total, count) => total + count, 0);
 }
 function classifyVoiceSignals(
-  tokens: readonly WordToken[], dialogueRanges: readonly LocalRange[], baseOffset: number
+  tokens: readonly WordToken[],
+  dialogueRanges: readonly LocalRange[],
+  baseOffset: number,
+  scope?: LocalRange
 ): LiteraryVoiceSignal {
   const counts = { firstPerson: 0, secondPerson: 0, thirdPerson: 0 };
   const samples: LiteraryVoiceSignal["samples"][number][] = [];
+  const start = scope?.start ?? 0;
+  const end = scope?.end ?? Number.POSITIVE_INFINITY;
+  let tokenIndex = 0;
+  while (tokenIndex < tokens.length && tokens[tokenIndex]!.end <= start) tokenIndex++;
   let rangeIndex = 0;
-  for (const token of tokens) {
+  while (rangeIndex < dialogueRanges.length && dialogueRanges[rangeIndex]!.end <= start) rangeIndex++;
+  for (; tokenIndex < tokens.length && tokens[tokenIndex]!.start < end; tokenIndex++) {
+    const token = tokens[tokenIndex]!;
     while (rangeIndex < dialogueRanges.length && dialogueRanges[rangeIndex]!.end <= token.start) rangeIndex++;
     const activeRange = dialogueRanges[rangeIndex];
     if (activeRange && token.start < activeRange.end && token.end > activeRange.start) continue;
@@ -973,6 +986,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sentenceRanges = findSentenceRanges(text);
   const paragraphRanges = findParagraphRanges(text);
   const dialogueSegments = findDialogueSegments(text);
+  const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
   const localStructureMarkers = detectLiteraryStructure(text);
   const structuralMarkers: LiteraryStructureMarker[] = localStructureMarkers.map(marker => ({
     markerType:marker.markerType,
@@ -982,11 +996,10 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   }));
   const explicitScenes = analyzeExplicitScenes(
     text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? [],
-    input.knownEvents ?? [],input.documentId,input.revision
+    input.knownEvents ?? [],dialogueRanges,input.documentId,input.revision
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
-  const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);

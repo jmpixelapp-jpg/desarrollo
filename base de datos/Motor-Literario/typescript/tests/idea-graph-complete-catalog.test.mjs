@@ -13,7 +13,7 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
-      sourceProjectName:"Book", evidence:[], relatedIdeaIds:[], relatedEntityIds:[],
+      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:[], relatedEntityIds:[],
@@ -35,8 +35,11 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
     const result=await api.analyzeLiteraryDocument("chapter");
     assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount,0);
     assert.equal(result.ideaGraph.ideaCount,4);
-    assert.equal(result.ideaGraph.referenceCount,2);
-    assert.equal(result.ideaGraph.includedReferenceCount,2);
+    assert.equal(result.ideaGraph.referenceCount,3);
+    assert.equal(result.ideaGraph.includedReferenceCount,3);
+    assert.equal(result.ideaGraph.notIncludedReferenceCount,0);
+    assert.equal(result.ideaGraph.cycleCount,1);
+    assert.deepEqual(result.ideaGraph.cycles[0].ideaIds,["bridge","finish","origin"]);
     assert.equal(result.ideaGraph.weakComponentCount,2);
     assert.equal(result.ideaGraph.largestWeakComponentSize,3);
   } finally { api.dispose(); }
@@ -54,7 +57,7 @@ test("limita la muestra del catálogo global sin alterar los totales del grafo",
       originDocumentId: "chapter",
       sourceProjectName: "Book",
       evidence: [],
-      relatedIdeaIds: [],
+      relatedIdeaIds: index === 0 ? ["idea-2004"] : [],
       relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
     }))
@@ -76,6 +79,15 @@ test("limita la muestra del catálogo global sin alterar los totales del grafo",
     assert.equal(graph.weakComponents.length, 100);
     assert.equal(graph.largestWeakComponentSize, 1);
     assert.equal(graph.isolatedWithinSnapshotNodeCount, 2_000);
+    assert.equal(graph.referenceCount, 1);
+    assert.equal(graph.includedReferenceCount, 0);
+    assert.equal(graph.notIncludedReferenceCount, 1);
+    assert.deepEqual(graph.references, [{
+      fromIdeaId: "idea-0000",
+      toIdeaId: "idea-2004",
+      resolution: "not-in-snapshot"
+    }]);
+    assert.equal(graph.nodes[0].notIncludedOutgoingReferenceCount, 1);
   } finally {
     api.dispose();
   }

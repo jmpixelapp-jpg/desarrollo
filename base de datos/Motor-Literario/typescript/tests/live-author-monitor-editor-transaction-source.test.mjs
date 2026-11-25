@@ -397,6 +397,19 @@ test("limita transacciones reentrantes pendientes y exige resincronización sin 
   assert.equal(f.errors.at(-1).code, "transaction-backlog-overflow");
   assert.equal(f.editor.listeners.size, 0);
 
+  // El snapshot local incorpora las transacciones que no se entregaron al source.
+  const recovered = f.source.resynchronize(f.editor.getSnapshot("chapter-1"));
+  assert.equal(recovered.needsResync, false);
+  assert.equal(recovered.sequence, 3);
+  assert.equal(f.editor.listeners.size, 1);
+
+  f.editor.apply("edit", "tx-after-overflow-recovery", {
+    start: 6, end: 6, replacement: "$"
+  });
+  assert.deepEqual(observed, [1, 4]);
+  assert.equal(f.source.getState().sequence, 4);
+  assert.equal(f.source.getState().needsResync, false);
+
   stopReentrant();
   f.stop();
   f.source.dispose();

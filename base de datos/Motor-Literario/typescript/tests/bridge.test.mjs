@@ -1725,11 +1725,11 @@ test("SQLite recupera una finalización tras terminar el proceso con una transfe
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", chunk => {
         output += chunk;
-        if (output.includes("STAGED\\n")) resolveOnce();
+        if (output.includes("STAGED\n")) resolveOnce();
       });
       child.once("error", rejectOnce);
       child.once("exit", (code, signal) => {
-        if (!output.includes("STAGED\\n")) {
+        if (!output.includes("STAGED\n")) {
           rejectOnce(new Error(
             "El proceso terminó antes de dejar la transferencia sin confirmar. " +
             "exit=" + String(code) + " signal=" + String(signal) + " stderr=" + childStderr

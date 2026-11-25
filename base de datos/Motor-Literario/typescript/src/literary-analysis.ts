@@ -310,6 +310,10 @@ export interface LiteraryEventLifecycleProfile {
   readonly currentLabel: string;
   /** Participantes de la ficha vigente; no se obtienen de las menciones del texto. */
   readonly currentParticipantIds: readonly string[];
+  readonly latestRecordedLabel: string;
+  readonly latestRecordedParticipantIds: readonly string[];
+  /** false distingue una ficha vigente divergente de la última instantánea versionada. */
+  readonly currentStateMatchesLatestRevision: boolean;
   readonly latestRevision: number;
   readonly transitionCount: number;
   readonly labelChangeCount: number;
@@ -2305,7 +2309,10 @@ function buildEventLifecycleAnalysis(
   }
   const profiles=[...groups.entries()].map(([eventId,history])=>{
     const ordered=[...history].sort((a,b)=>a.revision-b.revision);
-    const current=currentEvents.get(eventId)!;
+    const currentEvent=currentEvents.get(eventId)!;
+    const currentParticipantIds=[...new Set(currentEvent.participants)].sort((a,b)=>a.localeCompare(b,"en"));
+    const latest=ordered[ordered.length-1]!;
+    const latestRecordedParticipantIds=[...latest.newParticipants];
     let labelChangeCount=0;
     let participantSetChangeCount=0;
     const changes:LiteraryEventLifecycleChangeSummary[]=ordered.map(item=>{
@@ -2332,9 +2339,14 @@ function buildEventLifecycleAnalysis(
     });
     return {
       eventId,
-      currentLabel:current.label,
-      currentParticipantIds:[...new Set(current.participants)].sort((a,b)=>a.localeCompare(b,"en")),
-      latestRevision:ordered[ordered.length-1]?.revision ?? 0,
+      currentLabel:currentEvent.label,
+      currentParticipantIds,
+      latestRecordedLabel:latest.newLabel,
+      latestRecordedParticipantIds,
+      currentStateMatchesLatestRevision:latest.newLabel===currentEvent.label &&
+        latestRecordedParticipantIds.length===currentParticipantIds.length &&
+        latestRecordedParticipantIds.every((id,index)=>id===currentParticipantIds[index]),
+      latestRevision:latest.revision,
       transitionCount:ordered.length,
       labelChangeCount,
       participantSetChangeCount,

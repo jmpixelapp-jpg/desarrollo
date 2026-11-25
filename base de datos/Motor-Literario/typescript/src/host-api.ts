@@ -5,8 +5,14 @@ import type {
 import { LiteraryEngine } from "./engine";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput } from "./dictionaries";
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
-import type { ProjectSetting, ProjectSettingSource, ProjectJsonValue } from "./project-data";
-import { cloneProjectSetting, validateProjectSetting } from "./project-data";
+import type {
+  ProjectSetting, ProjectSettingSource, ProjectJsonValue,
+  LanguageProfile, LanguageResourceRef
+} from "./project-data";
+import {
+  cloneProjectSetting, validateProjectSetting, cloneLanguageProfile,
+  cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef
+} from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
 import { extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
@@ -1449,6 +1455,108 @@ export class HostEngineApi {
     });
   }
 
+  async getLanguageProfiles(): Promise<readonly LanguageProfile[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadLanguageProfiles;
+      if (!load) throw new Error("El adaptador de almacenamiento no admite perfiles lingüísticos.");
+      const profiles = await load.call(this.store, projectId);
+      if (!Array.isArray(profiles)) throw new Error("El almacenamiento devolvió perfiles lingüísticos inválidos.");
+      const ids = new Set<string>();
+      for (const profile of profiles) {
+        validateLanguageProfile(profile, projectId);
+        if (ids.has(profile.id)) throw new Error("Hay IDs de perfil lingüístico duplicados en el proyecto.");
+        ids.add(profile.id);
+      }
+      return profiles.map(cloneLanguageProfile);
+    });
+  }
+
+  async saveLanguageProfile(
+    input: Omit<LanguageProfile, "projectId">
+  ): Promise<LanguageProfile> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadLanguageProfiles;
+      const save = this.store.saveLanguageProfile;
+      if (!load || !save) throw new Error("El adaptador de almacenamiento no admite perfiles lingüísticos.");
+      const profiles = await load.call(this.store, projectId);
+      if (!Array.isArray(profiles)) throw new Error("La colección de perfiles lingüísticos es inválida.");
+      let current: LanguageProfile | undefined;
+      const ids = new Set<string>();
+      for (const profile of profiles) {
+        validateLanguageProfile(profile, projectId);
+        if (ids.has(profile.id)) throw new Error("Hay IDs de perfil lingüístico duplicados.");
+        ids.add(profile.id);
+        if (profile.id === input.id) current = profile;
+      }
+      const candidate: LanguageProfile = { ...input, projectId };
+      validateLanguageProfile(candidate, projectId);
+      const safeCandidate = cloneLanguageProfile(candidate);
+      await save.call(this.store, safeCandidate, current);
+      return cloneLanguageProfile(safeCandidate);
+    });
+  }
+
+  async getLanguageResourceRefs(profileId?: string): Promise<readonly LanguageResourceRef[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadLanguageResourceRefs;
+      if (!load) throw new Error("El adaptador de almacenamiento no admite referencias de recursos lingüísticos.");
+      const resources = await load.call(this.store, projectId, profileId);
+      if (!Array.isArray(resources)) throw new Error("El almacenamiento devolvió referencias de recursos inválidas.");
+      const ids = new Set<string>();
+      for (const resource of resources) {
+        validateLanguageResourceRef(resource, projectId);
+        if (ids.has(resource.id)) throw new Error("Hay IDs de recursos lingüísticos duplicados en el proyecto.");
+        ids.add(resource.id);
+        if (profileId !== undefined && resource.profileId !== profileId) {
+          throw new Error("Una referencia recuperada pertenece a otro perfil lingüístico.");
+        }
+      }
+      const profiles = await this.store.loadLanguageProfiles?.(projectId) ?? [];
+      const profileIds = new Set(profiles.map(profile => profile.id));
+      for (const resource of resources) {
+        if (resource.profileId !== undefined && !profileIds.has(resource.profileId)) {
+          throw new Error("Una referencia de recurso apunta a un perfil lingüístico inexistente.");
+        }
+      }
+      return resources.map(cloneLanguageResourceRef);
+    });
+  }
+
+  async saveLanguageResourceRef(
+    input: Omit<LanguageResourceRef, "projectId">
+  ): Promise<LanguageResourceRef> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadLanguageResourceRefs;
+      const save = this.store.saveLanguageResourceRef;
+      if (!load || !save) {
+        throw new Error("El adaptador de almacenamiento no admite referencias de recursos lingüísticos.");
+      }
+      if (input.profileId !== undefined) {
+        const profiles = await this.store.loadLanguageProfiles?.(projectId);
+        if (!profiles?.some(profile => profile.id === input.profileId)) {
+          throw new Error("El perfil lingüístico asociado no existe en el proyecto.");
+        }
+      }
+      const resources = await load.call(this.store, projectId);
+      if (!Array.isArray(resources)) throw new Error("La colección de referencias de recursos es inválida.");
+      const byId = new Map<string, LanguageResourceRef>();
+      for (const resource of resources) {
+        validateLanguageResourceRef(resource, projectId);
+        if (byId.has(resource.id)) throw new Error("Hay IDs de referencias de recursos duplicados.");
+        byId.set(resource.id, resource);
+      }
+      const candidate: LanguageResourceRef = { ...input, projectId };
+      validateLanguageResourceRef(candidate, projectId);
+      const safeCandidate = cloneLanguageResourceRef(candidate);
+      await save.call(this.store, safeCandidate, byId.get(candidate.id));
+      return cloneLanguageResourceRef(safeCandidate);
+    });
+  }
+
   /** Devuelve los diccionarios pertenecientes únicamente al libro activo. */
   async getProjectDictionaries(): Promise<readonly ProjectDictionary[]> {
     return this.enqueueKnowledgeOperation(async () => {
@@ -1995,6 +2103,8 @@ export class HostEngineApi {
       evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
       semanticContradictionAnalysis: false,
       projectSettings: Boolean(this.store.saveProjectSetting && this.store.loadProjectSettings),
+      languageProfiles: Boolean(this.store.saveLanguageProfile && this.store.loadLanguageProfiles),
+      languageResourceRefs: Boolean(this.store.saveLanguageResourceRef && this.store.loadLanguageResourceRefs),
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),

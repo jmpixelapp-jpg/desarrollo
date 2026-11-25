@@ -3129,6 +3129,20 @@ export class HostEngineApi {
   }
 
   /**
+   * Descarta las cachés narrativas de esta instancia para recoger cambios
+   * confirmados por otras instancias que comparten el mismo almacenamiento.
+   * No borra datos; las siguientes consultas vuelven a leer el estado durable.
+   */
+  async refreshNarrativeKnowledge(): Promise<void> {
+    this.requireProject();
+    await this.liveAnalysisTail;
+    await this.flushPendingChanges();
+    await this.enqueueKnowledgeOperation(async () => {
+      this.invalidateNarrativeKnowledgeCaches();
+    });
+  }
+
+  /**
    * Invalida únicamente las cachés de esta instancia cuando el puente detecta
    * una confirmación externa en SQLite. No vacía ni vuelve a guardar colas.
    */

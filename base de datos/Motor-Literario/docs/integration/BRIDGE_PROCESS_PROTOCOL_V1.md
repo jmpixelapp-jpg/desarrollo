@@ -263,7 +263,7 @@ Al cerrar por completo el proceso compañero:
 await motor.shutdown();
 ~~~
 
-El servidor vacía todas las instancias antes de cerrar SQLite. Si el proceso se cae inesperadamente, la siguiente instancia debe abrir el mismo archivo y llamar document.recover con el ID del documento. Si el journal es discontinuo o falta su snapshot base, el motor rechaza la recuperación y exige un snapshot autoritativo del anfitrión; no borrar el archivo para superar el error.
+El servidor deja de admitir solicitudes, espera todas las operaciones ya aceptadas (incluidas finalizaciones de biblioteca), drena la sincronización de conocimiento y vacía todos los proyectos antes de cerrar SQLite. Si el vaciado falla, devuelve un error sin cerrar la base, vuelve a admitir solicitudes y reanuda el sondeo desde el cursor anterior para que el anfitrión pueda corregir la causa y reintentar. El anfitrión debe esperar la respuesta de `shutdown`; no debe terminar el proceso durante una transferencia activa. La finalización SQLite es una transacción inmediata: si el proceso termina antes del commit, la recuperación del WAL revierte el movimiento completo; la idea permanece en el libro, no aparece parcialmente en la biblioteca y no existe recibo. El anfitrión puede repetir la finalización de forma idempotente. Si el proceso se cae durante la persistencia del manuscrito, la siguiente instancia debe abrir el mismo archivo y llamar `document.recover` con el ID del documento. Si el journal es discontinuo o falta su snapshot base, el motor rechaza la recuperación y exige un snapshot autoritativo del anfitrión; no borrar el archivo para superar el error.
 
 ## 9. Prueba de aceptación del puente
 
@@ -274,8 +274,12 @@ La suite `tests/bridge.test.mjs` inicia procesos reales del servidor y comprueba
 - snapshot correcto después de una edición;
 - cierre ordenado;
 - recuperación del mismo documento desde el archivo SQLite después de reiniciar el proceso;
-- aislamiento de dos proyectos que usan el mismo documentId;\n- sincronización de biblioteca entre proyectos/procesos del mismo escritor y exclusión de otros escritores;\n- rollback completo y reintento de una finalización interrumpida;\n- copia, verificación y restauración de SQLite en `tests/database-snapshot.test.mjs`.
-
+- aislamiento de dos proyectos que usan el mismo documentId;
+- sincronización de biblioteca entre proyectos/procesos del mismo escritor y exclusión de otros escritores;
+- rollback completo, reintento idempotente y comprobación del contenido archivado;
+- cierre del puente concurrente con finalización y espera de solicitudes aceptadas que terminan con error;
+- recuperación tras terminar el proceso con una transferencia sin confirmar;
+- copia, verificación y restauración de SQLite en `tests/database-snapshot.test.mjs`.
 Ejecutar desde typescript:
 
 ~~~sh

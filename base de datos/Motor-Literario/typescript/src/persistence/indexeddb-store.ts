@@ -3870,7 +3870,23 @@ export class IndexedDbProjectStore implements ProjectStore {
           try {
             if (finished) return;
             const cursor = cursorRequest.result;
-            if (!cursor) return;
+            if (!cursor) {
+              if (supportsReceipts) {
+                const archivedIdeaIds = archived
+                  .map(entry => entry.idea.id)
+                  .sort((first, second) => first.localeCompare(second));
+                receipts.add({
+                  writerId,
+                  sourceProjectId: projectId,
+                  receiptId: FINALIZATION_RECEIPT_ID,
+                  sourceProjectName,
+                  finalizedAt: archivedAt,
+                  archivedIdeaIds,
+                  archiveChecksum: checksumArchivedIdeaIds(archivedIdeaIds)
+                } satisfies StoredProjectFinalizationReceipt);
+              }
+              return;
+            }
             const idea = cursor.value as NarrativeIdea;
             if (idea.projectId !== projectId) {
               throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");

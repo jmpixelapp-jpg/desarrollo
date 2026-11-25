@@ -3296,6 +3296,15 @@ export class HostEngineApi {
         this.narrativeIdeas.set(ideaId, updated);
         return cloneNarrativeRecord(updated);
       } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const missingTarget = referenceKind === "relatedIdeaIds"
+          ? /idea enlaza una idea inexistente|ideas relacionadas no existen/iu.test(message)
+          : /entidades no existen|ficha de destino inexistente/iu.test(message);
+        if (missingTarget) {
+          throw new Error(referenceKind === "relatedIdeaIds"
+            ? "Ambas ideas deben existir en el proyecto activo."
+            : "La idea y la entidad deben existir en el proyecto activo.");
+        }
         const isVersionConflict = error instanceof Error &&
           /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
         if (!isVersionConflict || attempt === maxAttempts - 1) throw error;

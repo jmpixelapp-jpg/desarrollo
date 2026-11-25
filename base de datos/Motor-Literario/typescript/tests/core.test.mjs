@@ -10755,7 +10755,7 @@ test("mantiene el perfil de diálogo vacío cuando una escena no contiene segmen
 
 test("compara las métricas de diálogo entre escenas explícitas contiguas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
-  const text = "ESCENA 1\\nLa tarde cayó lentamente. “Hola, Ana.”\\n***\\nESCENA 2\\nEl viento cruzó la plaza.";
+  const text = "ESCENA 1\nLa tarde cayó lentamente. “Hola, Ana.”\n***\nESCENA 2\nEl viento cruzó la plaza.";
   const result = analyzeLiteraryFragment({
     projectId:"scene-dialogue-transitions",documentId:"chapter",revision:1,text
   });
@@ -10780,7 +10780,7 @@ test("no crea transiciones de diálogo cuando hay menos de dos escenas explícit
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const result = analyzeLiteraryFragment({
     projectId:"scene-dialogue-single",documentId:"chapter",revision:1,
-    text:"ESCENA 1\\n“Una frase.”"
+    text:"ESCENA 1\n“Una frase.”"
   });
   assert.deepEqual(result.sceneDialogueTransitions,[]);
 });

@@ -172,7 +172,7 @@ export interface NarrativeIdea {
   readonly evidence: readonly TextEvidence[];
   /** Referencias explícitas a fichas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES por categoría. */
   readonly relatedEntityIds?: readonly string[];
-  /** Enlaces explícitos a otras ideas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES por categoría. */
+  /** Enlaces explícitos a otras ideas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES. */
   readonly relatedIdeaIds?: readonly string[];
   /** Historial inmutable de transiciones de estado, separado de las revisiones del texto. */
   readonly statusHistory?: readonly NarrativeIdeaStatusChange[];
@@ -643,8 +643,9 @@ export function mergeNarrativeIdea(
     ...(previous.relatedIdeaIds ?? []),
     ...(incoming.relatedIdeaIds ?? [])
   ])];
-  if (relatedEntityIds.length + relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES) {
-    throw new Error(`Las referencias explícitas de la idea superan el límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`);
+  if (relatedEntityIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+      relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES) {
+    throw new Error(`Las referencias explícitas de cada categoría superan el límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`);
   }
   const textChanged = previous.text !== incoming.text;
   const nextStatus = textChanged ? "IDEA" : previous.status;

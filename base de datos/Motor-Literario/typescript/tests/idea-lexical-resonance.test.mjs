@@ -516,3 +516,13 @@ test("mantiene compatibilidad con catálogos antiguos que no transfieren el text
   assert.equal(result.candidatePairCount, 0);
   assert.deepEqual(result.resonances, []);
 });
+
+test("filtra palabras funcionales portuguesas y conserva los términos narrativos", () => {
+  const result = analyze([
+    idea("pt-a", "A casa do menino e da menina"),
+    idea("pt-b", "O menino da casa com a menina")
+  ]);
+  assert.equal(result.candidatePairCount, 1);
+  assert.deepEqual(result.resonances[0].sharedTerms, ["casa", "menina", "menino"]);
+  assert.equal(result.resonances[0].sharedTermCount, 3);
+});

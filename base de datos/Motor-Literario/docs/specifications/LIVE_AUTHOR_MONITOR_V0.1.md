@@ -343,3 +343,16 @@ La comprobación del snapshot posterior a una transacción está protegida frent
 Las pruebas de regresión agregadas a `live-author-monitor-editor-transaction-source.test.mjs` verifican: (1) una transacción inválida emitida sincrónicamente al suscribirse, (2) el desmontaje de la fuente desde un listener durante esa misma fase y (3) un error al leer el snapshot durante una edición. En los tres casos se comprueba la ausencia de listeners residuales o de excepciones que interrumpan el flujo de edición.
 
 **Validación:** estos casos forman parte de las 72 pruebas aprobadas en la ejecución aislada `45719731344`; el build Vite finalizó correctamente.
+
+## 15. Conexión concreta con el editor anfitrión
+
+**Estado tras auditar el árbol del repositorio el 25 de noviembre de 2026:** el proyecto contiene el núcleo `Motor-Literario/typescript`, sus contratos, el motor y las pruebas del monitor. No contiene una aplicación de edición anfitriona ni un módulo concreto que exponga el historial/transacciones nativas de un editor. El archivo `package.json` del núcleo declara TypeScript y Vite como herramientas de desarrollo, pero no una dependencia de editor visual que permita implementar un adaptador específico.
+
+Por tanto, `LiveAuthorMonitorEditorTransactionProvider` es actualmente el contrato de integración y `mountLiveAuthorMonitorEditorTransactions` es la conexión genérica ya implementada y probada con proveedores de prueba. **No debe describirse como una conexión ya instalada en la interfaz de producción.** La integración nativa real queda pendiente de que el anfitrión exponga su editor y su API transaccional concreta.
+
+Para completar esa conexión, el anfitrión deberá proporcionar, por documento:
+1. un snapshot local coherente con el snapshot durable de `HostEngineApi` (texto, revisión y secuencia);
+2. una suscripción a transacciones ya aplicadas, con ID único, tipo `edit/undo/redo` y delta exacto UTF-16;
+3. una función de cancelación de la suscripción y una lectura de snapshot actualizada antes de notificar la transacción.
+
+No se sustituirá esta integración por inferencias a partir de teclas, eventos `historyUndo/historyRedo` o comparaciones de texto retenidas en memoria. Mientras el anfitrión use un `HTMLTextAreaElement`, puede montar el adaptador nativo `mountLiveAuthorMonitorTextArea`; las operaciones de historial que no entreguen un delta exacto seguirán necesitando resincronización segura.

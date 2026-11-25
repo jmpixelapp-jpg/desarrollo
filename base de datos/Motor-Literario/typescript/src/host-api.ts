@@ -3367,7 +3367,7 @@ export class HostEngineApi {
   }
 
 
-  /** Consulta el recibo durable que demuestra la transferencia de cierre de este libro. */
+  /** Consulta el recibo durable en el mismo orden serial que el archivo y la biblioteca. */
   async getProjectFinalizationReceipt(): Promise<StoredProjectFinalizationReceipt | undefined> {
     const project = this.requireProject();
     const writerId = this.requireWriterId();
@@ -3375,21 +3375,27 @@ export class HostEngineApi {
     if (!loadReceipt) {
       throw new Error("El almacenamiento no admite recibos durables de finalización.");
     }
-    const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
-    if (receipt === undefined) return undefined;
-    const ids = receipt.archivedIdeaIds;
-    if (!receipt || receipt.writerId !== writerId ||
-        receipt.sourceProjectId !== project.projectId ||
-        typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||
-        receipt.sourceProjectName !== project.projectName ||
-        !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
-        !Array.isArray(ids) ||
-        ids.some(id => typeof id !== "string" || !id.trim()) ||
-        new Set(ids).size !== ids.length ||
-        typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
-      throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
-    }
-    return cloneNarrativeRecord(receipt);
+
+    // Un cierre solicitado antes de esta lectura debe quedar visible aquí.
+    // Sin esta barrera, una lectura inmediata podía adelantarse a la transacción
+    // de archivo y devolver undefined aunque la transferencia ya estuviera en cola.
+    return this.enqueueKnowledgeOperation(async () => {
+      const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
+      if (receipt === undefined) return undefined;
+      const ids = receipt.archivedIdeaIds;
+      if (!receipt || receipt.writerId !== writerId ||
+          receipt.sourceProjectId !== project.projectId ||
+          typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||
+          receipt.sourceProjectName !== project.projectName ||
+          !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+          !Array.isArray(ids) ||
+          ids.some(id => typeof id !== "string" || !id.trim()) ||
+          new Set(ids).size !== ids.length ||
+          typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
+        throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
+      }
+      return cloneNarrativeRecord(receipt);
+    });
   }
 
   async setNarrativeIdeaStatus(

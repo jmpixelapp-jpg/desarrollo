@@ -3589,6 +3589,26 @@ function buildLiteraryIdeaGraph(
     }
   }
 
+  const countStatusReversals = (
+    history: readonly NarrativeIdeaStatusChange[]
+  ): number => {
+    const seenStatuses = new Set<NarrativeIdea["status"]>();
+    let previousStatus: NarrativeIdea["status"] | undefined;
+    let reversalCount = 0;
+    for (const change of history) {
+      if (
+        previousStatus !== undefined &&
+        change.status !== previousStatus &&
+        seenStatuses.has(change.status)
+      ) {
+        reversalCount++;
+      }
+      seenStatuses.add(change.status);
+      previousStatus = change.status;
+    }
+    return reversalCount;
+  };
+
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => ({
     ideaId: idea.ideaId,
     status: idea.status,
@@ -3603,13 +3623,7 @@ function buildLiteraryIdeaGraph(
         count + (changeIndex > 0 && change.status !== history[changeIndex - 1]!.status ? 1 : 0),
       0
     ),
-    statusReversalCount: idea.statusHistory.reduce((count, change, changeIndex, history) => {
-      if (changeIndex === 0 || change.status === history[changeIndex - 1]!.status) return count;
-      for (let previousIndex = 0; previousIndex < changeIndex - 1; previousIndex++) {
-        if (history[previousIndex]!.status === change.status) return count + 1;
-      }
-      return count;
-    }, 0),
+    statusReversalCount: countStatusReversals(idea.statusHistory),
     nonMonotonicStatusTimestampCount: idea.statusHistory.reduce(
       (count, change, changeIndex, history) => {
         if (changeIndex === 0) return count;

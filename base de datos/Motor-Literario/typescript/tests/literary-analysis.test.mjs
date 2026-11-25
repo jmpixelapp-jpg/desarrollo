@@ -1235,7 +1235,7 @@ test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálo
   }), /ideas y decisiones/);
 });
 
-test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
+test("el análisis conserva referencias históricas autorreferenciales y duplicadas", () => {
   const base = {
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -1259,14 +1259,30 @@ test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
     writerDecisionCount: 0,
     omittedStatusHistoryCount: 0
   };
-  assert.throws(() => analyzeLiteraryFragment({
+
+  assert.doesNotThrow(() => analyzeLiteraryFragment({
     ...base,
-    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-a"] }]
-  }), /ideas y decisiones/);
-  assert.throws(() => analyzeLiteraryFragment({
+    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-a", "idea-a"] }]
+  }));
+
+  const legacyGraph = analyzeLiteraryFragment({
     ...base,
-    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-b", "idea-b"] }]
-  }), /ideas y decisiones/);
+    knownProjectIdeas: [{
+      projectId: idea.projectId,
+      ideaId: idea.ideaId,
+      status: "IDEA",
+      relatedIdeaIds: ["idea-a", "idea-a"],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial" }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 0
+    }]
+  }).ideaGraph;
+  assert.equal(legacyGraph.referenceCount, 2);
+  assert.equal(legacyGraph.includedReferenceCount, 2);
+  assert.equal(legacyGraph.selfReferenceCount, 2);
+  assert.equal(legacyGraph.cycleCount, 1);
 });
 
 test("mantiene el total de decisiones de escritor cuando el historial de una idea se recorta", () => {

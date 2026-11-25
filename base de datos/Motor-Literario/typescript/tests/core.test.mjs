@@ -9468,3 +9468,194 @@ test("la recuperación local no inventa un snapshot cuando el documento nunca fu
   );
   assert.equal(api.getSnapshot("chapter-missing"), undefined);
 });
+
+
+test("IndexedDB registra el cierre del libro y repite la transferencia usando el mismo recibo durable", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const projectId = "finalization-receipt-book";
+  const writerId = "finalization-receipt-writer";
+  const projectName = "El libro finalizado";
+  const idea = {
+    projectId,
+    id: "idea-to-archive",
+    text: "La ciudad recuerda a sus habitantes.",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: projectName,
+    evidence: [],
+    statusHistory: [{ status: "IDEA", changedAt: 10, reason: "initial" }]
+  };
+  const projectIdeas = [structuredClone(idea)];
+  const library = new Map();
+  const receipts = new Map();
+  const makeKey = parts => JSON.stringify(parts);
+
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction(storeNames, mode) {
+      const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+      assert.ok(names.includes("writer-library-finalization-receipts"));
+      const transaction = {
+        error: null,
+        oncomplete: null,
+        onerror: null,
+        onabort: null,
+        aborted: false,
+        completed: false,
+        pendingRequests: 0,
+        abort() {
+          if (transaction.aborted || transaction.completed) return;
+          transaction.aborted = true;
+          queueMicrotask(() => transaction.onabort?.());
+        },
+        maybeComplete() {
+          if (transaction.completed || transaction.aborted || transaction.pendingRequests !== 0) return;
+          queueMicrotask(() => {
+            if (transaction.completed || transaction.aborted || transaction.pendingRequests !== 0) return;
+            transaction.completed = true;
+            transaction.oncomplete?.();
+          });
+        },
+        request(resultFactory) {
+          transaction.pendingRequests++;
+          const request = {};
+          queueMicrotask(() => {
+            if (transaction.aborted) return;
+            request.result = resultFactory();
+            request.onsuccess?.();
+            transaction.pendingRequests--;
+            transaction.maybeComplete();
+          });
+          return request;
+        },
+        objectStore(name) {
+          if (name === "narrative-ideas") {
+            return {
+              index(indexName) {
+                assert.equal(indexName, "by-project");
+                return {
+                  getAll(requestedProjectId) {
+                    return transaction.request(() =>
+                      structuredClone(projectIdeas.filter(item => item.projectId === requestedProjectId))
+                    );
+                  }
+                };
+              },
+              delete(key) {
+                const [requestedProjectId, ideaId] = key;
+                const index = projectIdeas.findIndex(item =>
+                  item.projectId === requestedProjectId && item.id === ideaId
+                );
+                if (index >= 0) projectIdeas.splice(index, 1);
+              }
+            };
+          }
+          if (name === "personal-idea-library") {
+            return {
+              index(indexName) {
+                assert.equal(indexName, "by-writer-source");
+                return {
+                  getAll(key) {
+                    return transaction.request(() =>
+                      [...library.values()]
+                        .filter(entry => entry.writerId === key[0] && entry.sourceProjectId === key[1])
+                        .map(entry => structuredClone(entry))
+                    );
+                  }
+                };
+              },
+              add(entry) {
+                const key = makeKey([entry.writerId, entry.sourceProjectId, entry.idea.id]);
+                if (library.has(key)) {
+                  throw new Error("ConstraintError: idea already archived");
+                }
+                library.set(key, structuredClone(entry));
+              }
+            };
+          }
+          if (name === "writer-library-finalization-receipts") {
+            return {
+              get(key) {
+                return transaction.request(() => {
+                  const value = receipts.get(makeKey(key));
+                  return value ? structuredClone(value) : undefined;
+                });
+              },
+              add(receipt) {
+                const key = makeKey([receipt.writerId, receipt.sourceProjectId, receipt.receiptId]);
+                if (receipts.has(key)) throw new Error("ConstraintError: receipt already exists");
+                receipts.set(key, structuredClone(receipt));
+              }
+            };
+          }
+          assert.equal(name, "narrative-entities");
+          return {
+            get() {
+              return transaction.request(() => undefined);
+            }
+          };
+        }
+      };
+      assert.equal(mode === "readwrite" || mode === "readonly", true);
+      return transaction;
+    }
+  };
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: {
+      open() {
+        const request = { result: database };
+        queueMicrotask(() => request.onsuccess?.());
+        return request;
+      }
+    }
+  });
+
+  try {
+    const store = new IndexedDbProjectStore();
+    const firstArchive = await store.archiveUnincorporatedIdeas(
+      projectId, writerId, projectName, 100
+    );
+    assert.equal(firstArchive.length, 1);
+    assert.equal(projectIdeas.length, 0);
+    assert.equal(library.size, 1);
+    assert.equal(receipts.size, 1);
+
+    const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.ok(receipt);
+    assert.equal(receipt.receiptId, "finalization-v1");
+    assert.equal(receipt.sourceProjectName, projectName);
+    assert.equal(receipt.finalizedAt, 100);
+    assert.deepEqual(receipt.archivedIdeaIds, ["idea-to-archive"]);
+    assert.match(receipt.archiveChecksum, /^fnv1a64:[0-9a-f]{16}$/);
+
+    const retryArchive = await store.archiveUnincorporatedIdeas(
+      projectId, writerId, projectName, 200
+    );
+    assert.equal(retryArchive.length, 1);
+    assert.equal(retryArchive[0].idea.id, "idea-to-archive");
+    assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
+    assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
+    assert.equal(
+      (await store.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
+      receipt.archiveChecksum
+    );
+
+    projectIdeas.push({
+      ...structuredClone(idea),
+      id: "idea-created-after-finalization",
+      text: "Esta idea se añadió después del cierre."
+    });
+    await assert.rejects(
+      store.archiveUnincorporatedIdeas(projectId, writerId, projectName, 300),
+      /recibo de finalización; las ideas nuevas/
+    );
+    assert.equal(projectIdeas.length, 1, "el reintento posterior no elimina ni archiva ideas nuevas");
+    assert.equal(library.size, 1);
+    assert.equal(receipts.size, 1);
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});

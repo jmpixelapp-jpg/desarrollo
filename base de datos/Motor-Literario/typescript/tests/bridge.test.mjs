@@ -175,3 +175,65 @@ test("el puente separa libros y rechaza una llamada sin proyecto abierto", async
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca privada", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-ideas-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId: "idea-project",
+      projectName: "Libro ideas",
+      writerId: "writer-private"
+    });
+    await client.openDocument("idea-project", {
+      documentId: "chapter-ideas",
+      text: "IDEA: La campana debe sonar antes del amanecer.",
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject("idea-project");
+
+    const ideas = await client.request("project.call", {
+      projectId: "idea-project",
+      method: "getNarrativeIdeas",
+      args: []
+    });
+    assert.equal(ideas.length, 1);
+    assert.equal(ideas[0].status, "IDEA");
+
+    const archived = await client.request("project.call", {
+      projectId: "idea-project",
+      method: "archiveUnincorporatedIdeas",
+      args: []
+    });
+    assert.equal(archived.length, 1);
+    assert.equal(archived[0].writerId, "writer-private");
+    assert.equal(archived[0].category, "Libro ideas");
+    assert.equal(archived[0].context.version, 1);
+
+    const library = await client.request("project.call", {
+      projectId: "idea-project",
+      method: "getPersonalIdeaLibrary",
+      args: []
+    });
+    assert.equal(library.length, 1);
+    assert.equal(library[0].idea.text, "La campana debe sonar antes del amanecer.");
+
+    const receipt = await client.request("project.call", {
+      projectId: "idea-project",
+      method: "getProjectFinalizationReceipt",
+      args: []
+    });
+    assert.equal(receipt.sourceProjectId, "idea-project");
+    assert.equal(receipt.writerId, "writer-private");
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

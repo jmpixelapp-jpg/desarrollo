@@ -1463,8 +1463,8 @@ function advanceWriterLibraryVersion(transaction: IDBTransaction, writerId: stri
   const request = versions.get(writerId);
   request.onsuccess = () => {
     const current = request.result as { readonly writerId?: unknown; readonly version?: unknown } | undefined;
-    const version = current?.version ?? 0;
-    if ((current && current.writerId !== writerId) ||
+    const version = current === undefined ? 0 : current.version;
+    if ((current !== undefined && current.writerId !== writerId) ||
         !Number.isSafeInteger(version) || (version as number) < 0 ||
         (version as number) >= Number.MAX_SAFE_INTEGER) {
       try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }

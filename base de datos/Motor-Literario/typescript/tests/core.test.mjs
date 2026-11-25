@@ -9814,6 +9814,72 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
 });
 
 
+test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libera suscripciones", () => {
+  const originalBroadcastChannel = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class FakeBroadcastChannel {
+    static instances = [];
+    name;
+    onmessage = null;
+    sent = [];
+    closed = false;
+
+    constructor(name) {
+      this.name = name;
+      FakeBroadcastChannel.instances.push(this);
+    }
+
+    postMessage(message) {
+      this.sent.push(structuredClone(message));
+      for (const receiver of FakeBroadcastChannel.instances) {
+        if (receiver === this || receiver.name !== this.name || receiver.closed) continue;
+        queueMicrotask(() => receiver.onmessage?.({ data: structuredClone(message) }));
+      }
+    }
+
+    close() {
+      this.closed = true;
+      this.onmessage = null;
+    }
+  }
+
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: FakeBroadcastChannel
+  });
+
+  try {
+    const writerStore = new IndexedDbProjectStore();
+    const readerStore = new IndexedDbProjectStore();
+    const received = [];
+    const unsubscribe = readerStore.subscribeNarrativeChanges(projectId => received.push(projectId));
+    assert.equal(FakeBroadcastChannel.instances.length, 1);
+    assert.equal(FakeBroadcastChannel.instances[0].name, "motor-literario-local:narrative-changes:v1");
+
+    writerStore.publishNarrativeChange("book-a");
+    return new Promise(resolve => queueMicrotask(() => {
+      assert.deepEqual(received, ["book-a"]);
+      const sender = FakeBroadcastChannel.instances.find(channel => channel !== FakeBroadcastChannel.instances[0]);
+      assert.ok(sender);
+      assert.deepEqual(sender.sent, [{
+        type: "motor-literario:narrative-change",
+        projectId: "book-a"
+      }]);
+
+      unsubscribe();
+      assert.equal(FakeBroadcastChannel.instances[0].closed, true);
+      readerStore.publishNarrativeChange("book-b");
+      assert.deepEqual(received, ["book-a"]);
+      resolve();
+    }));
+  } finally {
+    if (originalBroadcastChannel) {
+      Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);
+    } else {
+      delete globalThis.BroadcastChannel;
+    }
+  }
+});
+
 test("el análisis literario mide ritmo, diálogo y repeticiones con offsets UTF-16", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

@@ -105,27 +105,65 @@ export class LiteraryEngine {
   }
 
   async openDocument(snapshot: DocumentSnapshot): Promise<void> {
-    const project = this.requireProject();
     if (!snapshot || typeof snapshot.documentId !== "string" ||
         typeof snapshot.text !== "string" || !snapshot.documentId.trim() ||
         !Number.isSafeInteger(snapshot.revision) ||
         !Number.isSafeInteger(snapshot.sequence) || snapshot.revision < 0 || snapshot.sequence < 0) {
       throw new Error("Snapshot de documento inválido.");
     }
-    if (this.openingDocuments.has(snapshot.documentId) ||
-        this.applyingDocuments.has(snapshot.documentId) ||
-        this.queue.some(item => item.change.documentId === snapshot.documentId)) {
+    return this.openDocumentInternal(snapshot.documentId, snapshot);
+  }
+
+  /**
+   * Recupera un documento usando exclusivamente su último snapshot durable y
+   * el journal leído en la misma vista transaccional. No requiere que el
+   * anfitrión reconstruya ni reenvíe el manuscrito completo.
+   */
+  async recoverDocument(documentId: string): Promise<void> {
+    if (typeof documentId !== "string" || !documentId.trim()) {
+      throw new Error("Identificador de documento inválido para recuperación.");
+    }
+    return this.openDocumentInternal(documentId);
+  }
+
+  private async openDocumentInternal(
+    documentId: string,
+    hostSnapshot?: DocumentSnapshot
+  ): Promise<void> {
+    const project = this.requireProject();
+    if (this.openingDocuments.has(documentId) ||
+        this.applyingDocuments.has(documentId) ||
+        this.queue.some(item => item.change.documentId === documentId)) {
       throw new Error("No se puede abrir o resincronizar un documento mientras tiene operaciones activas.");
     }
-    this.openingDocuments.add(snapshot.documentId);
+    this.openingDocuments.add(documentId);
     try {
     const recovery = await this.options.store.loadDocumentWithChanges(
-      project.projectId, snapshot.documentId
+      project.projectId, documentId
     );
     if (!recovery || !Array.isArray(recovery.changes)) {
       throw new Error("La lectura transaccional de recuperación devolvió datos inválidos.");
     }
     const stored = recovery.document;
+    if (stored && (
+      stored.projectId !== project.projectId ||
+      stored.documentId !== documentId ||
+      typeof stored.text !== "string" ||
+      !Number.isSafeInteger(stored.revision) || stored.revision < 0 ||
+      !Number.isSafeInteger(stored.sequence) || stored.sequence < 0 ||
+      !Number.isFinite(stored.updatedAt) || stored.updatedAt < 0
+    )) {
+      throw new Error("El snapshot durable está malformado o pertenece a otro proyecto/documento.");
+    }
+    const snapshot: DocumentSnapshot | undefined = hostSnapshot ?? (stored ? {
+      documentId,
+      text: stored.text,
+      revision: stored.revision,
+      sequence: stored.sequence
+    } : undefined);
+    if (!snapshot) {
+      throw new Error("No existe un snapshot durable para recuperar este documento; el anfitrión debe proporcionar el snapshot autoritativo.");
+    }
     const atomicJournal: readonly StoredChange[] = recovery.changes;
     if (stored && (snapshot.revision < stored.revision ||
         snapshot.sequence < stored.sequence ||
@@ -218,7 +256,7 @@ export class LiteraryEngine {
       // journal restante no compromete la apertura ni la integridad del texto.
     }
     } finally {
-      this.openingDocuments.delete(snapshot.documentId);
+      this.openingDocuments.delete(documentId);
     }
   }
 

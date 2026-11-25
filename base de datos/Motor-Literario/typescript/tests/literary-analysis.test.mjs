@@ -1241,6 +1241,7 @@ test("mantiene el total de decisiones de escritor cuando el historial de una ide
 
 test("el grafo no reutiliza omisiones de trayectorias cuando recibe el catálogo global", () => {
   const projectId = "literary-analysis-test";
+  const statusHistory = [{ status: "IDEA", reason: "initial", changedAt: 1 }];
   const result = analyzeLiteraryFragment({
     projectId,
     documentId: "chapter-one",
@@ -1253,7 +1254,7 @@ test("el grafo no reutiliza omisiones de trayectorias cuando recibe el catálogo
       relatedIdeaIds: ["missing-target"],
       evidenceCount: 0,
       staleEvidenceCount: 0,
-      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      statusHistory,
       writerDecisionCount: 0,
       omittedStatusHistoryCount: 0
     }],
@@ -1265,6 +1266,8 @@ test("el grafo no reutiliza omisiones de trayectorias cuando recibe el catálogo
   assert.equal(result.ideaGraph.notIncludedReferenceCount, 1);
   assert.equal(result.ideaGraph.missingFromProjectReferenceCount, 1);
   assert.equal(result.ideaGraph.references[0].resolution, "missing-from-project");
+  result.ideaGraph.nodes[0].statusHistory[0].reason = "writer";
+  assert.equal(statusHistory[0].reason, "initial");
 });
 
 test("el catálogo de compatibilidad no presenta como ausentes ideas fuera del subconjunto de personajes", () => {

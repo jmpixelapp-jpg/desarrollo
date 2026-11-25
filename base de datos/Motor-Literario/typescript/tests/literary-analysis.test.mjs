@@ -1170,6 +1170,13 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   assert.equal(graph.sourceNodeCount, 1);
   assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
   assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+  assert.equal(graph.weakComponentCount, 2);
+  assert.equal(graph.omittedWeakComponentCount, 0);
+  assert.equal(graph.largestWeakComponentSize, 2);
+  assert.deepEqual(graph.weakComponents, [
+    { representativeIdeaId: "idea-a", ideaIds: ["idea-a", "idea-b"] },
+    { representativeIdeaId: "idea-c", ideaIds: ["idea-c", "idea-d"] }
+  ]);
   assert.equal(graph.cycleCount, 1);
   assert.deepEqual(graph.cycles, [{ ideaIds: ["idea-a", "idea-b"] }]);
   assert.deepEqual(graph.nodes, [

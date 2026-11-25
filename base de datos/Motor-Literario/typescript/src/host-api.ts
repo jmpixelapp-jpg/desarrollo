@@ -2985,34 +2985,11 @@ export class HostEngineApi {
         typeof entityId !== "string" || !entityId.trim() || typeof linked !== "boolean") {
       throw new Error("Datos de relación entre idea y entidad inválidos.");
     }
-    return this.enqueueKnowledgeOperation(async () => {
-      const ideaStore = this.requireIdeaStore();
-      const entityStore = this.requireKnowledgeStore();
-      if (!this.ideasLoaded) {
-        const ideas = requireProjectScopedRecords(await ideaStore.loadIdeas(projectId), projectId, "ideas");
-        for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
-        this.ideasLoaded = true;
-      }
-      if (!this.entitiesLoaded) {
-        const entities = requireProjectScopedRecords(await entityStore.loadEntities(projectId), projectId, "entidades");
-        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
-        this.entitiesLoaded = true;
-      }
-      const idea = this.narrativeIdeas.get(ideaId);
-      const entity = this.narrativeEntities.get(entityId);
-      if (!idea || idea.projectId !== projectId || !entity || entity.projectId !== projectId) {
-        throw new Error("La idea y la entidad deben existir en el proyecto activo.");
-      }
-      const current = idea.relatedEntityIds ?? [];
-      const relatedEntityIds = linked
-        ? [...new Set([...current, entityId])]
-        : current.filter(id => id !== entityId);
-      if (relatedEntityIds.length === current.length && relatedEntityIds.every((id, index) => id === current[index])) return cloneNarrativeRecord(idea);
-      const updated: NarrativeIdea = { ...idea, relatedEntityIds };
-      await this.persistIdeaUpdate(ideaStore, updated, idea);
-      this.narrativeIdeas.set(ideaId, updated);
-      return cloneNarrativeRecord(updated);
-    });
+    return this.enqueueKnowledgeOperation(() =>
+      this.mutateNarrativeIdeaReferenceSet(
+        projectId, ideaId, entityId, "relatedEntityIds", linked
+      )
+    );
   }
 
   /**
@@ -3026,31 +3003,100 @@ export class HostEngineApi {
         ideaId === relatedIdeaId || typeof linked !== "boolean") {
       throw new Error("Datos de relación entre ideas inválidos.");
     }
-    return this.enqueueKnowledgeOperation(async () => {
-      const store = this.requireIdeaStore();
+    return this.enqueueKnowledgeOperation(() =>
+      this.mutateNarrativeIdeaReferenceSet(
+        projectId, ideaId, relatedIdeaId, "relatedIdeaIds", linked
+      )
+    );
+  }
+
+  /**
+   * Reaplica una mutación de conjunto sobre la última versión durable si otra
+   * instancia ganó la escritura CAS. Añadir/quitar una arista es conmutativo
+   * respecto de las demás aristas del mismo conjunto: se conserva la decisión
+   * concurrente y solo se vuelve a aplicar el vínculo solicitado.
+   *
+   * Las decisiones editoriales de estado no usan este reintento, porque dos
+   * estados distintos no se pueden combinar sin imponer una prioridad al autor.
+   */
+  private async mutateNarrativeIdeaReferenceSet(
+    projectId: string,
+    ideaId: string,
+    targetId: string,
+    referenceKind: "relatedEntityIds" | "relatedIdeaIds",
+    linked: boolean
+  ): Promise<NarrativeIdea> {
+    const store = this.requireIdeaStore();
+    const maxAttempts = 3;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (!this.ideasLoaded) {
-        const ideas = requireProjectScopedRecords(await store.loadIdeas(projectId), projectId, "ideas");
+        const ideas = requireProjectScopedRecords(
+          await store.loadIdeas(projectId), projectId, "ideas"
+        );
         for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
         this.ideasLoaded = true;
       }
+
+      if (referenceKind === "relatedEntityIds" && !this.entitiesLoaded) {
+        const entityStore = this.requireKnowledgeStore();
+        const entities = requireProjectScopedRecords(
+          await entityStore.loadEntities(projectId), projectId, "entidades"
+        );
+        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
+        this.entitiesLoaded = true;
+      }
+
       const idea = this.narrativeIdeas.get(ideaId);
-      const related = this.narrativeIdeas.get(relatedIdeaId);
-      if (!idea || idea.projectId !== projectId ||
-          (linked && (!related || related.projectId !== projectId))) {
+      const targetExists = referenceKind === "relatedIdeaIds"
+        ? this.narrativeIdeas.get(targetId)?.projectId === projectId
+        : this.narrativeEntities.get(targetId)?.projectId === projectId;
+      const targetRequired = linked || referenceKind === "relatedEntityIds";
+      if (!idea || idea.projectId !== projectId || (targetRequired && !targetExists)) {
+        if (referenceKind === "relatedEntityIds") {
+          throw new Error("La idea y la entidad deben existir en el proyecto activo.");
+        }
         throw new Error(linked
           ? "Ambas ideas deben existir en el proyecto activo."
           : "La idea que contiene el vínculo no existe en el proyecto activo.");
       }
-      const current = idea.relatedIdeaIds ?? [];
-      const relatedIdeaIds = linked
-        ? [...new Set([...current, relatedIdeaId])]
-        : current.filter(id => id !== relatedIdeaId);
-      if (relatedIdeaIds.length === current.length && relatedIdeaIds.every((id, index) => id === current[index])) return cloneNarrativeRecord(idea);
-      const updated: NarrativeIdea = { ...idea, relatedIdeaIds };
-      await this.persistIdeaUpdate(store, updated, idea);
-      this.narrativeIdeas.set(ideaId, updated);
-      return cloneNarrativeRecord(updated);
-    });
+
+      const currentIds = referenceKind === "relatedEntityIds"
+        ? idea.relatedEntityIds ?? []
+        : idea.relatedIdeaIds ?? [];
+      const nextIds = linked
+        ? (currentIds.includes(targetId) ? [...currentIds] : [...currentIds, targetId])
+        : currentIds.filter(id => id !== targetId);
+      if (nextIds.length === currentIds.length &&
+          nextIds.every((id, index) => id === currentIds[index])) {
+        return cloneNarrativeRecord(idea);
+      }
+
+      const updated: NarrativeIdea = referenceKind === "relatedEntityIds"
+        ? { ...idea, relatedEntityIds: nextIds }
+        : { ...idea, relatedIdeaIds: nextIds };
+      try {
+        await this.persistIdeaUpdate(store, updated, idea);
+        this.narrativeIdeas.set(ideaId, updated);
+        return cloneNarrativeRecord(updated);
+      } catch (error) {
+        const isVersionConflict = error instanceof Error &&
+          /\\bidea\\b.*\\bcambió en otra instancia\\b/iu.test(error.message);
+        if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
+
+        // persistIdeaUpdate ya invalida la caché de ideas al fallar el CAS.
+        // En una asociación a ficha también se vuelve a leer el catálogo: la
+        // ficha pudo cambiar de identidad mientras esta instancia esperaba.
+        if (referenceKind === "relatedEntityIds") {
+          this.narrativeEntities.clear();
+          this.entitiesLoaded = false;
+          this.entityEvidenceIndex = undefined;
+          this.entityNameIndex = undefined;
+        }
+      }
+    }
+
+    throw new Error("No se pudo sincronizar el vínculo de la idea tras varios conflictos concurrentes.");
   }
 
   /**

@@ -6587,8 +6587,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
           (!event.timeReference ||
             !["calendar","story-day"].includes(event.timeReference.basis) ||
             !["date","year","day-index"].includes(event.timeReference.precision) ||
-            typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim() ||
-            false))) {
+            typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim()))) {
       throw new Error("El catálogo global de acontecimientos del análisis literario es inválido.");
     }
     for (const evidence of event.evidence) {

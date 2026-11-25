@@ -1,6 +1,6 @@
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
-  EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, Diagnostic
+  EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import { proofreadFragment } from "./proofreading";
@@ -1556,6 +1556,31 @@ export class HostEngineApi {
   }
 
 
+  /** Consulta el recibo durable que demuestra la transferencia de cierre de este libro. */
+  async getProjectFinalizationReceipt(): Promise<StoredProjectFinalizationReceipt | undefined> {
+    const project = this.requireProject();
+    const writerId = this.requireWriterId();
+    const loadReceipt = this.store.loadProjectFinalizationReceipt;
+    if (!loadReceipt) {
+      throw new Error("El almacenamiento no admite recibos durables de finalización.");
+    }
+    const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
+    if (receipt === undefined) return undefined;
+    const ids = receipt.archivedIdeaIds;
+    if (!receipt || receipt.writerId !== writerId ||
+        receipt.sourceProjectId !== project.projectId ||
+        typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||
+        receipt.sourceProjectName !== project.projectName ||
+        !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+        !Array.isArray(ids) ||
+        ids.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(ids).size !== ids.length ||
+        typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
+      throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
+    }
+    return cloneNarrativeRecord(receipt);
+  }
+
   async setNarrativeIdeaStatus(
     ideaId: string,
     status: NarrativeIdea["status"]
@@ -1686,6 +1711,9 @@ export class HostEngineApi {
       explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.updateIdeaIfUnchanged && this.store.saveEntity && this.store.loadEntities),
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.updateIdeaIfUnchanged),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
+      personalIdeaLibraryFinalizationReceipts: Boolean(
+        this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
+      ),
       explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
       evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
       semanticContradictionAnalysis: false,

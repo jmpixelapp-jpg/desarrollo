@@ -92,6 +92,16 @@ export interface StoredDiagnostics {
   readonly updatedAt: number;
 }
 
+/** Confirmación compacta de finalización; las ideas se recuperan por páginas. */
+export interface ProjectFinalizationSummary {
+  readonly writerId: string;
+  readonly sourceProjectId: string;
+  readonly sourceProjectName: string;
+  readonly archivedCount: number;
+  readonly finalizedAt: number;
+  readonly archiveChecksum: string;
+}
+
 /** Recibo durable e idempotente de la transferencia al cerrar un libro. */
 export interface StoredProjectFinalizationReceipt {
   readonly writerId: string;
@@ -288,6 +298,10 @@ export interface ProjectStore {
   ): Promise<void>;
   /** Transfiere atómicamente ideas aún no incorporadas a la biblioteca privada del escritor. */
   archiveUnincorporatedIdeas?(projectId: string, writerId: string, sourceProjectName: string, archivedAt: number): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
+  /** Igual operación atómica, con confirmación compacta y sin materializar las entradas transferidas. */
+  archiveUnincorporatedIdeasSummary?(
+    projectId: string, writerId: string, sourceProjectName: string, archivedAt: number
+  ): Promise<ProjectFinalizationSummary>;
   loadPersonalIdeas?(writerId: string): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   /** Lectura keyset por páginas; el límite máximo admitido es 200 entradas. */
   loadPersonalIdeasPage?(

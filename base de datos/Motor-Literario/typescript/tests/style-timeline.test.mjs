@@ -8,7 +8,7 @@ class MemoryStyleTimelineStore {
   key(projectId, id) { return projectId + ":" + id; }
 
   async loadStyleProfiles(projectId) {
-    return [...this.styles.values()].filter(item => item.projectId === projectId).map(structuredClone);
+    return [...this.styles.values()].filter(item => item.projectId === projectId).map(item => structuredClone(item));
   }
   async saveStyleProfile(item, expected) {
     const key = this.key(item.projectId, item.id);
@@ -20,7 +20,7 @@ class MemoryStyleTimelineStore {
     this.styles.set(key, structuredClone(item));
   }
   async loadTimelineTracks(projectId) {
-    return [...this.tracks.values()].filter(item => item.projectId === projectId).map(structuredClone);
+    return [...this.tracks.values()].filter(item => item.projectId === projectId).map(item => structuredClone(item));
   }
   async saveTimelineTrack(item, expected) {
     const key = this.key(item.projectId, item.id);

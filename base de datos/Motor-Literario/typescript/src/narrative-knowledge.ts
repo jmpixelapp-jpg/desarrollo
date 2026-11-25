@@ -130,6 +130,31 @@ export interface NarrativeIdeaStatusChange {
   readonly reason: "initial" | "writer" | "text-revised";
 }
 
+/**
+ * Devuelve una marca temporal que no retrocede respecto del historial conocido.
+ * Es útil al importar decisiones desde equipos con relojes desincronizados.
+ */
+export function nextNarrativeIdeaStatusChangeAt(
+  statusHistory: readonly NarrativeIdeaStatusChange[],
+  now = Date.now()
+): number {
+  if (!Array.isArray(statusHistory) || !Number.isFinite(now) || now < 0) {
+    throw new Error("Historial o reloj de decisiones narrativas inválido.");
+  }
+  let latestKnownAt = 0;
+  for (const change of statusHistory) {
+    if (!change ||
+        (change.changedAt !== undefined &&
+          (!Number.isFinite(change.changedAt) || change.changedAt < 0))) {
+      throw new Error("El historial contiene una marca temporal inválida.");
+    }
+    if (change.changedAt !== undefined) {
+      latestKnownAt = Math.max(latestKnownAt, change.changedAt);
+    }
+  }
+  return Math.max(now, latestKnownAt);
+}
+
 export interface NarrativeIdea {
   readonly projectId: string;
   readonly id: string;
@@ -609,7 +634,11 @@ export function mergeNarrativeIdea(
     { status: previous.status, reason: "initial" as const }
   ])];
   if (textChanged && previous.status !== "IDEA") {
-    statusHistory.push({ status: "IDEA", changedAt: Date.now(), reason: "text-revised" });
+    statusHistory.push({
+      status: "IDEA",
+      changedAt: nextNarrativeIdeaStatusChangeAt(statusHistory),
+      reason: "text-revised"
+    });
   }
   return {
     ...previous,

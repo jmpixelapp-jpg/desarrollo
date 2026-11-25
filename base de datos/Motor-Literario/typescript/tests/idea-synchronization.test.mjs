@@ -63,7 +63,7 @@ class RacingStore {
     }
     for (const id of next.relatedIdeaIds ?? []) {
       if (id === next.id || !this.ideas.has(next.projectId + ":" + id)) {
-        throw new Error("La idea enlaza una idea inexistente o se enlaza a sí misma.");
+        throw new Error("Ambas ideas deben existir en el proyecto activo.");
       }
     }
     for (const id of next.relatedEntityIds ?? []) {
@@ -377,7 +377,7 @@ test("rechaza altas de vínculos entre ideas si el destino fue eliminado externa
     /Ambas ideas deben existir en el proyecto activo/
   );
 
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 1);
   assert.equal(store.writes, 0);
   assert.deepEqual(
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
@@ -610,7 +610,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 3);
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"
@@ -736,8 +736,8 @@ test("mantiene el límite de 500 vínculos por categoría antes de persistir", a
   entityApi.dispose();
 });
 
-test("rechaza historiales editoriales cuya secuencia temporal o estado final es incoherente", async () => {
-  const invalidHistories = [
+test("preserva historiales editoriales importados aunque sus fechas retrocedan o difieran del estado actual", async () => {
+  const historicalCases = [
     [
       { status: "IDEA", reason: "initial", changedAt: 10 },
       { status: "incorporated", reason: "writer", changedAt: 9 }
@@ -748,15 +748,15 @@ test("rechaza historiales editoriales cuya secuencia temporal o estado final es 
     ]
   ];
 
-  for (const statusHistory of invalidHistories) {
+  for (const statusHistory of historicalCases) {
     const store = new RacingStore([
       idea("idea-source", { status: "incorporated", statusHistory })
     ]);
     const api = createApi(store);
-    await assert.rejects(
-      api.getNarrativeIdeas(),
-      /registro malformado en ideas/
-    );
+    const loaded = await api.getNarrativeIdeas();
+    assert.equal(loaded.length, 1);
+    assert.deepEqual(loaded[0].statusHistory, statusHistory);
+    assert.equal(loaded[0].status, "incorporated");
     api.dispose();
   }
 });

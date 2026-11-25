@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HostEngineApi, IndexedDbProjectStore, PieceTable } from "../dist/motor-literario.js";
+import { HostEngineApi, IndexedDbProjectStore, PieceTable, nextNarrativeIdeaStatusChangeAt } from "../dist/motor-literario.js";
 
 class MemoryStore {
   documents = new Map();
@@ -2415,6 +2415,26 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   let transaction;
   const database = {
     objectStoreNames: { contains: name => stores.has(name) },
+    createObjectStore(name, options) {
+      const indexes = new Map();
+      const objectStore = {
+        keyPath: options.keyPath,
+        indexNames: { contains: indexName => indexes.has(indexName) },
+        index(indexName) {
+          const definition = indexes.get(indexName);
+          assert.ok(definition, "índice inexistente: " + name + "." + indexName);
+          return definition;
+        },
+        createIndex(indexName, keyPath, indexOptions) {
+          const definition = { keyPath, unique: indexOptions?.unique ?? false };
+          indexes.set(indexName, definition);
+          createdIndexes.push([name, indexName, keyPath, indexOptions]);
+          return definition;
+        }
+      };
+      stores.set(name, objectStore);
+      return objectStore;
+    },
     onversionchange: null,
     close() {},
     transaction() {
@@ -2444,8 +2464,11 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 21);
+    assert.equal(openedVersion, 22);
     const expected = [
+      ["event-lifecycles", "by-project"],
+      ["event-lifecycles", "by-subject"],
+      ["event-lifecycles", "by-subject-revision"],
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
       ["language-profiles", "by-project-language"],
@@ -2537,7 +2560,7 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const names = [
     "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
-    "record-lifecycles", "relation-lifecycles", "project-settings", "documents", "changes",
+    "record-lifecycles", "relation-lifecycles", "event-lifecycles", "project-settings", "documents", "changes",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
@@ -3921,6 +3944,203 @@ test("el archivo conserva el grafo de ideas que se transfieren juntas sin duplic
   );
 });
 
+test("IndexedDB conserva referencias mutuas entre ideas archivadas en la misma transacción", async () => {
+  const projectId = "indexeddb-archive-mutual-links";
+  const writerId = "writer-indexeddb-archive-mutual-links";
+  const projectName = "Libro con vínculos mutuos";
+  const key = (project, id) => project + "\u0000" + id;
+  const projectIdeas = new Map([
+    ["idea-a", {
+      projectId, id: "idea-a", text: "Idea A", status: "IDEA",
+      originDocumentId: "chapter-a", sourceProjectName: projectName,
+      evidence: [], relatedIdeaIds: ["idea-b"]
+    }],
+    ["idea-b", {
+      projectId, id: "idea-b", text: "Idea B", status: "IDEA",
+      originDocumentId: "chapter-b", sourceProjectName: projectName,
+      evidence: [], relatedIdeaIds: ["idea-a"]
+    }]
+  ].map(([id, idea]) => [key(projectId, id), structuredClone(idea)]));
+  const personalIdeas = new Map();
+  const receipts = new Map();
+  let pendingRequests = 0;
+  let completionTimer;
+  let aborted = false;
+  let completed = false;
+  let transaction;
+
+  const scheduleCompletion = () => {
+    if (pendingRequests !== 0 || aborted || completed || completionTimer) return;
+    completionTimer = setTimeout(() => {
+      completionTimer = undefined;
+      if (pendingRequests !== 0 || aborted || completed) return;
+      completed = true;
+      transaction.oncomplete?.();
+    }, 0);
+  };
+  const createRequest = () => ({
+    result: undefined,
+    error: null,
+    onsuccess: null,
+    onerror: null
+  });
+  const queueResult = (request, read) => {
+    pendingRequests++;
+    if (completionTimer) {
+      clearTimeout(completionTimer);
+      completionTimer = undefined;
+    }
+    queueMicrotask(() => {
+      if (aborted) {
+        pendingRequests--;
+        return;
+      }
+      try {
+        request.result = read();
+        request.onsuccess?.({ target: request });
+      } catch (error) {
+        request.error = error;
+        try { request.onerror?.({ target: request }); }
+        finally { transaction.abort(); }
+      } finally {
+        pendingRequests--;
+        scheduleCompletion();
+      }
+    });
+    return request;
+  };
+
+  const ideaStore = {
+    index(indexName) {
+      assert.equal(indexName, "by-project");
+      return {
+        openCursor(requestedProjectId) {
+          assert.equal(requestedProjectId, projectId);
+          const snapshot = [...projectIdeas.values()]
+            .filter(idea => idea.projectId === projectId)
+            .sort((left, right) => left.id.localeCompare(right.id))
+            .map(idea => structuredClone(idea));
+          const request = createRequest();
+          const cursorAt = index => {
+            const value = snapshot[index];
+            if (!value) return null;
+            return {
+              value: structuredClone(value),
+              continue() {
+                queueResult(request, () => cursorAt(index + 1));
+              }
+            };
+          };
+          return queueResult(request, () => cursorAt(0));
+        }
+      };
+    },
+    get(compositeKey) {
+      return queueResult(createRequest(), () => {
+        const value = projectIdeas.get(key(compositeKey[0], compositeKey[1]));
+        return value ? structuredClone(value) : undefined;
+      });
+    },
+    delete(compositeKey) {
+      projectIdeas.delete(key(compositeKey[0], compositeKey[1]));
+    }
+  };
+  const personalStore = {
+    add(entry) {
+      const identity = key(entry.writerId + ":" + entry.sourceProjectId, entry.idea.id);
+      if (personalIdeas.has(identity)) throw new Error("Entrada archivada duplicada.");
+      personalIdeas.set(identity, structuredClone(entry));
+      return createRequest();
+    },
+    get(compositeKey) {
+      return queueResult(createRequest(), () => {
+        const value = personalIdeas.get(key(compositeKey[0] + ":" + compositeKey[1], compositeKey[2]));
+        return value ? structuredClone(value) : undefined;
+      });
+    },
+    index(indexName) {
+      assert.equal(indexName, "by-writer-source");
+      return {
+        count(compositeKey) {
+          return queueResult(createRequest(), () => [...personalIdeas.values()].filter(entry =>
+            entry.writerId === compositeKey[0] &&
+            entry.sourceProjectId === compositeKey[1]
+          ).length);
+        }
+      };
+    }
+  };
+  const receiptStore = {
+    get(compositeKey) {
+      return queueResult(createRequest(), () => receipts.get(compositeKey.join(":")));
+    },
+    add(receipt) {
+      receipts.set(
+        [receipt.writerId, receipt.sourceProjectId, receipt.receiptId].join(":"),
+        structuredClone(receipt)
+      );
+      return createRequest();
+    }
+  };
+  const entityStore = {
+    get(compositeKey) {
+      return queueResult(createRequest(), () => undefined);
+    }
+  };
+  const database = {
+    transaction(storeNames, mode) {
+      assert.equal(mode, "readwrite");
+      assert.deepEqual(new Set(storeNames), new Set([
+        "narrative-ideas",
+        "personal-idea-library",
+        "narrative-entities",
+        "writer-library-finalization-receipts"
+      ]));
+      transaction = {
+        error: null,
+        oncomplete: null,
+        onerror: null,
+        onabort: null,
+        objectStore(name) {
+          if (name === "narrative-ideas") return ideaStore;
+          if (name === "personal-idea-library") return personalStore;
+          if (name === "narrative-entities") return entityStore;
+          if (name === "writer-library-finalization-receipts") return receiptStore;
+          throw new Error("Almacén inesperado: " + name);
+        },
+        abort() {
+          if (aborted || completed) return;
+          aborted = true;
+          if (completionTimer) clearTimeout(completionTimer);
+          queueMicrotask(() => transaction.onabort?.());
+        }
+      };
+      return transaction;
+    }
+  };
+
+  const store = new IndexedDbProjectStore();
+  // Inyecta una base ya abierta para probar la secuencia transaccional sin
+  // sustituir el flujo de IndexedDB por el adaptador MemoryStore.
+  store.database = Promise.resolve(database);
+  const archived = await store.archiveUnincorporatedIdeas(
+    projectId, writerId, projectName, 100
+  );
+
+  assert.equal(archived.length, 2);
+  const byId = new Map(archived.map(entry => [entry.idea.id, entry]));
+  assert.deepEqual(byId.get("idea-a").idea.relatedIdeaIds, ["idea-b"]);
+  assert.deepEqual(byId.get("idea-b").idea.relatedIdeaIds, ["idea-a"]);
+  assert.equal(byId.get("idea-a").context.relatedIdeas.length, 0);
+  assert.equal(byId.get("idea-b").context.relatedIdeas.length, 0);
+  assert.equal(projectIdeas.size, 0);
+  assert.deepEqual(
+    new Set([...personalIdeas.values()].map(entry => entry.idea.id)),
+    new Set(["idea-a", "idea-b"])
+  );
+  assert.equal(receipts.size, 1);
+});
+
 test("exige identidad de escritor suministrada por el anfitrión para acceder a la biblioteca", async () => {
   const api = new HostEngineApi({ store: new MemoryStore() });
   api.initializeProject({ projectId: "book-without-writer", projectName: "Libro sin identidad" });
@@ -4026,6 +4246,36 @@ test("el archivo de ideas espera a que termine el análisis vivo antes de transf
   assert.equal(archived.length, 1);
   assert.equal(archived[0].idea.text, "La puerta se abre al amanecer.");
   assert.equal((await api.getNarrativeIdeas()).length, 0);
+});
+
+test("rechaza historiales importados de decisiones narrativas malformados", () => {
+  const validIdeaChange = { status: "IDEA", reason: "initial", changedAt: 10 };
+  const invalidHistories = [
+    [{ ...validIdeaChange, status: "pending" }],
+    [{ ...validIdeaChange, reason: "imported-without-source" }],
+    [{ ...validIdeaChange, changedAt: "10" }],
+    [{ ...validIdeaChange, changedAt: Number.NaN }],
+    [{ ...validIdeaChange, changedAt: Number.POSITIVE_INFINITY }],
+    [{ ...validIdeaChange, changedAt: -1 }],
+    [null]
+  ];
+
+  for (const history of invalidHistories) {
+    assert.throws(
+      () => nextNarrativeIdeaStatusChangeAt(history, 20),
+      /decisión narrativa inválida|marca temporal inválida/
+    );
+  }
+
+  assert.equal(
+    nextNarrativeIdeaStatusChangeAt([{ status: "IDEA", reason: "initial" }], 20),
+    20,
+    "las decisiones históricas sin fecha siguen siendo compatibles"
+  );
+  assert.throws(
+    () => nextNarrativeIdeaStatusChangeAt([], "20"),
+    /Historial o reloj de decisiones narrativas inválido/
+  );
 });
 
 test("mantiene monotónico el historial al sincronizar decisiones con una marca futura", async () => {
@@ -4427,7 +4677,7 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
   store.loadIdeas = async () => [{ ...base, relatedIdeaIds: ["idea-b", "idea-b"] }];
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [{ ...base, relatedIdeaIds: ["idea-a"] }];
-  await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
+  await assert.rejects(() => api.getNarrativeIdeas(), /no puede enlazarse a sí misma/i);
   store.loadIdeas = async () => [{
     ...base,
     statusHistory: [
@@ -4435,7 +4685,9 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
       { status: "IDEA", reason: "writer", changedAt: 2 }
     ]
   }];
-  await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
+  await api.invalidateNarrativeKnowledgeFromExternalChange();
+  const repeatedWriterDecision = await api.getNarrativeIdeas();
+  assert.equal(repeatedWriterDecision[0].statusHistory.length, 2);
   store.loadIdeas = async () => [{
     ...base,
     status: "discarded",
@@ -4444,6 +4696,7 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
       { status: "discarded", reason: "text-revised", changedAt: 2 }
     ]
   }];
+  await api.invalidateNarrativeKnowledgeFromExternalChange();
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [];
   assert.deepEqual(await api.getNarrativeIdeas(), []);
@@ -5739,7 +5992,7 @@ test("IndexedDB rechaza vínculos de idea duplicados y autorreferenciales antes 
       originDocumentId: "chapter", sourceProjectName: "Libro", evidence: [] };
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-b", "idea-b"] }),
-      /referencias inválidas o duplicadas/i
+      /referencias inválidas, duplicadas/i
     );
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-a"] }),
@@ -6868,9 +7121,32 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidación at�
       }
     ]
   };
+  const archivedForReceipt = collections["personal-idea-library"]
+    .filter(entry => entry.writerId === "writer-canonical" && entry.sourceProjectId === "canonical-relation")
+    .sort((first, second) => first.idea.id.localeCompare(second.idea.id));
+  const checksum = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  const archivedIdeaIds = archivedForReceipt.map(entry => entry.idea.id);
+  const originalReceipt = {
+    writerId: "writer-canonical",
+    sourceProjectId: "canonical-relation",
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro",
+    finalizedAt: 20,
+    archivedIdeaIds,
+    archiveChecksum: checksum(JSON.stringify(archivedIdeaIds)),
+    archiveContentChecksum: checksum(JSON.stringify(archivedForReceipt))
+  };
+  collections["writer-library-finalization-receipts"] = [originalReceipt];
   const puts = [];
   const deletes = [];
-  let pendingReads = 6;
+  let pendingReads = 7;
   let transaction;
   const database = {
     onversionchange: null,
@@ -6899,6 +7175,18 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidación at�
                   return request;
                 }
               };
+            },
+            get(key) {
+              const request = {};
+              queueMicrotask(() => {
+                request.result = structuredClone((collections["writer-library-finalization-receipts"] ?? [])
+                  .find(item => item.writerId === key[0] &&
+                    item.sourceProjectId === key[1] && item.receiptId === key[2]));
+                request.onsuccess?.();
+                pendingReads--;
+                if (pendingReads === 0) queueMicrotask(() => transaction.oncomplete?.());
+              });
+              return request;
             },
             put(record) { puts.push({ store: name, record: structuredClone(record) }); },
             delete(key) { deletes.push({ store: name, key }); }
@@ -6963,6 +7251,17 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidación at�
     assert.deepEqual(archived.record.idea.statusHistory, [{ status: "IDEA", changedAt: 4, reason: "initial" }]);
     assert.equal(archived.record.category, "Libro");
     assert.equal(archived.record.archivedAt, 20);
+    const updatedReceipt = puts.find(item => item.store === "writer-library-finalization-receipts");
+    assert.ok(updatedReceipt, "el recibo debe actualizarse en la misma transacción");
+    assert.notEqual(updatedReceipt.record.archiveContentChecksum, originalReceipt.archiveContentChecksum);
+    const updatedEntries = archivedForReceipt.map(entry =>
+      puts.find(item => item.store === "personal-idea-library" && item.record.idea.id === entry.idea.id)?.record ?? entry
+    );
+    assert.equal(
+      updatedReceipt.record.archiveContentChecksum,
+      checksum(JSON.stringify(updatedEntries)),
+      "el recibo debe reflejar los snapshots ya consolidados"
+    );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;
@@ -7007,7 +7306,7 @@ test("IndexedDB aborta también la actualización de la biblioteca si falla la c
   let queuedWrites = 0;
   let queuedDeletes = 0;
   let queuedPersonalWrites = 0;
-  let pendingReads = 6;
+  let pendingReads = 7;
   let transaction;
   const database = {
     onversionchange: null,
@@ -7045,6 +7344,25 @@ test("IndexedDB aborta también la actualización de la biblioteca si falla la c
                 });
                 return request;
               } };
+            },
+            get(key) {
+              const request = {};
+              queueMicrotask(() => {
+                request.result = structuredClone((committed["writer-library-finalization-receipts"] ?? [])
+                  .find(item => item.writerId === key[0] &&
+                    item.sourceProjectId === key[1] && item.receiptId === key[2]));
+                request.onsuccess?.();
+                pendingReads--;
+                if (pendingReads === 0) {
+                  queueMicrotask(() => {
+                    if (!aborted && !completed) {
+                      completed = true;
+                      transaction.oncomplete?.();
+                    }
+                  });
+                }
+              });
+              return request;
             },
             put(record) {
               queuedWrites++;
@@ -7513,6 +7831,15 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
   const legacyLibrary = await api.getPersonalIdeaLibrary();
   assert.equal(legacyLibrary.length, 1);
   assert.equal(legacyLibrary[0].contextStatus, "missing-legacy-context");
+
+  store.archiveUnincorporatedIdeas = async () => [structuredClone(entry)];
+  const legacyArchive = await api.archiveUnincorporatedIdeas();
+  assert.equal(legacyArchive.length, 1);
+  assert.equal(
+    legacyArchive[0].contextStatus,
+    "missing-legacy-context",
+    "un reintento de una finalización histórica debe exponer que faltan snapshots contextuales"
+  );
   store.loadPersonalIdeas = async () => [{
     ...structuredClone(entry),
     idea: {
@@ -7726,13 +8053,13 @@ test("IndexedDB rechaza ideas malformadas tanto al guardar como al recuperar", a
     };
     await assert.rejects(
       store.saveIdea(historyMismatch),
-      /historial no coincide con el estado actual/
+      /historial de estados no coincide con la idea que se va a guardar/
     );
     storedIdea = historyMismatch;
-    await assert.rejects(
-      store.loadIdeas("idea-integrity"),
-      /historial no coincide con el estado actual/
-    );
+    const importedHistory = await store.loadIdeas("idea-integrity");
+    assert.equal(importedHistory.length, 1);
+    assert.deepEqual(importedHistory[0].statusHistory, historyMismatch.statusHistory);
+    assert.equal(importedHistory[0].status, "IDEA");
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;
@@ -9808,6 +10135,29 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     sourceProjectName: projectName,
     evidence: []
   }));
+  // La red conserva más de mil nodos de contexto sin superar el límite
+  // de 500 enlaces por idea: la raíz apunta a ramas y cada rama a sus hojas.
+  const wideBranchCount = 3;
+  const wideBranchSize = Math.ceil(wideCount / wideBranchCount);
+  const wideBranchIds = Array.from({ length: wideBranchCount }, (_, index) =>
+    `wide-branch-${String(index).padStart(2, "0")}`
+  );
+  const wideBranches = Array.from({ length: wideBranchCount }, (_, branchIndex) => {
+    const firstLeafIndex = branchIndex * wideBranchSize;
+    const branchLeafCount = Math.min(wideBranchSize, wideCount - firstLeafIndex);
+    return {
+      projectId,
+      id: wideBranchIds[branchIndex],
+      text: `Rama contextual ${branchIndex}`,
+      status: "incorporated",
+      originDocumentId: "chapter",
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedIdeaIds: Array.from({ length: branchLeafCount }, (_, index) =>
+        `wide-leaf-${String(firstLeafIndex + index).padStart(4, "0")}`
+      )
+    };
+  });
   const wideRoot = {
     projectId,
     id: "context-wide-root",
@@ -9816,9 +10166,7 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     originDocumentId: "chapter",
     sourceProjectName: projectName,
     evidence: [],
-    relatedIdeaIds: Array.from({ length: wideCount }, (_, index) =>
-      `wide-leaf-${String(index).padStart(4, "0")}`
-    )
+    relatedIdeaIds: wideBranchIds
   };
   const wideLeaves = Array.from({ length: wideCount }, (_, index) => ({
     projectId,
@@ -9829,7 +10177,9 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     sourceProjectName: projectName,
     evidence: []
   }));
-  const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideLeaves];
+  const projectIdeas = [
+    ...pendingIdeas, ...smallContexts, wideRoot, ...wideBranches, ...wideLeaves
+  ];
   const entries = [];
   const deleted = [];
   const transaction = {
@@ -9905,10 +10255,13 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     }
     const wideEntry = entries.find(item => item.idea.id === "pending-wide");
     assert.ok(wideEntry);
-    assert.equal(wideEntry.context.relatedIdeas.length, wideCount + 1);
+    assert.equal(
+      wideEntry.context.relatedIdeas.length,
+      wideCount + wideBranchCount + 1
+    );
     assert.deepEqual(
       wideEntry.context.relatedIdeas.map(idea => idea.id),
-      [...["context-wide-root"], ...wideLeaves.map(idea => idea.id)].sort()
+      ["context-wide-root", ...wideBranchIds, ...wideLeaves.map(idea => idea.id)].sort()
     );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
@@ -10006,6 +10359,29 @@ test("la recuperación local no inventa un snapshot cuando el documento nunca fu
 
 test("IndexedDB registra el cierre del libro y repite la transferencia usando el mismo recibo durable", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const originalBroadcastChannel = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class FinalizationBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    constructor(name) { this.name = name; FinalizationBroadcastChannel.channels.add(this); }
+    postMessage(data) {
+      for (const channel of FinalizationBroadcastChannel.channels) {
+        if (channel === this || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: structuredClone(data) }));
+      }
+    }
+    close() { FinalizationBroadcastChannel.channels.delete(this); }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true, value: FinalizationBroadcastChannel
+  });
+  const finalizationBroadcastAssertions = [];
+  const observer = new IndexedDbProjectStore();
+  const unsubscribeFinalizationObserver = observer.subscribePersonalIdeaLibraryChanges(
+    value => finalizationBroadcastAssertions.push(value)
+  );
   const projectId = "finalization-receipt-book";
   const writerId = "finalization-receipt-writer";
   const projectName = "El libro finalizado";
@@ -10069,12 +10445,40 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-project");
                 return {
-                  getAll(requestedProjectId) {
-                    return transaction.request(() =>
-                      structuredClone(projectIdeas.filter(item => item.projectId === requestedProjectId))
-                    );
+                  openCursor(requestedProjectId) {
+                    const request = {};
+                    const ordered = projectIdeas
+                      .filter(item => item.projectId === requestedProjectId)
+                      .sort((first, second) => first.id.localeCompare(second.id));
+                    let index = 0;
+                    const advance = () => {
+                      transaction.pendingRequests++;
+                      queueMicrotask(() => {
+                        if (transaction.aborted) return;
+                        const item = ordered[index++];
+                        request.result = item
+                          ? {
+                              value: structuredClone(item),
+                              continue: advance
+                            }
+                          : null;
+                        request.onsuccess?.();
+                        transaction.pendingRequests--;
+                        transaction.maybeComplete();
+                      });
+                    };
+                    advance();
+                    return request;
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const item = projectIdeas.find(entry =>
+                    entry.projectId === key[0] && entry.id === key[1]
+                  );
+                  return item ? structuredClone(item) : undefined;
+                });
               },
               delete(key) {
                 const [requestedProjectId, ideaId] = key;
@@ -10090,14 +10494,20 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-writer-source");
                 return {
-                  getAll(key) {
+                  count(key) {
                     return transaction.request(() =>
-                      [...library.values()]
-                        .filter(entry => entry.writerId === key[0] && entry.sourceProjectId === key[1])
-                        .map(entry => structuredClone(entry))
+                      [...library.values()].filter(entry =>
+                        entry.writerId === key[0] && entry.sourceProjectId === key[1]
+                      ).length
                     );
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const entry = library.get(makeKey(key));
+                  return entry ? structuredClone(entry) : undefined;
+                });
               },
               add(entry) {
                 const key = makeKey([entry.writerId, entry.sourceProjectId, entry.idea.id]);
@@ -10120,6 +10530,11 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
                 const key = makeKey([receipt.writerId, receipt.sourceProjectId, receipt.receiptId]);
                 if (receipts.has(key)) throw new Error("ConstraintError: receipt already exists");
                 receipts.set(key, structuredClone(receipt));
+              },
+              put(receipt) {
+                const key = makeKey([receipt.writerId, receipt.sourceProjectId, receipt.receiptId]);
+                receipts.set(key, structuredClone(receipt));
+                return {};
               }
             };
           }
@@ -10155,6 +10570,9 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(projectIdeas.length, 0);
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(finalizationBroadcastAssertions, [writerId],
+      "la transferencia confirmada notifica una vez a la biblioteca del escritor");
 
     const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
     assert.ok(receipt);
@@ -10163,14 +10581,52 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(receipt.finalizedAt, 100);
     assert.deepEqual(receipt.archivedIdeaIds, ["idea-to-archive"]);
     assert.match(receipt.archiveChecksum, /^fnv1a64:[0-9a-f]{16}$/);
+    assert.match(receipt.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/);
+    assert.equal(
+      receipt.archiveContentChecksum,
+      (await store.archiveUnincorporatedIdeasSummary(projectId, writerId, projectName, 150))
+        .archiveContentChecksum
+    );
+
+    // Un recibo previo al checksum de contenido se migra al repetir la
+    // operación idempotente, sin transferir de nuevo la entrada.
+    const receiptKey = makeKey([writerId, projectId, "finalization-v1"]);
+    const legacyReceipt = { ...receipts.get(receiptKey) };
+    delete legacyReceipt.archiveContentChecksum;
+    receipts.set(receiptKey, legacyReceipt);
+    const migratedSummary = await store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 160
+    );
+    assert.equal(migratedSummary.alreadyFinalized, true);
+    assert.equal(migratedSummary.archiveContentChecksum, receipt.archiveContentChecksum);
+    assert.equal(receipts.get(receiptKey).archiveContentChecksum, receipt.archiveContentChecksum);
+    assert.equal(library.size, 1);
+    assert.equal(projectIdeas.length, 0);
+
+    const archivedKey = makeKey([writerId, projectId, "idea-to-archive"]);
+    const originalEntry = library.get(archivedKey);
+    library.set(archivedKey, {
+      ...originalEntry,
+      idea: { ...originalEntry.idea, text: "Texto alterado fuera del archivo." }
+    });
+    await assert.rejects(
+      store.archiveUnincorporatedIdeas(projectId, writerId, projectName, 175),
+      /checksum del contenido archivado/u
+    );
+    library.set(archivedKey, originalEntry);
 
     const retryArchive = await store.archiveUnincorporatedIdeas(
       projectId, writerId, projectName, 200
     );
     assert.equal(retryArchive.length, 1);
     assert.equal(retryArchive[0].idea.id, "idea-to-archive");
+    assert.deepEqual(retryArchive, firstArchive,
+      "el reintento debe devolver la entrada y su contexto originales ya confirmados");
     assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(finalizationBroadcastAssertions, [writerId],
+      "repetir un recibo no publica una segunda transferencia");
     assert.equal(
       (await store.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
       receipt.archiveChecksum
@@ -10189,8 +10645,13 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
   } finally {
+    unsubscribeFinalizationObserver();
+    observer.dispose?.();
+    FinalizationBroadcastChannel.channels.clear();
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;
+    if (originalBroadcastChannel) Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);
+    else delete globalThis.BroadcastChannel;
   }
 });
 
@@ -12884,4 +13345,824 @@ test("la API integra relaciones y decisiones persistidas en la trayectoria del p
   assert.equal(ana.writerDecisionCount, 1);
   assert.deepEqual(ana.scenes[0].relationshipIds, ["ana-bruno"]);
   assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, ["ana-promise-decision"]);
+});
+
+
+test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera de la página", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  const identity = {
+    projectId: "paged-personal-library",
+    projectName: "Libro por páginas",
+    writerId: "writer-paged-library"
+  };
+  api.initializeProject(identity);
+
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-a",
+    text: "Primera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: [],
+    relatedIdeaIds: ["idea-b"]
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-b",
+    text: "Segunda idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-c",
+    text: "Tercera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-2",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await api.archiveUnincorporatedIdeas();
+
+  let pageReads = 0;
+  let batchReads = 0;
+  let pointReads = 0;
+  store.loadPersonalIdeasPage = async (writerId, cursor, limit) => {
+    assert.equal(writerId, identity.writerId);
+    assert.equal(limit, 1);
+    pageReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const ordered = [...all].sort((first, second) =>
+      first.sourceProjectId.localeCompare(second.sourceProjectId) ||
+      first.idea.id.localeCompare(second.idea.id)
+    );
+    const remaining = cursor
+      ? ordered.filter(entry =>
+          entry.sourceProjectId > cursor.sourceProjectId ||
+          (entry.sourceProjectId === cursor.sourceProjectId && entry.idea.id > cursor.ideaId)
+        )
+      : ordered;
+    const items = remaining.slice(0, limit);
+    const nextCursor = remaining.length > items.length && items.length
+      ? { sourceProjectId: items[0].sourceProjectId, ideaId: items[0].idea.id }
+      : null;
+    return { items, nextCursor };
+  };
+  store.loadPersonalIdeasByKeys = async (writerId, references) => {
+    batchReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const requested = new Set(references.map(reference =>
+      JSON.stringify([reference.sourceProjectId, reference.ideaId])
+    ));
+    return all.filter(entry => requested.has(
+      JSON.stringify([entry.sourceProjectId, entry.idea.id])
+    ));
+  };
+  store.loadPersonalIdea = async (writerId, sourceProjectId, ideaId) => {
+    pointReads++;
+    return (await store.loadPersonalIdeas(writerId)).find(entry =>
+      entry.sourceProjectId === sourceProjectId && entry.idea.id === ideaId
+    );
+  };
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.deepEqual(first.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-a"
+  });
+  assert.equal(batchReads, 1, "agrupa las referencias que apuntan fuera de la página");
+  assert.equal(pointReads, 0, "no abre transacciones individuales cuando existe lectura agrupada");
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.deepEqual(second.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-b"
+  });
+
+  const third = await api.getPersonalIdeaLibraryPage(second.nextCursor, 1);
+  assert.deepEqual(third.items.map(entry => entry.idea.id), ["idea-c"]);
+  assert.equal(third.nextCursor, null);
+  assert.equal(pageReads, 3);
+});
+
+
+
+
+test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas anteriores", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const writerId = "writer-indexeddb-pages";
+  const entry = (owner, id) => ({
+    writerId: owner,
+    sourceProjectId: "book-pages",
+    sourceProjectName: "Libro páginas",
+    category: "Libro páginas",
+    idea: { projectId: "book-pages", id, text: "Idea " + id, status: "IDEA", originDocumentId: "chapter", evidence: [] },
+    archivedAt: 1
+  });
+  const entries = [
+    entry(writerId, "idea-a"),
+    entry(writerId, "idea-b"),
+    entry(writerId, "idea-c"),
+    entry("another-writer", "idea-private")
+  ];
+  let transaction;
+  let seekCalls = 0;
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction() {
+      let pending = 0;
+      let completeQueued = false;
+      let completed = false;
+      const schedule = (request, ordered, index) => {
+        pending++;
+        completeQueued = false;
+        queueMicrotask(() => {
+          if (completed) return;
+          const value = ordered[index];
+          const current = value ? {
+            value: structuredClone(value),
+            primaryKey: [value.writerId, value.sourceProjectId, value.idea.id],
+            continue() { schedule(request, ordered, index + 1); },
+            continuePrimaryKey(indexKey, primaryKey) {
+              seekCalls++;
+              assert.equal(indexKey, writerId);
+              const compare = (first, second) => {
+                for (let part = 0; part < first.length; part++) {
+                  if (first[part] !== second[part]) return first[part] < second[part] ? -1 : 1;
+                }
+                return 0;
+              };
+              const next = ordered.findIndex(item =>
+                compare([item.writerId, item.sourceProjectId, item.idea.id], primaryKey) > 0
+              );
+              schedule(request, ordered, next < 0 ? ordered.length : next);
+            }
+          } : null;
+          request.result = current;
+          request.onsuccess?.();
+          pending--;
+          if (pending === 0 && !completeQueued) {
+            completeQueued = true;
+            queueMicrotask(() => {
+              if (pending === 0 && !completed) {
+                completed = true;
+                transaction.oncomplete?.();
+              }
+            });
+          }
+        });
+      };
+      transaction = {
+        error: null,
+        abort() {
+          if (completed) return;
+          completed = true;
+          queueMicrotask(() => transaction.onabort?.());
+        },
+        objectStore(name) {
+          assert.equal(name, "personal-idea-library");
+          return {
+            get(key) {
+              const request = {};
+              pending++;
+              completeQueued = false;
+              queueMicrotask(() => {
+                const value = entries.find(item =>
+                  item.writerId === key[0] &&
+                  item.sourceProjectId === key[1] &&
+                  item.idea.id === key[2]
+                );
+                request.result = value ? structuredClone(value) : undefined;
+                request.onsuccess?.();
+                pending--;
+                if (pending === 0 && !completeQueued) {
+                  completeQueued = true;
+                  queueMicrotask(() => {
+                    if (pending === 0 && !completed) {
+                      completed = true;
+                      transaction.oncomplete?.();
+                    }
+                  });
+                }
+              });
+              return request;
+            },
+            index(indexName) {
+              assert.equal(indexName, "by-writer");
+              return {
+                openCursor(requestedWriterId) {
+                  assert.equal(requestedWriterId, writerId);
+                  const ordered = entries.filter(item => item.writerId === requestedWriterId)
+                    .sort((first, second) => first.idea.id.localeCompare(second.idea.id));
+                  const request = {};
+                  schedule(request, ordered, 0);
+                  return request;
+                }
+              };
+            }
+          };
+        }
+      };
+      return transaction;
+    }
+  };
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: { open() {
+      const request = { result: database };
+      queueMicrotask(() => request.onsuccess?.());
+      return request;
+    } }
+  });
+  try {
+    const store = new IndexedDbProjectStore();
+    const first = await store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: "book-pages", ideaId: "idea-b" });
+
+    const second = await store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+    assert.equal(seekCalls, 1, "la segunda página salta directamente tras la clave compuesta del cursor");
+
+    const linked = await store.loadPersonalIdeasByKeys(writerId, [
+      { sourceProjectId: "book-pages", ideaId: "idea-c" },
+      { sourceProjectId: "book-pages", ideaId: "missing-idea" }
+    ]);
+    assert.deepEqual(linked.map(item => item.idea.id), ["idea-c"]);
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});
+
+
+
+
+test("la API paginada mantiene compatibilidad con adaptadores antiguos de biblioteca", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-legacy-pages";
+  const projectId = "legacy-pages-book";
+  const makeEntry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro antiguo",
+    category: "Libro antiguo",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro antiguo",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-b"]), makeEntry("idea-b"));
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-a"]), makeEntry("idea-a"));
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro antiguo",
+    writerId
+  });
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.equal(first.items[0].contextStatus, "missing-legacy-context");
+  assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-a" });
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.equal(second.nextCursor, null);
+});
+
+
+
+
+test("la API rechaza páginas de biblioteca sin un cursor final explícito", async () => {
+  const store = new MemoryStore();
+  store.loadPersonalIdeasPage = async () => ({ items: [] });
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId: "malformed-library-page",
+    projectName: "Libro incompleto",
+    writerId: "writer-page-validation"
+  });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /página o su cursor están malformados/
+  );
+});
+
+
+
+
+test("la API rechaza vínculos a ideas ausentes aunque el almacén use lectura agrupada", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-missing-library-link";
+  const projectId = "book-missing-library-link";
+  store.loadPersonalIdeasPage = async () => ({
+    items: [{
+      writerId,
+      sourceProjectId: projectId,
+      sourceProjectName: "Libro enlazado",
+      category: "Libro enlazado",
+      idea: {
+        projectId,
+        id: "idea-present",
+        text: "Una idea archivada",
+        status: "IDEA",
+        originDocumentId: "chapter",
+        sourceProjectName: "Libro enlazado",
+        evidence: [],
+        relatedIdeaIds: ["idea-does-not-exist"]
+      },
+      context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+      archivedAt: 1
+    }],
+    nextCursor: null
+  });
+  store.loadPersonalIdeasByKeys = async (_writerId, references) => {
+    assert.deepEqual(references, [{
+      sourceProjectId: projectId,
+      ideaId: "idea-does-not-exist"
+    }]);
+    return [];
+  };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Libro enlazado", writerId });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /una idea relacionada no existe en la biblioteca del escritor/
+  );
+});
+
+
+
+test("notifica cambios de biblioteca solo por la identidad del escritor", async () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class TestBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    closed = false;
+    constructor(name) {
+      this.name = name;
+      TestBroadcastChannel.channels.add(this);
+    }
+    postMessage(data) {
+      for (const channel of TestBroadcastChannel.channels) {
+        if (channel === this || channel.closed || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: structuredClone(data) }));
+      }
+    }
+    close() {
+      this.closed = true;
+      TestBroadcastChannel.channels.delete(this);
+    }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: TestBroadcastChannel
+  });
+
+  const publisher = new IndexedDbProjectStore();
+  const subscriber = new IndexedDbProjectStore();
+  const received = [];
+  const offPublisher = publisher.subscribePersonalIdeaLibraryChanges(() => {});
+  const api = new HostEngineApi({
+    store: subscriber,
+    callbacks: { onPersonalIdeaLibraryChanged: writerId => received.push(writerId) }
+  });
+  api.initializeProject({
+    projectId: "library-notification-project",
+    projectName: "Libro de notificaciones",
+    writerId: "writer-authenticated"
+  });
+  try {
+    publisher.publishPersonalIdeaLibraryChange("writer-other");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(received, []);
+
+    publisher.publishPersonalIdeaLibraryChange("writer-authenticated");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(received, ["writer-authenticated"]);
+  } finally {
+    api.dispose();
+    offPublisher();
+    if (originalDescriptor) Object.defineProperty(globalThis, "BroadcastChannel", originalDescriptor);
+    else delete globalThis.BroadcastChannel;
+  }
+})
+
+test("el anfitrión notifica al escritor después de archivar las ideas del libro", async () => {
+  const store = new MemoryStore();
+  const notices = [];
+  const writerId = "writer-finalization-notice";
+  const api = new HostEngineApi({
+    store,
+    callbacks: {
+      onPersonalIdeaLibraryChanged: id => notices.push(id)
+    }
+  });
+  api.initializeProject({
+    projectId: "book-finalization-notice",
+    projectName: "Libro con ideas",
+    writerId
+  });
+  await store.saveIdea({
+    projectId: "book-finalization-notice",
+    id: "idea-finalization-notice",
+    text: "La puerta se abre al amanecer.",
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Libro con ideas",
+    evidence: []
+  });
+
+  const archived = await api.archiveUnincorporatedIdeas();
+  assert.equal(archived.length, 1);
+  assert.deepEqual(notices, [writerId]);
+
+  const emptyRetry = await api.archiveUnincorporatedIdeas();
+  assert.deepEqual(emptyRetry, []);
+  assert.deepEqual(notices, [writerId]);
+  api.dispose();
+});
+
+
+
+test("la API exige checksum de contenido en una finalización nueva si el adaptador ofrece verificación", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-required-content-checksum";
+  const projectId = "book-required-content-checksum";
+  const baseSummary = {
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro con integridad",
+    archivedCount: 0,
+    finalizedAt: 10,
+    archiveChecksum: "fnv1a64:09612b07b5ecb5a5",
+    alreadyFinalized: false
+  };
+  store.loadPersonalIdeasByKeys = async () => [];
+  store.archiveUnincorporatedIdeasSummary = async () => ({ ...baseSummary });
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Libro con integridad", writerId });
+
+  await assert.rejects(
+    api.finalizeProjectToIdeaLibrary(),
+    /resumen de finalización es inválido/u
+  );
+
+  store.archiveUnincorporatedIdeasSummary = async () => ({
+    ...baseSummary,
+    archiveContentChecksum: "fnv1a64:09612b07b5ecb5a5"
+  });
+  const summary = await api.finalizeProjectToIdeaLibrary();
+  assert.equal(summary.archiveContentChecksum, "fnv1a64:09612b07b5ecb5a5");
+  api.dispose();
+});
+
+test("la lectura del recibo espera a que termine la finalización en curso", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-receipt-serialization";
+  const projectId = "book-receipt-serialization";
+  let releaseFinalization;
+  let markFinalizationStarted;
+  const finalizationGate = new Promise(resolve => { releaseFinalization = resolve; });
+  const finalizationStarted = new Promise(resolve => { markFinalizationStarted = resolve; });
+  let storedReceipt;
+  let receiptReads = 0;
+
+  store.archiveUnincorporatedIdeasSummary = async (
+    sourceProjectId, authenticatedWriterId, sourceProjectName, finalizedAt
+  ) => {
+    markFinalizationStarted();
+    await finalizationGate;
+    storedReceipt = {
+      writerId: authenticatedWriterId,
+      sourceProjectId,
+      receiptId: "finalization-v1",
+      sourceProjectName,
+      finalizedAt,
+      archivedIdeaIds: [],
+      archiveChecksum: "fnv1a64:09612b07b5ecb5a5"
+    };
+    return {
+      writerId: authenticatedWriterId,
+      sourceProjectId,
+      sourceProjectName,
+      archivedCount: 0,
+      finalizedAt,
+      archiveChecksum: storedReceipt.archiveChecksum,
+      alreadyFinalized: false
+    };
+  };
+  store.loadProjectFinalizationReceipt = async () => {
+    receiptReads++;
+    return storedReceipt;
+  };
+
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro con recibo",
+    writerId
+  });
+
+  const finalization = api.finalizeProjectToIdeaLibrary();
+  await finalizationStarted;
+  const pendingReceipt = api.getProjectFinalizationReceipt();
+
+  try {
+    assert.equal(receiptReads, 0,
+      "la consulta no debe adelantarse a una transferencia ya encolada");
+  } finally {
+    releaseFinalization();
+  }
+
+  await finalization;
+  const receipt = await pendingReceipt;
+  assert.equal(receiptReads, 1);
+  assert.equal(receipt.writerId, writerId);
+  assert.equal(receipt.sourceProjectId, projectId);
+  assert.equal(receipt.receiptId, "finalization-v1");
+  api.dispose();
+});
+test("la API rechaza recibos de biblioteca con checksum incorrecto o IDs desordenados", async () => {
+  const writerId = "writer-invalid-library-receipt";
+  const projectId = "book-invalid-library-receipt";
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro con recibo alterado",
+    writerId
+  });
+
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: ["idea-a", "idea-b"],
+    archiveChecksum: "fnv1a64:0000000000000000"
+  });
+  await assert.rejects(
+    api.getProjectFinalizationReceipt(),
+    /IDs del recibo no están ordenados o su checksum no coincide/
+  );
+
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: ["idea-b", "idea-a"],
+    archiveChecksum: "fnv1a64:b0fa017158444d90"
+  });
+  await assert.rejects(
+    api.getProjectFinalizationReceipt(),
+    /IDs del recibo no están ordenados o su checksum no coincide/
+  );
+
+  // El orden visible del recibo usa localeCompare; el checksum de IDs debe
+  // ser independiente de las diferencias entre ese orden y Array.sort().
+  const mixedCaseIds = ["idea-a", "idea-A"];
+  const hash = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: mixedCaseIds,
+    archiveChecksum: hash(JSON.stringify([...mixedCaseIds].sort()))
+  });
+  const canonicalReceipt = await api.getProjectFinalizationReceipt();
+  assert.deepEqual(canonicalReceipt.archivedIdeaIds, mixedCaseIds);
+
+  // Los recibos SQLite anteriores calculaban el hash sobre el orden almacenado.
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: mixedCaseIds,
+    archiveChecksum: hash(JSON.stringify(mixedCaseIds))
+  });
+  const legacyReceipt = await api.getProjectFinalizationReceipt();
+  assert.deepEqual(legacyReceipt.archivedIdeaIds, mixedCaseIds);
+
+  store.loadPersonalIdeasByKeys = async () => [];
+  await assert.rejects(
+    api.getProjectFinalizationReceipt(),
+    /entradas ausentes o duplicadas/
+  );
+  api.dispose();
+});
+
+test("HostEngineApi entrega los textos privados de ideas al análisis de resonancias léxicas", async () => {
+  const projectId = "host-idea-lexical-resonance";
+  const store = new MemoryStore();
+  const makeIdea = (id, text) => ({
+    projectId,
+    id,
+    text,
+    status: "IDEA",
+    originDocumentId: "chapter-source",
+    sourceProjectName: "Libro privado",
+    evidence: [],
+    relatedEntityIds: [],
+    relatedIdeaIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  });
+  store.ideas.set(projectId + ":idea-alpha", makeIdea(
+    "idea-alpha",
+    "La brújula antigua revela una puerta escondida bajo el cristal oscuro."
+  ));
+  store.ideas.set(projectId + ":idea-beta", makeIdea(
+    "idea-beta",
+    "El cristal oscuro protege la puerta secreta tras la brújula antigua."
+  ));
+
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId, projectName: "Libro privado", writerId: "writer-private" });
+    await api.openDocument({
+      documentId: "chapter-one",
+      text: "Escena 1\nLa protagonista observa el horizonte.",
+      revision: 0,
+      sequence: 0
+    });
+    await api.flushPendingChanges();
+
+    const result = await api.analyzeLiteraryDocument("chapter-one");
+    const lexical = result.ideaGraph.lexicalResonances;
+
+    assert.equal(lexical.inputIdeaCount, 2);
+    assert.equal(lexical.analyzedIdeaCount, 2);
+    assert.equal(lexical.ideasWithoutTextCount, 0);
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.deepEqual(
+      lexical.resonances.map(item => [item.leftIdeaId, item.rightIdeaId]),
+      [["idea-alpha", "idea-beta"]]
+    );
+  } finally {
+    api.dispose();
+  }
+});
+
+test("la API verifica el contenido completo de las ideas archivadas al leer el recibo", async () => {
+  const writerId = "writer-content-receipt";
+  const projectId = "book-content-receipt";
+  const projectName = "Libro con checksum de contenido";
+  const entry = {
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: projectName,
+    category: projectName,
+    idea: {
+      projectId,
+      id: "idea-content-receipt",
+      text: "La carta permanece bajo la lluvia.",
+      status: "IDEA",
+      originDocumentId: "chapter-content",
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedEntityIds: [],
+      relatedIdeaIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+    archivedAt: 10
+  };
+  const hash = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  const ids = [entry.idea.id];
+  const receipt = {
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: projectName,
+    finalizedAt: 10,
+    archivedIdeaIds: ids,
+    archiveChecksum: hash(JSON.stringify(ids)),
+    archiveContentChecksum: hash(JSON.stringify([entry]))
+  };
+  const store = new MemoryStore();
+  store.loadProjectFinalizationReceipt = async () => structuredClone(receipt);
+  store.loadPersonalIdeasByKeys = async (authenticatedWriterId, references) => {
+    assert.equal(authenticatedWriterId, writerId);
+    assert.deepEqual(references, [{ sourceProjectId: projectId, ideaId: entry.idea.id }]);
+    return [structuredClone(entry)];
+  };
+
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId, projectName, writerId });
+    const validated = await api.getProjectFinalizationReceipt();
+    assert.equal(validated.archiveContentChecksum, receipt.archiveContentChecksum);
+
+    entry.idea.text = "Contenido alterado después del archivo.";
+    await assert.rejects(
+      api.getProjectFinalizationReceipt(),
+      /contenido archivado no coincide con el checksum del recibo/u
+    );
+  } finally {
+    api.dispose();
+  }
+});
+
+test("la verificación del recibo pagina más de 128 ideas sin exigir que sus vínculos queden dentro del lote", async () => {
+  const writerId = "writer-content-receipt-pages";
+  const projectId = "book-content-receipt-pages";
+  const projectName = "Libro con recibo paginado";
+  const ids = Array.from({ length: 129 }, (_, index) =>
+    "idea-" + String(index).padStart(3, "0")
+  );
+  const entries = ids.map((id, index) => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: projectName,
+    category: projectName,
+    idea: {
+      projectId,
+      id,
+      text: "Contenido privado " + id,
+      status: "IDEA",
+      originDocumentId: "chapter-" + id,
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedEntityIds: [],
+      relatedIdeaIds: index === 0 ? [ids[128]] : []
+    },
+    context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+    archivedAt: index + 1
+  }));
+  const hash = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  const receipt = {
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: projectName,
+    finalizedAt: 200,
+    archivedIdeaIds: ids,
+    archiveChecksum: hash(JSON.stringify(ids)),
+    archiveContentChecksum: hash(JSON.stringify(entries))
+  };
+  const reads = [];
+  const byId = new Map(entries.map(entry => [entry.idea.id, entry]));
+  const store = new MemoryStore();
+  store.loadProjectFinalizationReceipt = async () => structuredClone(receipt);
+  store.loadPersonalIdeasByKeys = async (authenticatedWriterId, references) => {
+    assert.equal(authenticatedWriterId, writerId);
+    reads.push(references.length);
+    return references.map(reference => structuredClone(byId.get(reference.ideaId)));
+  };
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId, projectName, writerId });
+    const result = await api.getProjectFinalizationReceipt();
+    assert.equal(result.archivedIdeaIds.length, 129);
+    assert.deepEqual(reads, [128, 1]);
+  } finally {
+    api.dispose();
+  }
 });

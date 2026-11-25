@@ -2,8 +2,8 @@
 
 **Estado:** contrato vigente para integración TypeScript/JavaScript  
 **Versión de API:** `0.1.0` (`MOTOR_LITERARIO_API_VERSION`)  
-**Esquema lógico:** MLDB `0.4.1`  
-**Persistencia incluida:** IndexedDB `motor-literario-local`, versión `21`  
+**Esquema lógico:** MLDB `0.4.2`  
+**Persistencia incluida:** IndexedDB `motor-literario-local`, versión `22`  
 **Punto de entrada público:** `typescript/src/index.ts`
 
 Esta guía describe cómo conectar el Motor Literario con el programa que crea los libros, administra usuarios y contiene el editor. La aplicación anfitriona conserva la propiedad de los proyectos, documentos y texto original. El motor recibe su identidad y los cambios del editor; devuelve confirmaciones, diagnósticos y conocimiento estructurado. Nunca reescribe el texto del anfitrión por iniciativa propia.
@@ -34,7 +34,7 @@ El paquete TypeScript del repositorio sigue marcado como privado (`private: true
 | Aplicar cambios al manuscrito | Responsable | No escribe sobre el editor ni cambia el texto original |
 | Mostrar diagnósticos | Responsable | Devuelve diagnósticos asociados a una revisión concreta |
 | Conservar conocimiento narrativo | Puede consultarlo y presentarlo | Extrae y persiste registros aislados por proyecto |
-| Copias de seguridad y restauración del programa | Responsable | No expone aún una API pública completa de backup/restore |
+| Respaldo local SQLite e IndexedDB | Motor + anfitrión | APIs de almacenamiento implementadas; escritura/lectura de archivo y aceptación real corresponden al anfitrión |
 
 El anfitrión debe usar la misma identidad externa de proyecto en todas las llamadas de un libro. No debe crear un proyecto paralelo en la base del motor.
 
@@ -258,6 +258,22 @@ Esta barrera espera la cola de cambios, el análisis en vivo, la persistencia de
 
 La API expone consultas y operaciones tipadas para que el anfitrión construya su propia interfaz. Las listas que siguen son métodos públicos de `HostEngineApi`; los detalles exactos de cada objeto se definen en los tipos TypeScript enlazados al final de esta sección.
 
+Cuando el motor se ejecuta como proceso separado, `MotorLiterarioBridgeClient` ofrece una API tipada para el conocimiento narrativo y la biblioteca: extracción (`extractNarrativeKnowledge`), consulta de fichas, relaciones, acontecimientos, afirmaciones, cronología y contradicciones, alias y consolidación de identidades, historiales y análisis del documento (`analyzeLiteraryDocument`); además de consulta y enlace de ideas, cambio de estado, finalización y lectura paginada de biblioteca (`getPersonalIdeaLibraryPage`). Los métodos llevan el `projectId` como primer argumento; el escritor se deriva de la identidad autenticada que el puente abrió para ese proyecto y no se envía libremente desde la interfaz. El detalle de los métodos y sus tipos está en `typescript/src/bridge-client.ts`.
+
+Ejemplo de flujo recomendado para una biblioteca grande:
+
+~~~ts
+const ideas = await bridge.getNarrativeIdeas(projectId);
+const updated = await bridge.setNarrativeIdeaLink(
+  projectId, ideaSourceId, ideaTargetId, true
+);
+const summary = await bridge.finalizeProjectToIdeaLibrary(projectId);
+let page = await bridge.getPersonalIdeaLibraryPage(projectId, null, 100);
+// Continuar leyendo con page.nextCursor hasta que sea null.
+~~~
+
+`archiveUnincorporatedIdeas(projectId)` y `getPersonalIdeaLibrary(projectId)` se conservan para compatibilidad y devuelven colecciones completas en memoria. Para bibliotecas extensas, usar la finalización resumida y la lectura por páginas.
+
 ### Conocimiento narrativo
 
 - `getNarrativeEntities()`, `getNarrativeRelations()`, `getNarrativeEvents()`, `getNarrativeIdeas()` y `getNarrativeAssertions()`.
@@ -265,17 +281,18 @@ La API expone consultas y operaciones tipadas para que el anfitrión construya s
 - `getNarrativeEntityHistory(entityId)`, `resolveNarrativeEntityId(entityId)` y `getNarrativeEntityIdentityCandidates()`.
 - `setNarrativeIdeaStatus(ideaId, status)`, `setNarrativeIdeaEntityLink(...)` y `setNarrativeIdeaLink(...)`.
 
-Cada idea admite hasta 500 vínculos explícitos por categoría: 500 a fichas y 500 a otras ideas. El anfitrión y los adaptadores de almacenamiento usan `MAX_NARRATIVE_IDEA_REFERENCES` y rechazan el vínculo 501 antes de escribir.
+Cada idea admite hasta 500 vínculos explícitos a fichas y hasta 500 vínculos a otras ideas. El anfitrión y los adaptadores IndexedDB/SQLite usan `MAX_NARRATIVE_IDEA_REFERENCES` y rechazan por separado cualquier categoría que supere ese límite.
 
 La extracción narrativa inicial se programa al abrir/recuperar el documento y continúa de manera incremental con las ediciones. Su alcance es deliberadamente conservador: usa indicadores textuales explícitos; los acontecimientos requieren `ACONTECIMIENTO:` o `EVENTO:`, y las ideas requieren `IDEA:`. No atribuir al motor inferencias semánticas que todavía no realiza.
 
 ### Biblioteca privada de ideas
 
-- `archiveUnincorporatedIdeas()`: transferir al finalizar el libro solo las ideas cuyo estado vigente siga siendo `IDEA`.
-- `getPersonalIdeaLibrary()`: consultar la biblioteca del escritor autenticado asociado a esta instancia.
-- `getProjectFinalizationReceipt()`: consultar el recibo durable de finalización.
+- `finalizeProjectToIdeaLibrary()`: ruta recomendada para finalizar un libro. Transfiere solo las ideas cuyo estado vigente siga siendo `IDEA` y devuelve un resumen compacto con recibo durable, sin devolver ni acumular los textos transferidos.
+- `getPersonalIdeaLibraryPage(cursor, limit)`: leer el contenido por páginas con cursor estable; el límite permitido es de 1 a 200 entradas.
+- `getProjectFinalizationReceipt()`: volver a comprobar el recibo y el checksum del contenido archivado antes de dar por verificada la transferencia.
+- `archiveUnincorporatedIdeas()` y `getPersonalIdeaLibrary()`: rutas de compatibilidad que devuelven colecciones completas en memoria; no se recomiendan para libros o bibliotecas grandes.
 
-La biblioteca requiere que `writerId` se haya proporcionado al inicializar. La transferencia guarda procedencia, historial y contexto relacionado en una transacción local. Las ideas incorporadas o descartadas permanecen en el conocimiento del libro. La aplicación debe llamar al archivo solo cuando el escritor haya decidido finalizar esa obra, no en cada cierre de ventana.
+La biblioteca requiere que `writerId` se haya proporcionado al inicializar. La transferencia guarda procedencia, historial y contexto relacionado en una transacción local. Las ideas incorporadas o descartadas permanecen en el conocimiento del libro. La aplicación debe llamar a la finalización solo cuando el escritor haya decidido terminar esa obra, no en cada cierre de ventana. El recibo conserva un checksum de los IDs y un checksum incremental FNV-1a de las entradas completas; este último detecta alteraciones accidentales, pero no es una firma ni sustituye el cifrado o el control de acceso.
 
 ### Datos MLDB y configuración
 
@@ -342,9 +359,41 @@ No interpretar `queued` como `applied`, ni un diagnóstico de una revisión ante
 - No escribir directamente en `motor-literario-local`, sus object stores, claves o índices, ni en `bridge_records`/`bridge_document_heads`. Las migraciones pertenecen a cada adaptador.
 - IndexedDB está ligado al origen y perfil local. El archivo SQLite del puente está ligado a la ruta local proporcionada al proceso compañero. Son bases físicas independientes y no se fusionan automáticamente.
 - Al copiar el archivo SQLite para una copia de seguridad, detener antes el puente con `bridge.shutdown` y esperar el cierre del proceso; no copiar solo el archivo principal mientras SQLite está activo y puede tener datos en WAL.
-- La API pública actual no incluye exportación/importación integral ni restauración asistida de toda la base. La aplicación anfitriona debe implementar y probar su mecanismo de backup/restore antes de confiar manuscritos irremplazables al entorno de producción. No copiar object stores en caliente ni asumir que el archivo del manuscrito contiene todo el conocimiento MLDB.
+- El puente Node incluye `bridge/database-snapshot.mjs` para crear, verificar y restaurar copias completas de SQLite; exige detener el puente y conserva la base anterior y sus sidecars.
+- `HostEngineApi.exportDatabaseBackup()` y `restoreDatabaseBackup(backup)` son la superficie pública de respaldo; delegan en `IndexedDbProjectStore`, que cubre todos los object stores del navegador. La restauración se rechaza si la instancia ya ejecutó `initializeProject()`. La exportación lee una instantánea en una transacción readonly y genera un paquete JSON versionado con checksum. La restauración valida versión, catálogo de almacenes y checksum, y reemplaza todos los almacenes dentro de una transacción readwrite; un aborto conserva el estado anterior y un commit publica invalidaciones de proyecto y escritor.
+El anfitrión controla el archivo y su ubicación. En navegador, el siguiente ejemplo resuelve el flujo básico con descarga JSON y selector de archivo; el motor conserva la responsabilidad de validar el contenido y restaurarlo atómicamente:
 
-El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar.
+```ts
+import {
+  downloadIndexedDbBackupFile,
+  readIndexedDbBackupFile
+} from "./ruta-local/Motor-Literario/typescript/src/index";
+import type { HostEngineApi } from "./ruta-local/Motor-Literario/typescript/src/index";
+
+export async function downloadMotorKnowledgeBackup(
+  motor: HostEngineApi
+): Promise<void> {
+  // Espera journal, análisis, diagnósticos y conocimiento pendientes.
+  const backup = await motor.exportDatabaseBackup();
+  downloadIndexedDbBackupFile(backup);
+}
+
+export async function restoreMotorKnowledgeBackup(
+  motorNuevoSinProyecto: HostEngineApi,
+  file: File
+): Promise<void> {
+  const backup = await readIndexedDbBackupFile(file);
+  // La API valida versión, almacenes, checksum e integridad y restaura
+  // todos los object stores en una única transacción atómica.
+  await motorNuevoSinProyecto.restoreDatabaseBackup(backup);
+}
+```
+
+Uso de restauración: detener la edición, crear una instancia nueva de `HostEngineApi` sin llamar todavía a `initializeProject()`, seleccionar el archivo mediante un control `<input type="file" accept="application/json,.json">`, pasar el `File` a `restoreMotorKnowledgeBackup()` y solo después inicializar el proyecto con las identidades proporcionadas por el anfitrión. Si el usuario cancela el selector, no se llama a la restauración. En Electron u otro entorno de escritorio, sustituir la descarga y lectura del navegador por el diálogo de archivos privado del anfitrión, manteniendo las mismas llamadas del motor.
+
+El paquete IndexedDB contiene todos los libros y escritores almacenados en ese perfil local, no solo el proyecto que está abierto. Tratar el archivo como información privada: no guardarlo en carpetas compartidas ni enviarlo a servicios externos sin una decisión explícita de cifrado y acceso. El checksum incluido detecta alteraciones accidentales, pero no cifra ni autentica el archivo.
+
+El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar. Probar el flujo en el navegador real y definir cifrado en reposo siguen siendo parte de la aceptación de la aplicación. Ninguno de los dos respaldos copia object stores en caliente ni debe confundirse con el archivo de texto visible del manuscrito.
 
 ## 10. Lista de aceptación de la integración
 
@@ -366,7 +415,8 @@ La integración no debe declararse terminada hasta comprobar, en el programa anf
 - [ ] Verifica aislamiento entre dos proyectos y dos escritores en el mismo perfil local.
 - [ ] Comprueba extracción, consulta e historial narrativo; prueba la transferencia de ideas no incorporadas en un libro de ensayo.
 - [ ] Ejecuta pruebas de cuota, bloqueo/cierre de IndexedDB, actualización de versión y cierre inesperado.
-- [ ] Implementa y prueba backup/restore integral del manuscrito y del conocimiento local.
+- [ ] Integra el paquete JSON de `exportDatabaseBackup()`/`restoreDatabaseBackup()` con archivos privados del anfitrión; prueba exportación, restauración y fallo/aborto en el navegador real.
+- [ ] Define protección/cifrado en reposo y automatización de copias de seguridad según la política del anfitrión.
 - [ ] Registra la versión de API, versión MLDB, navegador/runtime, sistema operativo, resultados y límites observados.
 
 ## 11. Validación del núcleo

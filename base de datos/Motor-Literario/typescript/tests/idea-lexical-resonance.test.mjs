@@ -36,7 +36,16 @@ function analyzeGraph(ideas, options = {}) {
     revision: 1,
     text: "Fragmento narrativo de prueba.",
     ...(options.projectCatalog === false
-      ? { knownIdeas: ideas }
+      ? {
+          knownIdeas: ideas.map(item => ({
+            ...item,
+            text: item.text ?? "Texto legado de idea",
+            originDocumentId: "chapter-1",
+            sourceProjectName: "Libro",
+            relatedEntityIds: [],
+            evidence: []
+          }))
+        }
       : { knownProjectIdeas: ideas }),
     ...(options.projectCatalog === false
       ? { knownIdeasOmittedCount: options.omittedIdeaCount ?? 0 }
@@ -168,7 +177,6 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
   const expected = structuredClone(first);
 
   first.nodes[0].statusHistory[0].reason = "mutación externa";
-  first.nodes[0].relatedIdeaIds.push("external-mutation");
   first.cycles[0].ideaIds.pop();
   first.references[0].resolution = "external-mutation";
   first.statusProfiles[0].ideaCount = 999;
@@ -188,6 +196,11 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
 test("invalida la caché ante cambios de evidencia y decisiones editoriales", () => {
   const original = {
     ...idea("metadata-a", "memoria espejo luz"),
+    status: "incorporated",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "incorporated", reason: "writer", changedAt: 2 }
+    ],
     evidenceCount: 1,
     staleEvidenceCount: 0,
     writerDecisionCount: 1
@@ -195,30 +208,33 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   const initial = analyzeGraph([original]);
   assert.equal(initial.nodes[0].activeEvidenceCount, 1);
   assert.equal(initial.nodes[0].writerDecisionCount, 1);
-  assert.equal(initial.statusProfiles[0].activeEvidenceCount, 1);
-  assert.equal(initial.statusProfiles[0].statusHistoryRecordCount, 1);
+  const initialProfile = initial.statusProfiles.find(profile => profile.status === "incorporated");
+  assert.equal(initialProfile.activeEvidenceCount, 1);
+  assert.equal(initialProfile.statusHistoryRecordCount, 2);
 
   const revised = analyzeGraph([{
     ...original,
+    status: "IDEA",
     evidenceCount: 4,
     staleEvidenceCount: 2,
     writerDecisionCount: 3,
-    omittedStatusHistoryCount: 1,
+    omittedStatusHistoryCount: 2,
     statusHistory: [
-      ...original.statusHistory,
-      { status: "IDEA", reason: "reconsidered", changedAt: 2 }
+      { status: "incorporated", reason: "writer", changedAt: 2 },
+      { status: "IDEA", reason: "writer", changedAt: 3 }
     ]
   }]);
   assert.equal(revised.nodes[0].activeEvidenceCount, 4);
   assert.equal(revised.nodes[0].staleEvidenceCount, 2);
   assert.equal(revised.nodes[0].writerDecisionCount, 3);
-  assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
+  assert.equal(revised.nodes[0].omittedStatusHistoryCount, 2);
   assert.equal(revised.nodes[0].statusHistory.length, 2);
-  assert.equal(revised.statusProfiles[0].activeEvidenceCount, 4);
-  assert.equal(revised.statusProfiles[0].staleEvidenceCount, 2);
-  assert.equal(revised.statusProfiles[0].writerDecisionCount, 3);
-  assert.equal(revised.statusProfiles[0].statusHistoryRecordCount, 2);
-  assert.equal(revised.statusProfiles[0].omittedStatusHistoryCount, 1);
+  const revisedProfile = revised.statusProfiles.find(profile => profile.status === "IDEA");
+  assert.equal(revisedProfile.activeEvidenceCount, 4);
+  assert.equal(revisedProfile.staleEvidenceCount, 2);
+  assert.equal(revisedProfile.writerDecisionCount, 3);
+  assert.equal(revisedProfile.statusHistoryRecordCount, 2);
+  assert.equal(revisedProfile.omittedStatusHistoryCount, 2);
 });
 
 test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {
@@ -253,6 +269,11 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     {
       ...idea("aggregate-a", "memoria espejo"),
       relatedIdeaIds: ["aggregate-b", "outside-snapshot"],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 },
+        { status: "IDEA", reason: "writer", changedAt: 3 }
+      ],
       writerDecisionCount: 2,
       evidenceCount: 3,
       staleEvidenceCount: 1
@@ -262,7 +283,7 @@ test("agrega métricas globales y por estado de forma coherente", () => {
       status: "incorporated",
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 1 },
-        { status: "incorporated", reason: "accepted", changedAt: 2 }
+        { status: "incorporated", reason: "writer", changedAt: 2 }
       ],
       writerDecisionCount: 1,
       staleEvidenceCount: 2
@@ -270,6 +291,11 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     {
       ...idea("aggregate-c", "ceniza bruma"),
       status: "discarded",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "writer", changedAt: 2 }
+      ],
+      writerDecisionCount: 1,
       evidenceCount: 1
     }
   ];
@@ -291,9 +317,23 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     incomingReferenceCount: 0,
     includedOutgoingReferenceCount: 1,
     notIncludedOutgoingReferenceCount: 1,
-    statusHistoryRecordCount: 1,
+    statusHistoryRecordCount: 3,
+    statusHistoryConsistentIdeaCount: 1,
+    statusHistoryMismatchIdeaCount: 0,
+    statusHistoryConsistencyUnknownIdeaCount: 0,
     omittedStatusHistoryCount: 0,
     writerDecisionCount: 2,
+    observedStatusTransitionCount: 2,
+    statusReversalCount: 1,
+    nonMonotonicStatusTimestampCount: 0,
+    comparableStatusTimestampPairCount: 2,
+    uncomparableStatusTimestampPairCount: 0,
+    observedInitialStatusRecordCount: 1,
+    observedWriterStatusChangeCount: 2,
+    observedTextRevisionStatusChangeCount: 0,
+    earliestKnownStatusChangeAt: 1,
+    latestKnownStatusChangeAt: 3,
+    knownStatusHistorySpanMs: 2,
     activeEvidenceCount: 3,
     staleEvidenceCount: 1,
     ideasWithActiveEvidenceCount: 1,

@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -5,7 +6,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
+import { HostEngineApi, MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
 import { SqliteProjectStore } from "../bridge/sqlite-project-store.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -197,39 +198,181 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     });
     await client.flushProject("idea-project");
 
-    const ideas = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "getNarrativeIdeas",
-      args: []
-    });
+    const ideas = await client.getNarrativeIdeas("idea-project");
     assert.equal(ideas.length, 1);
     assert.equal(ideas[0].status, "IDEA");
 
-    const archived = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "archiveUnincorporatedIdeas",
-      args: []
-    });
+    const archived = await client.archiveUnincorporatedIdeas("idea-project");
     assert.equal(archived.length, 1);
     assert.equal(archived[0].writerId, "writer-private");
     assert.equal(archived[0].category, "Libro ideas");
     assert.equal(archived[0].context.version, 1);
 
-    const library = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "getPersonalIdeaLibrary",
-      args: []
-    });
+    const library = await client.getPersonalIdeaLibrary("idea-project");
     assert.equal(library.length, 1);
     assert.equal(library[0].idea.text, "La campana debe sonar antes del amanecer.");
 
-    const receipt = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "getProjectFinalizationReceipt",
-      args: []
-    });
+    const receipt = await client.getProjectFinalizationReceipt("idea-project");
     assert.equal(receipt.sourceProjectId, "idea-project");
     assert.equal(receipt.writerId, "writer-private");
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("BridgeClient ofrece operaciones tipadas para consultar, enlazar y cambiar ideas", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-idea-client-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    const projectId = "bridge-idea-client";
+    await client.openProject({
+      projectId,
+      projectName: "Libro de API tipada",
+      writerId: "writer-bridge-idea-client"
+    });
+    await client.openDocument(projectId, {
+      documentId: "chapter-1",
+      text: [
+        "El personaje Ana llegó al pueblo.",
+        "IDEA: La ciudad celebra la llegada del verano.",
+        "IDEA: El reloj se detiene a medianoche."
+      ].join("\n"),
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject(projectId);
+
+    const ideas = await client.getNarrativeIdeas(projectId);
+    const entities = await client.getNarrativeEntities(projectId);
+    assert.equal(ideas.length, 2);
+    const first = ideas.find(idea => idea.text.startsWith("La ciudad celebra"));
+    const second = ideas.find(idea => idea.text.startsWith("El reloj se detiene"));
+    const ana = entities.find(entity => entity.canonicalName === "Ana");
+    assert.ok(first);
+    assert.ok(second);
+    assert.ok(ana);
+
+    const aliasedAna = await client.addNarrativeEntityAlias(projectId, ana.id, "Anita");
+    assert.ok(aliasedAna.aliases.includes("Anita"));
+    assert.equal(await client.resolveNarrativeEntityId(projectId, ana.id), ana.id);
+    assert.deepEqual(await client.getNarrativeEntityIdentityCandidates(projectId), []);
+    assert.deepEqual(await client.getNarrativeRelations(projectId), []);
+    assert.deepEqual(await client.getNarrativeAssertions(projectId), []);
+    assert.deepEqual(await client.getNarrativeEntityHistory(projectId, ana.id), []);
+
+    const extracted = await client.extractNarrativeKnowledge(
+      projectId, "chapter-extra", 1, "El personaje Bruno llegó al puerto."
+    );
+    const bruno = extracted.find(entity => entity.canonicalName === "Bruno");
+    assert.ok(bruno);
+    const mergedAna = await client.mergeNarrativeEntities(projectId, ana.id, bruno.id);
+    assert.equal(mergedAna.id, ana.id);
+    assert.equal(await client.resolveNarrativeEntityId(projectId, bruno.id), ana.id);
+
+    const entityLinked = await client.setNarrativeIdeaEntityLink(
+      projectId, first.id, ana.id, true
+    );
+    assert.deepEqual(entityLinked.relatedEntityIds, [ana.id]);
+
+    const ideaLinked = await client.setNarrativeIdeaLink(
+      projectId, first.id, second.id, true
+    );
+    assert.deepEqual(ideaLinked.relatedIdeaIds, [second.id]);
+
+    const incorporated = await client.setNarrativeIdeaStatus(
+      projectId, first.id, "incorporated"
+    );
+    assert.equal(incorporated.status, "incorporated");
+    assert.deepEqual(
+      incorporated.statusHistory.map(item => item.status),
+      ["IDEA", "incorporated"]
+    );
+
+    const reloaded = await client.getNarrativeIdeas(projectId);
+    assert.deepEqual(reloaded.find(item => item.id === first.id), incorporated);
+
+    const eventEntities = await client.getNarrativeEntities(projectId);
+    assert.ok(eventEntities.some(entity => entity.id === ana.id));
+    await client.extractNarrativeKnowledge(
+      projectId, "chapter-event", 1, "ACONTECIMIENTO: Ana llegó viva a la ciudad."
+    );
+    const events = await client.getNarrativeEvents(projectId);
+    assert.equal(events.length, 1);
+    const updatedEvent = await client.updateNarrativeEvent(projectId, {
+      eventId: events[0].id,
+      label: "Ana llegó viva a la ciudad amurallada.",
+      changedBy: "writer-bridge-idea-client"
+    });
+    assert.equal(updatedEvent.label, "Ana llegó viva a la ciudad amurallada.");
+    assert.equal((await client.getEventLifecycleHistory(projectId, updatedEvent.id)).length, 1);
+    assert.equal((await client.getNarrativeTimeline(projectId)).length, 1);
+    assert.deepEqual(await client.getNarrativeContradictions(projectId), []);
+
+    const analysis = await client.analyzeLiteraryDocument(projectId, "chapter-1");
+    assert.equal(analysis.projectId, projectId);
+    assert.equal(analysis.documentId, "chapter-1");
+    await client.refreshNarrativeKnowledge(projectId);
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("la finalización compacta devuelve un recibo resumido y permite leer las ideas por páginas", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-compact-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId: "compact-finalization-project",
+      projectName: "Libro compacto",
+      writerId: "writer-compact"
+    });
+    await client.openDocument("compact-finalization-project", {
+      documentId: "chapter-compact",
+      text: "IDEA: Una ciudad conserva la memoria de sus habitantes.",
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject("compact-finalization-project");
+
+    const summary = await client.finalizeProjectToIdeaLibrary("compact-finalization-project");
+    assert.equal(summary.writerId, "writer-compact");
+    assert.equal(summary.sourceProjectId, "compact-finalization-project");
+    assert.equal(summary.sourceProjectName, "Libro compacto");
+    assert.equal(summary.archivedCount, 1);
+    assert.equal(summary.alreadyFinalized, false);
+    assert.equal(typeof summary.archiveChecksum, "string");
+    assert.equal(Array.isArray(summary), false);
+    assert.equal(Object.hasOwn(summary, "items"), false);
+
+    const page = await client.getPersonalIdeaLibraryPage(
+      "compact-finalization-project", null, 1
+    );
+    assert.equal(page.items.length, 1);
+    assert.equal(page.items[0].idea.text, "Una ciudad conserva la memoria de sus habitantes.");
+    assert.equal(page.nextCursor, null);
+
+    const receipt = await client.getProjectFinalizationReceipt("compact-finalization-project");
+    assert.equal(receipt?.writerId, "writer-compact");
+    assert.deepEqual(receipt?.archivedIdeaIds, [page.items[0].idea.id]);
+    assert.match(summary.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
+    assert.equal(receipt?.archiveContentChecksum, summary.archiveContentChecksum);
+    const retry = await client.finalizeProjectToIdeaLibrary("compact-finalization-project");
+    assert.equal(retry.alreadyFinalized, true);
+    assert.deepEqual({ ...retry, alreadyFinalized: false }, summary);
 
     const exited = waitForExit(child);
     await client.shutdown();
@@ -315,6 +458,12 @@ test("el puente SQLite consolida identidades y actualiza atómicamente la biblio
     assert.deepEqual(library[0].idea.evidence, archived[0].idea.evidence);
     assert.deepEqual(library[0].idea.statusHistory, archived[0].idea.statusHistory);
     assert.equal(library[0].archivedAt, archived[0].archivedAt);
+    const finalizedReceipt = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "getProjectFinalizationReceipt", args: []
+    });
+    assert.match(finalizedReceipt.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u,
+      "la consolidación debe renovar el checksum del contenido en el recibo");
+
 
     const exitFirst = waitForExit(first.child);
     await first.client.shutdown();
@@ -383,25 +532,15 @@ test("el archivo de ideas conserva contexto independiente para cada entrada de b
     const anita = entities.find(item => item.canonicalName === "Anita");
     assert.ok(ana);
     assert.ok(anita);
-    const ideas = await client.request("project.call", {
-      projectId: "idea-context-project", method: "getNarrativeIdeas", args: []
-    });
+    const ideas = await client.getNarrativeIdeas("idea-context-project");
     assert.equal(ideas.length, 2);
     const campana = ideas.find(item => item.text.includes("campana"));
     const puerta = ideas.find(item => item.text.includes("puerta"));
     assert.ok(campana);
     assert.ok(puerta);
-    await client.request("project.call", {
-      projectId: "idea-context-project", method: "setNarrativeIdeaEntityLink",
-      args: [campana.id, ana.id, true]
-    });
-    await client.request("project.call", {
-      projectId: "idea-context-project", method: "setNarrativeIdeaEntityLink",
-      args: [puerta.id, anita.id, true]
-    });
-    const archived = await client.request("project.call", {
-      projectId: "idea-context-project", method: "archiveUnincorporatedIdeas", args: []
-    });
+    await client.setNarrativeIdeaEntityLink("idea-context-project", campana.id, ana.id, true);
+    await client.setNarrativeIdeaEntityLink("idea-context-project", puerta.id, anita.id, true);
+    const archived = await client.archiveUnincorporatedIdeas("idea-context-project");
     assert.equal(archived.length, 2);
     const campanaEntry = archived.find(entry => entry.idea.id === campana.id);
     const puertaEntry = archived.find(entry => entry.idea.id === puerta.id);
@@ -410,11 +549,11 @@ test("el archivo de ideas conserva contexto independiente para cada entrada de b
     assert.equal(campanaEntry.context.relatedIdeas.length, 0);
     assert.equal(puertaEntry.context.relatedIdeas.length, 0);
 
-    const repeated = await client.request("project.call", {
-      projectId: "idea-context-project", method: "archiveUnincorporatedIdeas", args: []
-    });
+    const repeated = await client.archiveUnincorporatedIdeas("idea-context-project");
     assert.equal(repeated.length, 2);
     assert.deepEqual(repeated.map(entry => entry.idea.id).sort(), [campana.id, puerta.id].sort());
+    assert.deepEqual(repeated, archived,
+      "repetir la transferencia debe devolver las mismas ideas y snapshots ya confirmados");
 
     const exited = waitForExit(child);
     await client.shutdown();
@@ -447,35 +586,19 @@ test("el archivo rechaza referencias desde ideas que permanecerán en el libro",
       sequence: 0
     });
     await client.flushProject("idea-graph-project");
-    const ideas = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getNarrativeIdeas", args: []
-    });
+    const ideas = await client.getNarrativeIdeas("idea-graph-project");
     assert.equal(ideas.length, 2);
     const retained = ideas.find(item => item.text.includes("campana"));
     const pending = ideas.find(item => item.text.includes("puerta"));
-    await client.request("project.call", {
-      projectId: "idea-graph-project", method: "setNarrativeIdeaLink",
-      args: [retained.id, pending.id, true]
-    });
-    await client.request("project.call", {
-      projectId: "idea-graph-project", method: "setNarrativeIdeaStatus",
-      args: [retained.id, "incorporated"]
-    });
+    await client.setNarrativeIdeaLink("idea-graph-project", retained.id, pending.id, true);
+    await client.setNarrativeIdeaStatus("idea-graph-project", retained.id, "incorporated");
     await assert.rejects(
-      client.request("project.call", {
-        projectId: "idea-graph-project", method: "archiveUnincorporatedIdeas", args: []
-      }),
+      client.archiveUnincorporatedIdeas("idea-graph-project"),
       error => error?.code === -32000 && /depende de una idea que se trasladaría/.test(error.message)
     );
-    const library = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getPersonalIdeaLibrary", args: []
-    });
-    const remaining = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getNarrativeIdeas", args: []
-    });
-    const receipt = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getProjectFinalizationReceipt", args: []
-    });
+    const library = await client.getPersonalIdeaLibrary("idea-graph-project");
+    const remaining = await client.getNarrativeIdeas("idea-graph-project");
+    const receipt = await client.getProjectFinalizationReceipt("idea-graph-project");
     assert.equal(library.length, 0);
     assert.equal(remaining.length, 2);
     assert.equal(receipt, null);
@@ -514,9 +637,7 @@ test("una instancia recibe una notificación y actualiza sus cachés por cambios
       sequence: 0
     });
     await first.client.flushProject("shared-project");
-    const firstIdeas = await first.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const firstIdeas = await first.client.getNarrativeIdeas("shared-project");
     assert.equal(firstIdeas.length, 1);
     assert.equal(firstIdeas[0].status, "IDEA");
 
@@ -527,9 +648,7 @@ test("una instancia recibe una notificación y actualiza sus cachés por cambios
       projectName: "Libro compartido",
       writerId: "writer-shared"
     });
-    const secondIdeas = await second.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const secondIdeas = await second.client.getNarrativeIdeas("shared-project");
     assert.equal(secondIdeas.length, 1);
 
     const knowledgeChanged = new Promise((resolveNotice, rejectNotice) => {
@@ -544,25 +663,17 @@ test("una instancia recibe una notificación y actualiza sus cachés por cambios
         }
       });
     });
-    await second.client.request("project.call", {
-      projectId: "shared-project",
-      method: "setNarrativeIdeaStatus",
-      args: [secondIdeas[0].id, "incorporated"]
-    });
+    await second.client.setNarrativeIdeaStatus("shared-project", secondIdeas[0].id, "incorporated");
     const notice = await knowledgeChanged;
     assert.equal(notice.projectId, "shared-project");
 
-    const automaticallyRefreshed = await first.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const automaticallyRefreshed = await first.client.getNarrativeIdeas("shared-project");
     assert.equal(automaticallyRefreshed[0].status, "incorporated");
 
     await first.client.request("project.call", {
       projectId: "shared-project", method: "refreshNarrativeKnowledge", args: []
     });
-    const explicitlyRefreshed = await first.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const explicitlyRefreshed = await first.client.getNarrativeIdeas("shared-project");
     assert.equal(explicitlyRefreshed[0].status, "incorporated");
 
     const firstExit = waitForExit(first.child);
@@ -633,6 +744,68 @@ test("SQLite rechaza una escritura de entidad narrativa basada en una versión o
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("SQLite rechaza más de 500 vínculos por idea incluso sin pasar por HostEngineApi", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-sqlite-idea-link-limit-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "sqlite-idea-link-limit";
+  const store = await SqliteProjectStore.open(databasePath);
+  const tooManyIds = Array.from({ length: 501 }, (_, index) => "reference-" + index);
+  const base = {
+    projectId,
+    id: "idea-limited",
+    text: "Una idea con demasiados vínculos no debe persistirse.",
+    status: "IDEA",
+    originDocumentId: "chapter-limit",
+    sourceProjectName: "Libro de límite",
+    evidence: [],
+    relatedIdeaIds: [],
+    relatedEntityIds: []
+  };
+  try {
+    assert.throws(
+      () => store.saveIdea({ ...base, relatedIdeaIds: tooManyIds }),
+      /más de 500 vínculos por categoría/
+    );
+    assert.throws(
+      () => store.saveIdeaIfUnchanged({
+        ...base,
+        relatedEntityIds: tooManyIds
+      }, base),
+      /más de 500 vínculos por categoría/
+    );
+    assert.throws(
+      () => store.saveIdea({
+        ...base,
+        statusHistory: [
+          { status: "IDEA", reason: "initial", changedAt: 1 },
+          { status: "IDEA", reason: "invalid-reason", changedAt: 2 }
+        ]
+      }),
+      /Historial de estados de idea inválido/
+    );
+    assert.throws(
+      () => store.saveIdea({
+        ...base,
+        status: "discarded",
+        statusHistory: [
+          { status: "incorporated", reason: "initial", changedAt: 1 },
+          { status: "discarded", reason: "text-revised", changedAt: 2 }
+        ]
+      }),
+      /Historial de estados de idea inválido/
+    );
+    assert.deepEqual(
+      await store.loadIdeas(projectId),
+      [],
+      "ninguna de las dos escrituras rechazadas puede dejar un registro parcial"
+    );
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 
 test("SQLite protege relaciones, acontecimientos, ideas y afirmaciones frente a escrituras obsoletas", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-narrative-cas-"));
@@ -915,6 +1088,1030 @@ test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin m
     assert.equal(persisted.length, 2);
     assert.deepEqual(persisted.find(item => item.id === "target").mergedFromIds, ["legacy-id", "legacy-id"]);
     assert.ok(persisted.some(item => item.id === "source"));
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-sqlite-library-page-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const writerId = "writer-sqlite-page";
+  const projectId = "book-sqlite-page";
+  const database = new DatabaseSync(databasePath);
+  const entry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro SQLite",
+    category: "Libro SQLite",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro SQLite",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  try {
+    // Simula una base anterior a la columna sort_key.
+    database.exec(
+      "CREATE TABLE bridge_records (" +
+      "collection TEXT NOT NULL, record_key TEXT NOT NULL, project_id TEXT, " +
+      "writer_id TEXT, document_id TEXT, sequence INTEGER, value_json TEXT NOT NULL, " +
+      "PRIMARY KEY (collection, record_key)) WITHOUT ROWID"
+    );
+    database.exec("CREATE INDEX bridge_records_writer ON bridge_records(collection, writer_id)");
+    const insert = database.prepare(
+      "INSERT INTO bridge_records(collection, record_key, project_id, writer_id, value_json) VALUES(?, ?, ?, ?, ?)"
+    );
+    for (const id of ["idea-c", "idea-a", "idea-b"]) {
+      const value = entry(id);
+      insert.run(
+        "personal-idea-library",
+        JSON.stringify([writerId, projectId, id]),
+        null,
+        writerId,
+        JSON.stringify(value)
+      );
+    }
+
+    const store = new SqliteProjectStore(database, databasePath);
+    const first = store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-b" });
+
+    const second = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+    assert.equal(
+      store.loadPersonalIdea(writerId, projectId, "idea-b").idea.id,
+      "idea-b"
+    );
+    assert.deepEqual(
+      store.loadPersonalIdeasByKeys(writerId, [
+        { sourceProjectId: projectId, ideaId: "idea-a" },
+        { sourceProjectId: projectId, ideaId: "missing-idea" },
+        { sourceProjectId: projectId, ideaId: "idea-c" }
+      ]).map(item => item.idea.id),
+      ["idea-a", "idea-c"]
+    );
+
+    const schema = database.prepare("PRAGMA table_info(bridge_records)").all();
+    assert.ok(schema.some(column => column.name === "sort_key"));
+    const plan = database.prepare(
+      "EXPLAIN QUERY PLAN SELECT value_json FROM bridge_records " +
+      "WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
+      "ORDER BY sort_key LIMIT ?"
+    ).all(writerId, "", 3);
+    assert.ok(
+      plan.some(row => row.detail.includes("bridge_records_personal_library_page")),
+      "la consulta keyset debe usar el índice parcial de biblioteca"
+    );
+    store.close();
+  } finally {
+    try { database.close(); } catch { /* El almacenamiento puede haber cerrado la conexión. */ }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+
+test("SQLite guarda cada cambio de acontecimiento junto con su historial append-only", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-event-lifecycle-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "sqlite-event-history-project";
+  const store = await SqliteProjectStore.open(databasePath);
+  const original = {
+    projectId,
+    id: "event-guard-arrives",
+    label: "La guardia llega a la puerta",
+    participants: [],
+    evidence: []
+  };
+  const api = new HostEngineApi({ store });
+  try {
+    store.saveEvent(original);
+    api.initializeProject({
+      projectId,
+      projectName: "Libro de acontecimientos",
+      writerId: "writer-event-history"
+    });
+
+    const loaded = await api.getNarrativeEvents();
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].label, original.label);
+
+    const firstUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia abre la puerta",
+      changedBy: "writer-event-history",
+      changeReason: "El escritor ajustó el acontecimiento",
+      changedAt: 100
+    });
+    assert.equal(firstUpdate.label, "La guardia abre la puerta");
+
+    const firstHistory = await api.getEventLifecycleHistory(original.id);
+    assert.equal(firstHistory.length, 1);
+    assert.equal(firstHistory[0].revision, 1);
+    assert.equal(firstHistory[0].previousLabel, original.label);
+    assert.equal(firstHistory[0].newLabel, firstUpdate.label);
+    assert.equal(firstHistory[0].changedBy, "writer-event-history");
+
+    const secondUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia protege la entrada",
+      changedBy: "writer-event-history",
+      changedAt: 200
+    });
+    const completeHistory = await store.loadProjectEventLifecycles(projectId);
+    assert.deepEqual(completeHistory.map(item => item.revision), [1, 2]);
+    assert.equal(completeHistory[1].previousLabel, firstUpdate.label);
+    assert.equal(completeHistory[1].newLabel, secondUpdate.label);
+
+    const invalidEvent = { ...secondUpdate, label: "Una versión que no debe publicarse" };
+    const invalidLifecycle = {
+      projectId,
+      id: original.id + ":v3",
+      eventId: original.id,
+      revision: 3,
+      previousLabel: secondUpdate.label,
+      newLabel: invalidEvent.label,
+      previousParticipants: [],
+      newParticipants: [],
+      changedBy: "writer-event-history",
+      changedAt: 150
+    };
+    assert.throws(
+      () => store.saveEventAndAppendLifecycleIfUnchanged(
+        invalidEvent, secondUpdate, invalidLifecycle
+      ),
+      /no continúa la última revisión durable/
+    );
+
+    const persisted = (await store.loadEvents(projectId))[0];
+    const afterRejectedWrite = await store.loadEventLifecycles(projectId, original.id);
+    assert.equal(persisted.label, secondUpdate.label);
+    assert.equal(afterRejectedWrite.length, 2);
+    assert.deepEqual(afterRejectedWrite.map(item => item.revision), [1, 2]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+
+test("el cliente TypeScript del puente lee y añade historiales versionados de relaciones", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-relation-history-client-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "bridge-relation-history";
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId,
+      projectName: "Libro con relaciones versionadas",
+      writerId: "writer-relation-history"
+    });
+
+    const record = await client.request("project.call", {
+      projectId,
+      method: "saveProjectRecord",
+      args: [{
+        id: "record-ana",
+        recordType: "character",
+        primaryName: "Ana",
+        description: null,
+        label: "IDEA",
+        state: "abierto",
+        confidence: "confirmed",
+        confirmationKind: "explicit",
+        provenanceKind: "writer",
+        createdAt: 5,
+        updatedAt: 5
+      }]
+    });
+    const recordFirst = await client.appendRecordLifecycle(projectId, {
+      id: "record-ana:v1",
+      recordId: record.id,
+      revision: 1,
+      previousLabel: null,
+      newLabel: "IDEA",
+      previousState: null,
+      newState: "abierto",
+      changedBy: "writer-relation-history",
+      changedAt: 15
+    });
+    assert.equal(recordFirst.projectId, projectId);
+
+    const recordSecond = await client.appendRecordLifecycle(projectId, {
+      id: "record-ana:v2",
+      recordId: record.id,
+      revision: 2,
+      previousLabel: "IDEA",
+      newLabel: "REGISTRADO EN LA OBRA",
+      previousState: "abierto",
+      newState: "cerrado",
+      changedBy: "writer-relation-history",
+      changeReason: "La ficha quedó incorporada al manuscrito",
+      changedAt: 25
+    });
+    assert.deepEqual(
+      await client.getRecordLifecycleHistory(projectId, record.id),
+      [recordFirst, recordSecond]
+    );
+
+    await assert.rejects(
+      client.appendRecordLifecycle(projectId, {
+        id: "record-ana:v3-invalid",
+        recordId: record.id,
+        revision: 3,
+        previousLabel: "REGISTRADO EN LA OBRA",
+        newLabel: "REGISTRADO EN LA OBRA",
+        previousState: "cerrado",
+        newState: "cerrado",
+        changedBy: "writer-relation-history",
+        changedAt: 24
+      }),
+      /debe continuar exactamente la última revisión durable/
+    );
+    assert.deepEqual(
+      await client.getRecordLifecycleHistory(projectId, record.id),
+      [recordFirst, recordSecond],
+      "un cambio con fecha regresiva no debe contaminar el historial"
+    );
+
+    const relation = await client.request("project.call", {
+      projectId,
+      method: "saveProjectRelation",
+      args: [{
+        id: "relation-ana-map",
+        relationType: "supports",
+        sourceRecordId: null,
+        targetRecordId: null,
+        label: "IDEA",
+        state: "abierto",
+        confirmationKind: "explicit",
+        provenanceKind: "writer",
+        confidence: "confirmed",
+        createdAt: 10,
+        updatedAt: 10
+      }]
+    });
+    assert.equal(relation.id, "relation-ana-map");
+
+    const first = await client.appendRelationLifecycle(projectId, {
+      id: "relation-ana-map:v1",
+      relationId: relation.id,
+      revision: 1,
+      previousLabel: null,
+      newLabel: "IDEA",
+      previousState: null,
+      newState: "abierto",
+      changedBy: "writer-relation-history",
+      changeReason: "Creación explícita del vínculo",
+      changedAt: 20
+    });
+    assert.equal(first.projectId, projectId);
+
+    const history = await client.getRelationLifecycleHistory(projectId, relation.id);
+    assert.deepEqual(history, [first]);
+
+    const second = await client.appendRelationLifecycle(projectId, {
+      id: "relation-ana-map:v2",
+      relationId: relation.id,
+      revision: 2,
+      previousLabel: "IDEA",
+      newLabel: "REGISTRADO EN LA OBRA",
+      previousState: "abierto",
+      newState: "cerrado",
+      changedBy: "writer-relation-history",
+      changedAt: 30
+    });
+    assert.deepEqual(
+      await client.getRelationLifecycleHistory(projectId, relation.id),
+      [first, second]
+    );
+    await assert.rejects(
+      client.appendRelationLifecycle(projectId, {
+        id: "relation-ana-map:v3-invalid",
+        relationId: relation.id,
+        revision: 3,
+        previousLabel: "REGISTRADO EN LA OBRA",
+        newLabel: "REGISTRADO EN LA OBRA",
+        previousState: "cerrado",
+        newState: "cerrado",
+        changedBy: "writer-relation-history",
+        changedAt: 29
+      }),
+      /debe continuar exactamente la última revisión durable/
+    );
+    assert.deepEqual(
+      await client.getRelationLifecycleHistory(projectId, relation.id),
+      [first, second],
+      "una revisión con fecha regresiva debe rechazarse sin alterar el historial"
+    );
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("sincroniza archivo y consolidación de biblioteca entre proyectos y procesos sin filtrar a otros escritores", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-writer-library-sync-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let first;
+  let second;
+  try {
+    first = startBridge(databasePath);
+    second = startBridge(databasePath);
+    await Promise.all([first.client.hello(), second.client.hello()]);
+
+    await first.client.openProject({
+      projectId: "writer-sync-source",
+      projectName: "Libro de origen",
+      writerId: "writer-shared"
+    });
+    await first.client.openProject({
+      projectId: "writer-sync-sibling",
+      projectName: "Otro libro del mismo escritor",
+      writerId: "writer-shared"
+    });
+    await first.client.openProject({
+      projectId: "writer-sync-private",
+      projectName: "Libro de otro escritor",
+      writerId: "writer-private"
+    });
+    await second.client.openProject({
+      projectId: "writer-sync-peer",
+      projectName: "Libro abierto en otro proceso",
+      writerId: "writer-shared"
+    });
+    await second.client.openProject({
+      projectId: "writer-sync-other",
+      projectName: "Otro escritor en otro proceso",
+      writerId: "writer-other"
+    });
+
+    const waitForProjects = (client, expectedCount) => new Promise((resolveNotice, rejectNotice) => {
+      const received = [];
+      const timer = setTimeout(() => {
+        unsubscribe();
+        rejectNotice(new Error("No llegaron todas las notificaciones de biblioteca esperadas: " +
+          received.map(item => item.projectId).join(", ")));
+      }, 15_000);
+      const unsubscribe = client.onNotification("engine.personalIdeaLibraryChanged", params => {
+        received.push(params);
+        if (received.length >= expectedCount) {
+          clearTimeout(timer);
+          unsubscribe();
+          resolveNotice(received);
+        }
+      });
+    });
+    const assertSharedWriterNotifications = async (sameProcessPromise, otherProcessPromise) => {
+      const [sameProcess, otherProcess] = await Promise.all([
+        sameProcessPromise,
+        otherProcessPromise
+      ]);
+      assert.deepEqual(
+        sameProcess.map(item => item.projectId).sort(),
+        ["writer-sync-sibling", "writer-sync-source"]
+      );
+      assert.deepEqual(otherProcess.map(item => item.projectId), ["writer-sync-peer"]);
+      const notices = [...sameProcess, ...otherProcess];
+      assert.ok(notices.every(item => item.writerId === "writer-shared"));
+      assert.ok(notices.every(item => {
+        const keys = Object.keys(item).sort();
+        return keys.length === 2 && keys[0] === "projectId" && keys[1] === "writerId";
+      }), "los avisos solo pueden transportar las identidades de proyecto y escritor");
+      assert.ok(notices.every(item =>
+        !JSON.stringify(item).includes("La campana debe sonar antes del amanecer.")
+      ), "los avisos de sincronización nunca deben transportar texto narrativo");
+      assert.ok(!notices.some(item =>
+        item.projectId === "writer-sync-private" || item.projectId === "writer-sync-other"
+      ));
+    };
+
+    await first.client.openDocument("writer-sync-source", {
+      documentId: "chapter-ideas",
+      text: "personaje Ana\npersonaje Anita\nIDEA: La campana debe sonar antes del amanecer.",
+      revision: 0,
+      sequence: 0
+    });
+    await first.client.flushProject("writer-sync-source");
+
+    const entities = await first.client.request("project.call", {
+      projectId: "writer-sync-source", method: "getNarrativeEntities", args: []
+    });
+    const target = entities.find(entity => entity.canonicalName === "Ana");
+    const source = entities.find(entity => entity.canonicalName === "Anita");
+    assert.ok(target, "Debe existir la ficha canónica de Ana.");
+    assert.ok(source, "Debe existir la ficha que se consolidará.");
+
+    const ideas = await first.client.request("project.call", {
+      projectId: "writer-sync-source", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(ideas.length, 1);
+    await first.client.request("project.call", {
+      projectId: "writer-sync-source",
+      method: "setNarrativeIdeaEntityLink",
+      args: [ideas[0].id, source.id, true]
+    });
+
+    const archiveSameProcess = waitForProjects(first.client, 2);
+    const archiveOtherProcess = waitForProjects(second.client, 1);
+    const archived = await first.client.request("project.call", {
+      projectId: "writer-sync-source",
+      method: "archiveUnincorporatedIdeas",
+      args: []
+    });
+    assert.equal(archived.length, 1);
+    assert.equal(archived[0].writerId, "writer-shared");
+    assert.deepEqual(archived[0].idea.relatedEntityIds, [source.id]);
+    await assertSharedWriterNotifications(archiveSameProcess, archiveOtherProcess);
+
+    // La consolidación también modifica instantáneas archivadas. Debe invalidar
+    // la biblioteca en las demás sesiones, igual que la transferencia inicial.
+    const mergeSameProcess = waitForProjects(first.client, 2);
+    const mergeOtherProcess = waitForProjects(second.client, 1);
+    const merged = await first.client.request("project.call", {
+      projectId: "writer-sync-source",
+      method: "mergeNarrativeEntities",
+      args: [target.id, source.id]
+    });
+    assert.equal(merged.id, target.id);
+    assert.ok(merged.mergedFromIds.includes(source.id));
+    await assertSharedWriterNotifications(mergeSameProcess, mergeOtherProcess);
+
+    const peerPage = await second.client.getPersonalIdeaLibraryPage(
+      "writer-sync-peer", null, 50
+    );
+    assert.equal(peerPage.items.length, 1);
+    assert.equal(peerPage.items[0].idea.text, "La campana debe sonar antes del amanecer.");
+    assert.deepEqual(peerPage.items[0].idea.relatedEntityIds, [target.id]);
+    assert.deepEqual(
+      peerPage.items[0].context.relatedEntities.map(entity => entity.id),
+      [target.id]
+    );
+    assert.ok(peerPage.items[0].context.relatedEntities[0].mergedFromIds.includes(source.id));
+
+    const privatePage = await second.client.getPersonalIdeaLibraryPage(
+      "writer-sync-other", null, 50
+    );
+    assert.equal(privatePage.items.length, 0);
+  } catch (error) {
+    const diagnostic = [first, second]
+      .filter(Boolean)
+      .map((bridge, index) => "bridge-" + (index + 1) + " stderr:\\n" + bridge.getStderr())
+      .join("\\n");
+    throw new Error(
+      (error instanceof Error ? error.message : String(error)) +
+      (diagnostic ? "\\n" + diagnostic : "")
+    );
+  } finally {
+    if (first) {
+      try {
+        const exited = waitForExit(first.child);
+        await first.client.shutdown();
+        await exited;
+      } catch {
+        first.child.kill();
+      }
+    }
+    if (second) {
+      try {
+        const exited = waitForExit(second.child);
+        await second.client.shutdown();
+        await exited;
+      } catch {
+        second.child.kill();
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+
+
+
+
+
+
+
+test("EOF de STDIN espera una finalización aceptada antes de cerrar SQLite", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-eof-library-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "eof-library-project";
+  const writerId = "writer-eof-library";
+  const projectName = "Libro cerrado por EOF";
+  const total = 6;
+  let active;
+  let inspection;
+  try {
+    active = startBridge(databasePath);
+    await active.client.hello();
+    await active.client.openProject({ projectId, projectName, writerId });
+    const text = Array.from({ length: total }, (_, index) =>
+      "IDEA: Idea de EOF " + String(index).padStart(2, "0")
+    ).join("\n");
+    await active.client.openDocument(projectId, {
+      documentId: "chapter-eof",
+      text,
+      revision: 0,
+      sequence: 0
+    });
+    await active.client.flushProject(projectId);
+
+    const finalization = active.client.finalizeProjectToIdeaLibrary(projectId);
+    // Cerrar el canal de entrada inmediatamente después de enviar la petición.
+    active.child.stdin.end();
+    const summary = await finalization;
+    assert.equal(summary.archivedCount, total);
+    assert.equal(summary.alreadyFinalized, false);
+    assert.equal(await waitForExit(active.child), 0);
+    active = undefined;
+
+    inspection = await SqliteProjectStore.open(databasePath);
+    assert.deepEqual(await inspection.loadIdeas(projectId), []);
+    assert.equal(inspection.loadPersonalIdeas(writerId).length, total);
+    assert.equal(
+      inspection.loadProjectFinalizationReceipt(writerId, projectId).archiveContentChecksum,
+      summary.archiveContentChecksum
+    );
+  } finally {
+    if (active && active.child.exitCode === null) active.child.kill();
+    inspection?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("bridge.shutdown espera operaciones aceptadas que terminan con error y aun así cierra limpiamente", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-shutdown-rejected-request-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let active;
+  try {
+    active = startBridge(databasePath);
+    await active.client.hello();
+    await active.client.openProject({
+      projectId: "shutdown-rejected-project",
+      projectName: "Libro de cierre con error",
+      writerId: "writer-shutdown-rejected"
+    });
+
+    const rejected = active.client.request("project.call", {
+      projectId: "shutdown-rejected-project",
+      method: "method-not-allowed-for-test",
+      args: []
+    });
+    const shutdown = active.client.shutdown();
+
+    await assert.rejects(rejected, /no permitido por el puente/u);
+    await shutdown;
+    const exited = waitForExit(active.child);
+    assert.equal(await exited, 0);
+    active = undefined;
+  } finally {
+    if (active) {
+      try {
+        const exited = waitForExit(active.child);
+        await active.client.shutdown();
+        await exited;
+      } catch {
+        active.child.kill();
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("bridge.shutdown espera una finalización de biblioteca ya aceptada antes de cerrar SQLite", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-shutdown-library-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "shutdown-library-project";
+  const writerId = "writer-shutdown-library";
+  const projectName = "Libro finalizado durante el cierre";
+  const total = 48;
+  let active;
+  let inspection;
+  try {
+    active = startBridge(databasePath);
+    await active.client.hello();
+    await active.client.openProject({ projectId, projectName, writerId });
+    const text = Array.from({ length: total }, (_, index) =>
+      "IDEA: Idea archivada durante cierre " + String(index).padStart(3, "0")
+    ).join("\n");
+    await active.client.openDocument(projectId, {
+      documentId: "chapter-shutdown",
+      text,
+      revision: 0,
+      sequence: 0
+    });
+    await active.client.flushProject(projectId);
+
+    // Ambas peticiones llegan en el mismo ciclo de transporte. El cierre
+    // debe esperar la transferencia ya aceptada, no cerrar el almacén después
+    // de vaciar únicamente el estado que existía antes de encolarla.
+    const finalization = active.client.finalizeProjectToIdeaLibrary(projectId);
+    const shutdown = active.client.shutdown();
+    const [summary] = await Promise.all([finalization, shutdown]);
+    assert.equal(summary.archivedCount, total);
+    assert.equal(summary.alreadyFinalized, false);
+
+    const exited = waitForExit(active.child);
+    assert.equal(await exited, 0);
+    active = undefined;
+
+    inspection = await SqliteProjectStore.open(databasePath);
+    assert.deepEqual(await inspection.loadIdeas(projectId), []);
+    assert.equal(inspection.loadPersonalIdeas(writerId).length, total);
+    const receipt = inspection.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.equal(receipt.archivedIdeaIds.length, total);
+    assert.equal(receipt.archiveContentChecksum, summary.archiveContentChecksum);
+  } finally {
+    if (active) {
+      try {
+        const exited = waitForExit(active.child);
+        await active.client.shutdown();
+        await exited;
+      } catch {
+        active.child.kill();
+      }
+    }
+    inspection?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("SQLite recupera una finalización tras terminar el proceso con una transferencia sin confirmar", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-process-crash-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "library-process-crash-project";
+  const writerId = "writer-process-crash";
+  const projectName = "Libro interrumpido por cierre del proceso";
+  const ids = ["idea-a", "idea-b", "idea-c"];
+  let store = await SqliteProjectStore.open(databasePath);
+  let child;
+  try {
+    for (const id of ids) {
+      store.saveIdea({
+        projectId,
+        id,
+        text: "Contenido de " + id,
+        status: "IDEA",
+        originDocumentId: "chapter-crash",
+        sourceProjectName: projectName,
+        evidence: [],
+        relatedIdeaIds: [],
+        statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+      });
+    }
+
+    // El proceso hijo reproduce el primer movimiento de la transacción de
+    // archivo y se mantiene vivo sin confirmar. El padre lo termina de forma
+    // abrupta cuando la inserción y el borrado ya están en el WAL.
+    const childScript = [
+      'import { DatabaseSync } from "node:sqlite";',
+      "const db = new DatabaseSync(process.argv[1]);",
+      'db.exec("PRAGMA busy_timeout = 5000");',
+      'db.exec("BEGIN IMMEDIATE");',
+      'const projectId = "library-process-crash-project";',
+      'const writerId = "writer-process-crash";',
+      'const projectName = "Libro interrumpido por cierre del proceso";',
+      'const ideaId = "idea-a";',
+      'const row = db.prepare("SELECT value_json FROM bridge_records WHERE collection = ? AND record_key = ?").get("narrative-ideas", JSON.stringify([projectId, ideaId]));',
+      'if (!row) throw new Error("La idea de origen no existe.");',
+      "const idea = JSON.parse(row.value_json);",
+      "const entry = { writerId, sourceProjectId: projectId, sourceProjectName: projectName, category: projectName, idea, context: { version: 1, relatedIdeas: [], relatedEntities: [] }, archivedAt: 100 };",
+      'const encode = value => Array.from({ length: value.length }, (_, index) => value.charCodeAt(index).toString(16).padStart(4, "0")).join("");',
+      'const sortKey = encode(projectId) + "!" + encode(ideaId) + "!";',
+      'db.prepare("INSERT INTO bridge_records(collection, record_key, project_id, writer_id, document_id, sequence, sort_key, value_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?)").run("personal-idea-library", JSON.stringify([writerId, projectId, ideaId]), null, writerId, null, null, sortKey, JSON.stringify(entry));',
+      'db.prepare("DELETE FROM bridge_records WHERE collection = ? AND record_key = ?").run("narrative-ideas", JSON.stringify([projectId, ideaId]));',
+      'process.stdout.write("STAGED\\n");',
+      "setInterval(() => {}, 1000);"
+    ].join("\n");
+    child = spawn(process.execPath, ["--input-type=module", "-e", childScript, databasePath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      env: { ...process.env }
+    });
+    let childStderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", chunk => { childStderr += chunk; });
+    let output = "";
+    const staged = new Promise((resolveStage, rejectStage) => {
+      const timeout = setTimeout(() => {
+        rejectStage(new Error("El proceso hijo no dejó la transferencia sin confirmar a tiempo. " + childStderr));
+      }, 15_000);
+      const resolveOnce = () => {
+        clearTimeout(timeout);
+        resolveStage();
+      };
+      const rejectOnce = error => {
+        clearTimeout(timeout);
+        rejectStage(error);
+      };
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", chunk => {
+        output += chunk;
+        if (output.includes("STAGED\n")) resolveOnce();
+      });
+      child.once("error", rejectOnce);
+      child.once("exit", (code, signal) => {
+        if (!output.includes("STAGED\n")) {
+          rejectOnce(new Error(
+            "El proceso terminó antes de dejar la transferencia sin confirmar. " +
+            "exit=" + String(code) + " signal=" + String(signal) + " stderr=" + childStderr
+          ));
+        }
+      });
+    });
+    await staged;
+
+    const exited = waitForExit(child);
+    assert.equal(child.kill(), true, "el proceso hijo debe poder terminarse abruptamente");
+    await exited;
+    child = undefined;
+
+    // La siguiente conexión fuerza la recuperación del WAL y debe observar
+    // íntegramente el estado anterior, nunca el movimiento parcial.
+    store.close();
+    store = await SqliteProjectStore.open(databasePath);
+    assert.deepEqual(store.loadIdeas(projectId).map(idea => idea.id).sort(), ids);
+    assert.deepEqual(store.loadPersonalIdeas(writerId), []);
+    assert.equal(store.loadProjectFinalizationReceipt(writerId, projectId), undefined);
+
+    const retry = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 200
+    );
+    assert.equal(retry.archivedCount, ids.length);
+    assert.equal(retry.alreadyFinalized, false);
+    assert.deepEqual(store.loadIdeas(projectId), []);
+    assert.deepEqual(
+      store.loadPersonalIdeas(writerId).map(entry => entry.idea.id).sort(),
+      ids
+    );
+    assert.deepEqual(
+      store.loadProjectFinalizationReceipt(writerId, projectId).archivedIdeaIds,
+      ids
+    );
+  } finally {
+    if (child && child.exitCode === null) {
+      child.kill();
+      await waitForExit(child);
+    }
+    store?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("SQLite revierte una finalización interrumpida a mitad de transferencia y permite reintentarla", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-finalization-recovery-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "library-recovery-project";
+  const writerId = "writer-library-recovery";
+  const projectName = "Libro con recuperación";
+  let store = await SqliteProjectStore.open(databasePath);
+  const ids = ["idea-a", "idea-b", "idea-c"];
+  try {
+    for (const id of ids) {
+      store.saveIdea({
+        projectId,
+        id,
+        text: "Contenido privado de " + id,
+        status: "IDEA",
+        originDocumentId: "chapter-recovery",
+        sourceProjectName: projectName,
+        evidence: [],
+        relatedIdeaIds: [],
+        statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+      });
+    }
+
+    // La primera idea se copia y se retira dentro de la transacción. El trigger
+    // interrumpe la segunda escritura para simular un cierre/fallo a mitad del lote.
+    store.database.exec(
+      "CREATE TRIGGER interrupt_personal_idea_archive " +
+      "BEFORE INSERT ON bridge_records " +
+      "WHEN NEW.collection = 'personal-idea-library' " +
+      "AND NEW.value_json LIKE '%idea-b%' " +
+      "BEGIN SELECT RAISE(ABORT, 'simulated archive interruption'); END"
+    );
+
+    assert.throws(
+      () => store.archiveUnincorporatedIdeasSummary(
+        projectId, writerId, projectName, 100
+      ),
+      /simulated archive interruption/
+    );
+
+    assert.deepEqual(
+      store.loadIdeas(projectId).map(idea => idea.id).sort(),
+      ids,
+      "ninguna idea debe desaparecer del libro tras el aborto"
+    );
+    assert.deepEqual(
+      store.loadPersonalIdeas(writerId),
+      [],
+      "la biblioteca no debe exponer una transferencia parcial"
+    );
+    assert.equal(
+      store.loadProjectFinalizationReceipt(writerId, projectId),
+      undefined,
+      "no debe publicarse un recibo de una transferencia incompleta"
+    );
+
+    store.database.exec("DROP TRIGGER interrupt_personal_idea_archive");
+    const retry = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 200
+    );
+    assert.equal(retry.archivedCount, ids.length);
+    assert.equal(retry.alreadyFinalized, false);
+    assert.deepEqual(store.loadIdeas(projectId), []);
+    assert.deepEqual(
+      store.loadPersonalIdeas(writerId).map(entry => entry.idea.id).sort(),
+      ids
+    );
+
+    store.close();
+    store = await SqliteProjectStore.open(databasePath);
+    const recoveredReceipt = store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.deepEqual(recoveredReceipt.archivedIdeaIds, ids);
+    assert.equal(recoveredReceipt.finalizedAt, 200);
+    assert.equal(store.loadPersonalIdeas(writerId).length, ids.length);
+
+    const repeated = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 300
+    );
+    assert.equal(repeated.alreadyFinalized, true);
+    assert.equal(repeated.finalizedAt, 200);
+    assert.equal(repeated.archivedCount, ids.length);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite finaliza libros grandes por páginas sin materializar todas las ideas ni entidades", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-paged-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const store = await SqliteProjectStore.open(databasePath);
+  const projectId = "paged-library-project";
+  const writerId = "writer-paged-library";
+  const sourceProjectName = "Libro paginado";
+  const total = 300;
+
+  try {
+    for (let index = 0; index < total; index++) {
+      const suffix = String(index).padStart(4, "0");
+      const entityId = "entity:" + suffix;
+      const canonicalName = "Personaje " + suffix;
+      store.saveEntity({
+        id: entityId,
+        projectId,
+        kind: "character",
+        canonicalName,
+        normalizedName: canonicalName.toLocaleLowerCase("es"),
+        aliases: [],
+        evidence: [],
+        firstSeenAt: index,
+        lastSeenAt: index,
+        extractionVersion: 1
+      });
+      store.saveIdea({
+        id: "idea:" + suffix,
+        projectId,
+        text: "Idea narrativa " + suffix,
+        status: "IDEA",
+        originDocumentId: "chapter-paged",
+        sourceProjectName,
+        evidence: [],
+        relatedEntityIds: [entityId],
+        relatedIdeaIds: [],
+        statusHistory: [{ status: "IDEA", changedAt: index, reason: "initial" }]
+      });
+    }
+
+    const aggregateIdeaLoader = store.loadIdeas;
+    const aggregateEntityLoader = store.loadEntities;
+    store.loadIdeas = () => { throw new Error("No debe materializar la colección completa de ideas."); };
+    store.loadEntities = () => { throw new Error("No debe materializar la colección completa de entidades."); };
+
+    let summary;
+    try {
+      summary = store.archiveUnincorporatedIdeasSummary(projectId, writerId, sourceProjectName, 500);
+    } finally {
+      store.loadIdeas = aggregateIdeaLoader;
+      store.loadEntities = aggregateEntityLoader;
+    }
+
+    assert.equal(summary.archivedCount, total);
+    assert.equal(summary.alreadyFinalized, false);
+    assert.equal(typeof summary.archiveChecksum, "string");
+    assert.equal(Array.isArray(summary), false);
+    assert.equal(store.loadIdeas(projectId).length, 0);
+
+    const receipt = store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.equal(receipt.archivedIdeaIds.length, total);
+    assert.equal(receipt.archivedIdeaIds[0], "idea:0000");
+    assert.equal(receipt.archivedIdeaIds[total - 1], "idea:0299");
+    assert.match(summary.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
+    assert.equal(receipt.archiveContentChecksum, summary.archiveContentChecksum);
+    assert.equal(store.loadPersonalIdeas(writerId).length, total);
+    const firstPage = store.loadPersonalIdeasPage(writerId, null, 120);
+    assert.equal(firstPage.items.length, 120);
+    assert.ok(firstPage.nextCursor);
+    const secondPage = store.loadPersonalIdeasPage(writerId, firstPage.nextCursor, 120);
+    assert.equal(secondPage.items.length, 120);
+    const thirdPage = store.loadPersonalIdeasPage(writerId, secondPage.nextCursor, 120);
+    assert.equal(thirdPage.items.length, 60);
+    assert.equal(thirdPage.nextCursor, null);
+    const retry = store.archiveUnincorporatedIdeasSummary(projectId, writerId, sourceProjectName, 600);
+    assert.equal(retry.alreadyFinalized, true);
+    assert.equal(retry.archivedCount, summary.archivedCount);
+    assert.equal(retry.archiveChecksum, summary.archiveChecksum);
+    assert.equal(retry.archiveContentChecksum, summary.archiveContentChecksum);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("SQLite detecta cambios en el contenido de una idea archivada aunque el recibo conserve sus IDs", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-content-checksum-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "library-content-checksum-project";
+  const writerId = "writer-content-checksum";
+  const projectName = "Libro con integridad de contenido";
+  let store = await SqliteProjectStore.open(databasePath);
+  try {
+    store.saveIdea({
+      projectId,
+      id: "idea-content",
+      text: "La brújula señala el norte.",
+      status: "IDEA",
+      originDocumentId: "chapter-content",
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedEntityIds: [],
+      relatedIdeaIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    });
+
+    const summary = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 100
+    );
+    assert.match(summary.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
+    const receipt = store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.equal(receipt.archiveContentChecksum, summary.archiveContentChecksum);
+
+    const original = store.loadPersonalIdea(writerId, projectId, "idea-content");
+    const altered = {
+      ...original,
+      idea: { ...original.idea, text: "La brújula señala el sur." }
+    };
+    store.put("personal-idea-library", [writerId, projectId, "idea-content"], altered, {
+      expectedCurrent: original
+    });
+
+    assert.throws(
+      () => store.archiveUnincorporatedIdeasSummary(
+        projectId, writerId, projectName, 200
+      ),
+      /checksum del contenido archivado/u
+    );
+
+    // Al restaurar el contenido original, un recibo legacy sin checksum
+    // puede migrarse en el reintento sin transferir ideas otra vez.
+    store.put("personal-idea-library", [writerId, projectId, "idea-content"], original, {
+      expectedCurrent: altered
+    });
+    const legacyReceipt = { ...receipt };
+    delete legacyReceipt.archiveContentChecksum;
+    store.put("writer-library-finalization-receipts",
+      [writerId, projectId, "finalization-v1"], legacyReceipt, { expectedCurrent: receipt });
+    const migrated = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 300
+    );
+    assert.equal(migrated.alreadyFinalized, true);
+    assert.equal(migrated.archiveContentChecksum, summary.archiveContentChecksum);
+    assert.equal(
+      store.loadProjectFinalizationReceipt(writerId, projectId).archiveContentChecksum,
+      summary.archiveContentChecksum
+    );
+    assert.equal(store.loadPersonalIdeas(writerId).length, 1);
+    assert.deepEqual(store.loadIdeas(projectId), []);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });

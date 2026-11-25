@@ -444,13 +444,13 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
         eventId: "storm",
         label: "La tormenta",
         participants: ["ana", "milo"],
-        evidence: [evidence("La tormenta"), evidence("la tormenta", 1)]
+        evidence: [evidence("La tormenta"), evidence("la tormenta")]
       },
       {
         eventId: "collapse",
         label: "El derrumbe",
         participants: ["ana", "luisa"],
-        evidence: [evidence("el derrumbe"), evidence("El derrumbe", 1)]
+        evidence: [evidence("el derrumbe"), evidence("El derrumbe")]
       }
     ]
   });
@@ -700,6 +700,7 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
     ]
   });
 
+  assert.equal(result.eventDependencyAnalysis.candidateCount, 1);
   const trajectories = result.characterNarrativeTrajectories.trajectories;
   const ana = trajectories.find(item => item.entityId === "ana-id");
   const bruno = trajectories.find(item => item.entityId === "bruno-id");
@@ -971,8 +972,22 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       includedOutgoingReferenceCount: 1,
       notIncludedOutgoingReferenceCount: 0,
       statusHistoryRecordCount: 2,
+      statusHistoryConsistentIdeaCount: 2,
+      statusHistoryMismatchIdeaCount: 0,
+      statusHistoryConsistencyUnknownIdeaCount: 0,
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 0,
+      observedStatusTransitionCount: 0,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 0,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 2,
+      observedWriterStatusChangeCount: 0,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: 1,
+      latestKnownStatusChangeAt: 1,
+      knownStatusHistorySpanMs: 0,
       activeEvidenceCount: 0,
       staleEvidenceCount: 1,
       ideasWithActiveEvidenceCount: 0,
@@ -989,8 +1004,22 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       includedOutgoingReferenceCount: 1,
       notIncludedOutgoingReferenceCount: 1,
       statusHistoryRecordCount: 2,
+      statusHistoryConsistentIdeaCount: 1,
+      statusHistoryMismatchIdeaCount: 0,
+      statusHistoryConsistencyUnknownIdeaCount: 0,
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 1,
+      observedStatusTransitionCount: 1,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 1,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 1,
+      observedWriterStatusChangeCount: 1,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: 1,
+      latestKnownStatusChangeAt: 2,
+      knownStatusHistorySpanMs: 1,
       activeEvidenceCount: 2,
       staleEvidenceCount: 1,
       ideasWithActiveEvidenceCount: 1,
@@ -1007,8 +1036,22 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       includedOutgoingReferenceCount: 1,
       notIncludedOutgoingReferenceCount: 0,
       statusHistoryRecordCount: 2,
+      statusHistoryConsistentIdeaCount: 1,
+      statusHistoryMismatchIdeaCount: 0,
+      statusHistoryConsistencyUnknownIdeaCount: 0,
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 1,
+      observedStatusTransitionCount: 1,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 1,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 1,
+      observedWriterStatusChangeCount: 1,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: 1,
+      latestKnownStatusChangeAt: 2,
+      knownStatusHistorySpanMs: 1,
       activeEvidenceCount: 1,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 1,
@@ -1041,6 +1084,17 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 0,
+      observedStatusTransitionCount: 0,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 0,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 1,
+      observedWriterStatusChangeCount: 0,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: 1,
+      latestKnownStatusChangeAt: 1,
+      knownStatusHistorySpanMs: 0,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0
     },
@@ -1054,6 +1108,17 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       ],
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 1,
+      observedStatusTransitionCount: 1,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 1,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 1,
+      observedWriterStatusChangeCount: 1,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: 1,
+      latestKnownStatusChangeAt: 2,
+      knownStatusHistorySpanMs: 1,
       activeEvidenceCount: 2,
       staleEvidenceCount: 1
     },
@@ -1064,6 +1129,17 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 0,
+      observedStatusTransitionCount: 0,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 0,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 1,
+      observedWriterStatusChangeCount: 0,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: 1,
+      latestKnownStatusChangeAt: 1,
+      knownStatusHistorySpanMs: 0,
       activeEvidenceCount: 0,
       staleEvidenceCount: 1
     },
@@ -1077,6 +1153,17 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       ],
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 1,
+      observedStatusTransitionCount: 1,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 1,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 1,
+      observedWriterStatusChangeCount: 1,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: 1,
+      latestKnownStatusChangeAt: 2,
+      knownStatusHistorySpanMs: 1,
       activeEvidenceCount: 1,
       staleEvidenceCount: 0
     }
@@ -1376,13 +1463,12 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     () => analyzeLiteraryFragment({ ...input, knownProjectIdeas: [idea, { ...idea }] }),
     /catálogo global de ideas/
   );
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
-    }),
-    /catálogo global de ideas/
-  );
+  const selfLoop = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
+  }).ideaGraph;
+  assert.equal(selfLoop.cycleCount, 1);
+  assert.deepEqual(selfLoop.cycles, [{ ideaIds: ["global-idea"] }]);
   assert.throws(
     () => analyzeLiteraryFragment({
       ...input,
@@ -1413,16 +1499,7 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     [{ status: "IDEA", reason: "writer", changedAt: 1 }],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "IDEA", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 3 },
       { status: "discarded", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 2 }
     ]
   ]) {
     assert.throws(
@@ -1453,6 +1530,36 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     }),
     /historial de decisiones del catálogo global/
   );
+
+  const importedMismatch = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      status: "IDEA",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
+      writerDecisionCount: 1
+    }]
+  }).ideaGraph;
+  assert.equal(importedMismatch.nodes[0].currentStatusHistoryConsistency, "mismatch");
+  assert.equal(importedMismatch.statusHistoryConsistency.mismatchIdeaCount, 1);
+
+  const importedClockSkew = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 10 },
+        { status: "incorporated", reason: "writer", changedAt: 9 }
+      ],
+      status: "incorporated",
+      writerDecisionCount: 1
+    }]
+  }).ideaGraph;
+  assert.equal(importedClockSkew.nodes[0].nonMonotonicStatusTimestampCount, 1);
+  assert.equal(importedClockSkew.nodes[0].currentStatusHistoryConsistency, "consistent");
 
   const truncated = analyzeLiteraryFragment({
     ...input,

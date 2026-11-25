@@ -8,6 +8,7 @@ const MAX_LINE_BYTES = 16 * 1024 * 1024;
 const projects = new Map();
 const inFlight = new Set();
 const activeIds = new Set();
+const activeDispatches = new Set();
 let store;
 let shuttingDown = false;
 let inputBuffer = "";
@@ -16,6 +17,8 @@ let lastObservedDataVersion;
 let knowledgeSyncTail = Promise.resolve();
 const lastNarrativeVersions = new Map();
 const pendingNarrativeSyncs = new Set();
+const lastWriterLibraryVersions = new Map();
+const pendingWriterLibrarySyncs = new Map();
 const KNOWLEDGE_SYNC_INTERVAL_MS = 500;
 
 const PUBLIC_API_METHODS = new Set([
@@ -26,6 +29,8 @@ const PUBLIC_API_METHODS = new Set([
   "getNarrativeEntities",
   "getNarrativeRelations",
   "getNarrativeEvents",
+  "getEventLifecycleHistory",
+  "updateNarrativeEvent",
   "setNarrativeEventTimelineTrack",
   "getNarrativeTimeline",
   "getNarrativeContradictions",
@@ -79,7 +84,9 @@ const PUBLIC_API_METHODS = new Set([
   "setNarrativeIdeaEntityLink",
   "setNarrativeIdeaLink",
   "archiveUnincorporatedIdeas",
+  "finalizeProjectToIdeaLibrary",
   "getPersonalIdeaLibrary",
+  "getPersonalIdeaLibraryPage",
   "getProjectFinalizationReceipt",
   "setNarrativeIdeaStatus"
 ]);
@@ -160,6 +167,9 @@ function openProject(params) {
             }
           }
         }).catch(writeError);
+      },
+      onPersonalIdeaLibraryChanged(writerId) {
+        notifyPersonalIdeaLibraryChanged(writerId);
       }
     }
   });
@@ -167,7 +177,28 @@ function openProject(params) {
   const record = { api, identity };
   projects.set(projectId, record);
   lastNarrativeVersions.set(projectId, store.getNarrativeVersion(projectId));
+  if (identity.writerId && store.getWriterLibraryVersion &&
+      ![...projects.values()].some(item => item !== record &&
+        item.identity.writerId === identity.writerId)) {
+    lastWriterLibraryVersions.set(identity.writerId, store.getWriterLibraryVersion(identity.writerId));
+  }
   return { projectId, alreadyOpen: false, capabilities: api.getCapabilities() };
+}
+
+function notifyPersonalIdeaLibraryChanged(writerId) {
+  if (typeof writerId !== "string" || !writerId.trim()) return;
+  if (store?.getWriterLibraryVersion) {
+    lastWriterLibraryVersions.set(writerId, store.getWriterLibraryVersion(writerId));
+    pendingWriterLibrarySyncs.delete(writerId);
+  }
+  for (const [projectId, record] of projects) {
+    if (record.identity.writerId !== writerId) continue;
+    void send({
+      jsonrpc: "2.0",
+      method: "engine.personalIdeaLibraryChanged",
+      params: { projectId, writerId }
+    }).catch(writeError);
+  }
 }
 
 function writeError(error) {
@@ -185,12 +216,62 @@ async function pollExternalNarrativeChanges() {
   for (const projectId of projects.keys()) {
     narrativeVersions.set(projectId, store.getNarrativeVersion(projectId));
   }
+  const writerLibraryVersions = new Map();
+  if (store.getWriterLibraryVersion) {
+    for (const record of projects.values()) {
+      const writerId = record.identity.writerId;
+      if (writerId && !writerLibraryVersions.has(writerId)) {
+        writerLibraryVersions.set(writerId, store.getWriterLibraryVersion(writerId));
+      }
+    }
+  }
   const dataVersionAfter = store.getDataVersion();
   if (dataVersionBefore !== dataVersionAfter) return;
 
   const externalCommit = lastObservedDataVersion !== undefined &&
     dataVersionAfter !== lastObservedDataVersion;
   lastObservedDataVersion = dataVersionAfter;
+
+  if (externalCommit) {
+    for (const [writerId, currentVersion] of writerLibraryVersions) {
+      const previousVersion = lastWriterLibraryVersions.get(writerId);
+      if (previousVersion !== undefined && currentVersion !== previousVersion) {
+        pendingWriterLibrarySyncs.set(writerId, currentVersion);
+      }
+    }
+  } else {
+    for (const [writerId, currentVersion] of writerLibraryVersions) {
+      if (!pendingWriterLibrarySyncs.has(writerId)) {
+        lastWriterLibraryVersions.set(writerId, currentVersion);
+      }
+    }
+  }
+
+  for (const [writerId, targetVersion] of pendingWriterLibrarySyncs) {
+    const currentVersion = writerLibraryVersions.get(writerId);
+    if (currentVersion === undefined) continue;
+    let delivered = true;
+    for (const [projectId, record] of projects) {
+      if (record.identity.writerId !== writerId) continue;
+      try {
+        await send({
+          jsonrpc: "2.0",
+          method: "engine.personalIdeaLibraryChanged",
+          params: { projectId, writerId }
+        });
+      } catch (error) {
+        delivered = false;
+        writeError(error);
+        break;
+      }
+    }
+    if (delivered) {
+      lastWriterLibraryVersions.set(writerId, currentVersion);
+      if (pendingWriterLibrarySyncs.get(writerId) === targetVersion) {
+        pendingWriterLibrarySyncs.delete(writerId);
+      }
+    }
+  }
 
   for (const [projectId, record] of projects) {
     const currentNarrativeVersion = narrativeVersions.get(projectId);
@@ -222,8 +303,10 @@ async function pollExternalNarrativeChanges() {
   }
 }
 
-function startKnowledgeSync() {
-  lastObservedDataVersion = store.getDataVersion();
+function startKnowledgeSync(preserveObservedVersion = false) {
+  if (!preserveObservedVersion || lastObservedDataVersion === undefined) {
+    lastObservedDataVersion = store.getDataVersion();
+  }
   if (knowledgeSyncInterval) clearInterval(knowledgeSyncInterval);
   knowledgeSyncInterval = setInterval(() => {
     knowledgeSyncTail = knowledgeSyncTail
@@ -271,7 +354,7 @@ async function dispatch(method, rawParams) {
         storage: "sqlite-local",
         sqliteDatabase: store.databasePath,
         processIsolation: true,
-        notifications: ["engine.analysis", "engine.commit", "engine.knowledgeError", "engine.knowledgeChanged"],
+        notifications: ["engine.analysis", "engine.commit", "engine.knowledgeError", "engine.knowledgeChanged", "engine.personalIdeaLibraryChanged"],
         maxMessageBytes: MAX_LINE_BYTES
       };
 
@@ -294,6 +377,11 @@ async function dispatch(method, rawParams) {
       projects.delete(projectId);
       lastNarrativeVersions.delete(projectId);
       pendingNarrativeSyncs.delete(projectId);
+      const writerId = record.identity.writerId;
+      if (writerId && ![...projects.values()].some(item => item.identity.writerId === writerId)) {
+        lastWriterLibraryVersions.delete(writerId);
+        pendingWriterLibrarySyncs.delete(writerId);
+      }
       return { projectId, closed: true };
     }
 
@@ -364,6 +452,8 @@ async function dispatch(method, rawParams) {
       projects.clear();
       lastNarrativeVersions.clear();
       pendingNarrativeSyncs.clear();
+      lastWriterLibraryVersions.clear();
+      pendingWriterLibrarySyncs.clear();
       return { shutdown: true, storage: store.health() };
 
     default: {
@@ -392,22 +482,51 @@ async function processRequest(request) {
     return;
   }
 
+  if (shuttingDown) {
+    return send({
+      jsonrpc: "2.0",
+      id: request.id,
+      error: { code: -32000, message: "El puente está cerrando y ya no admite nuevas solicitudes." }
+    });
+  }
   const idKey = String(request.id);
   if (activeIds.has(idKey)) {
     return send({ jsonrpc: "2.0", id: request.id, error: { code: -32600, message: "ID de solicitud duplicado en curso." } });
   }
+  const shutdownRequest = request.method === "bridge.shutdown";
   activeIds.add(idKey);
+  let shutdownDispatched = false;
 
   try {
-    const result = await dispatch(request.method, request.params);
+    if (shutdownRequest) {
+      // Cierra la admisión antes de esperar: las solicitudes ya aceptadas
+      // terminan sus escrituras y transferencias antes del flush final.
+      shuttingDown = true;
+      await Promise.allSettled([...activeDispatches]);
+    }
+    const operation = dispatch(request.method, request.params);
+    if (!shutdownRequest) activeDispatches.add(operation);
+    let result;
+    try {
+      result = await operation;
+      if (shutdownRequest) shutdownDispatched = true;
+    } finally {
+      if (!shutdownRequest) activeDispatches.delete(operation);
+    }
     await send({ jsonrpc: "2.0", id: request.id, result: result === undefined ? null : result });
   } catch (error) {
+    if (shutdownRequest && !shutdownDispatched) {
+      // Un fallo de vaciado no debe cerrar una base que aún puede tener trabajo
+      // pendiente. Reabre la admisión y el sondeo para que el anfitrión reintente.
+      shuttingDown = false;
+      try { startKnowledgeSync(true); } catch (restartError) { writeError(restartError); }
+    }
     const payload = errorPayload(error);
     if (Number.isInteger(error?.code)) payload.code = error.code;
     await send({ jsonrpc: "2.0", id: request.id, error: payload });
   } finally {
     activeIds.delete(idKey);
-    if (shuttingDown) {
+    if (shutdownRequest && shutdownDispatched) {
       store.close();
       process.stdin.pause();
       process.exitCode = 0;
@@ -417,13 +536,40 @@ async function processRequest(request) {
 
 async function closeGracefully() {
   if (!store || store.closed) return;
-  try { await drainKnowledgeSync(); } catch (error) { writeError(error); }
-  try { await flushAll(); } catch (error) { writeError(error); }
+  // La entrada STDIN también puede terminar por EOF o por una línea excesiva.
+  // En ambos casos no se cierra SQLite mientras quede una petición aceptada.
+  shuttingDown = true;
+  await Promise.allSettled([...inFlight]);
+  await Promise.allSettled([...activeDispatches]);
+  if (!store || store.closed) return;
+  let closeFailed = false;
+  try {
+    await drainKnowledgeSync();
+  } catch (error) {
+    closeFailed = true;
+    writeError(error);
+  }
+  try {
+    await flushAll();
+  } catch (error) {
+    closeFailed = true;
+    writeError(error);
+  }
   for (const record of projects.values()) record.api.dispose();
   projects.clear();
   lastNarrativeVersions.clear();
   pendingNarrativeSyncs.clear();
-  try { store.close(); } catch (error) { writeError(error); }
+  pendingWriterLibrarySyncs.clear();
+  lastWriterLibraryVersions.clear();
+  try {
+    store.close();
+  } catch (error) {
+    closeFailed = true;
+    writeError(error);
+  }
+  // EOF no admite reintentos. El código de salida debe distinguir un vaciado
+  // incompleto de un cierre limpio para que el anfitrión active recuperación.
+  if (closeFailed) process.exitCode = 1;
 }
 
 async function main() {

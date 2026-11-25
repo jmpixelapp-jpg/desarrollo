@@ -3434,7 +3434,7 @@ const IDEA_DANISH_STOP_WORDS = new Set([
   "man","mand","mange","med","meget","men","mens","mere","mig","min","mine","mit","mod","må",
   "måske","ned","nej","noget","nogle","nu","når","og","også","om","op","os","over","på","se",
   "selv","sig","sin","sine","sit","skal","skulle","som","stor","store","så","sådan","thi","til",
-  "under","var","ved","vi","vil","ville","vor","vores","være","været","øvrigt"
+  "uden","under","var","ved","vi","vil","ville","vor","vores","være","været","øvrigt"
 ]);
 const IDEA_SWEDISH_STOP_WORDS = new Set([
   "alla","allt","alltid","andra","andras","annan","annat","att","av","bakom","bara","behöva",
@@ -3444,7 +3444,7 @@ const IDEA_SWEDISH_STOP_WORDS = new Set([
   "han","hans","har","henne","hennes","hit","hon","honom","hur","här","i","icke","idag","igår",
   "igen","inget","ingen","inga","innan","inne","inte","jag","ju","kan","kunde","kunnat","kvar",
   "kom","kommer","komma","kring","man","med","mellan","men","mig","min","mina","mitt","mot",
-  "mycket","många","måste","ned","ni","nog","när","någon","något","några","också","om","oss",
+  "mycket","många","måste","ned","ni","nog","när","någon","något","några","också","och","om","oss",
   "på","runt","så","samma","sedan","sig","sin","sina","sist","sitta","ska","skall","skulle",
   "som","stor","större","störst","till","tills","under","upp","utan","utanför","vad","var",
   "vara","varför","varit","varje","vars","vart","vem","vi","vid","vilka","vilken","vilket",
@@ -4039,6 +4039,9 @@ function buildLiteraryIdeaLexicalResonances(
           break;
         }
       }
+      // La caché de módulo nunca debe compartir resultados entre libros,
+      // incluso si los IDs locales y los textos coinciden.
+      cacheKey += `${idea.projectId.length}:${idea.projectId}`;
       cacheKey += `${idea.ideaId.length}:${idea.ideaId}`;
       cacheKey += idea.textOmitted === "budget" ? "B" : text === undefined
         ? "N" : `T${text.length}:${text}`;
@@ -5787,8 +5790,11 @@ function isValidNarrativeIdeaStatusHistory(
   writerDecisionCount: number,
   omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
-  let previousChangedAt: number | undefined;
+  if (!Array.isArray(value) || value.length > 100) return false;
+  if (value.length === 0) {
+    return omittedStatusHistoryCount > 0 &&
+      writerDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
+  }
   for (let index = 0; index < value.length; index++) {
     const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
     if (!change ||
@@ -5800,21 +5806,19 @@ function isValidNarrativeIdeaStatusHistory(
             ? change.reason !== "initial"
             : change.reason === "initial"
           : change.reason === "initial" ||
-            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
+            (change.status === (value[index - 1] as NarrativeIdeaStatusChange).status &&
+              change.reason !== "writer")) ||
         (change.changedAt !== undefined &&
           (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-        (change.changedAt !== undefined && previousChangedAt !== undefined &&
-          change.changedAt < previousChangedAt)) {
+        false) {
       return false;
     }
-    if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
   }
   const visibleWriterDecisionCount = value.filter(
     (change: NarrativeIdeaStatusChange) => change.reason === "writer"
   ).length;
   // El prefijo omitido contiene el estado inicial, que no cuenta como decisión del escritor.
-  return value[value.length - 1]?.status === currentStatus &&
-    writerDecisionCount >= visibleWriterDecisionCount &&
+  return writerDecisionCount >= visibleWriterDecisionCount &&
     writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
 }
 
@@ -5969,7 +5973,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
-        idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||

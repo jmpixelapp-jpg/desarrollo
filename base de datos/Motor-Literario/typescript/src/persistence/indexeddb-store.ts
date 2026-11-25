@@ -1,4 +1,5 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic } from "../contracts";
+import type { ProjectStore, ProjectFinalizationSummary, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
+import { createPersonalIdeaArchiveChecksumBuilder, isValidPersonalIdeaArchiveChecksum } from "./personal-idea-checksum";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -77,6 +78,15 @@ function checksumArchivedIdeaIds(ids: readonly string[]): string {
   }
   return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
 }
+function checksumArchivedIdeaIdsInReceiptOrder(ids: readonly string[]): string {
+  const serialized = JSON.stringify(ids);
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
 
 function validateFinalizationReceipt(
   receipt: StoredProjectFinalizationReceipt,
@@ -93,7 +103,10 @@ function validateFinalizationReceipt(
       new Set(receipt.archivedIdeaIds).size !== receipt.archivedIdeaIds.length ||
       [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1]!.localeCompare(id) > 0) ||
       typeof receipt.archiveChecksum !== "string" ||
-      receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds)) {
+      (receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds) &&
+        receipt.archiveChecksum !== checksumArchivedIdeaIdsInReceiptOrder(receipt.archivedIdeaIds)) ||
+      (receipt.archiveContentChecksum !== undefined &&
+        !isValidPersonalIdeaArchiveChecksum(receipt.archiveContentChecksum))) {
     throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");
   }
 }
@@ -266,7 +279,9 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
       (idea.status !== "IDEA" && idea.status !== "incorporated" && idea.status !== "discarded") ||
       typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
       typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||
-      !Array.isArray(idea.evidence)) {
+      !Array.isArray(idea.evidence) ||
+      (idea.omittedStatusHistoryCount !== undefined &&
+        (!Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0))) {
     throw new Error(`Registro de ${label} malformado: faltan datos narrativos obligatorios.`);
   }
   for (const evidence of idea.evidence) {
@@ -284,19 +299,16 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
         (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
           links.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(links).size !== links.length)) {
+      const category = links === idea.relatedEntityIds ? "fichas" : "ideas";
       throw new Error(
-        `Registro de ${label} malformado: referencias inválidas, duplicadas o superiores al límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`
+        `Registro de ${label} "${idea.id}" malformado: ${category} contiene ${Array.isArray(links) ? links.length : "un valor no válido"} referencias; máximo ${MAX_NARRATIVE_IDEA_REFERENCES}, sin IDs vacíos ni duplicados.`
       );
     }
-  }
-  if (idea.relatedIdeaIds?.includes(idea.id)) {
-    throw new Error(`Registro de ${label} malformado: una idea no puede relacionarse consigo misma.`);
   }
   if (idea.statusHistory !== undefined) {
     if (!Array.isArray(idea.statusHistory)) {
       throw new Error(`Registro de ${label} malformado: historial inválido.`);
     }
-    let previousChangedAt: number | undefined;
     for (let index = 0; index < idea.statusHistory.length; index++) {
       const change = idea.statusHistory[index];
       if (!change ||
@@ -305,17 +317,34 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
           (change.reason !== "initial" && change.reason !== "writer" && change.reason !== "text-revised") ||
           (change.reason === "text-revised" && change.status !== "IDEA") ||
           (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-            change.status === idea.statusHistory[index - 1]?.status) ||
-          (change.changedAt !== undefined && previousChangedAt !== undefined &&
-            change.changedAt < previousChangedAt)) {
+            (change.status === idea.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
+          false) {
         throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);
       }
-      if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
     }
-    if (idea.statusHistory.length === 0 ||
-        idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
+    if (idea.statusHistory.length === 0) {
       throw new Error(`Registro de ${label} malformado: el historial no coincide con el estado actual.`);
     }
+  }
+}
+
+function validateNarrativeIdeaWriteRecord(idea: NarrativeIdea, label: string): void {
+  validateNarrativeIdeaRecord(idea, label);
+  if (idea.relatedIdeaIds?.includes(idea.id)) {
+    throw new Error("Una idea no puede relacionarse consigo misma.");
+  }
+  const history = idea.statusHistory;
+  if (!history || history.length === 0) return;
+  if (history[history.length - 1]!.status !== idea.status) {
+    throw new Error("El historial de estados no coincide con la idea que se va a guardar.");
+  }
+  let previousChangedAt: number | undefined;
+  for (const change of history) {
+    if (change.changedAt === undefined) continue;
+    if (previousChangedAt !== undefined && change.changedAt < previousChangedAt) {
+      throw new Error("Las marcas temporales de nuevas decisiones no pueden retroceder.");
+    }
+    previousChangedAt = change.changedAt;
   }
 }
 
@@ -630,6 +659,23 @@ function remapPersonalIdeaEntriesForEntityMerge(
 }
 
 
+function validateWritableNarrativeIdeaStatusHistory(idea: NarrativeIdea): void {
+  if (idea.statusHistory === undefined) return;
+  if (idea.statusHistory.length === 0 ||
+      idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
+    throw new Error("El historial de estados no coincide con la idea que se va a guardar.");
+  }
+  let previousChangedAt: number | undefined;
+  for (const change of idea.statusHistory) {
+    if (change.changedAt !== undefined) {
+      if (previousChangedAt !== undefined && change.changedAt < previousChangedAt) {
+        throw new Error("Las marcas temporales de nuevas decisiones no pueden retroceder.");
+      }
+      previousChangedAt = change.changedAt;
+    }
+  }
+}
+
 async function saveNarrativeIdeaWithReferences(
   db: IDBDatabase,
   idea: NarrativeIdea,
@@ -638,6 +684,10 @@ async function saveNarrativeIdeaWithReferences(
 ): Promise<void> {
   const entityIds = idea.relatedEntityIds ?? [];
   const relatedIdeaIds = idea.relatedIdeaIds ?? [];
+  validateWritableNarrativeIdeaStatusHistory(idea);
+  if (relatedIdeaIds.includes(idea.id)) {
+    throw new Error("Una idea no puede enlazarse a sí misma.");
+  }
   if (expectedCurrent && (
     expectedCurrent.projectId !== idea.projectId || expectedCurrent.id !== idea.id
   )) {
@@ -1453,10 +1503,166 @@ async function saveEventWithLifecycle(
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
+export interface IndexedDbDatabaseBackup {
+  readonly format: "motor-literario-indexeddb-backup";
+  readonly formatVersion: 1;
+  readonly databaseVersion: number;
+  readonly createdAt: number;
+  readonly stores: Readonly<Record<string, readonly unknown[]>>;
+  /** Detecta corrupción accidental; no es una firma criptográfica. */
+  readonly checksum: string;
+}
+
+const INDEXEDDB_BACKUP_FORMAT = "motor-literario-indexeddb-backup" as const;
+
+function indexedDbBackupChecksum(
+  payload: Omit<IndexedDbDatabaseBackup, "checksum">
+): string {
+  const serialized = JSON.stringify(payload);
+  if (typeof serialized !== "string") {
+    throw new Error("El respaldo IndexedDB contiene datos que no se pueden serializar como JSON.");
+  }
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
+
+function backupProjectAndWriterIdentities(
+  stores: Readonly<Record<string, readonly unknown[]>>
+): { readonly projectIds: readonly string[]; readonly writerIds: readonly string[] } {
+  const projectIds = new Set<string>();
+  const writerIds = new Set<string>();
+  for (const [storeName, records] of Object.entries(stores)) {
+    for (const value of records) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const record = value as Record<string, unknown>;
+      if (typeof record.projectId === "string" && record.projectId.trim()) {
+        projectIds.add(record.projectId);
+      }
+      if (typeof record.sourceProjectId === "string" && record.sourceProjectId.trim()) {
+        projectIds.add(record.sourceProjectId);
+      }
+      if ((storeName === PERSONAL_IDEAS || storeName === FINALIZATION_RECEIPTS) &&
+          typeof record.writerId === "string" && record.writerId.trim()) {
+        writerIds.add(record.writerId);
+      }
+    }
+  }
+  return {
+    projectIds: [...projectIds].sort(),
+    writerIds: [...writerIds].sort()
+  };
+}
+function validatePersonalIdeaBackupIntegrity(
+  stores: Readonly<Record<string, readonly unknown[]>>
+): void {
+  const rawEntries = stores[PERSONAL_IDEAS];
+  const rawReceipts = stores[FINALIZATION_RECEIPTS];
+  if (!Array.isArray(rawEntries) || !Array.isArray(rawReceipts)) {
+    throw new Error("El respaldo IndexedDB no contiene las colecciones de biblioteca y recibos.");
+  }
+
+  const entryByKey = new Map<string, PersonalIdeaLibraryEntry>();
+  const countByOwnerAndProject = new Map<string, number>();
+  for (const value of rawEntries) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("El respaldo IndexedDB contiene una entrada de biblioteca malformada.");
+    }
+    const entry = value as PersonalIdeaLibraryEntry;
+    if (typeof entry.writerId !== "string" || !entry.writerId.trim() || entry.writerId.length > 256 ||
+        typeof entry.sourceProjectId !== "string" || !entry.sourceProjectId.trim() ||
+        typeof entry.sourceProjectName !== "string" || !entry.sourceProjectName.trim() ||
+        entry.category !== entry.sourceProjectName ||
+        !entry.idea || entry.idea.projectId !== entry.sourceProjectId ||
+        typeof entry.idea.id !== "string" || !entry.idea.id.trim() ||
+        entry.idea.sourceProjectName !== entry.sourceProjectName || entry.idea.status !== "IDEA" ||
+        !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 ||
+        (entry.context !== undefined && (!entry.context || entry.context.version !== 1))) {
+      throw new Error("El respaldo IndexedDB contiene una entrada de biblioteca inválida.");
+    }
+    validateNarrativeIdeaRecord(entry.idea, "idea archivada del respaldo");
+    if (entry.context) {
+      validatePersonalIdeaLibraryContext(
+        entry.context, entry.sourceProjectId, entry.sourceProjectName, "contexto del respaldo"
+      );
+    }
+    const key = JSON.stringify([entry.writerId, entry.sourceProjectId, entry.idea.id]);
+    if (entryByKey.has(key)) {
+      throw new Error("El respaldo IndexedDB contiene entradas de biblioteca duplicadas.");
+    }
+    entryByKey.set(key, entry);
+    const ownerKey = JSON.stringify([entry.writerId, entry.sourceProjectId]);
+    countByOwnerAndProject.set(ownerKey, (countByOwnerAndProject.get(ownerKey) ?? 0) + 1);
+  }
+
+  const seenReceipts = new Set<string>();
+  for (const value of rawReceipts) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("El respaldo IndexedDB contiene un recibo de finalización malformado.");
+    }
+    const receipt = value as StoredProjectFinalizationReceipt;
+    if (typeof receipt.writerId !== "string" || !receipt.writerId.trim() ||
+        typeof receipt.sourceProjectId !== "string" || !receipt.sourceProjectId.trim()) {
+      throw new Error("El respaldo IndexedDB contiene un recibo sin propietario o libro válidos.");
+    }
+    validateFinalizationReceipt(receipt, receipt.writerId, receipt.sourceProjectId);
+    const ownerKey = JSON.stringify([receipt.writerId, receipt.sourceProjectId]);
+    if (seenReceipts.has(ownerKey)) {
+      throw new Error("El respaldo IndexedDB contiene más de un recibo para el mismo escritor y libro.");
+    }
+    seenReceipts.add(ownerKey);
+    if ((countByOwnerAndProject.get(ownerKey) ?? 0) !== receipt.archivedIdeaIds.length) {
+      throw new Error("El respaldo IndexedDB no conserva todas las entradas de la biblioteca del recibo.");
+    }
+
+    const archivedIds = new Set(receipt.archivedIdeaIds);
+    const contentChecksum = receipt.archiveContentChecksum === undefined
+      ? undefined
+      : createPersonalIdeaArchiveChecksumBuilder();
+    for (const ideaId of receipt.archivedIdeaIds) {
+      const entry = entryByKey.get(JSON.stringify([receipt.writerId, receipt.sourceProjectId, ideaId]));
+      if (!entry || entry.writerId !== receipt.writerId ||
+          entry.sourceProjectId !== receipt.sourceProjectId ||
+          entry.sourceProjectName !== receipt.sourceProjectName ||
+          entry.category !== receipt.sourceProjectName ||
+          !entry.idea || entry.idea.projectId !== receipt.sourceProjectId ||
+          entry.idea.id !== ideaId || entry.idea.sourceProjectName !== receipt.sourceProjectName ||
+          entry.idea.status !== "IDEA" || !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 ||
+          (entry.context !== undefined && (!entry.context || entry.context.version !== 1))) {
+        throw new Error("El respaldo IndexedDB contiene una entrada incompatible con su recibo de finalización.");
+      }
+      validateNarrativeIdeaRecord(entry.idea, "idea archivada del respaldo");
+      if (entry.context) {
+        validatePersonalIdeaLibraryContext(
+          entry.context, receipt.sourceProjectId, receipt.sourceProjectName, "contexto del respaldo"
+        );
+        const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+        const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+        for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
+          if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
+              (idea.relatedIdeaIds ?? []).some(relatedId =>
+                !contextIdeaIds.has(relatedId) && !archivedIds.has(relatedId)
+              )) {
+            throw new Error("El respaldo IndexedDB contiene referencias archivadas sin destino resoluble.");
+          }
+        }
+      }
+      contentChecksum?.add(entry);
+    }
+    if (contentChecksum && contentChecksum.digest() !== receipt.archiveContentChecksum) {
+      throw new Error("El respaldo IndexedDB no coincide con el checksum del contenido archivado.");
+    }
+  }
+}
+
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;
   private readonly narrativeChangeListeners = new Set<(projectId: string) => void>();
+  private readonly personalIdeaLibraryChangeListeners = new Set<(writerId: string) => void>();
 
   private ensureNarrativeChangeChannel(): BroadcastChannel | undefined {
     if (typeof BroadcastChannel === "undefined") return undefined;
@@ -1465,12 +1671,22 @@ export class IndexedDbProjectStore implements ProjectStore {
       const channel = new BroadcastChannel(DATABASE_NAME + ":narrative-changes:v1");
       channel.onmessage = event => {
         const message = event.data;
-        if (!message || typeof message !== "object" ||
-            (message as { readonly type?: unknown }).type !== "motor-literario:narrative-change") return;
-        const projectId = (message as { readonly projectId?: unknown }).projectId;
-        if (typeof projectId !== "string" || !projectId.trim()) return;
-        for (const listener of this.narrativeChangeListeners) {
-          try { listener(projectId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
+        if (!message || typeof message !== "object") return;
+        const type = (message as { readonly type?: unknown }).type;
+        if (type === "motor-literario:narrative-change") {
+          const projectId = (message as { readonly projectId?: unknown }).projectId;
+          if (typeof projectId !== "string" || !projectId.trim()) return;
+          for (const listener of this.narrativeChangeListeners) {
+            try { listener(projectId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
+          }
+          return;
+        }
+        if (type === "motor-literario:personal-idea-library-change") {
+          const writerId = (message as { readonly writerId?: unknown }).writerId;
+          if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256) return;
+          for (const listener of this.personalIdeaLibraryChangeListeners) {
+            try { listener(writerId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
+          }
         }
       };
       // En Node, un canal de notificaciones no debe mantener vivo el proceso.
@@ -1483,17 +1699,32 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
   }
 
+  private closeNarrativeChangeChannelWhenUnused(): void {
+    if (this.narrativeChangeListeners.size > 0 ||
+        this.personalIdeaLibraryChangeListeners.size > 0 ||
+        !this.narrativeChangeChannel) return;
+    this.narrativeChangeChannel.onmessage = null;
+    this.narrativeChangeChannel.close();
+    this.narrativeChangeChannel = undefined;
+  }
+
   subscribeNarrativeChanges(listener: (projectId: string) => void): () => void {
     if (typeof listener !== "function") throw new TypeError("Se requiere un suscriptor de cambios narrativos.");
     if (!this.ensureNarrativeChangeChannel()) return () => undefined;
     this.narrativeChangeListeners.add(listener);
     return () => {
       this.narrativeChangeListeners.delete(listener);
-      if (this.narrativeChangeListeners.size === 0 && this.narrativeChangeChannel) {
-        this.narrativeChangeChannel.onmessage = null;
-        this.narrativeChangeChannel.close();
-        this.narrativeChangeChannel = undefined;
-      }
+      this.closeNarrativeChangeChannelWhenUnused();
+    };
+  }
+
+  subscribePersonalIdeaLibraryChanges(listener: (writerId: string) => void): () => void {
+    if (typeof listener !== "function") throw new TypeError("Se requiere un suscriptor de cambios de biblioteca.");
+    if (!this.ensureNarrativeChangeChannel()) return () => undefined;
+    this.personalIdeaLibraryChangeListeners.add(listener);
+    return () => {
+      this.personalIdeaLibraryChangeListeners.delete(listener);
+      this.closeNarrativeChangeChannelWhenUnused();
     };
   }
 
@@ -1506,14 +1737,32 @@ export class IndexedDbProjectStore implements ProjectStore {
       channel.postMessage({ type: "motor-literario:narrative-change", projectId });
     } catch {
       // La sincronización es complementaria: nunca debe invalidar una escritura ya confirmada.
+    } finally {
+      // Si este almacén solo publica, el canal es efímero. Evita retener un
+      // BroadcastChannel por cada instancia que nunca se suscribe a cambios.
+      this.closeNarrativeChangeChannelWhenUnused();
+    }
+  }
+
+  private publishPersonalIdeaLibraryChange(writerId: string): void {
+    const channel = this.ensureNarrativeChangeChannel();
+    if (!channel) return;
+    try {
+      channel.postMessage({ type: "motor-literario:personal-idea-library-change", writerId });
+    } catch {
+      // La notificación es complementaria y no debe invalidar una transferencia ya confirmada.
+    } finally {
+      this.closeNarrativeChangeChannelWhenUnused();
     }
   }
 
   private open(): Promise<IDBDatabase> {
+    // Los adaptadores anfitriones y las pruebas pueden inyectar una conexión
+    // compatible; se reutiliza antes de exigir el global del navegador.
+    if (this.database) return this.database;
     if (typeof indexedDB === "undefined") {
       return Promise.reject(new Error("IndexedDB no está disponible en este entorno."));
     }
-    if (this.database) return this.database;
 
     let opening!: Promise<IDBDatabase>;
     opening = new Promise((resolve, reject) => {
@@ -1966,6 +2215,211 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
     this.database = opening;
     return opening;
+  }
+
+  /**
+   * Exporta una instantánea JSON de todos los object stores de esta versión.
+   * Debe llamarse después de que el anfitrión haya vaciado las colas del motor.
+   */
+  async exportDatabaseBackup(): Promise<IndexedDbDatabaseBackup> {
+    const db = await this.open();
+    const storeNames = Array.from(db.objectStoreNames).sort();
+    if (storeNames.length === 0) {
+      throw new Error("La base IndexedDB no contiene almacenes que se puedan respaldar.");
+    }
+    const transaction = db.transaction(storeNames, "readonly");
+    const stores: Record<string, readonly unknown[]> = Object.create(null);
+    const requests = storeNames.map(name => transaction.objectStore(name).getAll());
+
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      let requestError: Error | undefined;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* La transacción ya pudo terminar. */ }
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+
+      requests.forEach((request, index) => {
+        request.onsuccess = () => {
+          const result = request.result;
+          if (!Array.isArray(result)) {
+            fail(new Error("IndexedDB devolvió un object store que no contiene una colección."));
+            return;
+          }
+          stores[storeNames[index]!] = result;
+        };
+        request.onerror = () => {
+          requestError = request.error ?? new Error("No se pudo leer un object store para el respaldo.");
+          try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+        };
+      });
+
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        if (requestError) {
+          reject(requestError);
+          return;
+        }
+        try {
+          validatePersonalIdeaBackupIntegrity(stores);
+          const payload: Omit<IndexedDbDatabaseBackup, "checksum"> = {
+            format: INDEXEDDB_BACKUP_FORMAT,
+            formatVersion: 1,
+            databaseVersion: db.version,
+            createdAt: Date.now(),
+            stores
+          };
+          const checksum = indexedDbBackupChecksum(payload);
+          // Verifica que todo el paquete puede escribirse como JSON antes de
+          // entregarlo al anfitrión para guardarlo como archivo local.
+          const serialized = JSON.stringify({ ...payload, checksum });
+          if (typeof serialized !== "string") {
+            throw new Error("No se pudo serializar el respaldo IndexedDB.");
+          }
+          resolve({ ...payload, checksum });
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? new Error("No se pudo completar la lectura del respaldo IndexedDB.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? requestError ?? new Error("Se canceló la lectura del respaldo IndexedDB.")
+      );
+    });
+  }
+
+  /**
+   * Restaura todos los object stores en una sola transacción readwrite.
+   * La versión de esquema debe coincidir exactamente; una restauración parcial
+   * o una copia de otra versión se rechaza antes de modificar la base.
+   */
+  async restoreDatabaseBackup(value: unknown): Promise<void> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("El respaldo IndexedDB debe ser un objeto.");
+    }
+    const candidate = value as Partial<IndexedDbDatabaseBackup>;
+    if (candidate.format !== INDEXEDDB_BACKUP_FORMAT || candidate.formatVersion !== 1 ||
+        !Number.isSafeInteger(candidate.databaseVersion) || candidate.databaseVersion! < 1 ||
+        !Number.isFinite(candidate.createdAt) || candidate.createdAt! < 0 ||
+        !candidate.stores || typeof candidate.stores !== "object" || Array.isArray(candidate.stores) ||
+        typeof candidate.checksum !== "string" || !candidate.checksum.trim()) {
+      throw new Error("El manifiesto del respaldo IndexedDB está malformado o no es compatible.");
+    }
+
+    const db = await this.open();
+    if (candidate.databaseVersion !== db.version) {
+      throw new Error(
+        "La versión del respaldo IndexedDB (" + candidate.databaseVersion +
+        ") no coincide con la base abierta (" + db.version + ")."
+      );
+    }
+    const currentNames = Array.from(db.objectStoreNames).sort();
+    const backupNames = Object.keys(candidate.stores).sort();
+    if (currentNames.length !== backupNames.length ||
+        currentNames.some((name, index) => name !== backupNames[index])) {
+      throw new Error("El respaldo IndexedDB no contiene exactamente los almacenes de la versión actual.");
+    }
+    for (const name of currentNames) {
+      if (!Array.isArray(candidate.stores[name])) {
+        throw new Error("El respaldo IndexedDB no contiene una colección válida para " + name + ".");
+      }
+    }
+
+    const payload: Omit<IndexedDbDatabaseBackup, "checksum"> = {
+      format: INDEXEDDB_BACKUP_FORMAT,
+      formatVersion: 1,
+      databaseVersion: candidate.databaseVersion!,
+      createdAt: candidate.createdAt!,
+      stores: candidate.stores
+    };
+    if (indexedDbBackupChecksum(payload) !== candidate.checksum) {
+      throw new Error("El checksum del respaldo IndexedDB no coincide; no se modificó la base.");
+    }
+
+    // Normaliza el paquete mediante JSON: los object stores del motor usan
+    // registros JSON. Esto rechaza ciclos, BigInt y datos no portables.
+    let normalizedStores: Record<string, readonly unknown[]>;
+    try {
+      const serialized = JSON.stringify(candidate.stores);
+      if (typeof serialized !== "string") throw new Error("colección no serializable");
+      normalizedStores = JSON.parse(serialized) as Record<string, readonly unknown[]>;
+    } catch (error) {
+      throw new Error("El respaldo IndexedDB contiene datos no serializables: " + String(error));
+    }
+
+    validatePersonalIdeaBackupIntegrity(normalizedStores);
+
+    const transaction = db.transaction(currentNames, "readwrite");
+    const previousStores: Record<string, readonly unknown[]> = Object.create(null);
+    try {
+      for (const name of currentNames) {
+        const objectStore = transaction.objectStore(name);
+        // Lee las identidades anteriores dentro de la misma transacción que
+        // reemplaza la base: también hay que invalidar cachés de proyectos o
+        // escritores que desaparezcan por completo en la copia restaurada.
+        const previousRequest = objectStore.getAll();
+        previousRequest.onsuccess = () => {
+          previousStores[name] = previousRequest.result as readonly unknown[];
+        };
+        previousRequest.onerror = () => {
+          try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+        };
+        objectStore.clear();
+        for (const record of normalizedStores[name]!) {
+          objectStore.add(record);
+        }
+      }
+    } catch (error) {
+      try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+      throw error;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      let finished = false;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        const previousIdentities = backupProjectAndWriterIdentities(previousStores);
+        const restoredIdentities = backupProjectAndWriterIdentities(normalizedStores);
+        const projectIds = new Set([
+          ...previousIdentities.projectIds,
+          ...restoredIdentities.projectIds
+        ]);
+        const writerIds = new Set([
+          ...previousIdentities.writerIds,
+          ...restoredIdentities.writerIds
+        ]);
+        for (const projectId of projectIds) {
+          this.publishNarrativeChange(projectId);
+          for (const listener of this.narrativeChangeListeners) {
+            try { listener(projectId); } catch { /* Un suscriptor no bloquea a los demás. */ }
+          }
+        }
+        for (const writerId of writerIds) {
+          this.publishPersonalIdeaLibraryChange(writerId);
+          for (const listener of this.personalIdeaLibraryChangeListeners) {
+            try { listener(writerId); } catch { /* Un suscriptor no bloquea a los demás. */ }
+          }
+        }
+        resolve();
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? new Error("No se pudo restaurar el respaldo IndexedDB.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? new Error("Se canceló la restauración IndexedDB; los datos anteriores se conservaron.")
+      );
+    });
   }
 
 
@@ -3532,6 +3986,29 @@ export class IndexedDbProjectStore implements ProjectStore {
     sourceProjectName: string,
     archivedAt: number
   ): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    return this.archiveUnincorporatedIdeasInternal(
+      projectId, writerId, sourceProjectName, archivedAt, true
+    ) as unknown as Promise<readonly PersonalIdeaLibraryEntry[]>;
+  }
+
+  async archiveUnincorporatedIdeasSummary(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number
+  ): Promise<ProjectFinalizationSummary> {
+    return this.archiveUnincorporatedIdeasInternal(
+      projectId, writerId, sourceProjectName, archivedAt, false
+    ) as unknown as Promise<ProjectFinalizationSummary>;
+  }
+
+  private async archiveUnincorporatedIdeasInternal(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number,
+    collectEntries: boolean
+  ): Promise<readonly PersonalIdeaLibraryEntry[] | ProjectFinalizationSummary> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
         typeof sourceProjectName !== "string" || !sourceProjectName.trim() ||
@@ -3547,283 +4024,760 @@ export class IndexedDbProjectStore implements ProjectStore {
       const personal = transaction.objectStore(PERSONAL_IDEAS);
       const entities = transaction.objectStore(ENTITIES);
       const receipts = transaction.objectStore(FINALIZATION_RECEIPTS);
-      // La lectura del recibo se encola antes de las ideas: ambas lecturas
-      // pertenecen a la misma transacción y no existe una ventana de carrera.
-      // Los navegadores siempre exponen get/add en un object store real.
-      // La comprobación también permite que adaptadores IndexedDB mínimos de
-      // compatibilidad sigan probando la ruta antigua sin simular el almacén.
       const supportsReceipts = typeof receipts.get === "function" &&
         typeof receipts.add === "function";
       const receiptRequest = supportsReceipts
         ? receipts.get([writerId, projectId, FINALIZATION_RECEIPT_ID])
         : undefined;
-      let receiptRead = !supportsReceipts;
       let existingReceipt: StoredProjectFinalizationReceipt | undefined;
+      let finished = false;
+      let didChange = false;
+      let archiveContentChecksum: string | undefined;
+      const archived: PersonalIdeaLibraryEntry[] = [];
+      const archivedIdeaIds: string[] = [];
+      // Las referencias mutuas entre ideas trasladadas juntas deben seguir
+      // resolviéndose después de borrar cada registro del libro en esta transacción.
+      const archivedIdeaIdSet = new Set<string>();
+      const identityOwners = new Map<string, string>();
+      const legacyIdeaCache = new Map<string, NarrativeIdea>();
+      let legacyIdeaCatalogLoaded = false;
+
+      const abortWith = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* la transacción pudo haberse abortado */ }
+        reject(error);
+      };
+
       if (receiptRequest) {
-        receiptRequest.onsuccess = () => {
-          existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
-          receiptRead = true;
-        };
         receiptRequest.onerror = () => abortWith(
           receiptRequest.error ?? new Error("No se pudo recuperar el recibo de finalización.")
         );
       }
-      const request = ideas.index("by-project").getAll(projectId);
-      const archived: PersonalIdeaLibraryEntry[] = [];
-      let didChange = false;
-      let finished = false;
-      const abortWith = (error: unknown): void => {
-        if (finished) return;
-        finished = true;
-        try { transaction.abort(); } catch { /* transacción ya abortada */ }
-        reject(error);
-      };
-      const commitEntries = (
-        pending: readonly { readonly idea: NarrativeIdea; readonly context: PersonalIdeaLibraryContext }[]
+
+      const readIdea = (
+        ideaId: string,
+        callback: (idea: NarrativeIdea | undefined) => void
       ): void => {
-        if (finished) return;
-        try {
-          for (const item of pending) {
-            const archivedIdea: NarrativeIdea = { ...item.idea, sourceProjectName };
-            validateNarrativeIdeaRecord(archivedIdea, "idea archivada");
-            const entry: PersonalIdeaLibraryEntry = {
-              writerId,
-              sourceProjectId: projectId,
-              sourceProjectName,
-              category: sourceProjectName,
-              idea: archivedIdea,
-              context: item.context,
-              archivedAt
-            };
-            personal.add(entry);
-            ideas.delete([projectId, entry.idea.id]);
-            archived.push(entry);
-            didChange = true;
+        if (typeof ideas.get !== "function" && legacyIdeaCatalogLoaded) {
+          const cached = legacyIdeaCache.get(ideaId);
+          if (cached) {
+            try {
+              if (cached.projectId !== projectId || cached.id !== ideaId) {
+                throw new Error("Aislamiento de ideas inconsistente: una referencia resolvió a otro registro.");
+              }
+              validateNarrativeIdeaRecord(cached, "idea relacionada");
+              callback(cached);
+            } catch (error) {
+              abortWith(error);
+            }
+          } else {
+            callback(undefined);
           }
-          const archivedIdeaIds = pending.map(item => item.idea.id).sort();
-          if (supportsReceipts) receipts.add({
-            writerId,
-            sourceProjectId: projectId,
-            receiptId: FINALIZATION_RECEIPT_ID,
-            sourceProjectName,
-            finalizedAt: archivedAt,
-            archivedIdeaIds,
-            archiveChecksum: checksumArchivedIdeaIds(archivedIdeaIds)
-          } satisfies StoredProjectFinalizationReceipt);
-        } catch (error) {
-          abortWith(error);
+          return;
+        }
+        const request = ideas.get([projectId, ideaId]);
+        request.onsuccess = () => {
+          try {
+            const idea = request.result as NarrativeIdea | undefined;
+            if (idea !== undefined) {
+              if (idea.projectId !== projectId || idea.id !== ideaId) {
+                throw new Error("Aislamiento de ideas inconsistente: una referencia resolvió a otro registro.");
+              }
+              validateNarrativeIdeaRecord(idea, "idea relacionada");
+            }
+            callback(idea);
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+        request.onerror = () => abortWith(
+          request.error ?? new Error("No se pudo recuperar una idea relacionada.")
+        );
+      };
+
+      const readEntity = (
+        entityId: string,
+        callback: (entity: NarrativeEntity | undefined) => void
+      ): void => {
+        const request = entities.get([projectId, entityId]);
+        request.onsuccess = () => {
+          try {
+            const entity = request.result as NarrativeEntity | undefined;
+            if (!entity || entity.projectId !== projectId || entity.id !== entityId) {
+              throw new Error("No se pueden archivar ideas: una ficha relacionada no existe en el proyecto de origen.");
+            }
+            validateNarrativeEntityRecord(entity, "entidad contextual");
+            callback(entity);
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+        request.onerror = () => abortWith(
+          request.error ?? new Error("No se pudo recuperar una ficha relacionada.")
+        );
+      };
+
+      const claimEntityIdentities = (entity: NarrativeEntity): void => {
+        const localIds = new Set<string>([entity.id]);
+        for (const historicalId of entity.mergedFromIds ?? []) {
+          if (localIds.has(historicalId)) {
+            throw new Error("Integridad narrativa: una entidad repite un ID histórico o reclama su propio ID.");
+          }
+          localIds.add(historicalId);
+        }
+        for (const identityId of localIds) {
+          const owner = identityOwners.get(identityId);
+          if (owner !== undefined && owner !== entity.id) {
+            throw new Error("Integridad narrativa: un ID histórico pertenece a más de una entidad.");
+          }
+          identityOwners.set(identityId, entity.id);
         }
       };
-      request.onsuccess = () => {
-        try {
-          if (!receiptRead) {
-            throw new Error("No se pudo establecer una lectura transaccional del recibo de finalización.");
-          }
-          const projectIdeas = request.result as NarrativeIdea[];
-          if (!Array.isArray(projectIdeas)) throw new Error("La colección de ideas del proyecto es inválida.");
 
-          if (existingReceipt) {
-            validateFinalizationReceipt(existingReceipt, writerId, projectId);
-            if (projectIdeas.some(idea => idea?.status === "IDEA")) {
-              throw new Error(
-                "El libro ya tiene un recibo de finalización; las ideas nuevas requieren una reapertura explícita antes de archivarse."
-              );
+      const restoreFromReceipt = (receipt: StoredProjectFinalizationReceipt): void => {
+        try {
+          validateFinalizationReceipt(receipt, writerId, projectId);
+        } catch (error) {
+          abortWith(error);
+          return;
+        }
+
+        const archivedIds = new Set(receipt.archivedIdeaIds);
+        const contentChecksum = createPersonalIdeaArchiveChecksumBuilder();
+        const countRequest = personal.index("by-writer-source").count([writerId, projectId]);
+        countRequest.onsuccess = () => {
+          try {
+            if (countRequest.result !== receipt.archivedIdeaIds.length) {
+              throw new Error("La biblioteca personal no coincide con el recibo de finalización.");
             }
-            const libraryRequest = personal.index("by-writer-source").getAll([writerId, projectId]);
-            libraryRequest.onsuccess = () => {
+            let index = 0;
+            const readNext = (): void => {
               if (finished) return;
-              try {
-                const entries = libraryRequest.result as PersonalIdeaLibraryEntry[];
-                if (!Array.isArray(entries)) {
-                  throw new Error("La biblioteca personal del libro no devolvió una colección válida.");
+              if (index >= receipt.archivedIdeaIds.length) {
+                const calculatedContentChecksum = contentChecksum.digest();
+                if (receipt.archiveContentChecksum !== undefined &&
+                    calculatedContentChecksum !== receipt.archiveContentChecksum) {
+                  throw new Error("La biblioteca personal no coincide con el checksum del contenido archivado.");
                 }
-                const byIdeaId = new Map<string, PersonalIdeaLibraryEntry>();
-                for (const entry of entries) {
+                archiveContentChecksum = calculatedContentChecksum;
+                if (receipt.archiveContentChecksum === undefined &&
+                    typeof receipts.put === "function") {
+                  // Migra recibos antiguos dentro de la transacción de lectura
+                  // y validación; no repite ni vuelve a notificar la transferencia.
+                  receipts.put({
+                    ...receipt,
+                    archiveContentChecksum: calculatedContentChecksum
+                  } satisfies StoredProjectFinalizationReceipt);
+                }
+                return;
+              }
+              const ideaId = receipt.archivedIdeaIds[index++]!;
+              const request = personal.get([writerId, projectId, ideaId]);
+              request.onsuccess = () => {
+                try {
+                  const entry = request.result as PersonalIdeaLibraryEntry | undefined;
                   if (!entry || entry.writerId !== writerId ||
                       entry.sourceProjectId !== projectId ||
                       entry.sourceProjectName !== sourceProjectName ||
                       entry.category !== sourceProjectName ||
                       !entry.idea || entry.idea.projectId !== projectId ||
+                      entry.idea.id !== ideaId ||
                       entry.idea.sourceProjectName !== sourceProjectName ||
                       entry.idea.status !== "IDEA" ||
-                      !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0) {
-                    throw new Error("La biblioteca personal contiene una entrada ajena o malformada.");
+                      !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 ||
+                      (entry.context !== undefined && (!entry.context || entry.context.version !== 1))) {
+                    throw new Error("La biblioteca personal contiene una entrada ajena o incompleta.");
                   }
                   validateNarrativeIdeaRecord(entry.idea, "idea archivada");
+                  contentChecksum.add(entry);
+                  if (collectEntries) archived.push(entry);
                   if (entry.context) {
                     validatePersonalIdeaLibraryContext(
                       entry.context, projectId, sourceProjectName, "contexto archivado"
                     );
+                    const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+                    const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+                    for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
+                      if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
+                          (idea.relatedIdeaIds ?? []).some(relatedId =>
+                            !contextIdeaIds.has(relatedId) && !archivedIds.has(relatedId)
+                          )) {
+                        throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
+                      }
+                    }
                   }
-                  if (byIdeaId.has(entry.idea.id)) {
-                    throw new Error("La biblioteca personal contiene IDs de idea duplicados para el mismo libro.");
-                  }
-                  byIdeaId.set(entry.idea.id, entry);
+                  readNext();
+                } catch (error) {
+                  abortWith(error);
                 }
-                const selected = existingReceipt!.archivedIdeaIds.map(id => {
-                  const entry = byIdeaId.get(id);
-                  if (!entry) {
-                    throw new Error("El recibo de finalización referencia una idea que no existe en la biblioteca.");
-                  }
-                  if (!entry.context || entry.context.version !== 1) {
-                    throw new Error("La idea archivada no conserva el contexto requerido por el recibo.");
-                  }
-                  return entry;
-                });
-                const selectedIds = selected.map(entry => entry.idea.id).sort();
-                if (checksumArchivedIdeaIds(selectedIds) !== existingReceipt!.archiveChecksum) {
-                  throw new Error("El checksum del recibo no coincide con las ideas archivadas recuperadas.");
-                }
-                archived.push(...selected);
-              } catch (error) {
-                abortWith(error);
-              }
+              };
+              request.onerror = () => abortWith(
+                request.error ?? new Error("No se pudo recuperar una idea archivada del recibo.")
+              );
             };
-            libraryRequest.onerror = () => abortWith(
-              libraryRequest.error ?? new Error("No se pudieron recuperar las ideas del recibo de finalización.")
-            );
-            return;
+            readNext();
+          } catch (error) {
+            abortWith(error);
           }
+        };
+        countRequest.onerror = () => abortWith(
+          countRequest.error ?? new Error("No se pudo contar la biblioteca personal del libro.")
+        );
+      };
 
-          const projectIdeaIds = new Set<string>();
-          const ideasById = new Map<string, NarrativeIdea>();
-          for (const idea of projectIdeas) {
-            if (!idea || typeof idea.id !== "string" || !idea.id.trim()) {
-              throw new Error("Integridad de ideas inconsistente: se encontró una identidad inválida.");
-            }
-            if (projectIdeaIds.has(idea.id)) {
-              throw new Error("Integridad de ideas inconsistente: se encontraron identificadores duplicados.");
-            }
-            if (idea.projectId !== projectId) {
-              throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
-            }
-            validateNarrativeIdeaRecord(idea, "idea narrativa");
-            projectIdeaIds.add(idea.id);
-            ideasById.set(idea.id, idea);
-          }
+      const buildAndStoreEntry = (
+        idea: NarrativeIdea,
+        callback: () => void
+      ): void => {
+        const contextIdeas = new Map<string, NarrativeIdea>();
+        const visited = new Set<string>([idea.id]);
+        const queue = [...(idea.relatedIdeaIds ?? [])];
+        let queueIndex = 0;
 
-          // Antes de archivar, valida el grafo completo. Las ideas que
-          // permanecen en el libro no pueden depender de ideas trasladadas.
-          const ideasToArchive = new Set(projectIdeas
-            .filter(idea => idea.status === "IDEA")
-            .map(idea => idea.id));
-          for (const idea of projectIdeas) {
-            for (const relatedId of idea.relatedIdeaIds ?? []) {
-              if (!projectIdeaIds.has(relatedId)) {
-                throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
-              }
-            }
-            if (idea.status !== "IDEA" &&
-                (idea.relatedIdeaIds ?? []).some(id => ideasToArchive.has(id))) {
-              throw new Error("No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal.");
-            }
-          }
-
-          const pending: { idea: NarrativeIdea; contextIdeaIds: Set<string>; entityIds: Set<string> }[] = [];
-          const allEntityIds = new Set<string>();
-          for (const idea of projectIdeas) {
-            if (idea.status !== "IDEA") continue;
-            const contextIdeaIds = new Set<string>();
-            const visited = new Set<string>([idea.id]);
-            const queue = [...(idea.relatedIdeaIds ?? [])];
-            // Un índice evita desplazar los elementos pendientes en cada iteración.
-            let queueIndex = 0;
-            while (queueIndex < queue.length) {
+        let collectingContextIdeas = false;
+        const collectContextIdeas = (): void => {
+          if (finished || collectingContextIdeas) return;
+          collectingContextIdeas = true;
+          try {
+            while (!finished && queueIndex < queue.length) {
               const relatedId = queue[queueIndex++]!;
               if (visited.has(relatedId)) continue;
               visited.add(relatedId);
-              if (ideasToArchive.has(relatedId)) continue;
-              const relatedIdea = ideasById.get(relatedId);
-              if (!relatedIdea) {
-                throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
-              }
-              contextIdeaIds.add(relatedId);
-              queue.push(...(relatedIdea.relatedIdeaIds ?? []));
-            }
-            const entityIds = new Set<string>(idea.relatedEntityIds ?? []);
-            for (const relatedId of contextIdeaIds) {
-              for (const entityId of ideasById.get(relatedId)?.relatedEntityIds ?? []) entityIds.add(entityId);
-            }
-            for (const entityId of entityIds) allEntityIds.add(entityId);
-            pending.push({ idea, contextIdeaIds, entityIds });
-          }
+              // Una idea ya transferida tiene su propia entrada de biblioteca;
+              // no debe reaparecer como contexto ni tratarse como referencia rota.
+              if (archivedIdeaIdSet.has(relatedId)) continue;
 
-          const contextIdeasFor = (ids: ReadonlySet<string>): NarrativeIdea[] =>
-            [...ids]
-              .map(id => {
-                const candidate = ideasById.get(id);
-                if (!candidate) {
-                  throw new Error("No se pueden archivar ideas: falta una idea del contexto validado.");
+              let readCompletedSynchronously = false;
+              readIdea(relatedId, relatedIdea => {
+                readCompletedSynchronously = true;
+                if (!relatedIdea) {
+                  throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
                 }
-                return candidate;
-              })
-              .sort((first, second) => first.id.localeCompare(second.id))
-              .map(candidate => ({ ...candidate, sourceProjectName }));
+                // Las ideas que también se trasladan tendrán su propia entrada.
+                if (relatedIdea.status !== "IDEA") {
+                  contextIdeas.set(relatedId, relatedIdea);
+                  queue.push(...(relatedIdea.relatedIdeaIds ?? []));
+                }
+                // Si la lectura fue asíncrona, reanuda el bucle cuando llegue
+                // su callback. Si fue síncrona, el while continúa sin recursión.
+                if (!collectingContextIdeas && !finished) collectContextIdeas();
+              });
+              if (!readCompletedSynchronously) return;
+            }
+            if (!finished) collectContextEntities();
+          } catch (error) {
+            abortWith(error);
+          } finally {
+            collectingContextIdeas = false;
+          }
+        };
 
-          const loadedEntities = new Map<string, NarrativeEntity>();
-          const entityIds = [...allEntityIds].sort();
-          if (entityIds.length === 0) {
-            commitEntries(pending.map(item => ({
-              idea: item.idea,
-              context: {
-                version: 1 as const,
-                relatedIdeas: contextIdeasFor(item.contextIdeaIds),
-                relatedEntities: []
+        const collectContextEntities = (): void => {
+          if (finished) return;
+          const entityIds = new Set<string>(idea.relatedEntityIds ?? []);
+          for (const related of contextIdeas.values()) {
+            for (const entityId of related.relatedEntityIds ?? []) entityIds.add(entityId);
+          }
+          const orderedIds = [...entityIds].sort((first, second) => first.localeCompare(second));
+          const relatedEntities: NarrativeEntity[] = [];
+          let entityIndex = 0;
+          let collectingEntities = false;
+          const readNextEntity = (): void => {
+            if (finished || collectingEntities) return;
+            collectingEntities = true;
+            try {
+              while (!finished && entityIndex < orderedIds.length) {
+                const entityId = orderedIds[entityIndex++]!;
+                let readCompletedSynchronously = false;
+                readEntity(entityId, entity => {
+                  readCompletedSynchronously = true;
+                  if (entity) relatedEntities.push(entity);
+                  if (!collectingEntities && !finished) readNextEntity();
+                });
+                if (!readCompletedSynchronously) return;
               }
-            })));
+              if (finished) return;
+              const relatedIdeas = [...contextIdeas.values()]
+                .sort((first, second) => first.id.localeCompare(second.id))
+                .map(related => ({ ...related, sourceProjectName }));
+              const context: PersonalIdeaLibraryContext = {
+                version: 1,
+                relatedIdeas,
+                relatedEntities
+              };
+              validatePersonalIdeaLibraryContext(
+                context, projectId, sourceProjectName, "contexto archivado"
+              );
+              const archivedIdea: NarrativeIdea = { ...idea, sourceProjectName };
+              validateNarrativeIdeaRecord(archivedIdea, "idea archivada");
+              const contextEntityIds = new Set(relatedEntities.map(entity => entity.id));
+              if ((archivedIdea.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id))) {
+                throw new Error("Una idea archivada conserva una referencia a una ficha que no está en su contexto.");
+              }
+              const entry: PersonalIdeaLibraryEntry = {
+                writerId,
+                sourceProjectId: projectId,
+                sourceProjectName,
+                category: sourceProjectName,
+                idea: archivedIdea,
+                context,
+                archivedAt
+              };
+              personal.add(entry);
+              ideas.delete([projectId, idea.id]);
+              if (collectEntries) archived.push(entry);
+              archivedIdeaIds.push(idea.id);
+              archivedIdeaIdSet.add(idea.id);
+              didChange = true;
+              callback();
+            } catch (error) {
+              abortWith(error);
+            } finally {
+              collectingEntities = false;
+            }
+          };
+          readNextEntity();
+        };
+
+        collectContextIdeas();
+      };
+
+      const validateLinksAndMaybeArchive = (
+        idea: NarrativeIdea,
+        relatedIndex: number,
+        continueCursor: () => void
+      ): void => {
+        const relatedIds = idea.relatedIdeaIds ?? [];
+        let index = relatedIndex;
+        let validatingLinks = false;
+        const advance = (): void => {
+          if (finished || validatingLinks) return;
+          validatingLinks = true;
+          try {
+            while (!finished && index < relatedIds.length) {
+              const relatedId = relatedIds[index++]!;
+              if (archivedIdeaIdSet.has(relatedId)) {
+                if (idea.status !== "IDEA") {
+                  throw new Error(
+                    "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+                  );
+                }
+                continue;
+              }
+              let readCompletedSynchronously = false;
+              readIdea(relatedId, relatedIdea => {
+                readCompletedSynchronously = true;
+                if (!relatedIdea) {
+                  throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+                }
+                if (idea.status !== "IDEA" && relatedIdea.status === "IDEA") {
+                  throw new Error(
+                    "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+                  );
+                }
+                if (!validatingLinks && !finished) advance();
+              });
+              if (!readCompletedSynchronously) return;
+            }
+            if (finished) return;
+            if (idea.status === "IDEA") buildAndStoreEntry(idea, continueCursor);
+            else continueCursor();
+          } catch (error) {
+            abortWith(error);
+          } finally {
+            validatingLinks = false;
+          }
+        };
+        advance();
+      };
+
+      const openProjectIdeaCursor = (): IDBRequest<IDBCursorWithValue | null> => {
+        const projectIndex = ideas.index("by-project") as unknown as {
+          openCursor?: (query?: IDBValidKey) => IDBRequest<IDBCursorWithValue | null>;
+          getAll?: (query?: IDBValidKey) => IDBRequest<unknown>;
+        };
+        if (typeof projectIndex.openCursor === "function") {
+          return projectIndex.openCursor(projectId);
+        }
+        // Compatibilidad para adaptadores antiguos de prueba que aún no simulan
+        // cursores. El runtime IndexedDB nativo siempre toma la ruta openCursor.
+        if (typeof projectIndex.getAll !== "function") {
+          throw new Error("El adaptador IndexedDB no admite recorridos por cursor.");
+        }
+        const cursorRequest = {
+          result: null as IDBCursorWithValue | null,
+          onsuccess: null as ((event: Event) => unknown) | null,
+          onerror: null as ((event: Event) => unknown) | null,
+          error: null as DOMException | null
+        };
+        const advance = (): void => {
+          const values = [...legacyIdeaCache.values()];
+          let index = 0;
+          const continueCursor = (): void => {
+            const value = values[index++];
+            cursorRequest.result = value
+              ? ({ value, continue: continueCursor } as unknown as IDBCursorWithValue)
+              : null;
+            cursorRequest.onsuccess?.({} as Event);
+          };
+          continueCursor();
+        };
+        if (legacyIdeaCatalogLoaded) {
+          queueMicrotask(advance);
+          return cursorRequest as unknown as IDBRequest<IDBCursorWithValue | null>;
+        }
+        const sourceRequest = projectIndex.getAll(projectId);
+        sourceRequest.onsuccess = () => {
+          try {
+            const values = sourceRequest.result;
+            if (!Array.isArray(values)) {
+              throw new Error("La colección de ideas del proyecto es inválida.");
+            }
+            legacyIdeaCache.clear();
+            for (const value of values as NarrativeIdea[]) {
+              if (!value || typeof value.id !== "string") continue;
+              if (legacyIdeaCache.has(value.id)) {
+                throw new Error("Integridad de ideas inconsistente: se encontraron identificadores duplicados.");
+              }
+              legacyIdeaCache.set(value.id, value);
+            }
+            legacyIdeaCatalogLoaded = true;
+            advance();
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+        sourceRequest.onerror = () => {
+          cursorRequest.error = sourceRequest.error;
+          cursorRequest.onerror?.({} as Event);
+          abortWith(sourceRequest.error ?? new Error("No se pudieron recuperar las ideas del proyecto."));
+        };
+        return cursorRequest as unknown as IDBRequest<IDBCursorWithValue | null>;
+      };
+
+      /**
+       * Primera pasada sin escrituras: valida el grafo completo y la propiedad
+       * de los IDs históricos antes de añadir una sola entrada a la biblioteca.
+       * Solo conserva IDs de fichas relacionados, no colecciones narrativas.
+       */
+      const preflightProjectIdeas = (): void => {
+        const referencedEntityIds = new Set<string>();
+
+        const collectContextEntityIds = (idea: NarrativeIdea, callback: () => void): void => {
+          for (const entityId of idea.relatedEntityIds ?? []) referencedEntityIds.add(entityId);
+          const visited = new Set<string>([idea.id]);
+          const queue = [...(idea.relatedIdeaIds ?? [])];
+          let queueIndex = 0;
+          let collectingContextEntities = false;
+          const next = (): void => {
+            if (finished || collectingContextEntities) return;
+            collectingContextEntities = true;
+            try {
+              while (!finished && queueIndex < queue.length) {
+                const relatedId = queue[queueIndex++]!;
+                if (visited.has(relatedId)) continue;
+                visited.add(relatedId);
+                let readCompletedSynchronously = false;
+                readIdea(relatedId, related => {
+                  readCompletedSynchronously = true;
+                  if (!related) {
+                    throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+                  }
+                  if (related.status !== "IDEA") {
+                    for (const entityId of related.relatedEntityIds ?? []) referencedEntityIds.add(entityId);
+                    queue.push(...(related.relatedIdeaIds ?? []));
+                  }
+                  if (!collectingContextEntities && !finished) next();
+                });
+                if (!readCompletedSynchronously || finished) return;
+              }
+              if (!finished) callback();
+            } catch (error) {
+              abortWith(error);
+            } finally {
+              collectingContextEntities = false;
+            }
+          };
+          next();
+        };
+
+        const validateIdeaLinks = (
+          idea: NarrativeIdea,
+          relatedIndex: number,
+          callback: () => void
+        ): void => {
+          const relatedIds = idea.relatedIdeaIds ?? [];
+          let index = relatedIndex;
+          let validatingLinks = false;
+          const advance = (): void => {
+            if (finished || validatingLinks) return;
+            validatingLinks = true;
+            try {
+              while (!finished && index < relatedIds.length) {
+                const relatedId = relatedIds[index++]!;
+                let readCompletedSynchronously = false;
+                readIdea(relatedId, related => {
+                  readCompletedSynchronously = true;
+                  if (!related) {
+                    throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+                  }
+                  if (idea.status !== "IDEA" && related.status === "IDEA") {
+                    throw new Error(
+                      "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+                    );
+                  }
+                  if (!validatingLinks && !finished) advance();
+                });
+                if (!readCompletedSynchronously || finished) return;
+              }
+              if (finished) return;
+              if (idea.status === "IDEA") collectContextEntityIds(idea, callback);
+              else callback();
+            } catch (error) {
+              abortWith(error);
+            } finally {
+              validatingLinks = false;
+            }
+          };
+          advance();
+        };
+
+        const cursorRequest = openProjectIdeaCursor();
+        let preflightCursorActive = false;
+        let preflightCursorPending = false;
+        cursorRequest.onsuccess = () => {
+          if (preflightCursorActive) {
+            preflightCursorPending = true;
             return;
           }
-
-          let remaining = entityIds.length;
-          const pendingEntries = (): { idea: NarrativeIdea; context: PersonalIdeaLibraryContext }[] => {
-            // La transferencia puede dividir un grafo entre varias entradas:
-            // valida la identidad de todas las fichas antes de crear cualquiera.
-            validateNarrativeEntityIdentityHistory([...loadedEntities.values()]);
-            return pending.map(item => {
-              const relatedEntities = [...item.entityIds].sort().map(id => loadedEntities.get(id)!);
-              return {
-                idea: item.idea,
-                context: {
-                  version: 1 as const,
-                  relatedIdeas: contextIdeasFor(item.contextIdeaIds),
-                  relatedEntities
-                }
-              };
-            });
-          };
-          for (const id of entityIds) {
-            const entityRequest = entities.get([projectId, id]);
-            entityRequest.onsuccess = () => {
+          preflightCursorActive = true;
+          try {
+            do {
+              preflightCursorPending = false;
               if (finished) return;
-              try {
-                const entity = entityRequest.result as NarrativeEntity | undefined;
-                if (!entity || entity.projectId !== projectId || entity.id !== id) {
-                  throw new Error("No se pueden archivar ideas: una ficha relacionada no existe en el proyecto de origen.");
-                }
-                validateNarrativeEntityRecord(entity, "entidad contextual");
-                loadedEntities.set(id, entity);
-                remaining--;
-                if (remaining === 0) commitEntries(pendingEntries());
-              } catch (error) {
-                abortWith(error);
+              const cursor = cursorRequest.result;
+              if (!cursor) {
+                const orderedEntityIds = [...referencedEntityIds]
+                  .sort((first, second) => first.localeCompare(second));
+                let entityIndex = 0;
+                let validatingEntities = false;
+                const validateNextEntity = (): void => {
+                  if (finished || validatingEntities) return;
+                  validatingEntities = true;
+                  try {
+                    while (!finished && entityIndex < orderedEntityIds.length) {
+                      const entityId = orderedEntityIds[entityIndex++]!;
+                      let readCompletedSynchronously = false;
+                      readEntity(entityId, entity => {
+                        readCompletedSynchronously = true;
+                        if (entity) claimEntityIdentities(entity);
+                        if (!validatingEntities && !finished) validateNextEntity();
+                      });
+                      if (!readCompletedSynchronously || finished) return;
+                    }
+                    if (finished) return;
+                    // La transferencia vuelve a leer cada ficha para crear el
+                    // snapshot contextual. Ya no necesita conservar este índice.
+                    identityOwners.clear();
+                    scanProjectIdeas();
+                  } catch (error) {
+                    abortWith(error);
+                  } finally {
+                    validatingEntities = false;
+                  }
+                };
+                validateNextEntity();
+                return;
               }
-            };
-            entityRequest.onerror = () => abortWith(
-              entityRequest.error ?? new Error("No se pudo recuperar el contexto de las fichas relacionadas.")
-            );
+              const idea = cursor.value as NarrativeIdea;
+              if (idea.projectId !== projectId) {
+                throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
+              }
+              validateNarrativeIdeaRecord(idea, "idea narrativa");
+              let linksValidatedSynchronously = false;
+              validateIdeaLinks(idea, 0, () => {
+                linksValidatedSynchronously = true;
+                cursor.continue();
+              });
+              if (!linksValidatedSynchronously) return;
+            } while (preflightCursorPending);
+          } catch (error) {
+            abortWith(error);
+          } finally {
+            preflightCursorActive = false;
           }
-        } catch (error) {
-          abortWith(error);
-        }
+        };
+        cursorRequest.onerror = () => abortWith(
+          cursorRequest.error ?? new Error("No se pudieron validar las ideas del proyecto antes del archivo.")
+        );
       };
-      request.onerror = () => abortWith(
-        request.error ?? new Error("No se pudieron recuperar las ideas del proyecto.")
-      );
+
+      const scanProjectIdeas = (): void => {
+        const cursorRequest = openProjectIdeaCursor();
+        let projectScanActive = false;
+        let projectScanPending = false;
+        cursorRequest.onsuccess = () => {
+          if (projectScanActive) {
+            projectScanPending = true;
+            return;
+          }
+          projectScanActive = true;
+          try {
+            do {
+              projectScanPending = false;
+              if (finished) return;
+              const cursor = cursorRequest.result;
+              if (!cursor) {
+              if (supportsReceipts) {
+                archivedIdeaIds.sort((first, second) => first.localeCompare(second));
+                const contentChecksum = createPersonalIdeaArchiveChecksumBuilder();
+                let checksumIndex = 0;
+                const addNextArchivedEntry = (): void => {
+                  if (finished) return;
+                  if (checksumIndex >= archivedIdeaIds.length) {
+                    archiveContentChecksum = contentChecksum.digest();
+                    receipts.add({
+                      writerId,
+                      sourceProjectId: projectId,
+                      receiptId: FINALIZATION_RECEIPT_ID,
+                      sourceProjectName,
+                      finalizedAt: archivedAt,
+                      archivedIdeaIds,
+                      archiveChecksum: checksumArchivedIdeaIds(archivedIdeaIds),
+                      archiveContentChecksum
+                    } satisfies StoredProjectFinalizationReceipt);
+                    return;
+                  }
+                  const ideaId = archivedIdeaIds[checksumIndex++]!;
+                  const archivedRequest = personal.get([writerId, projectId, ideaId]);
+                  archivedRequest.onsuccess = () => {
+                    try {
+                      const entry = archivedRequest.result as PersonalIdeaLibraryEntry | undefined;
+                      if (!entry || entry.writerId !== writerId ||
+                          entry.sourceProjectId !== projectId || entry.idea?.id !== ideaId) {
+                        throw new Error("La biblioteca personal no conserva una entrada recién archivada.");
+                      }
+                      contentChecksum.add(entry);
+                      addNextArchivedEntry();
+                    } catch (error) {
+                      abortWith(error);
+                    }
+                  };
+                  archivedRequest.onerror = () => abortWith(
+                    archivedRequest.error ?? new Error("No se pudo verificar el contenido recién archivado.")
+                  );
+                };
+                addNextArchivedEntry();
+              }
+              return;
+            }
+            const idea = cursor.value as NarrativeIdea;
+            if (idea.projectId !== projectId) {
+              throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
+            }
+              validateNarrativeIdeaRecord(idea, "idea narrativa");
+              let archiveValidationCompletedSynchronously = false;
+              validateLinksAndMaybeArchive(idea, 0, () => {
+                archiveValidationCompletedSynchronously = true;
+                cursor.continue();
+              });
+              if (!archiveValidationCompletedSynchronously) return;
+            } while (projectScanPending);
+          } catch (error) {
+            abortWith(error);
+          } finally {
+            projectScanActive = false;
+          }
+        };
+        cursorRequest.onerror = () => abortWith(
+          cursorRequest.error ?? new Error("No se pudieron recorrer las ideas del proyecto.")
+        );
+      };
+
+      const scanExistingReceiptIdeas = (): void => {
+        const request = openProjectIdeaCursor();
+        request.onsuccess = () => {
+          try {
+            if (finished) return;
+            const cursor = request.result;
+            if (!cursor) {
+              restoreFromReceipt(existingReceipt!);
+              return;
+            }
+            const idea = cursor.value as NarrativeIdea;
+            validateNarrativeIdeaRecord(idea, "idea narrativa");
+            if (idea.projectId !== projectId) {
+              throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
+            }
+            if (idea.status === "IDEA") {
+              throw new Error(
+                "El libro ya tiene un recibo de finalización; las ideas nuevas requieren una reapertura explícita antes de archivarse."
+              );
+            }
+            const relatedIds = idea.relatedIdeaIds ?? [];
+            let index = 0;
+            const validateNext = (): void => {
+              if (index >= relatedIds.length) {
+                cursor.continue();
+                return;
+              }
+              const relatedId = relatedIds[index++]!;
+              readIdea(relatedId, related => {
+                if (!related) {
+                  throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+                }
+                validateNext();
+              });
+            };
+            validateNext();
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+        request.onerror = () => abortWith(
+          request.error ?? new Error("No se pudieron validar las ideas del libro finalizado.")
+        );
+      };
+
+      if (receiptRequest) {
+        receiptRequest.onsuccess = () => {
+          existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
+          if (existingReceipt) scanExistingReceiptIdeas();
+          else preflightProjectIdeas();
+        };
+      } else {
+        preflightProjectIdeas();
+      }
+
       transaction.oncomplete = () => {
         if (!finished) {
           finished = true;
-          if (didChange) this.publishNarrativeChange(projectId);
-          resolve(archived);
+          if (didChange) {
+            this.publishNarrativeChange(projectId);
+            this.publishPersonalIdeaLibraryChange(writerId);
+          }
+          if (collectEntries) {
+            resolve(archived);
+          } else {
+            const receipt = existingReceipt;
+            const resolvedArchiveContentChecksum =
+              receipt?.archiveContentChecksum ?? archiveContentChecksum;
+            resolve({
+              writerId,
+              sourceProjectId: projectId,
+              sourceProjectName,
+              archivedCount: receipt?.archivedIdeaIds.length ?? archivedIdeaIds.length,
+              finalizedAt: receipt?.finalizedAt ?? archivedAt,
+              alreadyFinalized: Boolean(receipt),
+              archiveChecksum: receipt?.archiveChecksum ?? checksumArchivedIdeaIds(
+                [...archivedIdeaIds].sort((first, second) => first.localeCompare(second))
+              ),
+              ...(resolvedArchiveContentChecksum !== undefined
+                ? { archiveContentChecksum: resolvedArchiveContentChecksum }
+                : {})
+            });
+          }
         }
       };
       transaction.onerror = () => {
@@ -3854,6 +4808,195 @@ export class IndexedDbProjectStore implements ProjectStore {
     if (receipt) validateFinalizationReceipt(receipt, writerId, projectId);
     return receipt;
   }
+
+  async loadPersonalIdeasPage(
+    writerId: string,
+    cursor: PersonalIdeaLibraryCursor | null,
+    limit: number
+  ): Promise<PersonalIdeaLibraryPage> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
+        !Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+        (cursor !== null && (!cursor ||
+          typeof cursor.sourceProjectId !== "string" || !cursor.sourceProjectId.trim() ||
+          typeof cursor.ideaId !== "string" || !cursor.ideaId.trim()))) {
+      throw new Error("Parámetros de paginación de biblioteca inválidos.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(PERSONAL_IDEAS, "readonly");
+    const request = transaction.objectStore(PERSONAL_IDEAS).index("by-writer").openCursor(writerId);
+    const items: PersonalIdeaLibraryEntry[] = [];
+    let nextCursor: PersonalIdeaLibraryCursor | null = null;
+    let seekPending = cursor !== null;
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* La transacción ya pudo terminar. */ }
+        reject(error);
+      };
+      request.onsuccess = () => {
+        if (finished) return;
+        try {
+          const current = request.result as IDBCursorWithValue | null;
+          if (!current) return;
+          if (seekPending && cursor) {
+            const primaryKey = current.primaryKey;
+            if (!Array.isArray(primaryKey) || primaryKey.length !== 3 ||
+                primaryKey[0] !== writerId ||
+                typeof primaryKey[1] !== "string" || typeof primaryKey[2] !== "string") {
+              throw new Error("La biblioteca devolvió una clave primaria malformada.");
+            }
+            const target = [writerId, cursor.sourceProjectId, cursor.ideaId];
+            let comparison = 0;
+            for (let index = 0; index < target.length; index++) {
+              const actual = primaryKey[index] as string;
+              const expected = target[index]!;
+              if (actual !== expected) {
+                comparison = actual < expected ? -1 : 1;
+                break;
+              }
+            }
+            seekPending = false;
+            if (comparison < 0) {
+              current.continuePrimaryKey(writerId, target);
+              return;
+            }
+            if (comparison === 0) {
+              current.continue();
+              return;
+            }
+          }
+          if (items.length >= limit) {
+            const last = items[items.length - 1]!;
+            nextCursor = { sourceProjectId: last.sourceProjectId, ideaId: last.idea.id };
+            return; // El registro extra solo confirma que existe otra página.
+          }
+          const entry = current.value as PersonalIdeaLibraryEntry;
+          if (!entry || entry.writerId !== writerId) {
+            throw new Error("Biblioteca personal inconsistente: se rechazó un registro de otro escritor.");
+          }
+          items.push(entry);
+          current.continue();
+        } catch (error) {
+          fail(error);
+        }
+      };
+      request.onerror = () => fail(
+        request.error ?? new Error("No se pudo recorrer la página de la biblioteca personal.")
+      );
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        resolve({ items, nextCursor });
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? new Error("No se pudo leer la página de la biblioteca personal.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? new Error("Se canceló la lectura de la biblioteca personal.")
+      );
+    });
+  }
+
+  /** Recupera una idea archivada por su clave compuesta, sin cargar la biblioteca completa. */
+  async loadPersonalIdea(
+    writerId: string,
+    sourceProjectId: string,
+    ideaId: string
+  ): Promise<PersonalIdeaLibraryEntry | undefined> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
+        typeof sourceProjectId !== "string" || !sourceProjectId.trim() ||
+        typeof ideaId !== "string" || !ideaId.trim()) {
+      throw new Error("Identidad inválida para consultar una idea de la biblioteca personal.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(PERSONAL_IDEAS, "readonly");
+    const request = transaction.objectStore(PERSONAL_IDEAS).get([writerId, sourceProjectId, ideaId]);
+    return await readAfterTransaction(
+      transaction, request, "No se pudo leer la idea archivada."
+    ) as PersonalIdeaLibraryEntry | undefined;
+  }
+
+  /**
+   * Recupera referencias externas a una página en una sola transacción readonly.
+   * Las entradas inexistentes se omiten para que la API anfitriona detecte
+   * explícitamente vínculos huérfanos comparando las claves solicitadas.
+   */
+  async loadPersonalIdeasByKeys(
+    writerId: string,
+    references: readonly PersonalIdeaLibraryCursor[]
+  ): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
+        !Array.isArray(references) || references.length > 128) {
+      throw new Error("Parámetros inválidos para la lectura agrupada de la biblioteca personal.");
+    }
+    const seen = new Set<string>();
+    for (const reference of references) {
+      if (!reference || typeof reference.sourceProjectId !== "string" ||
+          !reference.sourceProjectId.trim() ||
+          typeof reference.ideaId !== "string" || !reference.ideaId.trim()) {
+        throw new Error("La lectura agrupada recibió una referencia malformada.");
+      }
+      const key = JSON.stringify([reference.sourceProjectId, reference.ideaId]);
+      if (seen.has(key)) throw new Error("La lectura agrupada recibió referencias duplicadas.");
+      seen.add(key);
+    }
+    if (references.length === 0) return [];
+
+    const db = await this.open();
+    const transaction = db.transaction(PERSONAL_IDEAS, "readonly");
+    const store = transaction.objectStore(PERSONAL_IDEAS);
+    const requests = references.map(reference =>
+      store.get([writerId, reference.sourceProjectId, reference.ideaId])
+    );
+    const results: (PersonalIdeaLibraryEntry | undefined)[] = new Array(references.length);
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      let requestError: DOMException | null = null;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* La transacción ya pudo terminar. */ }
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      requests.forEach((request, index) => {
+        request.onsuccess = () => {
+          results[index] = request.result as PersonalIdeaLibraryEntry | undefined;
+        };
+        request.onerror = () => {
+          requestError = request.error;
+          try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+        };
+      });
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        if (requestError) {
+          reject(requestError);
+          return;
+        }
+        const entries = results.filter(
+          (entry): entry is PersonalIdeaLibraryEntry => entry !== undefined
+        );
+        for (let index = 0; index < entries.length; index++) {
+          const entry = entries[index]!;
+          if (entry.writerId !== writerId) {
+            reject(new Error("Biblioteca personal inconsistente: la lectura agrupada devolvió otro escritor."));
+            return;
+          }
+        }
+        resolve(entries);
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? requestError ?? new Error("No se pudieron recuperar las ideas relacionadas.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? requestError ?? new Error("Se canceló la lectura agrupada de ideas relacionadas.")
+      );
+    });
+  }
+
 
   async loadPersonalIdeas(writerId: string): Promise<readonly PersonalIdeaLibraryEntry[]> {
     if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256) {
@@ -4040,14 +5183,14 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   async saveIdea(idea: NarrativeIdea): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea);
     this.publishNarrativeChange(idea.projectId);
   }
 
   async saveIdeaIfUnchanged(idea: NarrativeIdea, expectedCurrent?: NarrativeIdea): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
     if (expectedCurrent !== undefined) validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
@@ -4063,7 +5206,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     idea: NarrativeIdea,
     expectedCurrent: NarrativeIdea
   ): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
     validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
@@ -4164,7 +5307,9 @@ export class IndexedDbProjectStore implements ProjectStore {
     await new Promise<void>((resolve, reject) => {
       // La biblioteca se incluye incluso sin writerId para detectar
       // entradas archivadas que no podríamos mantener coherentes sin identidad.
-      const stores = [ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS];
+      const stores = [
+        ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS, FINALIZATION_RECEIPTS
+      ];
       const transaction = db.transaction(stores, "readwrite");
       const entityStore = transaction.objectStore(ENTITIES);
       const relationStore = transaction.objectStore(RELATIONS);
@@ -4172,6 +5317,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       const assertionStore = transaction.objectStore(ASSERTIONS);
       const ideaStore = transaction.objectStore(IDEAS);
       const personalIdeaStore = transaction.objectStore(PERSONAL_IDEAS);
+      const receiptStore = transaction.objectStore(FINALIZATION_RECEIPTS);
       const requests = [
         entityStore.index("by-project").getAll(projectId),
         relationStore.index("by-project").getAll(projectId),
@@ -4180,13 +5326,18 @@ export class IndexedDbProjectStore implements ProjectStore {
         ideaStore.index("by-project").getAll(projectId),
         writerId
           ? personalIdeaStore.index("by-writer-source").getAll([writerId, projectId])
-          : personalIdeaStore.index(PERSONAL_IDEA_SOURCE_INDEX).getAll(projectId)
+          : personalIdeaStore.index(PERSONAL_IDEA_SOURCE_INDEX).getAll(projectId),
+        ...(writerId
+          ? [receiptStore.get([writerId, projectId, FINALIZATION_RECEIPT_ID])]
+          : [])
       ];
-      const results: unknown[][] = Array.from({ length: requests.length }, () => []);
+      const results: unknown[] = Array.from({ length: requests.length }, () => []);
       let remaining = requests.length;
       requests.forEach((request, index) => {
         request.onsuccess = () => {
-          results[index] = request.result as unknown[];
+          results[index] = index === 6
+            ? request.result
+            : request.result as unknown[];
           remaining--;
           if (remaining !== 0) return;
           try {
@@ -4294,11 +5445,47 @@ export class IndexedDbProjectStore implements ProjectStore {
             if (!writerId && originalPersonalEntries.length > 0) {
               throw new Error("Se requiere la identidad estable del escritor para consolidar entidades de un libro con ideas ya archivadas.");
             }
+            const finalizationReceipt = writerId
+              ? results[6] as StoredProjectFinalizationReceipt | undefined
+              : undefined;
+            if (writerId && finalizationReceipt) {
+              validateFinalizationReceipt(finalizationReceipt, writerId, projectId);
+            }
             const personalEntries = writerId
               ? remapPersonalIdeaEntriesForEntityMerge(
                 originalPersonalEntries, writerId, projectId, sourceEntityId, mergedEntity
               )
               : [];
+            let updatedFinalizationReceipt: StoredProjectFinalizationReceipt | undefined;
+            if (finalizationReceipt) {
+              const orderedOriginal = [...originalPersonalEntries].sort((first, second) =>
+                first.idea.id.localeCompare(second.idea.id)
+              );
+              if (JSON.stringify(orderedOriginal.map(entry => entry.idea.id)) !==
+                  JSON.stringify(finalizationReceipt.archivedIdeaIds)) {
+                throw new Error("La biblioteca no coincide con los IDs del recibo durante la consolidación.");
+              }
+              const previousContent = createPersonalIdeaArchiveChecksumBuilder();
+              for (const entry of orderedOriginal) previousContent.add(entry);
+              const previousChecksum = previousContent.digest();
+              if (finalizationReceipt.archiveContentChecksum !== undefined &&
+                  previousChecksum !== finalizationReceipt.archiveContentChecksum) {
+                throw new Error("La biblioteca no coincide con el checksum del contenido archivado.");
+              }
+              const remappedById = new Map<string, PersonalIdeaLibraryEntry>(
+                personalEntries.map(entry => [entry.idea.id, entry] as const)
+              );
+              const nextContent = createPersonalIdeaArchiveChecksumBuilder();
+              for (const ideaId of finalizationReceipt.archivedIdeaIds) {
+                const entry = remappedById.get(ideaId);
+                if (!entry) throw new Error("La consolidación perdió una entrada de la biblioteca personal.");
+                nextContent.add(entry);
+              }
+              updatedFinalizationReceipt = {
+                ...finalizationReceipt,
+                archiveContentChecksum: nextContent.digest()
+              };
+            }
             entityStore.put(mergedEntity);
             entityStore.delete([projectId, sourceEntityId]);
             const relationGroups = new Map<string, Array<{
@@ -4363,6 +5550,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             personalEntries.forEach((entry, index) => {
               if (entry !== originalPersonalEntries[index]) personalIdeaStore.put(entry);
             });
+            if (updatedFinalizationReceipt) receiptStore.put(updatedFinalizationReceipt);
           } catch (error) {
             try { transaction.abort(); } catch { /* transacción ya finalizada */ }
             reject(error);
@@ -4374,6 +5562,9 @@ export class IndexedDbProjectStore implements ProjectStore {
       });
       transaction.oncomplete = () => {
         this.publishNarrativeChange(projectId);
+        if (writerId && (results[5] as PersonalIdeaLibraryEntry[]).length > 0) {
+          this.publishPersonalIdeaLibraryChange(writerId);
+        }
         resolve();
       };
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo consolidar la identidad narrativa."));

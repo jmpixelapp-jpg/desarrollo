@@ -34,7 +34,7 @@ test("IndexedDB rechaza más de 500 referencias explícitas por categoría", asy
     store.saveIdea(baseIdea({
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 1 },
-        { status: "IDEA", reason: "writer", changedAt: 2 }
+        { status: "IDEA", reason: "invalid-reason", changedAt: 2 }
       ]
     })),
     /transición de estado inválida/
@@ -201,7 +201,7 @@ test("fusionar ideas combina referencias explícitas sin duplicarlas y respeta e
   const oneMore = baseIdea({ relatedIdeaIds: ["new-reference"] });
   assert.throws(
     () => mergeNarrativeIdea(tooMany, oneMore),
-    /referencias explícitas de la idea superan el límite de 500/
+    /referencias explícitas de cada categoría superan el límite de 500/
   );
 });
 

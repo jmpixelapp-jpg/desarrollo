@@ -18,8 +18,7 @@ import {
   lstat,
   mkdir,
   rename,
-  rm,
-  stat
+  rm
 } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -269,6 +268,7 @@ export async function restoreDatabaseBackup(backupPath, destinationPath) {
 
 function readArguments(argv) {
   const [command, ...rest] = argv;
+  if (command === "--help" || command === "-h") return { command: "help", values: new Map() };
   const values = new Map();
   for (let index = 0; index < rest.length; index++) {
     const key = rest[index];
@@ -313,7 +313,7 @@ async function main(argv) {
     }
     result = await verifyDatabaseBackup(values.get("--backup"));
   } else if (command === "restore") {
-    if (values.size !== 4 || !values.has("--backup") || !values.has("--destination")) {
+    if (values.size !== 2 || !values.has("--backup") || !values.has("--destination")) {
       throw new Error("restore requiere --backup y --destination.");
     }
     result = await restoreDatabaseBackup(values.get("--backup"), values.get("--destination"));

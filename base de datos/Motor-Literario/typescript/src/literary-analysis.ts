@@ -1,4 +1,5 @@
 import type { NarrativeAssertion } from "./narrative-history";
+import type { NarrativeTimeReference } from "./narrative-knowledge";
 import { validateEventLifecycle, type EventLifecycle } from "./project-data";
 
 /**
@@ -27,6 +28,15 @@ export interface LiteraryAnalysisKnownEvent {
   readonly participants: readonly string[];
   readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
 }
+export interface LiteraryAnalysisKnownProjectEvent {
+  readonly projectId: string;
+  readonly eventId: string;
+  readonly label: string;
+  readonly participants: readonly string[];
+  readonly timelineTrackId?: string;
+  readonly timeReference?: NarrativeTimeReference;
+  readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
+}
 export interface LiteraryAnalysisInput {
   readonly projectId: string;
   readonly documentId: string;
@@ -35,8 +45,10 @@ export interface LiteraryAnalysisInput {
   readonly baseOffset?: number;
   /** Identidades de personajes conocidas por el proyecto; nunca se infieren desde el fragmento. */
   readonly knownCharacters?: readonly LiteraryAnalysisKnownCharacter[];
-  /** Acontecimientos del proyecto con evidencia versionada; solo se enlaza evidencia del documento/revisión analizados. */
+  /** Acontecimientos con evidencia del documento y revisión analizados. */
   readonly knownEvents?: readonly LiteraryAnalysisKnownEvent[];
+  /** Catálogo global de acontecimientos del proyecto para cronologías intercapítulos explícitamente fechadas. */
+  readonly knownProjectEvents?: readonly LiteraryAnalysisKnownProjectEvent[];
   /** Historiales append-only validados de cambios explícitos de etiqueta y participantes. */
   readonly knownEventLifecycles?: readonly EventLifecycle[];
   /** Afirmaciones históricas del proyecto; solo se asignan a escenas con evidencia vigente de esta revisión. */
@@ -530,6 +542,52 @@ export interface LiteraryCharacterTrajectorySceneSnapshot {
   readonly causalCandidateIds: readonly string[];
   readonly incompleteReasons: readonly ("mention-truncation" | "event-truncation")[];
 }
+export interface LiteraryCharacterProjectEventTimelineEvidence {
+  readonly eventId: string;
+  readonly eventLabel: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly occurrence: LiteraryAnalysisOccurrence;
+  readonly excerpt: string;
+}
+export interface LiteraryCharacterProjectEventTimelinePoint {
+  readonly timelineTrackId: string | null;
+  readonly basis: NarrativeTimeReference["basis"];
+  readonly precision: NarrativeTimeReference["precision"];
+  readonly orderValue: number;
+  readonly rawTimeReferences: readonly string[];
+  readonly eventCount: number;
+  readonly eventIds: readonly string[];
+  readonly omittedEventIdCount: number;
+  readonly documentIds: readonly string[];
+  readonly evidenceCount: number;
+  readonly evidenceSamples: readonly LiteraryCharacterProjectEventTimelineEvidence[];
+  readonly evidenceTruncated: boolean;
+}
+export interface LiteraryCharacterProjectEventTimelineTransition {
+  readonly timelineTrackId: string | null;
+  readonly basis: NarrativeTimeReference["basis"];
+  readonly precision: NarrativeTimeReference["precision"];
+  readonly fromOrderValue: number;
+  readonly toOrderValue: number;
+  readonly previousEventCount: number;
+  readonly nextEventCount: number;
+  readonly previousEventIds: readonly string[];
+  readonly nextEventIds: readonly string[];
+}
+export interface LiteraryCharacterProjectEventTimeline {
+  readonly sourceEventCount: number;
+  readonly timedEventCount: number;
+  readonly untimedEventCount: number;
+  readonly staleEventCount: number;
+  readonly pointCount: number;
+  readonly omittedPointCount: number;
+  readonly transitionCount: number;
+  readonly omittedTransitionCount: number;
+  readonly points: readonly LiteraryCharacterProjectEventTimelinePoint[];
+  readonly transitions: readonly LiteraryCharacterProjectEventTimelineTransition[];
+}
+
 export interface LiteraryCharacterNarrativeTrajectory {
   readonly entityId: string;
   readonly canonicalName: string;
@@ -541,6 +599,7 @@ export interface LiteraryCharacterNarrativeTrajectory {
   readonly incompleteSceneIndexes: readonly number[];
   readonly attributes: readonly LiteraryCharacterAttributeProfile[];
   readonly eventParticipation: readonly LiteraryCharacterEventEvidenceProfile[];
+  readonly projectEventTimeline: LiteraryCharacterProjectEventTimeline;
   readonly causalRelations: readonly LiteraryCharacterCausalRelation[];
   readonly scenes: readonly LiteraryCharacterTrajectorySceneSnapshot[];
 }

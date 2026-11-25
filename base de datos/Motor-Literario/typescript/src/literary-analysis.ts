@@ -787,9 +787,11 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly ideasWithoutActiveEvidenceCount: number;
 }
 export interface LiteraryIdeaGraphAnalysis {
+  /** Nodos del snapshot recibido; el catálogo no transferido se informa aparte. */
   readonly ideaCount: number;
   /** Distribución estructural de los nodos por estado editorial explícito. */
   readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
+  /** Ideas del catálogo global que el anfitrión no incluyó en este snapshot. */
   readonly omittedIdeaCount: number;
   readonly referenceCount: number;
   readonly includedReferenceCount: number;
@@ -803,11 +805,15 @@ export interface LiteraryIdeaGraphAnalysis {
   /** Nodos aislados únicamente respecto del conjunto de ideas incluido. */
   readonly isolatedWithinSnapshotNodeCount: number;
   /** Grupos conectados ignorando la dirección de los vínculos explícitos. */
+  /** Componentes débilmente conexos dentro del snapshot, no del catálogo omitido. */
   readonly weakComponentCount: number;
+  /** Componentes del snapshot no visibles por el límite de muestras. */
   readonly omittedWeakComponentCount: number;
   readonly largestWeakComponentSize: number;
   readonly weakComponents: readonly LiteraryIdeaGraphWeakComponent[];
+  /** Componentes cíclicos detectados dentro del snapshot. */
   readonly cycleCount: number;
+  /** Componentes cíclicos del snapshot no visibles por el límite de muestras. */
   readonly omittedCycleCount: number;
   readonly referenceSampleCount: number;
   readonly omittedReferenceSampleCount: number;

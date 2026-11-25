@@ -833,6 +833,22 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
       participants: ["ana-id", "bruno-id"],
       evidence: [evidence("Ana habló con Bruno.")]
     }],
+    knownProjectEvents: [{
+      projectId: "literary-analysis-test",
+      eventId: "ana-meets-bruno",
+      label: "Ana habla con Bruno",
+      participants: ["ana-id", "bruno-id"],
+      evidence: [
+        evidence("Ana habló con Bruno."),
+        {
+          documentId: "chapter-two",
+          revision: 2,
+          start: 10,
+          end: 32,
+          excerpt: "La conversación continúa."
+        }
+      ]
+    }],
     knownRelations: [
       {
         projectId: "literary-analysis-test",
@@ -915,6 +931,9 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
   assert.deepEqual(ana.documentedDecisions[0].evidencedSceneIndexes, [1]);
   assert.deepEqual(ana.documentedDecisions[0].materializedEventIds, ["ana-meets-bruno"]);
   assert.equal(ana.documentedDecisions[0].eventMaterializationStatus, "linked-to-event");
+  assert.deepEqual(ana.documentedDecisions[0].crossDocumentEventIds, ["ana-meets-bruno"]);
+  assert.equal(ana.documentedDecisions[0].crossDocumentEventEvidenceCount, 1);
+  assert.equal(ana.documentedDecisions[0].crossDocumentContinuityStatus, "cross-document-evidence");
   assert.equal(ana.documentedDecisions[0].writerDecisionCount, 1);
   assert.equal(bruno.documentedDecisions[0].currentStatusHistoryConsistency, "consistent");
   assert.equal(bruno.documentedDecisions[0].comparableStatusTimestampPairCount, 0);

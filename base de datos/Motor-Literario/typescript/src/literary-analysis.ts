@@ -847,6 +847,8 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly missingFromProjectReferenceCount: number;
   /** Pares de aristas inversas explícitas entre ideas incluidas en el snapshot. */
   readonly reciprocalReferencePairCount: number;
+  /** Referencias explícitas de una idea hacia sí misma; también forman ciclos unitarios. */
+  readonly selfReferenceCount: number;
   /** Nodos sin referencias entrantes desde el snapshot; no contempla fuentes omitidas. */
   readonly sourceNodeCount: number;
   /** Nodos sin salidas hacia otros nodos incluidos; pueden conservar salidas externas. */
@@ -3398,6 +3400,7 @@ function buildLiteraryIdeaGraph(
   let includedReferenceCount = 0;
   let notIncludedReferenceCount = 0;
   let missingFromProjectReferenceCount = 0;
+  let selfReferenceCount = 0;
   const references: LiteraryIdeaGraphReference[] = [];
 
   for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
@@ -3408,6 +3411,7 @@ function buildLiteraryIdeaGraph(
       const targetIndex = ideaIndexById.get(targetId);
       if (targetIndex !== undefined) {
         includedReferenceCount++;
+        if (targetIndex === sourceIndex) selfReferenceCount++;
         adjacency[sourceIndex]!.push(targetIndex);
         incoming[targetIndex] = incoming[targetIndex]! + 1;
         unionNodes(sourceIndex, targetIndex);
@@ -3657,6 +3661,7 @@ function buildLiteraryIdeaGraph(
     notIncludedReferenceCount,
     missingFromProjectReferenceCount,
     reciprocalReferencePairCount,
+    selfReferenceCount,
     sourceNodeCount,
     terminalWithinSnapshotNodeCount,
     isolatedWithinSnapshotNodeCount,

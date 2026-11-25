@@ -1007,3 +1007,30 @@ test("la biblioteca personal reúne varios libros del mismo escritor sin mezclar
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("SQLite rechaza recibos de finalización alterados al recuperarlos", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-invalid-finalization-receipt-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const store = await SqliteProjectStore.open(databasePath);
+  const writerId = "writer-invalid-receipt";
+  const projectId = "project-invalid-receipt";
+  try {
+    store.put("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"], {
+      writerId,
+      sourceProjectId: projectId,
+      receiptId: "finalization-v1",
+      sourceProjectName: "Libro alterado",
+      finalizedAt: 10,
+      archivedIdeaIds: ["idea-1"],
+      archiveChecksum: "fnv1a64:0000000000000000"
+    });
+    assert.throws(
+      () => store.loadProjectFinalizationReceipt(writerId, projectId),
+      /checksum inválidos/
+    );
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+

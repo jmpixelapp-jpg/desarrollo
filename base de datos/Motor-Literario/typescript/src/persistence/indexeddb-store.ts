@@ -3591,6 +3591,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       archivedCount: number;
       finalizedAt: number;
       archiveChecksum: string;
+      alreadyFinalized: boolean;
     }>;
   }
 

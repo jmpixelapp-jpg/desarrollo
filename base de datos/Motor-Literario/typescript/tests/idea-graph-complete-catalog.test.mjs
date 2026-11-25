@@ -46,6 +46,44 @@ const store = {
   async loadEntities(project) { return this.entities.filter(item=>item.projectId===project).map(item=>structuredClone(item)); }
 };
 
+test("el grafo global actualiza la sincronización al ampliarse el historial de una idea", async () => {
+  const ideas = structuredClone(store.ideas);
+  const localStore = { ...store, documents: new Map(), ideas };
+  const api = new HostEngineApi({ store: localStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-status-refresh" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl historial puede recibir una nueva decisión.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = await api.analyzeLiteraryDocument("chapter");
+    const beforeBridge = before.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(beforeBridge.currentStatusHistoryConsistency, "mismatch");
+    assert.equal(before.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 1);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.statusHistory.push({
+      status: "IDEA",
+      reason: "writer",
+      changedAt: 4
+    });
+
+    const after = await api.analyzeLiteraryDocument("chapter");
+    const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(afterBridge.currentStatusHistoryConsistency, "consistent");
+    assert.equal(afterBridge.observedStatusTransitionCount, 4);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 3);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 1);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verifiableIdeaCount, 3);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 0.75);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculadas", async () => {
   const api = new HostEngineApi({store});
   assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, true);

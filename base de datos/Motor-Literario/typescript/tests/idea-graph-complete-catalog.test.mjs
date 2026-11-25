@@ -1929,4 +1929,4 @@ test("el desempate de IDs Unicode mantiene un orden canónico estable", () => {
   assert.equal(forward.ideaCount, 2);
   assert.equal(forward.weakComponentCount, 2);
   assert.equal(forward.isolatedWithinSnapshotNodeCount, 2);
-});;
+});

@@ -5,14 +5,15 @@ import type { NarrativeAssertion } from "../narrative-history";
 import type { ProjectDictionary, DictionaryEntry } from "../dictionaries";
 import { validateProjectDictionary, validateDictionaryEntry } from "../dictionaries";
 import type {
-  ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
+  ProjectRecord, RecordName, ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
   ImportAuthorization, SchemaMigration
 } from "../mldb-records";
 import {
-  validateManuscriptFragment, validateRecordAttribute, validateRelationAttribute,
-  validateActiveSuggestion, validateImportAuthorization, validateSchemaMigration,
-  cloneManuscriptFragment, cloneRecordAttribute, cloneRelationAttribute,
-  cloneActiveSuggestion, cloneImportAuthorization, cloneSchemaMigration
+  validateProjectRecord, validateRecordName, validateManuscriptFragment,
+  validateRecordAttribute, validateRelationAttribute, validateActiveSuggestion,
+  validateImportAuthorization, validateSchemaMigration,
+  cloneProjectRecord, cloneRecordName, cloneManuscriptFragment, cloneRecordAttribute,
+  cloneRelationAttribute, cloneActiveSuggestion, cloneImportAuthorization, cloneSchemaMigration
 } from "../mldb-records";
 import type { ProjectSetting } from "../project-data";
 import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type LanguageResourceRef,
@@ -24,7 +25,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 18;
+const DATABASE_VERSION = 19;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -53,6 +54,8 @@ const RELATION_ATTRIBUTES = "relation-attributes";
 const ACTIVE_SUGGESTIONS = "active-suggestions";
 const IMPORT_AUTHORIZATIONS = "import-authorizations";
 const SCHEMA_MIGRATIONS = "schema-migrations";
+const PROJECT_RECORDS = "project-records";
+const RECORD_NAMES = "record-names";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -1392,6 +1395,20 @@ export class IndexedDbProjectStore implements ProjectStore {
           migrations.createIndex("by-to-version", "toVersion", { unique: false });
           migrations.createIndex("by-applied-at", "appliedAt", { unique: false });
         }
+        if (!db.objectStoreNames.contains(PROJECT_RECORDS)) {
+          const records = db.createObjectStore(PROJECT_RECORDS, { keyPath: ["projectId", "id"] });
+          records.createIndex("by-project", "projectId", { unique: false });
+          records.createIndex("by-project-type", ["projectId", "recordType"], { unique: false });
+          records.createIndex("by-project-name", ["projectId", "primaryName"], { unique: false });
+          records.createIndex("by-project-label-state", ["projectId", "label", "state"], { unique: false });
+          records.createIndex("by-project-updated", ["projectId", "updatedAt"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(RECORD_NAMES)) {
+          const names = db.createObjectStore(RECORD_NAMES, { keyPath: ["projectId", "id"] });
+          names.createIndex("by-project", "projectId", { unique: false });
+          names.createIndex("by-record", ["projectId", "recordId"], { unique: false });
+          names.createIndex("by-name", ["projectId", "name"], { unique: false });
+        }
         if (!db.objectStoreNames.contains(DICTIONARIES)) {
           const dictionaries = db.createObjectStore(DICTIONARIES, {
             keyPath: ["projectId", "id"]
@@ -1506,6 +1523,14 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(IMPORT_AUTHORIZATIONS, "by-target", ["writerId", "targetProjectId"]);
         ensureIndex(SCHEMA_MIGRATIONS, "by-to-version", "toVersion");
         ensureIndex(SCHEMA_MIGRATIONS, "by-applied-at", "appliedAt");
+        ensureIndex(PROJECT_RECORDS, "by-project", "projectId");
+        ensureIndex(PROJECT_RECORDS, "by-project-type", ["projectId", "recordType"]);
+        ensureIndex(PROJECT_RECORDS, "by-project-name", ["projectId", "primaryName"]);
+        ensureIndex(PROJECT_RECORDS, "by-project-label-state", ["projectId", "label", "state"]);
+        ensureIndex(PROJECT_RECORDS, "by-project-updated", ["projectId", "updatedAt"]);
+        ensureIndex(RECORD_NAMES, "by-project", "projectId");
+        ensureIndex(RECORD_NAMES, "by-record", ["projectId", "recordId"]);
+        ensureIndex(RECORD_NAMES, "by-name", ["projectId", "name"]);
         const nextVersion = event?.newVersion ?? DATABASE_VERSION;
         const migration: SchemaMigration = {
           migrationId: `indexeddb-v${nextVersion}`,
@@ -1832,14 +1857,14 @@ export class IndexedDbProjectStore implements ProjectStore {
       throw new Error("Identidad de proyecto o ficha inválida.");
     }
     return loadLifecycleHistory(
-      await this.open(), RECORD_LIFECYCLES, ENTITIES,
+      await this.open(), RECORD_LIFECYCLES, PROJECT_RECORDS,
       projectId, recordId, "ficha", validateRecordLifecycle, cloneRecordLifecycle
     );
   }
 
   async appendRecordLifecycle(item: RecordLifecycle): Promise<void> {
     return appendLifecycleRecord(
-      await this.open(), RECORD_LIFECYCLES, ENTITIES,
+      await this.open(), RECORD_LIFECYCLES, PROJECT_RECORDS,
       item, item.recordId, "ficha", validateRecordLifecycle
     );
   }
@@ -1860,6 +1885,175 @@ export class IndexedDbProjectStore implements ProjectStore {
       await this.open(), RELATION_LIFECYCLES, RELATIONS,
       item, item.relationId, "relación", validateRelationLifecycle
     );
+  }
+
+  async loadProjectRecords(projectId: string): Promise<readonly ProjectRecord[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para consultar fichas.");
+    }
+    return loadSimpleProjectRecords(
+      await this.open(), PROJECT_RECORDS, projectId, "fichas MLDB",
+      validateProjectRecord, cloneProjectRecord
+    );
+  }
+
+  async saveProjectRecord(
+    record: ProjectRecord,
+    expectedCurrent?: ProjectRecord
+  ): Promise<void> {
+    validateProjectRecord(record, record.projectId);
+    if (expectedCurrent) {
+      validateProjectRecord(expectedCurrent, record.projectId);
+      if (record.currentVersion !== expectedCurrent.currentVersion + 1) {
+        throw new Error("La versión de la ficha debe avanzar exactamente una unidad.");
+      }
+      if (record.createdAt !== expectedCurrent.createdAt || record.updatedAt < expectedCurrent.updatedAt) {
+        throw new Error("Las fechas de la ficha no pueden retroceder ni cambiar su creación.");
+      }
+    } else if (record.currentVersion !== 1) {
+      throw new Error("Una ficha nueva debe comenzar en versión 1.");
+    }
+    await saveProjectRecordWithParents(
+      await this.open(), PROJECT_RECORDS, record, expectedCurrent, [],
+      "ficha MLDB", validateProjectRecord, cloneProjectRecord
+    );
+  }
+
+  async loadRecordNames(projectId: string, recordId?: string): Promise<readonly RecordName[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        (recordId !== undefined && (typeof recordId !== "string" || !recordId.trim()))) {
+      throw new Error("Identidad de proyecto o ficha inválida para consultar nombres.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction([RECORD_NAMES, PROJECT_RECORDS], "readonly");
+    const namesStore = transaction.objectStore(RECORD_NAMES);
+    const request = recordId === undefined
+      ? namesStore.index("by-project").getAll(projectId)
+      : namesStore.index("by-record").getAll([projectId, recordId]);
+    const records = await readAfterTransaction(
+      transaction, request, "No se pudieron leer los nombres de fichas."
+    ) as RecordName[];
+    if (!Array.isArray(records)) throw new Error("La colección de nombres de fichas es inválida.");
+    const ids = new Set<string>();
+    const primaryByRecord = new Set<string>();
+    const recordRequests = new Map<string, IDBRequest>();
+    for (const item of records) {
+      validateRecordName(item, projectId);
+      if (ids.has(item.id)) throw new Error("Hay IDs duplicados de nombres de fichas.");
+      ids.add(item.id);
+      if (item.isPrimary) {
+        if (primaryByRecord.has(item.recordId)) {
+          throw new Error("Una ficha no puede tener más de un nombre alternativo principal.");
+        }
+        primaryByRecord.add(item.recordId);
+      }
+      if (!recordRequests.has(item.recordId)) {
+        recordRequests.set(item.recordId, transaction.objectStore(PROJECT_RECORDS)
+          .get([projectId, item.recordId]));
+      }
+    }
+    // Verify parent rows in the same readonly transaction, including primary-name consistency.
+    const parents = await Promise.all([...recordRequests.entries()].map(async ([id, req]) => {
+      const value = await new Promise<unknown>((resolve, reject) => {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error ?? new Error("No se pudo comprobar la ficha del nombre."));
+      });
+      if (!value) throw new Error("Un nombre persistido referencia una ficha inexistente.");
+      const record = value as ProjectRecord;
+      validateProjectRecord(record, projectId);
+      return [id, record] as const;
+    }));
+    const parentById = new Map(parents);
+    for (const item of records) {
+      if (item.isPrimary && parentById.get(item.recordId)?.primaryName !== item.name) {
+        throw new Error("El nombre marcado como principal no coincide con primaryName de la ficha.");
+      }
+    }
+    return records.map(cloneRecordName);
+  }
+
+  async saveRecordName(name: RecordName, expectedCurrent?: RecordName): Promise<void> {
+    validateRecordName(name, name.projectId);
+    if (expectedCurrent) {
+      validateRecordName(expectedCurrent, name.projectId);
+      if (expectedCurrent.id !== name.id || expectedCurrent.recordId !== name.recordId) {
+        throw new Error("La actualización del nombre debe conservar su ficha e ID.");
+      }
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([RECORD_NAMES, PROJECT_RECORDS], "readwrite");
+      const names = transaction.objectStore(RECORD_NAMES);
+      const records = transaction.objectStore(PROJECT_RECORDS);
+      const recordRequest = records.get([name.projectId, name.recordId]);
+      const currentRequest = names.get([name.projectId, name.id]);
+      const namesRequest = names.index("by-record").getAll([name.projectId, name.recordId]);
+      let parentReady = false;
+      let currentReady = false;
+      let namesReady = false;
+      let parent: ProjectRecord | undefined;
+      let current: RecordName | undefined;
+      let existing: RecordName[] = [];
+      let failure: Error | undefined;
+      let finished = false;
+      const abortWith = (error: unknown): void => {
+        if (finished) return;
+        failure = error instanceof Error ? error : new Error("No se pudo guardar el nombre de ficha.");
+        finished = true;
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      const commitIfReady = (): void => {
+        if (finished || !parentReady || !currentReady || !namesReady) return;
+        try {
+          if (!parent) throw new Error("No existe la ficha a la que pertenece el nombre.");
+          if (name.isPrimary && parent.primaryName !== name.name) {
+            throw new Error("El nombre principal debe coincidir con primaryName de la ficha.");
+          }
+          if (expectedCurrent) {
+            if (!current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+              throw new Error("El nombre cambió en otra instancia; vuelve a leer antes de actualizar.");
+            }
+          } else if (current) {
+            throw new Error("El nombre ya existe; vuelve a leer antes de actualizar.");
+          }
+          if (name.isPrimary && existing.some(item => item.id !== name.id && item.isPrimary)) {
+            throw new Error("La ficha ya tiene otro nombre marcado como principal.");
+          }
+          names.put(cloneRecordName(name));
+        } catch (error) { abortWith(error); }
+      };
+      recordRequest.onsuccess = () => {
+        parent = recordRequest.result as ProjectRecord | undefined;
+        try {
+          if (parent) validateProjectRecord(parent, name.projectId);
+          parentReady = true;
+          commitIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      currentRequest.onsuccess = () => {
+        current = currentRequest.result as RecordName | undefined;
+        try {
+          if (current) validateRecordName(current, name.projectId);
+          currentReady = true;
+          commitIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      namesRequest.onsuccess = () => {
+        try {
+          existing = namesRequest.result as RecordName[];
+          if (!Array.isArray(existing)) throw new Error("Los nombres existentes no forman una colección.");
+          for (const item of existing) validateRecordName(item, name.projectId);
+          namesReady = true;
+          commitIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      recordRequest.onerror = () => abortWith(recordRequest.error ?? new Error("No se pudo leer la ficha padre."));
+      currentRequest.onerror = () => abortWith(currentRequest.error ?? new Error("No se pudo leer el nombre actual."));
+      namesRequest.onerror = () => abortWith(namesRequest.error ?? new Error("No se pudieron leer los nombres de la ficha."));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar el nombre de ficha."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado del nombre de ficha."));
+    });
   }
 
   async loadManuscriptFragments(
@@ -1942,9 +2136,9 @@ export class IndexedDbProjectStore implements ProjectStore {
     await saveProjectRecordWithParents(
       await this.open(), RECORD_ATTRIBUTES, attribute, expectedCurrent,
       [{
-        storeName: ENTITIES, key: [attribute.projectId, attribute.recordId],
+        storeName: PROJECT_RECORDS, key: [attribute.projectId, attribute.recordId],
         label: "la ficha del atributo",
-        validate: value => validateNarrativeEntityRecord(value as NarrativeEntity, "ficha del atributo")
+        validate: value => validateProjectRecord(value as ProjectRecord, attribute.projectId)
       }],
       "atributo de ficha", validateRecordAttribute, cloneRecordAttribute
     );

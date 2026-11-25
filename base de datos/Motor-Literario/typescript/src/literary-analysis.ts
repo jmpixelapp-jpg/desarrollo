@@ -2875,12 +2875,22 @@ function buildExplicitEventDependencyAnalysis(
       const localStart = evidence.start - baseOffset;
       const localEnd = evidence.end - baseOffset;
       if (localStart < 0 || localEnd <= localStart || localEnd > text.length) continue;
-      const sentenceIndex = sentenceRanges.findIndex(range =>
-        localStart >= range.start && localEnd <= range.end
-      );
-      if (sentenceIndex < 0) continue;
       evidenceAnchorCount++;
       if (anchors.length >= MAX_EVIDENCE_ANCHORS) continue;
+      let low = 0;
+      let high = sentenceRanges.length-1;
+      let sentenceIndex = -1;
+      while (low <= high) {
+        const middle = Math.floor((low+high)/2);
+        const range = sentenceRanges[middle]!;
+        if (localEnd <= range.start) high = middle-1;
+        else if (localStart >= range.end) low = middle+1;
+        else {
+          if (localStart >= range.start && localEnd <= range.end) sentenceIndex = middle;
+          break;
+        }
+      }
+      if (sentenceIndex < 0) continue;
       anchors.push({
         eventId:event.eventId,
         eventLabel:event.label,

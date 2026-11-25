@@ -480,6 +480,50 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
   ));
 });
 
+test("reconoce conectores causales españoles aunque terminen en vocal acentuada", () => {
+  const connectors = ["provocó", "causó", "desencadenó", "originó"];
+  for (const connector of connectors) {
+    const text = `La tormenta ${connector} el derrumbe.`;
+    const evidence = phrase => {
+      const start = text.indexOf(phrase);
+      assert.notEqual(start, -1);
+      return {
+        documentId: "chapter-one",
+        revision: 1,
+        start,
+        end: start + phrase.length,
+        excerpt: phrase
+      };
+    };
+    const result = analyzeLiteraryFragment({
+      projectId: "literary-analysis-test",
+      documentId: "chapter-one",
+      revision: 1,
+      text,
+      knownEvents: [
+        {
+          eventId: "storm",
+          label: "La tormenta",
+          participants: ["ana"],
+          evidence: [evidence("La tormenta")]
+        },
+        {
+          eventId: "collapse",
+          label: "El derrumbe",
+          participants: ["ana"],
+          evidence: [evidence("el derrumbe")]
+        }
+      ]
+    });
+    assert.equal(result.eventDependencyAnalysis.candidateCount, 1, connector);
+    assert.equal(result.eventDependencyAnalysis.candidates[0].connector, connector);
+    assert.equal(
+      result.eventDependencyAnalysis.candidates[0].direction,
+      "cause-before-consequence"
+    );
+  }
+});
+
 test("no infiere dependencias sin conector y excluye evidencia obsoleta o de otra revisión", () => {
   const text = "La tormenta precedió el derrumbe.";
   const startStorm = text.indexOf("La tormenta");

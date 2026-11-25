@@ -24,6 +24,7 @@ class RacingStore {
   onNextConflict;
   nextWriteError;
   writes = 0;
+  ideaReads = 0;
   entityReads = 0;
 
   constructor(ideas = [], entities = []) {
@@ -33,6 +34,7 @@ class RacingStore {
   key(item) { return item.projectId + ":" + item.id; }
   async saveIdea(item) { this.ideas.set(this.key(item), structuredClone(item)); }
   async loadIdeas(id) {
+    this.ideaReads++;
     return [...this.ideas.values()].filter(x => x.projectId === id).map(x => structuredClone(x));
   }
   async saveEntity(item) { this.entities.set(this.key(item), structuredClone(item)); }

@@ -100,6 +100,8 @@ export interface ProjectFinalizationSummary {
   readonly archivedCount: number;
   readonly finalizedAt: number;
   readonly archiveChecksum: string;
+  /** Checksum incremental del contenido archivado; opcional en adaptadores y recibos heredados. */
+  readonly archiveContentChecksum?: string;
   readonly alreadyFinalized: boolean;
 }
 
@@ -113,6 +115,8 @@ export interface StoredProjectFinalizationReceipt {
   readonly archivedIdeaIds: readonly string[];
   /** Checksum determinista del conjunto ordenado de IDs archivados. */
   readonly archiveChecksum: string;
+  /** Checksum de las entradas archivadas completas; ausente en recibos heredados. */
+  readonly archiveContentChecksum?: string;
 }
 
 /** Cursor estable de lectura de la biblioteca; el escritor se deriva de la sesión autenticada. */

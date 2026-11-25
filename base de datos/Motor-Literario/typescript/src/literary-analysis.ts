@@ -470,6 +470,52 @@ export interface LiteraryCharacterMentionDistributionAnalysis {
   /** Perfiles ordenados por cobertura, racha consecutiva y, finalmente, ID estable. */
   readonly characters: readonly LiteraryCharacterMentionDistribution[];
 }
+export type LiteraryCharacterSceneMentionStatus =
+  | "mentioned-by-known-name"
+  | "not-mentioned-by-known-name"
+  | "unknown-due-to-mention-truncation";
+export type LiteraryCharacterSceneParticipationStatus =
+  | "linked-to-explicit-event-evidence"
+  | "not-linked-in-current-evidence"
+  | "unknown-due-to-event-truncation";
+export interface LiteraryCharacterSceneEvidenceSnapshot {
+  readonly sceneIndex: number;
+  readonly mentionStatus: LiteraryCharacterSceneMentionStatus;
+  readonly mentionCount: number;
+  readonly participationStatus: LiteraryCharacterSceneParticipationStatus;
+  readonly eventIds: readonly string[];
+  readonly eventEvidenceRangeCount: number;
+  readonly eventEvidenceSamplesTruncated: boolean;
+  readonly characterMentionsTruncated: boolean;
+  readonly eventLinksTruncated: boolean;
+}
+export interface LiteraryCharacterSceneEvidenceProfile {
+  readonly entityId: string;
+  readonly canonicalName: string;
+  readonly totalMentionCount: number;
+  readonly mentionSceneCount: number;
+  readonly mentionSceneIndexes: readonly number[];
+  readonly firstMentionSceneIndex: number | null;
+  readonly lastMentionSceneIndex: number | null;
+  readonly eventParticipationSceneCount: number;
+  readonly eventParticipationSceneIndexes: readonly number[];
+  readonly firstEventParticipationSceneIndex: number | null;
+  readonly lastEventParticipationSceneIndex: number | null;
+  readonly totalEventEvidenceRangeCount: number;
+  readonly incompleteSceneCount: number;
+  /** Una instantánea por escena explícita, incluidos ceros y estados desconocidos. */
+  readonly scenes: readonly LiteraryCharacterSceneEvidenceSnapshot[];
+}
+export interface LiteraryCharacterSceneEvidenceAnalysis {
+  readonly explicitSceneCount: number;
+  readonly sourceTruncatedSceneCount: number;
+  readonly sourceTruncatedSceneIndexes: readonly number[];
+  readonly characterCount: number;
+  readonly omittedCharacterCount: number;
+  /** Perfiles ordenados por participación, cobertura nominal, menciones e ID; máximo cien. */
+  readonly profiles: readonly LiteraryCharacterSceneEvidenceProfile[];
+}
+
 export interface LiterarySceneCadenceTransition {
   readonly fromSceneIndex: number;
   readonly toSceneIndex: number;
@@ -789,6 +835,8 @@ export interface LiteraryExplicitSceneSegment {
   readonly rhythmSignals: LiterarySceneRhythmProfile;
   /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
   readonly characterMentions: readonly LiterarySceneCharacterMention[];
+  /** Indica que se han limitado a cuarenta las identidades con mención nominal. */
+  readonly characterMentionsTruncated: boolean;
   readonly eventLinks: readonly LiterarySceneEventLink[];
   /** Indica que hubo más de 100 acontecimientos con evidencia coincidente en esta escena. */
   readonly eventLinksTruncated: boolean;
@@ -866,6 +914,8 @@ export interface LiteraryAnalysisResult {
   readonly characterCoMentions: readonly LiteraryCharacterCoMentionPattern[];
   /** Distribución de menciones literales de personajes conocidos a lo largo de las escenas explícitas. */
   readonly characterMentionDistributions: LiteraryCharacterMentionDistributionAnalysis;
+  /** Serie por escena que separa menciones nominales de participación documentada por acontecimientos. */
+  readonly characterSceneEvidence: LiteraryCharacterSceneEvidenceAnalysis;
   /** Evidencia de acontecimientos asociados explícitamente a participantes, desglosada por escena. */
   readonly characterEventEvidenceProfiles: LiteraryCharacterEventEvidenceAnalysis;
   /** Recurrencia de acontecimientos en escenas, independiente de que tengan participantes declarados. */
@@ -1481,6 +1531,7 @@ function analyzeExplicitScenes(
     dialogueFlowSignals,
     rhythmSignals:summarizeSceneRhythm(sceneSentenceRanges,sceneSentenceWordCounts,baseOffset),
     characterMentions,
+    characterMentionsTruncated:allCharacterMentions.length>40,
     eventLinks:eventLinkResult.links,
     eventLinksTruncated:eventLinkResult.truncated,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
@@ -2656,6 +2707,115 @@ function buildCharacterMentionDistributions(
   };
 }
 
+function buildCharacterSceneEvidenceProfiles(
+  scenes: readonly LiteraryExplicitSceneSegment[],
+  knownCharacters: readonly LiteraryAnalysisKnownCharacter[]
+): LiteraryCharacterSceneEvidenceAnalysis {
+  const characterById = new Map(knownCharacters.map(character => [character.entityId, character]));
+  const candidateIds = new Set<string>();
+  const sourceTruncatedSceneIndexes: number[] = [];
+  const preparedScenes = scenes.map(scene => {
+    const mentionsById = new Map(scene.characterMentions.map(mention => [mention.entityId, mention]));
+    const participantsById = new Map<string, {
+      eventIds: string[];
+      eventEvidenceRangeCount: number;
+      eventEvidenceSamplesTruncated: boolean;
+    }>();
+    if (scene.characterMentionsTruncated || scene.eventLinksTruncated) {
+      sourceTruncatedSceneIndexes.push(scene.sceneIndex);
+    }
+    for (const mention of scene.characterMentions) candidateIds.add(mention.entityId);
+    for (const link of scene.eventLinks) {
+      for (const participant of link.participants) {
+        candidateIds.add(participant.entityId);
+        const aggregate = participantsById.get(participant.entityId) ?? {
+          eventIds: [],
+          eventEvidenceRangeCount: 0,
+          eventEvidenceSamplesTruncated: false
+        };
+        aggregate.eventIds.push(link.eventId);
+        aggregate.eventEvidenceRangeCount += link.matchingEvidenceCount;
+        aggregate.eventEvidenceSamplesTruncated ||= link.matchingEvidenceTruncated;
+        participantsById.set(participant.entityId, aggregate);
+      }
+    }
+    for (const aggregate of participantsById.values()) {
+      aggregate.eventIds.sort((a,b) => a.localeCompare(b,"en"));
+    }
+    return { scene, mentionsById, participantsById };
+  });
+
+  const candidates = [...candidateIds]
+    .map(entityId => characterById.get(entityId))
+    .filter((character): character is LiteraryAnalysisKnownCharacter => character !== undefined)
+    .map(character => {
+      const snapshots: LiteraryCharacterSceneEvidenceSnapshot[] = preparedScenes.map(item => {
+        const {scene,mentionsById,participantsById} = item;
+        const mention = mentionsById.get(character.entityId);
+        const participation = participantsById.get(character.entityId);
+        const mentionStatus: LiteraryCharacterSceneMentionStatus = mention
+          ? "mentioned-by-known-name"
+          : scene.characterMentionsTruncated
+            ? "unknown-due-to-mention-truncation"
+            : "not-mentioned-by-known-name";
+        const participationStatus: LiteraryCharacterSceneParticipationStatus = participation
+          ? "linked-to-explicit-event-evidence"
+          : scene.eventLinksTruncated
+            ? "unknown-due-to-event-truncation"
+            : "not-linked-in-current-evidence";
+        return {
+          sceneIndex:scene.sceneIndex,
+          mentionStatus,
+          mentionCount:mention?.mentionCount ?? 0,
+          participationStatus,
+          eventIds:participation?.eventIds ?? [],
+          eventEvidenceRangeCount:participation?.eventEvidenceRangeCount ?? 0,
+          eventEvidenceSamplesTruncated:participation?.eventEvidenceSamplesTruncated ?? false,
+          characterMentionsTruncated:scene.characterMentionsTruncated,
+          eventLinksTruncated:scene.eventLinksTruncated
+        };
+      });
+      const mentionSnapshots = snapshots.filter(scene => scene.mentionCount > 0);
+      const participationSnapshots = snapshots.filter(scene => scene.eventIds.length > 0);
+      return {
+        entityId:character.entityId,
+        canonicalName:character.canonicalName,
+        totalMentionCount:mentionSnapshots.reduce((total,scene) => total+scene.mentionCount,0),
+        mentionSceneCount:mentionSnapshots.length,
+        mentionSceneIndexes:mentionSnapshots.map(scene => scene.sceneIndex),
+        firstMentionSceneIndex:mentionSnapshots[0]?.sceneIndex ?? null,
+        lastMentionSceneIndex:mentionSnapshots.at(-1)?.sceneIndex ?? null,
+        eventParticipationSceneCount:participationSnapshots.length,
+        eventParticipationSceneIndexes:participationSnapshots.map(scene => scene.sceneIndex),
+        firstEventParticipationSceneIndex:participationSnapshots[0]?.sceneIndex ?? null,
+        lastEventParticipationSceneIndex:participationSnapshots.at(-1)?.sceneIndex ?? null,
+        totalEventEvidenceRangeCount:snapshots.reduce(
+          (total,scene) => total+scene.eventEvidenceRangeCount,0
+        ),
+        incompleteSceneCount:snapshots.filter(scene =>
+          scene.mentionStatus === "unknown-due-to-mention-truncation" ||
+          scene.participationStatus === "unknown-due-to-event-truncation"
+        ).length,
+        scenes:snapshots
+      };
+    })
+    .sort((a,b) =>
+      b.eventParticipationSceneCount-a.eventParticipationSceneCount ||
+      b.mentionSceneCount-a.mentionSceneCount ||
+      b.totalMentionCount-a.totalMentionCount ||
+      a.entityId.localeCompare(b.entityId,"en")
+    );
+
+  return {
+    explicitSceneCount:scenes.length,
+    sourceTruncatedSceneCount:sourceTruncatedSceneIndexes.length,
+    sourceTruncatedSceneIndexes,
+    characterCount:candidates.length,
+    omittedCharacterCount:Math.max(0,candidates.length-100),
+    profiles:candidates.slice(0,100)
+  };
+}
+
 function buildSceneLexicalEchoes(
   tokens: readonly WordToken[],
   scenes: readonly LiteraryExplicitSceneSegment[],
@@ -3314,6 +3474,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.knownEvents ?? [],dialogueRanges,dialogueSegments,input.documentId,input.revision
   );
   const sceneLexicalEchoes = buildSceneLexicalEchoes(tokens, explicitScenes, dialogueRanges, baseOffset);
+  const characterSceneEvidence = buildCharacterSceneEvidenceProfiles(explicitScenes,input.knownCharacters ?? []);
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneEventAssociationTransitions = buildSceneEventAssociationTransitions(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
@@ -3521,6 +3682,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneVoiceSequences,
     characterCoMentions,
     characterMentionDistributions,
+    characterSceneEvidence,
     characterEventEvidenceProfiles,
     sceneEventEvidenceProfiles,
     sceneEventSequenceMotifs,
@@ -3562,7 +3724,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos.",
       "Los tramos del flujo de diálogo agrupan párrafos consecutivos por presencia o ausencia de diálogo reconocido; los párrafos mixtos y dialogados comparten tramo y esto no identifica turnos ni hablantes.",
       "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes.",
-      "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; separan ocurrencias en narración y diálogo reconocido, no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16."
+      "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; separan ocurrencias en narración y diálogo reconocido, no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16.",
+      "Los perfiles de personajes separan menciones nominales literales de asociaciones a acontecimientos con evidencia vigente de la misma revisión. Una mención no prueba participación; una asociación de participante no prueba presencia física, acción, causalidad ni cambio del personaje. Las escenas con muestras truncadas declaran el estado como desconocido en vez de tratarlo como ausencia."
     ]
   };
 }

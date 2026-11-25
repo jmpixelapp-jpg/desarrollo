@@ -166,3 +166,35 @@ test("descarta un checkpoint obsoleto cuando el documento recuperado avanzó a o
   assert.notEqual(refreshed.sessionId, stale.sessionId);
   await second.disposeSafely();
 });
+
+
+test("guarda checkpoints automáticamente al completar commits y al disponer de forma segura", async () => {
+  const store = new MemoryDocumentStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "monitor-auto-checkpoint", projectName: "Automatic checkpoint" });
+  await api.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  const admission = api.onEditorChange({
+    documentId: "chapter-1",
+    sequence: 1,
+    baseRevision: 0,
+    start: 1,
+    end: 1,
+    replacement: "B"
+  });
+  assert.equal(admission.status, "queued");
+  await api.disposeSafely();
+
+  const checkpoint = store.monitorCheckpoints.get("monitor-auto-checkpoint:chapter-1");
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.revision, 1);
+  assert.equal(checkpoint.sequence, 1);
+  assert.equal(checkpoint.acceptedChanges, 1);
+  assert.equal(checkpoint.committedChanges, 1);
+  assert.equal(checkpoint.currentDocumentLength, 2);
+});

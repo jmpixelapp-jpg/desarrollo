@@ -259,6 +259,36 @@ export interface LiteraryCharacterEventEvidenceAnalysis {
   /** Asociaciones explícitas participante/acontecimiento, priorizadas por cobertura y evidencia. */
   readonly profiles: readonly LiteraryCharacterEventEvidenceProfile[];
 }
+export interface LiterarySceneEventEvidenceScene {
+  readonly sceneIndex: number;
+  /** null indica que no existe evidencia enlazada para este acontecimiento en la escena. */
+  readonly evidenceRangeCount: number | null;
+  /** null cuando no hay vínculo; en otro caso indica si las muestras UTF-16 superan veinte rangos. */
+  readonly evidenceSamplesTruncated: boolean | null;
+}
+export interface LiterarySceneEventEvidenceProfile {
+  readonly eventId: string;
+  readonly eventLabel: string;
+  readonly sceneIndexes: readonly number[];
+  readonly sceneCount: number;
+  readonly firstSceneIndex: number;
+  readonly lastSceneIndex: number;
+  readonly interveningSceneCount: number;
+  readonly longestConsecutiveSceneRun: number;
+  readonly totalEvidenceRangeCount: number;
+  /** Una entrada por escena explícita; null separa ausencia de evidencia de evidencia recortada. */
+  readonly scenes: readonly LiterarySceneEventEvidenceScene[];
+}
+export interface LiterarySceneEventEvidenceAnalysis {
+  readonly explicitSceneCount: number;
+  /** Escenas cuya lista fuente superó el límite de cien acontecimientos enlazados. */
+  readonly sourceTruncatedSceneCount: number;
+  readonly sourceTruncatedSceneIndexes: readonly number[];
+  readonly eventCount: number;
+  readonly omittedEventCount: number;
+  /** Perfiles de acontecimientos ordenados por cobertura, racha, evidencia e ID; máximo cien. */
+  readonly profiles: readonly LiterarySceneEventEvidenceProfile[];
+}
 export type LiterarySceneCharacterContinuityStatus =
   | "mentioned-in-both-scenes"
   | "not-mentioned-in-next-scene"
@@ -693,6 +723,8 @@ export interface LiteraryAnalysisResult {
   readonly characterMentionDistributions: LiteraryCharacterMentionDistributionAnalysis;
   /** Evidencia de acontecimientos asociados explícitamente a participantes, desglosada por escena. */
   readonly characterEventEvidenceProfiles: LiteraryCharacterEventEvidenceAnalysis;
+  /** Recurrencia de acontecimientos en escenas, independiente de que tengan participantes declarados. */
+  readonly sceneEventEvidenceProfiles: LiterarySceneEventEvidenceAnalysis;
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -1985,6 +2017,92 @@ function findCharacterCoMentionPatterns(
     }));
 }
 
+function buildSceneEventEvidenceProfiles(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneEventEvidenceAnalysis {
+  const groups = new Map<string,{
+    readonly eventId: string;
+    readonly eventLabel: string;
+    sceneEvidence: Map<number,{
+      readonly evidenceRangeCount: number;
+      readonly evidenceSamplesTruncated: boolean;
+    }>;
+    totalEvidenceRangeCount: number;
+  }>();
+
+  for (const scene of scenes) {
+    for (const event of scene.eventLinks) {
+      const group = groups.get(event.eventId) ?? {
+        eventId:event.eventId,
+        eventLabel:event.label,
+        sceneEvidence:new Map<number,{
+          readonly evidenceRangeCount:number;
+          readonly evidenceSamplesTruncated:boolean;
+        }>(),
+        totalEvidenceRangeCount:0
+      };
+      group.sceneEvidence.set(scene.sceneIndex,{
+        evidenceRangeCount:event.matchingEvidenceCount,
+        evidenceSamplesTruncated:event.matchingEvidenceTruncated
+      });
+      group.totalEvidenceRangeCount += event.matchingEvidenceCount;
+      groups.set(event.eventId,group);
+    }
+  }
+
+  const profiles = [...groups.values()].map(group => {
+    const sceneIndexes = scenes
+      .filter(scene => group.sceneEvidence.has(scene.sceneIndex))
+      .map(scene => scene.sceneIndex);
+    const firstSceneIndex = sceneIndexes[0] ?? 0;
+    const lastSceneIndex = sceneIndexes[sceneIndexes.length-1] ?? 0;
+    let longestConsecutiveSceneRun = 0;
+    let currentRun = 0;
+    let previousSceneIndex = Number.NEGATIVE_INFINITY;
+    for (const sceneIndex of sceneIndexes) {
+      currentRun = sceneIndex === previousSceneIndex+1 ? currentRun+1 : 1;
+      longestConsecutiveSceneRun = Math.max(longestConsecutiveSceneRun,currentRun);
+      previousSceneIndex = sceneIndex;
+    }
+    return {
+      eventId:group.eventId,
+      eventLabel:group.eventLabel,
+      sceneIndexes,
+      sceneCount:sceneIndexes.length,
+      firstSceneIndex,
+      lastSceneIndex,
+      interveningSceneCount:Math.max(0,lastSceneIndex-firstSceneIndex+1-sceneIndexes.length),
+      longestConsecutiveSceneRun,
+      totalEvidenceRangeCount:group.totalEvidenceRangeCount,
+      scenes:scenes.map(scene => {
+        const evidence = group.sceneEvidence.get(scene.sceneIndex);
+        return {
+          sceneIndex:scene.sceneIndex,
+          evidenceRangeCount:evidence?.evidenceRangeCount ?? null,
+          evidenceSamplesTruncated:evidence?.evidenceSamplesTruncated ?? null
+        };
+      })
+    };
+  }).sort((a,b) =>
+    b.sceneCount-a.sceneCount ||
+    b.longestConsecutiveSceneRun-a.longestConsecutiveSceneRun ||
+    b.totalEvidenceRangeCount-a.totalEvidenceRangeCount ||
+    a.eventId.localeCompare(b.eventId,"en")
+  );
+
+  const sourceTruncatedSceneIndexes = scenes
+    .filter(scene => scene.eventLinksTruncated)
+    .map(scene => scene.sceneIndex);
+  return {
+    explicitSceneCount:scenes.length,
+    sourceTruncatedSceneCount:sourceTruncatedSceneIndexes.length,
+    sourceTruncatedSceneIndexes,
+    eventCount:profiles.length,
+    omittedEventCount:Math.max(0,profiles.length-100),
+    profiles:profiles.slice(0,100)
+  };
+}
+
 function buildCharacterEventEvidenceProfiles(
   scenes: readonly LiteraryExplicitSceneSegment[],
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[]
@@ -2660,6 +2778,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const characterEventEvidenceProfiles = buildCharacterEventEvidenceProfiles(
     explicitScenes,input.knownCharacters ?? []
   );
+  const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
@@ -2845,6 +2964,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterCoMentions,
     characterMentionDistributions,
     characterEventEvidenceProfiles,
+    sceneEventEvidenceProfiles,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),

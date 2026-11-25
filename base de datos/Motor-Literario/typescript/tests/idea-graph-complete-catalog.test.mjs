@@ -485,3 +485,95 @@ test("conserva ideas grandes en el grafo aunque no entren en la trayectoria auxi
     api.dispose();
   }
 });
+
+test("contrasta los componentes de Tarjan con un oráculo de alcanzabilidad en grafos deterministas", async () => {
+  const graphCount = 16;
+  const nodesPerGraph = 7;
+  let seed = 0x5eed1234;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x1_0000_0000;
+  };
+  const ideas = [];
+  const expectedCycles = [];
+
+  for (let graphIndex = 0; graphIndex < graphCount; graphIndex++) {
+    const ids = Array.from({ length: nodesPerGraph }, (_, nodeIndex) =>
+      "oracle-" + String(graphIndex).padStart(2, "0") + "-node-" + nodeIndex
+    );
+    const links = ids.map(() => []);
+    for (let from = 0; from < nodesPerGraph; from++) {
+      for (let to = 0; to < nodesPerGraph; to++) {
+        if (random() < 0.24) links[from].push(ids[to]);
+      }
+    }
+
+    // Cierre transitivo independiente: dos nodos comparten SCC si se alcanzan
+    // mutuamente. No reutiliza Tarjan ni la lógica de componentes del producto.
+    const reachable = links.map((targets, from) =>
+      ids.map((_, to) => from === to || targets.includes(ids[to]))
+    );
+    for (let pivot = 0; pivot < nodesPerGraph; pivot++) {
+      for (let from = 0; from < nodesPerGraph; from++) {
+        for (let to = 0; to < nodesPerGraph; to++) {
+          reachable[from][to] ||= reachable[from][pivot] && reachable[pivot][to];
+        }
+      }
+    }
+
+    const assigned = new Set();
+    for (let node = 0; node < nodesPerGraph; node++) {
+      if (assigned.has(node)) continue;
+      const component = [];
+      for (let candidate = 0; candidate < nodesPerGraph; candidate++) {
+        if (reachable[node][candidate] && reachable[candidate][node]) {
+          component.push(ids[candidate]);
+          assigned.add(candidate);
+        }
+      }
+      if (component.length > 1 || links[node].includes(ids[node])) {
+        expectedCycles.push(component.sort());
+      }
+    }
+
+    for (let node = 0; node < nodesPerGraph; node++) {
+      ideas.push({
+        projectId,
+        id: ids[node],
+        text: "Idea " + ids[node],
+        status: "IDEA",
+        originDocumentId: "chapter",
+        sourceProjectName: "Book",
+        evidence: [],
+        relatedIdeaIds: links[node],
+        relatedEntityIds: [],
+        statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+      });
+    }
+  }
+
+  const compareIds = (left, right) => left.localeCompare(right, "en") ||
+    (left === right ? 0 : left < right ? -1 : 1);
+  expectedCycles.sort((left, right) => compareIds(left[0], right[0]));
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-oracle" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl grafo se contrasta.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.deepEqual(
+      graph.cycles.map(cycle => cycle.ideaIds),
+      expectedCycles
+    );
+    assert.equal(graph.cycleCount, expectedCycles.length);
+    assert.equal(graph.ideaCount, graphCount * nodesPerGraph);
+  } finally {
+    api.dispose();
+  }
+});

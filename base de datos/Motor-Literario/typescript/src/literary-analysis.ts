@@ -3238,14 +3238,15 @@ function buildCharacterProjectEventTimeline(
       event.timeReference?.precision ?? null,
       event.timeReference?.orderValue ?? null
     ]);
-    const signatures = eventSignaturesById.get(event.eventId) ?? new Set<string>();
+    const eventKey = JSON.stringify([event.projectId,event.eventId]);
+    const signatures = eventSignaturesById.get(eventKey) ?? new Set<string>();
     signatures.add(signature);
-    eventSignaturesById.set(event.eventId,signatures);
+    eventSignaturesById.set(eventKey,signatures);
   }
   const conflictingEventIds = new Set(
     [...eventSignaturesById]
       .filter(([,signatures]) => signatures.size > 1)
-      .map(([eventId]) => eventId)
+      .map(([eventKey]) => eventKey)
   );
 
   for (const event of projectEvents) {
@@ -3272,7 +3273,7 @@ function buildCharacterProjectEventTimeline(
     // NaN e infinitos no representan posiciones cronológicas ordenables.
     // Se contabilizan como eventos no verificados y no contaminan los grupos.
     if (!Number.isFinite(event.timeReference.orderValue) ||
-        conflictingEventIds.has(event.eventId)) {
+        conflictingEventIds.has(JSON.stringify([event.projectId,event.eventId]))) {
       unverifiedEventCount++;
       continue;
     }

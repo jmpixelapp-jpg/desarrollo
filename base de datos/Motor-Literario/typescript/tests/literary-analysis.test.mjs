@@ -618,6 +618,56 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
         evidence: [evidence("el derrumbe")]
       }
     ],
+    knownProjectEvents: [
+      {
+        projectId: "literary-analysis-test",
+        eventId: "storm",
+        label: "La tormenta",
+        participants: ["ana-id"],
+        timelineTrackId: "main",
+        timeReference: { basis: "calendar", precision: "year", raw: "año 2020", orderValue: 100 },
+        evidence: [evidence("la tormenta")]
+      },
+      {
+        projectId: "literary-analysis-test",
+        eventId: "collapse",
+        label: "El derrumbe",
+        participants: ["ana-id", "bruno-id"],
+        timelineTrackId: "main",
+        timeReference: { basis: "calendar", precision: "year", raw: "año 2021", orderValue: 200 },
+        evidence: [evidence("el derrumbe")]
+      },
+      {
+        projectId: "literary-analysis-test",
+        eventId: "untracked",
+        label: "La llegada",
+        participants: ["ana-id"],
+        timeReference: { basis: "calendar", precision: "year", raw: "año 2022", orderValue: 300 },
+        evidence: [{
+          documentId: "chapter-two", revision: 2, start: 10, end: 20, excerpt: "La llegada"
+        }]
+      },
+      {
+        projectId: "literary-analysis-test",
+        eventId: "untimed",
+        label: "El recuerdo",
+        participants: ["ana-id"],
+        evidence: [{
+          documentId: "chapter-three", revision: 1, start: 0, end: 11, excerpt: "El recuerdo"
+        }]
+      },
+      {
+        projectId: "literary-analysis-test",
+        eventId: "stale-event",
+        label: "La caída antigua",
+        participants: ["ana-id"],
+        timeReference: { basis: "calendar", precision: "year", raw: "año 2019", orderValue: 0 },
+        evidence: [{
+          documentId: "chapter-old", revision: 1, start: 0, end: 12,
+          excerpt: "La caída antigua", status: "stale"
+        }]
+      }
+    ],
     knownAssertions: [
       {
         projectId: "literary-analysis-test",
@@ -658,6 +708,16 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
   assert.equal(ana.causalRelations.length, 1);
   assert.equal(ana.causalRelations[0].characterRole, "both-events-participant");
   assert.equal(ana.scenes[0].causalCandidateIds[0], ana.causalRelations[0].candidateId);
+  assert.equal(ana.projectEventTimeline.sourceEventCount, 5);
+  assert.equal(ana.projectEventTimeline.timedEventCount, 3);
+  assert.equal(ana.projectEventTimeline.untimedEventCount, 1);
+  assert.equal(ana.projectEventTimeline.staleEventCount, 1);
+  assert.equal(ana.projectEventTimeline.pointCount, 3);
+  assert.equal(ana.projectEventTimeline.transitionCount, 1,
+    "solo una pista temporal declarada autoriza transiciones entre puntos");
+  assert.deepEqual(ana.projectEventTimeline.transitions.map(item => [
+    item.timelineTrackId, item.fromOrderValue, item.toOrderValue
+  ]), [["main", 100, 200]]);
   assert.equal(bruno.causalRelations[0].characterRole, "consequence-event-participant");
   assert.deepEqual(bruno.eventParticipation.map(item => item.eventId), ["collapse"]);
   assert.deepEqual(carla.observedSceneIndexes, []);

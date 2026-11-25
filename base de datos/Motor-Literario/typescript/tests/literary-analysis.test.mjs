@@ -1266,3 +1266,37 @@ test("el grafo no reutiliza omisiones de trayectorias cuando recibe el catálogo
   assert.equal(result.ideaGraph.missingFromProjectReferenceCount, 1);
   assert.equal(result.ideaGraph.references[0].resolution, "missing-from-project");
 });
+
+test("el catálogo de compatibilidad no presenta como ausentes ideas fuera del subconjunto de personajes", () => {
+  const projectId = "literary-analysis-test";
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nAna recordó el origen.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownIdeas: [{
+      projectId,
+      ideaId: "character-idea",
+      text: "Ana recuerda su promesa.",
+      status: "IDEA",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: ["unlinked-idea"],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      evidence: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 0
+    }],
+    knownIdeasOmittedCount: 0
+  });
+
+  assert.equal(result.ideaGraph.catalogScope, "character-linked-fallback");
+  assert.equal(result.ideaGraph.omittedIdeaCount, 0);
+  assert.equal(result.ideaGraph.notIncludedReferenceCount, 1);
+  assert.equal(result.ideaGraph.missingFromProjectReferenceCount, 0);
+  assert.equal(result.ideaGraph.references[0].resolution, "not-in-snapshot");
+});

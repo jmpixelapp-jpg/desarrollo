@@ -1,0 +1,52 @@
+name: Motor Literario TypeScript
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "base de datos/Motor-Literario/**"
+      - ".github/workflows/motor-literario-typescript.yml"
+  pull_request:
+    paths:
+      - "base de datos/Motor-Literario/**"
+      - ".github/workflows/motor-literario-typescript.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Una ejecución nueva para la misma referencia sustituye a la anterior.
+# Evita acumular CI obsoleta cuando la rama recibe varios commits seguidos.
+concurrency:
+  group: motor-literario-typescript-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-and-tests:
+    name: TypeScript build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: "base de datos/Motor-Literario/typescript"
+    steps:
+      - name: Runner diagnostics
+        run: |
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner architecture: $RUNNER_ARCH"
+          node --version
+          npm --version
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install development tools
+        run: npm install --no-audit --no-fund
+      - name: Type-check
+        run: npm run typecheck
+      - name: Build and run automated tests
+        run: npm test
+      - name: Run live-edit benchmark
+        run: npm run bench

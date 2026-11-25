@@ -196,6 +196,8 @@ IndexedDB recorre el índice `by-writer` y utiliza la clave primaria compuesta p
 
 El cliente del puente expone `MotorLiterarioBridgeClient.getPersonalIdeaLibraryPage(projectId, cursor, limit)`. La consulta no altera la transferencia final: el archivo de ideas `IDEA` al cerrar el libro continúa siendo una operación atómica con recibo durable e idempotente.
 
+La biblioteca es compartida entre los proyectos del mismo escritor, pero nunca entre escritores. IndexedDB publica un aviso local por `writerId` después de confirmar la transacción de archivo o de consolidación de entidades. SQLite mantiene una versión durable por escritor; el puente compara esa versión al detectar commits externos y envía `engine.personalIdeaLibraryChanged` a todos los proyectos abiertos con la misma identidad autenticada. El aviso contiene únicamente `projectId` y `writerId`, no el contenido de las ideas. La aplicación anfitriona lo recibe mediante `HostCallbacks.onPersonalIdeaLibraryChanged` o `MotorLiterarioBridgeClient.onNotification("engine.personalIdeaLibraryChanged", ...)` y vuelve a consultar la página afectada. Un proyecto de otro escritor no recibe el aviso.
+
 
 ### Métricas de monitoreo en vivo
 

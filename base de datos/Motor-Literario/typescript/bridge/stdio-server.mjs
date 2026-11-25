@@ -69,6 +69,7 @@ const PUBLIC_API_METHODS = new Set([
   "getDictionaryEntryEntityLinks",
   "setDictionaryEntryEntityLink",
   "getNarrativeIdeas",
+  "refreshNarrativeKnowledge",
   "setNarrativeIdeaEntityLink",
   "setNarrativeIdeaLink",
   "archiveUnincorporatedIdeas",

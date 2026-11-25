@@ -3346,13 +3346,13 @@ function buildLiteraryIdeaGraph(
     return structuredClone(literaryIdeaGraphCacheValue);
   }
   const projectCatalogComplete = catalogScope === "project" && omittedIdeaCount === 0;
-  const ideaIds = new Set(orderedIdeas.map(idea => idea.ideaId));
   const ideaIndexById = new Map(
     orderedIdeas.map((idea, index) => [idea.ideaId, index] as const)
   );
-  const unionParent = new Int32Array(orderedIdeas.length);
-  const unionSize = new Int32Array(orderedIdeas.length);
-  for (let index = 0; index < orderedIdeas.length; index++) {
+  const ideaCount = orderedIdeas.length;
+  const unionParent = new Int32Array(ideaCount);
+  const unionSize = new Int32Array(ideaCount);
+  for (let index = 0; index < ideaCount; index++) {
     unionParent[index] = index;
     unionSize[index] = 1;
   }
@@ -3377,40 +3377,39 @@ function buildLiteraryIdeaGraph(
     unionParent[rightRoot] = leftRoot;
     unionSize[leftRoot] = unionSize[leftRoot]! + unionSize[rightRoot]!;
   };
-  const adjacency = new Map<string, string[]>();
-  const incoming = new Map<string, number>();
-  for (const idea of orderedIdeas) {
-    adjacency.set(idea.ideaId, []);
-    incoming.set(idea.ideaId, 0);
-  }
 
+  // Los índices siguen el orden canónico de IDs; las listas numéricas evitan
+  // Map/Set por arista y conservan el orden necesario para búsquedas binarias.
+  const adjacency: number[][] = Array.from({ length: ideaCount }, () => []);
+  const incoming = new Int32Array(ideaCount);
+  const outgoingExternal = new Int32Array(ideaCount);
   let referenceCount = 0;
   let includedReferenceCount = 0;
   let notIncludedReferenceCount = 0;
   let missingFromProjectReferenceCount = 0;
   const references: LiteraryIdeaGraphReference[] = [];
-  const outgoingExternal = new Map<string, number>();
 
-  for (const idea of orderedIdeas) {
+  for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
+    const idea = orderedIdeas[sourceIndex]!;
     const targets = [...idea.relatedIdeaIds].sort(compareIdeaIds);
     for (const targetId of targets) {
       referenceCount++;
-      const included = ideaIds.has(targetId);
-      if (included) {
+      const targetIndex = ideaIndexById.get(targetId);
+      if (targetIndex !== undefined) {
         includedReferenceCount++;
-        adjacency.get(idea.ideaId)!.push(targetId);
-        incoming.set(targetId, (incoming.get(targetId) ?? 0) + 1);
-        unionNodes(ideaIndexById.get(idea.ideaId)!, ideaIndexById.get(targetId)!);
+        adjacency[sourceIndex]!.push(targetIndex);
+        incoming[targetIndex] = incoming[targetIndex]! + 1;
+        unionNodes(sourceIndex, targetIndex);
       } else {
         notIncludedReferenceCount++;
         if (projectCatalogComplete) missingFromProjectReferenceCount++;
-        outgoingExternal.set(idea.ideaId, (outgoingExternal.get(idea.ideaId) ?? 0) + 1);
+        outgoingExternal[sourceIndex] = outgoingExternal[sourceIndex]! + 1;
       }
       if (references.length < MAX_IDEA_GRAPH_REFERENCE_SAMPLES) {
         references.push({
           fromIdeaId: idea.ideaId,
           toIdeaId: targetId,
-          resolution: included
+          resolution: targetIndex !== undefined
             ? "included-in-snapshot"
             : projectCatalogComplete ? "missing-from-project" : "not-in-snapshot"
         });
@@ -3418,12 +3417,12 @@ function buildLiteraryIdeaGraph(
     }
   }
 
-  const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map(idea => ({
+  const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => ({
     ideaId: idea.ideaId,
     status: idea.status,
-    incomingReferenceCount: incoming.get(idea.ideaId) ?? 0,
-    includedOutgoingReferenceCount: adjacency.get(idea.ideaId)!.length,
-    notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0,
+    incomingReferenceCount: incoming[index]!,
+    includedOutgoingReferenceCount: adjacency[index]!.length,
+    notIncludedOutgoingReferenceCount: outgoingExternal[index]!,
     statusHistory: idea.statusHistory.map(change => ({ ...change })),
     omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
     writerDecisionCount: idea.writerDecisionCount,
@@ -3431,62 +3430,61 @@ function buildLiteraryIdeaGraph(
     staleEvidenceCount: idea.staleEvidenceCount
   }));
 
-  // Tarjan: detecta componentes cíclicos en O(V + E), sin atribuir causalidad
-  // ni significado narrativo al hecho de que haya vínculos que formen un ciclo.
+  // Tarjan usa índices compactos en arreglos tipados; detecta componentes
+  // cíclicos en O(V + E) sin mapas y conjuntos de cadenas por nodo.
   let nextIndex = 0;
-  const indexById = new Map<string, number>();
-  const lowLinkById = new Map<string, number>();
-  const stack: string[] = [];
-  const onStack = new Set<string>();
+  const discoveryIndex = new Int32Array(ideaCount);
+  const lowLink = new Int32Array(ideaCount);
+  discoveryIndex.fill(-1);
+  lowLink.fill(-1);
+  const stack: number[] = [];
+  const onStack = new Uint8Array(ideaCount);
   const cycles: LiteraryIdeaGraphCycle[] = [];
 
-  const visit = (ideaId: string): void => {
+  const visit = (ideaIndex: number): void => {
     const index = nextIndex++;
-    indexById.set(ideaId, index);
-    lowLinkById.set(ideaId, index);
-    stack.push(ideaId);
-    onStack.add(ideaId);
+    discoveryIndex[ideaIndex] = index;
+    lowLink[ideaIndex] = index;
+    stack.push(ideaIndex);
+    onStack[ideaIndex] = 1;
 
-    for (const targetId of adjacency.get(ideaId) ?? []) {
-      if (!indexById.has(targetId)) {
-        visit(targetId);
-        lowLinkById.set(
-          ideaId,
-          Math.min(lowLinkById.get(ideaId)!, lowLinkById.get(targetId)!)
-        );
-      } else if (onStack.has(targetId)) {
-        lowLinkById.set(
-          ideaId,
-          Math.min(lowLinkById.get(ideaId)!, indexById.get(targetId)!)
+    for (const targetIndex of adjacency[ideaIndex]!) {
+      if (discoveryIndex[targetIndex] === -1) {
+        visit(targetIndex);
+        lowLink[ideaIndex] = Math.min(lowLink[ideaIndex]!, lowLink[targetIndex]!);
+      } else if (onStack[targetIndex] === 1) {
+        lowLink[ideaIndex] = Math.min(
+          lowLink[ideaIndex]!, discoveryIndex[targetIndex]!
         );
       }
     }
 
-    if (lowLinkById.get(ideaId) !== indexById.get(ideaId)) return;
-    const component: string[] = [];
+    if (lowLink[ideaIndex] !== discoveryIndex[ideaIndex]) return;
+    const component: number[] = [];
     while (stack.length > 0) {
       const member = stack.pop()!;
-      onStack.delete(member);
+      onStack[member] = 0;
       component.push(member);
-      if (member === ideaId) break;
+      if (member === ideaIndex) break;
     }
     if (component.length > 1) {
-      component.sort(compareIdeaIds);
-      cycles.push({ ideaIds: component });
+      component.sort((left, right) => left - right);
+      cycles.push({
+        ideaIds: component.map(member => orderedIdeas[member]!.ideaId)
+      });
     }
   };
 
-  for (const idea of orderedIdeas) {
-    if (!indexById.has(idea.ideaId)) visit(idea.ideaId);
+  for (let index = 0; index < ideaCount; index++) {
+    if (discoveryIndex[index] === -1) visit(index);
   }
   cycles.sort((left, right) =>
     compareIdeaIds(left.ideaIds[0]!, right.ideaIds[0]!)
   );
 
-  // Union-find agrupa los componentes débiles en O(V + E α(V)) sin duplicar
-  // las aristas en un segundo mapa de conjuntos no dirigidos.
+  // Union-find agrupa los componentes débiles sin duplicar las aristas.
   const weakGroups = new Map<number, string[]>();
-  for (let index = 0; index < orderedIdeas.length; index++) {
+  for (let index = 0; index < ideaCount; index++) {
     const root = findUnionRoot(index);
     const group = weakGroups.get(root) ?? [];
     group.push(orderedIdeas[index]!.ideaId);
@@ -3502,25 +3500,25 @@ function buildLiteraryIdeaGraph(
     compareIdeaIds(left.representativeIdeaId, right.representativeIdeaId)
   );
 
-  // Las listas de adyacencia están ordenadas; buscar el arco inverso por
-  // búsqueda binaria evita mantener otra copia de todas las aristas.
-  const hasSortedTarget = (sortedTargets: readonly string[], targetId: string): boolean => {
+  // Los índices numéricos mantienen el orden de IDs y permiten comprobar
+  // reciprocidad por búsqueda binaria sin duplicar la lista de aristas.
+  const hasSortedTarget = (sortedTargets: readonly number[], targetIndex: number): boolean => {
     let low = 0;
     let high = sortedTargets.length - 1;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      const comparison = compareIdeaIds(sortedTargets[middle]!, targetId);
-      if (comparison === 0) return true;
-      if (comparison < 0) low = middle + 1;
+      const candidate = sortedTargets[middle]!;
+      if (candidate === targetIndex) return true;
+      if (candidate < targetIndex) low = middle + 1;
       else high = middle - 1;
     }
     return false;
   };
   let reciprocalReferencePairCount = 0;
-  for (const idea of orderedIdeas) {
-    for (const targetId of adjacency.get(idea.ideaId) ?? []) {
-      if (compareIdeaIds(idea.ideaId, targetId) < 0 &&
-          hasSortedTarget(adjacency.get(targetId) ?? [], idea.ideaId)) {
+  for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
+    for (const targetIndex of adjacency[sourceIndex]!) {
+      if (sourceIndex < targetIndex &&
+          hasSortedTarget(adjacency[targetIndex]!, sourceIndex)) {
         reciprocalReferencePairCount++;
       }
     }

@@ -57,7 +57,7 @@ export function downloadIndexedDbBackupFile(
   filename = `motor-literario-${new Date().toISOString().replace(/[:.]/gu, "-")}.json`
 ): void {
   const safeFilename = filename.trim();
-  const deviceName = safeFilename.split(".", 1)[0]?.toUpperCase() ?? "";
+  const deviceName = safeFilename.split(".", 1)[0]?.replace(/[ .]+$/u, "").toUpperCase() ?? "";
   if (!safeFilename || safeFilename.length > 180 ||
       /[<>:"|?*]/u.test(safeFilename) ||
       safeFilename.includes("/") || safeFilename.includes("\\") ||
@@ -67,7 +67,7 @@ export function downloadIndexedDbBackupFile(
       }) ||
       safeFilename.endsWith(".") || safeFilename.endsWith(" ") ||
       safeFilename === "." || safeFilename === ".." ||
-      /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/u.test(deviceName)) {
+      /^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])$/u.test(deviceName)) {
     throw new Error("El nombre del archivo de respaldo no es válido.");
   }
 

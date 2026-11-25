@@ -29,6 +29,42 @@ function analyze(ideas) {
   }).ideaGraph.lexicalResonances;
 }
 
+function analyzeGraph(ideas, options = {}) {
+  return analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-1",
+    revision: 1,
+    text: "Fragmento narrativo de prueba.",
+    knownProjectIdeas: ideas,
+    knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0
+  }).ideaGraph;
+}
+
+test("memoiza el grafo completo, aísla las respuestas e invalida cambios estructurales", () => {
+  const ideas = [
+    { ...idea("graph-a", "memoria espejo luz"), relatedIdeaIds: ["graph-b"] },
+    { ...idea("graph-b", "memoria espejo destino"), relatedIdeaIds: ["graph-a"] }
+  ];
+  const first = analyzeGraph(ideas);
+  assert.equal(first.cycleCount, 1);
+  assert.equal(first.referenceCount, 2);
+  const expected = structuredClone(first);
+
+  first.nodes[0].statusHistory[0].reason = "mutación externa";
+  first.cycles[0].ideaIds.pop();
+  const repeated = analyzeGraph(ideas);
+  assert.deepEqual(repeated, expected);
+
+  const changed = analyzeGraph([
+    ideas[0],
+    { ...ideas[1], status: "incorporated", relatedIdeaIds: [] }
+  ]);
+  assert.equal(changed.cycleCount, 0);
+  assert.equal(changed.referenceCount, 1);
+  assert.equal(changed.nodes.find(node => node.ideaId === "graph-b").status, "incorporated");
+  assert.equal(changed.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 1);
+});
+
 test("detecta resonancias por términos literales compartidos sin alterar el grafo", () => {
   const ideas = [
     idea("idea-a", "La luz revela la memoria del espejo"),

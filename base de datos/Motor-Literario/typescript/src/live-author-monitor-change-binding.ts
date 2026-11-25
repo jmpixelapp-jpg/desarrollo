@@ -50,6 +50,7 @@ export interface LiveAuthorMonitorChangeBindingOptions {
  * stopChanges(). Además expone reintento e inspección de la cola diferida.
  */
 export interface LiveAuthorMonitorChangeBindingControl {
+  /** Se detiene solo con backlog vacío; lanza un error y conserva el stream si hay deltas pendientes. */
   (): void;
   /** Reenvía en orden todos los deltas retenidos hasta que el motor vuelva a rechazarlos. */
   retryPending(): void;

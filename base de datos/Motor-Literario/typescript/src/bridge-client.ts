@@ -2,6 +2,7 @@ import type {
   PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage,
   ProjectFinalizationSummary, StoredProjectFinalizationReceipt
 } from "./contracts";
+import type { NarrativeIdea, PersonalIdeaLibraryEntry } from "./narrative-knowledge";
 import type { RecordLifecycle, RelationLifecycle } from "./project-data";
 
 export interface BridgeReadable {
@@ -298,6 +299,65 @@ export class MotorLiterarioBridgeClient {
     replacement: string;
   }): Promise<unknown> {
     return this.request("document.change", { projectId, change });
+  }
+
+  /** Lee el catálogo de ideas del proyecto activo, sin mezclar bibliotecas de otros libros. */
+  getNarrativeIdeas(projectId: string): Promise<readonly NarrativeIdea[]> {
+    return this.request<readonly NarrativeIdea[]>("project.call", {
+      projectId,
+      method: "getNarrativeIdeas",
+      args: []
+    });
+  }
+
+  /** Cambia una arista dirigida entre dos ideas del mismo proyecto. */
+  setNarrativeIdeaLink(
+    projectId: string,
+    ideaId: string,
+    relatedIdeaId: string,
+    linked: boolean
+  ): Promise<NarrativeIdea> {
+    return this.request<NarrativeIdea>("project.call", {
+      projectId,
+      method: "setNarrativeIdeaLink",
+      args: [ideaId, relatedIdeaId, linked]
+    });
+  }
+
+  /** Vincula o desvincula una idea de una ficha narrativa del mismo libro. */
+  setNarrativeIdeaEntityLink(
+    projectId: string,
+    ideaId: string,
+    entityId: string,
+    linked: boolean
+  ): Promise<NarrativeIdea> {
+    return this.request<NarrativeIdea>("project.call", {
+      projectId,
+      method: "setNarrativeIdeaEntityLink",
+      args: [ideaId, entityId, linked]
+    });
+  }
+
+  /** Registra una decisión editorial explícita del escritor. */
+  setNarrativeIdeaStatus(
+    projectId: string,
+    ideaId: string,
+    status: NarrativeIdea["status"]
+  ): Promise<NarrativeIdea> {
+    return this.request<NarrativeIdea>("project.call", {
+      projectId,
+      method: "setNarrativeIdeaStatus",
+      args: [ideaId, status]
+    });
+  }
+
+  /** Lectura completa de compatibilidad; para bibliotecas grandes se recomienda la API paginada. */
+  getPersonalIdeaLibrary(projectId: string): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    return this.request<readonly PersonalIdeaLibraryEntry[]>("project.call", {
+      projectId,
+      method: "getPersonalIdeaLibrary",
+      args: []
+    });
   }
 
   finalizeProjectToIdeaLibrary(projectId: string): Promise<ProjectFinalizationSummary> {

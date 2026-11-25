@@ -377,7 +377,7 @@ test("rechaza altas de vínculos entre ideas si el destino fue eliminado externa
     /Ambas ideas deben existir en el proyecto activo/
   );
 
-  assert.equal(store.ideaReads, 1);
+  assert.equal(store.ideaReads, 2);
   assert.equal(store.writes, 0);
   assert.deepEqual(
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,

@@ -53,6 +53,8 @@ export interface LiteraryAnalysisInput {
   readonly knownEvents?: readonly LiteraryAnalysisKnownEvent[];
   /** Catálogo global de acontecimientos del proyecto para cronologías intercapítulos explícitamente fechadas. */
   readonly knownProjectEvents?: readonly LiteraryAnalysisKnownProjectEvent[];
+  /** Registros globales omitidos al acotar el catálogo transferido al análisis. */
+  readonly knownProjectEventsOmittedCount?: number;
   /** Historiales append-only validados de cambios explícitos de etiqueta y participantes. */
   readonly knownEventLifecycles?: readonly EventLifecycle[];
   /** Afirmaciones históricas del proyecto; solo se asignan a escenas con evidencia vigente de esta revisión. */
@@ -620,6 +622,7 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
   readonly omittedAttributeProfileCount: number;
   readonly omittedEventAssociationCount: number;
   readonly omittedCausalCandidateCount: number;
+  readonly omittedProjectEventCount: number;
   readonly causalCandidateCount: number;
   readonly trajectories: readonly LiteraryCharacterNarrativeTrajectory[];
 }
@@ -3178,6 +3181,7 @@ function buildCharacterNarrativeTrajectories(
     omittedAttributeProfileCount:attributeEvolution.omittedProfileCount,
     omittedEventAssociationCount:eventEvidence.omittedAssociationCount,
     omittedCausalCandidateCount:dependencies.omittedCandidateCount,
+    omittedProjectEventCount:input.knownProjectEventsOmittedCount ?? 0,
     causalCandidateCount:dependencies.candidateCount,
     trajectories:trajectories.slice(0,200)
   };
@@ -4336,6 +4340,8 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (!Array.isArray(input.knownEvents) || input.knownEvents.length > 2_000)) ||
       (input.knownProjectEvents !== undefined &&
         (!Array.isArray(input.knownProjectEvents) || input.knownProjectEvents.length > 2_000)) ||
+      (input.knownProjectEventsOmittedCount !== undefined &&
+        (!Number.isSafeInteger(input.knownProjectEventsOmittedCount) || input.knownProjectEventsOmittedCount < 0)) ||
       (input.knownEventLifecycles !== undefined &&
         (!Array.isArray(input.knownEventLifecycles) || input.knownEventLifecycles.length > 20_000)) ||
       (input.knownAssertions !== undefined &&

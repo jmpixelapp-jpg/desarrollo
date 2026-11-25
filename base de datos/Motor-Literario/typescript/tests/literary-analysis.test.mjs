@@ -600,7 +600,7 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
     revision: 1,
     text,
     knownCharacters: [
-      { entityId: "ana-id", canonicalName: "Ana", aliases: ["Anita"] },
+      { entityId: "ana-id", canonicalName: "Ana" },
       { entityId: "bruno-id", canonicalName: "Bruno" },
       { entityId: "carla-id", canonicalName: "Carla" }
     ],

@@ -2868,6 +2868,7 @@ function buildExplicitEventDependencyAnalysis(
     readonly sentenceIndex: number;
   }> = [];
   let evidenceAnchorCount = 0;
+  let sampledEvidenceAnchorCount = 0;
   let omittedEvidenceAnchorCount = 0;
   const MAX_EVIDENCE_ANCHORS = 2_000;
 
@@ -2882,10 +2883,11 @@ function buildExplicitEventDependencyAnalysis(
       const localEnd = evidence.end - baseOffset;
       if (localStart < 0 || localEnd <= localStart || localEnd > text.length) continue;
       evidenceAnchorCount++;
-      if (anchors.length >= MAX_EVIDENCE_ANCHORS) {
+      if (sampledEvidenceAnchorCount >= MAX_EVIDENCE_ANCHORS) {
         omittedEvidenceAnchorCount++;
         continue;
       }
+      sampledEvidenceAnchorCount++;
       let low = 0;
       let high = sentenceRanges.length-1;
       let sentenceIndex = -1;

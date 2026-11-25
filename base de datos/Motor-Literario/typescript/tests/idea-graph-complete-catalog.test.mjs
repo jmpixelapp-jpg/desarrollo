@@ -319,3 +319,58 @@ test("el anfitrión recorta IDs Unicode colacionados de forma determinista", asy
   assert.ok(first.nodes.some(node => node.ideaId === decomposedIdea.id));
   assert.equal(first.nodes.some(node => node.ideaId === composedIdea.id), false);
 });
+
+
+test("no reintroduce textos omitidos por tamaño a través de la lista de ideas ligadas a personajes", async () => {
+  const oversizedIdea = {
+    projectId,
+    id: "oversized-linked-idea",
+    text: "x".repeat(100_001),
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds: [],
+    relatedEntityIds: ["character-1"],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  };
+  const entity = {
+    projectId,
+    id: "character-1",
+    kind: "character",
+    canonicalName: "Iria",
+    normalizedName: "iria",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  };
+  const oversizedStore = {
+    ...store,
+    documents: new Map(),
+    ideas: [oversizedIdea],
+    async loadEntities(project) {
+      return project === projectId ? [structuredClone(entity)] : [];
+    }
+  };
+  const api = new HostEngineApi({ store: oversizedStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-oversized" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\nIria contempla el camino.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const result = await api.analyzeLiteraryDocument("chapter");
+    assert.equal(result.ideaGraph.ideaCount, 1);
+    assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount, 1);
+    assert.equal(result.ideaGraph.lexicalResonances.inputIdeaCount, 1);
+    assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount, 0);
+    assert.equal(result.ideaGraph.lexicalResonances.omittedTextBudgetIdeaCount, 1);
+    assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount, 0);
+  } finally {
+    api.dispose();
+  }
+});

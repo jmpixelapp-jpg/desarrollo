@@ -128,13 +128,12 @@ El respaldo contiene el manuscrito y los datos privados de la biblioteca en clar
 
 ## Respaldo y restauración de IndexedDB del navegador
 
-`IndexedDbProjectStore` incluye `exportDatabaseBackup()` y `restoreDatabaseBackup(backup)`. La exportación lee todos los object stores de la versión abierta dentro de una sola transacción readonly y devuelve un paquete JSON con el número de versión, fecha y checksum FNV-1a para detectar alteraciones accidentales. Incluye documentos, journal, conocimiento narrativo, biblioteca personal, diccionarios, historiales, configuraciones, evidencias, autorizaciones y recibos.
+`HostEngineApi` expone `exportDatabaseBackup()` y `restoreDatabaseBackup(backup)` cuando el adaptador local implementa ambas operaciones. El almacenamiento `IndexedDbProjectStore` realiza la instantánea y la restauración atómica. La exportación lee todos los object stores de la versión abierta dentro de una sola transacción readonly y devuelve un paquete JSON con el número de versión, fecha y checksum FNV-1a para detectar alteraciones accidentales. Incluye documentos, journal, conocimiento narrativo, biblioteca personal, diccionarios, historiales, configuraciones, evidencias, autorizaciones y recibos.
 
 El anfitrión debe vaciar primero las colas del motor y guardar el paquete como un archivo privado mediante su propio mecanismo de archivos:
 
 ~~~ts
-await api.flushPendingChanges();
-const backup = await indexedDbStore.exportDatabaseBackup();
+const backup = await api.exportDatabaseBackup();
 await hostFiles.writePrivateFile(
   "motor-literario-backup.json",
   JSON.stringify(backup)
@@ -145,10 +144,11 @@ Para restaurar, leer y validar el JSON antes de abrir proyectos o documentos en 
 
 ~~~ts
 const backup = JSON.parse(await hostFiles.readPrivateFile("motor-literario-backup.json"));
-await indexedDbStore.restoreDatabaseBackup(backup);
+// Ejecutar con una instancia nueva, antes de initializeProject().
+await api.restoreDatabaseBackup(backup);
 ~~~
 
-La restauración exige coincidencia exacta de versión y nombres de almacenes. Reemplaza todas las colecciones dentro de una sola transacción readwrite: si una escritura falla, IndexedDB aborta la transacción y conserva el estado anterior. Después de confirmar, publica invalidaciones de conocimiento narrativo y biblioteca para que las otras pestañas recarguen sus datos. El anfitrión debe ejecutar la restauración en modo de mantenimiento, sin sesiones de edición activas, y reconstruir las instancias del motor que dependan de los datos restaurados.
+La restauración exige una instancia de `HostEngineApi` sin proyecto inicializado; rechaza hacerlo desde una sesión activa. El anfitrión debe cerrar los editores y crear esa instancia de mantenimiento antes de abrir libros. Exige coincidencia exacta de versión y nombres de almacenes. Reemplaza todas las colecciones dentro de una sola transacción readwrite: si una escritura falla, IndexedDB aborta la transacción y conserva el estado anterior. Después de confirmar, publica invalidaciones de conocimiento narrativo y biblioteca para que las otras pestañas recarguen sus datos. El anfitrión debe ejecutar la restauración en modo de mantenimiento, sin sesiones de edición activas, y reconstruir las instancias del motor que dependan de los datos restaurados.
 
 La capacidad se consulta mediante `getCapabilities().fullDatabaseBackupRestore`; solo se anuncia cuando el adaptador implementa ambas operaciones. El puente SQLite no anuncia esta capacidad IndexedDB: dispone de su utilidad de archivo independiente.
 

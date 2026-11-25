@@ -148,6 +148,15 @@ test("respeta el presupuesto global de texto sin dividir una idea a medias", () 
   assert.equal(result.candidatePairCount, 0);
 });
 
+test("distingue textos omitidos por presupuesto de textos ausentes en adaptadores antiguos", () => {
+  const result = analyze([{ ...idea("idea-budget"), textOmitted: "budget" }]);
+
+  assert.equal(result.inputIdeaCount, 1);
+  assert.equal(result.analyzedIdeaCount, 0);
+  assert.equal(result.ideasWithoutTextCount, 0);
+  assert.equal(result.omittedTextBudgetIdeaCount, 1);
+});
+
 test("mantiene compatibilidad con catálogos antiguos que no transfieren el texto", () => {
   const result = analyze([idea("idea-legacy")]);
 

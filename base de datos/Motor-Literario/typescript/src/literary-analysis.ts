@@ -3599,6 +3599,10 @@ function buildLiteraryIdeaLexicalResonances(
     const localized = left.localeCompare(right, "es");
     return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
   };
+  const compareIdeaIds = (left: string, right: string): number => {
+    const localized = left.localeCompare(right, "en");
+    return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
+  };
   const prepared: { ideaId: string; terms: string[] }[] = [];
   let tokenizedTextUnitCount = 0;
   let ideasWithoutTextCount = 0;
@@ -3643,61 +3647,140 @@ function buildLiteraryIdeaLexicalResonances(
     }
   }
 
-  const pairTerms = new Map<number, string[]>();
+  // Un arreglo triangular de un byte por par evita millones de Map/Array
+  // temporales cuando muchas ideas comparten vocabulario de frecuencia media.
+  const ideaCount = prepared.length;
+  const pairRowStarts = new Float64Array(ideaCount);
+  for (let index = 0; index < ideaCount; index++) {
+    pairRowStarts[index] = index * (2 * ideaCount - index - 1) / 2;
+  }
+  const pairIndex = (leftIndex: number, rightIndex: number): number =>
+    pairRowStarts[leftIndex]! + rightIndex - leftIndex - 1;
+  const pairSharedTermCounts = new Uint8Array(ideaCount * (ideaCount - 1) / 2);
   let ignoredHighFrequencyTermCount = 0;
-  for (const [term, ideaIndexes] of postings) {
+
+  for (const ideaIndexes of postings.values()) {
     if (ideaIndexes.length > MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY) {
       ignoredHighFrequencyTermCount++;
       continue;
     }
     for (let left = 0; left < ideaIndexes.length; left++) {
       for (let right = left + 1; right < ideaIndexes.length; right++) {
-        const leftIndex = ideaIndexes[left]!;
-        const rightIndex = ideaIndexes[right]!;
-        const key = leftIndex * prepared.length + rightIndex;
-        const shared = pairTerms.get(key) ?? [];
-        shared.push(term);
-        pairTerms.set(key, shared);
+        const key = pairIndex(ideaIndexes[left]!, ideaIndexes[right]!);
+        // Cada idea contribuye como máximo cien términos distintos a un par.
+        pairSharedTermCounts[key] = pairSharedTermCounts[key]! + 1;
       }
     }
   }
 
-  const allResonances: LiteraryIdeaLexicalResonance[] = [];
-  for (const [key, sharedTerms] of pairTerms) {
-    if (sharedTerms.length < MIN_IDEA_LEXICAL_SHARED_TERMS) continue;
-    const leftIndex = Math.floor(key / prepared.length);
-    const rightIndex = key % prepared.length;
-    const left = prepared[leftIndex]!;
-    const right = prepared[rightIndex]!;
-    const sharedTermCount = sharedTerms.length;
-    const unionTermCount = left.terms.length + right.terms.length - sharedTermCount;
-    const orderedSharedTerms = [...sharedTerms].sort(compareTerms);
-    allResonances.push({
-      leftIdeaId: left.ideaId,
-      rightIdeaId: right.ideaId,
-      leftTermCount: left.terms.length,
-      rightTermCount: right.terms.length,
-      sharedTermCount,
-      jaccardSimilarity: roundMetric(sharedTermCount / unionTermCount),
-      overlapCoefficient: roundMetric(
-        sharedTermCount / Math.min(left.terms.length, right.terms.length)
-      ),
+  interface RankedPair {
+    readonly key: number;
+    readonly leftIndex: number;
+    readonly rightIndex: number;
+    readonly leftIdeaId: string;
+    readonly rightIdeaId: string;
+    readonly leftTermCount: number;
+    readonly rightTermCount: number;
+    readonly sharedTermCount: number;
+    readonly jaccardSimilarity: number;
+    readonly overlapCoefficient: number;
+  }
+  const compareRank = (left: RankedPair, right: RankedPair): number =>
+    right.sharedTermCount - left.sharedTermCount ||
+    right.jaccardSimilarity - left.jaccardSimilarity ||
+    compareIdeaIds(left.leftIdeaId, right.leftIdeaId) ||
+    compareIdeaIds(left.rightIdeaId, right.rightIdeaId);
+  // Heap acotado: conserva solo los cien mejores pares sin materializar el catálogo entero.
+  const topPairs: RankedPair[] = [];
+  let candidatePairCount = 0;
+  const siftWorstUp = (initialIndex: number): void => {
+    let index = initialIndex;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compareRank(topPairs[index]!, topPairs[parent]!) <= 0) break;
+      [topPairs[index], topPairs[parent]] = [topPairs[parent]!, topPairs[index]!];
+      index = parent;
+    }
+  };
+  const siftWorstDown = (initialIndex: number): void => {
+    let index = initialIndex;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let worst = index;
+      if (left < topPairs.length &&
+          compareRank(topPairs[left]!, topPairs[worst]!) > 0) worst = left;
+      if (right < topPairs.length &&
+          compareRank(topPairs[right]!, topPairs[worst]!) > 0) worst = right;
+      if (worst === index) break;
+      [topPairs[index], topPairs[worst]] = [topPairs[worst]!, topPairs[index]!];
+      index = worst;
+    }
+  };
+
+  for (let leftIndex = 0; leftIndex < ideaCount; leftIndex++) {
+    for (let rightIndex = leftIndex + 1; rightIndex < ideaCount; rightIndex++) {
+      const sharedTermCount = pairSharedTermCounts[pairIndex(leftIndex, rightIndex)]!;
+      if (sharedTermCount < MIN_IDEA_LEXICAL_SHARED_TERMS) continue;
+      candidatePairCount++;
+      const left = prepared[leftIndex]!;
+      const right = prepared[rightIndex]!;
+      const unionTermCount = left.terms.length + right.terms.length - sharedTermCount;
+      const candidate: RankedPair = {
+        key: pairIndex(leftIndex, rightIndex),
+        leftIndex,
+        rightIndex,
+        leftIdeaId: left.ideaId,
+        rightIdeaId: right.ideaId,
+        leftTermCount: left.terms.length,
+        rightTermCount: right.terms.length,
+        sharedTermCount,
+        jaccardSimilarity: roundMetric(sharedTermCount / unionTermCount),
+        overlapCoefficient: roundMetric(
+          sharedTermCount / Math.min(left.terms.length, right.terms.length)
+        )
+      };
+      if (topPairs.length < MAX_IDEA_LEXICAL_RESONANCE_SAMPLES) {
+        topPairs.push(candidate);
+        siftWorstUp(topPairs.length - 1);
+      } else if (compareRank(candidate, topPairs[0]!) < 0) {
+        topPairs[0] = candidate;
+        siftWorstDown(0);
+      }
+    }
+  }
+  topPairs.sort(compareRank);
+
+  // Recupera términos únicamente para los cien resultados que se van a exponer.
+  const selectedTerms = new Map<number, string[]>(
+    topPairs.map(pair => [pair.key, []])
+  );
+  for (const [term, ideaIndexes] of postings) {
+    if (ideaIndexes.length > MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY) continue;
+    for (let left = 0; left < ideaIndexes.length; left++) {
+      for (let right = left + 1; right < ideaIndexes.length; right++) {
+        const shared = selectedTerms.get(pairIndex(ideaIndexes[left]!, ideaIndexes[right]!));
+        if (shared) shared.push(term);
+      }
+    }
+  }
+
+  const resonances: LiteraryIdeaLexicalResonance[] = topPairs.map(pair => {
+    const orderedSharedTerms = (selectedTerms.get(pair.key) ?? []).sort(compareTerms);
+    return {
+      leftIdeaId: pair.leftIdeaId,
+      rightIdeaId: pair.rightIdeaId,
+      leftTermCount: pair.leftTermCount,
+      rightTermCount: pair.rightTermCount,
+      sharedTermCount: pair.sharedTermCount,
+      jaccardSimilarity: pair.jaccardSimilarity,
+      overlapCoefficient: pair.overlapCoefficient,
       sharedTerms: orderedSharedTerms.slice(0, MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES),
       omittedSharedTermCount: Math.max(
         0, orderedSharedTerms.length - MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES
       )
-    });
-  }
-  const compareIdeaIds = (left: string, right: string): number => {
-    const localized = left.localeCompare(right, "en");
-    return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
-  };
-  allResonances.sort((left, right) =>
-    right.sharedTermCount - left.sharedTermCount ||
-    right.jaccardSimilarity - left.jaccardSimilarity ||
-    compareIdeaIds(left.leftIdeaId, right.leftIdeaId) ||
-    compareIdeaIds(left.rightIdeaId, right.rightIdeaId)
-  );
+    };
+  });
 
   return {
     inputIdeaCount: ideas.length,
@@ -3710,11 +3793,11 @@ function buildLiteraryIdeaLexicalResonances(
     ignoredHighFrequencyTermCount,
     minimumSharedTermCount: MIN_IDEA_LEXICAL_SHARED_TERMS,
     maxTermDocumentFrequency: MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY,
-    candidatePairCount: allResonances.length,
+    candidatePairCount,
     omittedCandidatePairCount: Math.max(
-      0, allResonances.length - MAX_IDEA_LEXICAL_RESONANCE_SAMPLES
+      0, candidatePairCount - resonances.length
     ),
-    resonances: allResonances.slice(0, MAX_IDEA_LEXICAL_RESONANCE_SAMPLES)
+    resonances
   };
 }
 

@@ -382,7 +382,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(complete.missingFromProjectReferenceCount, 1);
   assert.deepEqual(
     complete.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "missing-from-project"]
+    ["missing-from-project", "included-in-snapshot"]
   );
 
   const partial = analyze([source, included], 3);
@@ -391,7 +391,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(partial.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     partial.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 
   const legacy = analyzeLiteraryFragment({
@@ -406,7 +406,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(legacy.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     legacy.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 });
 

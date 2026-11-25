@@ -307,6 +307,7 @@ test("publica snapshots inmutables del backlog al entrar en contrapresión y al 
   ]);
   assert.equal(states.at(-1).reason, undefined);
   stop();
+  assert.equal(states.length, 4, "el desmontaje no debe repetir el estado clear");
 });
 
 test("limpia el indicador de contrapresión solo al descartar el backlog tras resincronizar", () => {
@@ -327,4 +328,50 @@ test("limpia el indicador de contrapresión solo al descartar el backlog tras re
   assert.deepEqual(states.at(-1), { status: "clear", pendingCount: 0 });
   assert.deepEqual(stop.getPendingChanges(), []);
   stop();
+});
+
+test("expone sink_error, aísla fallos de la vista y conserva el FIFO durante la recuperación", () => {
+  const f = sourceFixture();
+  const attempts = [];
+  const states = [];
+  const errors = [];
+  let shouldThrow = true;
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        if (shouldThrow) throw new Error("temporary_sink_failure");
+        return { status: "queued", ticketId: "ticket-" + value.sequence };
+      }
+    },
+    onAdmission: () => {},
+    onBackpressure: snapshot => {
+      states.push(snapshot);
+      throw new Error("visual_indicator_failure");
+    },
+    onError: error => errors.push(error.message)
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  assert.deepEqual(states.map(state => [state.status, state.pendingCount, state.reason]), [
+    ["backpressured", 1, "sink_error"],
+    ["backpressured", 2, "sink_error"]
+  ]);
+  assert.deepEqual(errors, ["temporary_sink_failure"]);
+
+  shouldThrow = false;
+  stop.retryPending();
+  assert.deepEqual(attempts, [1, 1, 2]);
+  assert.deepEqual(stop.getPendingChanges(), []);
+  assert.deepEqual(states.map(state => [state.status, state.pendingCount]), [
+    ["backpressured", 1],
+    ["backpressured", 2],
+    ["backpressured", 1],
+    ["clear", 0]
+  ]);
+  assert.deepEqual(errors, ["temporary_sink_failure"]);
+  stop();
+  assert.equal(states.length, 4);
 });

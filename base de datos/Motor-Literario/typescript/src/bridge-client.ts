@@ -369,6 +369,15 @@ export class MotorLiterarioBridgeClient {
     });
   }
 
+  /** Ruta de compatibilidad: devuelve el lote completo archivado en memoria. */
+  archiveUnincorporatedIdeas(projectId: string): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    return this.request<readonly PersonalIdeaLibraryEntry[]>("project.call", {
+      projectId,
+      method: "archiveUnincorporatedIdeas",
+      args: []
+    });
+  }
+
   finalizeProjectToIdeaLibrary(projectId: string): Promise<ProjectFinalizationSummary> {
     return this.request<ProjectFinalizationSummary>("project.call", {
       projectId,

@@ -553,3 +553,13 @@ La prueba comprueba:
 El test usa fake-indexeddb en memoria. Verifica el código de migración, las transacciones y la preservación de registros durante la actualización, pero sigue sin sustituir una prueba E2E en navegador con IndexedDB físico y reinicio real.
 
 **Validación CI:** ejecución [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335), commit 623a3397588ca135ab781d0a0a597a2f7ef53958: MLDB 0.4.2 válido; auditoría física correcta (25 tablas, 33 almacenes); build Vite correcto; 100 pruebas aprobadas, 0 fallidas y 0 omitidas.
+
+
+
+## 29. Reapertura de IndexedDbProjectStore después de close()
+
+La prueba de ciclo de vida ahora cierra explícitamente una conexión del almacén después de guardar el checkpoint y vuelve a leerlo usando la misma instancia IndexedDbProjectStore. La lectura posterior debe abrir una nueva conexión y devolver el mismo checkpoint sin modificaciones. Después se ejecuta el borrado normal y se confirma que la clave ya no existe.
+
+Esto verifica que close() libera la conexión actual, pero no vuelve inutilizable la instancia. El estado persistido permanece en IndexedDB y la siguiente operación puede crear una conexión nueva.
+
+**Validación CI:** ejecución [45724732118](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724732118), commit 1a48078743c450bb7c90e4dd78c75b1eac902fbc: MLDB 0.4.2 válido; auditoría física correcta con 25 tablas del motor y 33 almacenes IndexedDB; build Vite correcto; 100 pruebas aprobadas, 0 fallidas y 0 omitidas.

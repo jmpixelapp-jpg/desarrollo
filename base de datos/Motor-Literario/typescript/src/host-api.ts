@@ -1762,8 +1762,7 @@ export class HostEngineApi {
           projectId:idea.projectId,
           ideaId:idea.id,
           ...(includeLexicalText ? {text:idea.text} : {}),
-          ...(!knownLinkedIdeaIds.has(idea.id) && !includeLexicalText
-            ? {textOmitted:"budget" as const} : {}),
+          ...(!textFitsBudget ? {textOmitted:"budget" as const} : {}),
           status:idea.status,
           relatedIdeaIds:idea.relatedIdeaIds ?? [],
           evidenceCount:activeEvidence.length,
@@ -1779,7 +1778,7 @@ export class HostEngineApi {
       return {
         projectId:idea.projectId,
         ideaId:idea.id,
-        text:idea.text,
+        ...(idea.text.length <= 100_000 ? {text:idea.text} : {}),
         status:idea.status,
         originDocumentId:idea.originDocumentId,
         sourceProjectName:idea.sourceProjectName,

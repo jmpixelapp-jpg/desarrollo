@@ -5,7 +5,7 @@ import {
   type LiveAuthorMonitorChangeBindingControl
 } from "./live-author-monitor-change-binding";
 import type {
-  LiveAuthorMonitorTextAreaHostApi
+  LiveAuthorMonitorEditorHostApi
 } from "./live-author-monitor-textarea-integration";
 import type { LiveAuthorMonitorSnapshot } from "./live-author-monitor";
 import {
@@ -18,7 +18,7 @@ import {
 export interface LiveAuthorMonitorEditorTransactionIntegrationOptions {
   readonly documentId: string;
   readonly editor: LiveAuthorMonitorEditorTransactionProvider;
-  readonly hostApi: LiveAuthorMonitorTextAreaHostApi;
+  readonly hostApi: LiveAuthorMonitorEditorHostApi;
   readonly onAdmission?: (change: EditorChange, admission: ChangeAdmission) => void;
   readonly onBackpressure?: (snapshot: LiveAuthorMonitorBackpressureSnapshot) => void;
   readonly onError?: (

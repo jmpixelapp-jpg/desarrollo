@@ -477,7 +477,7 @@ test("el archivo rechaza referencias desde ideas que permanecerán en el libro",
     });
     assert.equal(library.length, 0);
     assert.equal(remaining.length, 2);
-    assert.equal(receipt, undefined);
+    assert.equal(receipt, null);
 
     const exited = waitForExit(child);
     await client.shutdown();

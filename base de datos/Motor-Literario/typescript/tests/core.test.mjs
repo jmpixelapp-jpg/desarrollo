@@ -2172,7 +2172,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 13);
+      assert.equal(version, 14);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2185,6 +2185,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("fresh-database"), []);
     assert.deepEqual(createdStores, [
+      { name: "project-settings", keyPath: ["projectId", "key"] },
       { name: "documents", keyPath: ["projectId", "documentId"] },
       { name: "changes", keyPath: ["projectId", "documentId", "sequence"] },
       { name: "narrative-entities", keyPath: ["projectId", "id"] },
@@ -2199,6 +2200,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "dictionary-entries", keyPath: ["projectId", "id"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
+      ["project-settings", "by-project"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],
@@ -2277,7 +2279,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const createdIndexes = [];
   const names = [
-    "documents", "changes", "narrative-entities", "narrative-relations",
+    "project-settings", "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
     "project-dictionaries", "dictionary-entries"
@@ -2329,8 +2331,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 13);
+    assert.equal(openedVersion, 14);
     const expected = [
+      ["project-settings", "by-project"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],
@@ -2366,7 +2369,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
 test("IndexedDB reemplaza índices existentes con definición incompatible", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const names = [
-    "documents", "changes", "narrative-entities", "narrative-relations",
+    "project-settings", "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
     "project-dictionaries", "dictionary-entries"

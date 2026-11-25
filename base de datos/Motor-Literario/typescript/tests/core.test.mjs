@@ -4428,6 +4428,23 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [{ ...base, relatedIdeaIds: ["idea-a"] }];
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
+  store.loadIdeas = async () => [{
+    ...base,
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "IDEA", reason: "writer", changedAt: 2 }
+    ]
+  }];
+  await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
+  store.loadIdeas = async () => [{
+    ...base,
+    status: "discarded",
+    statusHistory: [
+      { status: "incorporated", reason: "initial", changedAt: 1 },
+      { status: "discarded", reason: "text-revised", changedAt: 2 }
+    ]
+  }];
+  await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [];
   assert.deepEqual(await api.getNarrativeIdeas(), []);
 });
@@ -7501,6 +7518,91 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
     idea: {
       ...structuredClone(entry.idea),
       statusHistory: [{ status: "incorporated", changedAt: 2, reason: "initial" }]
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
+
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    idea: {
+      ...structuredClone(entry.idea),
+      relatedIdeaIds: Array.from({ length: 501 }, (_, index) => "root-related-" + index)
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
+
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    idea: {
+      ...structuredClone(entry.idea),
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "IDEA", reason: "writer", changedAt: 2 }
+      ]
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
+
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    context: {
+      version: 1,
+      relatedIdeas: [{
+        projectId: "library-api-validation",
+        id: "invalid-text-revision",
+        text: "Idea incorporada",
+        status: "discarded",
+        originDocumentId: "chapter",
+        sourceProjectName: "Libro validado",
+        evidence: [],
+        statusHistory: [
+          { status: "incorporated", reason: "initial", changedAt: 1 },
+          { status: "discarded", reason: "text-revised", changedAt: 2 }
+        ]
+      }],
+      relatedEntities: []
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
+
+  const contextTargets = Array.from({ length: 501 }, (_, index) => ({
+    projectId: "library-api-validation",
+    id: "context-target-" + index,
+    text: "Idea contextual " + index,
+    status: "discarded",
+    originDocumentId: "chapter",
+    sourceProjectName: "Libro validado",
+    evidence: []
+  }));
+  const contextSource = {
+    projectId: "library-api-validation",
+    id: "context-source",
+    text: "Idea contextual con muchos vínculos",
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: "Libro validado",
+    evidence: [],
+    relatedIdeaIds: contextTargets.map(target => target.id)
+  };
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    idea: { ...structuredClone(entry.idea), relatedIdeaIds: [] },
+    context: {
+      version: 1,
+      relatedIdeas: [contextSource, ...contextTargets],
+      relatedEntities: []
     }
   }];
   await assert.rejects(

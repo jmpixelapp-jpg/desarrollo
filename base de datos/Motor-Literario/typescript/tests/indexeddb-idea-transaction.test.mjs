@@ -1,0 +1,81 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { IndexedDbProjectStore } from "../dist/motor-literario.js";
+
+const DATABASE_NAME = "motor-literario-local";
+const projectId = "indexeddb-idea-transaction";
+
+const idea = (extra = {}) => ({
+  projectId,
+  id: "idea-source",
+  text: "La memoria transforma la ausencia.",
+  status: "IDEA",
+  originDocumentId: "chapter-1",
+  sourceProjectName: "Libro transaccional",
+  evidence: [],
+  relatedEntityIds: [],
+  relatedIdeaIds: [],
+  statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+  ...extra
+});
+
+const entity = {
+  projectId,
+  id: "entity-memory",
+  kind: "concept",
+  canonicalName: "Memoria",
+  normalizedName: "memoria",
+  aliases: [],
+  evidence: [],
+  firstSeenAt: 1,
+  lastSeenAt: 1,
+  extractionVersion: 1
+};
+
+function deleteDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DATABASE_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error ?? new Error("No se pudo limpiar IndexedDB."));
+    request.onblocked = () => reject(new Error("La limpieza de IndexedDB quedó bloqueada."));
+  });
+}
+
+test("IndexedDB revierte una idea inválida y conserva CAS frente a instantáneas obsoletas", {
+  skip: typeof indexedDB === "undefined" ? "Este runtime de Node no expone IndexedDB nativo." : false
+}, async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const original = idea();
+
+  try {
+    await store.saveIdea(original);
+
+    await assert.rejects(
+      store.saveIdeaIfUnchanged(
+        idea({ relatedEntityIds: ["entity-missing"] }),
+        original
+      ),
+      /Referencia narrativa inválida/
+    );
+
+    assert.deepEqual(await store.loadIdeas(projectId), [original]);
+
+    await store.saveEntity(entity);
+    const linked = idea({ relatedEntityIds: [entity.id] });
+    await store.saveIdeaIfUnchanged(linked, original);
+    assert.deepEqual(await store.loadIdeas(projectId), [linked]);
+
+    await assert.rejects(
+      store.saveIdeaIfUnchanged(
+        idea({ text: "Una edición obsoleta intenta imponerse." }),
+        original
+      ),
+      /cambió en otra instancia/
+    );
+    assert.deepEqual(await store.loadIdeas(projectId), [linked]);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

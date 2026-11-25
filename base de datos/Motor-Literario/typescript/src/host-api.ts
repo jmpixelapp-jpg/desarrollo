@@ -559,7 +559,7 @@ export class HostEngineApi {
   private readonly engine: LiteraryEngine;
   private project?: ProjectIdentity;
   private readonly store: HostEngineOptions["store"];
-  private unsubscribeNarrativeChanges?: () => void;
+  private unsubscribeNarrativeChanges: (() => void) | undefined;
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
   private knowledgeTail: Promise<void> = Promise.resolve();
@@ -3234,6 +3234,12 @@ export class HostEngineApi {
         this.onKnowledgeError?.(error);
       });
     });
+  }
+
+  /** Libera el suscriptor opcional de sincronización entre pestañas. */
+  dispose(): void {
+    this.unsubscribeNarrativeChanges?.();
+    this.unsubscribeNarrativeChanges = undefined;
   }
 
   /** La identidad del escritor nunca se recibe como argumento de una consulta de biblioteca. */

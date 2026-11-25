@@ -1808,3 +1808,46 @@ test("el caché distingue catálogos incompletos de catálogos globales completo
   assert.equal(partialAgain.references[0].resolution, "not-in-snapshot");
   assert.equal(partialAgain.missingFromProjectReferenceCount, 0);
 });
+
+
+test("cuenta co-menciones de personajes por escena sin confundirlas con relaciones", () => {
+  const text = [
+    "Escena 1",
+    "Ana encontró a Luis. Ana llamó a Luis otra vez.",
+    "Escena 2",
+    "Ana y Luis hablaron con Marta.",
+    "Escena 3",
+    "Marta caminó sola."
+  ].join("\\n");
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [
+      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "luis-id", canonicalName: "Luis" },
+      { entityId: "marta-id", canonicalName: "Marta" }
+    ]
+  });
+
+  assert.deepEqual(result.characterCoMentions, [
+    {
+      characterIds: ["ana-id", "luis-id"],
+      sharedSceneCount: 2,
+      sceneIndexes: [1, 2]
+    },
+    {
+      characterIds: ["ana-id", "marta-id"],
+      sharedSceneCount: 1,
+      sceneIndexes: [2]
+    },
+    {
+      characterIds: ["luis-id", "marta-id"],
+      sharedSceneCount: 1,
+      sceneIndexes: [2]
+    }
+  ]);
+  assert.equal(result.characterCoMentions[0].sharedSceneCount, 2);
+  assert.equal(result.characterCoMentions[0].sceneIndexes.length, 2);
+});

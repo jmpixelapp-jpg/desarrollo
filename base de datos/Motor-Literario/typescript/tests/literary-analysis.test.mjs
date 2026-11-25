@@ -2723,6 +2723,12 @@ test("el grafo identifica puntos de articulación en cadenas de referencias", ()
   assert.equal(node("c").articulationPointStatus, "not-articulation-within-snapshot");
   assert.equal(node("isolated").articulationPointStatus, "not-articulation-within-snapshot");
   assert.equal(node("isolated").weakComponentPiecesAfterRemoval, 0);
+  assert.equal(node("a").minimumDirectedHopsToTerminal, 2);
+  assert.equal(node("b").minimumDirectedHopsToTerminal, 1);
+  assert.equal(node("c").minimumDirectedHopsToTerminal, 0);
+  assert.equal(node("isolated").minimumDirectedHopsToTerminal, 0);
+  assert.equal(graph.terminalReachableNodeCount, 4);
+  assert.equal(graph.terminalReachabilityCoverage, 1);
   assert.equal(graph.articulationPointCount, 1);
   assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);
 });

@@ -3031,10 +3031,23 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
+        try {
+          requireNarrativeEntityReferences(
+            ideas, projectId, entities,
+            idea => idea.relatedEntityIds ?? [], "ideas"
+          );
+        } catch (error) {
+          // Un catálogo con vínculos huérfanos no debe convertirse en una caché
+          // aparentemente válida; la siguiente lectura debe consultar el almacén
+          // de nuevo, por si el anfitrión ya corrigió el registro.
+          this.narrativeIdeas.clear();
+          this.ideasLoaded = false;
+          this.narrativeEntities.clear();
+          this.entitiesLoaded = false;
+          this.entityEvidenceIndex = undefined;
+          this.entityNameIndex = undefined;
+          throw error;
+        }
       }
       return cloneNarrativeRecords(ideas);
     });

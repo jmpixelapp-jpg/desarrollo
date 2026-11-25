@@ -4050,6 +4050,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                     entry.context, projectId, sourceProjectName, "contexto archivado"
                   );
                   contentChecksum.add(entry);
+                  if (collectEntries) archived.push(entry);
                   const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
                   const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
                   for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {

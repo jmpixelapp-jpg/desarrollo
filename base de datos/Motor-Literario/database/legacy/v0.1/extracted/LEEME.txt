@@ -1,0 +1,11 @@
+MOTOR LITERARIO — BASE PRINCIPAL INICIAL v0.1
+
+Contenido:
+- motor_literario_principal_v0.1.mldb: contenedor binario inicial con el esquema principal.
+- schema.json: representación legible del mismo esquema.
+- FORMATO_Y_REGLAS_PARA_CODEX.md: formato y reglas obligatorias para implementar su lector/administrador.
+
+No contiene proyectos ni textos de escritores. El anfitrión proporcionará el project_id y el nombre de cada proyecto.
+
+IMPORTANTE:
+Esta entrega es la base inicial de esquema en formato propio MLDB v1. No es todavía un motor transaccional listo para producción. Codex debe implementar y probar las capacidades de almacenamiento, transacciones, índices, recuperación, integridad y migraciones antes de utilizarla para datos reales.

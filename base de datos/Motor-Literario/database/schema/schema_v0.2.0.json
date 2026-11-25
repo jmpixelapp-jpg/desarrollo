@@ -1,0 +1,2571 @@
+{
+  "format": {
+    "magic": "MLDB\r\n\u001a\n",
+    "container_version": 1,
+    "byte_order": "little-endian",
+    "encoding": "UTF-8",
+    "payload": "canonical JSON",
+    "database_type": "MAIN_NARRATIVE",
+    "schema_version": "0.2.0",
+    "status": "INTEGRITY_HARDENED_SCHEMA_DRAFT",
+    "description": "Esquema MLDB 0.2 con claves compuestas y referencias obligatorias dentro del proyecto. No es aún un motor transaccional."
+  },
+  "principles": {
+    "project_identity_source": "HOST_APPLICATION",
+    "project_id_generated_by_engine": false,
+    "project_isolation": "Every project-scoped row MUST have a non-null project_id. Every project-local reference MUST be enforced by a composite foreign key containing project_id. Cross-project references are forbidden except through explicit writer-authorized import operations.",
+    "record_states": [
+      "abierto",
+      "cerrado"
+    ],
+    "record_labels": [
+      "IDEA",
+      "REGISTRADO EN LA OBRA"
+    ],
+    "record_state_owner": "WRITER_ONLY",
+    "engine_may_modify_manuscript": false,
+    "dynamic_types": true,
+    "dynamic_attributes": true,
+    "no_fixed_limits_for_record_categories_or_relationship_types": true,
+    "current_data_only": true,
+    "historical_versions_location": "SEPARATE_HISTORY_DATABASE",
+    "specialized_language_data_location": "SEPARATE_LANGUAGE_DATABASES_WITH_REFERENCES_HERE"
+  },
+  "tables": [
+    {
+      "name": "projects",
+      "scope": "global",
+      "purpose": "Identidades de proyectos recibidas desde la aplicación anfitriona.",
+      "columns": [
+        [
+          "project_id",
+          "TEXT",
+          "PRIMARY KEY",
+          "ID externo recibido; no generado por el motor"
+        ],
+        [
+          "project_name",
+          "TEXT",
+          "NOT NULL",
+          "Nombre proporcionado por el escritor/anfitrión"
+        ],
+        [
+          "created_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          "Fecha de registro local"
+        ],
+        [
+          "updated_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          "Última actualización"
+        ]
+      ],
+      "indexes": [
+        [
+          "project_name"
+        ]
+      ]
+    },
+    {
+      "name": "project_settings",
+      "scope": "project",
+      "purpose": "Configuración vigente de cada libro.",
+      "columns": [
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "setting_key",
+          "TEXT",
+          "NOT NULL",
+          "Clave extensible"
+        ],
+        [
+          "value_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Valor tipado"
+        ],
+        [
+          "source",
+          "TEXT",
+          "NOT NULL",
+          "WRITER o HOST"
+        ],
+        [
+          "updated_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "PRIMARY KEY",
+          "(project_id,setting_key)",
+          "",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "setting_key"
+        ]
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_project_settings_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_settings_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "manuscript_documents",
+      "scope": "project",
+      "purpose": "Documentos/partes del manuscrito enviados por el anfitrión.",
+      "columns": [
+        [
+          "document_id",
+          "TEXT",
+          "PRIMARY KEY",
+          "ID estable proporcionado por el anfitrión o acordado por contrato"
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "document_kind",
+          "TEXT",
+          "NOT NULL",
+          "Tipo abierto: libro, capítulo, documento u otro"
+        ],
+        [
+          "title",
+          "TEXT",
+          "NULL",
+          ""
+        ],
+        [
+          "current_revision",
+          "INTEGER",
+          "NOT NULL",
+          "Secuencia de sincronización"
+        ],
+        [
+          "content_hash",
+          "TEXT",
+          "NULL",
+          "Hash calculado localmente; algoritmo se fija en implementación"
+        ],
+        [
+          "updated_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "document_id"
+        ],
+        [
+          "project_id",
+          "document_kind"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,document_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_manuscript_documents_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_documents_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "manuscript_fragments",
+      "scope": "project",
+      "purpose": "Anclajes estables de fragmentos; posiciones visibles son recalculables.",
+      "columns": [
+        [
+          "fragment_id",
+          "TEXT",
+          "PRIMARY KEY",
+          "Identificador estable"
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "document_id",
+          "TEXT",
+          "FK manuscript_documents.document_id",
+          ""
+        ],
+        [
+          "parent_fragment_id",
+          "TEXT",
+          "NULL self-reference",
+          "Jerarquía opcional"
+        ],
+        [
+          "fragment_kind",
+          "TEXT",
+          "NOT NULL",
+          "Párrafo, escena, bloque, etc.; extensible"
+        ],
+        [
+          "current_text",
+          "TEXT",
+          "NULL",
+          "Copia de trabajo actual si el contrato de sincronización lo requiere"
+        ],
+        [
+          "start_offset",
+          "INTEGER",
+          "NULL",
+          "Posición actual, no identidad estable"
+        ],
+        [
+          "end_offset",
+          "INTEGER",
+          "NULL",
+          "Posición actual, no identidad estable"
+        ],
+        [
+          "revision",
+          "INTEGER",
+          "NOT NULL",
+          "Versión del documento al que corresponde"
+        ],
+        [
+          "is_current",
+          "BOOLEAN",
+          "NOT NULL",
+          "Solo anclajes actuales en la base principal"
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "document_id",
+          "revision"
+        ],
+        [
+          "project_id",
+          "parent_fragment_id"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,fragment_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_manuscript_fragments_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_fragments_document",
+          "columns": [
+            "project_id",
+            "document_id"
+          ],
+          "references": {
+            "table": "manuscript_documents",
+            "columns": [
+              "project_id",
+              "document_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_fragments_parent",
+          "columns": [
+            "project_id",
+            "parent_fragment_id"
+          ],
+          "references": {
+            "table": "manuscript_fragments",
+            "columns": [
+              "project_id",
+              "fragment_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "records",
+      "scope": "project",
+      "purpose": "Registro universal de entidades, ideas, eventos, reglas, pistas, culturas y cualquier elemento narrativo.",
+      "columns": [
+        [
+          "record_id",
+          "TEXT",
+          "PRIMARY KEY",
+          "ID único y estable"
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "record_type",
+          "TEXT",
+          "NOT NULL",
+          "Tipo dinámico; no catálogo cerrado"
+        ],
+        [
+          "primary_name",
+          "TEXT",
+          "NULL",
+          "Nombre/denominación principal"
+        ],
+        [
+          "description",
+          "TEXT",
+          "NULL",
+          "Descripción vigente"
+        ],
+        [
+          "label",
+          "TEXT",
+          "NOT NULL",
+          "IDEA o REGISTRADO EN LA OBRA"
+        ],
+        [
+          "state",
+          "TEXT",
+          "NOT NULL",
+          "abierto o cerrado; solo escritor cambia"
+        ],
+        [
+          "confidence",
+          "TEXT",
+          "NOT NULL",
+          "Nivel de confianza separado del estado"
+        ],
+        [
+          "confirmation_kind",
+          "TEXT",
+          "NOT NULL",
+          "EXPLICIT, INFERRED, UNKNOWN, CONTRADICTORY, WRITER_CONFIRMED, DISCARDED u otro extensible"
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          "ESCRITOR, MOTOR, CONFIRMACIÓN DEL ESCRITOR, IMPORTACIÓN u otro"
+        ],
+        [
+          "created_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "updated_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "current_version",
+          "INTEGER",
+          "NOT NULL",
+          "Versión vigente; historial completo en base histórica"
+        ]
+      ],
+      "constraints": [
+        "label IN ('IDEA','REGISTRADO EN LA OBRA')",
+        "state IN ('abierto','cerrado')",
+        "UNIQUE(project_id,record_id)"
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "record_type"
+        ],
+        [
+          "project_id",
+          "primary_name"
+        ],
+        [
+          "project_id",
+          "label",
+          "state"
+        ],
+        [
+          "project_id",
+          "updated_at"
+        ]
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_records_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "record_names",
+      "scope": "project",
+      "purpose": "Nombres alternativos, alias, títulos y denominaciones sin forzar fusiones de identidad.",
+      "columns": [
+        [
+          "name_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "record_id",
+          "TEXT",
+          "FK records.record_id",
+          ""
+        ],
+        [
+          "name",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "name_kind",
+          "TEXT",
+          "NOT NULL",
+          "alias, título, nombre anterior u otro extensible"
+        ],
+        [
+          "language_code",
+          "TEXT",
+          "NULL",
+          ""
+        ],
+        [
+          "is_primary",
+          "BOOLEAN",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "name"
+        ],
+        [
+          "project_id",
+          "record_id"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,name_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_record_names_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_record_names_record",
+          "columns": [
+            "project_id",
+            "record_id"
+          ],
+          "references": {
+            "table": "records",
+            "columns": [
+              "project_id",
+              "record_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "record_attributes",
+      "scope": "project",
+      "purpose": "Atributos dinámicos, tipados y extensibles.",
+      "columns": [
+        [
+          "attribute_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "record_id",
+          "TEXT",
+          "FK records.record_id",
+          ""
+        ],
+        [
+          "attribute_key",
+          "TEXT",
+          "NOT NULL",
+          "Sin catálogo cerrado"
+        ],
+        [
+          "value_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Valor tipado; no inventar campos desconocidos"
+        ],
+        [
+          "value_status",
+          "TEXT",
+          "NOT NULL",
+          "EXPLICIT, INFERRED, UNKNOWN, CONTRADICTORY, WRITER_CONFIRMED, DISCARDED u otro"
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "confidence",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "record_id",
+          "attribute_key"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,attribute_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_record_attributes_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_record_attributes_record",
+          "columns": [
+            "project_id",
+            "record_id"
+          ],
+          "references": {
+            "table": "records",
+            "columns": [
+              "project_id",
+              "record_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "relations",
+      "scope": "project",
+      "purpose": "Relaciones como registros independientes con tipo y atributos dinámicos.",
+      "columns": [
+        [
+          "relation_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "relation_type",
+          "TEXT",
+          "NOT NULL",
+          "Tipo dinámico: padre_de, enemigo_de, propietario_de, etc."
+        ],
+        [
+          "source_record_id",
+          "TEXT",
+          "FK records.record_id",
+          ""
+        ],
+        [
+          "target_record_id",
+          "TEXT",
+          "FK records.record_id",
+          ""
+        ],
+        [
+          "label",
+          "TEXT",
+          "NOT NULL",
+          "IDEA o REGISTRADO EN LA OBRA"
+        ],
+        [
+          "state",
+          "TEXT",
+          "NOT NULL",
+          "abierto o cerrado; solo escritor cambia"
+        ],
+        [
+          "confirmation_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "confidence",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "created_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "updated_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "constraints": [
+        "source_record_id and target_record_id must belong to same project_id",
+        "label IN ('IDEA','REGISTRADO EN LA OBRA')",
+        "state IN ('abierto','cerrado')",
+        "UNIQUE(project_id,relation_id)"
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "source_record_id"
+        ],
+        [
+          "project_id",
+          "target_record_id"
+        ],
+        [
+          "project_id",
+          "relation_type"
+        ]
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_relations_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_relations_source",
+          "columns": [
+            "project_id",
+            "source_record_id"
+          ],
+          "references": {
+            "table": "records",
+            "columns": [
+              "project_id",
+              "record_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_relations_target",
+          "columns": [
+            "project_id",
+            "target_record_id"
+          ],
+          "references": {
+            "table": "records",
+            "columns": [
+              "project_id",
+              "record_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "relation_attributes",
+      "scope": "project",
+      "purpose": "Atributos propios de una relación.",
+      "columns": [
+        [
+          "relation_attribute_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "relation_id",
+          "TEXT",
+          "FK relations.relation_id",
+          ""
+        ],
+        [
+          "attribute_key",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "value_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "confidence",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "relation_id",
+          "attribute_key"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,relation_attribute_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_relation_attributes_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_relation_attributes_relation",
+          "columns": [
+            "project_id",
+            "relation_id"
+          ],
+          "references": {
+            "table": "relations",
+            "columns": [
+              "project_id",
+              "relation_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "evidences",
+      "scope": "project",
+      "purpose": "Evidencias múltiples con anclaje estable y ubicación visible recalculable.",
+      "columns": [
+        [
+          "evidence_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "subject_kind",
+          "TEXT",
+          "NOT NULL",
+          "RECORD o RELATION"
+        ],
+        [
+          "subject_record_id",
+          "TEXT",
+          "NULL",
+          "Referencia exclusiva cuando subject_kind=RECORD"
+        ],
+        [
+          "subject_relation_id",
+          "TEXT",
+          "NULL",
+          "Referencia exclusiva cuando subject_kind=RELATION"
+        ],
+        [
+          "document_id",
+          "TEXT",
+          "FK manuscript_documents.document_id",
+          ""
+        ],
+        [
+          "fragment_id",
+          "TEXT",
+          "FK manuscript_fragments.fragment_id",
+          "NULL si no es evidencia textual"
+        ],
+        [
+          "evidence_text",
+          "TEXT",
+          "NULL",
+          "Fragmento breve necesario para trazabilidad; evitar duplicar manuscrito completo"
+        ],
+        [
+          "chapter_label",
+          "TEXT",
+          "NULL",
+          "Ubicación visible"
+        ],
+        [
+          "page_number",
+          "INTEGER",
+          "NULL",
+          "Ubicación visible recalculable"
+        ],
+        [
+          "line_number",
+          "INTEGER",
+          "NULL",
+          "Ubicación visible recalculable"
+        ],
+        [
+          "start_offset",
+          "INTEGER",
+          "NULL",
+          "Posición vigente"
+        ],
+        [
+          "end_offset",
+          "INTEGER",
+          "NULL",
+          "Posición vigente"
+        ],
+        [
+          "document_revision",
+          "INTEGER",
+          "NULL",
+          "Versión del texto"
+        ],
+        [
+          "evidence_kind",
+          "TEXT",
+          "NOT NULL",
+          "EXPLICIT, INFERRED, TESTIMONY, MEMORY, etc."
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "is_current",
+          "BOOLEAN",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "subject_kind",
+          "subject_id"
+        ],
+        [
+          "project_id",
+          "fragment_id"
+        ],
+        [
+          "project_id",
+          "document_id",
+          "chapter_label",
+          "page_number",
+          "line_number"
+        ]
+      ],
+      "constraints": [
+        "subject_kind='RECORD' XOR subject_kind='RELATION'",
+        "When subject_kind='RECORD', subject_record_id is NOT NULL and subject_relation_id IS NULL",
+        "When subject_kind='RELATION', subject_relation_id is NOT NULL and subject_record_id IS NULL"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_evidences_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_evidences_document",
+          "columns": [
+            "project_id",
+            "document_id"
+          ],
+          "references": {
+            "table": "manuscript_documents",
+            "columns": [
+              "project_id",
+              "document_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_evidences_fragment",
+          "columns": [
+            "project_id",
+            "fragment_id"
+          ],
+          "references": {
+            "table": "manuscript_fragments",
+            "columns": [
+              "project_id",
+              "fragment_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_evidence_subject_record",
+          "columns": [
+            "project_id",
+            "subject_record_id"
+          ],
+          "references": {
+            "table": "records",
+            "columns": [
+              "project_id",
+              "record_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_evidence_subject_relation",
+          "columns": [
+            "project_id",
+            "subject_relation_id"
+          ],
+          "references": {
+            "table": "relations",
+            "columns": [
+              "project_id",
+              "relation_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "timeline_tracks",
+      "scope": "project",
+      "purpose": "Líneas temporales, calendarios y marcos temporales propios de cada universo.",
+      "columns": [
+        [
+          "track_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "track_name",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "track_kind",
+          "TEXT",
+          "NOT NULL",
+          "Línea temporal, calendario, universo temporal u otro"
+        ],
+        [
+          "rules_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Reglas temporales dinámicas"
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "track_name"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,track_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_timeline_tracks_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "timeline_occurrences",
+      "scope": "project",
+      "purpose": "Ubicación temporal de eventos y hechos, separada del orden del manuscrito.",
+      "columns": [
+        [
+          "occurrence_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "event_record_id",
+          "TEXT",
+          "FK records.record_id",
+          ""
+        ],
+        [
+          "track_id",
+          "TEXT",
+          "FK timeline_tracks.track_id",
+          ""
+        ],
+        [
+          "time_value_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Fecha, intervalo, duración, orden relativo o desconocido"
+        ],
+        [
+          "narrative_order",
+          "INTEGER",
+          "NULL",
+          "Orden dentro de la cronología si puede establecerse"
+        ],
+        [
+          "causal_links_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Referencias/relaciones causales; no inferir causalidad por mera sucesión"
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "confidence",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "event_record_id"
+        ],
+        [
+          "project_id",
+          "track_id",
+          "narrative_order"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,occurrence_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_timeline_occurrences_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_occurrence_event",
+          "columns": [
+            "project_id",
+            "event_record_id"
+          ],
+          "references": {
+            "table": "records",
+            "columns": [
+              "project_id",
+              "record_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_occurrence_track",
+          "columns": [
+            "project_id",
+            "track_id"
+          ],
+          "references": {
+            "table": "timeline_tracks",
+            "columns": [
+              "project_id",
+              "track_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "language_profiles",
+      "scope": "project",
+      "purpose": "Perfiles lingüísticos activos del manuscrito.",
+      "columns": [
+        [
+          "profile_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "language_identifier",
+          "TEXT",
+          "NOT NULL",
+          "Identificador flexible; BCP-47 cuando corresponda, sin obligar a idiomas ficticios"
+        ],
+        [
+          "language_name",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "regional_variant",
+          "TEXT",
+          "NULL",
+          ""
+        ],
+        [
+          "profile_kind",
+          "TEXT",
+          "NOT NULL",
+          "REAL, FICTIONAL_DEVELOPED, FICTIONAL_OCCASIONAL u otro"
+        ],
+        [
+          "editorial_preferences_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "coverage_status",
+          "TEXT",
+          "NOT NULL",
+          "Estado de cobertura demostrado por pruebas"
+        ],
+        [
+          "is_active",
+          "BOOLEAN",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "language_identifier"
+        ],
+        [
+          "project_id",
+          "is_active"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,profile_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_language_profiles_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "language_resource_refs",
+      "scope": "project",
+      "purpose": "Referencias a bases especializadas de idiomas y diccionarios, sin duplicar su contenido.",
+      "columns": [
+        [
+          "resource_ref_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "profile_id",
+          "TEXT",
+          "FK language_profiles.profile_id",
+          ""
+        ],
+        [
+          "resource_database_id",
+          "TEXT",
+          "NOT NULL",
+          "Identificador de base especializada"
+        ],
+        [
+          "resource_kind",
+          "TEXT",
+          "NOT NULL",
+          "DICTIONARY, GRAMMAR, ORTHOGRAPHY, PHONETICS, etc."
+        ],
+        [
+          "resource_schema_version",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "resource_status",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "profile_id"
+        ],
+        [
+          "project_id",
+          "resource_database_id"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,resource_ref_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_language_resource_refs_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_language_resource_profile",
+          "columns": [
+            "project_id",
+            "profile_id"
+          ],
+          "references": {
+            "table": "language_profiles",
+            "columns": [
+              "project_id",
+              "profile_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "style_profiles",
+      "scope": "project",
+      "purpose": "Preferencias y rasgos del estilo del escritor, separados de los hechos narrativos.",
+      "columns": [
+        [
+          "style_profile_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "profile_name",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "style_data_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Rasgos observados y preferencias confirmadas separados"
+        ],
+        [
+          "provenance_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "updated_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "profile_name"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,style_profile_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_style_profiles_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "active_suggestions",
+      "scope": "project",
+      "purpose": "Sugerencias vigentes y resultados de análisis asociados a versión del texto.",
+      "columns": [
+        [
+          "suggestion_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Obligatorio en toda fila de ámbito proyecto"
+        ],
+        [
+          "module_id",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "document_id",
+          "TEXT",
+          "NULL",
+          ""
+        ],
+        [
+          "fragment_id",
+          "TEXT",
+          "NULL",
+          ""
+        ],
+        [
+          "document_revision",
+          "INTEGER",
+          "NULL",
+          ""
+        ],
+        [
+          "suggestion_kind",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "priority",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "confidence",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "payload_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Resultado estructurado y evidencia"
+        ],
+        [
+          "suggestion_status",
+          "TEXT",
+          "NOT NULL",
+          "ACTIVE, OBSOLETE, ACCEPTED, REJECTED, IGNORED, EXPIRED"
+        ],
+        [
+          "created_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "document_id",
+          "document_revision"
+        ],
+        [
+          "project_id",
+          "suggestion_status",
+          "priority"
+        ]
+      ],
+      "constraints": [
+        "UNIQUE(project_id,suggestion_id)"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_active_suggestions_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_suggestion_document",
+          "columns": [
+            "project_id",
+            "document_id"
+          ],
+          "references": {
+            "table": "manuscript_documents",
+            "columns": [
+              "project_id",
+              "document_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_suggestion_fragment",
+          "columns": [
+            "project_id",
+            "fragment_id"
+          ],
+          "references": {
+            "table": "manuscript_fragments",
+            "columns": [
+              "project_id",
+              "fragment_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "import_authorizations",
+      "scope": "global",
+      "purpose": "Autorizaciones explícitas para importar o reutilizar datos entre proyectos.",
+      "columns": [
+        [
+          "authorization_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "source_project_id",
+          "TEXT",
+          "FK projects.project_id",
+          ""
+        ],
+        [
+          "target_project_id",
+          "TEXT",
+          "FK projects.project_id",
+          ""
+        ],
+        [
+          "authorized_by",
+          "TEXT",
+          "NOT NULL",
+          "WRITER"
+        ],
+        [
+          "scope_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Elementos y alcance exactos"
+        ],
+        [
+          "authorized_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "source_project_id",
+          "target_project_id"
+        ]
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_import_authorizations_source_project_id",
+          "columns": [
+            "source_project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        },
+        {
+          "name": "fk_import_authorizations_target_project_id",
+          "columns": [
+            "target_project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ]
+    },
+    {
+      "name": "schema_migrations",
+      "scope": "global",
+      "purpose": "Registro de versiones de esquema aplicadas.",
+      "columns": [
+        [
+          "migration_id",
+          "TEXT",
+          "PRIMARY KEY",
+          ""
+        ],
+        [
+          "from_version",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "to_version",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "applied_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "result",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ],
+        [
+          "checksum",
+          "TEXT",
+          "NOT NULL",
+          ""
+        ]
+      ],
+      "indexes": [
+        [
+          "to_version"
+        ]
+      ]
+    }
+  ],
+  "not_in_main_database": [
+    "Historial completo de versiones de registros: base histórica separada.",
+    "Contenido completo de diccionarios, gramáticas, fonética y recursos lingüísticos: bases especializadas.",
+    "Biblioteca personal de ideas del escritor: almacenamiento separado, con procedencia del libro de origen.",
+    "Cachés e índices derivados: reconstruibles y no fuente de verdad."
+  ],
+  "initial_data": {
+    "projects": [],
+    "records": [],
+    "relations": [],
+    "evidences": [],
+    "language_profiles": [],
+    "reason": "La identidad del proyecto la proporciona el anfitrión; no se inventan proyectos ni datos narrativos de ejemplo."
+  },
+  "integrity_model": {
+    "version": "0.2.0",
+    "enforcement": "MUST_BE_ENFORCED_BY_STORAGE_ENGINE_AND_VALIDATED_BEFORE_COMMIT",
+    "project_scope_rules": [
+      "Every row in a table with scope=project has project_id NOT NULL.",
+      "Every project-local foreign key includes project_id on both sides.",
+      "A child row can reference only a parent row with the same project_id.",
+      "No implicit cross-project joins, copies, or links.",
+      "Global import_authorizations are the only authorization records for deliberate cross-project reuse; they do not create direct foreign keys between project data."
+    ],
+    "composite_unique_keys": [
+      {
+        "table": "manuscript_documents",
+        "columns": [
+          "project_id",
+          "document_id"
+        ]
+      },
+      {
+        "table": "manuscript_fragments",
+        "columns": [
+          "project_id",
+          "fragment_id"
+        ]
+      },
+      {
+        "table": "records",
+        "columns": [
+          "project_id",
+          "record_id"
+        ]
+      },
+      {
+        "table": "record_names",
+        "columns": [
+          "project_id",
+          "name_id"
+        ]
+      },
+      {
+        "table": "record_attributes",
+        "columns": [
+          "project_id",
+          "attribute_id"
+        ]
+      },
+      {
+        "table": "relations",
+        "columns": [
+          "project_id",
+          "relation_id"
+        ]
+      },
+      {
+        "table": "relation_attributes",
+        "columns": [
+          "project_id",
+          "relation_attribute_id"
+        ]
+      },
+      {
+        "table": "evidences",
+        "columns": [
+          "project_id",
+          "evidence_id"
+        ]
+      },
+      {
+        "table": "timeline_tracks",
+        "columns": [
+          "project_id",
+          "track_id"
+        ]
+      },
+      {
+        "table": "timeline_occurrences",
+        "columns": [
+          "project_id",
+          "occurrence_id"
+        ]
+      },
+      {
+        "table": "language_profiles",
+        "columns": [
+          "project_id",
+          "profile_id"
+        ]
+      },
+      {
+        "table": "language_resource_refs",
+        "columns": [
+          "project_id",
+          "resource_ref_id"
+        ]
+      },
+      {
+        "table": "style_profiles",
+        "columns": [
+          "project_id",
+          "style_profile_id"
+        ]
+      },
+      {
+        "table": "active_suggestions",
+        "columns": [
+          "project_id",
+          "suggestion_id"
+        ]
+      },
+      {
+        "table": "project_settings",
+        "columns": [
+          "project_id",
+          "setting_key"
+        ],
+        "kind": "PRIMARY_KEY"
+      }
+    ],
+    "composite_foreign_keys": [
+      {
+        "table": "project_settings",
+        "name": "fk_project_settings_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "project_settings",
+        "name": "fk_settings_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "manuscript_documents",
+        "name": "fk_manuscript_documents_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "manuscript_documents",
+        "name": "fk_documents_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "manuscript_fragments",
+        "name": "fk_manuscript_fragments_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "manuscript_fragments",
+        "name": "fk_fragments_document",
+        "columns": [
+          "project_id",
+          "document_id"
+        ],
+        "references": {
+          "table": "manuscript_documents",
+          "columns": [
+            "project_id",
+            "document_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "manuscript_fragments",
+        "name": "fk_fragments_parent",
+        "columns": [
+          "project_id",
+          "parent_fragment_id"
+        ],
+        "references": {
+          "table": "manuscript_fragments",
+          "columns": [
+            "project_id",
+            "fragment_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "records",
+        "name": "fk_records_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "record_names",
+        "name": "fk_record_names_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "record_names",
+        "name": "fk_record_names_record",
+        "columns": [
+          "project_id",
+          "record_id"
+        ],
+        "references": {
+          "table": "records",
+          "columns": [
+            "project_id",
+            "record_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "record_attributes",
+        "name": "fk_record_attributes_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "record_attributes",
+        "name": "fk_record_attributes_record",
+        "columns": [
+          "project_id",
+          "record_id"
+        ],
+        "references": {
+          "table": "records",
+          "columns": [
+            "project_id",
+            "record_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "relations",
+        "name": "fk_relations_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "relations",
+        "name": "fk_relations_source",
+        "columns": [
+          "project_id",
+          "source_record_id"
+        ],
+        "references": {
+          "table": "records",
+          "columns": [
+            "project_id",
+            "record_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "relations",
+        "name": "fk_relations_target",
+        "columns": [
+          "project_id",
+          "target_record_id"
+        ],
+        "references": {
+          "table": "records",
+          "columns": [
+            "project_id",
+            "record_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "relation_attributes",
+        "name": "fk_relation_attributes_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "relation_attributes",
+        "name": "fk_relation_attributes_relation",
+        "columns": [
+          "project_id",
+          "relation_id"
+        ],
+        "references": {
+          "table": "relations",
+          "columns": [
+            "project_id",
+            "relation_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "evidences",
+        "name": "fk_evidences_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "evidences",
+        "name": "fk_evidences_document",
+        "columns": [
+          "project_id",
+          "document_id"
+        ],
+        "references": {
+          "table": "manuscript_documents",
+          "columns": [
+            "project_id",
+            "document_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "evidences",
+        "name": "fk_evidences_fragment",
+        "columns": [
+          "project_id",
+          "fragment_id"
+        ],
+        "references": {
+          "table": "manuscript_fragments",
+          "columns": [
+            "project_id",
+            "fragment_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "evidences",
+        "name": "fk_evidence_subject_record",
+        "columns": [
+          "project_id",
+          "subject_record_id"
+        ],
+        "references": {
+          "table": "records",
+          "columns": [
+            "project_id",
+            "record_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "evidences",
+        "name": "fk_evidence_subject_relation",
+        "columns": [
+          "project_id",
+          "subject_relation_id"
+        ],
+        "references": {
+          "table": "relations",
+          "columns": [
+            "project_id",
+            "relation_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "timeline_tracks",
+        "name": "fk_timeline_tracks_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "timeline_occurrences",
+        "name": "fk_timeline_occurrences_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "timeline_occurrences",
+        "name": "fk_occurrence_event",
+        "columns": [
+          "project_id",
+          "event_record_id"
+        ],
+        "references": {
+          "table": "records",
+          "columns": [
+            "project_id",
+            "record_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "timeline_occurrences",
+        "name": "fk_occurrence_track",
+        "columns": [
+          "project_id",
+          "track_id"
+        ],
+        "references": {
+          "table": "timeline_tracks",
+          "columns": [
+            "project_id",
+            "track_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "language_profiles",
+        "name": "fk_language_profiles_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "language_resource_refs",
+        "name": "fk_language_resource_refs_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "language_resource_refs",
+        "name": "fk_language_resource_profile",
+        "columns": [
+          "project_id",
+          "profile_id"
+        ],
+        "references": {
+          "table": "language_profiles",
+          "columns": [
+            "project_id",
+            "profile_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "style_profiles",
+        "name": "fk_style_profiles_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "active_suggestions",
+        "name": "fk_active_suggestions_project",
+        "columns": [
+          "project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "active_suggestions",
+        "name": "fk_suggestion_document",
+        "columns": [
+          "project_id",
+          "document_id"
+        ],
+        "references": {
+          "table": "manuscript_documents",
+          "columns": [
+            "project_id",
+            "document_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "active_suggestions",
+        "name": "fk_suggestion_fragment",
+        "columns": [
+          "project_id",
+          "fragment_id"
+        ],
+        "references": {
+          "table": "manuscript_fragments",
+          "columns": [
+            "project_id",
+            "fragment_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "import_authorizations",
+        "name": "fk_import_authorizations_source_project_id",
+        "columns": [
+          "source_project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      },
+      {
+        "table": "import_authorizations",
+        "name": "fk_import_authorizations_target_project_id",
+        "columns": [
+          "target_project_id"
+        ],
+        "references": {
+          "table": "projects",
+          "columns": [
+            "project_id"
+          ]
+        },
+        "on_delete": "RESTRICT",
+        "on_update": "RESTRICT"
+      }
+    ],
+    "polymorphic_reference_policy": "Polymorphic subject_id removed. Evidences use two nullable typed references and an exclusive-or constraint so the storage engine can enforce referential integrity.",
+    "writer_authority_rules": [
+      "Only a WRITER-authorized operation may change records.state or relations.state.",
+      "Only a WRITER-authorized operation may change label from IDEA to REGISTRADO EN LA OBRA or reverse it.",
+      "Engine-originated writes must preserve state and label unless an explicit writer confirmation is included in the same transaction.",
+      "Authorization is checked inside the transaction, not trusted from a caller-supplied boolean."
+    ],
+    "commit_validation": [
+      "Validate every required project_id.",
+      "Validate all composite foreign keys against rows in the same project.",
+      "Validate enumerated state and label values.",
+      "Validate exclusive-or evidence subject references.",
+      "Validate document/fragment ownership and fragment parent cycles.",
+      "Reject the complete transaction on any violation; never partially commit."
+    ],
+    "migration_from_0_1": [
+      "Do not rewrite the original v0.1 file in place.",
+      "Create and verify a byte-for-byte backup before migration.",
+      "Validate that every child reference resolves within the same project.",
+      "Quarantine and report ambiguous or cross-project rows; never guess their owner.",
+      "Convert evidences.subject_kind/subject_id into the matching typed subject column only when exactly one same-project target exists.",
+      "Apply all structural changes atomically and record migration checksum."
+    ]
+  }
+}

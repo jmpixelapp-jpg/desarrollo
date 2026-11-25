@@ -43,6 +43,7 @@ const unsubscribe = api.subscribeLiveAuthorMonitor(snapshot => {
 
 // Antes de cerrar el documento:
 await api.flushPendingChanges();
+api.closeLiveAuthorMonitorDocument(documentId);
 unsubscribe();
 api.dispose();
 ~~~
@@ -52,7 +53,7 @@ La integración automática realiza lo siguiente:
 1. **openDocument/recoverDocument:** abre la sesión con el snapshot efectivamente recuperado y el `projectId` activo.
 2. **onEditorChange:** registra exactamente una vez la admisión devuelta por el motor; los rechazos se cuentan sin alterar la longitud proyectada.
 3. **onCommit:** correlaciona automáticamente los tickets aplicados o rechazados, sin reemplazar el callback original del anfitrión.
-4. **consultas:** expone `getLiveAuthorMonitorSnapshot(documentId)`, `getLiveAuthorMonitorSnapshots()` y `subscribeLiveAuthorMonitor(listener, documentId?)`.
+4. **consultas y ciclo de vida:** expone `getLiveAuthorMonitorSnapshot(documentId)`, `getLiveAuthorMonitorSnapshots()`, `subscribeLiveAuthorMonitor(listener, documentId?)`, `resynchronizeLiveAuthorMonitor(snapshot)` y `closeLiveAuthorMonitorDocument(documentId)`.
 5. **aislamiento:** los errores internos del monitor no interrumpen la admisión, la persistencia ni los callbacks del anfitrión.
 
 No llamar manualmente a `recordAdmission` ni a `recordCommit` cuando se usa `HostEngineApi`: hacerlo duplicaría las métricas.

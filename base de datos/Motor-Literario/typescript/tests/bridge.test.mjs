@@ -193,7 +193,13 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     });
     await client.openDocument("idea-project", {
       documentId: "chapter-ideas",
-      text: "IDEA: La campana debe sonar antes del amanecer.\\nIDEA: El faro debe permanecer encendido durante la tormenta.",
+      text: "IDEA: La campana debe sonar antes del amanecer.",
+      revision: 0,
+      sequence: 0
+    });
+    await client.openDocument("idea-project", {
+      documentId: "chapter-ideas-second",
+      text: "IDEA: El faro debe permanecer encendido durante la tormenta.",
       revision: 0,
       sequence: 0
     });

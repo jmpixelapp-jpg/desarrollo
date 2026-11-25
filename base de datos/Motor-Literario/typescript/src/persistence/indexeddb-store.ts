@@ -925,10 +925,22 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([IDEAS, PERSONAL_IDEAS, ENTITIES], "readwrite");
+      const transaction = db.transaction(
+        [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS], "readwrite"
+      );
       const ideas = transaction.objectStore(IDEAS);
       const personal = transaction.objectStore(PERSONAL_IDEAS);
       const entities = transaction.objectStore(ENTITIES);
+      const receipts = transaction.objectStore(FINALIZATION_RECEIPTS);
+      // La lectura del recibo se encola antes de las ideas: ambas lecturas
+      // pertenecen a la misma transacción y no existe una ventana de carrera.
+      const receiptRequest = receipts.get([writerId, projectId, FINALIZATION_RECEIPT_ID]);
+      let receiptRead = false;
+      let existingReceipt: StoredProjectFinalizationReceipt | undefined;
+      receiptRequest.onsuccess = () => {
+        existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
+        receiptRead = true;
+      };
       const request = ideas.index("by-project").getAll(projectId);
       const archived: PersonalIdeaLibraryEntry[] = [];
       let finished = false;
@@ -959,14 +971,94 @@ export class IndexedDbProjectStore implements ProjectStore {
             ideas.delete([projectId, entry.idea.id]);
             archived.push(entry);
           }
+          const archivedIdeaIds = pending.map(item => item.idea.id).sort();
+          receipts.add({
+            writerId,
+            sourceProjectId: projectId,
+            receiptId: FINALIZATION_RECEIPT_ID,
+            sourceProjectName,
+            finalizedAt: archivedAt,
+            archivedIdeaIds,
+            archiveChecksum: checksumArchivedIdeaIds(archivedIdeaIds)
+          } satisfies StoredProjectFinalizationReceipt);
         } catch (error) {
           abortWith(error);
         }
       };
+      receiptRequest.onerror = () => abortWith(
+        receiptRequest.error ?? new Error("No se pudo recuperar el recibo de finalización.")
+      );
       request.onsuccess = () => {
         try {
+          if (!receiptRead) {
+            throw new Error("No se pudo establecer una lectura transaccional del recibo de finalización.");
+          }
           const projectIdeas = request.result as NarrativeIdea[];
           if (!Array.isArray(projectIdeas)) throw new Error("La colección de ideas del proyecto es inválida.");
+
+          if (existingReceipt) {
+            validateFinalizationReceipt(existingReceipt, writerId, projectId);
+            if (projectIdeas.some(idea => idea?.status === "IDEA")) {
+              throw new Error(
+                "El libro ya tiene un recibo de finalización; las ideas nuevas requieren una reapertura explícita antes de archivarse."
+              );
+            }
+            const libraryRequest = personal.index("by-writer-source").getAll([writerId, projectId]);
+            libraryRequest.onsuccess = () => {
+              if (finished) return;
+              try {
+                const entries = libraryRequest.result as PersonalIdeaLibraryEntry[];
+                if (!Array.isArray(entries)) {
+                  throw new Error("La biblioteca personal del libro no devolvió una colección válida.");
+                }
+                const byIdeaId = new Map<string, PersonalIdeaLibraryEntry>();
+                for (const entry of entries) {
+                  if (!entry || entry.writerId !== writerId ||
+                      entry.sourceProjectId !== projectId ||
+                      entry.sourceProjectName !== sourceProjectName ||
+                      entry.category !== sourceProjectName ||
+                      !entry.idea || entry.idea.projectId !== projectId ||
+                      entry.idea.sourceProjectName !== sourceProjectName ||
+                      entry.idea.status !== "IDEA" ||
+                      !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0) {
+                    throw new Error("La biblioteca personal contiene una entrada ajena o malformada.");
+                  }
+                  validateNarrativeIdeaRecord(entry.idea, "idea archivada");
+                  if (entry.context) {
+                    validatePersonalIdeaLibraryContext(
+                      entry.context, projectId, sourceProjectName, "contexto archivado"
+                    );
+                  }
+                  if (byIdeaId.has(entry.idea.id)) {
+                    throw new Error("La biblioteca personal contiene IDs de idea duplicados para el mismo libro.");
+                  }
+                  byIdeaId.set(entry.idea.id, entry);
+                }
+                const selected = existingReceipt!.archivedIdeaIds.map(id => {
+                  const entry = byIdeaId.get(id);
+                  if (!entry) {
+                    throw new Error("El recibo de finalización referencia una idea que no existe en la biblioteca.");
+                  }
+                  if (!entry.context || entry.context.version !== 1) {
+                    throw new Error("La idea archivada no conserva el contexto requerido por el recibo.");
+                  }
+                  return entry;
+                });
+                const selectedIds = selected.map(entry => entry.idea.id).sort();
+                if (checksumArchivedIdeaIds(selectedIds) !== existingReceipt!.archiveChecksum) {
+                  throw new Error("El checksum del recibo no coincide con las ideas archivadas recuperadas.");
+                }
+                archived.push(...selected);
+              } catch (error) {
+                abortWith(error);
+              }
+            };
+            libraryRequest.onerror = () => abortWith(
+              libraryRequest.error ?? new Error("No se pudieron recuperar las ideas del recibo de finalización.")
+            );
+            return;
+          }
+
           const projectIdeaIds = new Set<string>();
           const ideasById = new Map<string, NarrativeIdea>();
           for (const idea of projectIdeas) {
@@ -1114,6 +1206,26 @@ export class IndexedDbProjectStore implements ProjectStore {
         if (!finished) reject(transaction.error ?? new Error("Se canceló el archivo de ideas."));
       };
     });
+  }
+
+  async loadProjectFinalizationReceipt(
+    writerId: string,
+    projectId: string
+  ): Promise<StoredProjectFinalizationReceipt | undefined> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
+        typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identidad de escritor o proyecto inválida para consultar la finalización.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(FINALIZATION_RECEIPTS, "readonly");
+    const request = transaction.objectStore(FINALIZATION_RECEIPTS).get([
+      writerId, projectId, FINALIZATION_RECEIPT_ID
+    ]);
+    const receipt = await readAfterTransaction(
+      transaction, request, "No se pudo leer el recibo de finalización."
+    ) as StoredProjectFinalizationReceipt | undefined;
+    if (receipt) validateFinalizationReceipt(receipt, writerId, projectId);
+    return receipt;
   }
 
   async loadPersonalIdeas(writerId: string): Promise<readonly PersonalIdeaLibraryEntry[]> {

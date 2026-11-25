@@ -1050,6 +1050,10 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly twoHopConvergentSourceCount: number;
   /** Pares fuente-destino con al menos dos intermediarios distintos en dos saltos. */
   readonly twoHopSharedDestinationCount: number;
+  /** Destinos de dos saltos alcanzados por una sola rama desde cada fuente bifurcada. */
+  readonly twoHopExclusiveDestinationCount: number;
+  /** Fuentes con al menos dos ramas que conservan destinos exclusivos. */
+  readonly twoHopIndependentBranchSourceCount: number;
   /** Indica si se examinó el espacio completo de caminos de dos aristas. */
   readonly twoHopConvergenceAnalysisStatus: "complete" | "truncated-by-work-budget";
   /** Aristas de salida de nodos con bifurcación, usando destinos únicos. */
@@ -4114,6 +4118,8 @@ function buildLiteraryIdeaGraph(
   }
   let twoHopConvergentSourceCount = 0;
   let twoHopSharedDestinationCount = 0;
+  let twoHopExclusiveDestinationCount = 0;
+  let twoHopIndependentBranchSourceCount = 0;
   let twoHopWork = 0;
   let twoHopConvergenceAnalysisStatus: "complete" | "truncated-by-work-budget" = "complete";
   for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
@@ -4140,13 +4146,28 @@ function buildLiteraryIdeaGraph(
     }
     twoHopWork += sourceWork;
     let sourceSharedDestinationCount = 0;
-    for (const intermediaryCount of destinationCounts.values()) {
-      if (intermediaryCount > 1) sourceSharedDestinationCount++;
+    let sourceExclusiveDestinationCount = 0;
+    const exclusiveIntermediaryCount = new Set<number>();
+    for (const [destinationIndex, intermediaryCount] of destinationCounts) {
+      if (intermediaryCount > 1) {
+        sourceSharedDestinationCount++;
+      } else {
+        sourceExclusiveDestinationCount++;
+        // Identifica qué rama aporta el destino exclusivo.
+        for (const intermediaryIndex of intermediaries) {
+          if (adjacency[intermediaryIndex]!.includes(destinationIndex)) {
+            exclusiveIntermediaryCount.add(intermediaryIndex);
+            break;
+          }
+        }
+      }
     }
     if (sourceSharedDestinationCount > 0) {
       twoHopConvergentSourceCount++;
       twoHopSharedDestinationCount += sourceSharedDestinationCount;
     }
+    twoHopExclusiveDestinationCount += sourceExclusiveDestinationCount;
+    if (exclusiveIntermediaryCount.size > 1) twoHopIndependentBranchSourceCount++;
   }
   let terminalReachableNodeCount = 0;
   let directedBranchNodeCount = 0;
@@ -4398,7 +4419,10 @@ function buildLiteraryIdeaGraph(
     terminalReachableNodeCount,
     terminalUnreachableNodeCount: ideaCount - terminalReachableNodeCount,    directedBranchNodeCount,
     directedConvergenceNodeCount,    twoHopConvergentSourceCount,
+    twoHopSharedDestinationCount,    twoHopConvergentSourceCount,
     twoHopSharedDestinationCount,
+    twoHopExclusiveDestinationCount,
+    twoHopIndependentBranchSourceCount,
     twoHopConvergenceAnalysisStatus,
     directedBranchNodeCount,
     directedConvergenceNodeCount,

@@ -84,6 +84,34 @@ export interface StoredDocument extends DocumentSnapshot {
 }
 
 /** Diagnósticos durables de una revisión concreta del documento. */
+/** Checkpoint versionado de métricas del monitor; no contiene texto ni deltas del manuscrito. */
+export interface StoredLiveAuthorMonitorCheckpoint {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly sessionId: string;
+  readonly savedAt: number;
+  readonly sessionDurationMs: number;
+  readonly activeDurationMs: number;
+  readonly idleDurationMs: number;
+  /** Edad monotónica de la última actividad al guardar; null si nunca hubo edición. */
+  readonly lastActivityAgeMs: number | null;
+  readonly pauseCount: number;
+  readonly acceptedChanges: number;
+  readonly rejectedChanges: number;
+  readonly committedChanges: number;
+  readonly failedChanges: number;
+  readonly insertedCharacters: number;
+  readonly deletedCharacters: number;
+  readonly currentDocumentLength: number;
+  readonly revision: number;
+  readonly sequence: number;
+  readonly resynchronizations: number;
+  readonly lastCommitLatencyMs: number;
+  readonly totalCommitLatencyMs: number;
+  readonly commitLatencies: readonly number[];
+}
+
 export interface StoredDiagnostics {
   readonly projectId: string;
   readonly documentId: string;

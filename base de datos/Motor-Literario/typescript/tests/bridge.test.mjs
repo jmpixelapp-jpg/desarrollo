@@ -2019,10 +2019,13 @@ test("SQLite detecta cambios en el contenido de una idea archivada aunque el rec
     assert.equal(receipt.archiveContentChecksum, summary.archiveContentChecksum);
 
     const original = store.loadPersonalIdea(writerId, projectId, "idea-content");
-    store.put("personal-idea-library", [writerId, projectId, "idea-content"], {
+    const altered = {
       ...original,
       idea: { ...original.idea, text: "La brújula señala el sur." }
-    }, { expectedCurrent: original });
+    };
+    store.put("personal-idea-library", [writerId, projectId, "idea-content"], altered, {
+      expectedCurrent: original
+    });
 
     assert.throws(
       () => store.archiveUnincorporatedIdeasSummary(
@@ -2030,6 +2033,27 @@ test("SQLite detecta cambios en el contenido de una idea archivada aunque el rec
       ),
       /checksum del contenido archivado/u
     );
+
+    // Al restaurar el contenido original, un recibo legacy sin checksum
+    // puede migrarse en el reintento sin transferir ideas otra vez.
+    store.put("personal-idea-library", [writerId, projectId, "idea-content"], original, {
+      expectedCurrent: altered
+    });
+    const legacyReceipt = { ...receipt };
+    delete legacyReceipt.archiveContentChecksum;
+    store.put("writer-library-finalization-receipts",
+      [writerId, projectId, "finalization-v1"], legacyReceipt, { expectedCurrent: receipt });
+    const migrated = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 300
+    );
+    assert.equal(migrated.alreadyFinalized, true);
+    assert.equal(migrated.archiveContentChecksum, summary.archiveContentChecksum);
+    assert.equal(
+      store.loadProjectFinalizationReceipt(writerId, projectId).archiveContentChecksum,
+      summary.archiveContentChecksum
+    );
+    assert.equal(store.loadPersonalIdeas(writerId).length, 1);
+    assert.deepEqual(store.loadIdeas(projectId), []);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });

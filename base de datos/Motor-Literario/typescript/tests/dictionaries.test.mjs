@@ -215,6 +215,15 @@ test("los vínculos solo admiten entidades del mismo libro", async () => {
   assert.equal(linkRows[0].provenanceKind, "WRITER");
   assert.equal(linkRows[0].createdAt, 35);
 
+  await api.setDictionaryEntryEntityLink(
+    "dict-es", "entry-casa", "entity:ana", true,
+    { linkKind: "MENTIONS", provenanceKind: "MOTOR", createdAt: 40 }
+  );
+  const revisedLinks = await api.getDictionaryEntryEntityLinks("dict-es", "entry-casa");
+  assert.equal(revisedLinks[0].linkKind, "MENTIONS");
+  assert.equal(revisedLinks[0].provenanceKind, "MOTOR");
+  assert.equal(revisedLinks[0].createdAt, 40);
+
   const unlinked = await api.setDictionaryEntryEntityLink("dict-es", "entry-casa", "entity:ana", false);
   assert.deepEqual(unlinked.relatedEntityIds, []);
   assert.deepEqual(await api.getDictionaryEntryEntityLinks("dict-es", "entry-casa"), []);

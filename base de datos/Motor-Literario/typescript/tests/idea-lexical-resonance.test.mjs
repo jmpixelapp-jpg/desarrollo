@@ -133,6 +133,25 @@ test("limita la salida a los cien pares mejor clasificados y declara el excedent
   assert.equal(result.resonances[99].leftIdeaId, "idea-a-099");
 });
 
+test("ordena por Jaccard completo cuando los valores presentados redondean igual", () => {
+  const words = (prefix, count) => Array.from({ length: count }, (_, index) =>
+    prefix + String(index).padStart(3, "0")
+  ).join(" ");
+  const result = analyze([
+    idea("a-left", "commonalpha commonbeta " + words("alefttoken", 98)),
+    idea("a-right", "commonalpha commonbeta " + words("arighttoken", 98)),
+    idea("b-left", "commoncharlie commondelta " + words("blefttoken", 98)),
+    idea("b-right", "commoncharlie commondelta " + words("brighttoken", 97))
+  ]);
+
+  assert.equal(result.candidatePairCount, 2);
+  assert.equal(result.resonances[0].leftIdeaId, "b-left");
+  assert.equal(result.resonances[0].rightIdeaId, "b-right");
+  assert.equal(result.resonances[0].jaccardSimilarity, 0.01);
+  assert.equal(result.resonances[1].leftIdeaId, "a-left");
+  assert.equal(result.resonances[1].jaccardSimilarity, 0.01);
+});
+
 test("respeta el presupuesto global de texto sin dividir una idea a medias", () => {
   const repeatedIdeaText = "memoria ".repeat(12_500);
   const ideas = Array.from({ length: 21 }, (_, index) => idea(
@@ -146,6 +165,17 @@ test("respeta el presupuesto global de texto sin dividir una idea a medias", () 
   assert.equal(result.omittedTextBudgetIdeaCount, 1);
   assert.equal(result.tokenizedTextUnitCount, 2_000_000);
   assert.equal(result.candidatePairCount, 0);
+});
+
+test("rechaza metadatos de omisión incompatibles con el contrato", () => {
+  assert.throws(
+    () => analyze([{ ...idea("idea-invalid"), textOmitted: "unknown" }]),
+    /catálogo global de ideas del análisis literario es inválido/
+  );
+  assert.throws(
+    () => analyze([{ ...idea("idea-invalid-text", "memoria"), textOmitted: "budget" }]),
+    /catálogo global de ideas del análisis literario es inválido/
+  );
 });
 
 test("distingue textos omitidos por presupuesto de textos ausentes en adaptadores antiguos", () => {

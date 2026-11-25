@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HostEngineApi } from "../dist/motor-literario.js";
+import { HostEngineApi, analyzeLiteraryFragment } from "../dist/motor-literario.js";
 
 const projectId = "complete-idea-graph";
 const store = {
@@ -18,22 +18,22 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
       statusHistory:[
         {status:"IDEA",reason:"initial",changedAt:1},
-        {status:"incorporated",reason:"writer",changedAt:3},
-        {status:"discarded",reason:"writer",changedAt:2},
-        {status:"IDEA",reason:"writer"}
+        {status:"incorporated",reason:"writer",changedAt:2},
+        {status:"IDEA",reason:"writer",changedAt:3},
+        {status:"discarded",reason:"text-revised"}
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
+      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}], omittedStatusHistoryCount:2 },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
       statusHistory:[
         {status:"IDEA",reason:"initial",changedAt:1},
-        {status:"incorporated",reason:"writer",changedAt:2},
-        {status:"discarded",reason:"writer",changedAt:3},
-        {status:"incorporated",reason:"writer",changedAt:4},
-        {status:"IDEA",reason:"writer",changedAt:5},
-        {status:"discarded",reason:"writer",changedAt:6},
+        {status:"IDEA",reason:"writer",changedAt:2},
+        {status:"incorporated",reason:"writer",changedAt:3},
+        {status:"IDEA",reason:"writer",changedAt:4},
+        {status:"discarded",reason:"writer",changedAt:5},
+        {status:"incorporated",reason:"writer",changedAt:6},
         {status:"IDEA",reason:"writer",changedAt:7}
       ] }
   ],
@@ -45,6 +45,113 @@ const store = {
   async loadIdeas(project) { return this.ideas.filter(item=>item.projectId===project).map(item=>structuredClone(item)); },
   async loadEntities(project) { return this.entities.filter(item=>item.projectId===project).map(item=>structuredClone(item)); }
 };
+
+test("el grafo global actualiza la sincronización al ampliarse el historial de una idea", async () => {
+  const ideas = structuredClone(store.ideas);
+  const localStore = { ...store, documents: new Map(), ideas };
+  const api = new HostEngineApi({ store: localStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-status-refresh" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl historial puede recibir una nueva decisión.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = await api.analyzeLiteraryDocument("chapter");
+    const beforeBridge = before.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(beforeBridge.currentStatusHistoryConsistency, "mismatch");
+    assert.equal(before.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 1);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.statusHistory.push({
+      status: "IDEA",
+      reason: "writer",
+      changedAt: 4
+    });
+
+    const after = await api.analyzeLiteraryDocument("chapter");
+    const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(afterBridge.currentStatusHistoryConsistency, "consistent");
+    assert.equal(afterBridge.observedStatusTransitionCount, 4);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 3);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 1);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verifiableIdeaCount, 3);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 0.75);
+  } finally {
+    api.dispose();
+  }
+});
+
+test("el analizador directo cuantifica marcas temporales no monotónicas", () => {
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 1,
+    text: "Fragmento para verificar el historial.",
+    knownProjectIdeas: [{
+      projectId,
+      ideaId: "non-monotonic",
+      status: "IDEA",
+      relatedIdeaIds: [],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 3 },
+        { status: "IDEA", reason: "writer", changedAt: 2 },
+        { status: "discarded", reason: "writer" }
+      ],
+      writerDecisionCount: 3,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+
+  const node = result.ideaGraph.nodes[0];
+  assert.equal(node.currentStatusHistoryConsistency, "mismatch");
+  assert.equal(node.nonMonotonicStatusTimestampCount, 1);
+  assert.equal(node.comparableStatusTimestampPairCount, 2);
+  assert.equal(node.uncomparableStatusTimestampPairCount, 1);
+  assert.equal(node.earliestKnownStatusChangeAt, 1);
+  assert.equal(node.latestKnownStatusChangeAt, 3);
+});
+
+test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
+  const api = new HostEngineApi({ store: { ...store, documents: new Map() } });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-cache-isolation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa instantánea debe permanecer aislada.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const first = await api.analyzeLiteraryDocument("chapter");
+    const firstOrigin = first.ideaGraph.nodes.find(node => node.ideaId === "origin");
+    const originalHistoryLength = firstOrigin.statusHistory.length;
+    const originalReferenceCount = first.ideaGraph.references.length;
+    firstOrigin.statusHistory.push({
+      status: "discarded",
+      reason: "external-mutation",
+      changedAt: 999
+    });
+    first.ideaGraph.references.push({
+      fromIdeaId: "external",
+      toIdeaId: "origin",
+      resolution: "included-in-snapshot"
+    });
+
+    const second = await api.analyzeLiteraryDocument("chapter");
+    const secondOrigin = second.ideaGraph.nodes.find(node => node.ideaId === "origin");
+    assert.equal(secondOrigin.statusHistory.length, originalHistoryLength);
+    assert.equal(secondOrigin.statusHistory.at(-1).changedAt, 1);
+    assert.equal(second.ideaGraph.references.length, originalReferenceCount);
+    assert.equal(second.ideaGraph.referenceCount, originalReferenceCount);
+  } finally {
+    api.dispose();
+  }
+});
 
 test("el grafo distingue historiales consistentes, discrepantes y desconocidos", async () => {
   const ideas = [
@@ -121,85 +228,55 @@ test("el grafo distingue historiales consistentes, discrepantes y desconocidos",
   }
 });
 
-test("el grafo global actualiza la consistencia al ampliarse el historial de una idea", async () => {
-  const ideas = structuredClone(store.ideas);
-  const bridge = ideas.find(idea => idea.id === "bridge");
-  bridge.status = "discarded";
-  const localStore = { ...store, documents: new Map(), ideas };
-  const api = new HostEngineApi({ store: localStore });
-  api.initializeProject({
+test("conserva ideas grandes en el grafo aunque no entren en la trayectoria auxiliar", async () => {
+  const oversizedIdea = {
     projectId,
-    projectName: "Book",
-    writerId: "writer-status-refresh"
-  });
+    id: "oversized-linked-idea",
+    text: "x".repeat(100_001),
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds: [],
+    relatedEntityIds: ["character-1"],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  };
+  const character = {
+    projectId,
+    id: "character-1",
+    kind: "character",
+    canonicalName: "Iria",
+    normalizedName: "iria",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  };
+  const largeStore = {
+    ...store,
+    documents: new Map(),
+    ideas: [oversizedIdea],
+    async loadEntities(requestedProjectId) {
+      return requestedProjectId === projectId ? [structuredClone(character)] : [];
+    }
+  };
+  const api = new HostEngineApi({ store: largeStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-large-idea" });
   await api.openDocument({
     documentId: "chapter",
-    text: "Escena 1\nEl historial puede recibir una nueva decisión.",
+    text: "Escena 1\nIria observa el horizonte.",
     revision: 0,
     sequence: 0
   });
   try {
-    const before = await api.analyzeLiteraryDocument("chapter");
-    const beforeBridge = before.ideaGraph.nodes.find(node => node.ideaId === "bridge");
-    assert.equal(beforeBridge.currentStatusHistoryConsistency, "mismatch");
-    assert.equal(before.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 1);
-
-    bridge.statusHistory.push({
-      status: "discarded",
-      reason: "writer",
-      changedAt: 8
-    });
-    await api.invalidateNarrativeKnowledgeFromExternalChange();
-
-    const after = await api.analyzeLiteraryDocument("chapter");
-    const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
-    assert.equal(afterBridge.currentStatusHistoryConsistency, "consistent");
-    assert.equal(after.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 4);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 0);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 1);
-  } finally {
-    api.dispose();
-  }
-});
-
-test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
-  const api = new HostEngineApi({
-    store: { ...store, documents: new Map() }
-  });
-  api.initializeProject({
-    projectId,
-    projectName: "Book",
-    writerId: "writer-graph-cache-isolation"
-  });
-  await api.openDocument({
-    documentId: "chapter",
-    text: "Escena 1\nLa instantánea debe permanecer aislada.",
-    revision: 0,
-    sequence: 0
-  });
-  try {
-    const first = await api.analyzeLiteraryDocument("chapter");
-    const firstOrigin = first.ideaGraph.nodes.find(node => node.ideaId === "origin");
-    const originalHistoryLength = firstOrigin.statusHistory.length;
-    const originalReferenceCount = first.ideaGraph.references.length;
-    firstOrigin.statusHistory.push({
-      status: "discarded",
-      reason: "external-mutation",
-      changedAt: 999
-    });
-    first.ideaGraph.references.push({
-      fromIdeaId: "external",
-      toIdeaId: "origin",
-      resolution: "included-in-snapshot"
-    });
-
-    const second = await api.analyzeLiteraryDocument("chapter");
-    const secondOrigin = second.ideaGraph.nodes.find(node => node.ideaId === "origin");
-    assert.equal(secondOrigin.statusHistory.length, originalHistoryLength);
-    assert.equal(secondOrigin.statusHistory.at(-1).changedAt, 1);
-    assert.equal(second.ideaGraph.references.length, originalReferenceCount);
-    assert.equal(second.ideaGraph.referenceCount, originalReferenceCount);
+    const result = await api.analyzeLiteraryDocument("chapter");
+    assert.equal(result.ideaGraph.ideaCount, 1);
+    assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount, 0);
+    assert.equal(result.ideaGraph.lexicalResonances.inputIdeaCount, 1);
+    assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount, 0);
+    assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount, 0);
+    assert.equal(result.ideaGraph.lexicalResonances.omittedTextBudgetIdeaCount, 1);
   } finally {
     api.dispose();
   }
@@ -219,44 +296,95 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
     const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(bridgeNode.currentStatusHistoryConsistency, "mismatch");
     assert.equal(bridgeNode.observedStatusTransitionCount, 3);
     assert.equal(bridgeNode.statusReversalCount, 1);
-    assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
-    assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
-    assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);
-    assert.equal(bridgeNode.observedInitialStatusRecordCount, 1);
-    assert.equal(bridgeNode.observedWriterStatusChangeCount, 3);
-    assert.equal(bridgeNode.observedTextRevisionStatusChangeCount, 0);
-    assert.equal(bridgeNode.earliestKnownStatusChangeAt, 1);
-    assert.equal(bridgeNode.latestKnownStatusChangeAt, 3);
-    assert.equal(bridgeNode.knownStatusHistorySpanMs, 2);
     const soloNode = result.ideaGraph.nodes.find(node => node.ideaId === "solo");
-    assert.equal(soloNode.observedStatusTransitionCount, 6);
-    assert.equal(soloNode.statusReversalCount, 4);
+    assert.equal(soloNode.currentStatusHistoryConsistency, "consistent");
+    const finishNode = result.ideaGraph.nodes.find(node => node.ideaId === "finish");
+    assert.equal(finishNode.currentStatusHistoryConsistency, "unknown");
+    assert.deepEqual(result.ideaGraph.statusHistoryConsistency, {
+      consistentIdeaCount: 2,
+      mismatchIdeaCount: 1,
+      unknownIdeaCount: 1,
+      verifiableIdeaCount: 3,
+      verificationCoverage: 0.75
+    });
+    const ideaProfile = result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA");
+    assert.equal(ideaProfile.statusHistoryConsistentIdeaCount, 2);
+    assert.equal(ideaProfile.statusHistoryMismatchIdeaCount, 1);
+    assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 1);
+    assert.equal(soloNode.observedStatusTransitionCount, 5);
+    assert.equal(soloNode.statusReversalCount, 3);
     assert.equal(soloNode.comparableStatusTimestampPairCount, 6);
     assert.equal(soloNode.uncomparableStatusTimestampPairCount, 0);
+    assert.equal(soloNode.nonMonotonicStatusTimestampCount, 0);
     assert.equal(soloNode.earliestKnownStatusChangeAt, 1);
     assert.equal(soloNode.latestKnownStatusChangeAt, 7);
     assert.equal(soloNode.knownStatusHistorySpanMs, 6);
-    assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
-        .observedStatusTransitionCount,
-      9
-    );
-    assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
-        .statusReversalCount,
-      5
-    );
+    assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 0);
+    assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
+    assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);
+    assert.equal(bridgeNode.observedInitialStatusRecordCount, 1);
+    assert.equal(bridgeNode.observedWriterStatusChangeCount, 2);
+    assert.equal(bridgeNode.observedTextRevisionStatusChangeCount, 1);
+    assert.equal(bridgeNode.earliestKnownStatusChangeAt, 1);
+    assert.equal(bridgeNode.latestKnownStatusChangeAt, 3);
+    assert.equal(bridgeNode.knownStatusHistorySpanMs, 2);
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .nonMonotonicStatusTimestampCount,
-      1
+      0
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .comparableStatusTimestampPairCount,
+      2
     );
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .uncomparableStatusTimestampPairCount,
       1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedInitialStatusRecordCount,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedWriterStatusChangeCount,
+      2
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedTextRevisionStatusChangeCount,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .earliestKnownStatusChangeAt,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .latestKnownStatusChangeAt,
+      3
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .knownStatusHistorySpanMs,
+      2
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .statusReversalCount,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedStatusTransitionCount,
+      3
     );
     assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount,4);
     assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount,0);
@@ -644,59 +772,6 @@ test("el anfitrión recorta IDs Unicode colacionados de forma determinista", asy
   assert.equal(first.nodes.some(node => node.ideaId === composedIdea.id), false);
 });
 
-test("conserva ideas grandes en el grafo aunque no entren en la trayectoria auxiliar", async () => {
-  const oversizedIdea = {
-    projectId,
-    id: "oversized-linked-idea",
-    text: "x".repeat(100_001),
-    status: "IDEA",
-    originDocumentId: "chapter",
-    sourceProjectName: "Book",
-    evidence: [],
-    relatedIdeaIds: [],
-    relatedEntityIds: ["character-1"],
-    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
-  };
-  const character = {
-    projectId,
-    id: "character-1",
-    kind: "character",
-    canonicalName: "Iria",
-    normalizedName: "iria",
-    aliases: [],
-    evidence: [],
-    firstSeenAt: 1,
-    lastSeenAt: 1,
-    extractionVersion: 1
-  };
-  const largeStore = {
-    ...store,
-    documents: new Map(),
-    ideas: [oversizedIdea],
-    async loadEntities(requestedProjectId) {
-      return requestedProjectId === projectId ? [structuredClone(character)] : [];
-    }
-  };
-  const api = new HostEngineApi({ store: largeStore });
-  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-large-idea" });
-  await api.openDocument({
-    documentId: "chapter",
-    text: "Escena 1\nIria observa el horizonte.",
-    revision: 0,
-    sequence: 0
-  });
-  try {
-    const result = await api.analyzeLiteraryDocument("chapter");
-    assert.equal(result.ideaGraph.ideaCount, 1);
-    assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount, 0);
-    assert.equal(result.ideaGraph.lexicalResonances.inputIdeaCount, 1);
-    assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount, 0);
-    assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount, 0);
-    assert.equal(result.ideaGraph.lexicalResonances.omittedTextBudgetIdeaCount, 1);
-  } finally {
-    api.dispose();
-  }
-});
 
 test("contrasta los componentes de Tarjan con un oráculo de alcanzabilidad en grafos deterministas", async () => {
   const graphCount = 16;
@@ -790,6 +865,7 @@ test("contrasta los componentes de Tarjan con un oráculo de alcanzabilidad en g
   }
 });
 
+
 test("la resonancia léxica descarta términos ubicuos sin perder coincidencias específicas", async () => {
   const ideas = Array.from({ length: 20 }, (_, index) => {
     const isPair = index < 2;
@@ -837,6 +913,7 @@ test("la resonancia léxica descarta términos ubicuos sin perder coincidencias 
   }
 });
 
+
 test("la resonancia léxica normaliza Unicode de compatibilidad y mayúsculas", async () => {
   const ideas = [
     {
@@ -873,6 +950,7 @@ test("la resonancia léxica normaliza Unicode de compatibilidad y mayúsculas", 
     api.dispose();
   }
 });
+
 
 test("la resonancia léxica limita a cien pares y conserva el ranking determinista", async () => {
   const ids = Array.from({ length: 15 }, (_, index) =>
@@ -930,6 +1008,7 @@ test("la resonancia léxica limita a cien pares y conserva el ranking determinis
   }
 });
 
+
 test("la resonancia léxica limita las muestras de términos sin alterar sus métricas", async () => {
   const sharedTerms = Array.from({ length: 15 }, (_, index) =>
     "sharedresonance" + String(index).padStart(2, "0")
@@ -976,6 +1055,7 @@ test("la resonancia léxica limita las muestras de términos sin alterar sus mé
     api.dispose();
   }
 });
+
 
 test("la resonancia léxica aplica el límite de términos por idea según frecuencia", async () => {
   const shared = ["sharedlexicalalpha", "sharedlexicalbeta"];
@@ -1024,6 +1104,7 @@ test("la resonancia léxica aplica el límite de términos por idea según frecu
   }
 });
 
+
 test("la resonancia léxica excluye stopwords en español, inglés y portugués", async () => {
   const ideas = [
     {
@@ -1062,6 +1143,7 @@ test("la resonancia léxica excluye stopwords en español, inglés y portugués"
     api.dispose();
   }
 });
+
 
 test("el límite léxico prioriza frecuencia antes del orden alfabético", async () => {
   const frequent = ["memoria", "memoria", "memoria", "espejo", "espejo"];
@@ -1107,6 +1189,7 @@ test("el límite léxico prioriza frecuencia antes del orden alfabético", async
   }
 });
 
+
 test("la caché de resonancia léxica no expone referencias mutables", async () => {
   const ideas = ["memoria espejo destino", "memoria espejo destino"].map((text, index) => ({
     projectId,
@@ -1146,6 +1229,7 @@ test("la caché de resonancia léxica no expone referencias mutables", async () 
   }
 });
 
+
 test("la caché léxica se invalida cuando cambia el texto de una idea", async () => {
   const ideas = ["memoria espejo destino", "memoria espejo destino"].map((text, index) => ({
     projectId,
@@ -1174,35 +1258,18 @@ test("la caché léxica se invalida cuando cambia el texto de una idea", async (
     assert.deepEqual(before.resonances[0].sharedTerms, ["destino", "espejo", "memoria"]);
 
     ideas[1] = { ...ideas[1], text: "memoria destino" };
-    // Un segundo anfitrión obtiene la nueva instantánea durable; la caché
-    // léxica compartida debe invalidarse por el cambio del texto.
-    const updatedApi = new HostEngineApi({
-      store: { ...store, documents: new Map(), ideas }
-    });
-    updatedApi.initializeProject({
-      projectId, projectName: "Book", writerId: "writer-lexical-invalidation-updated"
-    });
-    await updatedApi.openDocument({
-      documentId: "chapter",
-      text: "Escena 1\\nLa actualización debe invalidar la caché.",
-      revision: 0,
-      sequence: 0
-    });
-    try {
-      const after = (await updatedApi.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
-      assert.equal(after.candidatePairCount, 1);
-      assert.equal(after.resonances.length, 1);
-      assert.equal(after.resonances[0].leftTermCount, 3);
-      assert.equal(after.resonances[0].rightTermCount, 2);
-      assert.equal(after.resonances[0].sharedTermCount, 2);
-      assert.deepEqual(after.resonances[0].sharedTerms, ["destino", "memoria"]);
-    } finally {
-      updatedApi.dispose();
-    }
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(after.candidatePairCount, 1);
+    assert.equal(after.resonances.length, 1);
+    assert.equal(after.resonances[0].leftTermCount, 3);
+    assert.equal(after.resonances[0].rightTermCount, 2);
+    assert.equal(after.resonances[0].sharedTermCount, 2);
+    assert.deepEqual(after.resonances[0].sharedTerms, ["destino", "memoria"]);
   } finally {
     api.dispose();
   }
 });
+
 
 test("la resonancia léxica excluye stopwords frecuentes en francés", async () => {
   const ideas = [
@@ -1244,6 +1311,7 @@ test("la resonancia léxica excluye stopwords frecuentes en francés", async () 
     api.dispose();
   }
 });
+
 
 test("la resonancia léxica excluye stopwords frecuentes en italiano", async () => {
   const ideas = [
@@ -1372,7 +1440,7 @@ test("la resonancia léxica excluye stopwords frecuentes en sueco", async () => 
   const ideas = [
     {
       projectId, id: "lexical-swedish-stopwords-a",
-      text: "en minne och en spegel med ett natt",
+      text: "en minne och en spegel med ett ljus",
       status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
       evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
@@ -1491,6 +1559,7 @@ test("la resonancia léxica excluye stopwords frecuentes en noruego", async () =
   }
 });
 
+
 test("la resonancia léxica conserva la frecuencia de los motivos compartidos", async () => {
   const ideas = [
     {
@@ -1539,4 +1608,487 @@ test("la resonancia léxica conserva la frecuencia de los motivos compartidos", 
   } finally {
     api.dispose();
   }
+});
+
+
+test("la caché del grafo se invalida cuando cambian los vínculos declarados", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-link-invalidation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLos vínculos editoriales pueden cambiar.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.referenceCount, 6);
+    assert.equal(before.includedReferenceCount, 5);
+    assert.equal(before.cycleCount, 2);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.relatedIdeaIds = [];
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(after.referenceCount, 4);
+    assert.equal(after.includedReferenceCount, 3);
+    assert.equal(after.notIncludedReferenceCount, 1);
+    assert.equal(after.cycleCount, 1);
+    assert.deepEqual(after.cycles.map(cycle => cycle.ideaIds), [["solo"]]);
+    assert.equal(
+      after.references.some(reference =>
+        reference.fromIdeaId === "bridge" &&
+        (reference.toIdeaId === "finish" || reference.toIdeaId === "origin")
+      ),
+      false
+    );
+  } finally {
+    api.dispose();
+  }
+});
+
+test("el grafo conserva su orden canónico ante catálogos recibidos en distinto orden", async () => {
+  const analyze = async (ideas, writerId) => {
+    const api = new HostEngineApi({
+      store: { ...store, documents: new Map(), ideas: structuredClone(ideas) }
+    });
+    api.initializeProject({ projectId, projectName: "Book", writerId });
+    await api.openDocument({
+      documentId: "chapter",
+      text: "Escena 1\\nEl orden de entrada no debe alterar el grafo.",
+      revision: 0,
+      sequence: 0
+    });
+    try {
+      const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+      return {
+        nodeIds: graph.nodes.map(node => node.ideaId),
+        references: graph.references,
+        cycles: graph.cycles,
+        weakComponents: graph.weakComponents
+      };
+    } finally {
+      api.dispose();
+    }
+  };
+
+  const forward = await analyze(store.ideas, "writer-graph-order-forward");
+  const reversed = await analyze([...store.ideas].reverse(), "writer-graph-order-reversed");
+  assert.deepEqual(reversed, forward);
+  assert.deepEqual(forward.nodeIds, ["bridge", "finish", "origin", "solo"]);
+});
+
+
+test("el grafo resuelve referencias externas cuando el catálogo incorpora el destino", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-catalog-expansion" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl catálogo puede incorporar ideas nuevas.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    const ghostReferenceBefore = before.references.find(reference => reference.toIdeaId === "ghost");
+    assert.equal(before.ideaCount, 4);
+    assert.equal(before.notIncludedReferenceCount, 1);
+    assert.equal(before.missingFromProjectReferenceCount, 1);
+    assert.equal(ghostReferenceBefore.resolution, "missing-from-project");
+
+    ideas.push({
+      projectId,
+      id: "ghost",
+      text: "Una idea incorporada posteriormente",
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 8 }]
+    });
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    const ghostReferenceAfter = after.references.find(reference => reference.toIdeaId === "ghost");
+    assert.equal(after.ideaCount, 5);
+    assert.equal(after.referenceCount, 6);
+    assert.equal(after.includedReferenceCount, 6);
+    assert.equal(after.notIncludedReferenceCount, 0);
+    assert.equal(after.missingFromProjectReferenceCount, 0);
+    assert.equal(ghostReferenceAfter.resolution, "included-in-snapshot");
+  } finally {
+    api.dispose();
+  }
+});
+
+test("el grafo reclasifica como externas las referencias al retirar una idea del catálogo", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-catalog-removal" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nUna idea puede salir del catálogo.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.ideaCount, 4);
+    assert.equal(before.includedReferenceCount, 5);
+
+    const bridgeIndex = ideas.findIndex(idea => idea.id === "bridge");
+    ideas.splice(bridgeIndex, 1);
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(after.ideaCount, 3);
+    assert.equal(after.referenceCount, 4);
+    assert.equal(after.includedReferenceCount, 2);
+    assert.equal(after.notIncludedReferenceCount, 2);
+    assert.equal(after.missingFromProjectReferenceCount, 2);
+    assert.deepEqual(
+      after.references
+        .filter(reference => reference.toIdeaId === "bridge")
+        .map(reference => reference.resolution),
+      ["missing-from-project"]
+    );
+  } finally {
+    api.dispose();
+  }
+});
+
+
+test("la caché del grafo incorpora cambios de texto en el análisis de resonancia", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-text-invalidation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl vocabulario de las ideas puede revisarse.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.lexicalResonances.candidatePairCount, 1);
+    assert.equal(before.lexicalResonances.resonances.length, 1);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.text = "nube azul horizonte distante";
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(after.lexicalResonances.analyzedIdeaCount, 4);
+    assert.equal(after.lexicalResonances.candidatePairCount, 0);
+    assert.equal(after.lexicalResonances.resonances.length, 0);
+    assert.equal(after.ideaCount, before.ideaCount);
+    assert.equal(after.referenceCount, before.referenceCount);
+  } finally {
+    api.dispose();
+  }
+});
+
+test("la caché del grafo actualiza perfiles al cambiar el estado editorial actual", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-status-invalidation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl estado editorial puede cambiar.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.statusProfiles.find(profile => profile.status === "IDEA").ideaCount, 4);
+    assert.equal(before.statusProfiles.some(profile => profile.status === "incorporated"), false);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.status = "discarded";
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    const discardedProfile = after.statusProfiles.find(profile => profile.status === "discarded");
+    const ideaProfile = after.statusProfiles.find(profile => profile.status === "IDEA");
+    const bridgeNode = after.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(discardedProfile.ideaCount, 1);
+    assert.equal(ideaProfile.ideaCount, 3);
+    assert.equal(bridgeNode.status, "discarded");
+    assert.equal(bridgeNode.currentStatusHistoryConsistency, "consistent");
+    assert.equal(after.statusHistoryConsistency.mismatchIdeaCount, 0);
+    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 3);
+    assert.equal(after.statusHistoryConsistency.unknownIdeaCount, 1);
+  } finally {
+    api.dispose();
+  }
+});
+
+
+test("el grafo representa de forma explícita un catálogo de ideas vacío", async () => {
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas: [] }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-empty-idea-graph" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nTodavía no hay ideas registradas.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.catalogScope, "project");
+    assert.equal(graph.projectCatalogComplete, true);
+    assert.equal(graph.ideaCount, 0);
+    assert.equal(graph.omittedIdeaCount, 0);
+    assert.equal(graph.referenceCount, 0);
+    assert.equal(graph.includedReferenceCount, 0);
+    assert.equal(graph.notIncludedReferenceCount, 0);
+    assert.equal(graph.missingFromProjectReferenceCount, 0);
+    assert.equal(graph.reciprocalReferencePairCount, 0);
+    assert.equal(graph.selfReferenceCount, 0);
+    assert.equal(graph.sourceNodeCount, 0);
+    assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+    assert.equal(graph.weakComponentCount, 0);
+    assert.equal(graph.omittedWeakComponentCount, 0);
+    assert.equal(graph.largestWeakComponentSize, 0);
+    assert.equal(graph.cycleCount, 0);
+    assert.equal(graph.omittedCycleCount, 0);
+    assert.deepEqual(graph.nodes, []);
+    assert.deepEqual(graph.references, []);
+    assert.deepEqual(graph.cycles, []);
+    assert.deepEqual(graph.weakComponents, []);
+    assert.deepEqual(graph.statusHistoryConsistency, {
+      consistentIdeaCount: 0,
+      mismatchIdeaCount: 0,
+      unknownIdeaCount: 0,
+      verifiableIdeaCount: 0,
+      verificationCoverage: 0
+    });
+    assert.equal(graph.lexicalResonances.inputIdeaCount, 0);
+    assert.equal(graph.lexicalResonances.analyzedIdeaCount, 0);
+    assert.equal(graph.lexicalResonances.candidatePairCount, 0);
+    assert.deepEqual(graph.lexicalResonances.resonances, []);
+  } finally {
+    api.dispose();
+  }
+});
+
+
+test("el muestreo de referencias mantiene contadores exactos al superar cinco mil aristas", async () => {
+  const relatedIdeaIds = Array.from(
+    { length: 5_003 },
+    (_, index) => `external-${String(index).padStart(5, "0")}`
+  );
+  const ideas = [{
+    projectId,
+    id: "reference-sample-source",
+    text: "Una única idea con muchas referencias explícitas",
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds,
+    relatedEntityIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  }];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-reference-sample-cap" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl muestreo no debe alterar los totales.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 1);
+    assert.equal(graph.referenceCount, 5_003);
+    assert.equal(graph.includedReferenceCount, 0);
+    assert.equal(graph.notIncludedReferenceCount, 5_003);
+    assert.equal(graph.missingFromProjectReferenceCount, 5_003);
+    assert.equal(graph.referenceSampleCount, 5_000);
+    assert.equal(graph.omittedReferenceSampleCount, 3);
+    assert.equal(graph.referencesTruncated, true);
+    assert.equal(graph.references.length, 5_000);
+    assert.equal(graph.references[0].toIdeaId, "external-00000");
+    assert.equal(graph.references.at(-1).toIdeaId, "external-04999");
+    assert.ok(graph.references.every(reference =>
+      reference.fromIdeaId === "reference-sample-source" &&
+      reference.resolution === "missing-from-project"
+    ));
+    assert.equal(graph.nodes[0].notIncludedOutgoingReferenceCount, 5_003);
+    assert.equal(graph.nodes[0].incomingReferenceCount, 0);
+  } finally {
+    api.dispose();
+  }
+});
+
+test("los límites de muestras de ciclos y componentes no alteran los conteos completos", async () => {
+  const ideas = Array.from({ length: 105 }, (_, index) => {
+    const id = `self-cycle-${String(index).padStart(3, "0")}`;
+    return {
+      projectId,
+      id,
+      text: `motivo-literario-unico-${index}`,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [id],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    };
+  });
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-cycle-sample-cap" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nCada idea forma su propio ciclo.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 105);
+    assert.equal(graph.referenceCount, 105);
+    assert.equal(graph.selfReferenceCount, 105);
+    assert.equal(graph.cycleCount, 105);
+    assert.equal(graph.omittedCycleCount, 5);
+    assert.equal(graph.cycles.length, 100);
+    assert.equal(graph.cycles[0].ideaIds.length, 1);
+    assert.equal(graph.cycles.at(-1).ideaIds[0], "self-cycle-099");
+    assert.equal(graph.weakComponentCount, 105);
+    assert.equal(graph.omittedWeakComponentCount, 5);
+    assert.equal(graph.weakComponents.length, 100);
+    assert.equal(graph.largestWeakComponentSize, 1);
+    assert.deepEqual(graph.weakComponents[0].ideaIds, ["self-cycle-000"]);
+    assert.deepEqual(graph.weakComponents.at(-1).ideaIds, ["self-cycle-099"]);
+    assert.equal(graph.sourceNodeCount, 0);
+    assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+  } finally {
+    api.dispose();
+  }
+});
+
+
+test("un catálogo de proyecto truncado no clasifica referencias externas como ausencias", () => {
+  const idea = {
+    projectId,
+    ideaId: "partial-catalog-origin",
+    text: "Idea del catálogo parcial",
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    relatedEntityIds: [],
+    relatedIdeaIds: ["ghost"],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  };
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 0,
+    text: "Escena 1\\nEl catálogo transferido está truncado.",
+    knownProjectIdeas: [idea],
+    knownProjectIdeasOmittedCount: 2
+  });
+  const graph = result.ideaGraph;
+  assert.equal(graph.catalogScope, "project");
+  assert.equal(graph.projectCatalogComplete, false);
+  assert.equal(graph.ideaCount, 1);
+  assert.equal(graph.omittedIdeaCount, 2);
+  assert.equal(graph.referenceCount, 1);
+  assert.equal(graph.includedReferenceCount, 0);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.equal(graph.references[0].resolution, "not-in-snapshot");
+});
+
+test("el catálogo heredado de ideas vinculadas nunca se presenta como exhaustivo", () => {
+  const idea = {
+    projectId,
+    ideaId: "partial-catalog-origin",
+    text: "Idea del catálogo parcial",
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    relatedEntityIds: [],
+    relatedIdeaIds: ["ghost"],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  };
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 0,
+    text: "Escena 1\\nSolo se dispone de ideas vinculadas a personajes.",
+    knownIdeas: [idea]
+  });
+  const graph = result.ideaGraph;
+  assert.equal(graph.catalogScope, "character-linked-fallback");
+  assert.equal(graph.projectCatalogComplete, false);
+  assert.equal(graph.omittedIdeaCount, 0);
+  assert.equal(graph.referenceCount, 1);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.equal(graph.references[0].resolution, "not-in-snapshot");
+});
+
+test("el desempate de IDs Unicode mantiene un orden canónico estable", () => {
+  const decomposedId = String.fromCharCode(0x65, 0x301);
+  const makeIdea = (ideaId, text) => ({
+    projectId,
+    ideaId,
+    text,
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
+  const ideas = [
+    makeIdea("é", "motivo unicode compuesto"),
+    makeIdea(decomposedId, "motivo unicode descompuesto")
+  ];
+  const analyze = (knownProjectIdeas) => analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 0,
+    text: "Escena 1\\nLos identificadores Unicode deben ordenarse de forma determinista.",
+    knownProjectIdeas
+  }).ideaGraph;
+  const forward = analyze(ideas);
+  const reversed = analyze([...ideas].reverse());
+  assert.deepEqual(reversed.nodes.map(node => node.ideaId), forward.nodes.map(node => node.ideaId));
+  assert.deepEqual(forward.nodes.map(node => node.ideaId), [decomposedId, "é"]);
+  assert.equal(forward.ideaCount, 2);
+  assert.equal(forward.weakComponentCount, 2);
+  assert.equal(forward.isolatedWithinSnapshotNodeCount, 2);
 });

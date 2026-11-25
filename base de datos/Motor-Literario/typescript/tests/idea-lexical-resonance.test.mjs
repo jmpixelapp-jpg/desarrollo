@@ -78,7 +78,7 @@ test("conserva términos de alfabetos Unicode sin distinción de mayúsculas", (
 test("normaliza Unicode compuesto y conserva las marcas diacríticas", () => {
   const result = analyze([
     idea("idea-a", "CAFÉ memoria energía bosque"),
-    idea("idea-b", "cafe\u0301 MEMORIA energia\u0301 BOSQUE")
+    idea("idea-b", "cafe\u0301 MEMORIA energi\u0301a BOSQUE")
   ]);
 
   assert.equal(result.candidatePairCount, 1);

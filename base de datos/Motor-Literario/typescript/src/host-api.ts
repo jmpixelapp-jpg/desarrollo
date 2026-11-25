@@ -3567,7 +3567,9 @@ export class HostEngineApi {
           )) {
             throw new Error("Integridad de biblioteca: el recibo referencia entradas ausentes o malformadas.");
           }
-          const byId = new Map(batch.map(entry => [entry.idea.id, entry]));
+          const byId = new Map<string, PersonalIdeaLibraryEntry>(
+            batch.map(entry => [entry.idea.id, entry] as const)
+          );
           if (byId.size !== batchIds.length) {
             throw new Error("Integridad de biblioteca: el recibo referencia entradas ausentes o duplicadas.");
           }

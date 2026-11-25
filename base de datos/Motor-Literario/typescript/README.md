@@ -39,6 +39,7 @@ npm run bench
 - Persistencia local mediante IndexedDB con journal de cambios, reproducción ordenada del journal al reiniciar y snapshots cada 64 ediciones; las ediciones normales guardan deltas en lugar del manuscrito completo.
 - Reglas deterministas iniciales: palabras repetidas, espacios antes/después de puntuación, espacios dobles e inicio de oración en minúscula.
 - Resultados asociados a proyecto, documento y revisión.
+- El resultado literario incluye `ideaGraph`, construido con el catálogo global del libro, también para ideas sin vínculos a personajes; distingue referencias incluidas y fuera de muestra, ciclos, componentes conectados, estados editoriales y evidencia activa/obsoleta. Las trayectorias de personajes mantienen por separado solo las ideas asociadas explícitamente a sus fichas.
 - Diagnósticos persistidos en IndexedDB por proyecto, documento y revisión; al reabrir un documento, se reutiliza el resultado exacto o se recalcula la revisión recuperada y se guarda.
 - El anfitrión consulta los diagnósticos vigentes mediante `getDocumentDiagnostics(documentId)`; `flushPendingChanges()` también espera la recuperación y persistencia de diagnósticos.
 - Análisis de todas las líneas afectadas, incluso en inserciones y eliminaciones multilínea.
@@ -63,7 +64,7 @@ El módulo `narrative-knowledge.ts` incorpora la primera capa de conocimiento es
 - Captura ideas únicamente desde líneas marcadas con `IDEA:`. Cada idea conserva el documento de origen, el título del libro proporcionado por el anfitrión, evidencia e historial de revisiones. El anfitrión puede cambiar su estado a `IDEA`, `incorporated` o `discarded`; las transiciones quedan registradas por separado con fecha y motivo (`writer` o `text-revised`), sin duplicar entradas cuando se repite el mismo estado. Si el texto cambia, la versión nueva vuelve a `IDEA` y conserva el historial anterior. La transferencia final de ideas `IDEA` a una biblioteca personal aislada por escritor está implementada mediante una transacción local; requiere que el anfitrión suministre `writerId` al inicializar el proyecto.
 - Todas las colecciones se aíslan mediante el `projectId` proporcionado por la aplicación anfitriona.
 
-La base IndexedDB está en versión 21 y conserva las colecciones previas, con entidades, relaciones, acontecimientos, ideas, afirmaciones históricas y la biblioteca personal de ideas local. La migración verifica y reconstruye índices faltantes en almacenes existentes, sin reemplazar ni vaciar las colecciones.
+La base IndexedDB está en versión 22 y conserva las colecciones previas, con entidades, relaciones, acontecimientos, historiales de acontecimientos, ideas, afirmaciones históricas y la biblioteca personal de ideas local. La migración verifica y reconstruye índices faltantes en almacenes existentes, sin reemplazar ni vaciar las colecciones.
 
 La API del anfitrión expone `extractNarrativeKnowledge(documentId, revision, text)`, `getNarrativeEntities()`, `getNarrativeRelations()`, `getNarrativeEvents()`, `getNarrativeIdeas()`, `setNarrativeIdeaStatus(ideaId, status)`, `getNarrativeAssertions()` y `getNarrativeEntityHistory(entityId)`.
 

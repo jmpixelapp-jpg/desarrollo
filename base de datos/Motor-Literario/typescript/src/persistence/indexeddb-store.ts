@@ -1567,6 +1567,10 @@ function validatePersonalIdeaBackupIntegrity(
       throw new Error("El respaldo IndexedDB contiene un recibo de finalización malformado.");
     }
     const receipt = value as StoredProjectFinalizationReceipt;
+    if (typeof receipt.writerId !== "string" || !receipt.writerId.trim() ||
+        typeof receipt.sourceProjectId !== "string" || !receipt.sourceProjectId.trim()) {
+      throw new Error("El respaldo IndexedDB contiene un recibo sin propietario o libro válidos.");
+    }
     validateFinalizationReceipt(receipt, receipt.writerId, receipt.sourceProjectId);
     const ownerKey = JSON.stringify([receipt.writerId, receipt.sourceProjectId]);
     if (seenReceipts.has(ownerKey)) {

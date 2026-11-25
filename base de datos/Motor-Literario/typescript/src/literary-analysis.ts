@@ -3718,6 +3718,9 @@ function buildLiteraryIdeaLexicalResonances(
           break;
         }
       }
+      // La caché es de módulo, pero nunca comparte resultados entre libros:
+      // projectId forma parte de la partición incluso si IDs y textos coinciden.
+      cacheKey += `${idea.projectId.length}:${idea.projectId}`;
       cacheKey += `${idea.ideaId.length}:${idea.ideaId}`;
       cacheKey += idea.textOmitted === "budget" ? "B" : text === undefined
         ? "N" : `T${text.length}:${text}`;

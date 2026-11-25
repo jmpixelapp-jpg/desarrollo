@@ -86,6 +86,23 @@ test("ordena los candidatos de forma determinista aunque cambie el orden de entr
   assert.deepEqual(analyze(ideas), analyze([...ideas].reverse()));
 });
 
+test("limita la salida a los cien pares mejor clasificados y declara el excedente", () => {
+  const ideas = Array.from({ length: 101 }, (_, index) => {
+    const suffix = String(index).padStart(3, "0");
+    return [
+      idea("idea-a-" + suffix, "memoria" + suffix + " simbolo" + suffix + " origen" + suffix),
+      idea("idea-b-" + suffix, "memoria" + suffix + " simbolo" + suffix + " destino" + suffix)
+    ];
+  }).flat();
+  const result = analyze(ideas);
+
+  assert.equal(result.candidatePairCount, 101);
+  assert.equal(result.resonances.length, 100);
+  assert.equal(result.omittedCandidatePairCount, 1);
+  assert.equal(result.resonances[0].leftIdeaId, "idea-a-000");
+  assert.equal(result.resonances[99].leftIdeaId, "idea-a-099");
+});
+
 test("respeta el presupuesto global de texto sin dividir una idea a medias", () => {
   const repeatedIdeaText = "memoria ".repeat(12_500);
   const ideas = Array.from({ length: 21 }, (_, index) => idea(

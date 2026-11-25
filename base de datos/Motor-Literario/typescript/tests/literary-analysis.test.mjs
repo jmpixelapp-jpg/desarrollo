@@ -2307,3 +2307,141 @@ test("vincula decisiones con acontecimientos posteriores solo en escalas tempora
   assert.equal(decision.laterDocumentedEventCount, 1);
   assert.equal(decision.laterEventChronologyStatus, "later-events-found");
 });
+
+
+test("la cronología de decisiones no convierte evidencia obsoleta en acontecimientos posteriores", () => {
+  const text = "Escena 1\nAna decide esperar.";
+  const phrase = "Ana decide esperar.";
+  const start = text.indexOf(phrase);
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase
+  };
+  const staleEvidence = { ...evidence, status: "stale" };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownEvents: [{
+      eventId: "decision-event",
+      label: "La decisión",
+      participants: ["ana-id"],
+      evidence: [evidence]
+    }],
+    knownProjectEvents: [
+      {
+        projectId: "literary-analysis-test",
+        eventId: "decision-event",
+        label: "La decisión",
+        participants: ["ana-id"],
+        timelineTrackId: "main",
+        timeReference: { basis: "calendar", precision: "year", raw: "2020", orderValue: 2020 },
+        evidence: [evidence]
+      },
+      {
+        projectId: "literary-analysis-test",
+        eventId: "stale-later-event",
+        label: "Acontecimiento obsoleto",
+        participants: ["ana-id"],
+        timelineTrackId: "main",
+        timeReference: { basis: "calendar", precision: "year", raw: "2025", orderValue: 2025 },
+        evidenceCount: 0,
+        staleEvidenceCount: 1,
+        evidence: [staleEvidence]
+      }
+    ],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "ana-decision",
+      text: "Ana decide esperar.",
+      status: "incorporated",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 1,
+      staleEvidenceCount: 0,
+      evidence: [evidence],
+      statusHistory: [{ status: "incorporated", reason: "writer" }],
+      writerDecisionCount: 1,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+  const decision = result.characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.deepEqual(decision.laterDocumentedEventIds, []);
+  assert.equal(decision.laterEventChronologyStatus, "no-later-event-in-snapshot");
+});
+
+
+test("la cronología de decisiones conserva incertidumbre ante referencias ausentes y catálogos parciales", () => {
+  const text = "Escena 1\nAna decide marcharse.";
+  const phrase = "Ana decide marcharse.";
+  const start = text.indexOf(phrase);
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase
+  };
+  const base = {
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownEvents: [{
+      eventId: "decision-event",
+      label: "La decisión",
+      participants: ["ana-id"],
+      evidence: [evidence]
+    }],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "ana-decision",
+      text: "Ana decide marcharse.",
+      status: "incorporated",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 1,
+      staleEvidenceCount: 0,
+      evidence: [evidence],
+      statusHistory: [{ status: "incorporated", reason: "writer" }],
+      writerDecisionCount: 1,
+      omittedStatusHistoryCount: 0
+    }]
+  };
+  const withoutTime = analyzeLiteraryFragment({
+    ...base,
+    knownProjectEvents: [{
+      projectId: "literary-analysis-test",
+      eventId: "decision-event",
+      label: "La decisión",
+      participants: ["ana-id"],
+      evidence: [evidence]
+    }]
+  }).characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.equal(withoutTime.laterEventChronologyStatus, "unknown-time-reference");
+
+  const partialCatalog = analyzeLiteraryFragment({
+    ...base,
+    knownProjectEvents: [{
+      projectId: "literary-analysis-test",
+      eventId: "decision-event",
+      label: "La decisión",
+      participants: ["ana-id"],
+      timelineTrackId: "main",
+      timeReference: { basis: "calendar", precision: "year", raw: "2020", orderValue: 2020 },
+      evidence: [evidence]
+    }],
+    knownProjectEventsOmittedCount: 2
+  }).characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.equal(partialCatalog.laterEventChronologyStatus, "unknown-due-to-incomplete-catalog");
+});

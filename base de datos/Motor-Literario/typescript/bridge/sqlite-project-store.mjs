@@ -253,7 +253,9 @@ function validateNarrativeIdea(idea, projectId, label = "idea") {
   if (idea.projectId !== projectId || typeof idea.text !== "string" || !idea.text.trim() ||
       !["IDEA", "incorporated", "discarded"].includes(idea.status) ||
       typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
-      typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim()) {
+      typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||
+      (idea.omittedStatusHistoryCount !== undefined &&
+        (!Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0))) {
     throw new Error("Integridad narrativa: " + label + " malformada.");
   }
   validateEvidenceList(idea.evidence, label);

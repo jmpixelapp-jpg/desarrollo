@@ -149,7 +149,7 @@ function validatePersonalIdeaFinalizationIntegrity(database) {
           entry.idea?.projectId !== receipt.sourceProjectId ||
           entry.idea?.id !== ideaId || entry.idea?.status !== "IDEA" ||
           entry.idea?.sourceProjectName !== receipt.sourceProjectName ||
-          !entry.context || entry.context.version !== 1) {
+          (entry.context !== undefined && (!entry.context || entry.context.version !== 1))) {
         throw new Error("El respaldo SQLite contiene una entrada de biblioteca incompatible con su recibo.");
       }
       contentChecksum.add(entry);

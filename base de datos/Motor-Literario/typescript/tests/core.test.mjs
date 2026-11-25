@@ -9885,15 +9885,20 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
   const projectIdeas = [structuredClone(idea)];
   const library = new Map();
   const receipts = new Map();
+  const writerVersions = new Map();
   const makeKey = parts => JSON.stringify(parts);
 
   const database = {
     onversionchange: null,
+    objectStoreNames: {
+      contains(name) { return name === "writer-library-versions"; }
+    },
     close() {},
     transaction(storeNames, mode) {
       const names = Array.isArray(storeNames) ? storeNames : [storeNames];
       assert.ok(names.includes("writer-library-finalization-receipts"));
       const transaction = {
+        objectStoreNames: { contains(name) { return names.includes(name); } },
         error: null,
         oncomplete: null,
         onerror: null,
@@ -9986,6 +9991,19 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               }
             };
           }
+          if (name === "writer-library-versions") {
+            return {
+              get(key) {
+                return transaction.request(() => {
+                  const value = writerVersions.get(key);
+                  return value ? structuredClone(value) : undefined;
+                });
+              },
+              put(record) {
+                writerVersions.set(record.writerId, structuredClone(record));
+              }
+            };
+          }
           assert.equal(name, "narrative-entities");
           return {
             get() {
@@ -10018,6 +10036,8 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(projectIdeas.length, 0);
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
+    assert.deepEqual(writerVersions.get(writerId), { writerId, version: 1 },
+      "el archivo incrementa la generación dentro de la transacción de biblioteca");
 
     const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
     assert.ok(receipt);
@@ -10034,6 +10054,8 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(retryArchive[0].idea.id, "idea-to-archive");
     assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
+    assert.equal(writerVersions.get(writerId).version, 1,
+      "un reintento idempotente no cambia la generación si no modifica la biblioteca");
     assert.equal(
       (await store.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
       receipt.archiveChecksum

@@ -179,3 +179,5 @@ A partir de esta entrega, cualquier avance nuevo del monitor debe actualizar est
 
 **Resultado verificado:** [CI específica 45721849829](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721849829), build Vite correcto, 78/78 pruebas aprobadas, 0 fallidas y 0 omitidas.
 
+La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721849896), correspondiente al mismo commit `a9093daeac9b25bed3b2f5638f5c25fecb6d8efe`, sigue fallando en `src/literary-analysis.ts` (errores TS2322, TS2677, TS18047 y TS2345). El workflow específico del monitor terminó correctamente; no se modificó el archivo narrativo.
+

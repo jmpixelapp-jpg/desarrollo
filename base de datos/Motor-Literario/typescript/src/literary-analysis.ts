@@ -797,6 +797,12 @@ export interface LiteraryIdeaGraphWeakComponent {
 export interface LiteraryIdeaGraphStatusProfile {
   readonly status: NarrativeIdea["status"];
   readonly ideaCount: number;
+  /** Marca temporal conocida más antigua entre los historiales visibles del perfil. */
+  readonly earliestKnownStatusChangeAt: number | null;
+  /** Marca temporal conocida más reciente entre los historiales visibles del perfil. */
+  readonly latestKnownStatusChangeAt: number | null;
+  /** Amplitud temporal conjunta entre las fechas conocidas del perfil. */
+  readonly knownStatusHistorySpanMs: number | null;
   /** Ideas sin entradas desde otros nodos del snapshot; puede haber fuentes omitidas. */
   readonly sourceIdeaCount: number;
   readonly terminalWithinSnapshotIdeaCount: number;
@@ -3816,6 +3822,8 @@ function buildLiteraryIdeaGraph(
     observedInitialStatusRecordCount: number;
     observedWriterStatusChangeCount: number;
     observedTextRevisionStatusChangeCount: number;
+    earliestKnownStatusChangeAt: number | null;
+    latestKnownStatusChangeAt: number | null;
     activeEvidenceCount: number;
     staleEvidenceCount: number;
     ideasWithActiveEvidenceCount: number;
@@ -3844,6 +3852,8 @@ function buildLiteraryIdeaGraph(
       observedInitialStatusRecordCount: 0,
       observedWriterStatusChangeCount: 0,
       observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: null,
+      latestKnownStatusChangeAt: null,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 0,
@@ -3881,6 +3891,18 @@ function buildLiteraryIdeaGraph(
     totals.observedInitialStatusRecordCount += node.observedInitialStatusRecordCount;
     totals.observedWriterStatusChangeCount += node.observedWriterStatusChangeCount;
     totals.observedTextRevisionStatusChangeCount += node.observedTextRevisionStatusChangeCount;
+    if (node.earliestKnownStatusChangeAt !== null) {
+      totals.earliestKnownStatusChangeAt =
+        totals.earliestKnownStatusChangeAt === null
+          ? node.earliestKnownStatusChangeAt
+          : Math.min(totals.earliestKnownStatusChangeAt, node.earliestKnownStatusChangeAt);
+    }
+    if (node.latestKnownStatusChangeAt !== null) {
+      totals.latestKnownStatusChangeAt =
+        totals.latestKnownStatusChangeAt === null
+          ? node.latestKnownStatusChangeAt
+          : Math.max(totals.latestKnownStatusChangeAt, node.latestKnownStatusChangeAt);
+    }
     totals.activeEvidenceCount += node.activeEvidenceCount;
     totals.staleEvidenceCount += node.staleEvidenceCount;
     if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;

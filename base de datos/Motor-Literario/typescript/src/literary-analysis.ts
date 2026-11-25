@@ -4533,12 +4533,10 @@ function buildCharacterNarrativeTrajectories(
     const causalRelations = [...(relationsByCharacter.get(character.entityId) ?? [])]
       .map(relation => {
         const causeEvents = projectEvents.filter(event =>
-          event.eventId === relation.candidate.causeEventId &&
-          event.participants.includes(character.entityId)
+          event.eventId === relation.candidate.causeEventId
         );
         const consequenceEvents = projectEvents.filter(event =>
-          event.eventId === relation.candidate.consequenceEventId &&
-          event.participants.includes(character.entityId)
+          event.eventId === relation.candidate.consequenceEventId
         );
         const uniqueTemporalReference = (events: readonly LiteraryAnalysisKnownProjectEvent[]) => {
           const active = events.filter(event =>

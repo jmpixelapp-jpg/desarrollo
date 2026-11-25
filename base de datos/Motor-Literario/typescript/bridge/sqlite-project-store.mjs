@@ -93,8 +93,8 @@ export class SqliteProjectStore {
     await mkdir(dirname(databasePath), { recursive: true, mode: 0o700 });
     const handle = await openFile(databasePath, "a", 0o600);
     await handle.close();
-    // El directorio restringido protege también los archivos -wal y -shm.
-    // En Windows, el control efectivo se hereda además de la ACL del directorio.
+    // El anfitrión debe mantener la carpeta de datos privada para proteger
+    // también los archivos auxiliares -wal y -shm. En Windows se aplican ACL.
     try { await chmod(databasePath, 0o600); } catch { /* Algunos entornos no admiten chmod completo. */ }
     const database = new DatabaseSync(databasePath);
     return new SqliteProjectStore(database, databasePath);

@@ -1,0 +1,41 @@
+name: Narrative idea cache regression
+
+on:
+  pull_request:
+    paths:
+      - "base de datos/Motor-Literario/typescript/src/host-api.ts"
+      - "base de datos/Motor-Literario/typescript/tests/idea-synchronization.test.mjs"
+      - ".github/workflows/narrative-idea-cache-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "base de datos/Motor-Literario/typescript/src/host-api.ts"
+      - "base de datos/Motor-Literario/typescript/tests/idea-synchronization.test.mjs"
+      - ".github/workflows/narrative-idea-cache-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  atomic-idea-cache:
+    name: Atomic idea cache recovery
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "base de datos/Motor-Literario/typescript"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install development tools
+        run: npm install --no-audit --no-fund
+      - name: Build runtime bundle
+        run: npx vite build
+      - name: Run atomic cache recovery regression
+        run: >-
+          node --test
+          --test-name-pattern="no publica ideas en caché cuando falla la validación de sus referencias"
+          tests/idea-synchronization.test.mjs

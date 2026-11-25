@@ -5157,11 +5157,13 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
-        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0 ||
-        !isValidNarrativeIdeaStatusHistory(
-          idea.statusHistory,idea.status,idea.writerDecisionCount,idea.omittedStatusHistoryCount
-        )) {
+        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
       throw new Error("El catálogo global de ideas del análisis literario es inválido.");
+    }
+    if (!isValidNarrativeIdeaStatusHistory(
+      idea.statusHistory,idea.status,idea.writerDecisionCount,idea.omittedStatusHistoryCount
+    )) {
+      throw new Error("El historial de decisiones del catálogo global de ideas es inválido.");
     }
     projectIdeaIds.add(idea.ideaId);
   }
@@ -5187,11 +5189,13 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||
         idea.evidenceCount < idea.evidence.length ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
-        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0 ||
-        !isValidNarrativeIdeaStatusHistory(
-          idea.statusHistory,idea.status,idea.writerDecisionCount,idea.omittedStatusHistoryCount
-        )) {
+        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
       throw new Error("El catálogo de ideas y decisiones del análisis literario es inválido.");
+    }
+    if (!isValidNarrativeIdeaStatusHistory(
+      idea.statusHistory,idea.status,idea.writerDecisionCount,idea.omittedStatusHistoryCount
+    )) {
+      throw new Error("El historial de decisiones de una idea vinculada es inválido.");
     }
     ideaIds.add(idea.ideaId);
     for (const evidence of idea.evidence) {

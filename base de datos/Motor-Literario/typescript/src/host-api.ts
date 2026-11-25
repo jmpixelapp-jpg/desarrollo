@@ -1136,8 +1136,8 @@ export class HostEngineApi {
     }
     await this.liveAnalysisTail;
     const work = this.knowledgeTail.then(async () => {
-      const store = this.requireKnowledgeStore();
-      if (!store.mergeNarrativeEntityIdentity) {
+      const store = this.requireKnowledgeReaderStore();
+      if (!this.store.mergeNarrativeEntityIdentity) {
         throw new Error("El adaptador no ofrece consolidación transaccional; no se realizaron cambios.");
       }
       const loadEntities = async () => requireProjectScopedRecords(
@@ -1178,7 +1178,7 @@ export class HostEngineApi {
         firstSeenAt: Math.min(target.firstSeenAt, source.firstSeenAt),
         lastSeenAt: Math.max(target.lastSeenAt, source.lastSeenAt)
       };
-      await store.mergeNarrativeEntityIdentity(
+      await this.store.mergeNarrativeEntityIdentity!(
         projectId, targetEntityId, sourceEntityId, project.writerId
       );
       if (this.ideasLoaded) {
@@ -1225,7 +1225,7 @@ export class HostEngineApi {
     if (!this.entitiesLoaded) {
       const projectId = this.requireProject().projectId;
       const entities = requireProjectScopedRecords(
-        await this.requireKnowledgeStore().loadEntities(projectId), projectId, "entidades"
+        await this.requireKnowledgeReaderStore().loadEntities(projectId), projectId, "entidades"
       );
       for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
       this.entitiesLoaded = true;
@@ -1244,7 +1244,7 @@ export class HostEngineApi {
       const projectId = this.requireProject().projectId;
       if (!this.relationsLoaded) {
         const relations = requireProjectScopedRecords(
-          await this.requireRelationStore().loadRelations(projectId), projectId, "relaciones"
+          await this.requireRelationReaderStore().loadRelations(projectId), projectId, "relaciones"
         );
         const entities = await this.loadNarrativeEntitiesFromStore();
         requireNarrativeEntityReferences(
@@ -1268,7 +1268,7 @@ export class HostEngineApi {
       const projectId = this.requireProject().projectId;
       if (!this.eventsLoaded) {
         const events = requireProjectScopedRecords(
-          await this.requireEventStore().loadEvents(projectId), projectId, "acontecimientos"
+          await this.requireEventReaderStore().loadEvents(projectId), projectId, "acontecimientos"
         );
         const entities = await this.loadNarrativeEntitiesFromStore();
         requireNarrativeEntityReferences(
@@ -2712,7 +2712,7 @@ export class HostEngineApi {
       const projectId = this.requireProject().projectId;
       if (!this.ideasLoaded) {
         const ideas = requireProjectScopedRecords(
-          await this.requireIdeaStore().loadIdeas(projectId), projectId, "ideas"
+          await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
         );
         const hasEntityLinks = ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0);
         if (hasEntityLinks) {
@@ -2993,6 +2993,38 @@ export class HostEngineApi {
         throw new Error("Un acontecimiento referencia una pista cronológica inexistente o ajena al proyecto.");
       }
     }
+  }
+
+  private requireKnowledgeReaderStore(): Required<Pick<
+    import("./contracts").ProjectStore, "loadEntities"
+  >> {
+    const store = this.store;
+    if (!store.loadEntities) throw new Error("El almacenamiento no admite lectura de entidades narrativas.");
+    return { loadEntities: store.loadEntities.bind(store) };
+  }
+
+  private requireRelationReaderStore(): Required<Pick<
+    import("./contracts").ProjectStore, "loadRelations"
+  >> {
+    const store = this.store;
+    if (!store.loadRelations) throw new Error("El almacenamiento no admite lectura de relaciones narrativas.");
+    return { loadRelations: store.loadRelations.bind(store) };
+  }
+
+  private requireEventReaderStore(): Required<Pick<
+    import("./contracts").ProjectStore, "loadEvents"
+  >> {
+    const store = this.store;
+    if (!store.loadEvents) throw new Error("El almacenamiento no admite lectura de acontecimientos.");
+    return { loadEvents: store.loadEvents.bind(store) };
+  }
+
+  private requireIdeaReaderStore(): Required<Pick<
+    import("./contracts").ProjectStore, "loadIdeas"
+  >> {
+    const store = this.store;
+    if (!store.loadIdeas) throw new Error("El almacenamiento no admite lectura de ideas.");
+    return { loadIdeas: store.loadIdeas.bind(store) };
   }
 
   private requireEventStore(): Required<Pick<

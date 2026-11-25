@@ -1670,3 +1670,55 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
     api.dispose();
   }
 });
+
+
+test("el grafo representa de forma explícita un catálogo de ideas vacío", async () => {
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas: [] }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-empty-idea-graph" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nTodavía no hay ideas registradas.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.catalogScope, "project");
+    assert.equal(graph.projectCatalogComplete, true);
+    assert.equal(graph.ideaCount, 0);
+    assert.equal(graph.omittedIdeaCount, 0);
+    assert.equal(graph.referenceCount, 0);
+    assert.equal(graph.includedReferenceCount, 0);
+    assert.equal(graph.notIncludedReferenceCount, 0);
+    assert.equal(graph.missingFromProjectReferenceCount, 0);
+    assert.equal(graph.reciprocalReferencePairCount, 0);
+    assert.equal(graph.selfReferenceCount, 0);
+    assert.equal(graph.sourceNodeCount, 0);
+    assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+    assert.equal(graph.weakComponentCount, 0);
+    assert.equal(graph.omittedWeakComponentCount, 0);
+    assert.equal(graph.largestWeakComponentSize, 0);
+    assert.equal(graph.cycleCount, 0);
+    assert.equal(graph.omittedCycleCount, 0);
+    assert.deepEqual(graph.nodes, []);
+    assert.deepEqual(graph.references, []);
+    assert.deepEqual(graph.cycles, []);
+    assert.deepEqual(graph.weakComponents, []);
+    assert.deepEqual(graph.statusHistoryConsistency, {
+      consistentIdeaCount: 0,
+      mismatchIdeaCount: 0,
+      unknownIdeaCount: 0,
+      verifiableIdeaCount: 0,
+      verificationCoverage: 0
+    });
+    assert.equal(graph.lexicalResonances.inputIdeaCount, 0);
+    assert.equal(graph.lexicalResonances.analyzedIdeaCount, 0);
+    assert.equal(graph.lexicalResonances.candidatePairCount, 0);
+    assert.deepEqual(graph.lexicalResonances.resonances, []);
+  } finally {
+    api.dispose();
+  }
+});

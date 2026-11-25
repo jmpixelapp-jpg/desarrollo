@@ -334,3 +334,38 @@ test("convierte un error al leer el snapshot en pausa segura sin propagarlo al e
   assert.equal(editor.listeners.size, 0);
   source.dispose();
 });
+
+
+test("mantiene orden FIFO entre suscriptores ante transacciones reentrantes síncronas", () => {
+  const f = fixture("abc");
+  const firstSeen = [];
+  const secondSeen = [];
+  let emittedNested = false;
+
+  const stopFirst = f.source.subscribeChanges(change => {
+    firstSeen.push(change.sequence);
+    if (change.sequence === 1 && !emittedNested) {
+      emittedNested = true;
+      f.editor.apply("edit", "tx-reentrant", {
+        start: 4, end: 4, replacement: "?"
+      });
+    }
+  });
+  const stopSecond = f.source.subscribeChanges(change => {
+    secondSeen.push(change.sequence);
+  });
+
+  f.editor.apply("edit", "tx-outer", {
+    start: 3, end: 3, replacement: "!"
+  });
+
+  assert.deepEqual(firstSeen, [1, 2]);
+  assert.deepEqual(secondSeen, [1, 2]);
+  assert.equal(f.source.getState().sequence, 2);
+  assert.equal(f.source.getState().needsResync, false);
+
+  stopSecond();
+  stopFirst();
+  f.stop();
+  f.source.dispose();
+});

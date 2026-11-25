@@ -24,7 +24,7 @@ const store = {
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}], omittedStatusHistoryCount:2 },
+      statusHistory:[{status:"IDEA",reason:"text-revised",changedAt:1}], omittedStatusHistoryCount:2 },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
       statusHistory:[

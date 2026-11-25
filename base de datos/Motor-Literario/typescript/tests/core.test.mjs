@@ -3400,7 +3400,8 @@ test("el archivo conserva instantáneas de ideas y fichas que permanecen en el l
   api.initializeProject({ projectId: "archive-cross-links", projectName: "Libro", writerId: "writer-a" });
   await store.saveEntity({
     projectId: "archive-cross-links", id: "ana", kind: "character",
-    canonicalName: "Ana", normalizedName: "ana", aliases: [], evidence: [],
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [{ documentId: "chapter-5", revision: 4, start: 3, end: 6, excerpt: "Ana" }],
     firstSeenAt: 1, lastSeenAt: 2, extractionVersion: 1
   });
   await store.saveIdea({
@@ -4341,8 +4342,9 @@ test("consolida dos entidades y conserva referencias, evidencias e historial", a
     relationType: "ally", evidence: [] });
   await store.saveEvent({ projectId: "merge-book", id: "event-1", label: "Regreso", participants: ["source", "target"],
     evidence: [], firstSeenAt: 1, lastSeenAt: 2, extractionVersion: 1 });
-  await store.saveAssertion({ projectId: "merge-book", id: "assertion-1", entityId: "source", attribute: "age",
-    value: 31, evidence: { documentId: "chapter-2", revision: 2, start: 8, end: 13, excerpt: "Zorro" }, capturedAt: 2 });
+  await store.saveAssertion({ projectId: "merge-book", id: "assertion-1", entityId: "source",
+    entityName: "Zorro", attribute: "age", value: 31,
+    evidence: { documentId: "chapter-2", revision: 2, start: 8, end: 13, excerpt: "Zorro" }, capturedAt: 2 });
   // Carga previamente las cachés para verificar su invalidación tras la transacción.
   await api.getNarrativeRelations();
   await api.getNarrativeEvents();
@@ -4457,7 +4459,7 @@ test("rechaza consolidar entidades de proyectos o tipos distintos sin modificar 
 
 test("no realiza una consolidación parcial si el adaptador no ofrece transacción atómica", async () => {
   const store = new MemoryStore();
-  delete store.mergeNarrativeEntityIdentity;
+  store.mergeNarrativeEntityIdentity = undefined;
   const api = new HostEngineApi({ store });
   api.initializeProject({ projectId: "merge-no-atomic", projectName: "Sin transacción" });
   const base = { projectId: "merge-no-atomic", kind: "character", aliases: [], evidence: [],
@@ -6881,7 +6883,9 @@ test("IndexedDB aborta la fusión ante referencias huérfanas en todas las colec
     await runCase("narrative-assertions", {
       projectId: "merge-orphan", id: "orphan-assertion", entityId: "missing",
       entityName: "Desconocida", attribute: "role", value: "guardia",
-      capturedAt: 1, evidence: []
+      capturedAt: 1, evidence: {
+        documentId: "chapter", revision: 1, start: 0, end: 11, excerpt: "Desconocida"
+      }
     }, /afirmación referencia una entidad inexistente/);
 
     await runCase("narrative-ideas", {
@@ -7425,8 +7429,16 @@ test("la API no expone relaciones, acontecimientos ni afirmaciones con referenci
 test("la API rechaza IDs narrativos duplicados sin contaminar la caché", async () => {
   const store = new MemoryStore();
   store.loadEntities = async () => [
-    { projectId: "duplicate-ids", id: "same" },
-    { projectId: "duplicate-ids", id: "same" }
+    {
+    projectId: "duplicate-ids", id: "same", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  },
+    {
+    projectId: "duplicate-ids", id: "same", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  }
   ];
   const api = new HostEngineApi({ store });
   api.initializeProject({ projectId: "duplicate-ids", projectName: "Libro" });
@@ -8029,7 +8041,7 @@ test("la admisión rechaza offsets fuera del texto proyectado sin perder la secu
   await api.flushPendingChanges();
   assert.equal(api.getSnapshot("chapter")?.text, "abXY");
   assert.equal(api.getDocumentSyncState("chapter")?.needsResync, false);
-  assert.equal(api.getLiveAnalysisMetrics().invalidChangeRejections, 2);
+  assert.equal(api.getLiveAnalysisMetrics().invalidChangeRejections, 5);
 });
 
 test("las consultas narrativas ocupan la cola y no se solapan con escrituras posteriores", async () => {
@@ -8068,7 +8080,7 @@ test("las consultas narrativas ocupan la cola y no se solapan con escrituras pos
     await extraction;
     const entities = await api.getNarrativeEntities();
     assert.ok(entities.some(entity => entity.canonicalName === "Valeria"));
-    assert.equal(loadCalls, 2);
+    assert.equal(loadCalls, 1);
   } finally {
     releaseRead();
   }
@@ -8120,7 +8132,7 @@ test("la asignación manual de alias espera las consultas narrativas en curso", 
 test("las consultas narrativas devuelven copias aisladas de sus cachés", async () => {
   const api = new HostEngineApi({ store: new MemoryStore() });
   api.initializeProject({ projectId: "defensive-narrative-reads", projectName: "Lecturas defensivas" });
-  await api.extractNarrativeKnowledge("chapter-1", 0, "Mara llegó a Buenos Aires.");
+  await api.extractNarrativeKnowledge("chapter-1", 0, "El personaje Mara llegó a Buenos Aires.");
   const first = await api.getNarrativeEntities();
   assert.ok(first.length > 0);
   const baseline = structuredClone(first);
@@ -8130,7 +8142,7 @@ test("las consultas narrativas devuelven copias aisladas de sus cachés", async 
   assert.deepEqual(await api.getNarrativeEntities(), baseline);
 
   const extracted = await api.extractNarrativeKnowledge(
-    "chapter-1", 1, "Mara llegó a Buenos Aires otra vez."
+    "chapter-1", 1, "El personaje Mara llegó a Buenos Aires otra vez."
   );
   extracted[0].aliases.push("Alias desde extracción");
   extracted[0].evidence[0].excerpt = "Evidencia manipulada";

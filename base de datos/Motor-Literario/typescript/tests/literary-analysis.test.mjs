@@ -1950,3 +1950,69 @@ test("las trayectorias resuelven escenas con evidencia posterior a las primeras 
   assert.equal(ana.documentedDecisions[0].evidenceSamples.length, 20);
   assert.equal(ana.documentedDecisions[0].evidenceTruncated, true);
 });
+
+
+test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documentos o revisiones", () => {
+  const text = "Escena 1\\nAna habló con Bruno.";
+  const phrase = "Ana habló con Bruno.";
+  const start = text.indexOf(phrase);
+  const makeEvidence = (documentId, revision, status) => ({
+    documentId,
+    revision,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase,
+    ...(status ? { status } : {})
+  });
+  const foreignEvidence = [
+    makeEvidence("chapter-one", 1, "stale"),
+    makeEvidence("chapter-two", 1),
+    makeEvidence("chapter-one", 2)
+  ];
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [
+      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "bruno-id", canonicalName: "Bruno" }
+    ],
+    knownRelations: [{
+      projectId: "literary-analysis-test",
+      relationId: "ana-bruno",
+      fromEntityId: "ana-id",
+      toEntityId: "bruno-id",
+      relationType: "alliance",
+      evidenceCount: 0,
+      staleEvidenceCount: 1,
+      evidence: foreignEvidence
+    }],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "ana-decision",
+      text: "Ana decide confiar en Bruno.",
+      status: "incorporated",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 0,
+      staleEvidenceCount: 1,
+      evidence: foreignEvidence,
+      statusHistory: [{ status: "incorporated", reason: "writer", changedAt: 2 }],
+      writerDecisionCount: 1,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+
+  const ana = result.characterNarrativeTrajectories.trajectories.find(
+    item => item.entityId === "ana-id"
+  );
+  assert.ok(ana);
+  assert.deepEqual(ana.scenes[0].relationshipIds, []);
+  assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, []);
+  assert.equal(ana.scenes[0].evidenceStatus, "no-known-evidence");
+  assert.equal(ana.relationships[0].evidenceStatus, "stale-only");
+  assert.equal(ana.documentedDecisions[0].evidenceCount, 0);
+});

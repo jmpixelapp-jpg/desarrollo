@@ -1851,3 +1851,28 @@ test("cuenta co-menciones de personajes por escena sin confundirlas con relacion
   assert.equal(result.characterCoMentions[0].sharedSceneCount, 2);
   assert.equal(result.characterCoMentions[0].sceneIndexes.length, 2);
 });
+
+
+test("no asigna alias ambiguos a personajes ni genera co-menciones falsas", () => {
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: [
+      "Escena 1",
+      "Alex habló con Luis."
+    ].join("\\n"),
+    knownCharacters: [
+      { entityId: "ana-id", canonicalName: "Ana", aliases: ["Alex"] },
+      { entityId: "alex-id", canonicalName: "Alex" },
+      { entityId: "luis-id", canonicalName: "Luis" }
+    ]
+  });
+
+  assert.deepEqual(result.characterCoMentions, []);
+  assert.deepEqual(
+    result.characterMentionDistributions.characters.map(character => character.entityId),
+    ["luis-id"]
+  );
+  assert.equal(result.characterMentionDistributions.characters[0].totalMentionCount, 1);
+});

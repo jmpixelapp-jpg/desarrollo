@@ -24,7 +24,11 @@ const store = {
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"text-revised",changedAt:1}], omittedStatusHistoryCount:2 },
+      statusHistory:[
+        {status:"IDEA",reason:"initial",changedAt:1},
+        {status:"incorporated",reason:"writer",changedAt:2},
+        {status:"IDEA",reason:"text-revised",changedAt:3}
+      ] },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
       statusHistory:[
@@ -75,11 +79,11 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
     const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
     assert.equal(afterBridge.currentStatusHistoryConsistency, "consistent");
     assert.equal(afterBridge.observedStatusTransitionCount, 4);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 3);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 4);
     assert.equal(after.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 1);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.verifiableIdeaCount, 3);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 0.75);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 0);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verifiableIdeaCount, 4);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 1);
   } finally {
     api.dispose();
   }
@@ -165,18 +169,18 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     const soloNode = result.ideaGraph.nodes.find(node => node.ideaId === "solo");
     assert.equal(soloNode.currentStatusHistoryConsistency, "consistent");
     const finishNode = result.ideaGraph.nodes.find(node => node.ideaId === "finish");
-    assert.equal(finishNode.currentStatusHistoryConsistency, "unknown");
+    assert.equal(finishNode.currentStatusHistoryConsistency, "consistent");
     assert.deepEqual(result.ideaGraph.statusHistoryConsistency, {
-      consistentIdeaCount: 3,
+      consistentIdeaCount: 4,
       mismatchIdeaCount: 0,
-      unknownIdeaCount: 1,
-      verifiableIdeaCount: 3,
-      verificationCoverage: 0.75
+      unknownIdeaCount: 0,
+      verifiableIdeaCount: 4,
+      verificationCoverage: 1
     });
     const ideaProfile = result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA");
-    assert.equal(ideaProfile.statusHistoryConsistentIdeaCount, 2);
+    assert.equal(ideaProfile.statusHistoryConsistentIdeaCount, 3);
     assert.equal(ideaProfile.statusHistoryMismatchIdeaCount, 0);
-    assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 1);
+    assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 0);
     assert.equal(soloNode.observedStatusTransitionCount, 5);
     assert.equal(soloNode.statusReversalCount, 3);
     assert.equal(soloNode.comparableStatusTimestampPairCount, 6);

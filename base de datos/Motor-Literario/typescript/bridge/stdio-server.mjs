@@ -278,6 +278,7 @@ async function dispatch(method, rawParams) {
       const record = projects.get(projectId);
       if (!record) return { projectId, alreadyClosed: true };
       await record.api.flushPendingChanges();
+      record.api.dispose();
       projects.delete(projectId);
       lastNarrativeVersions.delete(projectId);
       pendingNarrativeSyncs.delete(projectId);
@@ -347,10 +348,7 @@ async function dispatch(method, rawParams) {
       await drainKnowledgeSync();
       await flushAll();
       shuttingDown = true;
-      for (const record of projects.values()) {
-        // HostEngineApi deja de recibir solicitudes; las referencias se liberan al cerrar el proceso.
-        void record;
-      }
+      for (const record of projects.values()) record.api.dispose();
       projects.clear();
       lastNarrativeVersions.clear();
       pendingNarrativeSyncs.clear();
@@ -409,6 +407,7 @@ async function closeGracefully() {
   if (!store || store.closed) return;
   try { await drainKnowledgeSync(); } catch (error) { writeError(error); }
   try { await flushAll(); } catch (error) { writeError(error); }
+  for (const record of projects.values()) record.api.dispose();
   projects.clear();
   lastNarrativeVersions.clear();
   pendingNarrativeSyncs.clear();

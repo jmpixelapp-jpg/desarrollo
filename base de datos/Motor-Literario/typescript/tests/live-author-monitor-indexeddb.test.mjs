@@ -7,6 +7,18 @@ import { IDBFactory } from "fake-indexeddb";
 globalThis.indexedDB = new IDBFactory();
 const { IndexedDbProjectStore } = await import("../dist/motor-literario.js");
 
+async function acquireLease(store, projectId, documentId, ownerId = "owner-" + randomUUID(), now = Date.now(), durationMs = 30_000) {
+  const lease = await store.acquireLiveAuthorMonitorLease(
+    projectId,
+    documentId,
+    ownerId,
+    now,
+    durationMs
+  );
+  assert.ok(lease, "el lease debe quedar adquirido por este propietario");
+  return lease;
+}
+
 function checkpoint(projectId, documentId, savedAt, overrides = {}) {
   return {
     version: 1,
@@ -42,8 +54,9 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
   const documentId = "chapter-" + randomUUID();
 
   try {
-    const first = checkpoint(projectId, documentId, 1000);
-    await store.saveLiveAuthorMonitorCheckpoint(first);
+    const lease = await acquireLease(store, projectId, documentId);
+    const first = checkpoint(projectId, documentId, Date.now());
+    await store.saveLiveAuthorMonitorCheckpoint(first, lease);
 
     const loaded = await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
     assert.deepEqual(loaded, first);
@@ -56,11 +69,11 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
     assert.deepEqual(reread.commitLatencies, [5]);
 
     await assert.rejects(
-      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, 999)),
+      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, first.savedAt - 1), lease),
       /checkpoint anterior/
     );
 
-    const newer = checkpoint(projectId, documentId, 2000, {
+    const newer = checkpoint(projectId, documentId, Date.now() + 1, {
       sessionDurationMs: 250,
       activeDurationMs: 120,
       idleDurationMs: 130,
@@ -74,7 +87,7 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
       totalCommitLatencyMs: 12,
       commitLatencies: [5, 7]
     });
-    await store.saveLiveAuthorMonitorCheckpoint(newer);
+    await store.saveLiveAuthorMonitorCheckpoint(newer, lease);
     assert.deepEqual(
       await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
       newer
@@ -110,7 +123,8 @@ test("migra IndexedDB v22 a v23 creando el almacén de checkpoints sin perder do
   const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.2.json", import.meta.url);
   const mapping = JSON.parse(await readFile(mappingUrl, "utf8"));
   const existingStores = mapping.runtime.object_stores.filter(
-    descriptor => descriptor.name !== "live-author-monitor-checkpoints"
+    descriptor => descriptor.name !== "live-author-monitor-checkpoints" &&
+      descriptor.name !== "live-author-monitor-leases"
   );
 
   const legacyDatabase = await new Promise((resolve, reject) => {
@@ -149,7 +163,11 @@ test("migra IndexedDB v22 a v23 creando el almacén de checkpoints sin perder do
 
   const store = new IndexedDbProjectStore();
   try {
-    await store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, 3000));
+    const lease = await acquireLease(store, projectId, documentId);
+    await store.saveLiveAuthorMonitorCheckpoint(
+      checkpoint(projectId, documentId, Date.now()),
+      lease
+    );
     const restoredCheckpoint = await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
     assert.equal(restoredCheckpoint.sequence, 1);
     await store.close();
@@ -160,8 +178,16 @@ test("migra IndexedDB v22 a v23 creando el almacén de checkpoints sin perder do
       request.onerror = () => reject(request.error);
     });
     try {
-      assert.equal(migratedDatabase.version, 23);
+      assert.equal(migratedDatabase.version, 24);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
+      assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
+
+      const leaseStore = migratedDatabase.transaction(
+        "live-author-monitor-leases",
+        "readonly"
+      ).objectStore("live-author-monitor-leases");
+      assert.deepEqual(leaseStore.keyPath, ["projectId", "documentId"]);
+      assert.equal(leaseStore.indexNames.contains("by-project"), true);
 
       const checkpointStore = migratedDatabase.transaction(
         "live-author-monitor-checkpoints",
@@ -194,7 +220,8 @@ test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timest
   const documentId = "chapter-" + randomUUID();
 
   try {
-    const durable = checkpoint(projectId, documentId, 1000, {
+    const lease = await acquireLease(store, projectId, documentId);
+    const durable = checkpoint(projectId, documentId, Date.now(), {
       sessionDurationMs: 300,
       activeDurationMs: 180,
       idleDurationMs: 120,
@@ -207,20 +234,20 @@ test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timest
       totalCommitLatencyMs: 25,
       commitLatencies: [5, 5, 5, 5, 5]
     });
-    await store.saveLiveAuthorMonitorCheckpoint(durable);
+    await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
 
     await assert.rejects(
-      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, 5000, {
+      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, Date.now() + 1, {
         revision: 4,
         sequence: 4,
         acceptedChanges: 99,
         committedChanges: 99
-      })),
+      }), lease),
       /revisión o secuencia durable anterior/
     );
 
     await assert.rejects(
-      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, 6000, {
+      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, Date.now() + 2, {
         sessionId: durable.sessionId,
         sessionDurationMs: 200,
         activeDurationMs: 100,
@@ -232,7 +259,7 @@ test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timest
         sequence: 5,
         totalCommitLatencyMs: 20,
         commitLatencies: [5, 5, 5, 5]
-      })),
+      }), lease),
       /hace retroceder la métrica/
     );
 
@@ -249,10 +276,11 @@ test("permite iniciar una nueva identidad de sesión en el mismo snapshot durabl
   const documentId = "chapter-" + randomUUID();
 
   try {
-    const previous = checkpoint(projectId, documentId, 1000);
-    await store.saveLiveAuthorMonitorCheckpoint(previous);
+    const lease = await acquireLease(store, projectId, documentId);
+    const previous = checkpoint(projectId, documentId, Date.now());
+    await store.saveLiveAuthorMonitorCheckpoint(previous, lease);
 
-    const nextSession = checkpoint(projectId, documentId, 2000, {
+    const nextSession = checkpoint(projectId, documentId, Date.now() + 1, {
       sessionId: "new-session-" + randomUUID(),
       sessionDurationMs: 0,
       activeDurationMs: 0,
@@ -270,7 +298,7 @@ test("permite iniciar una nueva identidad de sesión en el mismo snapshot durabl
       totalCommitLatencyMs: 0,
       commitLatencies: []
     });
-    await store.saveLiveAuthorMonitorCheckpoint(nextSession);
+    await store.saveLiveAuthorMonitorCheckpoint(nextSession, lease);
     assert.deepEqual(
       await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
       nextSession

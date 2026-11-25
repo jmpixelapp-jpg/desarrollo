@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -1002,6 +1003,70 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     assert.equal(store.loadPersonalIdeas(writerId).length, total);
   } finally {
     store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-sqlite-library-page-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const writerId = "writer-sqlite-page";
+  const projectId = "book-sqlite-page";
+  const database = new DatabaseSync(databasePath);
+  const entry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro SQLite",
+    category: "Libro SQLite",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro SQLite",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  try {
+    // Simula una base anterior a la columna sort_key.
+    database.exec(
+      "CREATE TABLE bridge_records (" +
+      "collection TEXT NOT NULL, record_key TEXT NOT NULL, project_id TEXT, " +
+      "writer_id TEXT, document_id TEXT, sequence INTEGER, value_json TEXT NOT NULL, " +
+      "PRIMARY KEY (collection, record_key)) WITHOUT ROWID"
+    );
+    database.exec("CREATE INDEX bridge_records_writer ON bridge_records(collection, writer_id)");
+    const insert = database.prepare(
+      "INSERT INTO bridge_records(collection, record_key, project_id, writer_id, value_json) VALUES(?, ?, ?, ?, ?)"
+    );
+    for (const id of ["idea-c", "idea-a", "idea-b"]) {
+      const value = entry(id);
+      insert.run(
+        "personal-idea-library",
+        JSON.stringify([writerId, projectId, id]),
+        null,
+        writerId,
+        JSON.stringify(value)
+      );
+    }
+
+    const store = new SqliteProjectStore(database, databasePath);
+    const first = store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-b" });
+
+    const second = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+
+    const schema = database.prepare("PRAGMA table_info(bridge_records)").all();
+    assert.ok(schema.some(column => column.name === "sort_key"));
+    store.close();
+  } finally {
+    try { database.close(); } catch { /* El almacenamiento puede haber cerrado la conexión. */ }
     await rm(directory, { recursive: true, force: true });
   }
 });

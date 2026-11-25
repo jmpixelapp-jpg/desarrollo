@@ -1,0 +1,12 @@
+[package]
+name = "mldb-storage"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+description = "Motor de almacenamiento propio del Motor Literario; sin dependencias externas."
+
+[lib]
+name = "mldb_storage"
+path = "src/lib.rs"
+
+[dependencies]

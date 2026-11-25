@@ -1748,7 +1748,9 @@ export class HostEngineApi {
           ideaId:idea.id,
           // El análisis léxico es deliberadamente acotado: los textos mayores
           // a 100.000 unidades UTF-16 se omiten del índice, no del grafo.
-          ...(idea.text.length <= 100_000 ? { text: idea.text } : {}),
+          ...(idea.text.length <= 100_000
+            ? { text: idea.text }
+            : { textOmitted: "budget" as const }),
           status:idea.status,
           relatedIdeaIds:idea.relatedIdeaIds ?? [],
           evidenceCount:activeEvidence.length,

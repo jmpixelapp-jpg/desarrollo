@@ -206,6 +206,41 @@ test("rechaza el vínculo a ficha si la entidad destino desaparece durante CAS",
   api.dispose();
 });
 
+test("permite limpiar el vínculo a una idea eliminada durante un conflicto CAS", async () => {
+  const store = new RacingStore([
+    idea("idea-source", { relatedIdeaIds: ["idea-target"] }),
+    idea("idea-target")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => {
+    store.ideas.delete(projectId + ":idea-target");
+    return {
+      ...current,
+      status: "incorporated",
+      statusHistory: [
+        ...current.statusHistory,
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ]
+    };
+  };
+
+  const result = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target", false
+  );
+
+  assert.deepEqual(result.relatedIdeaIds, []);
+  assert.equal(result.status, "incorporated");
+  assert.equal(result.statusHistory.at(-1).reason, "writer");
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    []
+  );
+  assert.equal(store.writes, 2);
+  api.dispose();
+});
+
 test("permite limpiar el vínculo a una ficha eliminada durante un conflicto CAS", async () => {
   const store = new RacingStore([
     idea("idea-source", { relatedEntityIds: ["character-local"] })

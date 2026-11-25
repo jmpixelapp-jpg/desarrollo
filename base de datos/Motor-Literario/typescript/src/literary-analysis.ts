@@ -735,7 +735,7 @@ function buildSceneVoiceProfile(
   const categories: readonly (keyof LiteraryVoiceSignalCounts)[] = [
     "firstPerson","secondPerson","thirdPerson"
   ];
-  const categoryTotals: LiteraryVoiceSignalCounts = {
+  const categoryTotals = {
     firstPerson:0,secondPerson:0,thirdPerson:0
   };
   const scenesWithOccurrences: Record<keyof LiteraryVoiceSignalCounts,number> = {

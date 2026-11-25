@@ -4136,7 +4136,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             const cursor = cursorRequest.result;
             if (!cursor) {
               if (supportsReceipts) {
-                archivedIdeaIds.sort((first, second) => first.localeCompare(second));
+                archivedIdeaIds.sort();
                 receipts.add({
                   writerId,
                   sourceProjectId: projectId,

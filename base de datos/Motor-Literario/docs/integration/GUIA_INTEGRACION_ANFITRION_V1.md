@@ -361,9 +361,57 @@ No interpretar `queued` como `applied`, ni un diagnóstico de una revisión ante
 - Al copiar el archivo SQLite para una copia de seguridad, detener antes el puente con `bridge.shutdown` y esperar el cierre del proceso; no copiar solo el archivo principal mientras SQLite está activo y puede tener datos en WAL.
 - El puente Node incluye `bridge/database-snapshot.mjs` para crear, verificar y restaurar copias completas de SQLite; exige detener el puente y conserva la base anterior y sus sidecars.
 - `HostEngineApi.exportDatabaseBackup()` y `restoreDatabaseBackup(backup)` son la superficie pública de respaldo; delegan en `IndexedDbProjectStore`, que cubre todos los object stores del navegador. La restauración se rechaza si la instancia ya ejecutó `initializeProject()`. La exportación lee una instantánea en una transacción readonly y genera un paquete JSON versionado con checksum. La restauración valida versión, catálogo de almacenes y checksum, y reemplaza todos los almacenes dentro de una transacción readwrite; un aborto conserva el estado anterior y un commit publica invalidaciones de proyecto y escritor.
-- El anfitrión aún debe implementar el selector/guardado/lectura del archivo de respaldo con el mecanismo de archivos del entorno. `HostEngineApi.exportDatabaseBackup()` espera automáticamente a que el motor vacíe journal, análisis, diagnósticos y conocimiento pendientes. Restaurar con una instancia nueva en modo de mantenimiento, antes de ejecutar `initializeProject()` y abrir libros o documentos. Probar el flujo en el navegador real y definir cifrado en reposo sigue siendo parte de la aceptación de la aplicación. Ninguno de los dos respaldos copia object stores en caliente ni debe confundirse con el archivo de texto visible del manuscrito.
+El anfitrión controla el archivo y su ubicación. En navegador, el siguiente ejemplo resuelve el flujo básico con descarga JSON y selector de archivo; el motor conserva la responsabilidad de validar el contenido y restaurarlo atómicamente:
 
-El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar.
+```ts
+import type { HostEngineApi } from "./ruta-local/Motor-Literario/typescript/src/index";
+
+export async function downloadMotorKnowledgeBackup(
+  motor: HostEngineApi
+): Promise<void> {
+  // Espera automáticamente a que terminen journal, análisis y conocimiento.
+  const backup = await motor.exportDatabaseBackup();
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `motor-literario-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  link.hidden = true;
+  document.body.append(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+export async function restoreMotorKnowledgeBackup(
+  motorNuevoSinProyecto: HostEngineApi,
+  file: File
+): Promise<void> {
+  if (file.size === 0) {
+    throw new Error("El archivo de respaldo está vacío.");
+  }
+  let backup: unknown;
+  try {
+    backup = JSON.parse(await file.text()) as unknown;
+  } catch {
+    throw new Error("El archivo seleccionado no contiene JSON válido.");
+  }
+  // La API comprueba formato, versión, almacenes, checksum e integridad
+  // antes de reemplazar datos; la operación de almacenamiento es atómica.
+  await motorNuevoSinProyecto.restoreDatabaseBackup(backup);
+}
+```
+
+Uso de restauración: detener la edición, crear una instancia nueva de `HostEngineApi` sin llamar todavía a `initializeProject()`, seleccionar el archivo mediante un control `<input type="file" accept="application/json,.json">`, ejecutar `restoreMotorKnowledgeBackup()` y solo después inicializar el proyecto con las identidades proporcionadas por el anfitrión. Si el usuario cancela el selector, no se llama a la restauración. En Electron u otro entorno de escritorio, sustituir la descarga y lectura del navegador por el diálogo de archivos privado del anfitrión, manteniendo las mismas llamadas del motor.
+
+El paquete IndexedDB contiene todos los libros y escritores almacenados en ese perfil local, no solo el proyecto que está abierto. Tratar el archivo como información privada: no guardarlo en carpetas compartidas ni enviarlo a servicios externos sin una decisión explícita de cifrado y acceso. El checksum incluido detecta alteraciones accidentales, pero no cifra ni autentica el archivo.
+
+El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar. Probar el flujo en el navegador real y definir cifrado en reposo siguen siendo parte de la aceptación de la aplicación. Ninguno de los dos respaldos copia object stores en caliente ni debe confundirse con el archivo de texto visible del manuscrito.
 
 ## 10. Lista de aceptación de la integración
 

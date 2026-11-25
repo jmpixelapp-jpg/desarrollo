@@ -7,6 +7,7 @@ import type {
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
+import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener } from "./live-author-monitor";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput, DictionaryEntryEntityLink } from "./dictionaries";
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry, validateDictionaryEntryEntityLink } from "./dictionaries";
 import type {
@@ -592,6 +593,8 @@ export interface HostCallbacks {
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
   readonly callbacks?: HostCallbacks;
+  /** Ajustes opcionales del monitor local de actividad del autor. */
+  readonly liveAuthorMonitor?: LiveAuthorMonitorOptions;
 }
 
 /**
@@ -600,6 +603,7 @@ export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "o
  */
 export class HostEngineApi {
   private readonly engine: LiteraryEngine;
+  private readonly liveAuthorMonitor: LiveAuthorMonitor;
   private project?: ProjectIdentity;
   private readonly store: HostEngineOptions["store"];
   private unsubscribeNarrativeChanges: (() => void) | undefined;
@@ -652,6 +656,7 @@ export class HostEngineApi {
 
   constructor(options: HostEngineOptions) {
     this.store = options.store;
+    this.liveAuthorMonitor = new LiveAuthorMonitor(options.liveAuthorMonitor);
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
@@ -673,6 +678,7 @@ export class HostEngineApi {
       },
       onCommit: result => {
         this.liveSubmissionTimes.delete(result.ticketId);
+        try { this.liveAuthorMonitor.recordCommit(result); } catch { /* El monitor nunca debe detener la cola durable. */ }
         try { options.callbacks?.onCommit?.(result); } catch { /* El callback del anfitrión no debe detener la cola. */ }
       }
     });
@@ -3718,6 +3724,7 @@ export class HostEngineApi {
   dispose(): void {
     this.unsubscribeNarrativeChanges?.();
     this.unsubscribeNarrativeChanges = undefined;
+    this.liveAuthorMonitor.dispose();
   }
 
   /** La identidad del escritor nunca se recibe como argumento de una consulta de biblioteca. */
@@ -3747,6 +3754,12 @@ export class HostEngineApi {
   private async afterDocumentRecovery(documentId: string): Promise<void> {
     const recoveredSnapshot = this.engine.getSnapshot(documentId);
     if (recoveredSnapshot) {
+      const projectId = this.requireProject().projectId;
+      const monitored = this.liveAuthorMonitor.getSnapshot(documentId);
+      if (!monitored) this.liveAuthorMonitor.openDocument(recoveredSnapshot, projectId);
+      else if (monitored.latestRevision !== recoveredSnapshot.revision || monitored.latestSequence !== recoveredSnapshot.sequence) {
+        try { this.liveAuthorMonitor.resynchronizeDocument(recoveredSnapshot); } catch { /* La sesión conserva su estado si aún hay commits pendientes. */ }
+      }
       const recovery = this.diagnosticsPersistenceTail.then(async () => {
         await this.restoreDocumentDiagnostics(recoveredSnapshot);
       });
@@ -3772,6 +3785,9 @@ export class HostEngineApi {
     if (admission.status === "queued") {
       this.liveSubmissionTimes.set(admission.ticketId, performance.now());
     }
+    if (this.liveAuthorMonitor.getSnapshot(change.documentId)) {
+      try { this.liveAuthorMonitor.recordAdmission(change, admission); } catch { /* La observabilidad no altera la admisión del motor. */ }
+    }
     return admission;
   }
 
@@ -3788,6 +3804,21 @@ export class HostEngineApi {
 
   getDocumentSyncState(documentId: string) {
     return this.engine.getSyncState(documentId);
+  }
+
+  /** Snapshot de actividad en vivo; no incluye texto del manuscrito. */
+  getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined {
+    return this.liveAuthorMonitor.getSnapshot(documentId);
+  }
+
+  /** Snapshots de todos los documentos actualmente observados. */
+  getLiveAuthorMonitorSnapshots(): readonly LiveAuthorMonitorSnapshot[] {
+    return this.liveAuthorMonitor.getSnapshots();
+  }
+
+  /** Suscripción global o limitada a un documento. */
+  subscribeLiveAuthorMonitor(listener: LiveAuthorMonitorListener, documentId?: string): () => void {
+    return this.liveAuthorMonitor.subscribe(listener, documentId);
   }
 
   /** Permite al anfitrión esperar la persistencia de todos los cambios admitidos. */

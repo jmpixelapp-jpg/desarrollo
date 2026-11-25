@@ -244,8 +244,10 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
 test("la finalización compacta devuelve un recibo y permite recuperar ideas por páginas", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-compact-finalization-"));
   const databasePath = resolve(directory, "motor.sqlite");
-  const { child, client } = startBridge(databasePath);
+  let child;
+  let client;
   try {
+    ({ child, client } = startBridge(databasePath));
     await client.hello();
     await client.openProject({
       projectId: "compact-finalization-project",
@@ -305,6 +307,15 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     await client.shutdown();
     assert.equal(await exited, 0);
   } finally {
+    if (child && client) {
+      try {
+        const exited = waitForExit(child);
+        await client.shutdown();
+        await exited;
+      } catch {
+        child.kill();
+      }
+    }
     await rm(directory, { recursive: true, force: true });
   }
 });

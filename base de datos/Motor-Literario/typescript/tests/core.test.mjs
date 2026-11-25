@@ -10690,7 +10690,7 @@ test("resume el volumen y formato del diálogo dentro de cada escena explícita"
     "ESCENA 2",
     "—Volveré mañana.",
     "El pasillo largo parecía completamente vacío bajo la luz de la luna y sin ninguna respuesta."
-  ].join("\\n");
+  ].join("\n");
   const baseOffset = 2400;
   const result = analyzeLiteraryFragment({
     projectId:"scene-dialogue",documentId:"chapter",revision:8,text,baseOffset
@@ -10736,7 +10736,7 @@ test("resume el volumen y formato del diálogo dentro de cada escena explícita"
 
 test("mantiene el perfil de diálogo vacío cuando una escena no contiene segmentos reconocidos", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
-  const text = "ESCENA 1\\nEl jardín permaneció silencioso durante toda la tarde.";
+  const text = "ESCENA 1\nEl jardín permaneció silencioso durante toda la tarde.";
   const result = analyzeLiteraryFragment({
     projectId:"scene-dialogue-empty",documentId:"chapter",revision:1,text
   });

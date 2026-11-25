@@ -40,6 +40,33 @@ function analyzeGraph(ideas, options = {}) {
   }).ideaGraph;
 }
 
+test("conserva ciclos, reciprocidad y orden estable con índices compactos", () => {
+  const ideas = [
+    { ...idea("a", "memoria espejo luz"), relatedIdeaIds: ["á", "z", "ghost"] },
+    { ...idea("á", "memoria espejo destino"), relatedIdeaIds: ["z"] },
+    { ...idea("z", "memoria horizonte origen"), relatedIdeaIds: ["a"] }
+  ];
+  const graph = analyzeGraph(ideas);
+  const reordered = analyzeGraph([...ideas].reverse());
+
+  assert.deepEqual(reordered, graph);
+  assert.equal(graph.referenceCount, 5);
+  assert.equal(graph.includedReferenceCount, 4);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.missingFromProjectReferenceCount, 1);
+  assert.equal(graph.reciprocalReferencePairCount, 1);
+  assert.equal(graph.cycleCount, 1);
+  assert.deepEqual(graph.cycles[0].ideaIds, ["a", "á", "z"]);
+  assert.equal(graph.weakComponentCount, 1);
+  assert.equal(graph.largestWeakComponentSize, 3);
+  assert.deepEqual(graph.references[0], {
+    fromIdeaId: "a",
+    toIdeaId: "á",
+    resolution: "included-in-snapshot"
+  });
+  assert.equal(graph.references.at(-1).resolution, "not-in-snapshot");
+});
+
 test("memoiza el grafo completo, aísla las respuestas e invalida cambios estructurales", () => {
   const ideas = [
     { ...idea("graph-a", "memoria espejo luz"), relatedIdeaIds: ["graph-b"] },

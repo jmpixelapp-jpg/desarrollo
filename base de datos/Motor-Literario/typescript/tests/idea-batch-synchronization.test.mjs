@@ -402,3 +402,41 @@ test("aborta el lote si un destino desaparece entre la validación y la escritur
     }
   }
 });
+
+
+test("no acepta destinos con el mismo ID pertenecientes a otro proyecto", async () => {
+  const store = new AtomicIdeaStore(
+    [
+      idea("source"),
+      idea("shared-idea-id", { projectId: "other-project" })
+    ],
+    [entity("shared-entity-id", "Ana").projectId === projectId
+      ? { ...entity("shared-entity-id", "Ana"), projectId: "other-project" }
+      : entity("shared-entity-id", "Ana")]
+  );
+  const api = createApi(store);
+
+  try {
+    await assert.rejects(
+      api.synchronizeNarrativeIdeaLinks(
+        "source",
+        links([], []),
+        links(["shared-idea-id"], [])
+      ),
+      /idea de destino inexistente o ajena al proyecto/
+    );
+    await assert.rejects(
+      api.synchronizeNarrativeIdeaLinks(
+        "source",
+        links([], []),
+        links([], ["shared-entity-id"])
+      ),
+      /ficha de destino inexistente o ajena al proyecto/
+    );
+    assert.equal(store.writes, 0);
+    assert.deepEqual(store.ideas.get(projectId + ":source").relatedIdeaIds, []);
+    assert.deepEqual(store.ideas.get(projectId + ":source").relatedEntityIds, []);
+  } finally {
+    api.dispose();
+  }
+});

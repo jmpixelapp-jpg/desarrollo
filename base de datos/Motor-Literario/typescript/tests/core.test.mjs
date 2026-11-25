@@ -2420,9 +2420,16 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       const objectStore = {
         keyPath: options.keyPath,
         indexNames: { contains: indexName => indexes.has(indexName) },
+        index(indexName) {
+          const definition = indexes.get(indexName);
+          assert.ok(definition, "índice inexistente: " + name + "." + indexName);
+          return definition;
+        },
         createIndex(indexName, keyPath, indexOptions) {
-          indexes.set(indexName, { keyPath, unique: indexOptions?.unique ?? false });
+          const definition = { keyPath, unique: indexOptions?.unique ?? false };
+          indexes.set(indexName, definition);
           createdIndexes.push([name, indexName, keyPath, indexOptions]);
+          return definition;
         }
       };
       stores.set(name, objectStore);

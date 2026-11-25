@@ -497,7 +497,7 @@ async function processRequest(request) {
       // Cierra la admisión antes de esperar: las solicitudes ya aceptadas
       // terminan sus escrituras y transferencias antes del flush final.
       shuttingDown = true;
-      await Promise.all([...activeDispatches]);
+      await Promise.allSettled([...activeDispatches]);
     }
     const operation = dispatch(request.method, request.params);
     if (!shutdownRequest) activeDispatches.add(operation);

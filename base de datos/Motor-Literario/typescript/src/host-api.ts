@@ -733,7 +733,7 @@ export class HostEngineApi {
           result.changeStart === result.changeEnd &&
           result.changeStart === result.previousAffectedStart &&
           evidence.start >= result.changeStart &&
-          result.affectedEnd < result.changeStart + result.replacementLength;
+          result.affectedEnd <= result.changeStart + result.replacementLength;
         const lineWasAffected = !insertedWholeLinesBeforeEvidence && (
           (evidence.start < result.previousAffectedEnd && evidence.end > result.previousAffectedStart) ||
           (evidence.start >= result.previousAffectedStart && evidence.start <= result.previousAffectedEnd)

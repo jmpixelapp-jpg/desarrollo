@@ -3000,36 +3000,44 @@ export class HostEngineApi {
   async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
-      if (!this.ideasLoaded) {
-        const loaded = requireProjectScopedRecords(
-          await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
-        );
-        for (const idea of loaded) this.narrativeIdeas.set(idea.id, idea);
-        this.ideasLoaded = true;
-      }
-
-      const ideas = [...this.narrativeIdeas.values()];
+      // Carga y valida primero en variables temporales. Un catálogo con una
+      // referencia rota nunca debe quedar publicado parcialmente en la caché:
+      // el anfitrión puede reparar el registro y repetir la consulta.
+      const pendingIdeas = !this.ideasLoaded;
+      const ideas = pendingIdeas
+        ? requireProjectScopedRecords(
+            await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
+          )
+        : [...this.narrativeIdeas.values()];
+      let entities: readonly NarrativeEntity[] | undefined;
       if (ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
         if (!this.store.loadEntities) {
           throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
         }
-        // La lectura de ideas es también un límite de reconciliación: el catálogo
-        // de entidades puede haber cambiado desde otra instancia del anfitrión.
-        // No validar contra una caché caliente que oculte destinos eliminados.
-        const entities = requireProjectScopedRecords(
+        // La lectura de ideas también reconcilia entidades que otra instancia
+        // pudo eliminar. La validación debe ocurrir antes de publicar ambas cachés.
+        entities = requireProjectScopedRecords(
           await this.requireKnowledgeReaderStore().loadEntities(projectId),
           projectId,
           "entidades"
         );
+        requireNarrativeEntityReferences(
+          ideas, projectId, entities,
+          idea => idea.relatedEntityIds ?? [], "ideas"
+        );
+      }
+
+      if (pendingIdeas) {
+        this.narrativeIdeas.clear();
+        for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
+        this.ideasLoaded = true;
+      }
+      if (entities) {
         this.narrativeEntities.clear();
         for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
       }
       return cloneNarrativeRecords(ideas);
     });
@@ -3292,6 +3300,15 @@ export class HostEngineApi {
         this.narrativeIdeas.set(ideaId, updated);
         return cloneNarrativeRecord(updated);
       } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const missingTarget = referenceKind === "relatedIdeaIds"
+          ? /idea enlaza una idea inexistente|ideas relacionadas no existen/iu.test(message)
+          : /entidades no existen|ficha de destino inexistente/iu.test(message);
+        if (missingTarget) {
+          throw new Error(referenceKind === "relatedIdeaIds"
+            ? "Ambas ideas deben existir en el proyecto activo."
+            : "La idea y la entidad deben existir en el proyecto activo.");
+        }
         const isVersionConflict = error instanceof Error &&
           /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
         if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
@@ -3431,7 +3448,7 @@ export class HostEngineApi {
           return cloneNarrativeRecord(updated);
         } catch (error) {
           const isVersionConflict = error instanceof Error &&
-            /\\bidea\\b.*\\bcambió en otra instancia\\b/iu.test(error.message);
+            /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
           if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
           // La siguiente iteración relee la idea completa y conserva las
           // referencias concurrentes y las decisiones editoriales añadidas.

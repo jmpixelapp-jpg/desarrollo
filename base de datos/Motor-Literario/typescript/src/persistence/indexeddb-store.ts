@@ -3654,7 +3654,6 @@ export class IndexedDbProjectStore implements ProjectStore {
             readEntity(entityId, entity => {
               if (!entity) return;
               try {
-                claimEntityIdentities(entity);
                 relatedEntities.push(entity);
                 readNextEntity();
               } catch (error) {

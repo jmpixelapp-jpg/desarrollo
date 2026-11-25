@@ -226,3 +226,19 @@ test("aísla errores lanzados por consumidores del stream", () => {
   f.stop();
   f.source.dispose();
 });
+
+test("rechaza inputType vacío o ajeno a inserción/eliminación sin inventar un delta", () => {
+  const f = fixture("hello");
+  f.element.edit({
+    start: 5,
+    end: 5,
+    nextValue: "hello!",
+    inputType: ""
+  });
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors[0].code, "unsupported-input-type");
+  f.stop();
+  f.source.dispose();
+});
+

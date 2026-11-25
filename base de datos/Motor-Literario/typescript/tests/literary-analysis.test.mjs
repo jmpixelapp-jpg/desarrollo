@@ -60,3 +60,25 @@ test("no presenta ecos cuando el fragmento carece de escenas explícitas", () =>
   assert.equal(result.sceneLexicalEchoes.candidateCount, 0);
   assert.deepEqual(result.sceneLexicalEchoes.echoes, []);
 });
+test("distingue recurrencia léxica en narración y diálogo reconocido", () => {
+  const text = [
+    "Escena 1",
+    "«La sombra regresó.»",
+    "La sombra permaneció.",
+    "Escena 2",
+    "«La sombra habló.»",
+    "La sombra avanzó."
+  ].join("\\n");
+  const result = analyze(text);
+  const echo = result.sceneLexicalEchoes.echoes.find(item => item.normalizedWord === "sombra");
+
+  assert.ok(echo);
+  assert.equal(echo.totalOccurrenceCount, 4);
+  assert.deepEqual(echo.scenes.map(scene => scene.narrativeOccurrenceCount), [1, 1]);
+  assert.deepEqual(echo.scenes.map(scene => scene.dialogueOccurrenceCount), [1, 1]);
+  assert.deepEqual(echo.scenes.map(scene => scene.contextClassification), ["mixed", "mixed"]);
+  assert.deepEqual(echo.scenes.map(scene => scene.occurrences.map(item => item.context)), [
+    ["dialogue", "narrative"],
+    ["dialogue", "narrative"]
+  ]);
+});

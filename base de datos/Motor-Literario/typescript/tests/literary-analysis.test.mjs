@@ -1953,7 +1953,7 @@ test("las trayectorias resuelven escenas con evidencia posterior a las primeras 
 
 
 test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documentos o revisiones", () => {
-  const text = "Escena 1\\nAna habló con Bruno.";
+  const text = "Escena 1\nAna habló con Bruno.";
   const phrase = "Ana habló con Bruno.";
   const start = text.indexOf(phrase);
   const makeEvidence = (documentId, revision, status) => ({

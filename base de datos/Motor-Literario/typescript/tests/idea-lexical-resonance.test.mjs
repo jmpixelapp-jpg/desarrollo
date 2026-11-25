@@ -63,6 +63,16 @@ test("excluye términos ubicuos para evitar coincidencias poco informativas", ()
   assert.deepEqual(result.resonances, []);
 });
 
+test("conserva términos de alfabetos Unicode sin distinción de mayúsculas", () => {
+  const result = analyze([
+    idea("idea-a", "月光 森林 静寂"),
+    idea("idea-b", "月光 森林 海辺")
+  ]);
+
+  assert.equal(result.candidatePairCount, 1);
+  assert.deepEqual(result.resonances[0].sharedTerms, ["月光", "森林"]);
+});
+
 test("ordena los candidatos de forma determinista aunque cambie el orden de entrada", () => {
   const ideas = [
     idea("idea-c", "La memoria y la luz permanecen"),

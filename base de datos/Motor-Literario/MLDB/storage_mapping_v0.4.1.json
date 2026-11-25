@@ -6,7 +6,7 @@
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 21,
+    "database_version": 23,
     "object_stores": [
       {
         "name": "project-settings",
@@ -795,6 +795,20 @@
               "projectId",
               "recordId"
             ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "live-author-monitor-checkpoints",
+        "keyPath": [
+          "projectId",
+          "documentId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
             false
           ]
         ]

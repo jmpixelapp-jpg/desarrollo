@@ -1083,3 +1083,140 @@ test("integra relaciones documentadas y decisiones explícitas del escritor en l
   assert.equal(trajectories.linkedIdeaCount, 2);
   assert.equal(trajectories.omittedIdeaCount, 1);
 });
+
+
+test("construye el grafo explícito de ideas y distingue referencias externas del snapshot", () => {
+  const makeIdea = (ideaId, relatedIdeaIds = [], status = "IDEA") => ({
+    projectId: "literary-analysis-test",
+    ideaId,
+    text: "Idea " + ideaId,
+    status,
+    originDocumentId: "chapter-one",
+    sourceProjectName: "Libro",
+    relatedEntityIds: [],
+    relatedIdeaIds,
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: [],
+    statusHistory: status === "IDEA"
+      ? [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+      : [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status, reason: "writer", changedAt: 2 }
+      ],
+    writerDecisionCount: status === "IDEA" ? 0 : 1,
+    omittedStatusHistoryCount: 0
+  });
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nAna espera.",
+    knownIdeas: [
+      makeIdea("idea-a", ["idea-b"]),
+      makeIdea("idea-b", ["idea-a", "context-not-loaded"], "incorporated"),
+      makeIdea("idea-c"),
+      makeIdea("idea-d", ["idea-c"], "discarded")
+    ],
+    knownIdeasOmittedCount: 3
+  });
+  const graph = result.ideaGraph;
+  assert.equal(graph.ideaCount, 4);
+  assert.deepEqual(graph.statusProfiles, [
+    {
+      status: "IDEA",
+      ideaCount: 2,
+      sourceIdeaCount: 0,
+      terminalWithinSnapshotIdeaCount: 1,
+      isolatedWithinSnapshotIdeaCount: 0,
+      incomingReferenceCount: 2,
+      includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistoryRecordCount: 2,
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 0
+    },
+    {
+      status: "incorporated",
+      ideaCount: 1,
+      sourceIdeaCount: 0,
+      terminalWithinSnapshotIdeaCount: 0,
+      isolatedWithinSnapshotIdeaCount: 0,
+      incomingReferenceCount: 1,
+      includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 1,
+      statusHistoryRecordCount: 2,
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
+    },
+    {
+      status: "discarded",
+      ideaCount: 1,
+      sourceIdeaCount: 1,
+      terminalWithinSnapshotIdeaCount: 0,
+      isolatedWithinSnapshotIdeaCount: 0,
+      incomingReferenceCount: 0,
+      includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistoryRecordCount: 2,
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
+    }
+  ]);
+  assert.equal(graph.omittedIdeaCount, 3);
+  assert.equal(graph.referenceCount, 4);
+  assert.equal(graph.includedReferenceCount, 3);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.sourceNodeCount, 1);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+  assert.equal(graph.cycleCount, 1);
+  assert.deepEqual(graph.cycles, [{ ideaIds: ["idea-a", "idea-b"] }]);
+  assert.deepEqual(graph.nodes, [
+    {
+      ideaId: "idea-a", status: "IDEA",
+      incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 0
+    },
+    {
+      ideaId: "idea-b", status: "incorporated",
+      incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 1,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
+    },
+    {
+      ideaId: "idea-c", status: "IDEA",
+      incomingReferenceCount: 1, includedOutgoingReferenceCount: 0,
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 0
+    },
+    {
+      ideaId: "idea-d", status: "discarded",
+      incomingReferenceCount: 0, includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "writer", changedAt: 2 }
+      ],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
+    }
+  ]);
+  assert.deepEqual(graph.references, [
+    { fromIdeaId: "idea-a", toIdeaId: "idea-b", resolution: "included-in-snapshot" },
+    { fromIdeaId: "idea-b", toIdeaId: "context-not-loaded", resolution: "not-in-snapshot" },
+    { fromIdeaId: "idea-b", toIdeaId: "idea-a", resolution: "included-in-snapshot" },
+    { fromIdeaId: "idea-d", toIdeaId: "idea-c", resolution: "included-in-snapshot" }
+  ]);
+  assert.equal(graph.referencesTruncated, false);
+});

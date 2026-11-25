@@ -3629,7 +3629,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       throw new Error("Datos de archivo de ideas inválidos.");
     }
     const db = await this.open();
-    return new Promise((resolve, reject) => {
+    return new Promise<readonly PersonalIdeaLibraryEntry[] | ProjectFinalizationSummary>((resolve, reject) => {
       const archiveStores = [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS];
       if (db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS)) {
         archiveStores.push(WRITER_LIBRARY_VERSIONS);

@@ -105,6 +105,8 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
+  subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */
   loadProjectRelations(projectId: string): Promise<readonly ProjectRelation[]>;
   saveProjectRelation(relation: ProjectRelation, expectedCurrent?: ProjectRelation): Promise<void>;

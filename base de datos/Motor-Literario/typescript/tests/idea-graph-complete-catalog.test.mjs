@@ -717,3 +717,50 @@ test("la resonancia léxica limita a cien pares y conserva el ranking determinis
     api.dispose();
   }
 });
+
+test("la resonancia léxica limita las muestras de términos sin alterar sus métricas", async () => {
+  const sharedTerms = Array.from({ length: 15 }, (_, index) =>
+    "sharedresonance" + String(index).padStart(2, "0")
+  );
+  const ideas = [
+    {
+      projectId, id: "lexical-shared-a",
+      text: [...sharedTerms, "exclusiveleft"].join(" "),
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "lexical-shared-b",
+      text: [...sharedTerms, "exclusiveright"].join(" "),
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }
+  ];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-shared-limit" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa muestra de términos se limita.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.equal(lexical.resonances.length, 1);
+    const resonance = lexical.resonances[0];
+    assert.equal(resonance.sharedTermCount, 15);
+    assert.equal(resonance.leftTermCount, 16);
+    assert.equal(resonance.rightTermCount, 16);
+    assert.equal(resonance.jaccardSimilarity, 0.882);
+    assert.equal(resonance.overlapCoefficient, 0.938);
+    assert.deepEqual(resonance.sharedTerms, sharedTerms.slice(0, 12));
+    assert.equal(resonance.omittedSharedTermCount, 3);
+  } finally {
+    api.dispose();
+  }
+});

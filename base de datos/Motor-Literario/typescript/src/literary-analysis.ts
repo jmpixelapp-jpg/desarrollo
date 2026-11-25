@@ -656,6 +656,11 @@ export interface LiteraryCharacterRelationshipProfile {
   /** Las relaciones narrativas aún no disponen de un historial de transiciones versionado. */
   readonly historyStatus: "current-record-only";
 }
+export interface LiteraryCharacterDocumentedIdeaReference {
+  readonly ideaId: string;
+  /** La referencia puede apuntar a una idea omitida del snapshot, no necesariamente inexistente. */
+  readonly resolution: "included-in-analysis-snapshot" | "not-in-analysis-snapshot";
+}
 export interface LiteraryCharacterDocumentedDecision {
   readonly ideaId: string;
   readonly text: string;
@@ -663,6 +668,7 @@ export interface LiteraryCharacterDocumentedDecision {
   readonly originDocumentId: string;
   readonly sourceProjectName: string;
   readonly relatedIdeaIds: readonly string[];
+  readonly relatedIdeaReferences: readonly LiteraryCharacterDocumentedIdeaReference[];
   readonly evidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly evidenceSamples: readonly LiteraryCharacterRelationshipEvidence[];
@@ -704,6 +710,10 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
   readonly relationshipRecordCount: number;
   readonly omittedRelationshipCount: number;
   readonly linkedIdeaCount: number;
+  /** Enlaces entre ideas del catálogo recibido, aunque el destino no esté en este snapshot. */
+  readonly ideaReferenceCount: number;
+  readonly resolvedIdeaReferenceCount: number;
+  readonly notIncludedIdeaReferenceCount: number;
   readonly omittedIdeaCount: number;
   readonly causalCandidateCount: number;
   readonly trajectories: readonly LiteraryCharacterNarrativeTrajectory[];
@@ -3479,6 +3489,14 @@ function buildCharacterNarrativeTrajectories(
     eventsByCharacter.set(profile.entityId,profiles);
   }
   const characterById = new Map(knownCharacters.map(character => [character.entityId,character]));
+  const knownIdeaIds = new Set(knownIdeas.map(idea => idea.ideaId));
+  const ideaReferenceCount = knownIdeas.reduce(
+    (total, idea) => total + idea.relatedIdeaIds.length, 0
+  );
+  const resolvedIdeaReferenceCount = knownIdeas.reduce(
+    (total, idea) => total + idea.relatedIdeaIds.filter(ideaId => knownIdeaIds.has(ideaId)).length, 0
+  );
+  const notIncludedIdeaReferenceCount = ideaReferenceCount - resolvedIdeaReferenceCount;
   const relationshipsByCharacter = new Map<string,LiteraryCharacterRelationshipProfile[]>();
   for (const relation of knownRelations) {
     const linkEndpoints = [
@@ -3526,6 +3544,12 @@ function buildCharacterNarrativeTrajectories(
         originDocumentId:idea.originDocumentId,
         sourceProjectName:idea.sourceProjectName,
         relatedIdeaIds:idea.relatedIdeaIds,
+        relatedIdeaReferences:idea.relatedIdeaIds.map(ideaId => ({
+          ideaId,
+          resolution:knownIdeaIds.has(ideaId)
+            ? "included-in-analysis-snapshot" as const
+            : "not-in-analysis-snapshot" as const
+        })),
         evidenceCount:idea.evidenceCount,
         staleEvidenceCount:idea.staleEvidenceCount,
         evidenceSamples:idea.evidence.slice(0,20).map(item => ({
@@ -3730,6 +3754,9 @@ function buildCharacterNarrativeTrajectories(
     relationshipRecordCount:knownRelations.length+omittedRelationCount,
     omittedRelationshipCount:omittedRelationCount,
     linkedIdeaCount:knownIdeas.length,
+    ideaReferenceCount,
+    resolvedIdeaReferenceCount,
+    notIncludedIdeaReferenceCount,
     omittedIdeaCount,
     causalCandidateCount:dependencies.candidateCount,
     trajectories:trajectories.slice(0,200)
@@ -5020,6 +5047,8 @@ function validateInput(input: LiteraryAnalysisInput): number {
         new Set(idea.relatedEntityIds).size !== idea.relatedEntityIds.length ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
         idea.relatedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
+        idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||

@@ -2776,7 +2776,7 @@ test("conserva offsets UTF-16 absolutos después de caracteres Unicode suplement
     "😀 La sombra cubrió la torre. La sombra avanzó.",
     "Escena 2",
     "🧭 Una sombra cruzó la plaza."
-  ].join("\\n");
+  ].join("\n");
   const baseOffset = 2_048;
   const result = analyze(text, baseOffset);
   const echo = result.sceneLexicalEchoes.echoes.find(item => item.normalizedWord === "sombra");

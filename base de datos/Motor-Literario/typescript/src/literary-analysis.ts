@@ -4379,6 +4379,7 @@ function buildCharacterNarrativeTrajectories(
   );
   const notIncludedIdeaReferenceCount = ideaReferenceCount - resolvedIdeaReferenceCount;
   const relationshipsByCharacter = new Map<string,LiteraryCharacterRelationshipProfile[]>();
+  const relationshipRecordsByCharacter = new Map<string,LiteraryAnalysisKnownRelation[]>();
   for (const relation of knownRelations) {
     const linkEndpoints = [
       ...(characterById.has(relation.fromEntityId)
@@ -4389,6 +4390,9 @@ function buildCharacterNarrativeTrajectories(
         : [])
     ];
     for (const endpoint of linkEndpoints) {
+      const records = relationshipRecordsByCharacter.get(endpoint.entityId) ?? [];
+      records.push(relation);
+      relationshipRecordsByCharacter.set(endpoint.entityId,records);
       const otherCharacter = characterById.get(endpoint.otherEntityId);
       const profile:LiteraryCharacterRelationshipProfile = {
         relationId:relation.relationId,
@@ -4407,7 +4411,8 @@ function buildCharacterNarrativeTrajectories(
           occurrence:{start:item.start,end:item.end},
           excerpt:item.excerpt
         })),
-        evidenceTruncated:relation.evidenceCount>relation.evidence.length,
+        evidenceTruncated:relation.evidence.length>20 ||
+          relation.evidenceCount>Math.min(20,relation.evidence.length),
         historyStatus:"current-record-only"
       };
       const profiles=relationshipsByCharacter.get(endpoint.entityId) ?? [];
@@ -4416,8 +4421,12 @@ function buildCharacterNarrativeTrajectories(
     }
   }
   const decisionsByCharacter = new Map<string,LiteraryCharacterDocumentedDecision[]>();
+  const decisionRecordsByCharacter = new Map<string,LiteraryAnalysisKnownIdea[]>();
   for (const idea of knownIdeas) {
     for (const entityId of idea.relatedEntityIds) {
+      const records = decisionRecordsByCharacter.get(entityId) ?? [];
+      records.push(idea);
+      decisionRecordsByCharacter.set(entityId,records);
       const decision:LiteraryCharacterDocumentedDecision = {
         ideaId:idea.ideaId,
         text:idea.text,
@@ -4439,7 +4448,8 @@ function buildCharacterNarrativeTrajectories(
           occurrence:{start:item.start,end:item.end},
           excerpt:item.excerpt
         })),
-        evidenceTruncated:idea.evidenceCount>idea.evidence.length,
+        evidenceTruncated:idea.evidence.length>20 ||
+          idea.evidenceCount>Math.min(20,idea.evidence.length),
         statusHistory:idea.statusHistory,
         omittedStatusHistoryCount:idea.omittedStatusHistoryCount,
         writerDecisionCount:idea.writerDecisionCount
@@ -4522,34 +4532,39 @@ function buildCharacterNarrativeTrajectories(
       const causalCandidateIds = causalRelations
         .filter(item => item.candidate.sceneIndex === scene.sceneIndex)
         .map(item => item.candidateId);
-      const matchingRelationships=characterRelationships.filter(profile =>
-        profile.evidenceSamples.some(evidence =>
+      // Resolver escenas contra la evidencia íntegra, no solo contra las 20 muestras públicas.
+      const matchingRelationshipRecords=(relationshipRecordsByCharacter.get(character.entityId) ?? [])
+        .filter(relation => relation.evidence.some(evidence =>
           evidence.documentId===documentId &&
           evidence.revision===revision &&
-          evidence.occurrence.end>scene.contentRange.start &&
-          evidence.occurrence.start<scene.contentRange.end
-        )
-      );
-      const relationshipIds=matchingRelationships.map(item => item.relationId);
-      const matchingDecisions=characterDecisions.filter(decision =>
-        decision.evidenceSamples.some(evidence =>
+          evidence.end>scene.contentRange.start &&
+          evidence.start<scene.contentRange.end
+        ));
+      const relationshipIds=matchingRelationshipRecords.map(item => item.relationId);
+      const matchingDecisionRecords=(decisionRecordsByCharacter.get(character.entityId) ?? [])
+        .filter(idea => idea.evidence.some(evidence =>
           evidence.documentId===documentId &&
           evidence.revision===revision &&
-          evidence.occurrence.end>scene.contentRange.start &&
-          evidence.occurrence.start<scene.contentRange.end
-        )
-      );
-      const documentedDecisionIdeaIds=matchingDecisions.map(item => item.ideaId);
+          evidence.end>scene.contentRange.start &&
+          evidence.start<scene.contentRange.end
+        ));
+      const documentedDecisionIdeaIds=matchingDecisionRecords.map(item => item.ideaId);
       const incompleteReasons: Array<
         "mention-truncation" | "event-truncation" |
         "relationship-evidence-truncation" | "decision-evidence-truncation"
       > = [];
       if (scene.characterMentionsTruncated) incompleteReasons.push("mention-truncation");
       if (scene.eventLinksTruncated) incompleteReasons.push("event-truncation");
-      if (matchingRelationships.some(item => item.evidenceTruncated)) {
+      if (matchingRelationshipRecords.some(item =>
+        item.evidence.length>20 ||
+        item.evidenceCount>Math.min(20,item.evidence.length)
+      )) {
         incompleteReasons.push("relationship-evidence-truncation");
       }
-      if (matchingDecisions.some(item => item.evidenceTruncated)) {
+      if (matchingDecisionRecords.some(item =>
+        item.evidence.length>20 ||
+        item.evidenceCount>Math.min(20,item.evidence.length)
+      )) {
         incompleteReasons.push("decision-evidence-truncation");
       }
       const hasDocumentedEvidence =

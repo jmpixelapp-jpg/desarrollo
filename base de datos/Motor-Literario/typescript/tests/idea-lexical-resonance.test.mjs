@@ -35,10 +35,44 @@ function analyzeGraph(ideas, options = {}) {
     documentId: "chapter-1",
     revision: 1,
     text: "Fragmento narrativo de prueba.",
-    knownProjectIdeas: ideas,
-    knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0
+    ...(options.projectCatalog === false
+      ? { knownIdeas: ideas }
+      : { knownProjectIdeas: ideas }),
+    ...(options.projectCatalog === false
+      ? { knownIdeasOmittedCount: options.omittedIdeaCount ?? 0 }
+      : { knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0 })
   }).ideaGraph;
 }
+
+test("conserva ciclos, reciprocidad y orden estable con índices compactos", () => {
+  const ideas = [
+    { ...idea("a", "memoria espejo luz"), relatedIdeaIds: ["á", "z", "ghost"] },
+    { ...idea("á", "memoria espejo destino"), relatedIdeaIds: ["z"] },
+    { ...idea("z", "memoria horizonte origen"), relatedIdeaIds: ["a"] }
+  ];
+  const graph = analyzeGraph(ideas);
+  const reordered = analyzeGraph([...ideas].reverse());
+
+  assert.deepEqual(reordered, graph);
+  assert.equal(graph.referenceCount, 5);
+  assert.equal(graph.includedReferenceCount, 4);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.missingFromProjectReferenceCount, 1);
+  assert.equal(graph.reciprocalReferencePairCount, 1);
+  assert.equal(graph.cycleCount, 1);
+  assert.deepEqual(graph.cycles[0].ideaIds, ["a", "á", "z"]);
+  assert.equal(graph.weakComponentCount, 1);
+  assert.equal(graph.largestWeakComponentSize, 3);
+  assert.deepEqual(graph.references[0], {
+    fromIdeaId: "a",
+    toIdeaId: "á",
+    resolution: "included-in-snapshot"
+  });
+  assert.equal(
+    graph.references.find(reference => reference.toIdeaId === "ghost").resolution,
+    "missing-from-project"
+  );
+});
 
 test("memoiza el grafo completo, aísla las respuestas e invalida cambios estructurales", () => {
   const ideas = [
@@ -63,6 +97,33 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
   assert.equal(changed.referenceCount, 1);
   assert.equal(changed.nodes.find(node => node.ideaId === "graph-b").status, "incorporated");
   assert.equal(changed.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 1);
+});
+
+test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {
+  const ideas = [
+    { ...idea("scope-a", "memoria espejo luz"), relatedIdeaIds: ["outside"] }
+  ];
+
+  const fallback = analyzeGraph(ideas, { projectCatalog: false });
+  assert.equal(fallback.catalogScope, "character-linked-fallback");
+  assert.equal(fallback.projectCatalogComplete, false);
+  assert.equal(fallback.missingFromProjectReferenceCount, 0);
+
+  const complete = analyzeGraph(ideas, { projectCatalog: true });
+  assert.equal(complete.catalogScope, "project");
+  assert.equal(complete.projectCatalogComplete, true);
+  assert.equal(complete.missingFromProjectReferenceCount, 1);
+  assert.equal(complete.references[0].resolution, "missing-from-project");
+
+  const incomplete = analyzeGraph(ideas, {
+    projectCatalog: true,
+    omittedIdeaCount: 1
+  });
+  assert.equal(incomplete.catalogScope, "project");
+  assert.equal(incomplete.projectCatalogComplete, false);
+  assert.equal(incomplete.omittedIdeaCount, 1);
+  assert.equal(incomplete.missingFromProjectReferenceCount, 0);
+  assert.equal(incomplete.references[0].resolution, "not-in-snapshot");
 });
 
 test("agrega métricas globales y por estado de forma coherente", () => {

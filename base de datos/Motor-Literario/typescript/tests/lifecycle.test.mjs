@@ -5,6 +5,8 @@ import { HostEngineApi } from "../dist/motor-literario.js";
 class LifecycleMemoryStore {
   entities = new Map();
   relations = new Map();
+  projectRecords = new Map();
+  projectRelations = new Map();
   recordHistory = new Map();
   relationHistory = new Map();
 
@@ -12,6 +14,22 @@ class LifecycleMemoryStore {
 
   async saveEntity(item) {
     this.entities.set(this.key(item.projectId, item.id), structuredClone(item));
+    this.projectRecords.set(this.key(item.projectId, item.id), {
+      projectId: item.projectId, id: item.id, recordType: item.kind,
+      primaryName: item.canonicalName ?? null, description: null,
+      label: "REGISTRADO EN LA OBRA", state: "abierto",
+      confidence: "HIGH", confirmationKind: "EXPLICIT",
+      provenanceKind: "MOTOR", createdAt: item.firstSeenAt ?? 0,
+      updatedAt: item.lastSeenAt ?? item.firstSeenAt ?? 0, currentVersion: 1
+    });
+  }
+  async loadProjectRecords(projectId) {
+    return [...this.projectRecords.values()]
+      .filter(item => item.projectId === projectId)
+      .map(item => structuredClone(item));
+  }
+  async saveProjectRecord(item) {
+    this.projectRecords.set(this.key(item.projectId, item.id), structuredClone(item));
   }
   async loadEntities(projectId) {
     return [...this.entities.values()]
@@ -20,6 +38,21 @@ class LifecycleMemoryStore {
   }
   async saveRelation(item) {
     this.relations.set(this.key(item.projectId, item.id), structuredClone(item));
+    this.projectRelations.set(this.key(item.projectId, item.id), {
+      projectId: item.projectId, id: item.id, relationType: item.relationType,
+      sourceRecordId: item.fromEntityId ?? null, targetRecordId: item.toEntityId ?? null,
+      label: "REGISTRADO EN LA OBRA", state: "abierto",
+      confirmationKind: "EXPLICIT", provenanceKind: "MOTOR", confidence: "HIGH",
+      createdAt: 0, updatedAt: 0, currentVersion: 1
+    });
+  }
+  async loadProjectRelations(projectId) {
+    return [...this.projectRelations.values()]
+      .filter(item => item.projectId === projectId)
+      .map(item => structuredClone(item));
+  }
+  async saveProjectRelation(item) {
+    this.projectRelations.set(this.key(item.projectId, item.id), structuredClone(item));
   }
   async loadRelations(projectId) {
     return [...this.relations.values()]
@@ -28,13 +61,13 @@ class LifecycleMemoryStore {
   }
 
   async loadRecordLifecycles(projectId, recordId) {
-    if (!this.entities.has(this.key(projectId, recordId))) {
+    if (!this.projectRecords.has(this.key(projectId, recordId))) {
       throw new Error("No existe la ficha solicitada.");
     }
     return structuredClone(this.recordHistory.get(this.key(projectId, recordId)) ?? []);
   }
   async appendRecordLifecycle(item) {
-    if (!this.entities.has(this.key(item.projectId, item.recordId))) {
+    if (!this.projectRecords.has(this.key(item.projectId, item.recordId))) {
       throw new Error("No existe la ficha de destino.");
     }
     const key = this.key(item.projectId, item.recordId);
@@ -53,13 +86,13 @@ class LifecycleMemoryStore {
   }
 
   async loadRelationLifecycles(projectId, relationId) {
-    if (!this.relations.has(this.key(projectId, relationId))) {
+    if (!this.projectRelations.has(this.key(projectId, relationId))) {
       throw new Error("No existe la relación solicitada.");
     }
     return structuredClone(this.relationHistory.get(this.key(projectId, relationId)) ?? []);
   }
   async appendRelationLifecycle(item) {
-    if (!this.relations.has(this.key(item.projectId, item.relationId))) {
+    if (!this.projectRelations.has(this.key(item.projectId, item.relationId))) {
       throw new Error("No existe la relación de destino.");
     }
     const key = this.key(item.projectId, item.relationId);

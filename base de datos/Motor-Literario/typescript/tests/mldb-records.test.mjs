@@ -7,6 +7,11 @@ class MldbRecordsMemoryStore {
   fragments = new Map();
   entities = new Map();
   relations = new Map();
+  projectRecords = new Map();
+  projectRelations = new Map();
+  evidences = new Map();
+  occurrences = new Map();
+  recordNames = new Map();
   recordAttributes = new Map();
   relationAttributes = new Map();
   suggestions = new Map();
@@ -24,12 +29,81 @@ class MldbRecordsMemoryStore {
   }
   async saveEntity(entity) {
     this.entities.set(this.key(entity.projectId, entity.id), structuredClone(entity));
+    this.projectRecords.set(this.key(entity.projectId, entity.id), {
+      projectId: entity.projectId, id: entity.id, recordType: entity.kind,
+      primaryName: entity.canonicalName ?? null, description: null,
+      label: "REGISTRADO EN LA OBRA", state: "abierto",
+      confidence: "HIGH", confirmationKind: "EXPLICIT", provenanceKind: "MOTOR",
+      createdAt: entity.firstSeenAt ?? 0, updatedAt: entity.lastSeenAt ?? entity.firstSeenAt ?? 0,
+      currentVersion: 1
+    });
+  }
+  async loadProjectRecords(projectId) {
+    return [...this.projectRecords.values()].filter(item => item.projectId === projectId)
+      .map(item => structuredClone(item));
+  }
+  async saveProjectRecord(record, expectedCurrent) {
+    const key = this.key(record.projectId, record.id);
+    const current = this.projectRecords.get(key);
+    if (expectedCurrent === undefined ? current !== undefined
+      : !current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) throw new Error("record_conflict");
+    const previousNames = [...this.recordNames.values()].filter(item =>
+      item.projectId === record.projectId && item.recordId === record.id
+    );
+    for (const name of previousNames) {
+      if (name.isPrimary && name.name !== record.primaryName) {
+        this.recordNames.set(this.key(name.projectId, name.id), { ...name, isPrimary: false });
+      }
+    }
+    if (record.primaryName !== null) {
+      const match = previousNames.find(name => name.name === record.primaryName);
+      if (match) this.recordNames.set(this.key(match.projectId, match.id), { ...match, isPrimary: true });
+      else {
+        const name = {
+          projectId: record.projectId, id: "primary:" + record.id,
+          recordId: record.id, name: record.primaryName, nameKind: "primary",
+          isPrimary: true, provenanceKind: record.provenanceKind
+        };
+        this.recordNames.set(this.key(name.projectId, name.id), structuredClone(name));
+      }
+    }
+    this.projectRecords.set(key, structuredClone(record));
+  }
+  async loadRecordNames(projectId, recordId) {
+    return [...this.recordNames.values()].filter(item =>
+      item.projectId === projectId && (recordId === undefined || item.recordId === recordId)
+    ).map(item => structuredClone(item));
+  }
+  async saveRecordName(name, expectedCurrent) {
+    const key = this.key(name.projectId, name.id);
+    const current = this.recordNames.get(key);
+    if (expectedCurrent === undefined ? current !== undefined
+      : !current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) throw new Error("name_conflict");
+    this.recordNames.set(key, structuredClone(name));
   }
   async loadEntities(projectId) {
     return [...this.entities.values()].filter(item => item.projectId === projectId).map(item => structuredClone(item));
   }
   async saveRelation(relation) {
     this.relations.set(this.key(relation.projectId, relation.id), structuredClone(relation));
+    this.projectRelations.set(this.key(relation.projectId, relation.id), {
+      projectId: relation.projectId, id: relation.id, relationType: relation.relationType,
+      sourceRecordId: relation.fromEntityId ?? null, targetRecordId: relation.toEntityId ?? null,
+      label: "REGISTRADO EN LA OBRA", state: "abierto",
+      confirmationKind: "EXPLICIT", provenanceKind: "MOTOR", confidence: "HIGH",
+      createdAt: 0, updatedAt: 0, currentVersion: 1
+    });
+  }
+  async loadProjectRelations(projectId) {
+    return [...this.projectRelations.values()].filter(item => item.projectId === projectId)
+      .map(item => structuredClone(item));
+  }
+  async saveProjectRelation(relation, expectedCurrent) {
+    const key = this.key(relation.projectId, relation.id);
+    const current = this.projectRelations.get(key);
+    if (expectedCurrent === undefined ? current !== undefined
+      : !current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) throw new Error("relation_conflict");
+    this.projectRelations.set(key, structuredClone(relation));
   }
   async loadRelations(projectId) {
     return [...this.relations.values()].filter(item => item.projectId === projectId).map(item => structuredClone(item));
@@ -61,7 +135,7 @@ class MldbRecordsMemoryStore {
     ).map(item => structuredClone(item));
   }
   async saveRecordAttribute(attribute, expectedCurrent) {
-    if (!this.entities.has(this.key(attribute.projectId, attribute.recordId))) throw new Error("No existe la ficha del atributo.");
+    if (!this.projectRecords.has(this.key(attribute.projectId, attribute.recordId))) throw new Error("No existe la ficha del atributo.");
     const key = this.key(attribute.projectId, attribute.id);
     const current = this.recordAttributes.get(key);
     if (expectedCurrent === undefined ? current !== undefined
@@ -75,7 +149,7 @@ class MldbRecordsMemoryStore {
     ).map(item => structuredClone(item));
   }
   async saveRelationAttribute(attribute, expectedCurrent) {
-    if (!this.relations.has(this.key(attribute.projectId, attribute.relationId))) throw new Error("No existe la relación del atributo.");
+    if (!this.projectRelations.has(this.key(attribute.projectId, attribute.relationId))) throw new Error("No existe la relación del atributo.");
     const key = this.key(attribute.projectId, attribute.id);
     const current = this.relationAttributes.get(key);
     if (expectedCurrent === undefined ? current !== undefined
@@ -103,6 +177,55 @@ class MldbRecordsMemoryStore {
     if (expectedCurrent === undefined ? current !== undefined
       : !current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) throw new Error("suggestion_conflict");
     this.suggestions.set(key, structuredClone(suggestion));
+  }
+
+  async loadProjectEvidences(projectId, subjectKind, subjectId) {
+    return [...this.evidences.values()].filter(item =>
+      item.projectId === projectId &&
+      (subjectKind === undefined || item.subjectKind === subjectKind) &&
+      (subjectId === undefined ||
+        (subjectKind === "RECORD" ? item.subjectRecordId === subjectId : item.subjectRelationId === subjectId))
+    ).map(item => structuredClone(item));
+  }
+  async saveProjectEvidence(evidence, expectedCurrent) {
+    const key = this.key(evidence.projectId, evidence.id);
+    const current = this.evidences.get(key);
+    if (expectedCurrent === undefined ? current !== undefined
+      : !current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) throw new Error("evidence_conflict");
+    if (evidence.subjectKind === "RECORD" &&
+        !this.projectRecords.has(this.key(evidence.projectId, evidence.subjectRecordId))) {
+      throw new Error("No existe la ficha de la evidencia.");
+    }
+    if (evidence.subjectKind === "RELATION" &&
+        !this.projectRelations.has(this.key(evidence.projectId, evidence.subjectRelationId))) {
+      throw new Error("No existe la relación de la evidencia.");
+    }
+    if (evidence.documentId && !this.documents.has(this.key(evidence.projectId, evidence.documentId))) {
+      throw new Error("No existe el documento de la evidencia.");
+    }
+    if (evidence.fragmentId) {
+      const fragment = this.fragments.get(this.key(evidence.projectId, evidence.fragmentId));
+      if (!fragment || fragment.documentId !== evidence.documentId) throw new Error("El fragmento de evidencia no existe en el documento.");
+    }
+    this.evidences.set(key, structuredClone(evidence));
+  }
+  async loadTimelineOccurrences(projectId, eventRecordId, trackId) {
+    return [...this.occurrences.values()].filter(item =>
+      item.projectId === projectId &&
+      (eventRecordId === undefined || item.eventRecordId === eventRecordId) &&
+      (trackId === undefined || item.trackId === trackId)
+    ).map(item => structuredClone(item));
+  }
+  async saveTimelineOccurrence(occurrence, expectedCurrent) {
+    const key = this.key(occurrence.projectId, occurrence.id);
+    const current = this.occurrences.get(key);
+    if (expectedCurrent === undefined ? current !== undefined
+      : !current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) throw new Error("occurrence_conflict");
+    if (occurrence.eventRecordId &&
+        !this.projectRecords.has(this.key(occurrence.projectId, occurrence.eventRecordId))) {
+      throw new Error("No existe la ficha de evento.");
+    }
+    this.occurrences.set(key, structuredClone(occurrence));
   }
 
   async loadImportAuthorizations(writerId) {
@@ -139,6 +262,107 @@ const fragment = (overrides = {}) => ({
   id: "fragment-1", documentId: "chapter-1", parentFragmentId: null,
   fragmentKind: "paragraph", currentText: "Ana llega.",
   startOffset: 0, endOffset: 10, revision: 1, isCurrent: true, ...overrides
+});
+
+test("las fichas genéricas admiten nombre nulo y sincronizan nombres principales sin perder alias", async () => {
+  const store = new MldbRecordsMemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject(project);
+  const base = {
+    id: "record-unnamed", recordType: "culture", primaryName: null, description: null,
+    label: "IDEA", state: "abierto", confidence: "UNKNOWN",
+    confirmationKind: "UNKNOWN", provenanceKind: "WRITER",
+    createdAt: 1, updatedAt: 1
+  };
+  const unnamed = await api.saveProjectRecord(base);
+  assert.equal(unnamed.primaryName, null);
+  assert.equal((await api.getProjectRecords()).length, 1);
+  assert.deepEqual(await api.getRecordNames("record-unnamed"), []);
+
+  await api.saveProjectRecord({ ...base, primaryName: "Lunarios", updatedAt: 2 });
+  assert.equal((await api.getRecordNames("record-unnamed")).filter(name => name.isPrimary)[0].name, "Lunarios");
+  await api.saveRecordName({
+    id: "old-name", recordId: "record-unnamed", name: "Pueblo lunar",
+    nameKind: "alias", languageCode: "es", isPrimary: false, provenanceKind: "WRITER"
+  });
+  await api.saveProjectRecord({ ...base, primaryName: "Lunarianos", updatedAt: 3 });
+  const names = await api.getRecordNames("record-unnamed");
+  assert.equal(names.some(name => name.name === "Lunarios" && name.isPrimary), false);
+  assert.equal(names.some(name => name.name === "Lunarios" && !name.isPrimary), true);
+  assert.equal(names.find(name => name.isPrimary).name, "Lunarianos");
+});
+
+test("las relaciones genéricas conservan tipo, extremos opcionales y estado propio", async () => {
+  const store = new MldbRecordsMemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject(project);
+  await api.saveProjectRecord({
+    id: "record-origin", recordType: "character", primaryName: "Ana", description: null,
+    label: "REGISTRADO EN LA OBRA", state: "abierto", confidence: "HIGH",
+    confirmationKind: "EXPLICIT", provenanceKind: "WRITER", createdAt: 1, updatedAt: 1
+  });
+  const saved = await api.saveProjectRelation({
+    id: "relation-one", relationType: "protege", sourceRecordId: "record-origin",
+    targetRecordId: null, label: "IDEA", state: "abierto",
+    confirmationKind: "INFERRED", provenanceKind: "MOTOR", confidence: "MEDIUM",
+    createdAt: 2, updatedAt: 2
+  });
+  assert.equal(saved.targetRecordId, null);
+  assert.equal((await api.getProjectRelations())[0].relationType, "protege");
+  await assert.rejects(api.saveProjectRelation({
+    id: "relation-bad", relationType: "parent_of", sourceRecordId: "missing-record",
+    targetRecordId: null, label: "IDEA", state: "abierto",
+    confirmationKind: "UNKNOWN", provenanceKind: "WRITER", confidence: "LOW",
+    createdAt: 2, updatedAt: 2
+  }), /ficha de origen/);
+});
+
+test("las evidencias validan sujeto exclusivo y anclaje de documento y fragmento", async () => {
+  const store = new MldbRecordsMemoryStore();
+  await store.saveDocument(document);
+  const api = new HostEngineApi({ store });
+  api.initializeProject(project);
+  await api.saveProjectRecord({
+    id: "record-evidence", recordType: "character", primaryName: "Ana", description: null,
+    label: "REGISTRADO EN LA OBRA", state: "abierto", confidence: "HIGH",
+    confirmationKind: "EXPLICIT", provenanceKind: "WRITER", createdAt: 1, updatedAt: 1
+  });
+  await api.saveManuscriptFragment(fragment());
+  const saved = await api.saveProjectEvidence({
+    id: "evidence-one", subjectKind: "RECORD",
+    subjectRecordId: "record-evidence", subjectRelationId: null,
+    documentId: "chapter-1", fragmentId: "fragment-1", evidenceText: "Ana llega.",
+    chapterLabel: "Capítulo 1", pageNumber: 1, lineNumber: 1,
+    startOffset: 0, endOffset: 10, documentRevision: 1,
+    evidenceKind: "EXPLICIT", provenanceKind: "WRITER", isCurrent: true
+  });
+  assert.equal(saved.subjectKind, "RECORD");
+  assert.equal((await api.getProjectEvidences("RECORD", "record-evidence")).length, 1);
+  await assert.rejects(api.saveProjectEvidence({
+    id: "evidence-bad", subjectKind: "RECORD",
+    subjectRecordId: "record-evidence", subjectRelationId: "foreign-relation",
+    documentId: null, fragmentId: null, evidenceText: null, chapterLabel: null,
+    pageNumber: null, lineNumber: null, startOffset: null, endOffset: null,
+    documentRevision: null, evidenceKind: "EXPLICIT", provenanceKind: "WRITER", isCurrent: true
+  }), /no puede referenciar una relación/);
+});
+
+test("las ocurrencias cronológicas enlazan un evento sin inventar orden ni fecha", async () => {
+  const store = new MldbRecordsMemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject(project);
+  await api.saveProjectRecord({
+    id: "record-event", recordType: "event", primaryName: null, description: null,
+    label: "REGISTRADO EN LA OBRA", state: "abierto", confidence: "MEDIUM",
+    confirmationKind: "INFERRED", provenanceKind: "MOTOR", createdAt: 1, updatedAt: 1
+  });
+  const occurrence = await api.saveTimelineOccurrence({
+    id: "occurrence-one", eventRecordId: "record-event", trackId: null,
+    timeValue: { kind: "UNKNOWN", reason: "El texto no fija fecha" },
+    narrativeOrder: null, causalLinks: [], provenanceKind: "MOTOR", confidence: "LOW"
+  });
+  assert.equal(occurrence.narrativeOrder, null);
+  assert.deepEqual((await api.getTimelineOccurrences("record-event"))[0].timeValue.kind, "UNKNOWN");
 });
 
 test("persiste fragmentos con offsets, revisión y jerarquía del mismo documento", async () => {

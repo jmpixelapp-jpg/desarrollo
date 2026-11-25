@@ -99,7 +99,9 @@ function validateEventLifecycleHistory(
         item.revision!==previous.revision+1 ||
         item.previousLabel!==previous.newLabel ||
         item.previousParticipants.length!==previous.newParticipants.length ||
-        !item.previousParticipants.every((id,index)=>id===previous.newParticipants[index]) ||
+        !item.previousParticipants.every(
+          (id: string,index: number)=>id===previous?.newParticipants[index]
+        ) ||
         item.changedAt<previous.changedAt
       ))) {
       throw new Error("El historial de acontecimiento contiene revisiones duplicadas o transiciones discontinuas.");

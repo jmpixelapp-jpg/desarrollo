@@ -344,6 +344,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Patrones de co-mención de personajes conocidos en escenas compartidas, ordenados por frecuencia y sin inferir relaciones entre ellos.
 - Distribución de menciones literales de personajes conocidos por escena: cobertura, primera y última mención, intervalos sin coincidencia, rachas consecutivas y tasas por cada 1.000 palabras para comparar escenas de distinta longitud. Cuenta todas las coincidencias detectadas y distingue esos conteos de los ejemplos UTF-16 y formas de nombre limitados por escena.
 - Perfiles de evidencia de personajes por escena: separan mención nominal literal y participación declarada en acontecimientos con evidencia vigente de la misma revisión. Conservan series por escena, IDs de acontecimientos y estados desconocidos cuando los límites de muestras impiden concluir ausencia.
+- Evolución de atributos explícitos entre escenas: compara afirmaciones de edad, ubicación y rol de la revisión vigente, distingue valores sin cambio, cambios observados y múltiples valores en una escena, y conserva fragmentos UTF-16 y contadores de evidencia obsoleta o fuera de alcance.
 
 La API `analyzeLiteraryDocument(documentId, start?, end?)` espera a que terminen los cambios admitidos y analiza el rango UTF-16 solicitado en la revisión vigente. Es una operación de solo lectura, no persiste sugerencias ni modifica el manuscrito. Los resultados identifican proyecto, documento, revisión y rango; las ocurrencias usan offsets UTF-16 absolutos.
 

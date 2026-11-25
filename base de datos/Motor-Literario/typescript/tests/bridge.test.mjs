@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
+import { HostEngineApi, MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
 import { SqliteProjectStore } from "../bridge/sqlite-project-store.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -915,6 +915,175 @@ test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin m
     assert.equal(persisted.length, 2);
     assert.deepEqual(persisted.find(item => item.id === "target").mergedFromIds, ["legacy-id", "legacy-id"]);
     assert.ok(persisted.some(item => item.id === "source"));
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-sqlite-library-page-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const writerId = "writer-sqlite-page";
+  const projectId = "book-sqlite-page";
+  const database = new DatabaseSync(databasePath);
+  const entry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro SQLite",
+    category: "Libro SQLite",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro SQLite",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  try {
+    // Simula una base anterior a la columna sort_key.
+    database.exec(
+      "CREATE TABLE bridge_records (" +
+      "collection TEXT NOT NULL, record_key TEXT NOT NULL, project_id TEXT, " +
+      "writer_id TEXT, document_id TEXT, sequence INTEGER, value_json TEXT NOT NULL, " +
+      "PRIMARY KEY (collection, record_key)) WITHOUT ROWID"
+    );
+    database.exec("CREATE INDEX bridge_records_writer ON bridge_records(collection, writer_id)");
+    const insert = database.prepare(
+      "INSERT INTO bridge_records(collection, record_key, project_id, writer_id, value_json) VALUES(?, ?, ?, ?, ?)"
+    );
+    for (const id of ["idea-c", "idea-a", "idea-b"]) {
+      const value = entry(id);
+      insert.run(
+        "personal-idea-library",
+        JSON.stringify([writerId, projectId, id]),
+        null,
+        writerId,
+        JSON.stringify(value)
+      );
+    }
+
+    const store = new SqliteProjectStore(database, databasePath);
+    const first = store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-b" });
+
+    const second = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+    assert.equal(
+      store.loadPersonalIdea(writerId, projectId, "idea-b").idea.id,
+      "idea-b"
+    );
+    assert.deepEqual(
+      store.loadPersonalIdeasByKeys(writerId, [
+        { sourceProjectId: projectId, ideaId: "idea-a" },
+        { sourceProjectId: projectId, ideaId: "missing-idea" },
+        { sourceProjectId: projectId, ideaId: "idea-c" }
+      ]).map(item => item.idea.id),
+      ["idea-a", "idea-c"]
+    );
+
+    const schema = database.prepare("PRAGMA table_info(bridge_records)").all();
+    assert.ok(schema.some(column => column.name === "sort_key"));
+    const plan = database.prepare(
+      "EXPLAIN QUERY PLAN SELECT value_json FROM bridge_records " +
+      "WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
+      "ORDER BY sort_key LIMIT ?"
+    ).all(writerId, "", 3);
+    assert.ok(
+      plan.some(row => row.detail.includes("bridge_records_personal_library_page")),
+      "la consulta keyset debe usar el índice parcial de biblioteca"
+    );
+    store.close();
+  } finally {
+    try { database.close(); } catch { /* El almacenamiento puede haber cerrado la conexión. */ }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite guarda cada cambio de acontecimiento junto con su historial append-only", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-event-lifecycle-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "sqlite-event-history-project";
+  const store = await SqliteProjectStore.open(databasePath);
+  const original = {
+    projectId,
+    id: "event-guard-arrives",
+    label: "La guardia llega a la puerta",
+    participants: [],
+    evidence: []
+  };
+  const api = new HostEngineApi({ store });
+  try {
+    store.saveEvent(original);
+    api.initializeProject({
+      projectId,
+      projectName: "Libro de acontecimientos",
+      writerId: "writer-event-history"
+    });
+
+    const loaded = await api.getNarrativeEvents();
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].label, original.label);
+
+    const firstUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia abre la puerta",
+      changedBy: "writer-event-history",
+      changeReason: "El escritor ajustó el acontecimiento",
+      changedAt: 100
+    });
+    assert.equal(firstUpdate.label, "La guardia abre la puerta");
+
+    const firstHistory = await api.getEventLifecycleHistory(original.id);
+    assert.equal(firstHistory.length, 1);
+    assert.equal(firstHistory[0].revision, 1);
+    assert.equal(firstHistory[0].previousLabel, original.label);
+    assert.equal(firstHistory[0].newLabel, firstUpdate.label);
+    assert.equal(firstHistory[0].changedBy, "writer-event-history");
+
+    const secondUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia protege la entrada",
+      changedBy: "writer-event-history",
+      changedAt: 200
+    });
+    const completeHistory = await store.loadProjectEventLifecycles(projectId);
+    assert.deepEqual(completeHistory.map(item => item.revision), [1, 2]);
+    assert.equal(completeHistory[1].previousLabel, firstUpdate.label);
+    assert.equal(completeHistory[1].newLabel, secondUpdate.label);
+
+    const invalidEvent = { ...secondUpdate, label: "Una versión que no debe publicarse" };
+    const invalidLifecycle = {
+      projectId,
+      id: original.id + ":v3",
+      eventId: original.id,
+      revision: 3,
+      previousLabel: secondUpdate.label,
+      newLabel: invalidEvent.label,
+      previousParticipants: [],
+      newParticipants: [],
+      changedBy: "writer-event-history",
+      changedAt: 150
+    };
+    assert.throws(
+      () => store.saveEventAndAppendLifecycleIfUnchanged(
+        invalidEvent, secondUpdate, invalidLifecycle
+      ),
+      /no continúa la última revisión durable/
+    );
+
+    const persisted = (await store.loadEvents(projectId))[0];
+    const afterRejectedWrite = await store.loadEventLifecycles(projectId, original.id);
+    assert.equal(persisted.label, secondUpdate.label);
+    assert.equal(afterRejectedWrite.length, 2);
+    assert.deepEqual(afterRejectedWrite.map(item => item.revision), [1, 2]);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });

@@ -9451,8 +9451,26 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
   const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideLeaves];
   const entries = [];
   const deleted = [];
-  const transaction = {
+  let transaction;
+  let cursorExhausted = false;
+  const maybeComplete = () => {
+    if (!cursorExhausted || transaction.pendingRequests !== 0 || transaction.completed) return;
+    transaction.completed = true;
+    queueMicrotask(() => transaction.oncomplete?.());
+  };
+  const scheduleRequest = work => {
+    transaction.pendingRequests++;
+    queueMicrotask(() => {
+      work();
+      transaction.pendingRequests--;
+      maybeComplete();
+    });
+  };
+  transaction = {
     error: null,
+    pendingRequests: 0,
+    completed: false,
+    oncomplete: null,
     objectStore(name) {
       if (name === "narrative-ideas") {
         return {
@@ -9466,13 +9484,13 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
                   .filter(item => item.projectId === requestedProjectId)
                   .sort((first, second) => first.id.localeCompare(second.id));
                 let index = 0;
-                const advance = () => queueMicrotask(() => {
+                const advance = () => scheduleRequest(() => {
                   const item = ordered[index++];
                   request.result = item
                     ? { value: structuredClone(item), continue: advance }
                     : null;
                   request.onsuccess?.();
-                  if (!item) queueMicrotask(() => transaction.oncomplete?.());
+                  if (!item) cursorExhausted = true;
                 });
                 advance();
                 return request;
@@ -9481,7 +9499,7 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
           },
           get(key) {
             const request = {};
-            queueMicrotask(() => {
+            scheduleRequest(() => {
               const item = projectIdeas.find(entry => entry.projectId === key[0] && entry.id === key[1]);
               request.result = item ? structuredClone(item) : undefined;
               request.onsuccess?.();
@@ -9496,7 +9514,16 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
       }
       if (name === "writer-library-finalization-receipts") return {};
       assert.equal(name, "narrative-entities");
-      return {};
+      return {
+        get(key) {
+          const request = {};
+          scheduleRequest(() => {
+            request.result = undefined;
+            request.onsuccess?.();
+          });
+          return request;
+        }
+      };
     }
   };
   const database = {

@@ -2866,14 +2866,14 @@ function buildCharacterAttributeEvolution(
     const sceneSnapshots = scenes.flatMap(scene => {
       const entries = group.byScene.get(scene.sceneIndex);
       if (!entries?.length) return [];
-      const values = new Map<string,string | number>();
-      for (const assertion of entries) {
-        const key = normalizeCharacterAttributeValue(assertion.value);
-        if (!values.has(key)) values.set(key,assertion.value);
-      }
       const ordered = [...entries].sort((a,b) =>
         a.evidence.start-b.evidence.start || a.id.localeCompare(b.id,"en")
       );
+      const values = new Map<string,string | number>();
+      for (const assertion of ordered) {
+        const key = normalizeCharacterAttributeValue(assertion.value);
+        if (!values.has(key)) values.set(key,assertion.value);
+      }
       return [{
         sceneIndex:scene.sceneIndex,
         assertionCount:entries.length,
@@ -2935,7 +2935,7 @@ function buildCharacterAttributeEvolution(
         a.evidence.start-b.evidence.start ||
         a.id.localeCompare(b.id,"en")
       );
-      for (const assertion of entries) {
+      for (const assertion of ordered) {
         const valueKey = normalizeCharacterAttributeValue(assertion.value);
         if (!values.has(valueKey)) values.set(valueKey,assertion.value);
         rawReferences.add(assertion.timeReference!.raw);

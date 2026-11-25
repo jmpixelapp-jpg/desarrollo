@@ -33,7 +33,7 @@ const store = {
   async loadEntities(project) { return this.entities.filter(item=>item.projectId===project).map(item=>structuredClone(item)); }
 };
 
-test("el grafo literario incluye ideas sin vínculos a personajes", async () => {
+test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculadas", async () => {
   const api = new HostEngineApi({store});
   assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, true);
   assert.equal(api.getCapabilities().authorMarkedIdeaCapture, false);

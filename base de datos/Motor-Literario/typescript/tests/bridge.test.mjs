@@ -552,6 +552,8 @@ test("el archivo de ideas conserva contexto independiente para cada entrada de b
     const repeated = await client.archiveUnincorporatedIdeas("idea-context-project");
     assert.equal(repeated.length, 2);
     assert.deepEqual(repeated.map(entry => entry.idea.id).sort(), [campana.id, puerta.id].sort());
+    assert.deepEqual(repeated, archived,
+      "repetir la transferencia debe devolver las mismas ideas y snapshots ya confirmados");
 
     const exited = waitForExit(child);
     await client.shutdown();

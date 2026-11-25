@@ -10551,6 +10551,78 @@ test("limita las instancias expuestas de cada motivo de secuencia", async () => 
   );
 });
 
+test("compara cambios de evidencia y menciones nominales de participantes entre escenas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","Ana vio la alarma. Bruno aguardó.","***",
+    "ESCENA 2","La alarma volvió a sonar. La alarma persistió.","***",
+    "ESCENA 3","Bruno cerró la puerta."
+  ].join("\\n");
+  const evidenceForAll = excerpt => {
+    const evidence=[];
+    let cursor=0;
+    while(true) {
+      const start=text.indexOf(excerpt,cursor);
+      if(start<0) break;
+      evidence.push({
+        documentId:"chapter",revision:18,
+        start,end:start+excerpt.length,excerpt
+      });
+      cursor=start+excerpt.length;
+    }
+    assert.ok(evidence.length>0);
+    return evidence;
+  };
+  const result=analyzeLiteraryFragment({
+    projectId:"event-association-transitions",documentId:"chapter",revision:18,text,
+    knownCharacters:[
+      {entityId:"ana",canonicalName:"Ana"},
+      {entityId:"bruno",canonicalName:"Bruno"}
+    ],
+    knownEvents:[{
+      eventId:"alarm",label:"Suena la alarma",participants:["ana","bruno"],
+      evidence:[
+        ...evidenceForAll("la alarma."),
+        ...evidenceForAll("La alarma volvió a sonar."),
+        ...evidenceForAll("La alarma persistió.")
+      ]
+    }]
+  });
+
+  assert.deepEqual(result.sceneEventAssociationTransitions,[
+    {
+      fromSceneIndex:1,toSceneIndex:2,eventId:"alarm",label:"Suena la alarma",
+      status:"evidence-in-both-scenes",
+      previousEvidenceRangeCount:1,nextEvidenceRangeCount:2,evidenceRangeCountDelta:1,
+      participants:[
+        {
+          entityId:"ana",previousMentionedByName:true,nextMentionedByName:false,
+          status:"mentioned-only-in-previous-scene"
+        },
+        {
+          entityId:"bruno",previousMentionedByName:true,nextMentionedByName:false,
+          status:"mentioned-only-in-previous-scene"
+        }
+      ]
+    },
+    {
+      fromSceneIndex:2,toSceneIndex:3,eventId:"alarm",label:"Suena la alarma",
+      status:"evidence-only-in-previous-scene",
+      previousEvidenceRangeCount:2,nextEvidenceRangeCount:0,evidenceRangeCountDelta:-2,
+      participants:[
+        {
+          entityId:"ana",previousMentionedByName:false,nextMentionedByName:null,
+          status:"no-event-evidence-in-next-scene"
+        },
+        {
+          entityId:"bruno",previousMentionedByName:false,nextMentionedByName:null,
+          status:"no-event-evidence-in-next-scene"
+        }
+      ]
+    }
+  ]);
+});
+
 test("la API publica comparaciones de continuidad con evidencia narrativa persistida", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({store});

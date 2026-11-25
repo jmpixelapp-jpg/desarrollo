@@ -595,7 +595,7 @@
         "project/dictionary-entries/related-entities/"
       ],
       "representation": "embedded",
-      "contract": "DictionaryEntry.relatedEntityIds; vínculos confirmados y validados en la misma transacción que la entrada.",
+      "contract": "DictionaryEntryRecord.relatedEntityIds; vínculos confirmados y validados en la misma transacción que la entrada.",
       "implementationStatus": "implemented",
       "objectStores": [
         "dictionary-entries",
@@ -662,10 +662,19 @@
       "keyPrefixes": [
         "writer/finalization-receipts/"
       ],
-      "representation": "archive",
-      "contract": "La transferencia de ideas es transaccional; falta persistir un recibo idempotente independiente.",
-      "implementationStatus": "partial",
-      "objectStores": []
+      "representation": "record",
+      "contract": "StoredProjectFinalizationReceipt; recibo idempotente con checksum, archivadoIdeaIds y escritura atómica junto a la transferencia.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "writer-library-finalization-receipts"
+      ],
+      "keyPath": [
+        [
+          "writerId",
+          "sourceProjectId",
+          "receiptId"
+        ]
+      ]
     }
   ]
 }

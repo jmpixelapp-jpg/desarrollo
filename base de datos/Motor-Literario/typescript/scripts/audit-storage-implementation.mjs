@@ -132,8 +132,11 @@ export function auditStorageImplementation(mapping, runtimeSource) {
         add("DUPLICATE_RUNTIME_STORE_DESCRIPTOR", `El almacén "${descriptor.name}" está definido más de una vez.`);
       }
       describedStores.add(descriptor.name);
-      if (!mappedStores.has(descriptor.name)) {
-        add("UNMAPPED_RUNTIME_STORE_DESCRIPTOR", `El almacén "${descriptor.name}" está definido físicamente pero ninguna tabla lo referencia.`);
+      const constantName = constantsByStore.get(descriptor.name);
+      if (!constantName) {
+        add("RUNTIME_DESCRIPTOR_CONSTANT_MISSING", `El almacén "${descriptor.name}" no tiene constante en el adaptador.`);
+      } else if (!createdConstants.has(constantName)) {
+        add("RUNTIME_DESCRIPTOR_CREATION_MISSING", `El almacén "${descriptor.name}" está definido en el manifiesto pero no se crea con createObjectStore.`);
       }
     }
     for (const storeName of mappedStores) {
@@ -165,9 +168,9 @@ async function main() {
   const implementedTables = mapping.entries.filter(
     (entry) => entry.table !== "projects" && entry.implementationStatus === "implemented"
   ).length;
-  const physicalStores = new Set(mapping.entries.flatMap((entry) => entry.objectStores ?? [])).size;
+  const physicalStores = mapping.runtime.object_stores.length;
   console.log(
-    `Auditoría física correcta: ${implementedTables} tablas del motor y ${physicalStores} almacenes IndexedDB declarados, definidos y creados. projects permanece bajo responsabilidad del anfitrión.`
+    `Auditoría física correcta: ${implementedTables} tablas del motor y ${physicalStores} almacenes IndexedDB definidos y creados. projects permanece bajo responsabilidad del anfitrión.`
   );
 }
 

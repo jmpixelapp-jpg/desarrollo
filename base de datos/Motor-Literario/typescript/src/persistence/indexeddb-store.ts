@@ -3565,7 +3565,7 @@ export class IndexedDbProjectStore implements ProjectStore {
   ): Promise<readonly PersonalIdeaLibraryEntry[]> {
     return this.archiveUnincorporatedIdeasInternal(
       projectId, writerId, sourceProjectName, archivedAt, true
-    ) as Promise<readonly PersonalIdeaLibraryEntry[]>;
+    ) as unknown as Promise<readonly PersonalIdeaLibraryEntry[]>;
   }
 
   async archiveUnincorporatedIdeasSummary(
@@ -3584,7 +3584,7 @@ export class IndexedDbProjectStore implements ProjectStore {
   }> {
     return this.archiveUnincorporatedIdeasInternal(
       projectId, writerId, sourceProjectName, archivedAt, false
-    ) as Promise<{
+    ) as unknown as Promise<{
       writerId: string;
       sourceProjectId: string;
       sourceProjectName: string;

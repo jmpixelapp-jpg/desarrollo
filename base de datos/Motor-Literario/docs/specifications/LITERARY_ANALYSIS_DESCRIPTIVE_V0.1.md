@@ -66,3 +66,9 @@ La API anfitriona aporta acontecimientos persistidos del proyecto activo. Una es
 La propiedad `sceneContinuity` compara cada par de escenas explícitas consecutivas del fragmento, sin saltar escenas ni inferir transiciones implícitas. Para cada identidad conocida devuelve los rangos de mención en ambas escenas y clasifica la señal como mencionada en ambas, no mencionada en la siguiente o mencionada solo en la siguiente. Para cada acontecimiento con evidencia enlazada devuelve sus rangos de evidencia por escena y si esa evidencia aparece en ambas o solo en una de ellas. Las listas se ordenan por ID y los offsets siguen siendo absolutos UTF-16.
 
 Estas etiquetas describen exclusivamente la cobertura textual disponible. «No mencionado en la siguiente escena» no significa que el personaje esté ausente, haya abandonado el lugar o haya desaparecido de la historia. Del mismo modo, evidencia exclusiva en una escena no demuestra que el acontecimiento termine allí, ni establece orden cronológico entre acontecimientos. Los pares se limitan a las escenas explícitas contiguas y no generan juicios de contradicción ni modifican el manuscrito.
+
+### Co-mención de personajes conocidos
+
+La propiedad `characterCoMentions` agrupa pares de identidades del catálogo cuyos nombres o alias no ambiguos aparecen literalmente dentro de una misma escena explícita. Cada patrón contiene los dos IDs en orden estable, la cantidad de escenas compartidas y sus índices. Los resultados se ordenan por frecuencia descendente y después por IDs, y se limitan a los 100 pares más frecuentes.
+
+La co-mención describe únicamente una coincidencia textual en la misma escena. No acredita que los personajes se encuentren físicamente, interactúen, conversen, mantengan una relación ni compartan el punto de vista narrativo. La evidencia de cada mención permanece disponible en `explicitScenes` para inspección.

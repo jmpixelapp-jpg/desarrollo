@@ -9960,6 +9960,11 @@ test("la API relaciona personajes del proyecto con escenas por nombre y alias", 
     canonicalName:"Ana",normalizedName:"ana",aliases:["La viajera"],evidence:[],
     firstSeenAt:1,lastSeenAt:1,extractionVersion:1
   });
+  await store.saveEntity({
+    projectId:"scene-entity-integration",id:"luis",kind:"character",
+    canonicalName:"Luis",normalizedName:"luis",aliases:[],evidence:[],
+    firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
   const text = "ESCENA: Estación\nLa viajera llegó. Ana saludó a Luis.";
   await api.openDocument({documentId:"chapter",text,revision:0,sequence:0});
   const result = await api.analyzeLiteraryDocument("chapter");
@@ -9967,6 +9972,9 @@ test("la API relaciona personajes del proyecto con escenas por nombre y alias", 
   assert.equal(result.explicitScenes[0].characterMentions.length,1);
   assert.equal(result.explicitScenes[0].characterMentions[0].entityId,"ana");
   assert.deepEqual(result.explicitScenes[0].characterMentions[0].matchedNames,["La viajera","Ana"]);
+  assert.deepEqual(result.characterCoMentions[0],{
+    characterIds:["ana","luis"],sharedSceneCount:1,sceneIndexes:[1]
+  });
   assert.equal(api.getSnapshot("chapter").text,text);
 });
 
@@ -10198,6 +10206,33 @@ test("vincula acontecimientos a escenas solo con evidencia de la misma revisión
   ]);
   assert.deepEqual(result.explicitScenes[1].eventLinks,[]);
   assert.ok(result.explicitScenes[0].eventLinks[0].matchingEvidence[0].start >= 400);
+});
+
+test("agrega patrones de co-mención de personajes por escena sin inferir relaciones", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "Ana encontró a Bruno.",
+    "***",
+    "ESCENA 2",
+    "Bruno habló con Ana.",
+    "***",
+    "ESCENA 3",
+    "Ana saludó a Carla."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"character-co-mentions",documentId:"chapter",revision:3,text,
+    knownCharacters:[
+      {entityId:"ana",canonicalName:"Ana"},
+      {entityId:"bruno",canonicalName:"Bruno"},
+      {entityId:"carla",canonicalName:"Carla"}
+    ]
+  });
+
+  assert.deepEqual(result.characterCoMentions,[
+    {characterIds:["ana","bruno"],sharedSceneCount:2,sceneIndexes:[1,2]},
+    {characterIds:["ana","carla"],sharedSceneCount:1,sceneIndexes:[3]}
+  ]);
 });
 
 test("compara señales literales entre escenas explícitas contiguas sin inferir ausencias", async () => {

@@ -179,6 +179,12 @@ export interface LiterarySceneContinuityTransition {
   readonly characterSignals: readonly LiterarySceneCharacterContinuitySignal[];
   readonly eventSignals: readonly LiterarySceneEventContinuitySignal[];
 }
+export interface LiteraryCharacterCoMentionPattern {
+  /** IDs de dos personajes conocidos, ordenados de forma estable. */
+  readonly characterIds: readonly [string, string];
+  readonly sharedSceneCount: number;
+  readonly sceneIndexes: readonly number[];
+}
 export interface LiteraryExplicitSceneSegment {
   readonly sceneIndex: number;
   readonly markerType: "scene-heading" | "scene-divider";
@@ -204,6 +210,8 @@ export interface LiteraryAnalysisResult {
   readonly explicitScenes: readonly LiteraryExplicitSceneSegment[];
   /** Comparaciones descriptivas entre escenas explícitas contiguas, nunca diagnósticos de contradicción. */
   readonly sceneContinuity: readonly LiterarySceneContinuityTransition[];
+  /** Pares de personajes mencionados en las mismas escenas; no implica interacción o relación. */
+  readonly characterCoMentions: readonly LiteraryCharacterCoMentionPattern[];
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -645,6 +653,45 @@ function buildSceneContinuity(
   return transitions;
 }
 
+function findCharacterCoMentionPatterns(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiteraryCharacterCoMentionPattern[] {
+  const groups = new Map<string,{
+    readonly characterIds: readonly [string,string];
+    sceneIndexes: number[];
+  }>();
+  for (const scene of scenes) {
+    const entityIds = [...new Set(
+      scene.characterMentions.map(mention => mention.entityId)
+    )].sort((a,b) => a.localeCompare(b,"en"));
+    for (let left = 0; left < entityIds.length; left++) {
+      for (let right = left + 1; right < entityIds.length; right++) {
+        const first = entityIds[left]!;
+        const second = entityIds[right]!;
+        const key = JSON.stringify([first,second]);
+        const group = groups.get(key) ?? {
+          characterIds:[first,second] as const,
+          sceneIndexes:[]
+        };
+        group.sceneIndexes.push(scene.sceneIndex);
+        groups.set(key,group);
+      }
+    }
+  }
+  return [...groups.values()]
+    .sort((a,b) =>
+      b.sceneIndexes.length-a.sceneIndexes.length ||
+      a.characterIds[0].localeCompare(b.characterIds[0],"en") ||
+      a.characterIds[1].localeCompare(b.characterIds[1],"en")
+    )
+    .slice(0,100)
+    .map(group => ({
+      characterIds:group.characterIds,
+      sharedSceneCount:group.sceneIndexes.length,
+      sceneIndexes:[...group.sceneIndexes]
+    }));
+}
+
 function mergeRanges(ranges: readonly LocalRange[]): LocalRange[] {
   const ordered = [...ranges].filter(range => range.end > range.start)
     .sort((a,b) => a.start - b.start || a.end - b.end);
@@ -938,6 +985,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.knownEvents ?? [],input.documentId,input.revision
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
+  const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
   const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
@@ -1112,6 +1160,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     structuralMarkers,
     explicitScenes,
     sceneContinuity,
+    characterCoMentions,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),
@@ -1125,6 +1174,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La presencia de personajes se basa en nombres y alias literales no ambiguos del catálogo del proyecto; no implica que el personaje actúe, hable o sea el punto de vista de la escena.",
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",
       "La continuidad compara solo escenas explícitas contiguas: las menciones literales y la evidencia por ID de acontecimiento describen cobertura textual, no presencia física, cronología ni contradicciones.",
+      "La co-mención agrupa nombres de personajes conocidos que aparecen en una misma escena explícita; no demuestra interacción, relación, diálogo ni presencia física compartida.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",

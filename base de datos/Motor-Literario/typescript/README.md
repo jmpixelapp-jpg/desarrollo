@@ -262,3 +262,11 @@ Las referencias de recursos conservan el ID de la base local, tipo, versión de 
 
 API: `getLanguageProfiles()`, `saveLanguageProfile()`, `getLanguageResourceRefs()` y `saveLanguageResourceRef()`.
 
+
+
+### Perfiles de estilo y pistas cronológicas
+
+Los perfiles de estilo se guardan por proyecto con nombre, procedencia y datos JSON estructurados. Las pistas cronológicas guardan nombre, tipo, procedencia y reglas JSON declarativas. Ambos almacenes usan la clave compuesta `projectId` + ID, índices por proyecto y nombre, validación del contenido y actualización optimista para impedir que una instancia antigua sobrescriba silenciosamente datos modificados por otra.
+
+La API del anfitrión ofrece `getStyleProfiles`, `saveStyleProfile`, `getTimelineTracks` y `saveTimelineTrack`. Los datos permanecen locales en IndexedDB y aislados entre libros. La base local se encuentra en la versión 16.
+

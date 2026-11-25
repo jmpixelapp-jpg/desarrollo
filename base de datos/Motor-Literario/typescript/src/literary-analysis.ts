@@ -1,6 +1,7 @@
 import type { NarrativeAssertion } from "./narrative-history";
-import type {
-  NarrativeTimeReference, NarrativeRelation, NarrativeIdea, NarrativeIdeaStatusChange
+import {
+  MAX_NARRATIVE_IDEA_REFERENCES,
+  type NarrativeTimeReference, type NarrativeRelation, type NarrativeIdea, type NarrativeIdeaStatusChange
 } from "./narrative-knowledge";
 import { validateEventLifecycle, type EventLifecycle } from "./project-data";
 
@@ -5150,7 +5151,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         typeof idea.ideaId !== "string" || !idea.ideaId.trim() ||
         projectIdeaIds.has(idea.ideaId) ||
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
-        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
+        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
         idea.relatedIdeaIds.includes(idea.ideaId) ||
@@ -5177,7 +5178,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
         typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
         typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||
-        !Array.isArray(idea.relatedEntityIds) || idea.relatedEntityIds.length > 500 ||
+        !Array.isArray(idea.relatedEntityIds) || idea.relatedEntityIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedEntityIds.some((id: string) => typeof id !== "string" || !knownCharacterIds.has(id)) ||
         new Set(idea.relatedEntityIds).size !== idea.relatedEntityIds.length ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||

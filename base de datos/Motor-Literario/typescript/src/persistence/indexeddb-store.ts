@@ -843,9 +843,12 @@ function assertExpectedNarrativeVersion<T extends { readonly projectId: string; 
     }
     return;
   }
-  if (!current || current.projectId !== record.projectId || current.id !== record.id ||
+  if (!current) {
+    throw new Error(`${label} ya no existe en el proyecto; puede haberse archivado o eliminado desde otra instancia.`);
+  }
+  if (current.projectId !== record.projectId || current.id !== record.id ||
       JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
-    throw new Error(`${label} cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarlo.`);
+    throw new Error(`${label} cambió en otra instancia; actualiza la vista antes de volver a modificarlo.`);
   }
 }
 
@@ -940,8 +943,8 @@ async function saveNarrativeRecordWithEntityReferences<T extends { readonly proj
             available.add(entity.id);
           }
         }
-      } catch (error) {
-        abort(error);
+      } catch {
+        abort();
         return;
       }
       if (requiredIds.some(id => !available.has(id))) {

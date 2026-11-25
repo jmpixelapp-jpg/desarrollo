@@ -700,6 +700,7 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
     ]
   });
 
+  assert.equal(result.eventDependencyAnalysis.candidateCount, 1);
   const trajectories = result.characterNarrativeTrajectories.trajectories;
   const ana = trajectories.find(item => item.entityId === "ana-id");
   const bruno = trajectories.find(item => item.entityId === "bruno-id");

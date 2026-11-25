@@ -32,4 +32,4 @@ La auditoría es estática y complementa —no sustituye— las pruebas de compo
 
 ## Estado comprobado
 
-En la verificación de esta revisión, las 24 tablas propiedad del motor estaban marcadas `implemented`; los 31 almacenes físicos declarados tenían constantes y llamadas de creación en el adaptador. El último flujo de CI de `main` ejecutó correctamente el typecheck, las pruebas automatizadas y el benchmark de edición en vivo.
+En la inspección estática de los archivos actuales, las 24 tablas propiedad del motor están marcadas `implemented`; los 31 almacenes tienen constantes, `keyPath` e índices coincidentes con el adaptador. Esta comprobación no equivale a ejecutar `npm test`: el CI del último commit todavía debe confirmar typecheck, pruebas automatizadas y benchmark.

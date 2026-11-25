@@ -199,7 +199,8 @@ El anfitrión puede conectar su fuente nativa de cambios mediante bindLiveAuthor
 
 - Llama a HostEngineApi.onEditorChange exactamente una vez por delta.
 - Devuelve el resultado queued o rejected a onAdmission. El enlace conserva automáticamente los rechazos y puede reintentarlos en FIFO mediante retryPending o subscribeRetrySignal.
-- Informa excepciones a onError y deja al anfitrión la política de recuperación.
+- Publica transiciones de contrapresión mediante onBackpressure: estado clear/backpressured, cantidad pendiente, primera/última secuencia y causa (queue_full, rejected o sink_error). Cada snapshot es inmutable y no contiene texto del manuscrito.
+- Informa excepciones de envío a onError y deja al anfitrión la política de recuperación. Los errores de la callback visual onBackpressure quedan aislados para no interrumpir la escritura.
 - No registra eventos manuales adicionales en LiveAuthorMonitor, porque HostEngineApi ya incorpora admisiones y commits.
 
 ensureLiveAuthorMonitorDocument(documentId) restaura una sesión de observabilidad que se cerró mientras el documento del motor seguía abierto. Devuelve la sesión existente si ya está activa; en caso contrario, utiliza el snapshot actual del motor. Rechaza si el documento tiene cambios pendientes (pendingSequence !== sequence) o necesita resincronización. La integración con la pestaña activa usa este método automáticamente si la sesión no existe.
@@ -215,6 +216,7 @@ const authorMonitor = mountLiveAuthorMonitorTextArea({
   element: editorTextArea,
   documentId,
   hostApi: api,
+  onBackpressure: state => renderEditorQueueState(state),
   onAdmission: (change, admission) => {
     if (admission.status === "rejected" && admission.reason !== "queue_full") {
       reportEditorSynchronizationError(admission, change);
@@ -241,6 +243,7 @@ El montaje:
 - Asegura una sesión de métricas para el documento cuando todavía no existe.
 - Envía cada delta una sola vez a `HostEngineApi.onEditorChange`; las admisiones y commits se registran automáticamente.
 - Escucha `subscribeLiveAuthorMonitor` para reintentar automáticamente el backlog FIFO cuando el motor publica nuevas métricas.
+- `onBackpressure` permite actualizar un indicador visual sin consultar ni almacenar el manuscrito. Informa `status`, `pendingCount`, `firstPendingSequence`, `lastPendingSequence` y `reason`; al vaciarse la cola emite `{ status: "clear", pendingCount: 0 }`.
 - En `queue_full`, conserva el delta rechazado y todos los siguientes. Si otra señal encuentra todavía la cola llena, no elimina ni reordena nada.
 - Suspende la fuente ante rechazos no recuperables o entradas ambiguas.
 - `resynchronize()` exige que el motor no tenga cambios pendientes ni necesite resincronización, que el textarea coincida con el snapshot autoritativo y que las métricas puedan reconciliarse; solo entonces elimina el backlog antiguo.

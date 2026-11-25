@@ -119,3 +119,30 @@ test("la API rechaza un recibo de finalización con checksum alterado", async ()
   );
   api.dispose();
 });
+
+
+test("el recibo usa el mismo orden de IDs que el checksum en todos los idiomas", async () => {
+  const receipt = {
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: projectName,
+    finalizedAt: 100,
+    archivedIdeaIds: ["A", "a"],
+    archiveChecksum: checksum(["A", "a"])
+  };
+  const store = {
+    async loadProjectFinalizationReceipt() { return structuredClone(receipt); }
+  };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName, writerId });
+  const accepted = await api.getProjectFinalizationReceipt();
+  assert.deepEqual(accepted?.archivedIdeaIds, ["A", "a"]);
+
+  receipt.archivedIdeaIds = ["a", "A"];
+  await assert.rejects(
+    () => api.getProjectFinalizationReceipt(),
+    /checksum es inválido/
+  );
+  api.dispose();
+});

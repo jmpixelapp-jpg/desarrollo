@@ -1605,19 +1605,40 @@ export class HostEngineApi {
         ? localizedOrder
         : left.id === right.id ? 0 : left.id < right.id ? -1 : 1;
     });
+    const linkedIdeas = orderedProjectIdeas
+      .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)));
+    const knownIdeasOmittedCount=Math.max(0,linkedIdeas.length-2_000);
+    const knownLinkedIdeaIds = new Set(
+      linkedIdeas.slice(0,2_000).map(idea => idea.id)
+    );
+    const projectIdeaSnapshot = orderedProjectIdeas.slice(0,2_000);
+    // Las ideas enlazadas ya transfieren su texto en knownIdeas para las
+    // trayectorias; no se vuelve a copiar ese texto al catálogo global.
+    let lexicalTextUnitCount = projectIdeaSnapshot.reduce(
+      (total,idea) => total + (
+        knownLinkedIdeaIds.has(idea.id) ? idea.text.length : 0
+      ),
+      0
+    );
     const knownProjectIdeasOmittedCount = projectIdeaCatalogAvailable
       ? Math.max(0,orderedProjectIdeas.length-2_000)
       : 0;
     const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] | undefined =
-      projectIdeaCatalogAvailable ? orderedProjectIdeas.slice(0,2_000).map(idea => {
+      projectIdeaCatalogAvailable ? projectIdeaSnapshot.map(idea => {
         const activeEvidence = idea.evidence.filter(evidence => evidence.status !== "stale");
         const statusHistory = idea.statusHistory ?? [
           {status:idea.status,reason:"initial" as const}
         ];
+        const includeLexicalText = knownLinkedIdeaIds.has(idea.id)
+          ? false
+          : lexicalTextUnitCount + idea.text.length <= 2_000_000;
+        if (includeLexicalText) lexicalTextUnitCount += idea.text.length;
         return {
           projectId:idea.projectId,
           ideaId:idea.id,
-          text:idea.text,
+          ...(includeLexicalText ? {text:idea.text} : {}),
+          ...(!knownLinkedIdeaIds.has(idea.id) && !includeLexicalText
+            ? {textOmitted:"budget" as const} : {}),
           status:idea.status,
           relatedIdeaIds:idea.relatedIdeaIds ?? [],
           evidenceCount:activeEvidence.length,
@@ -1627,9 +1648,6 @@ export class HostEngineApi {
           omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
         };
       }) : undefined;
-    const linkedIdeas = orderedProjectIdeas
-      .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)));
-    const knownIdeasOmittedCount=Math.max(0,linkedIdeas.length-2_000);
     const knownIdeas=linkedIdeas.slice(0,2_000).map(idea => {
       const activeEvidence=idea.evidence.filter(evidence => evidence.status !== "stale");
       const statusHistory=idea.statusHistory ?? [{status:idea.status,reason:"initial" as const}];

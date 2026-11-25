@@ -2706,7 +2706,7 @@ test("el grafo detecta convergencia indirecta a través de ramas distintas", () 
   });
   const graph = analyzeLiteraryFragment({
     projectId, documentId: "chapter-diamond", revision: 1,
-    text: "Escena 1\\nUna bifurcación vuelve a converger.",
+    text: "Escena 1\nUna bifurcación vuelve a converger.",
     knownProjectIdeas: [
       makeIdea("root", ["left", "right"]),
       makeIdea("left", ["shared"]),

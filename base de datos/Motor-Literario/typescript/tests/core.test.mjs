@@ -12875,8 +12875,14 @@ test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas
   ];
   let transaction;
   let seekCalls = 0;
+  let libraryVersion = 4;
   const database = {
     onversionchange: null,
+    objectStoreNames: {
+      contains(name) {
+        return name === "personal-idea-library" || name === "writer-library-versions";
+      }
+    },
     close() {},
     transaction() {
       let pending = 0;
@@ -12929,6 +12935,31 @@ test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas
           queueMicrotask(() => transaction.onabort?.());
         },
         objectStore(name) {
+          if (name === "writer-library-versions") {
+            return {
+              get(key) {
+                assert.equal(key, writerId);
+                const request = {};
+                pending++;
+                completeQueued = false;
+                queueMicrotask(() => {
+                  request.result = { writerId, version: libraryVersion };
+                  request.onsuccess?.();
+                  pending--;
+                  if (pending === 0 && !completeQueued) {
+                    completeQueued = true;
+                    queueMicrotask(() => {
+                      if (pending === 0 && !completed) {
+                        completed = true;
+                        transaction.oncomplete?.();
+                      }
+                    });
+                  }
+                });
+                return request;
+              }
+            };
+          }
           assert.equal(name, "personal-idea-library");
           return {
             get(key) {
@@ -12987,12 +13018,35 @@ test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas
     const store = new IndexedDbProjectStore();
     const first = await store.loadPersonalIdeasPage(writerId, null, 2);
     assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
-    assert.deepEqual(first.nextCursor, { sourceProjectId: "book-pages", ideaId: "idea-b" });
+    assert.equal(first.libraryVersion, 4);
+    assert.deepEqual(first.nextCursor, {
+      sourceProjectId: "book-pages",
+      ideaId: "idea-b",
+      libraryVersion: 4
+    });
 
-    const second = await store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    // Simula una escritura confirmada desde otra pestaña mientras se navega.
+    libraryVersion = 5;
+    const stale = await store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(stale.items, []);
+    assert.equal(stale.nextCursor, null);
+    assert.equal(stale.libraryVersion, 5);
+    assert.equal(stale.restartRequired, true);
+    assert.equal(seekCalls, 0, "no recorre la biblioteca con un cursor de una generación antigua");
+
+    const restarted = await store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(restarted.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.equal(restarted.libraryVersion, 5);
+    assert.deepEqual(restarted.nextCursor, {
+      sourceProjectId: "book-pages",
+      ideaId: "idea-b",
+      libraryVersion: 5
+    });
+    const second = await store.loadPersonalIdeasPage(writerId, restarted.nextCursor, 2);
     assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
     assert.equal(second.nextCursor, null);
-    assert.equal(seekCalls, 1, "la segunda página salta directamente tras la clave compuesta del cursor");
+    assert.equal(second.libraryVersion, 5);
+    assert.equal(seekCalls, 1, "la página posterior salta a la clave compuesta del cursor vigente");
 
     const linked = await store.loadPersonalIdeasByKeys(writerId, [
       { sourceProjectId: "book-pages", ideaId: "idea-c" },

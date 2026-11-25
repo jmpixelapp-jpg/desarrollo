@@ -1283,7 +1283,7 @@ test("la resonancia léxica conserva la frecuencia de los motivos compartidos", 
   const ideas = [
     {
       projectId, id: "lexical-frequency-a",
-      text: "memoria memoria espejo espejo luz",
+      text: "memoria memoria espejo espejo luz sombra",
       status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
       evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
@@ -1317,8 +1317,13 @@ test("la resonancia léxica conserva la frecuencia de los motivos compartidos", 
     ]);
     assert.equal(
       lexical.resonances[0].frequencyWeightedJaccardSimilarity,
-      0.429
+      0.375
     );
+    assert.equal(lexical.resonances[0].leftVocabularyCoverage, 0.75);
+    assert.equal(lexical.resonances[0].rightVocabularyCoverage, 1);
+    assert.equal(lexical.resonances[0].leftFrequencyCoverage, 0.5);
+    assert.equal(lexical.resonances[0].rightFrequencyCoverage, 0.6);
+    assert.equal(lexical.resonances[0].frequencyCosineSimilarity, 0.667);
   } finally {
     api.dispose();
   }

@@ -3852,6 +3852,9 @@ export class HostEngineApi {
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
       ),
+      personalIdeaLibraryCompactFinalization: Boolean(
+        this.store.archiveUnincorporatedIdeasSummary && this.store.loadPersonalIdeasPage
+      ),
       personalIdeaLibraryPagedQuery: Boolean(this.store.loadPersonalIdeasPage),
       personalIdeaLibraryChangeNotifications: Boolean(
         this.store.subscribePersonalIdeaLibraryChanges || this.onPersonalIdeaLibraryChanged

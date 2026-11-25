@@ -155,6 +155,8 @@ class MemoryStore {
     const relationGroups = new Map();
     for (const [key, relation] of this.relations) {
       if (relation.projectId !== projectId) continue;
+      const originatedAtCanonical =
+        relation.fromEntityId === targetId || relation.toEntityId === targetId;
       const fromEntityId = relation.fromEntityId === sourceId ? targetId : relation.fromEntityId;
       const toEntityId = relation.toEntityId === sourceId ? targetId : relation.toEntityId;
       if (fromEntityId === toEntityId) {
@@ -163,15 +165,16 @@ class MemoryStore {
       }
       const groupKey = JSON.stringify([fromEntityId, relation.relationType, toEntityId]);
       const group = relationGroups.get(groupKey) ?? [];
-      group.push({ key, relation: { ...relation, fromEntityId, toEntityId } });
+      group.push({
+        key, relation: { ...relation, fromEntityId, toEntityId }, originatedAtCanonical
+      });
       relationGroups.set(groupKey, group);
     }
     for (const group of relationGroups.values()) {
-      group.sort((a, b) => {
-        const aCanonical = a.relation.fromEntityId === targetId || a.relation.toEntityId === targetId ? 0 : 1;
-        const bCanonical = b.relation.fromEntityId === targetId || b.relation.toEntityId === targetId ? 0 : 1;
-        return aCanonical - bCanonical || a.relation.id.localeCompare(b.relation.id);
-      });
+      group.sort((a, b) =>
+        Number(b.originatedAtCanonical) - Number(a.originatedAtCanonical) ||
+        a.relation.id.localeCompare(b.relation.id)
+      );
       const [primary, ...duplicates] = group;
       const evidence = new Map();
       for (const item of group.flatMap(value => value.relation.evidence)) {

@@ -104,7 +104,7 @@ test("invalida la caché al cambiar el alcance o la integridad del catálogo", (
     { ...idea("scope-a", "memoria espejo luz"), relatedIdeaIds: ["outside"] }
   ];
 
-  const fallback = analyzeGraph(ideas);
+  const fallback = analyzeGraph(ideas, { projectCatalog: false });
   assert.equal(fallback.catalogScope, "character-linked-fallback");
   assert.equal(fallback.projectCatalogComplete, false);
   assert.equal(fallback.missingFromProjectReferenceCount, 0);

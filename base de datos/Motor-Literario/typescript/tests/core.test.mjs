@@ -2548,7 +2548,7 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const names = [
     "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
-    "record-lifecycles", "relation-lifecycles", "project-settings", "documents", "changes",
+    "record-lifecycles", "relation-lifecycles", "event-lifecycles", "project-settings", "documents", "changes",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",

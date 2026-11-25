@@ -1,0 +1,371 @@
+# Guía de integración del Motor Literario con la aplicación anfitriona
+
+**Estado:** contrato vigente para integración TypeScript/JavaScript  
+**Versión de API:** `0.1.0` (`MOTOR_LITERARIO_API_VERSION`)  
+**Esquema lógico:** MLDB `0.4.1`  
+**Persistencia incluida:** IndexedDB `motor-literario-local`, versión `21`  
+**Punto de entrada público:** `typescript/src/index.ts`
+
+Esta guía describe cómo conectar el Motor Literario con el programa que crea los libros, administra usuarios y contiene el editor. La aplicación anfitriona conserva la propiedad de los proyectos, documentos y texto original. El motor recibe su identidad y los cambios del editor; devuelve confirmaciones, diagnósticos y conocimiento estructurado. Nunca reescribe el texto del anfitrión por iniciativa propia.
+
+## 1. Arquitectura y modalidad soportada
+
+La línea vigente del producto es TypeScript/JavaScript. El contrato de integración es la clase `HostEngineApi`, usando el adaptador `IndexedDbProjectStore` para persistencia local.
+
+La integración soportada actualmente consiste en importar el punto de entrada TypeScript del motor dentro del proceso/runtime JavaScript de la aplicación anfitriona, o incorporarlo a su compilación como módulo local. La API no observa el editor automáticamente: el anfitrión debe enviar cada cambio mediante `onEditorChange()`.
+
+**No usar como contrato vigente el documento JSON-RPC histórico.** `specifications/HOST_JSONRPC_PROTOCOL_V0.1.md` describe un prototipo anterior en Rust, con almacenamiento y offsets distintos. No es un transporte implementado para la línea TypeScript actual. Si ambos programas deben ejecutarse en procesos separados, hace falta diseñar e implementar un puente IPC/API sobre este contrato TypeScript; no se debe conectar el anfitrión al protocolo Rust suponiendo que sea equivalente.
+
+### Distribución del módulo
+
+El punto de entrada público es `typescript/src/index.ts`. Expone `HostEngineApi`, `IndexedDbProjectStore`, `MOTOR_LITERARIO_API_VERSION` y los contratos tipados.
+
+El paquete TypeScript del repositorio sigue marcado como privado (`private: true`) y no declara todavía metadatos de publicación, `exports` ni un paquete npm distribuible. El build genera el módulo ESM de Vite en `typescript/dist/motor-literario.js`, pero el script actual no genera declaraciones `.d.ts`. Por eso, para conservar el tipado en la primera integración, se recomienda incluir el directorio `typescript/src/` en la compilación del anfitrión (por ejemplo, mediante un alias o dependencia local al repositorio) y apuntar siempre a `src/index.ts`. No instalar `motor-literario-core` desde npm: no es un paquete publicado.
+
+## 2. Responsabilidades de cada programa
+
+| Responsabilidad | Aplicación anfitriona | Motor Literario |
+|---|---|---|
+| Crear, nombrar y eliminar un proyecto | Responsable | Recibe `projectId` y `projectName`; no crea la identidad |
+| Autenticar al escritor | Responsable | Recibe el `writerId` estable cuando se integra |
+| Crear y nombrar documentos | Responsable | Recibe el `documentId` |
+| Contener y mostrar el manuscrito | Autoridad del texto | Mantiene una sesión y una copia local recuperable |
+| Detectar cada edición | Envía el delta del editor | Lo admite, valida, persiste y analiza |
+| Aplicar cambios al manuscrito | Responsable | No escribe sobre el editor ni cambia el texto original |
+| Mostrar diagnósticos | Responsable | Devuelve diagnósticos asociados a una revisión concreta |
+| Conservar conocimiento narrativo | Puede consultarlo y presentarlo | Extrae y persiste registros aislados por proyecto |
+| Copias de seguridad y restauración del programa | Responsable | No expone aún una API pública completa de backup/restore |
+
+El anfitrión debe usar la misma identidad externa de proyecto en todas las llamadas de un libro. No debe crear un proyecto paralelo en la base del motor.
+
+## 3. Inicialización
+
+Crear una instancia de `HostEngineApi` por proyecto/libro activo. La identidad de una instancia es inmutable: para abrir otro libro, incluso del mismo escritor, se crea otra instancia. No se debe reutilizar una instancia cambiando su `projectId`.
+
+Ejemplo de integración (los objetos `hostProject`, `authenticatedUser` y `hostEditor` representan servicios propios de la aplicación anfitriona):
+
+```ts
+import {
+  HostEngineApi,
+  IndexedDbProjectStore,
+  MOTOR_LITERARIO_API_VERSION
+} from "./ruta-local/Motor-Literario/typescript/src/index";
+
+const motor = new HostEngineApi({
+  store: new IndexedDbProjectStore(),
+  // Opcionales; estos son también los valores predeterminados.
+  queueCapacity: 256,
+  maxConcurrentDocuments: 2,
+  maxQueuedTextUnits: 4_194_304,
+  callbacks: {
+    onAnalysis(result) {
+      // Mostrar solo si el editor todavía está en esa revisión.
+      if (hostEditor.getRevision(result.documentId) === result.revision) {
+        hostEditor.setDiagnostics(result.documentId, result.diagnostics);
+      }
+    },
+    onCommit(result) {
+      hostEditor.handleMotorCommit(result);
+    },
+    onKnowledgeError(error) {
+      hostEditor.reportBackgroundEngineError(error);
+    }
+  }
+});
+
+if (MOTOR_LITERARIO_API_VERSION !== "0.1.0") {
+  throw new Error("Versión de API del Motor Literario no reconocida.");
+}
+
+motor.initializeProject({
+  projectId: hostProject.id,
+  projectName: hostProject.title,
+  writerId: authenticatedUser.stableWriterId
+});
+```
+
+Reglas de identidad:
+
+- `projectId`: ID estable que ya asigna el programa anfitrión al libro.
+- `projectName`: título vigente suministrado por el anfitrión; se conserva como procedencia cuando se archivan ideas.
+- `writerId`: ID estable del escritor autenticado, no el nombre visible ni un valor enviado libremente desde la interfaz. Es opcional para las funciones generales, pero obligatorio para usar la biblioteca personal de ideas y la finalización de un libro.
+- `documentId`: ID estable que asigna el anfitrión a cada documento o capítulo.
+
+No se deben derivar estas identidades del título, nombre de usuario, ruta del archivo ni texto del manuscrito.
+
+### Entorno de persistencia
+
+`IndexedDbProjectStore` requiere que exista IndexedDB en el runtime. La base se abre de forma diferida y aplica las migraciones al abrirla. En el navegador, IndexedDB pertenece al origen y al perfil local donde corre la aplicación; no es una base compartida entre dominios, perfiles o dispositivos. El anfitrión no debe modificar directamente los almacenes internos ni duplicar sus migraciones.
+
+Si el anfitrión no corre en un entorno con IndexedDB, necesita implementar un adaptador completo que cumpla `ProjectStore` y sus garantías transaccionales antes de sustituir `IndexedDbProjectStore`. No se debe conectar una base remota o un servicio externo sin una decisión de arquitectura y privacidad expresa.
+
+## 4. Apertura y recuperación de documentos
+
+El anfitrión mantiene el snapshot autoritativo del editor: texto completo, revisión y secuencia. En una apertura normal, envía ese snapshot:
+
+```ts
+await motor.openDocument({
+  documentId: hostDocument.id,
+  text: hostDocument.text,
+  revision: hostDocument.revision,
+  sequence: hostDocument.sequence
+});
+```
+
+El motor lee el snapshot durable y el journal desde una vista transaccional consistente. Si el snapshot coincide con la base guardada, reproduce los deltas durables posteriores en orden. Si el anfitrión entrega una copia más reciente válida, esa copia puede convertirse en la nueva base. El motor rechaza snapshots regresivos, contadores desalineados o cambios de texto que reutilicen la misma revisión y secuencia.
+
+Cuando el programa anfitrión no dispone de su snapshot pero quiere recuperar la última sesión local, puede usar:
+
+```ts
+await motor.recoverDocument(hostDocumentId);
+const recovered = motor.getSnapshot(hostDocumentId);
+if (recovered) {
+  // El anfitrión decide cómo incorporar esta recuperación a su editor
+  // y a su propio mecanismo de guardado.
+  hostEditor.restoreDocument(recovered);
+}
+```
+
+`recoverDocument()` necesita que exista un snapshot durable base. Si solo hay deltas sin snapshot base, o el journal está corrupto/discontinuo, la recuperación falla de forma conservadora y conserva los datos en conflicto. En ese caso el anfitrión debe resolver la situación y reenviar un snapshot autoritativo válido mediante `openDocument()`; no debe borrar la base ni reiniciar revisión/secuencia a cero para forzar la apertura.
+
+Al abrir o recuperar un documento, el motor restaura los diagnósticos de la revisión y programa la extracción narrativa inicial en segundo plano. `flushPendingChanges()` permite esperar también a ese trabajo pendiente.
+
+## 5. Contrato obligatorio de edición en vivo
+
+La prioridad de integración es el flujo de cambios del editor. Cada operación enviada representa un solo reemplazo de rango:
+
+```ts
+interface EditorChange {
+  documentId: string;
+  sequence: number;
+  baseRevision: number;
+  start: number;
+  end: number;
+  replacement: string;
+}
+```
+
+**Los offsets `start` y `end` son unidades UTF-16**, como los índices de JavaScript y muchos editores web. No son bytes UTF-8, puntos de código Unicode, columnas visuales ni índices de grafemas. No convertirlos a bytes antes de llamar al motor.
+
+Cada cambio confirmado incrementa `revision` y `sequence` en uno. Para construir la siguiente operación, usar el estado de sincronización que entrega el propio motor:
+
+```ts
+function sendReplacement(
+  documentId: string,
+  start: number,
+  end: number,
+  replacement: string
+) {
+  const sync = motor.getDocumentSyncState(documentId);
+
+  if (sync.needsResync) {
+    hostEditor.pauseMotorSubmission(documentId);
+    hostEditor.requestAuthoritativeResync(documentId);
+    return;
+  }
+
+  const change = {
+    documentId,
+    sequence: sync.pendingSequence + 1,
+    baseRevision: sync.revision + (sync.pendingSequence - sync.sequence),
+    start,
+    end,
+    replacement
+  };
+
+  const admission = motor.onEditorChange(change);
+
+  if (admission.status === "queued") {
+    hostEditor.markMotorChangeQueued(documentId, admission.ticketId);
+    return;
+  }
+
+  // No descartar el delta rechazado. Mantenerlo junto con los posteriores
+  // y reintentarlo en orden cuando el motivo permita continuar.
+  hostEditor.retainMotorChange(documentId, change, admission.reason);
+}
+```
+
+Los rangos de una operación deben corresponder al texto que resulta de las operaciones anteriores ya aceptadas para ese documento. El cálculo anterior obtiene la próxima secuencia y revisión base de la cola local del motor, incluso cuando hay cambios anteriores pendientes.
+
+### Admisión y contrapresión
+
+`onEditorChange()` es síncrono y no espera a IndexedDB. Devuelve una de estas respuestas:
+
+| Respuesta | Significado | Acción del anfitrión |
+|---|---|---|
+| `{ status: "queued", ticketId }` | Aceptado en la cola; todavía no significa que la persistencia haya terminado | Conservar la relación ticket/cambio y esperar `onCommit` |
+| `queue_full` | Cola o presupuesto agregado temporalmente ocupado | Retener el cambio y reintentar el mismo cambio antes de enviar los posteriores |
+| `change_too_large` | El reemplazo supera el presupuesto individual | Retenerlo y manejarlo de forma explícita; no descartarlo |
+| `unknown_document` | El documento no está abierto en esta instancia | Abrir/recuperar el documento y luego volver a sincronizar |
+| `invalid_change` | Campos, rangos, secuencia o revisión no válidos | Corregir el contrato o reconstruir el delta; no reintentar sin cambios |
+| `resync_required` | El documento necesita una base autoritativa nueva | Detener el envío de deltas y ejecutar el procedimiento de resincronización |
+
+Cuando una edición recibe `queue_full`, el motor no la incorpora ni avanza `pendingSequence`. El anfitrión debe conservarla y reintentarla antes de cualquier operación posterior del mismo documento. Puede aplicar contrapresión temporal al editor o mantener una cola propia ordenada. Nunca debe descartar silenciosamente una edición ni enviar una secuencia posterior dejando un hueco.
+
+Valores predeterminados de admisión: `queueCapacity = 256`, `maxConcurrentDocuments = 2` (configurable de 1 a 8) y `maxQueuedTextUnits = 4.194.304` unidades UTF-16 de texto de reemplazo pendiente. Los cambios de un mismo documento se aplican FIFO; documentos distintos pueden avanzar en paralelo hasta el límite configurado.
+
+### Confirmación durable
+
+La aceptación `queued` no es confirmación de guardado. La persistencia del delta ocurre antes de que el motor informe `status: "applied"` en `onCommit`.
+
+```ts
+callbacks: {
+  onCommit(result) {
+    if (result.status === "applied") {
+      hostEditor.markMotorCommitDurable(result.ticketId, result.revision);
+    } else {
+      hostEditor.handleMotorCommitFailure(result.ticketId, result.reason);
+    }
+  }
+}
+```
+
+También existe `pollCommit(ticketId)`, que devuelve `CommitResult` si el ticket ya terminó o `undefined` si no hay resultado disponible. Usar `onCommit` como mecanismo principal: el motor conserva un historial de tickets acotado a los 4.096 resultados más recientes, no como historial permanente.
+
+### Diagnósticos
+
+`onAnalysis(result)` entrega el fragmento de líneas afectadas, la revisión y diagnósticos con offsets absolutos UTF-16. El anfitrión debe comprobar que la revisión siga siendo la visible antes de pintar subrayados o marcas. Para consultar el estado consolidado de la sesión se usa:
+
+```ts
+const diagnostics = motor.getDocumentDiagnostics(documentId);
+```
+
+Este método solo devuelve los diagnósticos de la revisión actualmente abierta; si aún no hay un conjunto vigente, devuelve una lista vacía. El motor no acepta que el anfitrión aplique automáticamente los reemplazos sugeridos: la decisión editorial pertenece al escritor.
+
+## 6. Resincronización, cierre y suspensión
+
+Si `getDocumentSyncState(documentId).needsResync` es `true`:
+
+1. Detener el envío de cambios para ese documento.
+2. Conservar los deltas del anfitrión que todavía no fueron confirmados y resolverlos contra el texto actual del editor.
+3. Esperar a que terminen las operaciones en curso con `await motor.flushPendingChanges()`.
+4. Obtener del editor anfitrión un snapshot completo, autoritativo y con revisión/secuencia coherentes y no regresivas.
+5. Reabrir esa sesión con `await motor.openDocument(snapshot)`.
+6. Reanudar el envío solo cuando la apertura termine correctamente.
+
+No llamar `openDocument()` mientras el documento todavía tenga cambios en cola o en aplicación. No limpiar a mano el journal para evitar el error. Si la apertura sigue fallando, conservar la base y el journal y presentar el conflicto para resolución; no sacrificar ediciones confirmadas.
+
+Antes de suspender o cerrar la aplicación, cambiar de libro o terminar una sesión de edición:
+
+```ts
+await motor.flushPendingChanges();
+```
+
+Esta barrera espera la cola de cambios, el análisis en vivo, la persistencia de diagnósticos, la recuperación de diagnósticos y las operaciones de conocimiento narrativo en cola. El motor ya escribe deltas de forma durable y crea snapshots periódicos; el anfitrión no necesita reconstruir el manuscrito completo en cada pulsación.
+
+## 7. Consultas de conocimiento y módulos disponibles
+
+La API expone consultas y operaciones tipadas para que el anfitrión construya su propia interfaz. Las listas que siguen son métodos públicos de `HostEngineApi`; los detalles exactos de cada objeto se definen en los tipos TypeScript enlazados al final de esta sección.
+
+### Conocimiento narrativo
+
+- `getNarrativeEntities()`, `getNarrativeRelations()`, `getNarrativeEvents()`, `getNarrativeIdeas()` y `getNarrativeAssertions()`.
+- `getNarrativeTimeline()` y `getNarrativeContradictions()`: la cronología y las contradicciones son vistas/candidatos conservadores, no una resolución semántica completa.
+- `getNarrativeEntityHistory(entityId)`, `resolveNarrativeEntityId(entityId)` y `getNarrativeEntityIdentityCandidates()`.
+- `setNarrativeIdeaStatus(ideaId, status)`, `setNarrativeIdeaEntityLink(...)` y `setNarrativeIdeaLink(...)`.
+
+La extracción narrativa inicial se programa al abrir/recuperar el documento y continúa de manera incremental con las ediciones. Su alcance es deliberadamente conservador: usa indicadores textuales explícitos; los acontecimientos requieren `ACONTECIMIENTO:` o `EVENTO:`, y las ideas requieren `IDEA:`. No atribuir al motor inferencias semánticas que todavía no realiza.
+
+### Biblioteca privada de ideas
+
+- `archiveUnincorporatedIdeas()`: transferir al finalizar el libro solo las ideas cuyo estado vigente siga siendo `IDEA`.
+- `getPersonalIdeaLibrary()`: consultar la biblioteca del escritor autenticado asociado a esta instancia.
+- `getProjectFinalizationReceipt()`: consultar el recibo durable de finalización.
+
+La biblioteca requiere que `writerId` se haya proporcionado al inicializar. La transferencia guarda procedencia, historial y contexto relacionado en una transacción local. Las ideas incorporadas o descartadas permanecen en el conocimiento del libro. La aplicación debe llamar al archivo solo cuando el escritor haya decidido finalizar esa obra, no en cada cierre de ventana.
+
+### Datos MLDB y configuración
+
+La API también proporciona métodos de lectura/escritura para:
+
+- Configuraciones por libro: `getProjectSettings()`, `setProjectSetting(...)`.
+- Perfiles lingüísticos y referencias: `getLanguageProfiles()`, `saveLanguageProfile(...)`, `getLanguageResourceRefs(...)`, `saveLanguageResourceRef(...)`.
+- Perfiles de estilo y pistas cronológicas: `getStyleProfiles()`, `saveStyleProfile(...)`, `getTimelineTracks()`, `saveTimelineTrack(...)`.
+- Fichas, nombres, relaciones, evidencias, atributos, fragmentos y ocurrencias: `getProjectRecords()`, `saveProjectRecord(...)`, `getRecordNames(...)`, `saveRecordName(...)`, `getProjectRelations()`, `saveProjectRelation(...)`, `getProjectEvidences(...)`, `saveProjectEvidence(...)`, `getRecordAttributes(...)`, `saveRecordAttribute(...)`, `getRelationAttributes(...)`, `saveRelationAttribute(...)`, `getManuscriptFragments(...)`, `saveManuscriptFragment(...)`, `getTimelineOccurrences(...)`, `saveTimelineOccurrence(...)`.
+- Sugerencias y autorizaciones: `getActiveSuggestions(...)`, `saveActiveSuggestion(...)`, `getImportAuthorizations()`, `authorizeImportBetweenProjects(...)`.
+- Diccionarios: `getProjectDictionaries()`, `saveProjectDictionary(...)`, `getDictionaryEntries(...)`, `saveDictionaryEntry(...)`, `getDictionaryEntryEntityLinks(...)`, `setDictionaryEntryEntityLink(...)`.
+- Historial y migraciones: `getRecordLifecycleHistory(...)`, `appendRecordLifecycle(...)`, `getRelationLifecycleHistory(...)`, `appendRelationLifecycle(...)`, `getSchemaMigrations()`.
+
+Antes de mostrar una pestaña o habilitar una función opcional, consultar `motor.getCapabilities()`. Esta respuesta identifica capacidades del adaptador actual; no asumir que todo adaptador futuro implementará las mismas funciones. La capacidad `semanticContradictionAnalysis` es `false` y `externalRuntimeServices` es `false`.
+
+Análisis descriptivo de un rango abierto:
+
+```ts
+const analysis = await motor.analyzeLiteraryDocument(documentId, startUtf16, endUtf16);
+```
+
+Este análisis no modifica el manuscrito ni sustituye la corrección en vivo. Los offsets de su entrada también son UTF-16.
+
+### Tipos fuente autoritativos
+
+El anfitrión debe importar los tipos públicos en vez de copiar o recrear estructuras por su cuenta:
+
+| Contratos | Archivo |
+|---|---|
+| `ProjectIdentity`, `DocumentSnapshot`, `EditorChange`, `ChangeAdmission`, `CommitResult`, `AnalysisResult`, métricas y `ProjectStore` | `typescript/src/contracts.ts` |
+| Entidades, relaciones, acontecimientos, ideas y biblioteca personal | `typescript/src/narrative-knowledge.ts` |
+| Afirmaciones e historial narrativo | `typescript/src/narrative-history.ts` |
+| Diccionarios y entradas | `typescript/src/dictionaries.ts` |
+| Fichas MLDB, nombres, evidencias, atributos, fragmentos y sugerencias | `typescript/src/mldb-records.ts` |
+| Ajustes, perfiles, pistas e historiales de ciclo de vida | `typescript/src/project-data.ts` |
+| Análisis literario descriptivo | `typescript/src/literary-analysis.ts` |
+| Fachada de integración | `typescript/src/host-api.ts` |
+| Persistencia IndexedDB | `typescript/src/persistence/indexeddb-store.ts` |
+
+## 8. Capacidades, métricas y errores
+
+Consultar:
+
+- `getCapabilities()`: versión y módulos disponibles.
+- `getLiveAnalysisMetrics()`: admisión, rechazos, profundidad de cola, concurrencia, tiempos de espera/aplicación, análisis terminados/fallidos y percentiles end-to-end.
+- `getDocumentSyncState(documentId)`: revisión y secuencia confirmadas, secuencia pendiente y necesidad de resincronización.
+- `getDocumentDiagnostics(documentId)`: diagnósticos vigentes de la revisión actual.
+
+Los errores de persistencia o extracción narrativa se notifican mediante `onKnowledgeError`. Un error de conocimiento no revierte una edición cuyo delta ya se confirmó durablemente; el anfitrión debe registrarlo y decidir cómo informar o reintentar. Los callbacks de interfaz deben ser rápidos y no lanzar excepciones que puedan detener el trabajo. Los callbacks `onAnalysis` y `onCommit` están aislados para que una excepción de la UI no rompa la cola.
+
+No interpretar `queued` como `applied`, ni un diagnóstico de una revisión anterior como vigente. Registrar por separado la admisión, confirmación durable, análisis y errores.
+
+## 9. Privacidad, almacenamiento y copias de seguridad
+
+- El adaptador incluido utiliza IndexedDB local y no envía manuscritos a servicios de terceros.
+- Todas las consultas narrativas están limitadas al `projectId` de la instancia; la biblioteca personal está limitada al `writerId` autenticado.
+- No compartir IDs de proyecto entre escritores distintos ni permitir que la interfaz elija un `writerId` arbitrario.
+- No escribir directamente en `motor-literario-local`, sus object stores, claves o índices. Las migraciones pertenecen al adaptador.
+- IndexedDB está ligado al origen y perfil local. El almacenamiento del navegador puede ser eliminado por el usuario, el sistema o políticas del entorno.
+- La API pública actual no incluye exportación/importación integral ni restauración asistida de toda la base. La aplicación anfitriona debe implementar y probar su mecanismo de backup/restore antes de confiar manuscritos irremplazables al entorno de producción. No copiar object stores en caliente ni asumir que el archivo del manuscrito contiene todo el conocimiento MLDB.
+
+El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar.
+
+## 10. Lista de aceptación de la integración
+
+La integración no debe declararse terminada hasta comprobar, en el programa anfitrión real, todos estos puntos:
+
+- [ ] Importa el motor mediante `typescript/src/index.ts` y verifica `MOTOR_LITERARIO_API_VERSION`.
+- [ ] Crea una instancia por proyecto y proporciona `projectId`, `projectName` y el `writerId` autenticado.
+- [ ] Abre un documento con snapshot, revisión y secuencia autoritativos.
+- [ ] Envía inserciones, eliminaciones, reemplazos y ediciones multilínea con offsets UTF-16.
+- [ ] Prueba una ráfaga superior a la capacidad y comprueba que `queue_full` conserva/reintenta cambios en orden sin perder secuencias.
+- [ ] Espera confirmaciones durables y no confunde `queued` con `applied`.
+- [ ] Muestra diagnósticos solo en la revisión vigente y no aplica reemplazos automáticamente.
+- [ ] Cierra/suspende después de `flushPendingChanges()`.
+- [ ] Reinicia la aplicación y verifica recuperación con snapshot del anfitrión y con `recoverDocument()`.
+- [ ] Fuerza una resincronización y comprueba que el anfitrión resuelve conflictos sin borrar deltas ni reiniciar contadores.
+- [ ] Verifica aislamiento entre dos proyectos y dos escritores en el mismo perfil local.
+- [ ] Comprueba extracción, consulta e historial narrativo; prueba la transferencia de ideas no incorporadas en un libro de ensayo.
+- [ ] Ejecuta pruebas de cuota, bloqueo/cierre de IndexedDB, actualización de versión y cierre inesperado.
+- [ ] Implementa y prueba backup/restore integral del manuscrito y del conocimiento local.
+- [ ] Registra la versión de API, versión MLDB, navegador/runtime, sistema operativo, resultados y límites observados.
+
+## 11. Validación del núcleo
+
+Desde `base de datos/Motor-Literario/typescript/`:
+
+```sh
+npm install
+npm run typecheck
+npm test
+npm run bench
+```
+
+La CI automatizada ejecuta typecheck, build, validación de esquema/almacenamiento, suite de pruebas y benchmark. El benchmark predeterminado usa un adaptador en memoria; sus latencias no sustituyen las mediciones de IndexedDB y del editor en el equipo anfitrión. Para aceptar la integración se necesitan pruebas adicionales con el runtime, editor y persistencia reales del programa anfitrión.

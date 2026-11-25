@@ -303,12 +303,12 @@ async function main(argv) {
 
   let result;
   if (command === "create") {
-    if (values.size !== 4 || !values.has("--source") || !values.has("--destination")) {
+    if (values.size !== 2 || !values.has("--source") || !values.has("--destination")) {
       throw new Error("create requiere --source y --destination.");
     }
     result = await createDatabaseBackup(values.get("--source"), values.get("--destination"));
   } else if (command === "verify") {
-    if (values.size !== 2 || !values.has("--backup")) {
+    if (values.size !== 1 || !values.has("--backup")) {
       throw new Error("verify requiere --backup.");
     }
     result = await verifyDatabaseBackup(values.get("--backup"));

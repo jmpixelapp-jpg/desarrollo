@@ -162,19 +162,39 @@ test("monta el textarea directamente contra HostEngineApi y entrega deltas únic
 
 test("reintenta automáticamente queue_full cuando el motor emite otra señal", () => {
   const f = fixture();
+  const pressureStates = [];
+  f.integration.dispose();
+  const integration = mountLiveAuthorMonitorTextArea({
+    element: f.element,
+    documentId: "chapter-1",
+    hostApi: f.hostApi,
+    onBackpressure: state => pressureStates.push(state),
+    onAdmission: (_change, admission) => f.admissions.push(admission),
+    onError: (error, change) => f.errors.push({ error, change })
+  });
   f.setRejectNext(true);
   f.element.edit(5, 5, "hello!");
   f.element.edit(6, 6, "hello!!");
 
   assert.equal(f.changes.length, 1);
-  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1, 2]);
+  assert.deepEqual(integration.getPendingChanges().map(change => change.sequence), [1, 2]);
+  assert.deepEqual(pressureStates.map(state => [state.status, state.pendingCount]), [
+    ["backpressured", 1],
+    ["backpressured", 2]
+  ]);
 
   // La señal equivale a una publicación del monitor al terminar un commit.
   f.publishRetrySignal();
   assert.deepEqual(f.changes.map(change => change.sequence), [1, 1, 2]);
-  assert.deepEqual(f.integration.getPendingChanges(), []);
+  assert.deepEqual(integration.getPendingChanges(), []);
+  assert.deepEqual(pressureStates.map(state => [state.status, state.pendingCount]), [
+    ["backpressured", 1],
+    ["backpressured", 2],
+    ["backpressured", 1],
+    ["clear", 0]
+  ]);
   assert.equal(f.monitor.getSnapshot("chapter-1").durableSequence, 2);
-  f.integration.dispose();
+  integration.dispose();
 });
 
 test("resincroniza motor, métricas y textarea desde un snapshot durable", () => {

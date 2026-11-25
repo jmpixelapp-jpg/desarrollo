@@ -12969,7 +12969,15 @@ test("notifica cambios de biblioteca solo por la identidad del escritor", async 
   const subscriber = new IndexedDbProjectStore();
   const received = [];
   const offPublisher = publisher.subscribePersonalIdeaLibraryChanges(() => {});
-  const offSubscriber = subscriber.subscribePersonalIdeaLibraryChanges(writerId => received.push(writerId));
+  const api = new HostEngineApi({
+    store: subscriber,
+    callbacks: { onPersonalIdeaLibraryChanged: writerId => received.push(writerId) }
+  });
+  api.initializeProject({
+    projectId: "library-notification-project",
+    projectName: "Libro de notificaciones",
+    writerId: "writer-authenticated"
+  });
   try {
     publisher.publishPersonalIdeaLibraryChange("writer-other");
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -12979,8 +12987,8 @@ test("notifica cambios de biblioteca solo por la identidad del escritor", async 
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.deepEqual(received, ["writer-authenticated"]);
   } finally {
+    api.dispose();
     offPublisher();
-    offSubscriber();
     if (originalDescriptor) Object.defineProperty(globalThis, "BroadcastChannel", originalDescriptor);
     else delete globalThis.BroadcastChannel;
   }

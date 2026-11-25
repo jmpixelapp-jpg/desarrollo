@@ -30,4 +30,23 @@ test("IndexedDB rechaza más de 500 referencias explícitas por categoría", asy
     store.saveIdea(baseIdea({ relatedEntityIds: tooManyEntityLinks })),
     /superiores al límite de 500/
   );
+  await assert.rejects(
+    store.saveIdea(baseIdea({
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "IDEA", reason: "writer", changedAt: 2 }
+      ]
+    })),
+    /transición de estado inválida/
+  );
+  await assert.rejects(
+    store.saveIdea(baseIdea({
+      status: "discarded",
+      statusHistory: [
+        { status: "incorporated", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "text-revised", changedAt: 2 }
+      ]
+    })),
+    /transición de estado inválida/
+  );
 });

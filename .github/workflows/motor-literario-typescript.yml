@@ -4,13 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "base de datos/Motor-Literario/typescript/**"
-      - "base de datos/Motor-Literario/MLDB/**"
-      - "base de datos/Motor-Literario/database/schema/**"
+      - "base de datos/Motor-Literario/**"
       - ".github/workflows/motor-literario-typescript.yml"
   pull_request:
     paths:
-      - "base de datos/Motor-Literario/typescript/**"
+      - "base de datos/Motor-Literario/**"
       - ".github/workflows/motor-literario-typescript.yml"
   workflow_dispatch:
 

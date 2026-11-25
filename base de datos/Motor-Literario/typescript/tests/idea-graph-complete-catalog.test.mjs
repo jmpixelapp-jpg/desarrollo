@@ -33,7 +33,7 @@ const store = {
   async loadEntities(project) { return this.entities.filter(item=>item.projectId===project).map(item=>structuredClone(item)); }
 };
 
-test("el grafo literario incluye ideas sin vínculos a personajes", async () => {
+test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculadas", async () => {
   const api = new HostEngineApi({store});
   assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, true);
   assert.equal(api.getCapabilities().authorMarkedIdeaCapture, false);
@@ -364,7 +364,6 @@ test("el anfitrión recorta IDs Unicode colacionados de forma determinista", asy
   assert.ok(first.nodes.some(node => node.ideaId === decomposedIdea.id));
   assert.equal(first.nodes.some(node => node.ideaId === composedIdea.id), false);
 });
-
 
 test("conserva ideas grandes en el grafo aunque no entren en la trayectoria auxiliar", async () => {
   const oversizedIdea = {

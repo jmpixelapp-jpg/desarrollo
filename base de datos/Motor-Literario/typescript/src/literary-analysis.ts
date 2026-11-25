@@ -3441,42 +3441,76 @@ function buildLiteraryIdeaGraph(
   const onStack = new Uint8Array(ideaCount);
   const cycles: LiteraryIdeaGraphCycle[] = [];
 
-  const visit = (ideaIndex: number): void => {
-    const index = nextIndex++;
-    discoveryIndex[ideaIndex] = index;
-    lowLink[ideaIndex] = index;
-    stack.push(ideaIndex);
-    onStack[ideaIndex] = 1;
+  // DFS iterativo: evita consumir la pila de llamadas del runtime en grafos
+  // profundos. Cada marco conserva el siguiente vecino pendiente y su padre.
+  const dfsNodes: number[] = [];
+  const dfsParents: number[] = [];
+  const dfsNextNeighbors: number[] = [];
 
-    for (const targetIndex of adjacency[ideaIndex]!) {
-      if (discoveryIndex[targetIndex] === -1) {
-        visit(targetIndex);
-        lowLink[ideaIndex] = Math.min(lowLink[ideaIndex]!, lowLink[targetIndex]!);
-      } else if (onStack[targetIndex] === 1) {
-        lowLink[ideaIndex] = Math.min(
-          lowLink[ideaIndex]!, discoveryIndex[targetIndex]!
+  for (let rootIndex = 0; rootIndex < ideaCount; rootIndex++) {
+    if (discoveryIndex[rootIndex] !== -1) continue;
+
+    const rootDiscoveryIndex = nextIndex++;
+    discoveryIndex[rootIndex] = rootDiscoveryIndex;
+    lowLink[rootIndex] = rootDiscoveryIndex;
+    stack.push(rootIndex);
+    onStack[rootIndex] = 1;
+    dfsNodes.push(rootIndex);
+    dfsParents.push(-1);
+    dfsNextNeighbors.push(0);
+
+    while (dfsNodes.length > 0) {
+      const frameIndex = dfsNodes.length - 1;
+      const currentIndex = dfsNodes[frameIndex]!;
+      const nextNeighborIndex = dfsNextNeighbors[frameIndex]!;
+      const neighbors = adjacency[currentIndex]!;
+
+      if (nextNeighborIndex < neighbors.length) {
+        const targetIndex = neighbors[nextNeighborIndex]!;
+        dfsNextNeighbors[frameIndex] = nextNeighborIndex + 1;
+
+        if (discoveryIndex[targetIndex] === -1) {
+          const targetDiscoveryIndex = nextIndex++;
+          discoveryIndex[targetIndex] = targetDiscoveryIndex;
+          lowLink[targetIndex] = targetDiscoveryIndex;
+          stack.push(targetIndex);
+          onStack[targetIndex] = 1;
+          dfsNodes.push(targetIndex);
+          dfsParents.push(currentIndex);
+          dfsNextNeighbors.push(0);
+        } else if (onStack[targetIndex] === 1) {
+          lowLink[currentIndex] = Math.min(
+            lowLink[currentIndex]!, discoveryIndex[targetIndex]!
+          );
+        }
+        continue;
+      }
+
+      dfsNodes.pop();
+      const parentIndex = dfsParents.pop()!;
+      dfsNextNeighbors.pop();
+
+      if (parentIndex !== -1) {
+        lowLink[parentIndex] = Math.min(
+          lowLink[parentIndex]!, lowLink[currentIndex]!
         );
       }
-    }
 
-    if (lowLink[ideaIndex] !== discoveryIndex[ideaIndex]) return;
-    const component: number[] = [];
-    while (stack.length > 0) {
-      const member = stack.pop()!;
-      onStack[member] = 0;
-      component.push(member);
-      if (member === ideaIndex) break;
+      if (lowLink[currentIndex] !== discoveryIndex[currentIndex]) continue;
+      const component: number[] = [];
+      while (stack.length > 0) {
+        const member = stack.pop()!;
+        onStack[member] = 0;
+        component.push(member);
+        if (member === currentIndex) break;
+      }
+      if (component.length > 1) {
+        component.sort((left, right) => left - right);
+        cycles.push({
+          ideaIds: component.map(member => orderedIdeas[member]!.ideaId)
+        });
+      }
     }
-    if (component.length > 1) {
-      component.sort((left, right) => left - right);
-      cycles.push({
-        ideaIds: component.map(member => orderedIdeas[member]!.ideaId)
-      });
-    }
-  };
-
-  for (let index = 0; index < ideaCount; index++) {
-    if (discoveryIndex[index] === -1) visit(index);
   }
   cycles.sort((left, right) =>
     compareIdeaIds(left.ideaIds[0]!, right.ideaIds[0]!)

@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, Diagnostic } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 22;
+const DATABASE_VERSION = 23;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -44,6 +44,7 @@ const FINALIZATION_RECEIPTS = "writer-library-finalization-receipts";
 const FINALIZATION_RECEIPT_ID = "finalization-v1";
 const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
+const LIVE_AUTHOR_MONITOR_CHECKPOINTS = "live-author-monitor-checkpoints";
 const DICTIONARIES = "project-dictionaries";
 const DICTIONARY_ENTRIES = "dictionary-entries";
 const DICTIONARY_ENTRY_ENTITIES = "dictionary-entry-entities";
@@ -1652,6 +1653,12 @@ export class IndexedDbProjectStore implements ProjectStore {
             keyPath: ["projectId", "documentId"]
           });
           diagnostics.createIndex("by-project", "projectId", { unique: false });
+        }
+        if (!db.objectStoreNames.contains(LIVE_AUTHOR_MONITOR_CHECKPOINTS)) {
+          const checkpoints = db.createObjectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS, {
+            keyPath: ["projectId", "documentId"]
+          });
+          checkpoints.createIndex("by-project", "projectId", { unique: false });
         }
         if (!db.objectStoreNames.contains(MANUSCRIPT_FRAGMENTS)) {
           const fragments = db.createObjectStore(MANUSCRIPT_FRAGMENTS, { keyPath: ["projectId", "id"] });

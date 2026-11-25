@@ -348,3 +348,57 @@ test("exige CAS cuando la sincronización cambiaría el registro", async () => {
     api.dispose();
   }
 });
+
+
+test("aborta el lote si un destino desaparece entre la validación y la escritura CAS", async () => {
+  for (const targetKind of ["idea", "entity"]) {
+    const store = new AtomicIdeaStore(
+      [
+        idea("source", { relatedIdeaIds: [], relatedEntityIds: [] }),
+        idea("idea-target")
+      ],
+      [entity("entity-target", "Ana")]
+    );
+    const api = createApi(store);
+
+    try {
+      store.onNextConflict = current => {
+        if (targetKind === "idea") {
+          store.ideas.delete(projectId + ":idea-target");
+        } else {
+          store.entities.delete(projectId + ":entity-target");
+        }
+        return {
+          ...current,
+          status: "incorporated",
+          statusHistory: [
+            ...current.statusHistory,
+            { status: "incorporated", reason: "writer", changedAt: 2 }
+          ]
+        };
+      };
+
+      await assert.rejects(
+        api.synchronizeNarrativeIdeaLinks(
+          "source",
+          links([], []),
+          targetKind === "idea"
+            ? links(["idea-target"], [])
+            : links([], ["entity-target"])
+        ),
+        /cambió en otra instancia/
+      );
+
+      const persisted = store.ideas.get(projectId + ":source");
+      assert.deepEqual(persisted.relatedIdeaIds, []);
+      assert.deepEqual(persisted.relatedEntityIds, []);
+      assert.equal(persisted.status, "incorporated");
+      assert.deepEqual(persisted.statusHistory.map(change => change.status), [
+        "IDEA", "incorporated"
+      ]);
+      assert.equal(store.writes, 1);
+    } finally {
+      api.dispose();
+    }
+  }
+});

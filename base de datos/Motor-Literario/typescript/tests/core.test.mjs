@@ -10514,7 +10514,7 @@ test("limita las instancias expuestas de cada motivo de secuencia", async () => 
     lines.push("ESCENA "+index,"La señal persiste.");
     if(index<25) lines.push("***");
   }
-  const text=lines.join("\\n");
+  const text=lines.join("\n");
   const evidence=[];
   let cursor=0;
   while(true) {

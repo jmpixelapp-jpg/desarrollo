@@ -1024,11 +1024,6 @@
       "indexes": [
         [
           "project_id",
-          "subject_kind",
-          "subject_id"
-        ],
-        [
-          "project_id",
           "fragment_id"
         ],
         [
@@ -1037,6 +1032,16 @@
           "chapter_label",
           "page_number",
           "line_number"
+        ],
+        [
+          "project_id",
+          "subject_kind",
+          "subject_record_id"
+        ],
+        [
+          "project_id",
+          "subject_kind",
+          "subject_relation_id"
         ]
       ],
       "constraints": [

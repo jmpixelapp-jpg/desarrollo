@@ -448,3 +448,36 @@ La prueba de desbordamiento se amplió para validar también el ciclo completo d
 Una vez aceptado el snapshot local reconciliado, `resynchronize()` actualiza la revisión y secuencia de referencia, limpia los eventos aplazados y registra de nuevo el proveedor. La prueba fuerza dos eventos reentrantes por encima de un límite de uno: el source primero pausa en la secuencia 1, después acepta el snapshot que ya contiene hasta la secuencia 3 y finalmente captura la nueva edición de secuencia 4. Los consumidores observan `[1, 4]`; las secuencias 2 y 3 quedan incorporadas en el snapshot reconciliado, no reproducidas como deltas parciales.
 
 **Validación CI:** ejecución específica [45721849829](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721849829), commit `a9093daeac9b25bed3b2f5638f5c25fecb6d8efe`: build Vite correcto; **78 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+
+## 24. Checkpoints durables de sesión
+
+El monitor incorpora un checkpoint versionado de métricas, definido por `StoredLiveAuthorMonitorCheckpoint` (versión 1). El registro guarda identidad de proyecto/documento y sesión, timestamp de guardado, duración acumulada, actividad/inactividad, edad de la última actividad, contadores de cambios y muestras de latencia. **No guarda texto del manuscrito, reemplazos, selección, deltas ni tickets de edición pendientes.**
+
+Solo se puede crear cuando:
+- no existen tickets pendientes de commit;
+- la sesión no está marcada `needsResync`;
+- revisión y secuencia más recientes coinciden con las durables.
+
+### Persistencia IndexedDB
+
+`ProjectStore` ofrece tres operaciones opcionales:
+- `saveLiveAuthorMonitorCheckpoint(checkpoint)`
+- `loadLiveAuthorMonitorCheckpoint(projectId, documentId)`
+- `deleteLiveAuthorMonitorCheckpoint(projectId, documentId)`
+
+`IndexedDbProjectStore` las implementa mediante el almacén compuesto `live-author-monitor-checkpoints`, aislado por `projectId/documentId`. La base local sube de versión 22 a **23** para crear este almacén sin alterar los documentos ni el journal existentes. Las escrituras rechazan un checkpoint cuyo timestamp sea más antiguo que el ya guardado y las lecturas validan identidad, versión, contadores, duraciones y muestras de latencia.
+
+### Guardado, cierre y restauración
+
+- `HostEngineApi` programa un guardado no bloqueante cuando la sesión llega a un estado durable después de un commit; los fallos de persistencia se reportan sin interrumpir la edición.
+- `closeLiveAuthorMonitorDocumentSafely(documentId)` espera a que el motor quede inactivo, comprueba el estado durable, persiste un checkpoint y solo después cierra la sesión de métricas.
+- `disposeSafely()` espera a la cola del motor y los checkpoints ya programados antes de liberar la instancia.
+- Durante `openDocument/recoverDocument`, el anfitrión intenta cargar el checkpoint y restaurarlo sobre el snapshot recuperado. La restauración requiere identidad, longitud, revisión y secuencia exactamente coincidentes.
+- Si el checkpoint está corrupto, obsoleto o no coincide con el snapshot durable, se elimina y se inicia una sesión nueva desde el estado real recuperado. Así no se atribuyen a las métricas cambios que el checkpoint no describe.
+- El intervalo entre `savedAt` y la restauración se suma al tiempo de sesión y al tiempo inactivo; nunca se contabiliza como tiempo escribiendo. La sesión restaurada comienza en estado inactivo y la siguiente edición contabiliza la pausa correspondiente.
+- Los IDs de sesión incluyen un nonce para no reutilizar la identidad de una sesión anterior tras reiniciar la aplicación.
+
+Los checkpoints conservan métricas agregadas y muestras recientes, no el historial completo del escritor. Los almacenes anfitriones que no implementen los métodos opcionales pueden seguir usando el monitor en memoria; el cierre seguro con persistencia exige `saveLiveAuthorMonitorCheckpoint`.
+
+**Límite de concurrencia:** la persistencia por clave evita mezclar documentos, pero todavía no implementa un lease/fencing token entre dos instancias de la aplicación que editen simultáneamente el mismo documento. La coordinación multi-pestaña de sesiones de monitoreo queda como trabajo separado; el checkpoint no debe considerarse un bloqueo de edición ni un mecanismo de sincronización del manuscrito.

@@ -236,17 +236,19 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 
 ## 11. Nueva entrega — manifiesto físico y auditoría del checkpoint IndexedDB (25 de noviembre de 2026)
 
-**Hallazgo:** el adaptador IndexedDB ya creaba `live-author-monitor-checkpoints` y usaba la base versión 23, pero el manifiesto `MLDB/storage_mapping_v0.4.1.json` conservaba versión 21 y no describía este almacén operativo. Esa divergencia podía dejar sin correspondencia documental la persistencia de sesiones y hacer que la auditoría de almacenamiento informara un almacén huérfano.
+**Hallazgo:** el adaptador IndexedDB ya creaba `live-author-monitor-checkpoints` y utilizaba la base versión 23, pero el manifiesto activo `storage_mapping_v0.4.2.json` todavía declaraba versión 22 y no describía este almacén operativo. El audit script ya apuntaba a v0.4.2, mientras una prueba leía de forma obsoleta v0.4.1 y esperaba 24 tablas.
+
+**Corrección del alcance:** se preservó el manifiesto histórico `storage_mapping_v0.4.1.json` sin cambios. La definición actualizada se aplicó al manifiesto activo `storage_mapping_v0.4.2.json`.
 
 **Cambios:**
-- Se actualizó `runtime.database_version` de 21 a 23 en el manifiesto físico.
+- Se actualizó `runtime.database_version` de 22 a 23 en el manifiesto activo y `mapping_version` de 12 a 13.
 - Se agregó el descriptor `live-author-monitor-checkpoints`, keyPath compuesto `[projectId, documentId]` e índice `by-project`.
-- Se corrigió una prueba de auditoría que inyectaba un almacén ficticio al reemplazar el literal antiguo `DATABASE_VERSION = 21`. Ahora inyecta el identificador y la creación del almacén en el punto de apertura, sin depender del número de versión vigente.
-- El workflow aislado ejecuta `npm run validate:schema` antes de build y pruebas, y ejecuta además `tests/storage-implementation-audit.test.mjs`.
-- Los filtros de push y pull request incluyen el manifiesto físico, el adaptador IndexedDB y la prueba de auditoría.
+- Se corrigió la prueba de auditoría para leer v0.4.2 y comparar dinámicamente la cantidad de tablas; ya no depende del literal de versión 21 ni de un número de tablas obsoleto.
+- El workflow aislado ejecuta `npm run validate:schema` antes del build y las pruebas, y ejecuta además `tests/storage-implementation-audit.test.mjs`.
+- Los filtros de push y pull request incluyen el manifiesto activo, el adaptador IndexedDB y la prueba de auditoría.
 
-**Archivos:** `MLDB/storage_mapping_v0.4.1.json`, `typescript/tests/storage-implementation-audit.test.mjs`, `.github/workflows/live-author-monitor.yml`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
+**Commits:** [daa6f22 — restaurar el manifiesto histórico v0.4.1](https://github.com/jmpixelapp-jpg/desarrollo/commit/daa6f22e40aa32787db80094a339a65d0015ee09), [32b1ebf — registrar almacén y versión en v0.4.2](https://github.com/jmpixelapp-jpg/desarrollo/commit/32b1ebf148658190637de8ecdf1bae42f4d89172), [2eec62d — alinear prueba con v0.4.2](https://github.com/jmpixelapp-jpg/desarrollo/commit/2eec62d0ff03ab15d2057a4868f348e9055642ea), [85e4b42 — validar manifiesto activo en CI](https://github.com/jmpixelapp-jpg/desarrollo/commit/85e4b42546d7ef7ba281c37eee8c998e2a8f316a).
 
-**Commits:** [782b2e4 — registrar almacén y versión en el manifiesto](https://github.com/jmpixelapp-jpg/desarrollo/commit/782b2e416fba03a239c705ff4e08e32ab1b192a4), [9dc7e32 — desacoplar la auditoría de una versión fija](https://github.com/jmpixelapp-jpg/desarrollo/commit/9dc7e32c6884e3e65076f23e61fb1e906b451b4e), [6bb03fc — validar esquema y mapeo en CI](https://github.com/jmpixelapp-jpg/desarrollo/commit/6bb03fc5d266cb445708a3995f9eade85cdbebc2), [62626f9 — activar filtros de pull request](https://github.com/jmpixelapp-jpg/desarrollo/commit/62626f9f183de83c32be80b1208285bb1b2e4115), [4de43bd — incluir auditoría física en el workflow](https://github.com/jmpixelapp-jpg/desarrollo/commit/4de43bd69e5f6dd07c4e31a53810bb9acc40317b), [4ce291a — documentar correspondencia técnica](https://github.com/jmpixelapp-jpg/desarrollo/commit/4ce291ac8f8ec216de93b244fd84069f727bc2bd).
+**Ejecuciones anteriores:** las ejecuciones [45723541249](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723541249) y [45723473909](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723473909) fallaron porque sus commits todavía auditaban el manifiesto anterior al ajuste del manifiesto activo. No se toman como validación de esta corrección. La nueva ejecución debe probar el commit posterior a `85e4b42` y correr tanto validación física como las pruebas.
 
-**Resultado CI:** se registrará la ejecución que incluya todos los cambios de esta entrega. Hasta entonces el estado se mantiene como pendiente de validación; no se infiere que la auditoría haya pasado solo por haber actualizado el manifiesto.
+**Estado de CI:** pendiente de la nueva ejecución. No se marca como aprobado hasta verificar auditoría, build y pruebas.

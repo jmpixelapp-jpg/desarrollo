@@ -5005,7 +5005,7 @@ function isValidNarrativeIdeaStatusHistory(
   ).length;
   return value[value.length - 1]?.status === currentStatus &&
     writerDecisionCount >= visibleWriterDecisionCount &&
-    writerDecisionCount - visibleWriterDecisionCount <= omittedStatusHistoryCount;
+    writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
 }
 
 function validateInput(input: LiteraryAnalysisInput): number {

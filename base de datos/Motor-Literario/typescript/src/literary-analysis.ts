@@ -4126,6 +4126,7 @@ function buildLiteraryIdeaGraph(
     const intermediaries = new Set(adjacency[sourceIndex]!);
     if (intermediaries.size < 2) continue;
     const destinationCounts = new Map<number, number>();
+    const firstIntermediaryByDestination = new Map<number, number>();
     let sourceWork = 0;
     let sourceTruncated = false;
     for (const intermediaryIndex of intermediaries) {
@@ -4137,6 +4138,9 @@ function buildLiteraryIdeaGraph(
           break;
         }
         destinationCounts.set(destinationIndex, (destinationCounts.get(destinationIndex) ?? 0) + 1);
+        if (!firstIntermediaryByDestination.has(destinationIndex)) {
+          firstIntermediaryByDestination.set(destinationIndex, intermediaryIndex);
+        }
       }
       if (sourceTruncated) break;
     }
@@ -4153,13 +4157,8 @@ function buildLiteraryIdeaGraph(
         sourceSharedDestinationCount++;
       } else {
         sourceExclusiveDestinationCount++;
-        // Identifica qué rama aporta el destino exclusivo.
-        for (const intermediaryIndex of intermediaries) {
-          if (adjacency[intermediaryIndex]!.includes(destinationIndex)) {
-            exclusiveIntermediaryCount.add(intermediaryIndex);
-            break;
-          }
-        }
+        const soleIntermediary = firstIntermediaryByDestination.get(destinationIndex);
+        if (soleIntermediary !== undefined) exclusiveIntermediaryCount.add(soleIntermediary);
       }
     }
     if (sourceSharedDestinationCount > 0) {

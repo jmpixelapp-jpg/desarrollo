@@ -1876,3 +1876,77 @@ test("no asigna alias ambiguos a personajes ni genera co-menciones falsas", () =
   );
   assert.equal(result.characterMentionDistributions.characters[0].totalMentionCount, 1);
 });
+
+
+test("las trayectorias resuelven escenas con evidencia posterior a las primeras veinte muestras", () => {
+  const phrases = Array.from({ length: 21 }, (_, index) =>
+    "Ana habló con Bruno durante el encuentro número " + (index + 1) + "."
+  );
+  const text = [
+    "Escena 1",
+    ...phrases.slice(0, 20),
+    "Escena 2",
+    phrases[20]
+  ].join("\\n");
+  const evidence = phrase => {
+    const start = text.indexOf(phrase);
+    assert.notEqual(start, -1);
+    return {
+      documentId: "chapter-one",
+      revision: 1,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    };
+  };
+  const evidenceSamples = phrases.map(evidence);
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [
+      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "bruno-id", canonicalName: "Bruno" }
+    ],
+    knownRelations: [{
+      projectId: "literary-analysis-test",
+      relationId: "ana-bruno",
+      fromEntityId: "ana-id",
+      toEntityId: "bruno-id",
+      relationType: "alliance",
+      evidenceCount: 21,
+      staleEvidenceCount: 0,
+      evidence: evidenceSamples
+    }],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "ana-decision",
+      text: "Ana decide confiar en Bruno.",
+      status: "incorporated",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 21,
+      staleEvidenceCount: 0,
+      evidence: evidenceSamples,
+      statusHistory: [{ status: "incorporated", reason: "writer", changedAt: 2 }],
+      writerDecisionCount: 1,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+
+  const ana = result.characterNarrativeTrajectories.trajectories.find(
+    item => item.entityId === "ana-id"
+  );
+  assert.ok(ana);
+  assert.deepEqual(ana.scenes[1].relationshipIds, ["ana-bruno"]);
+  assert.deepEqual(ana.scenes[1].documentedDecisionIdeaIds, ["ana-decision"]);
+  assert.ok(ana.scenes[1].incompleteReasons.includes("relationship-evidence-truncation"));
+  assert.ok(ana.scenes[1].incompleteReasons.includes("decision-evidence-truncation"));
+  assert.equal(ana.relationships[0].evidenceSamples.length, 20);
+  assert.equal(ana.relationships[0].evidenceTruncated, true);
+  assert.equal(ana.documentedDecisions[0].evidenceSamples.length, 20);
+  assert.equal(ana.documentedDecisions[0].evidenceTruncated, true);
+});

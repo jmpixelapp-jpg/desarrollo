@@ -9705,12 +9705,40 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-project");
                 return {
-                  getAll(requestedProjectId) {
-                    return transaction.request(() =>
-                      structuredClone(projectIdeas.filter(item => item.projectId === requestedProjectId))
-                    );
+                  openCursor(requestedProjectId) {
+                    const request = {};
+                    const ordered = projectIdeas
+                      .filter(item => item.projectId === requestedProjectId)
+                      .sort((first, second) => first.id.localeCompare(second.id));
+                    let index = 0;
+                    const advance = () => {
+                      transaction.pendingRequests++;
+                      queueMicrotask(() => {
+                        if (transaction.aborted) return;
+                        const item = ordered[index++];
+                        request.result = item
+                          ? {
+                              value: structuredClone(item),
+                              continue: advance
+                            }
+                          : null;
+                        request.onsuccess?.();
+                        transaction.pendingRequests--;
+                        transaction.maybeComplete();
+                      });
+                    };
+                    advance();
+                    return request;
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const item = projectIdeas.find(entry =>
+                    entry.projectId === key[0] && entry.id === key[1]
+                  );
+                  return item ? structuredClone(item) : undefined;
+                });
               },
               delete(key) {
                 const [requestedProjectId, ideaId] = key;
@@ -9726,14 +9754,20 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-writer-source");
                 return {
-                  getAll(key) {
+                  count(key) {
                     return transaction.request(() =>
-                      [...library.values()]
-                        .filter(entry => entry.writerId === key[0] && entry.sourceProjectId === key[1])
-                        .map(entry => structuredClone(entry))
+                      [...library.values()].filter(entry =>
+                        entry.writerId === key[0] && entry.sourceProjectId === key[1]
+                      ).length
                     );
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const entry = library.get(makeKey(key));
+                  return entry ? structuredClone(entry) : undefined;
+                });
               },
               add(entry) {
                 const key = makeKey([entry.writerId, entry.sourceProjectId, entry.idea.id]);

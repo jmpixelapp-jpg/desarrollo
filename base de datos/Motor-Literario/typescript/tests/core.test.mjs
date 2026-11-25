@@ -744,7 +744,7 @@ test("usa journal incremental y compacta en snapshots periódicos", async () => 
   api.initializeProject({ projectId: "book-journal", projectName: "Journal incremental" });
   await api.openDocument({ documentId: "chapter", text: "", revision: 0, sequence: 0 });
   assert.equal(store.snapshotWrites, 1);
-  assert.equal(store.atomicCheckpointWrites, 1);
+  assert.equal(store.atomicCheckpointWrites, 0);
 
   for (let sequence = 1; sequence <= 63; sequence++) {
     const admission = api.onEditorChange({
@@ -765,7 +765,7 @@ test("usa journal incremental y compacta en snapshots periódicos", async () => 
   assert.equal(admission.status, "queued");
   await api.flushPendingChanges();
   assert.equal(store.snapshotWrites, 2);
-  assert.equal(store.atomicCheckpointWrites, 2);
+  assert.equal(store.atomicCheckpointWrites, 1);
   assert.equal(store.changes.length, 0);
   assert.equal(store.documents.get("book-journal:chapter")?.text.length, 64);
 });
@@ -1172,7 +1172,7 @@ test("un snapshot distinto del anfitrión invalida deltas anteriores", async () 
 });
 
 
-test("descarta un journal corrupto sin publicar una reconstrucción parcial", async () => {
+test("rechaza y conserva un journal corrupto sin publicar una reconstrucción parcial", async () => {
   class CorruptStore extends MemoryStore {
     changes = [];
     async loadChanges(projectId, documentId, afterSequence) {
@@ -1208,20 +1208,23 @@ test("descarta un journal corrupto sin publicar una reconstrucción parcial", as
   );
   const api = new HostEngineApi({ store });
   api.initializeProject({ projectId: "book-corrupt-journal", projectName: "Journal corrupto" });
-  await api.openDocument({
-    documentId: "chapter", text: "base", revision: 4, sequence: 7
-  });
-  assert.equal(api.getSnapshot("chapter")?.text, "base");
-  assert.equal(api.getSnapshot("chapter")?.revision, 4);
-  assert.equal(api.getSnapshot("chapter")?.sequence, 7);
+  await assert.rejects(
+    api.openDocument({
+      documentId: "chapter", text: "base", revision: 4, sequence: 7
+    }),
+    /Journal inválido o discontinuo/
+  );
+  assert.equal(api.getSnapshot("chapter"), undefined);
   assert.equal(store.documents.get("book-corrupt-journal:chapter")?.text, "base");
-  assert.equal(store.changes.length, 0);
+  assert.equal(store.changes.length, 2);
+  assert.equal(store.changes[0].sequence, 8);
+  assert.equal(store.changes[1].sequence, 10);
 });
 
 
 test("rechaza entradas malformadas del anfitrión sin romper la sesión", async () => {
   const api = new HostEngineApi({ store: new MemoryStore() });
-  assert.throws(() => api.initializeProject(null), /projectId y projectName/);
+  assert.throws(() => api.initializeProject(null), /identidad del proyecto o del escritor es inválida/);
   api.initializeProject({ projectId: "book-input-validation", projectName: "Validación" });
   await assert.rejects(api.openDocument({
     documentId: "chapter", text: null, revision: 0, sequence: 0
@@ -1327,6 +1330,7 @@ test("rechaza resincronizaciones que desalinean revisión y secuencia sin tocar 
 
 test("IndexedDB impide que un guardado atrasado reemplace un snapshot más reciente", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const originalKeyRange = Object.getOwnPropertyDescriptor(globalThis, "IDBKeyRange");
   const documents = new Map();
   const key = (projectId, documentId) => projectId + ":" + documentId;
   const database = {
@@ -1336,8 +1340,8 @@ test("IndexedDB impide que un guardado atrasado reemplace un snapshot más recie
       let finished = false;
       const transaction = {
         error: null,
-        objectStore() {
-          return {
+        objectStore(name) {
+          if (name === "documents") return {
             get([projectId, documentId]) {
               const request = {};
               queueMicrotask(() => {
@@ -1353,6 +1357,18 @@ test("IndexedDB impide que un guardado atrasado reemplace un snapshot más recie
                 finished = true;
                 transaction.oncomplete?.();
               });
+            }
+          };
+          return {
+            index() {
+              return { openCursor() {
+                const request = {};
+                queueMicrotask(() => {
+                  request.result = null;
+                  request.onsuccess?.();
+                });
+                return request;
+              } };
             }
           };
         },
@@ -1372,6 +1388,10 @@ test("IndexedDB impide que un guardado atrasado reemplace un snapshot más recie
       queueMicrotask(() => request.onsuccess?.());
       return request;
     } }
+  });
+  Object.defineProperty(globalThis, "IDBKeyRange", {
+    configurable: true,
+    value: { bound: (...bounds) => bounds }
   });
 
   try {
@@ -1402,6 +1422,8 @@ test("IndexedDB impide que un guardado atrasado reemplace un snapshot más recie
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;
+    if (originalKeyRange) Object.defineProperty(globalThis, "IDBKeyRange", originalKeyRange);
+    else delete globalThis.IDBKeyRange;
   }
 });
 

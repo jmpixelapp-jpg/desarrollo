@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "base de datos/Motor-Literario/typescript/**"
+      - "base de datos/Motor-Literario/MLDB/**"
+      - "base de datos/Motor-Literario/database/schema/**"
       - ".github/workflows/motor-literario-typescript.yml"
   pull_request:
     paths:

@@ -1,0 +1,598 @@
+{
+  "format": "MLDB_STORAGE_MAPPING",
+  "mapping_version": 1,
+  "schema_version": "0.4.1",
+  "storage_model": "journal-first-key-value",
+  "runtime": {
+    "technology": "IndexedDB nativo",
+    "database_name": "motor-literario-local",
+    "database_version": 11,
+    "object_stores": [
+      {
+        "name": "documents",
+        "keyPath": [
+          "projectId",
+          "documentId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "changes",
+        "keyPath": [
+          "projectId",
+          "documentId",
+          "sequence"
+        ],
+        "indexes": [
+          [
+            "by-document-sequence",
+            [
+              "projectId",
+              "documentId",
+              "sequence"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "narrative-entities",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-relations",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-events",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-ideas",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "personal-idea-library",
+        "keyPath": [
+          "writerId",
+          "sourceProjectId",
+          "idea.id"
+        ],
+        "indexes": [
+          [
+            "by-writer",
+            "writerId",
+            false
+          ],
+          [
+            "by-writer-source",
+            [
+              "writerId",
+              "sourceProjectId"
+            ],
+            false
+          ],
+          [
+            "by-source-project",
+            "sourceProjectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-assertions",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-entity",
+            [
+              "projectId",
+              "entityId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "document-diagnostics",
+        "keyPath": [
+          "projectId",
+          "documentId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      }
+    ]
+  },
+  "entries": [
+    {
+      "table": "projects",
+      "logicalScope": "global",
+      "storageScopes": [
+        "system"
+      ],
+      "keyPrefixes": [
+        "host/project-identities/"
+      ],
+      "representation": "archive",
+      "contract": "ProjectIdentity proporcionada por el anfitrión; identidad recibida, no generada por el motor.",
+      "implementationStatus": "host-owned",
+      "objectStores": []
+    },
+    {
+      "table": "project_settings",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/settings/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: no existe almacén ProjectSettings en IndexedDbProjectStore.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "manuscript_documents",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/documents/",
+        "project/change-journal/"
+      ],
+      "representation": "split-record",
+      "contract": "StoredDocument en documents + StoredChange ordenados en changes; checkpoint atómico.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "documents",
+        "changes"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "documentId"
+        ],
+        [
+          "projectId",
+          "documentId",
+          "sequence"
+        ]
+      ]
+    },
+    {
+      "table": "manuscript_fragments",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/documents/text/"
+      ],
+      "representation": "embedded",
+      "contract": "DocumentSnapshot.text; TextBuffer mantiene piezas durante la edición, pero no persiste filas de fragmento independientes.",
+      "implementationStatus": "partial",
+      "objectStores": [
+        "documents"
+      ]
+    },
+    {
+      "table": "records",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-entities/"
+      ],
+      "representation": "record",
+      "contract": "NarrativeEntity en narrative-entities; cobertura actual character/place/object, no todos los tipos dinámicos del esquema.",
+      "implementationStatus": "partial",
+      "objectStores": [
+        "narrative-entities"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "record_names",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-entities/names/"
+      ],
+      "representation": "embedded",
+      "contract": "NarrativeEntity.canonicalName + NarrativeEntity.aliases.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "narrative-entities"
+      ]
+    },
+    {
+      "table": "record_attributes",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-assertions/"
+      ],
+      "representation": "record",
+      "contract": "NarrativeAssertion en narrative-assertions; atributos actuales limitados a edad, ubicación y cargo/rol.",
+      "implementationStatus": "partial",
+      "objectStores": [
+        "narrative-assertions"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "relations",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-relations/"
+      ],
+      "representation": "record",
+      "contract": "NarrativeRelation en narrative-relations.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "narrative-relations"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "relation_attributes",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-relations/attributes/"
+      ],
+      "representation": "embedded",
+      "contract": "Tipo y evidencia de NarrativeRelation; no existe aún un conjunto genérico de atributos relacionales.",
+      "implementationStatus": "partial",
+      "objectStores": [
+        "narrative-relations"
+      ]
+    },
+    {
+      "table": "evidences",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-entities/evidence/",
+        "project/narrative-relations/evidence/",
+        "project/narrative-events/evidence/",
+        "project/narrative-ideas/evidence/",
+        "project/narrative-assertions/evidence/"
+      ],
+      "representation": "embedded",
+      "contract": "TextEvidence integrado en entidades, relaciones, acontecimientos, ideas y afirmaciones; offsets UTF-16.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "narrative-entities",
+        "narrative-relations",
+        "narrative-events",
+        "narrative-ideas",
+        "narrative-assertions"
+      ]
+    },
+    {
+      "table": "timeline_tracks",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/timeline-tracks/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: el núcleo conserva referencias temporales explícitas, no catálogos de tracks configurables.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "timeline_occurrences",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-events/timeline/"
+      ],
+      "representation": "embedded",
+      "contract": "NarrativeEvent.timeReference y participantes en narrative-events.",
+      "implementationStatus": "partial",
+      "objectStores": [
+        "narrative-events"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "language_profiles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/language-profiles/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: perfil lingüístico propio por proyecto.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "language_resource_refs",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/language-resources/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: referencias a diccionarios y recursos lingüísticos versionados.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "style_profiles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/style-profiles/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: perfil de estilo separado del texto y de los diagnósticos.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "active_suggestions",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/document-diagnostics/"
+      ],
+      "representation": "record",
+      "contract": "StoredDiagnostics por documento y revisión en document-diagnostics; no cubre todavía todos los módulos de sugerencias.",
+      "implementationStatus": "partial",
+      "objectStores": [
+        "document-diagnostics"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "documentId"
+        ]
+      ]
+    },
+    {
+      "table": "import_authorizations",
+      "logicalScope": "global",
+      "storageScopes": [
+        "system"
+      ],
+      "keyPrefixes": [
+        "system/import-authorizations/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: autorización explícita de importación entre proyectos del mismo escritor.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "schema_migrations",
+      "logicalScope": "global",
+      "storageScopes": [
+        "system"
+      ],
+      "keyPrefixes": [
+        "system/indexeddb-version/"
+      ],
+      "representation": "embedded",
+      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=11); no hay tabla de historial separada.",
+      "implementationStatus": "partial",
+      "objectStores": []
+    },
+    {
+      "table": "project_dictionaries",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/dictionaries/"
+      ],
+      "representation": "record",
+      "contract": "Contrato lógico definido; pendiente de integrar almacén y API TypeScript de diccionarios.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "dictionary_entries",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/dictionary-entries/"
+      ],
+      "representation": "record",
+      "contract": "Contrato lógico definido; pendiente de persistencia TypeScript de entradas.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "dictionary_entry_entities",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/dictionary-entries/related-entities/"
+      ],
+      "representation": "embedded",
+      "contract": "DictionaryEntryRecord.relatedEntityIds",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "record_lifecycles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/record-lifecycles/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: historial independiente de cambios de etiqueta y estado de cada ficha.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "relation_lifecycles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/relation-lifecycles/"
+      ],
+      "representation": "archive",
+      "contract": "Pendiente: historial independiente de cambios de etiqueta y estado de cada relación.",
+      "implementationStatus": "not-implemented",
+      "objectStores": []
+    },
+    {
+      "table": "writer_library_ideas",
+      "logicalScope": "writer",
+      "storageScopes": [
+        "writer"
+      ],
+      "keyPrefixes": [
+        "writer/personal-idea-library/"
+      ],
+      "representation": "record",
+      "contract": "PersonalIdeaLibraryEntry en personal-idea-library; keyPath writerId/sourceProjectId/idea.id.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "personal-idea-library"
+      ],
+      "keyPath": [
+        [
+          "writerId",
+          "sourceProjectId",
+          "idea.id"
+        ]
+      ]
+    },
+    {
+      "table": "writer_library_finalization_receipts",
+      "logicalScope": "writer",
+      "storageScopes": [
+        "writer"
+      ],
+      "keyPrefixes": [
+        "writer/finalization-receipts/"
+      ],
+      "representation": "archive",
+      "contract": "La transferencia de ideas es transaccional; falta persistir un recibo idempotente independiente.",
+      "implementationStatus": "partial",
+      "objectStores": []
+    }
+  ]
+}

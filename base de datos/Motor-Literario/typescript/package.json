@@ -7,9 +7,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
-    "test": "npm run build && node --test tests/*.test.mjs test/*.test.mjs",
+    "test": "npm run build && npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs",
     "bench": "npm run build && node bench/live-edit-benchmark.mjs",
-    "validate:schema": "node --test test/mldb-schema-validation.test.mjs"
+    "validate:schema": "node scripts/validate-mldb-schema.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

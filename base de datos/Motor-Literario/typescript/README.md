@@ -86,6 +86,17 @@ Al abrir un documento, el motor compara el snapshot local con el snapshot autori
 - Si `getDocumentSyncState` indica `needsResync`, detener el envío de deltas y reabrir con el snapshot completo actual del editor.
 - Para recuperar una sesión ya guardada después de reiniciar la aplicación, inicializar la identidad del proyecto y llamar `await api.recoverDocument(documentId)`. El método recupera el snapshot local y reproduce los deltas durables; no requiere volver a enviar el texto completo. Solo funciona cuando existe una base durable válida.
 
+## Esquema lógico MLDB 0.4.1 y correspondencia física
+
+El contrato lógico de la base se versiona como JSON declarativo en `../MLDB/`, y se valida con JavaScript puro mediante `scripts/validate-mldb-schema.mjs`. La versión vigente define 25 tablas lógicas, claves compuestas, ámbitos `global`, `project` y `writer`, propiedad de proyectos y referencias que no pueden cruzar libros o escritores.
+
+- `../MLDB/schema_v0.4.1.json`: esquema lógico vigente.
+- `../MLDB/schema_v0.4.0.json`, `schema_v0.3.0.json` y `schema_v0.2.0.json`: versiones anteriores verificadas para compatibilidad.
+- `../MLDB/storage_mapping_v0.4.1.json`: correspondencia entre las 25 tablas lógicas y el almacenamiento local IndexedDB.
+- `../MLDB/PHYSICAL_STORAGE_MAPPING_v0.4.1.md`: explicación de almacenes, claves, índices y estado real de implementación.
+
+El mapa físico distingue capacidades implementadas, parciales y pendientes; una tabla lógica declarada no se presenta como persistida cuando aún no existe su almacén o contrato TypeScript. El modelo actual usa IndexedDB nativo, sin SQL, servicios remotos ni código Rust en el runtime. `npm test` ejecuta ahora también el validador y los casos de compatibilidad del esquema, además de las pruebas del núcleo.
+
 ## Límites deliberados
 
 La implementación del producto se desarrolla exclusivamente en TypeScript/JavaScript. Las carpetas Rust del repositorio son material histórico y no forman parte del runtime ni deben ampliarse.

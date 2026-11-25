@@ -1614,12 +1614,7 @@ export class HostEngineApi {
     const projectIdeaSnapshot = orderedProjectIdeas.slice(0,2_000);
     // Las ideas enlazadas ya transfieren su texto en knownIdeas para las
     // trayectorias; no se vuelve a copiar ese texto al catálogo global.
-    let lexicalTextUnitCount = projectIdeaSnapshot.reduce(
-      (total,idea) => total + (
-        knownLinkedIdeaIds.has(idea.id) ? idea.text.length : 0
-      ),
-      0
-    );
+    let lexicalTextUnitCount = 0;
     const knownProjectIdeasOmittedCount = projectIdeaCatalogAvailable
       ? Math.max(0,orderedProjectIdeas.length-2_000)
       : 0;
@@ -1629,10 +1624,9 @@ export class HostEngineApi {
         const statusHistory = idea.statusHistory ?? [
           {status:idea.status,reason:"initial" as const}
         ];
-        const includeLexicalText = knownLinkedIdeaIds.has(idea.id)
-          ? false
-          : lexicalTextUnitCount + idea.text.length <= 2_000_000;
-        if (includeLexicalText) lexicalTextUnitCount += idea.text.length;
+        const textFitsBudget = lexicalTextUnitCount + idea.text.length <= 2_000_000;
+        if (textFitsBudget) lexicalTextUnitCount += idea.text.length;
+        const includeLexicalText = !knownLinkedIdeaIds.has(idea.id) && textFitsBudget;
         return {
           projectId:idea.projectId,
           ideaId:idea.id,

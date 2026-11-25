@@ -150,7 +150,9 @@ await indexedDbStore.restoreDatabaseBackup(backup);
 
 La restauración exige coincidencia exacta de versión y nombres de almacenes. Reemplaza todas las colecciones dentro de una sola transacción readwrite: si una escritura falla, IndexedDB aborta la transacción y conserva el estado anterior. Después de confirmar, publica invalidaciones de conocimiento narrativo y biblioteca para que las otras pestañas recarguen sus datos. El anfitrión debe ejecutar la restauración en modo de mantenimiento, sin sesiones de edición activas, y reconstruir las instancias del motor que dependan de los datos restaurados.
 
-La capacidad se consulta mediante `getCapabilities().fullDatabaseBackupRestore`; solo se anuncia cuando el adaptador implementa ambas operaciones. El puente SQLite no anuncia esta capacidad IndexedDB: dispone de su utilidad de archivo independiente.\n\nEl paquete contiene texto narrativo, ideas y datos privados sin cifrar. El anfitrión es responsable de guardarlo en una ubicación protegida y de aplicar cifrado en reposo cuando corresponda. El checksum no es una firma criptográfica ni autentica al creador. La exportación es una operación manual que materializa todos los almacenes en memoria; no debe ejecutarse durante la escritura normal ni en cada cambio del editor.
+La capacidad se consulta mediante `getCapabilities().fullDatabaseBackupRestore`; solo se anuncia cuando el adaptador implementa ambas operaciones. El puente SQLite no anuncia esta capacidad IndexedDB: dispone de su utilidad de archivo independiente.
+
+El paquete contiene texto narrativo, ideas y datos privados sin cifrar. El anfitrión es responsable de guardarlo en una ubicación protegida y de aplicar cifrado en reposo cuando corresponda. El checksum no es una firma criptográfica ni autentica al creador. La exportación es una operación manual que materializa todos los almacenes en memoria; no debe ejecutarse durante la escritura normal ni en cada cambio del editor.
 
 ## Límites deliberados
 

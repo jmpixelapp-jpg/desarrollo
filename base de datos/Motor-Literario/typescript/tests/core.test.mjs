@@ -3448,6 +3448,49 @@ test("transfiere ideas no incorporadas a una biblioteca aislada por escritor y c
   assert.equal((await api.archiveUnincorporatedIdeas()).length, 0);
 });
 
+test("la API finaliza el libro con un resumen compacto y notifica solo la primera transferencia", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-compact-api";
+  const projectId = "compact-api-book";
+  const summary = {
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro compacto",
+    archivedCount: 3,
+    finalizedAt: 1234,
+    archiveChecksum: "fnv1a64:0123456789abcdef",
+    alreadyFinalized: false
+  };
+  let calls = 0;
+  const notifications = [];
+  store.archiveUnincorporatedIdeas = async () => {
+    throw new Error("La API compacta no debe materializar la lista heredada.");
+  };
+  store.archiveUnincorporatedIdeasSummary = async (...args) => {
+    calls++;
+    assert.equal(args[0], projectId);
+    assert.equal(args[1], writerId);
+    assert.equal(args[2], "Libro compacto");
+    return { ...summary, alreadyFinalized: calls > 1 };
+  };
+  const api = new HostEngineApi({
+    store,
+    callbacks: {
+      onPersonalIdeaLibraryChanged: id => notifications.push(id)
+    }
+  });
+  api.initializeProject({ projectId, projectName: "Libro compacto", writerId });
+
+  assert.deepEqual(await api.finalizeProjectToIdeaLibrary(), summary);
+  assert.deepEqual(await api.finalizeProjectToIdeaLibrary(), {
+    ...summary,
+    alreadyFinalized: true
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(notifications, [writerId]);
+});
+
+
 test("una instancia con caché antigua no puede restaurar una idea archivada por otra", async () => {
   const store = new MemoryStore();
   const first = new HostEngineApi({ store });

@@ -24,7 +24,8 @@ const store = {
     const value=this.documents.get(project+":"+id); return value?structuredClone(value):undefined;
   },
   async loadDocumentWithChanges(project,id) { return {document:await this.loadDocument(project,id),changes:[]}; },
-  async loadIdeas(project) { return this.ideas.filter(item=>item.projectId===project).map(item=>structuredClone(item)); }
+  async loadIdeas(project) { return this.ideas.filter(item=>item.projectId===project).map(item=>structuredClone(item)); },
+  async loadEntities(project) { return []; }
 };
 
 test("el grafo literario incluye ideas sin vínculos a personajes", async () => {
@@ -49,10 +50,15 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
 });
 
 
-test("declara la capacidad de grafo global solo con lectura del catálogo", () => {
-  const api = new HostEngineApi({ store: { ...store, loadIdeas: undefined } });
-  assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, false);
-  api.dispose();
+test("declara la capacidad de grafo global solo cuando puede leer ideas y fichas", () => {
+  for (const incompleteStore of [
+    { ...store, loadIdeas: undefined },
+    { ...store, loadEntities: undefined }
+  ]) {
+    const api = new HostEngineApi({ store: incompleteStore });
+    assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, false);
+    api.dispose();
+  }
 });
 
 test("limita la muestra y clasifica referencias a ideas fuera del snapshot", async () => {

@@ -30,6 +30,12 @@ jobs:
       run:
         working-directory: "base de datos/Motor-Literario/typescript"
     steps:
+      - name: Runner diagnostics
+        run: |
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner architecture: $RUNNER_ARCH"
+          node --version
+          npm --version
       - name: Checkout
         uses: actions/checkout@v4
       - name: Set up Node.js

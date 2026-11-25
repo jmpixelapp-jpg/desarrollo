@@ -68,7 +68,7 @@ El núcleo TypeScript incorpora un análisis determinista del catálogo de ideas
 - El grafo global conserva ideas independientes y vínculos explícitos, y distingue referencias internas, externas al snapshot y ausentes.
 - Calcula componentes débiles y fuertemente conexos, ciclos (incluidas auto-referencias), reciprocidad, fuentes, terminales y nodos aislados. El recorrido de componentes fuertemente conexos es iterativo para evitar desbordamientos de pila en grafos profundos.
 - Produce métricas globales y perfiles por estado editorial en una sola pasada de agregación.
-- Detecta resonancias léxicas mediante términos literales normalizados Unicode, filtrado adaptativo de términos ubicuos y medidas de solapamiento. La salida está limitada a los pares mejor clasificados y nunca convierte una coincidencia de palabras en una relación semántica o causal.
+- Detecta resonancias léxicas mediante términos literales normalizados Unicode, filtrado de palabras funcionales en español, inglés y portugués, filtrado adaptativo de términos ubicuos y medidas de solapamiento. La salida está limitada a los pares mejor clasificados y nunca convierte una coincidencia de palabras en una relación semántica o causal.
 - Aplica presupuestos explícitos de catálogo, texto y resultados. La omisión de texto por presupuesto queda identificada y no se confunde con la ausencia de texto.
 - La memoización usa una clave exacta de la instantánea y devuelve copias aisladas; los cambios de contenido, estado, historial, evidencia, vínculos o alcance invalidan el resultado anterior.
 

@@ -44,7 +44,7 @@ function analyzeGraph(ideas, options = {}) {
   }).ideaGraph;
 }
 
-test("analiza el máximo de 2.000 ideas conectadas sin perder la topología", () => {
+test("analiza el límite de 2.000 ideas conectadas sin perder la topología", () => {
   const count = 2_000;
   const ideas = Array.from({ length: count }, (_, index) => ({
     ...idea("stress-" + String(index).padStart(4, "0")),
@@ -515,4 +515,14 @@ test("mantiene compatibilidad con catálogos antiguos que no transfieren el text
   assert.equal(result.ideasWithoutTextCount, 1);
   assert.equal(result.candidatePairCount, 0);
   assert.deepEqual(result.resonances, []);
+});
+
+test("filtra palabras funcionales portuguesas y conserva los términos narrativos", () => {
+  const result = analyze([
+    idea("pt-a", "A casa do menino e da menina"),
+    idea("pt-b", "O menino da casa com a menina")
+  ]);
+  assert.equal(result.candidatePairCount, 1);
+  assert.deepEqual(result.resonances[0].sharedTerms, ["casa", "menina", "menino"]);
+  assert.equal(result.resonances[0].sharedTermCount, 3);
 });

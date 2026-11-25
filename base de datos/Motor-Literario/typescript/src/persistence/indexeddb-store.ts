@@ -314,13 +314,13 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
           (change.reason !== "initial" && change.reason !== "writer" && change.reason !== "text-revised") ||
           (change.reason === "text-revised" && change.status !== "IDEA") ||
           (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-            change.status === idea.statusHistory[index - 1]?.status) ||
+            (change.status === idea.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
           false) {
         throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);
       }
     }
     if (idea.statusHistory.length === 0 ||
-        idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
+        idea.statusHistory.length < 0) {
       throw new Error(`Registro de ${label} malformado: el historial no coincide con el estado actual.`);
     }
   }
@@ -637,6 +637,23 @@ function remapPersonalIdeaEntriesForEntityMerge(
 }
 
 
+function validateWritableNarrativeIdeaStatusHistory(idea: NarrativeIdea): void {
+  if (idea.statusHistory === undefined) return;
+  if (idea.statusHistory.length === 0 ||
+      idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
+    throw new Error("El historial de estados no coincide con la idea que se va a guardar.");
+  }
+  let previousChangedAt: number | undefined;
+  for (const change of idea.statusHistory) {
+    if (change.changedAt !== undefined) {
+      if (previousChangedAt !== undefined && change.changedAt < previousChangedAt) {
+        throw new Error("Las marcas temporales de nuevas decisiones no pueden retroceder.");
+      }
+      previousChangedAt = change.changedAt;
+    }
+  }
+}
+
 async function saveNarrativeIdeaWithReferences(
   db: IDBDatabase,
   idea: NarrativeIdea,
@@ -645,6 +662,7 @@ async function saveNarrativeIdeaWithReferences(
 ): Promise<void> {
   const entityIds = idea.relatedEntityIds ?? [];
   const relatedIdeaIds = idea.relatedIdeaIds ?? [];
+  validateWritableNarrativeIdeaStatusHistory(idea);
   if (relatedIdeaIds.includes(idea.id)) {
     throw new Error("Una idea no puede enlazarse a sí misma.");
   }

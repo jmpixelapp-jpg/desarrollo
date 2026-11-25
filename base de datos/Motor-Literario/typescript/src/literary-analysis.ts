@@ -1,5 +1,7 @@
 import type { NarrativeAssertion } from "./narrative-history";
-import type { NarrativeTimeReference } from "./narrative-knowledge";
+import type {
+  NarrativeTimeReference, NarrativeRelation, NarrativeIdea, NarrativeIdeaStatusChange
+} from "./narrative-knowledge";
 import { validateEventLifecycle, type EventLifecycle } from "./project-data";
 
 /**
@@ -41,6 +43,31 @@ export interface LiteraryAnalysisKnownProjectEvent {
   readonly staleEvidenceCount?: number;
   readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
 }
+export interface LiteraryAnalysisKnownRelation {
+  readonly projectId: string;
+  readonly relationId: string;
+  readonly fromEntityId: string;
+  readonly toEntityId: string;
+  readonly relationType: string;
+  readonly evidenceCount: number;
+  readonly staleEvidenceCount: number;
+  readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
+}
+export interface LiteraryAnalysisKnownIdea {
+  readonly projectId: string;
+  readonly ideaId: string;
+  readonly text: string;
+  readonly status: NarrativeIdea["status"];
+  readonly originDocumentId: string;
+  readonly sourceProjectName: string;
+  readonly relatedEntityIds: readonly string[];
+  readonly relatedIdeaIds: readonly string[];
+  readonly evidenceCount: number;
+  readonly staleEvidenceCount: number;
+  readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
+  readonly statusHistory: readonly NarrativeIdeaStatusChange[];
+  readonly omittedStatusHistoryCount: number;
+}
 export interface LiteraryAnalysisInput {
   readonly projectId: string;
   readonly documentId: string;
@@ -59,6 +86,12 @@ export interface LiteraryAnalysisInput {
   readonly knownEventLifecycles?: readonly EventLifecycle[];
   /** Afirmaciones históricas del proyecto; solo se asignan a escenas con evidencia vigente de esta revisión. */
   readonly knownAssertions?: readonly NarrativeAssertion[];
+  /** Relaciones actuales del proyecto, con evidencias activas y obsoletas separadas. */
+  readonly knownRelations?: readonly LiteraryAnalysisKnownRelation[];
+  /** Ideas vinculadas explícitamente a personajes, con decisiones de estado registradas. */
+  readonly knownIdeas?: readonly LiteraryAnalysisKnownIdea[];
+  readonly knownRelationsOmittedCount?: number;
+  readonly knownIdeasOmittedCount?: number;
 }
 export interface LiteraryAnalysisOccurrence { readonly start: number; readonly end: number; }
 export interface LiteraryRepeatedWord {
@@ -597,6 +630,41 @@ export interface LiteraryCharacterProjectEventTimeline {
   readonly transitions: readonly LiteraryCharacterProjectEventTimelineTransition[];
 }
 
+export interface LiteraryCharacterRelationshipEvidence {
+  readonly documentId: string;
+  readonly revision: number;
+  readonly occurrence: LiteraryAnalysisOccurrence;
+  readonly excerpt: string;
+}
+export interface LiteraryCharacterRelationshipProfile {
+  readonly relationId: string;
+  readonly direction: "outgoing" | "incoming" | "self";
+  readonly otherEntityId: string;
+  readonly otherCharacterName: string | null;
+  readonly relationType: string;
+  readonly evidenceStatus: "active-evidence" | "stale-only" | "no-evidence";
+  readonly evidenceCount: number;
+  readonly staleEvidenceCount: number;
+  readonly evidenceSamples: readonly LiteraryCharacterRelationshipEvidence[];
+  readonly evidenceTruncated: boolean;
+  /** Las relaciones narrativas aún no disponen de un historial de transiciones versionado. */
+  readonly historyStatus: "current-record-only";
+}
+export interface LiteraryCharacterDocumentedDecision {
+  readonly ideaId: string;
+  readonly text: string;
+  readonly status: NarrativeIdea["status"];
+  readonly originDocumentId: string;
+  readonly sourceProjectName: string;
+  readonly relatedIdeaIds: readonly string[];
+  readonly evidenceCount: number;
+  readonly staleEvidenceCount: number;
+  readonly evidenceSamples: readonly LiteraryCharacterRelationshipEvidence[];
+  readonly statusHistory: readonly NarrativeIdeaStatusChange[];
+  readonly omittedStatusHistoryCount: number;
+  /** Cambios de estado registrados explícitamente con reason=writer. */
+  readonly writerDecisionCount: number;
+}
 export interface LiteraryCharacterNarrativeTrajectory {
   readonly entityId: string;
   readonly canonicalName: string;
@@ -607,6 +675,8 @@ export interface LiteraryCharacterNarrativeTrajectory {
   readonly observedSceneIndexes: readonly number[];
   readonly incompleteSceneIndexes: readonly number[];
   readonly attributes: readonly LiteraryCharacterAttributeProfile[];
+  readonly relationships: readonly LiteraryCharacterRelationshipProfile[];
+  readonly documentedDecisions: readonly LiteraryCharacterDocumentedDecision[];
   readonly eventParticipation: readonly LiteraryCharacterEventEvidenceProfile[];
   readonly projectEventTimeline: LiteraryCharacterProjectEventTimeline;
   readonly causalRelations: readonly LiteraryCharacterCausalRelation[];
@@ -623,6 +693,10 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
   readonly omittedEventAssociationCount: number;
   readonly omittedCausalCandidateCount: number;
   readonly omittedProjectEventCount: number;
+  readonly relationshipRecordCount: number;
+  readonly omittedRelationshipCount: number;
+  readonly linkedIdeaCount: number;
+  readonly omittedIdeaCount: number;
   readonly causalCandidateCount: number;
   readonly trajectories: readonly LiteraryCharacterNarrativeTrajectory[];
 }

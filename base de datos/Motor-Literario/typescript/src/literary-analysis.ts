@@ -398,6 +398,27 @@ export interface LiterarySceneDialogueFlowProfile {
   readonly paragraphs: readonly LiterarySceneDialogueParagraph[];
   readonly evidenceTruncated: boolean;
 }
+
+export interface LiterarySceneDialogueFlowTransition {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  readonly previousParagraphCount: number;
+  readonly nextParagraphCount: number;
+  readonly paragraphCountDelta: number;
+  readonly previousDialogueBearingParagraphCount: number;
+  readonly nextDialogueBearingParagraphCount: number;
+  readonly dialogueBearingParagraphCountDelta: number;
+  readonly previousDialogueBearingParagraphRatio: number;
+  readonly nextDialogueBearingParagraphRatio: number;
+  readonly dialogueBearingParagraphRatioDelta: number;
+  readonly classificationCountDelta: {
+    readonly narrativeOnly: number;
+    readonly dialogueOnly: number;
+    readonly mixed: number;
+  };
+  readonly classificationTransitionCountDelta: LiterarySceneDialogueFlowProfile["classificationTransitionCounts"];
+  readonly classificationChangeCountDelta: number;
+}
 export interface LiterarySceneDialogueSegment {
   /** Índice local al conjunto de segmentos de diálogo de esta escena. */
   readonly segmentIndex: number;
@@ -493,6 +514,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneCadenceTransitions: readonly LiterarySceneCadenceTransition[];
   /** Variaciones cuantitativas de diálogo entre escenas explícitas contiguas; no atribuye hablantes. */
   readonly sceneDialogueTransitions: readonly LiterarySceneDialogueTransition[];
+  /** Cambios de distribución de párrafos narrativos, dialogados y mixtos entre escenas contiguas. */
+  readonly sceneDialogueFlowTransitions: readonly LiterarySceneDialogueFlowTransition[];
   /** Firmas de cadencia recurrentes entre escenas explícitas del fragmento analizado. */
   readonly sceneCadenceMotifs: LiterarySceneCadenceMotifAnalysis;
   /** Variaciones de señales gramaticales entre escenas contiguas; no demuestra cambio de narrador. */
@@ -1022,6 +1045,59 @@ function analyzeExplicitScenes(
     ),
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
   });});
+}
+
+function buildSceneDialogueFlowTransitions(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneDialogueFlowTransition[] {
+  const transitions: LiterarySceneDialogueFlowTransition[] = [];
+  for (let index=1; index<scenes.length; index++) {
+    const previous = scenes[index-1]!.dialogueFlowSignals;
+    const next = scenes[index]!.dialogueFlowSignals;
+    transitions.push({
+      fromSceneIndex:index,
+      toSceneIndex:index+1,
+      previousParagraphCount:previous.paragraphCount,
+      nextParagraphCount:next.paragraphCount,
+      paragraphCountDelta:next.paragraphCount-previous.paragraphCount,
+      previousDialogueBearingParagraphCount:previous.dialogueBearingParagraphCount,
+      nextDialogueBearingParagraphCount:next.dialogueBearingParagraphCount,
+      dialogueBearingParagraphCountDelta:
+        next.dialogueBearingParagraphCount-previous.dialogueBearingParagraphCount,
+      previousDialogueBearingParagraphRatio:previous.dialogueBearingParagraphRatio,
+      nextDialogueBearingParagraphRatio:next.dialogueBearingParagraphRatio,
+      dialogueBearingParagraphRatioDelta:roundMetric(
+        next.dialogueBearingParagraphRatio-previous.dialogueBearingParagraphRatio
+      ),
+      classificationCountDelta:{
+        narrativeOnly:next.classificationCounts.narrativeOnly-previous.classificationCounts.narrativeOnly,
+        dialogueOnly:next.classificationCounts.dialogueOnly-previous.classificationCounts.dialogueOnly,
+        mixed:next.classificationCounts.mixed-previous.classificationCounts.mixed
+      },
+      classificationTransitionCountDelta:{
+        narrativeOnlyToNarrativeOnly:
+          next.classificationTransitionCounts.narrativeOnlyToNarrativeOnly-previous.classificationTransitionCounts.narrativeOnlyToNarrativeOnly,
+        narrativeOnlyToDialogueOnly:
+          next.classificationTransitionCounts.narrativeOnlyToDialogueOnly-previous.classificationTransitionCounts.narrativeOnlyToDialogueOnly,
+        narrativeOnlyToMixed:
+          next.classificationTransitionCounts.narrativeOnlyToMixed-previous.classificationTransitionCounts.narrativeOnlyToMixed,
+        dialogueOnlyToNarrativeOnly:
+          next.classificationTransitionCounts.dialogueOnlyToNarrativeOnly-previous.classificationTransitionCounts.dialogueOnlyToNarrativeOnly,
+        dialogueOnlyToDialogueOnly:
+          next.classificationTransitionCounts.dialogueOnlyToDialogueOnly-previous.classificationTransitionCounts.dialogueOnlyToDialogueOnly,
+        dialogueOnlyToMixed:
+          next.classificationTransitionCounts.dialogueOnlyToMixed-previous.classificationTransitionCounts.dialogueOnlyToMixed,
+        mixedToNarrativeOnly:
+          next.classificationTransitionCounts.mixedToNarrativeOnly-previous.classificationTransitionCounts.mixedToNarrativeOnly,
+        mixedToDialogueOnly:
+          next.classificationTransitionCounts.mixedToDialogueOnly-previous.classificationTransitionCounts.mixedToDialogueOnly,
+        mixedToMixed:
+          next.classificationTransitionCounts.mixedToMixed-previous.classificationTransitionCounts.mixedToMixed
+      },
+      classificationChangeCountDelta:next.classificationChangeCount-previous.classificationChangeCount
+    });
+  }
+  return transitions;
 }
 
 function buildSceneDialogueTransitions(
@@ -2021,6 +2097,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
   const sceneCadenceTransitions = buildSceneCadenceTransitions(explicitScenes);
   const sceneDialogueTransitions = buildSceneDialogueTransitions(explicitScenes);
+  const sceneDialogueFlowTransitions = buildSceneDialogueFlowTransitions(explicitScenes);
   const sceneCadenceMotifs = buildSceneCadenceMotifs(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
@@ -2202,6 +2279,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneRhythmTransitions,
     sceneCadenceTransitions,
     sceneDialogueTransitions,
+    sceneDialogueFlowTransitions,
     sceneCadenceMotifs,
     sceneVoiceTransitions,
     sceneVoiceProfile,

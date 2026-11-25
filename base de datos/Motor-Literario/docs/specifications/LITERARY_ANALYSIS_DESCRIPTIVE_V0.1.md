@@ -164,3 +164,10 @@ Cada escena explícita expone `dialogueFlowSignals`, que clasifica los párrafos
 Los párrafos de solo puntuación, sin palabras reconocidas, no entran en el denominador. Los índices de párrafo siguen el orden de los rangos de párrafo detectados dentro de la escena; cada muestra conserva su rango UTF-16 absoluto. Se exponen hasta 40 muestras iniciales y `evidenceTruncated` indica si hay más. Los conteos y transiciones se calculan sobre todos los párrafos con palabras, no solo sobre las muestras visibles.
 
 Esta clasificación es estructural y léxica: depende de los segmentos de diálogo reconocidos y del separador de párrafos (líneas en blanco). Un párrafo mixto no identifica qué persona habla ni distingue narración indirecta, citas no reconocidas o voz del narrador. La proporción de párrafos dialogados no equivale a la proporción de palabras dialogadas ni al número de turnos conversacionales.
+
+
+### Comparación del flujo de diálogo entre escenas
+
+La propiedad `sceneDialogueFlowTransitions` compara el perfil de párrafos de cada par de escenas explícitas contiguas. Expone el número de párrafos, la cantidad y proporción de párrafos con diálogo reconocido, y las diferencias (siguiente menos anterior) para esas medidas. Incluye deltas por clase (`narrative-only`, `dialogue-only`, `mixed`), por cada transición entre clases consecutivas y para el número de cambios de clase.
+
+Los deltas de conteo son enteros con signo; el delta de proporción se redondea a tres decimales. Las transiciones solo comparan escenas contiguas disponibles y no saltan escenas intermedias. Si hay menos de dos escenas explícitas, la lista queda vacía. Estas diferencias describen la distribución de párrafos que contienen palabras reconocidas y no permiten inferir hablantes, turnos conversacionales, intención, tensión ni calidad narrativa.

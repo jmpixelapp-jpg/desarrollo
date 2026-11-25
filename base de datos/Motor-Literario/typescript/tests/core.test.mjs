@@ -11202,6 +11202,65 @@ test("limita las muestras del flujo de diálogo sin truncar conteos ni transicio
   assert.equal(flow.evidenceTruncated,true);
 });
 
+test("compara el flujo de párrafos dialogados entre escenas explícitas contiguas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "La casa estaba en silencio.",
+    "",
+    "—Ven conmigo, Ana.",
+    "",
+    "«No iré», respondió Ana.",
+    "",
+    "La puerta quedó abierta.",
+    "***",
+    "ESCENA 2",
+    "«Regresaré pronto».",
+    "",
+    "El tren salió de la estación."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow-transitions",documentId:"chapter",revision:1,text
+  });
+  assert.equal(result.sceneDialogueFlowTransitions.length,1);
+  const transition = result.sceneDialogueFlowTransitions[0];
+  assert.equal(transition.fromSceneIndex,1);
+  assert.equal(transition.toSceneIndex,2);
+  assert.equal(transition.previousParagraphCount,4);
+  assert.equal(transition.nextParagraphCount,2);
+  assert.equal(transition.paragraphCountDelta,-2);
+  assert.equal(transition.previousDialogueBearingParagraphCount,2);
+  assert.equal(transition.nextDialogueBearingParagraphCount,1);
+  assert.equal(transition.dialogueBearingParagraphCountDelta,-1);
+  assert.equal(transition.previousDialogueBearingParagraphRatio,0.5);
+  assert.equal(transition.nextDialogueBearingParagraphRatio,0.5);
+  assert.equal(transition.dialogueBearingParagraphRatioDelta,0);
+  assert.deepEqual(transition.classificationCountDelta,{
+    narrativeOnly:-1,dialogueOnly:0,mixed:-1
+  });
+  assert.deepEqual(transition.classificationTransitionCountDelta,{
+    narrativeOnlyToNarrativeOnly:0,
+    narrativeOnlyToDialogueOnly:-1,
+    narrativeOnlyToMixed:0,
+    dialogueOnlyToNarrativeOnly:1,
+    dialogueOnlyToDialogueOnly:0,
+    dialogueOnlyToMixed:-1,
+    mixedToNarrativeOnly:-1,
+    mixedToDialogueOnly:0,
+    mixedToMixed:0
+  });
+  assert.equal(transition.classificationChangeCountDelta,-2);
+});
+
+test("no crea transiciones de flujo de diálogo con menos de dos escenas explícitas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow-single",documentId:"chapter",revision:1,
+    text:"ESCENA 1\n«Una respuesta.»"
+  });
+  assert.deepEqual(result.sceneDialogueFlowTransitions,[]);
+});
+
 test("compara las métricas de diálogo entre escenas explícitas contiguas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = "ESCENA 1\nLa tarde cayó lentamente. “Hola, Ana.”\n***\nESCENA 2\nEl viento cruzó la plaza.";

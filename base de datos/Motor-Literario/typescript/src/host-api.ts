@@ -1512,7 +1512,11 @@ export class HostEngineApi {
     const narrativeEvents = this.store.loadEvents
       ? await this.getNarrativeEvents()
       : [];
-    const knownProjectEvents = narrativeEvents.map(event => {
+    const participantEvents=[...narrativeEvents]
+      .filter(event => event.participants.length > 0)
+      .sort((a,b) => a.id.localeCompare(b.id,"en"));
+    const knownProjectEventsOmittedCount=Math.max(0,participantEvents.length-2_000);
+    const knownProjectEvents = participantEvents.slice(0,2_000).map(event => {
       const activeEvidence=event.evidence.filter(evidence => evidence.status !== "stale");
       const staleEvidenceCount=event.evidence.length-activeEvidence.length;
       return {
@@ -1582,6 +1586,7 @@ export class HostEngineApi {
       knownCharacters,
       knownEvents,
       knownProjectEvents,
+      knownProjectEventsOmittedCount,
       knownEventLifecycles,
       knownAssertions
     });

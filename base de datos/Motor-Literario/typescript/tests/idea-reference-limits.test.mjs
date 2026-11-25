@@ -17,7 +17,7 @@ function baseIdea(extra = {}) {
   };
 }
 
-test("IndexedDB rechaza más de 500 referencias explícitas por categoría", async () => {
+test("IndexedDB rechaza más de 500 referencias explícitas totales por idea", async () => {
   const store = new IndexedDbProjectStore();
   const tooManyIdeaLinks = Array.from({ length: 501 }, (_, index) => "idea-" + index);
   const tooManyEntityLinks = Array.from({ length: 501 }, (_, index) => "entity-" + index);
@@ -29,6 +29,13 @@ test("IndexedDB rechaza más de 500 referencias explícitas por categoría", asy
   await assert.rejects(
     store.saveIdea(baseIdea({ relatedEntityIds: tooManyEntityLinks })),
     /superiores al límite de 500/
+  );
+  await assert.rejects(
+    store.saveIdea(baseIdea({
+      relatedEntityIds: Array.from({ length: 300 }, (_, index) => "entity-" + index),
+      relatedIdeaIds: Array.from({ length: 201 }, (_, index) => "idea-" + index)
+    })),
+    /el total de referencias supera el límite de 500/
   );
   await assert.rejects(
     store.saveIdea(baseIdea({
@@ -204,6 +211,36 @@ test("la fusión de ideas respeta el máximo de 500 vínculos después de unir c
   const overflow = baseIdea({ relatedIdeaIds: ["idea-0", "idea-extra"] });
   assert.throws(
     () => mergeNarrativeIdea(previous, overflow),
-    /referencias explícitas a ideas superan el límite de 500/
+    /referencias explícitas de la idea superan el límite de 500/
+  );
+});
+
+test("fusionar ideas conserva referencias a entidades y aplica un límite conjunto", async () => {
+  const { mergeNarrativeIdea, MAX_NARRATIVE_IDEA_REFERENCES } =
+    await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    relatedEntityIds: ["entity-a", "entity-shared"],
+    relatedIdeaIds: ["idea-a"]
+  });
+  const incoming = baseIdea({
+    relatedEntityIds: ["entity-shared", "entity-b"],
+    relatedIdeaIds: ["idea-a", "idea-b"]
+  });
+
+  const merged = mergeNarrativeIdea(previous, incoming);
+  assert.deepEqual(merged.relatedEntityIds, ["entity-a", "entity-shared", "entity-b"]);
+  assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-b"]);
+
+  const atLimit = baseIdea({
+    relatedEntityIds: Array.from(
+      { length: MAX_NARRATIVE_IDEA_REFERENCES - 1 },
+      (_, index) => "entity-" + index
+    ),
+    relatedIdeaIds: ["idea-last"]
+  });
+  const overflow = baseIdea({ relatedIdeaIds: ["another-idea"] });
+  assert.throws(
+    () => mergeNarrativeIdea(atLimit, overflow),
+    /referencias explícitas de la idea superan el límite de 500/
   );
 });

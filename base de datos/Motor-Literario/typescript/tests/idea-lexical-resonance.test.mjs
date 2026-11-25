@@ -36,7 +36,16 @@ function analyzeGraph(ideas, options = {}) {
     revision: 1,
     text: "Fragmento narrativo de prueba.",
     ...(options.projectCatalog === false
-      ? { knownIdeas: ideas }
+      ? {
+          knownIdeas: ideas.map(item => ({
+            ...item,
+            text: item.text ?? "Texto legado de idea",
+            originDocumentId: "chapter-1",
+            sourceProjectName: "Libro",
+            relatedEntityIds: [],
+            evidence: []
+          }))
+        }
       : { knownProjectIdeas: ideas }),
     ...(options.projectCatalog === false
       ? { knownIdeasOmittedCount: options.omittedIdeaCount ?? 0 }
@@ -200,8 +209,9 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   const initial = analyzeGraph([original]);
   assert.equal(initial.nodes[0].activeEvidenceCount, 1);
   assert.equal(initial.nodes[0].writerDecisionCount, 1);
-  assert.equal(initial.statusProfiles[0].activeEvidenceCount, 1);
-  assert.equal(initial.statusProfiles[0].statusHistoryRecordCount, 1);
+  const initialProfile = initial.statusProfiles.find(profile => profile.status === "incorporated");
+  assert.equal(initialProfile.activeEvidenceCount, 1);
+  assert.equal(initialProfile.statusHistoryRecordCount, 2);
 
   const revised = analyzeGraph([{
     ...original,
@@ -220,11 +230,12 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   assert.equal(revised.nodes[0].writerDecisionCount, 3);
   assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
   assert.equal(revised.nodes[0].statusHistory.length, 2);
-  assert.equal(revised.statusProfiles[0].activeEvidenceCount, 4);
-  assert.equal(revised.statusProfiles[0].staleEvidenceCount, 2);
-  assert.equal(revised.statusProfiles[0].writerDecisionCount, 3);
-  assert.equal(revised.statusProfiles[0].statusHistoryRecordCount, 2);
-  assert.equal(revised.statusProfiles[0].omittedStatusHistoryCount, 1);
+  const revisedProfile = revised.statusProfiles.find(profile => profile.status === "IDEA");
+  assert.equal(revisedProfile.activeEvidenceCount, 4);
+  assert.equal(revisedProfile.staleEvidenceCount, 2);
+  assert.equal(revisedProfile.writerDecisionCount, 3);
+  assert.equal(revisedProfile.statusHistoryRecordCount, 2);
+  assert.equal(revisedProfile.omittedStatusHistoryCount, 1);
 });
 
 test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {

@@ -9,7 +9,8 @@ import type {
   ImportAuthorization, SchemaMigration
 } from "../mldb-records";
 import {
-  validateProjectRecord, validateRecordName, validateManuscriptFragment,
+  validateProjectRecord as validateProjectRecordContract,
+  validateRecordName, validateManuscriptFragment,
   validateRecordAttribute, validateRelationAttribute, validateActiveSuggestion,
   validateImportAuthorization, validateSchemaMigration,
   cloneProjectRecord, cloneRecordName, cloneManuscriptFragment, cloneRecordAttribute,
@@ -1898,9 +1899,9 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   async saveProjectRecord(record: ProjectRecord, expectedCurrent?: ProjectRecord): Promise<void> {
-    validateProjectRecord(record, record.projectId);
+    validateProjectRecordContract(record, record.projectId);
     if (expectedCurrent) {
-      validateProjectRecord(expectedCurrent, record.projectId);
+      validateProjectRecordContract(expectedCurrent, record.projectId);
       if (record.currentVersion !== expectedCurrent.currentVersion + 1) {
         throw new Error("La versión de la ficha debe avanzar exactamente una unidad.");
       }
@@ -1951,7 +1952,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       currentRequest.onsuccess = () => {
         current = currentRequest.result as ProjectRecord | undefined;
         try {
-          if (current) validateProjectRecord(current, record.projectId);
+          if (current) validateProjectRecordContract(current, record.projectId);
           recordReady = true;
           commitIfReady();
         } catch (error) { abortWith(error); }
@@ -2066,7 +2067,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       recordRequest.onsuccess = () => {
         parent = recordRequest.result as ProjectRecord | undefined;
         try {
-          if (parent) validateProjectRecord(parent, name.projectId);
+          if (parent) validateProjectRecordContract(parent, name.projectId);
           parentReady = true;
           commitIfReady();
         } catch (error) { abortWith(error); }

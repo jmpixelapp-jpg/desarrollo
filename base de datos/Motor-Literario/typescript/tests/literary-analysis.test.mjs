@@ -358,3 +358,58 @@ test("rechaza afirmaciones históricas ajenas al proyecto o a personajes no cono
     knownAssertions: [{ ...assertion, entityId: "unknown-character" }]
   }), /afirmaciones históricas/);
 });
+
+test("compara atributos entre capítulos solo con referencias temporales explícitas comparables", () => {
+  const text = ["Escena 1", "Ana cruzó el patio."].join("\n");
+  const dated = (id, value, documentId, raw, orderValue, revision = 1) => ({
+    ...makeAssertion({
+      id,
+      value,
+      text: "Ana cruzó el patio.",
+      phrase: "Ana cruzó el patio.",
+      documentId,
+      revision
+    }),
+    timeReference: {
+      basis: "calendar",
+      precision: "year",
+      raw,
+      orderValue
+    }
+  });
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 2,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownAssertions: [
+      dated("chapter-one-age", 18, "chapter-one", "año 2020", 100, 2),
+      dated("chapter-two-age", 20, "chapter-two", "año 2021", 200),
+      dated("chapter-three-age", 20, "chapter-three", "año 2022", 300),
+      {
+        ...dated("chapter-old-age", 17, "chapter-old", "año 2019", 0),
+        evidence: {
+          ...dated("chapter-old-age-copy", 17, "chapter-old", "año 2019", 0).evidence,
+          status: "stale"
+        }
+      }
+    ]
+  });
+  const profile = result.characterAttributeEvolution.profiles.find(item => item.attribute === "age");
+
+  assert.ok(profile);
+  assert.equal(profile.sceneCount, 1, "solo la revisión del capítulo abierto se asigna a escenas");
+  assert.equal(profile.projectTimelineAssertionCount, 3);
+  assert.equal(profile.projectTimelinePointCount, 3);
+  assert.deepEqual(profile.projectTimeline.map(item => item.rawTimeReferences), [
+    ["año 2020"], ["año 2021"], ["año 2022"]
+  ]);
+  assert.deepEqual(profile.projectTimelineTransitions.map(item => item.status), [
+    "changed-value", "unchanged-value"
+  ]);
+  assert.deepEqual(profile.projectTimelineTransitions.map(item => item.previousValues), [[18], [20]]);
+  assert.deepEqual(profile.projectTimelineTransitions.map(item => item.nextValues), [[20], [20]]);
+  assert.equal(result.characterAttributeEvolution.staleAssertionCount, 1);
+  assert.equal(result.characterAttributeEvolution.outOfScopeAssertionCount, 2);
+});

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
+import { SqliteProjectStore } from "../bridge/sqlite-project-store.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER = resolve(HERE, "../bridge/stdio-server.mjs");
@@ -488,6 +489,43 @@ test("el archivo rechaza referencias desde ideas que permanecerán en el libro",
       await client.shutdown();
       await exited;
     } catch { child.kill(); }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin modificar las fichas", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-identity-history-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const store = await SqliteProjectStore.open(databasePath);
+  const entity = (id, canonicalName, mergedFromIds = []) => ({
+    id,
+    projectId: "identity-history-project",
+    kind: "character",
+    canonicalName,
+    normalizedName: canonicalName.toLocaleLowerCase("es"),
+    aliases: [],
+    mergedFromIds,
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  });
+  try {
+    store.saveEntity(entity("target", "Ana", ["legacy-id", "legacy-id"]));
+    store.saveEntity(entity("source", "Anita"));
+    assert.throws(
+      () => store.mergeNarrativeEntityIdentity(
+        "identity-history-project", "target", "source", "writer-history"
+      ),
+      /entidad malformada/
+    );
+    const persisted = await store.loadEntities("identity-history-project");
+    assert.equal(persisted.length, 2);
+    assert.deepEqual(persisted.find(item => item.id === "target").mergedFromIds, ["legacy-id", "legacy-id"]);
+    assert.ok(persisted.some(item => item.id === "source"));
+  } finally {
+    store.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

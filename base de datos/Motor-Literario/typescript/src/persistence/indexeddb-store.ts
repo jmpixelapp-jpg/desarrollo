@@ -738,7 +738,7 @@ async function saveNarrativeEventWithReferences(
           }
         }
         if (requiredIds.some(id => !available.has(id))) {
-          throw new Error("Uno o más participantes no existen en el proyecto del acontecimiento.");
+          throw new Error("Referencia narrativa inválida: una o más entidades no existen en el proyecto.");
         }
         entitiesReady = true;
         saveIfReady();

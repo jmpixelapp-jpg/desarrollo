@@ -106,7 +106,7 @@ test("detecta cambios en keyPath e índices aunque el almacén exista", () => {
 
 test("detecta almacenes IndexedDB creados que no figuran en el manifiesto", () => {
   const sourceWithExtraStore = runtimeSource.replace(
-    "const DATABASE_VERSION = 22;",
+    "const DATABASE_VERSION = 23;",
     'const DATABASE_VERSION = 22;\nconst UNDECLARED_STORE = "undeclared-store";'
   ).replace(
     "const db = request.result;",

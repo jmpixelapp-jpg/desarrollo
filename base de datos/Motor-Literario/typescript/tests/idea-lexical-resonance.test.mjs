@@ -44,6 +44,29 @@ function analyzeGraph(ideas, options = {}) {
   }).ideaGraph;
 }
 
+test("analiza el límite de 2.000 ideas conectadas sin perder la topología", () => {
+  const count = 2_000;
+  const ideas = Array.from({ length: count }, (_, index) => ({
+    ...idea("stress-" + String(index).padStart(4, "0")),
+    relatedIdeaIds: [
+      "stress-" + String((index + 1) % count).padStart(4, "0")
+    ]
+  }));
+
+  const graph = analyzeGraph(ideas);
+  assert.equal(graph.ideaCount, count);
+  assert.equal(graph.referenceCount, count);
+  assert.equal(graph.includedReferenceCount, count);
+  assert.equal(graph.notIncludedReferenceCount, 0);
+  assert.equal(graph.cycleCount, 1);
+  assert.equal(graph.cycles[0].ideaIds.length, count);
+  assert.equal(graph.weakComponentCount, 1);
+  assert.equal(graph.largestWeakComponentSize, count);
+  assert.equal(graph.sourceNodeCount, 0);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+});
+
 test("conserva ciclos, reciprocidad y orden estable con índices compactos", () => {
   const ideas = [
     { ...idea("a", "memoria espejo luz"), relatedIdeaIds: ["á", "z", "ghost"] },

@@ -3579,7 +3579,7 @@ export class HostEngineApi {
       authorMarkedIdeaCapture: Boolean(this.store.saveIdea && this.store.loadIdeas),
       explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.saveEntity && this.store.loadEntities),
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),
-      projectWideNarrativeIdeaGraph: Boolean(this.store.loadIdeas),
+      projectWideNarrativeIdeaGraph: Boolean(this.store.loadIdeas && this.store.loadEntities),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt

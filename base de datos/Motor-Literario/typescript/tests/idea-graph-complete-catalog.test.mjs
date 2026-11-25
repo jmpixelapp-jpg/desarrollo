@@ -803,3 +803,48 @@ test("la resonancia léxica excluye stopwords en español, inglés y portugués"
     api.dispose();
   }
 });
+
+
+test("el límite léxico prioriza frecuencia antes del orden alfabético", async () => {
+  const frequent = ["memoria", "memoria", "memoria", "espejo", "espejo"];
+  const unique = Array.from({ length: 98 }, (_, index) =>
+    "unicoa" + String(index).padStart(3, "0")
+  );
+  const ideas = [
+    {
+      projectId, id: "lexical-frequency-a",
+      text: [...frequent, ...unique, "zzdiscard"].join(" "),
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "lexical-frequency-b",
+      text: "memoria espejo zzdiscard",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }
+  ];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-frequency" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa frecuencia determina la selección léxica.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.omittedDistinctTermCount, 1);
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.equal(lexical.resonances[0].leftTermCount, 100);
+    assert.equal(lexical.resonances[0].rightTermCount, 3);
+    assert.equal(lexical.resonances[0].sharedTermCount, 2);
+    assert.deepEqual(lexical.resonances[0].sharedTerms, ["espejo", "memoria"]);
+  } finally {
+    api.dispose();
+  }
+});

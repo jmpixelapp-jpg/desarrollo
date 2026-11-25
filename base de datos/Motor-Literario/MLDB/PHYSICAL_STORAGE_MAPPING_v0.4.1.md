@@ -67,18 +67,18 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `schema_migrations` | `schema-migrations` | Implementado desde DB18; cada actualización escribe un recibo con versiones y checksum |
 | `project_dictionaries` | `project-dictionaries` | Implementado; unicidad por proyecto, idioma y nombre normalizado |
 | `dictionary_entries` | `dictionary-entries` | Implementado; actualización comparada y forma normalizada única |
-| `dictionary_entry_entities` | `dictionary-entry-entities` + proyección `relatedEntityIds` | Parcial; DB21 persiste metadatos para vínculos nuevos/confirmados; los vínculos heredados por IDs no se completan con metadatos inventados |
+| `dictionary_entry_entities` | `dictionary-entry-entities` + proyección `relatedEntityIds` | Implementado; cada vínculo tiene tipo, procedencia y fecha propios; DB21 migra los vínculos antiguos con procedencia MIGRATION y fecha de materialización |
 | `record_lifecycles` | `record-lifecycles` | Implementado; historial append-only con continuidad de revisión |
 | `relation_lifecycles` | `relation-lifecycles` | Implementado; historial append-only con continuidad de revisión |
 | `writer_library_ideas` | `personal-idea-library` | Implementado con transacción de transferencia |
 | `writer_library_finalization_receipts` | `writer-library-finalization-receipts` | Implementado; recibo idempotente con checksum y transferencia en la misma transacción |
 
-La única tabla lógica que permanece parcial es `dictionary_entry_entities`: desde DB21 los vínculos nuevos/confirmados guardan tipo, procedencia y fecha por separado y se actualizan atómicamente; los vínculos heredados que solo tenían IDs se conservan sin inventar sus metadatos históricos.
+Las 24 tablas lógicas propiedad del motor están implementadas. `projects` permanece bajo propiedad del anfitrión. Los vínculos de diccionario se materializan por separado y DB21 conserva las asociaciones heredadas indicando expresamente que su procedencia es MIGRATION y que su fecha corresponde a la migración, no a una fecha histórica reconstruida.
 
 El archivo `storage_mapping_v0.4.1.json` es la fuente verificable del mapeo: contiene todas las tablas, el ámbito lógico, el ámbito físico, prefijos, representación, contrato TypeScript y estado de implementación. El validador falla cuando falta una tabla, hay una tabla extra, se repite una entrada o el ámbito/contrato/representación es inválido.
 
 ## Límites que no deben ocultarse
 
-La versión IndexedDB 20 materializa fichas genéricas, nombres, relaciones, evidencias y ocurrencias cronológicas en almacenes independientes (`project-records`, `record-names`, `project-relations`, `project-evidences` y `timeline-occurrences`), sin sustituir los almacenes especializados de extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
+La versión IndexedDB 21 materializa fichas genéricas, nombres, relaciones, evidencias, ocurrencias cronológicas y vínculos de diccionario en almacenes independientes (`project-records`, `record-names`, `project-relations`, `project-evidences` y `timeline-occurrences`), sin sustituir los almacenes especializados de extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.

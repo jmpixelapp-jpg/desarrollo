@@ -438,3 +438,57 @@ test("no acepta destinos con el mismo ID pertenecientes a otro proyecto", async 
     api.dispose();
   }
 });
+
+
+test("permite reintentar explícitamente con la instantánea refrescada tras un conflicto CAS", async () => {
+  const store = new AtomicIdeaStore(
+    [
+      idea("source", { relatedIdeaIds: ["idea-a"] }),
+      idea("idea-a"),
+      idea("idea-b"),
+      idea("idea-concurrent")
+    ],
+    []
+  );
+  const api = createApi(store);
+
+  try {
+    store.onNextConflict = current => ({
+      ...current,
+      status: "incorporated",
+      statusHistory: [
+        ...current.statusHistory,
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
+      relatedIdeaIds: [...current.relatedIdeaIds, "idea-concurrent"]
+    });
+
+    await assert.rejects(
+      api.synchronizeNarrativeIdeaLinks(
+        "source",
+        links(["idea-a"], []),
+        links(["idea-b"], [])
+      ),
+      /cambió en otra instancia/
+    );
+
+    const refreshed = (await api.getNarrativeIdeas()).find(item => item.id === "source");
+    assert.deepEqual(refreshed.relatedIdeaIds, ["idea-a", "idea-concurrent"]);
+    assert.equal(refreshed.status, "incorporated");
+
+    const retried = await api.synchronizeNarrativeIdeaLinks(
+      "source",
+      links(refreshed.relatedIdeaIds, refreshed.relatedEntityIds),
+      links(["idea-b", "idea-concurrent"], [])
+    );
+
+    assert.deepEqual(retried.relatedIdeaIds, ["idea-b", "idea-concurrent"]);
+    assert.equal(retried.status, "incorporated");
+    assert.deepEqual(retried.statusHistory.map(change => change.status), [
+      "IDEA", "incorporated"
+    ]);
+    assert.equal(store.writes, 2);
+  } finally {
+    api.dispose();
+  }
+});

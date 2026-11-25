@@ -2212,7 +2212,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 22);
+      assert.equal(version, 23);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();

@@ -456,3 +456,75 @@ test("sincroniza otra instancia tras restaurar y difunde solo identidades, nunca
     else delete globalThis.BroadcastChannel;
   }
 });
+
+test("una restauración abortada no notifica cambios ni invalida otras instancias", async () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class AbortBroadcastChannel {
+    static channels = new Set();
+    static messages = [];
+    name;
+    onmessage = null;
+    constructor(name) {
+      this.name = name;
+      AbortBroadcastChannel.channels.add(this);
+    }
+    postMessage(data) {
+      AbortBroadcastChannel.messages.push(clone(data));
+      for (const channel of AbortBroadcastChannel.channels) {
+        if (channel === this || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: clone(data) }));
+      }
+    }
+    close() { AbortBroadcastChannel.channels.delete(this); }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: AbortBroadcastChannel
+  });
+
+  const preservedDocument = {
+    ...documentRecord,
+    projectId: "preserved-project",
+    text: "La versión confirmada debe permanecer."
+  };
+  const currentDatabase = createFakeDatabase({
+    documents: [preservedDocument],
+    "personal-idea-library": []
+  }, {
+    failOnRecord: (_name, value) => value?.id === "explode"
+  });
+  const source = attach(createFakeDatabase({
+    documents: [{ ...documentRecord, text: "No debe reemplazar la versión confirmada." }],
+    "personal-idea-library": [{
+      ...archivedIdea,
+      idea: { ...archivedIdea.idea, id: "explode" }
+    }]
+  }));
+  const target = attach(currentDatabase);
+  const observer = attach(currentDatabase);
+  const observedProjects = [];
+  const off = observer.subscribeNarrativeChanges(id => observedProjects.push(id));
+
+  try {
+    const backup = await source.exportDatabaseBackup();
+    await assert.rejects(
+      target.restoreDatabaseBackup(backup),
+      /simulated IndexedDB write failure/
+    );
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.deepEqual(currentDatabase.state.get("documents"), [preservedDocument]);
+    assert.deepEqual(currentDatabase.state.get("personal-idea-library"), []);
+    assert.deepEqual(observedProjects, []);
+    assert.deepEqual(AbortBroadcastChannel.messages, []);
+  } finally {
+    off();
+    source.database = undefined;
+    target.database = undefined;
+    observer.database = undefined;
+    for (const channel of [...AbortBroadcastChannel.channels]) channel.close();
+    if (originalDescriptor) Object.defineProperty(globalThis, "BroadcastChannel", originalDescriptor);
+    else delete globalThis.BroadcastChannel;
+  }
+});

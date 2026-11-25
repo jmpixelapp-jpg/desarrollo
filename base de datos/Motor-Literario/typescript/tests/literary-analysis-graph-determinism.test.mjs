@@ -210,3 +210,47 @@ test("un historial truncado conserva métricas observadas pero no certifica su c
   assert.equal(graph.statusHistoryConsistency.unknownIdeaCount, 1);
   assert.equal(graph.statusHistoryConsistency.verificationCoverage, 0);
 });
+
+
+test("el historial completo informa divergencias y contabiliza solo cambios de estado efectivos", () => {
+  const graph = analyze([{
+    ...idea("history"),
+    status: "discarded",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 50 },
+      { status: "IDEA", reason: "initial", changedAt: 50 },
+      { status: "incorporated", reason: "writer", changedAt: 60 },
+      { status: "discarded", reason: "text-revised", changedAt: 55 },
+      { status: "incorporated", reason: "writer", changedAt: 70 }
+    ]
+  }]);
+  const node = graph.nodes[0];
+
+  assert.equal(node.observedStatusTransitionCount, 3);
+  assert.equal(node.statusReversalCount, 1);
+  assert.equal(node.observedInitialStatusRecordCount, 2);
+  assert.equal(node.observedWriterStatusChangeCount, 2);
+  assert.equal(node.observedTextRevisionStatusChangeCount, 1);
+  assert.equal(node.comparableStatusTimestampPairCount, 4);
+  assert.equal(node.uncomparableStatusTimestampPairCount, 0);
+  assert.equal(node.nonMonotonicStatusTimestampCount, 1);
+  assert.equal(node.currentStatusHistoryConsistency, "mismatch");
+  assert.equal(graph.statusHistoryConsistency.mismatchIdeaCount, 1);
+  assert.equal(graph.statusHistoryConsistency.consistentIdeaCount, 0);
+  assert.equal(graph.statusHistoryConsistency.verificationCoverage, 1);
+  assert.equal(node.knownStatusHistorySpanMs, 20);
+});
+
+test("una idea sin historial no se clasifica como coherente ni divergente", () => {
+  const graph = analyze([{
+    ...idea("history"),
+    status: "incorporated",
+    statusHistory: []
+  }]);
+  const node = graph.nodes[0];
+
+  assert.equal(node.currentStatusHistoryConsistency, "unknown");
+  assert.equal(graph.statusHistoryConsistency.unknownIdeaCount, 1);
+  assert.equal(graph.statusHistoryConsistency.verifiableIdeaCount, 0);
+  assert.equal(graph.statusHistoryConsistency.verificationCoverage, 0);
+});

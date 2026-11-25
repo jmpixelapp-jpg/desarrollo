@@ -1585,7 +1585,7 @@ export class SqliteProjectStore {
               !Array.isArray(existingReceipt.archivedIdeaIds) ||
               existingReceipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
               new Set(existingReceipt.archivedIdeaIds).size !== existingReceipt.archivedIdeaIds.length ||
-              [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1].localeCompare(id)>0) ||
+              [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1]>id) ||
               existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds)) {
             throw new Error("El recibo de finalización está malformado o no pertenece al escritor y libro activos.");
           }
@@ -1754,7 +1754,7 @@ export class SqliteProjectStore {
           archivedIdeaIds.push(idea.id);
         });
 
-        archivedIdeaIds.sort((first, second) => first.localeCompare(second));
+        archivedIdeaIds.sort();
         const archiveChecksum = checksumFor(archivedIdeaIds);
         this.put("writer-library-finalization-receipts", receiptKey, {
           writerId, sourceProjectId: projectId, receiptId, sourceProjectName,

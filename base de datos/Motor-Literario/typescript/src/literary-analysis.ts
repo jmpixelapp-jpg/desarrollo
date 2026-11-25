@@ -3285,6 +3285,17 @@ const MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY = 40;
 const MIN_IDEA_LEXICAL_SHARED_TERMS = 2;
 const MAX_IDEA_LEXICAL_RESONANCE_SAMPLES = 100;
 const MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES = 12;
+const IDEA_PORTUGUESE_STOP_WORDS = new Set([
+  "a","à","às","ao","aos","aquela","aquelas","aquele","aqueles","aquilo","as","até",
+  "com","como","da","das","de","dela","delas","dele","deles","depois","do","dos","e",
+  "ela","elas","ele","eles","em","entre","era","eram","essa","essas","esse","esses",
+  "esta","está","estão","estas","este","estes","eu","foi","foram","há","isso","isto",
+  "já","lhe","lhes","mais","mas","me","mesmo","meu","minha","muito","na","nas","nem",
+  "no","nos","nós","nossa","nossas","nosso","nossos","num","numa","o","os","ou","para",
+  "pela","pelas","pelo","pelos","por","porque","qual","quando","que","quem","se","sem",
+  "seu","seus","sua","suas","também","te","tem","têm","tenho","ter","todo","toda",
+  "todos","todas","tu","um","uma","umas","uns","você","vocês"
+]);
 const IDEA_ENGLISH_STOP_WORDS = new Set([
   "the","and","for","with","from","that","this","these","those","then","than","there","their","them",
   "they","you","your","yours","our","ours","his","her","hers","its","who","whom","what","when","where",
@@ -3744,7 +3755,8 @@ function buildLiteraryIdeaLexicalResonances(
     for (const token of tokenize(idea.text)) {
       const term = token.normalized;
       if (Array.from(term).length < 2 || !/\p{L}/u.test(term) ||
-          STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term)) continue;
+          STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
+          IDEA_PORTUGUESE_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>

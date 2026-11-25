@@ -9,7 +9,7 @@
 
 El manifiesto `MLDB/storage_mapping_v0.4.1.json` declara 25 tablas lógicas. La tabla `projects` pertenece al anfitrión: el motor recibe la identidad del libro y no crea una copia narrativa de ella. Las otras 24 tablas pertenecen al motor y deben permanecer marcadas como `implemented`.
 
-El manifiesto agrupa esas tablas en 30 almacenes IndexedDB físicos. Algunos almacenes son compartidos por más de una tabla lógica (por ejemplo, las evidencias narrativas y los vínculos de diccionario), por lo que el número de almacenes no equivale al número de tablas.
+El manifiesto declara 31 almacenes IndexedDB físicos, incluidos los almacenes operativos de diagnósticos y recibos de finalización; las 24 tablas lógicas del motor se corresponden con sus almacenes aunque algunas colecciones se comparten. Algunos almacenes son compartidos por más de una tabla lógica (por ejemplo, las evidencias narrativas y los vínculos de diccionario), por lo que el número de almacenes no equivale al número de tablas.
 
 ## Verificación automatizada
 
@@ -32,4 +32,4 @@ La auditoría es estática y complementa —no sustituye— las pruebas de compo
 
 ## Estado comprobado
 
-En la verificación de esta revisión, las 24 tablas propiedad del motor estaban marcadas `implemented`; los 30 almacenes físicos declarados tenían constantes y llamadas de creación en el adaptador. El último flujo de CI de `main` ejecutó correctamente el typecheck, las pruebas automatizadas y el benchmark de edición en vivo.
+En la verificación de esta revisión, las 24 tablas propiedad del motor estaban marcadas `implemented`; los 31 almacenes físicos declarados tenían constantes y llamadas de creación en el adaptador. El último flujo de CI de `main` ejecutó correctamente el typecheck, las pruebas automatizadas y el benchmark de edición en vivo.

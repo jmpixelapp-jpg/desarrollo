@@ -318,7 +318,7 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     incomingReferenceCount: 0,
     includedOutgoingReferenceCount: 1,
     notIncludedOutgoingReferenceCount: 1,
-    statusHistoryRecordCount: 1,
+    statusHistoryRecordCount: 3,
     omittedStatusHistoryCount: 0,
     writerDecisionCount: 2,
     activeEvidenceCount: 3,

@@ -2709,7 +2709,8 @@ test("el grafo identifica puntos de articulación en cadenas de referencias", ()
     text: "Escena 1\nUna idea permanece.",
     knownProjectIdeas: [
       makeIdea("a", ["b"]),
-      makeIdea("b", ["c"]),
+      { ...makeIdea("b", ["c"]), status: "incorporated",
+        statusHistory: [{ status: "incorporated", reason: "initial" }] },
       makeIdea("c"),
       makeIdea("isolated")
     ]
@@ -2730,7 +2731,8 @@ test("el grafo identifica puntos de articulación en cadenas de referencias", ()
   assert.equal(graph.terminalReachableNodeCount, 4);
   assert.equal(graph.terminalReachabilityCoverage, 1);
   assert.deepEqual(graph.statusTransitionProfiles, [
-    { fromStatus: "IDEA", toStatus: "IDEA", referenceCount: 2 }
+    { fromStatus: "IDEA", toStatus: "incorporated", referenceCount: 1 },
+    { fromStatus: "incorporated", toStatus: "IDEA", referenceCount: 1 }
   ]);
   assert.equal(graph.articulationPointCount, 1);
   assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);

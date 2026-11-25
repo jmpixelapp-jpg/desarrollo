@@ -230,6 +230,59 @@ export function cloneTimelineTrack(track: TimelineTrack): TimelineTrack {
 }
 
 
+/** Cambio inmutable de etiqueta y participantes de un acontecimiento. */
+export interface EventLifecycle {
+  readonly projectId: string;
+  readonly id: string;
+  readonly eventId: string;
+  /** Secuencia monotónica desde el primer cambio registrado. */
+  readonly revision: number;
+  readonly previousLabel: string;
+  readonly newLabel: string;
+  /** IDs únicos y ordenados de forma estable; no son menciones textuales. */
+  readonly previousParticipants: readonly string[];
+  readonly newParticipants: readonly string[];
+  readonly changedBy: string;
+  readonly changeReason?: string | null;
+  readonly changedAt: number;
+}
+
+function validateEventLifecycleParticipants(value: unknown, label: string): void {
+  if (!Array.isArray(value) || value.length > 500 ||
+      value.some((id: unknown) => typeof id !== "string" || !id.trim() || id.length > 256) ||
+      new Set(value).size !== value.length ||
+      value.some((id: string, index: number) => index > 0 &&
+        value[index-1]!.localeCompare(id,"en") > 0)) {
+    throw new Error(`El historial de acontecimiento contiene ${label} inválidos o no normalizados.`);
+  }
+}
+
+export function validateEventLifecycle(
+  item: EventLifecycle,
+  expectedProjectId?: string
+): void {
+  if (!item || typeof item !== "object" ||
+      typeof item.projectId !== "string" || !item.projectId.trim() ||
+      (expectedProjectId !== undefined && item.projectId !== expectedProjectId) ||
+      typeof item.id !== "string" || !item.id.trim() || item.id.length > 256 ||
+      typeof item.eventId !== "string" || !item.eventId.trim() || item.eventId.length > 256 ||
+      !Number.isSafeInteger(item.revision) || item.revision < 1 ||
+      typeof item.previousLabel !== "string" || !item.previousLabel.trim() || item.previousLabel.length > 512 ||
+      typeof item.newLabel !== "string" || !item.newLabel.trim() || item.newLabel.length > 512 ||
+      typeof item.changedBy !== "string" || !item.changedBy.trim() || item.changedBy.length > 256 ||
+      (item.changeReason !== undefined && item.changeReason !== null &&
+        (typeof item.changeReason !== "string" || item.changeReason.length > 4_096)) ||
+      typeof item.changedAt !== "number" || !Number.isFinite(item.changedAt) || item.changedAt < 0) {
+    throw new Error("Registro de ciclo de vida de acontecimiento inválido: identidad, transición o fecha incorrectas.");
+  }
+  validateEventLifecycleParticipants(item.previousParticipants,"participantes anteriores");
+  validateEventLifecycleParticipants(item.newParticipants,"participantes nuevos");
+}
+
+export function cloneEventLifecycle(item: EventLifecycle): EventLifecycle {
+  return structuredClone(item);
+}
+
 /** Cambio inmutable de etiqueta o estado de una ficha narrativa. */
 export interface RecordLifecycle {
   readonly projectId: string;

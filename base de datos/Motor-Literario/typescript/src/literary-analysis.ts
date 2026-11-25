@@ -3742,7 +3742,12 @@ function buildLiteraryIdeaGraph(
   // Map/Set por arista y conservan el orden necesario para búsquedas binarias.
   const adjacency: number[][] = Array.from({ length: ideaCount }, () => []);
   const incoming = new Int32Array(ideaCount);
+  const outgoingIncluded = new Int32Array(ideaCount);
   const outgoingExternal = new Int32Array(ideaCount);
+  const directReferenceStatusCountsBySource = Array.from(
+    { length: ideaCount },
+    () => ({ IDEA: 0, incorporated: 0, discarded: 0 })
+  );
   let referenceCount = 0;
   let includedReferenceCount = 0;
   let notIncludedReferenceCount = 0;
@@ -3752,17 +3757,19 @@ function buildLiteraryIdeaGraph(
 
   for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
     const idea = orderedIdeas[sourceIndex]!;
-    // Una referencia duplicada heredada no duplica una arista del grafo.
-    const targets = [...new Set(idea.relatedIdeaIds)].sort(compareIdeaIds);
-    for (const targetId of targets) {
+    // Las referencias declaradas se conservan como ocurrencias individuales
+    // para auditoría y conteos. La topología usa destinos únicos para que una
+    // referencia histórica duplicada no altere componentes, ciclos o caminos.
+    const explicitTargets = [...idea.relatedIdeaIds].sort(compareIdeaIds);
+    for (const targetId of explicitTargets) {
       referenceCount++;
       const targetIndex = ideaIndexById.get(targetId);
       if (targetIndex !== undefined) {
         includedReferenceCount++;
+        outgoingIncluded[sourceIndex] = outgoingIncluded[sourceIndex]! + 1;
         if (targetIndex === sourceIndex) selfReferenceCount++;
-        adjacency[sourceIndex]!.push(targetIndex);
         incoming[targetIndex] = incoming[targetIndex]! + 1;
-        unionNodes(sourceIndex, targetIndex);
+        directReferenceStatusCountsBySource[sourceIndex]![orderedIdeas[targetIndex]!.status]++;
       } else {
         notIncludedReferenceCount++;
         if (projectCatalogComplete) missingFromProjectReferenceCount++;
@@ -3777,6 +3784,14 @@ function buildLiteraryIdeaGraph(
             : projectCatalogComplete ? "missing-from-project" : "not-in-snapshot"
         });
       }
+    }
+
+    const distinctTargets = [...new Set(explicitTargets)];
+    for (const targetId of distinctTargets) {
+      const targetIndex = ideaIndexById.get(targetId);
+      if (targetIndex === undefined) continue;
+      adjacency[sourceIndex]!.push(targetIndex);
+      unionNodes(sourceIndex, targetIndex);
     }
   }
 
@@ -3857,19 +3872,15 @@ function buildLiteraryIdeaGraph(
 
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => {
     const directReferenceStatusCounts = {
-      IDEA: 0,
-      incorporated: 0,
-      discarded: 0,
+      ...directReferenceStatusCountsBySource[index]!,
       notInSnapshot: outgoingExternal[index]!
     };
     const directStatuses = new Set<NarrativeIdea["status"]>();
     for (const targetIndex of adjacency[index]!) {
-      const targetStatus = orderedIdeas[targetIndex]!.status;
-      directReferenceStatusCounts[targetStatus]++;
-      directStatuses.add(targetStatus);
+      directStatuses.add(orderedIdeas[targetIndex]!.status);
     }
     const hasExternalTargets = outgoingExternal[index]! > 0;
-    const directReferenceStatusAlignment = adjacency[index]!.length +
+    const directReferenceStatusAlignment = outgoingIncluded[index]! +
       outgoingExternal[index]! === 0
       ? "no-references" as const
       : directStatuses.size > 1
@@ -3887,7 +3898,7 @@ function buildLiteraryIdeaGraph(
     incomingReferenceCount: incoming[index]!,
     distinctOutgoingIdeaCount: new Set(adjacency[index]!).size,
     distinctIncomingIdeaCount: 0,
-    includedOutgoingReferenceCount: adjacency[index]!.length,
+    includedOutgoingReferenceCount: outgoingIncluded[index]!,
     notIncludedOutgoingReferenceCount: outgoingExternal[index]!,
     statusHistory: idea.statusHistory.map(change => ({ ...change })),
     omittedStatusHistoryCount: idea.omittedStatusHistoryCount,

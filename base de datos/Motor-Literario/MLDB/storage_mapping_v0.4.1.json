@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 1,
+  "mapping_version": 2,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 11,
+    "database_version": 13,
     "object_stores": [
       {
         "name": "documents",
@@ -158,6 +158,60 @@
             "by-project",
             "projectId",
             false
+          ]
+        ]
+      },
+      {
+        "name": "project-dictionaries",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-language-name",
+            [
+              "projectId",
+              "languageIdentifier",
+              "normalizedName"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "dictionary-entries",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-dictionary",
+            [
+              "projectId",
+              "dictionaryId"
+            ],
+            false
+          ],
+          [
+            "by-dictionary-normalized",
+            [
+              "projectId",
+              "dictionaryId",
+              "normalizedForm"
+            ],
+            true
           ]
         ]
       }
@@ -497,9 +551,17 @@
         "project/dictionaries/"
       ],
       "representation": "record",
-      "contract": "Contrato lógico definido; pendiente de integrar almacén y API TypeScript de diccionarios.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "contract": "ProjectDictionary en project-dictionaries; índice único por proyecto, idioma y nombre normalizado.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "project-dictionaries"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
     },
     {
       "table": "dictionary_entries",
@@ -511,9 +573,17 @@
         "project/dictionary-entries/"
       ],
       "representation": "record",
-      "contract": "Contrato lógico definido; pendiente de persistencia TypeScript de entradas.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "contract": "DictionaryEntry en dictionary-entries; comparación optimista y unicidad de forma normalizada.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "dictionary-entries"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
     },
     {
       "table": "dictionary_entry_entities",
@@ -525,9 +595,12 @@
         "project/dictionary-entries/related-entities/"
       ],
       "representation": "embedded",
-      "contract": "DictionaryEntryRecord.relatedEntityIds",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "contract": "DictionaryEntry.relatedEntityIds; vínculos confirmados y validados en la misma transacción que la entrada.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "dictionary-entries",
+        "narrative-entities"
+      ]
     },
     {
       "table": "record_lifecycles",

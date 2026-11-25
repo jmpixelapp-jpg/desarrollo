@@ -97,6 +97,14 @@ El contrato lógico de la base se versiona como JSON declarativo en `../MLDB/`, 
 
 El mapa físico distingue capacidades implementadas, parciales y pendientes; una tabla lógica declarada no se presenta como persistida cuando aún no existe su almacén o contrato TypeScript. El modelo actual usa IndexedDB nativo, sin SQL, servicios remotos ni código Rust en el runtime. `npm test` ejecuta ahora también el validador y los casos de compatibilidad del esquema, además de las pruebas del núcleo.
 
+### Diccionarios propios por libro
+
+La API TypeScript guarda y consulta diccionarios privados por proyecto, con idioma real o ficticio, nombre normalizado, procedencia y atributos JSON extensibles. Las entradas conservan forma literal, definición, pronunciación, categoría gramatical, estado y vínculos explícitos con fichas del mismo libro. La normalización usa NFKC, espacios colapsados y minúsculas; no traduce ni modifica la forma literal.
+
+Las actualizaciones se comparan con la versión leída para rechazar escrituras obsoletas de otra instancia. IndexedDB comprueba en una sola transacción la existencia del diccionario padre y de las entidades enlazadas. Los índices únicos impiden nombres duplicados para el mismo idioma y formas normalizadas repetidas dentro de un diccionario. La migración IndexedDB versión 13 agrega los dos almacenes sin borrar los anteriores.
+
+Métodos del anfitrión: `saveProjectDictionary`, `getProjectDictionaries`, `saveDictionaryEntry`, `getDictionaryEntries` y `setDictionaryEntryEntityLink`.
+
 ## Límites deliberados
 
 La implementación del producto se desarrolla exclusivamente en TypeScript/JavaScript. Las carpetas Rust del repositorio son material histórico y no forman parte del runtime ni deben ampliarse.

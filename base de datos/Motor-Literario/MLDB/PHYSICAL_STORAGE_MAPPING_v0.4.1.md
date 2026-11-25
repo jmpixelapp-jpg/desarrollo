@@ -19,6 +19,8 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `personal-idea-library` | `[writerId, sourceProjectId, idea.id]` | `by-writer`, `by-writer-source`, `by-source-project` | Ideas no incorporadas archivadas con contexto |
 | `narrative-assertions` | `[projectId, id]` | `by-project`, `by-entity` | Afirmaciones históricas explícitas |
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
+| `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |
+| `dictionary-entries` | `[projectId, id]` | `by-project`, `by-dictionary`, `by-dictionary-normalized` único | Entradas, atributos JSON y vínculos con entidades |
 
 Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()`. Las lecturas deben esperar a que complete su transacción readonly; las colecciones y registros se validan antes de incorporarse a la API o a sus cachés.
 
@@ -44,9 +46,9 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `active_suggestions` | `document-diagnostics` | Parcial; diagnósticos, no todos los módulos |
 | `import_authorizations` | Prefijo reservado | Pendiente |
 | `schema_migrations` | Versión nativa de IndexedDB y migraciones `onupgradeneeded` | Parcial; sin tabla de historial separada |
-| `project_dictionaries` | Prefijo reservado | Pendiente de API y almacén |
-| `dictionary_entries` | Prefijo reservado | Pendiente de API y almacén |
-| `dictionary_entry_entities` | Vínculo embebible `DictionaryEntryRecord.relatedEntityIds` | Contrato definido; persistencia pendiente |
+| `project_dictionaries` | `project-dictionaries` | Implementado; unicidad por proyecto, idioma y nombre normalizado |
+| `dictionary_entries` | `dictionary-entries` | Implementado; actualización comparada y forma normalizada única |
+| `dictionary_entry_entities` | `DictionaryEntry.relatedEntityIds` embebido | Implementado; referencias verificadas transaccionalmente dentro del libro |
 | `record_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
 | `relation_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
 | `writer_library_ideas` | `personal-idea-library` | Implementado con transacción de transferencia |

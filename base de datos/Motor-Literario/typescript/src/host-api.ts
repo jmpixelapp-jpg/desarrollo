@@ -3,6 +3,8 @@ import type {
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
+import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput } from "./dictionaries";
+import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
 import { extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
@@ -1381,6 +1383,198 @@ export class HostEngineApi {
     });
   }
 
+  /** Devuelve los diccionarios pertenecientes únicamente al libro activo. */
+  async getProjectDictionaries(): Promise<readonly ProjectDictionary[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const dictionaries = await this.requireDictionaryStore().loadDictionaries(projectId);
+      if (!Array.isArray(dictionaries)) {
+        throw new Error("El almacenamiento devolvió una colección de diccionarios inválida.");
+      }
+      const ids = new Set<string>();
+      const names = new Set<string>();
+      for (const dictionary of dictionaries) {
+        validateProjectDictionary(dictionary, "diccionario recuperado");
+        if (dictionary.projectId !== projectId || ids.has(dictionary.id)) {
+          throw new Error("Violación de aislamiento: se recibió un diccionario ajeno o duplicado.");
+        }
+        const key = JSON.stringify([dictionary.languageIdentifier, dictionary.normalizedName]);
+        if (names.has(key)) {
+          throw new Error("Integridad de diccionarios: hay dos nombres iguales para el mismo idioma.");
+        }
+        ids.add(dictionary.id);
+        names.add(key);
+      }
+      return cloneNarrativeRecords(dictionaries);
+    });
+  }
+
+  /** Guarda un diccionario. El projectId procede siempre de la identidad del anfitrión. */
+  async saveProjectDictionary(input: ProjectDictionaryInput): Promise<ProjectDictionary> {
+    const projectId = this.requireProject().projectId;
+    if (!input || typeof input !== "object") throw new Error("Datos de diccionario inválidos.");
+    return this.enqueueKnowledgeOperation(async () => {
+      const store = this.requireDictionaryStore();
+      const dictionaries = await store.loadDictionaries(projectId);
+      if (!Array.isArray(dictionaries)) throw new Error("La colección de diccionarios es inválida.");
+      for (const dictionary of dictionaries) {
+        validateProjectDictionary(dictionary, "diccionario recuperado");
+        if (dictionary.projectId !== projectId) throw new Error("Violación de aislamiento en diccionarios.");
+      }
+      const current = dictionaries.find(dictionary => dictionary.id === input.id);
+      const candidate: ProjectDictionary = {
+        projectId,
+        id: input.id,
+        languageIdentifier: input.languageIdentifier,
+        name: input.name,
+        normalizedName: normalizeDictionaryName(input.name),
+        ...(input.description === undefined ? {} : { description: input.description }),
+        kind: input.kind,
+        provenanceKind: input.provenanceKind,
+        createdAt: current?.createdAt ?? input.createdAt,
+        updatedAt: input.updatedAt
+      };
+      validateProjectDictionary(candidate);
+      if (current && candidate.updatedAt < current.updatedAt) {
+        throw new Error("La fecha de actualización del diccionario no puede retroceder.");
+      }
+      const duplicate = dictionaries.find(dictionary =>
+        dictionary.id !== candidate.id &&
+        dictionary.languageIdentifier === candidate.languageIdentifier &&
+        dictionary.normalizedName === candidate.normalizedName
+      );
+      if (duplicate) throw new Error("Ya existe ese nombre de diccionario para el mismo idioma en este libro.");
+      await store.saveDictionary(candidate, current);
+      return cloneNarrativeRecord(candidate);
+    });
+  }
+
+  /** Consulta entradas y vuelve a validar los vínculos con entidades del mismo libro. */
+  async getDictionaryEntries(dictionaryId: string): Promise<readonly DictionaryEntry[]> {
+    if (typeof dictionaryId !== "string" || !dictionaryId.trim()) {
+      throw new Error("Identificador de diccionario inválido.");
+    }
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const entries = await this.requireDictionaryStore().loadDictionaryEntries(projectId, dictionaryId);
+      if (!Array.isArray(entries)) throw new Error("El almacenamiento devolvió entradas inválidas.");
+      const ids = new Set<string>();
+      const normalizedForms = new Set<string>();
+      for (const entry of entries) {
+        validateDictionaryEntry(entry, "entrada recuperada");
+        if (entry.projectId !== projectId || entry.dictionaryId !== dictionaryId ||
+            ids.has(entry.id) || normalizedForms.has(entry.normalizedForm)) {
+          throw new Error("Violación de aislamiento o duplicidad en entradas de diccionario.");
+        }
+        ids.add(entry.id);
+        normalizedForms.add(entry.normalizedForm);
+      }
+      if (entries.some(entry => entry.relatedEntityIds.length > 0)) {
+        requireNarrativeEntityReferences(
+          entries, projectId, await this.loadNarrativeEntitiesFromStore(),
+          entry => entry.relatedEntityIds, "entradas de diccionario"
+        );
+      }
+      return cloneNarrativeRecords(entries);
+    });
+  }
+
+  /** Crea o actualiza una entrada con normalización determinista y referencias verificadas. */
+  async saveDictionaryEntry(input: DictionaryEntryInput): Promise<DictionaryEntry> {
+    const projectId = this.requireProject().projectId;
+    if (!input || typeof input !== "object") throw new Error("Datos de entrada de diccionario inválidos.");
+    return this.enqueueKnowledgeOperation(async () => {
+      const store = this.requireDictionaryStore();
+      const dictionaries = await store.loadDictionaries(projectId);
+      if (!Array.isArray(dictionaries)) throw new Error("La colección de diccionarios es inválida.");
+      let dictionaryExists = false;
+      for (const dictionary of dictionaries) {
+        validateProjectDictionary(dictionary, "diccionario recuperado");
+        if (dictionary.projectId !== projectId) throw new Error("Violación de aislamiento en diccionarios.");
+        if (dictionary.id === input.dictionaryId) dictionaryExists = true;
+      }
+      if (!dictionaryExists) throw new Error("El diccionario de destino no existe en el libro activo.");
+      const existingEntries = await store.loadDictionaryEntries(projectId, input.dictionaryId);
+      if (!Array.isArray(existingEntries)) throw new Error("La colección de entradas es inválida.");
+      for (const existing of existingEntries) validateDictionaryEntry(existing, "entrada recuperada");
+      const current = existingEntries.find(entry => entry.id === input.id);
+      const candidate: DictionaryEntry = {
+        projectId,
+        id: input.id,
+        dictionaryId: input.dictionaryId,
+        surfaceForm: input.surfaceForm,
+        normalizedForm: normalizeDictionarySurface(input.surfaceForm),
+        definition: input.definition,
+        ...(input.pronunciation === undefined ? {} : { pronunciation: input.pronunciation }),
+        ...(input.grammaticalCategory === undefined ? {} : { grammaticalCategory: input.grammaticalCategory }),
+        attributes: input.attributes ?? {},
+        status: input.status,
+        provenanceKind: input.provenanceKind,
+        relatedEntityIds: [...(input.relatedEntityIds ?? [])],
+        createdAt: current?.createdAt ?? input.createdAt,
+        updatedAt: input.updatedAt
+      };
+      validateDictionaryEntry(candidate);
+      if (current && candidate.updatedAt < current.updatedAt) {
+        throw new Error("La fecha de actualización de la entrada no puede retroceder.");
+      }
+      const duplicate = existingEntries.find(entry =>
+        entry.id !== candidate.id && entry.normalizedForm === candidate.normalizedForm
+      );
+      if (duplicate) throw new Error("Ya existe una entrada con esa forma normalizada en el diccionario.");
+      if (candidate.relatedEntityIds.length > 0) {
+        requireNarrativeEntityReferences(
+          [candidate], projectId, await this.loadNarrativeEntitiesFromStore(),
+          entry => entry.relatedEntityIds, "entradas de diccionario"
+        );
+      }
+      await store.saveDictionaryEntry(candidate, current);
+      return cloneNarrativeRecord(candidate);
+    });
+  }
+
+  /** Enlaza o desenlaza una ficha solo después de comprobar que ambas pertenecen al mismo libro. */
+  async setDictionaryEntryEntityLink(
+    dictionaryId: string,
+    entryId: string,
+    entityId: string,
+    linked: boolean
+  ): Promise<DictionaryEntry> {
+    if (typeof dictionaryId !== "string" || !dictionaryId.trim() ||
+        typeof entryId !== "string" || !entryId.trim() ||
+        typeof entityId !== "string" || !entityId.trim() ||
+        typeof linked !== "boolean") {
+      throw new Error("Datos de vínculo de diccionario inválidos.");
+    }
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const store = this.requireDictionaryStore();
+      const entries = await store.loadDictionaryEntries(projectId, dictionaryId);
+      if (!Array.isArray(entries)) throw new Error("La colección de entradas es inválida.");
+      const current = entries.find(entry => entry.id === entryId);
+      if (!current) throw new Error("La entrada no existe en el diccionario del libro activo.");
+      const entities = await this.loadNarrativeEntitiesFromStore();
+      const entity = entities.find(item => item.id === entityId);
+      if (linked && !entity) {
+        throw new Error("No se puede enlazar una ficha que no existe en el mismo libro.");
+      }
+      const relatedEntityIds = new Set(current.relatedEntityIds);
+      if (linked) relatedEntityIds.add(entityId);
+      else relatedEntityIds.delete(entityId);
+      if (relatedEntityIds.size === current.relatedEntityIds.length) {
+        return cloneNarrativeRecord(current);
+      }
+      const updated: DictionaryEntry = {
+        ...current,
+        relatedEntityIds: [...relatedEntityIds].sort(),
+        updatedAt: Math.max(Date.now(), current.updatedAt)
+      };
+      validateDictionaryEntry(updated);
+      await store.saveDictionaryEntry(updated, current);
+      return cloneNarrativeRecord(updated);
+    });
+  }
+
   async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
@@ -1618,6 +1812,23 @@ export class HostEngineApi {
     try { this.onKnowledgeError?.(error); } catch { /* Los errores del anfitrión no deben detener el motor. */ }
   }
 
+  private requireDictionaryStore(): Required<Pick<
+    import("./contracts").ProjectStore,
+    "saveDictionary" | "loadDictionaries" | "saveDictionaryEntry" | "loadDictionaryEntries"
+  >> {
+    const store = this.store;
+    if (!store.saveDictionary || !store.loadDictionaries ||
+        !store.saveDictionaryEntry || !store.loadDictionaryEntries) {
+      throw new Error("El adaptador de almacenamiento no admite diccionarios con integridad referencial.");
+    }
+    return {
+      saveDictionary: store.saveDictionary.bind(store),
+      loadDictionaries: store.loadDictionaries.bind(store),
+      saveDictionaryEntry: store.saveDictionaryEntry.bind(store),
+      loadDictionaryEntries: store.loadDictionaryEntries.bind(store)
+    };
+  }
+
   private requireEventStore(): Required<Pick<import("./contracts").ProjectStore, "saveEvent" | "loadEvents">> {
     const store = this.store;
     if (!store.saveEvent || !store.loadEvents) throw new Error("El almacenamiento no admite acontecimientos.");
@@ -1717,6 +1928,9 @@ export class HostEngineApi {
       explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
       evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
       semanticContradictionAnalysis: false,
+      projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
+      dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
+      explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),
       externalRuntimeServices: false
     });
   }

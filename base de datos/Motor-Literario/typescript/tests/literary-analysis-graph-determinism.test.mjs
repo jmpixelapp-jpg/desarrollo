@@ -174,9 +174,9 @@ test("el historial acepta marcas temporales iguales y detecta retrocesos adyacen
     ...idea("history"),
     status: "discarded",
     statusHistory: [
-      { status: "IDEA", reason: "initial", changedAt: 0 },
-      { status: "incorporated", reason: "writer", changedAt: 0 },
-      { status: "discarded", reason: "writer", changedAt: -1 }
+      { status: "IDEA", reason: "initial", changedAt: 100 },
+      { status: "incorporated", reason: "writer", changedAt: 100 },
+      { status: "discarded", reason: "writer", changedAt: 99 }
     ]
   }]);
   const node = graph.nodes[0];
@@ -184,8 +184,8 @@ test("el historial acepta marcas temporales iguales y detecta retrocesos adyacen
   assert.equal(node.comparableStatusTimestampPairCount, 2);
   assert.equal(node.uncomparableStatusTimestampPairCount, 0);
   assert.equal(node.nonMonotonicStatusTimestampCount, 1);
-  assert.equal(node.earliestKnownStatusChangeAt, -1);
-  assert.equal(node.latestKnownStatusChangeAt, 0);
+  assert.equal(node.earliestKnownStatusChangeAt, 99);
+  assert.equal(node.latestKnownStatusChangeAt, 100);
   assert.equal(node.knownStatusHistorySpanMs, 1);
 });
 

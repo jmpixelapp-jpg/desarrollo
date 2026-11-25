@@ -10299,7 +10299,7 @@ test("resume la recurrencia de acontecimientos entre escenas aunque no declaren 
     "ESCENA 2","El patio quedó en silencio.","***",
     "ESCENA 3","La tormenta regresó.","***",
     "ESCENA 4","La campana repicó."
-  ].join("\\n");
+  ].join("\n");
   const evidenceFor = excerpt => {
     const start = text.indexOf(excerpt);
     assert.notEqual(start,-1);

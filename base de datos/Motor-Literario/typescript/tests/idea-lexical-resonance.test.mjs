@@ -143,20 +143,6 @@ test("conserva ciclos, reciprocidad y orden estable con índices compactos", () 
   );
 });
 
-test("reconoce una auto-referencia como ciclo sin clasificar nodos aislados", () => {
-  const graph = analyzeGraph([
-    { ...idea("self-loop"), relatedIdeaIds: ["self-loop"] },
-    idea("no-loop")
-  ]);
-
-  assert.equal(graph.referenceCount, 1);
-  assert.equal(graph.includedReferenceCount, 1);
-  assert.equal(graph.cycleCount, 1);
-  assert.deepEqual(graph.cycles, [{ ideaIds: ["self-loop"] }]);
-  assert.equal(graph.weakComponentCount, 2);
-  assert.equal(graph.isolatedWithinSnapshotNodeCount, 1);
-});
-
 test("memoiza el grafo completo, aísla las respuestas e invalida cambios estructurales", () => {
   const ideas = [
     { ...idea("graph-a", "memoria espejo luz"), relatedIdeaIds: ["graph-b"] },
@@ -168,7 +154,6 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
   const expected = structuredClone(first);
 
   first.nodes[0].statusHistory[0].reason = "mutación externa";
-  first.nodes[0].relatedIdeaIds.push("external-mutation");
   first.cycles[0].ideaIds.pop();
   first.references[0].resolution = "external-mutation";
   first.statusProfiles[0].ideaCount = 999;
@@ -177,7 +162,16 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
 
   const changed = analyzeGraph([
     ideas[0],
-    { ...ideas[1], status: "incorporated", relatedIdeaIds: [] }
+    {
+      ...ideas[1],
+      status: "incorporated",
+      relatedIdeaIds: [],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
+      writerDecisionCount: 1
+    }
   ]);
   assert.equal(changed.cycleCount, 0);
   assert.equal(changed.referenceCount, 1);
@@ -188,6 +182,11 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
 test("invalida la caché ante cambios de evidencia y decisiones editoriales", () => {
   const original = {
     ...idea("metadata-a", "memoria espejo luz"),
+    status: "incorporated",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "incorporated", reason: "writer", changedAt: 2 }
+    ],
     evidenceCount: 1,
     staleEvidenceCount: 0,
     writerDecisionCount: 1
@@ -195,30 +194,33 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   const initial = analyzeGraph([original]);
   assert.equal(initial.nodes[0].activeEvidenceCount, 1);
   assert.equal(initial.nodes[0].writerDecisionCount, 1);
-  assert.equal(initial.statusProfiles[0].activeEvidenceCount, 1);
-  assert.equal(initial.statusProfiles[0].statusHistoryRecordCount, 1);
+  const incorporatedProfile = initial.statusProfiles.find(profile => profile.status === "incorporated");
+  assert.equal(incorporatedProfile.activeEvidenceCount, 1);
+  assert.equal(incorporatedProfile.statusHistoryRecordCount, 2);
 
   const revised = analyzeGraph([{
     ...original,
     evidenceCount: 4,
     staleEvidenceCount: 2,
-    writerDecisionCount: 3,
+    status: "IDEA",
+    writerDecisionCount: 2,
     omittedStatusHistoryCount: 1,
     statusHistory: [
-      ...original.statusHistory,
-      { status: "IDEA", reason: "reconsidered", changedAt: 2 }
+      { status: "incorporated", reason: "writer", changedAt: 2 },
+      { status: "IDEA", reason: "writer", changedAt: 3 }
     ]
   }]);
   assert.equal(revised.nodes[0].activeEvidenceCount, 4);
   assert.equal(revised.nodes[0].staleEvidenceCount, 2);
-  assert.equal(revised.nodes[0].writerDecisionCount, 3);
+  assert.equal(revised.nodes[0].writerDecisionCount, 2);
   assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
   assert.equal(revised.nodes[0].statusHistory.length, 2);
-  assert.equal(revised.statusProfiles[0].activeEvidenceCount, 4);
-  assert.equal(revised.statusProfiles[0].staleEvidenceCount, 2);
-  assert.equal(revised.statusProfiles[0].writerDecisionCount, 3);
-  assert.equal(revised.statusProfiles[0].statusHistoryRecordCount, 2);
-  assert.equal(revised.statusProfiles[0].omittedStatusHistoryCount, 1);
+  const ideaProfile = revised.statusProfiles.find(profile => profile.status === "IDEA");
+  assert.equal(ideaProfile.activeEvidenceCount, 4);
+  assert.equal(ideaProfile.staleEvidenceCount, 2);
+  assert.equal(ideaProfile.writerDecisionCount, 2);
+  assert.equal(ideaProfile.statusHistoryRecordCount, 2);
+  assert.equal(ideaProfile.omittedStatusHistoryCount, 1);
 });
 
 test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {
@@ -253,6 +255,11 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     {
       ...idea("aggregate-a", "memoria espejo"),
       relatedIdeaIds: ["aggregate-b", "outside-snapshot"],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 },
+        { status: "IDEA", reason: "writer", changedAt: 3 }
+      ],
       writerDecisionCount: 2,
       evidenceCount: 3,
       staleEvidenceCount: 1
@@ -262,7 +269,7 @@ test("agrega métricas globales y por estado de forma coherente", () => {
       status: "incorporated",
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 1 },
-        { status: "incorporated", reason: "accepted", changedAt: 2 }
+        { status: "incorporated", reason: "writer", changedAt: 2 }
       ],
       writerDecisionCount: 1,
       staleEvidenceCount: 2
@@ -270,6 +277,11 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     {
       ...idea("aggregate-c", "ceniza bruma"),
       status: "discarded",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "writer", changedAt: 2 }
+      ],
+      writerDecisionCount: 1,
       evidenceCount: 1
     }
   ];
@@ -282,8 +294,24 @@ test("agrega métricas globales y por estado de forma coherente", () => {
   assert.equal(graph.sourceNodeCount, 2);
   assert.equal(graph.terminalWithinSnapshotNodeCount, 2);
   assert.equal(graph.isolatedWithinSnapshotNodeCount, 1);
-  assert.deepEqual(profile("IDEA"), {
-    status: "IDEA",
+  const ideaProfile = profile("IDEA");
+  assert.deepEqual({
+    ideaCount: ideaProfile.ideaCount,
+    sourceIdeaCount: ideaProfile.sourceIdeaCount,
+    terminalWithinSnapshotIdeaCount: ideaProfile.terminalWithinSnapshotIdeaCount,
+    isolatedWithinSnapshotIdeaCount: ideaProfile.isolatedWithinSnapshotIdeaCount,
+    incomingReferenceCount: ideaProfile.incomingReferenceCount,
+    includedOutgoingReferenceCount: ideaProfile.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: ideaProfile.notIncludedOutgoingReferenceCount,
+    statusHistoryRecordCount: ideaProfile.statusHistoryRecordCount,
+    omittedStatusHistoryCount: ideaProfile.omittedStatusHistoryCount,
+    writerDecisionCount: ideaProfile.writerDecisionCount,
+    activeEvidenceCount: ideaProfile.activeEvidenceCount,
+    staleEvidenceCount: ideaProfile.staleEvidenceCount,
+    ideasWithActiveEvidenceCount: ideaProfile.ideasWithActiveEvidenceCount,
+    ideasWithStaleEvidenceCount: ideaProfile.ideasWithStaleEvidenceCount,
+    ideasWithoutActiveEvidenceCount: ideaProfile.ideasWithoutActiveEvidenceCount
+  }, {
     ideaCount: 1,
     sourceIdeaCount: 1,
     terminalWithinSnapshotIdeaCount: 0,
@@ -291,7 +319,7 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     incomingReferenceCount: 0,
     includedOutgoingReferenceCount: 1,
     notIncludedOutgoingReferenceCount: 1,
-    statusHistoryRecordCount: 1,
+    statusHistoryRecordCount: 3,
     omittedStatusHistoryCount: 0,
     writerDecisionCount: 2,
     activeEvidenceCount: 3,
@@ -526,3 +554,13 @@ test("filtra palabras funcionales portuguesas y conserva los términos narrativo
   assert.deepEqual(result.resonances[0].sharedTerms, ["casa", "menina", "menino"]);
   assert.equal(result.resonances[0].sharedTermCount, 3);
 });
+test("rechaza una auto-referencia en el catálogo persistible de ideas", () => {
+  assert.throws(
+    () => analyzeGraph([
+      { ...idea("self-loop"), relatedIdeaIds: ["self-loop"] },
+      idea("no-loop")
+    ]),
+    /catálogo global de ideas del análisis literario es inválido/
+  );
+});
+

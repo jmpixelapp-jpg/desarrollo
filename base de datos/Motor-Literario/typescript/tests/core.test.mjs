@@ -12582,3 +12582,356 @@ test("limita las muestras de tramos del flujo sin truncar sus métricas", async 
   assert.equal(flow.runs[39].runIndex,40);
   assert.equal(flow.runs[39].fromParagraphIndex,40);
 });
+
+
+test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera de la página", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  const identity = {
+    projectId: "paged-personal-library",
+    projectName: "Libro por páginas",
+    writerId: "writer-paged-library"
+  };
+  api.initializeProject(identity);
+
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-a",
+    text: "Primera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: [],
+    relatedIdeaIds: ["idea-b"]
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-b",
+    text: "Segunda idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-c",
+    text: "Tercera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-2",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await api.archiveUnincorporatedIdeas();
+
+  let pageReads = 0;
+  let batchReads = 0;
+  let pointReads = 0;
+  store.loadPersonalIdeasPage = async (writerId, cursor, limit) => {
+    assert.equal(writerId, identity.writerId);
+    assert.equal(limit, 1);
+    pageReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const ordered = [...all].sort((first, second) =>
+      first.sourceProjectId.localeCompare(second.sourceProjectId) ||
+      first.idea.id.localeCompare(second.idea.id)
+    );
+    const remaining = cursor
+      ? ordered.filter(entry =>
+          entry.sourceProjectId > cursor.sourceProjectId ||
+          (entry.sourceProjectId === cursor.sourceProjectId && entry.idea.id > cursor.ideaId)
+        )
+      : ordered;
+    const items = remaining.slice(0, limit);
+    const nextCursor = remaining.length > items.length && items.length
+      ? { sourceProjectId: items[0].sourceProjectId, ideaId: items[0].idea.id }
+      : null;
+    return { items, nextCursor };
+  };
+  store.loadPersonalIdeasByKeys = async (writerId, references) => {
+    batchReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const requested = new Set(references.map(reference =>
+      JSON.stringify([reference.sourceProjectId, reference.ideaId])
+    ));
+    return all.filter(entry => requested.has(
+      JSON.stringify([entry.sourceProjectId, entry.idea.id])
+    ));
+  };
+  store.loadPersonalIdea = async (writerId, sourceProjectId, ideaId) => {
+    pointReads++;
+    return (await store.loadPersonalIdeas(writerId)).find(entry =>
+      entry.sourceProjectId === sourceProjectId && entry.idea.id === ideaId
+    );
+  };
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.deepEqual(first.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-a"
+  });
+  assert.equal(batchReads, 1, "agrupa las referencias que apuntan fuera de la página");
+  assert.equal(pointReads, 0, "no abre transacciones individuales cuando existe lectura agrupada");
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.deepEqual(second.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-b"
+  });
+
+  const third = await api.getPersonalIdeaLibraryPage(second.nextCursor, 1);
+  assert.deepEqual(third.items.map(entry => entry.idea.id), ["idea-c"]);
+  assert.equal(third.nextCursor, null);
+  assert.equal(pageReads, 3);
+});
+
+
+test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas anteriores", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const writerId = "writer-indexeddb-pages";
+  const entry = (owner, id) => ({
+    writerId: owner,
+    sourceProjectId: "book-pages",
+    sourceProjectName: "Libro páginas",
+    category: "Libro páginas",
+    idea: { projectId: "book-pages", id, text: "Idea " + id, status: "IDEA", originDocumentId: "chapter", evidence: [] },
+    archivedAt: 1
+  });
+  const entries = [
+    entry(writerId, "idea-a"),
+    entry(writerId, "idea-b"),
+    entry(writerId, "idea-c"),
+    entry("another-writer", "idea-private")
+  ];
+  let transaction;
+  let seekCalls = 0;
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction() {
+      let pending = 0;
+      let completeQueued = false;
+      let completed = false;
+      const schedule = (request, ordered, index) => {
+        pending++;
+        completeQueued = false;
+        queueMicrotask(() => {
+          if (completed) return;
+          const value = ordered[index];
+          const current = value ? {
+            value: structuredClone(value),
+            primaryKey: [value.writerId, value.sourceProjectId, value.idea.id],
+            continue() { schedule(request, ordered, index + 1); },
+            continuePrimaryKey(indexKey, primaryKey) {
+              seekCalls++;
+              assert.equal(indexKey, writerId);
+              const compare = (first, second) => {
+                for (let part = 0; part < first.length; part++) {
+                  if (first[part] !== second[part]) return first[part] < second[part] ? -1 : 1;
+                }
+                return 0;
+              };
+              const next = ordered.findIndex(item =>
+                compare([item.writerId, item.sourceProjectId, item.idea.id], primaryKey) > 0
+              );
+              schedule(request, ordered, next < 0 ? ordered.length : next);
+            }
+          } : null;
+          request.result = current;
+          request.onsuccess?.();
+          pending--;
+          if (pending === 0 && !completeQueued) {
+            completeQueued = true;
+            queueMicrotask(() => {
+              if (pending === 0 && !completed) {
+                completed = true;
+                transaction.oncomplete?.();
+              }
+            });
+          }
+        });
+      };
+      transaction = {
+        error: null,
+        abort() {
+          if (completed) return;
+          completed = true;
+          queueMicrotask(() => transaction.onabort?.());
+        },
+        objectStore(name) {
+          assert.equal(name, "personal-idea-library");
+          return {
+            get(key) {
+              const request = {};
+              pending++;
+              completeQueued = false;
+              queueMicrotask(() => {
+                const value = entries.find(item =>
+                  item.writerId === key[0] &&
+                  item.sourceProjectId === key[1] &&
+                  item.idea.id === key[2]
+                );
+                request.result = value ? structuredClone(value) : undefined;
+                request.onsuccess?.();
+                pending--;
+                if (pending === 0 && !completeQueued) {
+                  completeQueued = true;
+                  queueMicrotask(() => {
+                    if (pending === 0 && !completed) {
+                      completed = true;
+                      transaction.oncomplete?.();
+                    }
+                  });
+                }
+              });
+              return request;
+            },
+            index(indexName) {
+              assert.equal(indexName, "by-writer");
+              return {
+                openCursor(requestedWriterId) {
+                  assert.equal(requestedWriterId, writerId);
+                  const ordered = entries.filter(item => item.writerId === requestedWriterId)
+                    .sort((first, second) => first.idea.id.localeCompare(second.idea.id));
+                  const request = {};
+                  schedule(request, ordered, 0);
+                  return request;
+                }
+              };
+            }
+          };
+        }
+      };
+      return transaction;
+    }
+  };
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: { open() {
+      const request = { result: database };
+      queueMicrotask(() => request.onsuccess?.());
+      return request;
+    } }
+  });
+  try {
+    const store = new IndexedDbProjectStore();
+    const first = await store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: "book-pages", ideaId: "idea-b" });
+
+    const second = await store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+    assert.equal(seekCalls, 1, "la segunda página salta directamente tras la clave compuesta del cursor");
+
+    const linked = await store.loadPersonalIdeasByKeys(writerId, [
+      { sourceProjectId: "book-pages", ideaId: "idea-c" },
+      { sourceProjectId: "book-pages", ideaId: "missing-idea" }
+    ]);
+    assert.deepEqual(linked.map(item => item.idea.id), ["idea-c"]);
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});
+
+
+test("la API paginada mantiene compatibilidad con adaptadores antiguos de biblioteca", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-legacy-pages";
+  const projectId = "legacy-pages-book";
+  const makeEntry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro antiguo",
+    category: "Libro antiguo",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro antiguo",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-b"]), makeEntry("idea-b"));
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-a"]), makeEntry("idea-a"));
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro antiguo",
+    writerId
+  });
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.equal(first.items[0].contextStatus, "missing-legacy-context");
+  assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-a" });
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.equal(second.nextCursor, null);
+});
+
+
+test("la API rechaza páginas de biblioteca sin un cursor final explícito", async () => {
+  const store = new MemoryStore();
+  store.loadPersonalIdeasPage = async () => ({ items: [] });
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId: "malformed-library-page",
+    projectName: "Libro incompleto",
+    writerId: "writer-page-validation"
+  });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /página o su cursor están malformados/
+  );
+});
+
+
+test("la API rechaza vínculos a ideas ausentes aunque el almacén use lectura agrupada", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-missing-library-link";
+  const projectId = "book-missing-library-link";
+  store.loadPersonalIdeasPage = async () => ({
+    items: [{
+      writerId,
+      sourceProjectId: projectId,
+      sourceProjectName: "Libro enlazado",
+      category: "Libro enlazado",
+      idea: {
+        projectId,
+        id: "idea-present",
+        text: "Una idea archivada",
+        status: "IDEA",
+        originDocumentId: "chapter",
+        sourceProjectName: "Libro enlazado",
+        evidence: [],
+        relatedIdeaIds: ["idea-does-not-exist"]
+      },
+      context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+      archivedAt: 1
+    }],
+    nextCursor: null
+  });
+  store.loadPersonalIdeasByKeys = async (_writerId, references) => {
+    assert.deepEqual(references, [{
+      sourceProjectId: projectId,
+      ideaId: "idea-does-not-exist"
+    }]);
+    return [];
+  };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Libro enlazado", writerId });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /una idea relacionada no existe en la biblioteca del escritor/
+  );
+});

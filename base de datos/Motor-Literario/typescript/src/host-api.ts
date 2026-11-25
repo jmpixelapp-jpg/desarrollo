@@ -434,11 +434,13 @@ function findDocumentLineRecord<T extends { readonly id: string }>(
   index: Map<string, Set<string>>,
   records: ReadonlyMap<string, T>,
   documentId: string,
-  lineStart: number
+  lineStart: number,
+  excludedIds: ReadonlySet<string> = new Set()
 ): T | undefined {
-  const ids = index.get(`${documentId}\u0000${lineStart}`);
+  const ids = index.get(`${documentId}\\u0000${lineStart}`);
   if (!ids) return undefined;
   for (const id of ids) {
+    if (excludedIds.has(id)) continue;
     const record = records.get(id);
     if (record) return record;
   }
@@ -725,9 +727,17 @@ export class HostEngineApi {
       const delta = result.replacementLength - (result.changeEnd - result.changeStart);
       const rebase = (evidence: TextEvidence): TextEvidence => {
         if (evidence.documentId !== result.documentId || evidence.status === "stale") return evidence;
-        const lineWasAffected =
+        // Insertar un párrafo completo al inicio de una línea no cambia el
+        // contenido ni la identidad de la línea original: solo desplaza sus offsets.
+        const insertedWholeLinesBeforeEvidence =
+          result.changeStart === result.changeEnd &&
+          result.changeStart === result.previousAffectedStart &&
+          evidence.start >= result.changeStart &&
+          result.affectedEnd < result.changeStart + result.replacementLength;
+        const lineWasAffected = !insertedWholeLinesBeforeEvidence && (
           (evidence.start < result.previousAffectedEnd && evidence.end > result.previousAffectedStart) ||
-          (evidence.start >= result.previousAffectedStart && evidence.start <= result.previousAffectedEnd);
+          (evidence.start >= result.previousAffectedStart && evidence.start <= result.previousAffectedEnd)
+        );
         if (lineWasAffected) return { ...evidence, status: "stale" };
         if (evidence.start >= result.changeEnd) {
           return {
@@ -930,12 +940,10 @@ export class HostEngineApi {
             ? incomingEvidence.start - Math.max(0, incomingEvidence.excerpt.indexOf(event.label))
             : -1;
           const indexedEvent = findDocumentLineRecord(
-            this.eventLineIndex, eventById, documentId, incomingLineStart
+            this.eventLineIndex, eventById, documentId, incomingLineStart, matchedEventIds
           );
           const previousAtLine = indexedEvent && incomingEvidence &&
-            indexedEvent.evidence.some(item =>
-              item.documentId === documentId && item.excerpt === incomingEvidence.excerpt
-            )
+            indexedEvent.evidence.some(item => item.documentId === documentId)
             ? indexedEvent
             : (incomingEvidence ? findDocumentLineRecordByExcerpt(
               eventById.values(), item => item.evidence, documentId,
@@ -972,12 +980,10 @@ export class HostEngineApi {
             ? incomingEvidence.start - Math.max(0, incomingEvidence.excerpt.indexOf(idea.text))
             : -1;
           const indexedIdea = findDocumentLineRecord(
-            this.ideaLineIndex, ideaById, documentId, incomingLineStart
+            this.ideaLineIndex, ideaById, documentId, incomingLineStart, matchedIdeaIds
           );
           const previousAtLine = indexedIdea && incomingEvidence &&
-            indexedIdea.evidence.some(item =>
-              item.documentId === documentId && item.excerpt === incomingEvidence.excerpt
-            )
+            indexedIdea.evidence.some(item => item.documentId === documentId)
             ? indexedIdea
             : (incomingEvidence ? findDocumentLineRecordByExcerpt(
               ideaById.values(), item => item.evidence, documentId,

@@ -311,14 +311,33 @@ test("rechaza restaurar un respaldo de una versión de esquema diferente", async
   }
 });
 
-test("la capacidad de backup integral solo se anuncia cuando ambos métodos están disponibles", () => {
-  const store = attach(createFakeDatabase({
-    documents: [],
-    "personal-idea-library": []
-  }));
+test("HostEngineApi expone backup, restaura antes de inicializar y rechaza una restauración en sesión activa", async () => {
+  const database = createFakeDatabase({
+    documents: [documentRecord],
+    "personal-idea-library": [archivedIdea]
+  });
+  const store = attach(database);
   const api = new HostEngineApi({ store });
   try {
     assert.equal(api.getCapabilities().fullDatabaseBackupRestore, true);
+    const backup = await api.exportDatabaseBackup();
+    assert.equal(backup.format, "motor-literario-indexeddb-backup");
+
+    database.state.set("documents", [{ ...documentRecord, text: "Cambio que se va a revertir." }]);
+    database.state.set("personal-idea-library", []);
+    await api.restoreDatabaseBackup(backup);
+    assert.deepEqual(database.state.get("documents"), [documentRecord]);
+    assert.deepEqual(database.state.get("personal-idea-library"), [archivedIdea]);
+
+    api.initializeProject({
+      projectId: "active-project",
+      projectName: "Sesión abierta",
+      writerId: "backup-writer"
+    });
+    await assert.rejects(
+      api.restoreDatabaseBackup(backup),
+      /restauración requiere una instancia.*sin proyecto inicializado/iu
+    );
   } finally {
     api.dispose();
     store.database = undefined;
@@ -332,6 +351,8 @@ test("la capacidad de backup integral solo se anuncia cuando ambos métodos est�
   const legacyApi = new HostEngineApi({ store: legacyStore });
   try {
     assert.equal(legacyApi.getCapabilities().fullDatabaseBackupRestore, false);
+    await assert.rejects(legacyApi.exportDatabaseBackup(), /no admite respaldo integral/iu);
+    await assert.rejects(legacyApi.restoreDatabaseBackup({}), /no admite restauración integral/iu);
   } finally {
     legacyApi.dispose();
   }

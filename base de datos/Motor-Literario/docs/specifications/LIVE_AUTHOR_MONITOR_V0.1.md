@@ -499,3 +499,18 @@ La prueba de HostEngineApi utiliza un almacén que falla al guardar y comprueba 
 
 
 **Validación de lifecycle seguro:** ejecución aislada [45723191692](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723191692), commit `dde974d98cd5b0c9b9dacc9c86a35ab26e4b0d95`: build Vite correcto; **85 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye el caso donde el almacenamiento falla y se comprueba que `disposeSafely()` no libera falsamente la instancia.
+
+
+## 26. Correspondencia del almacén IndexedDB con el manifiesto físico
+
+El checkpoint del monitor forma parte del esquema físico y debe figurar tanto en el adaptador IndexedDB como en `MLDB/storage_mapping_v0.4.1.json`. La base de datos local se encuentra en versión **23**. El manifiesto declara ahora la misma versión y el almacén adicional:
+
+- nombre: `live-author-monitor-checkpoints`;
+- keyPath: `[projectId, documentId]`;
+- índice: `by-project` sobre `projectId`.
+
+La tabla funcional de documentos y el journal de cambios no se modifican. Este almacén operativo conserva exclusivamente el checkpoint de métricas descrito en la sección 24.
+
+El workflow específico del monitor ejecuta `npm run validate:schema` antes del build y las pruebas. También ejecuta `tests/storage-implementation-audit.test.mjs` para detectar almacenes físicos no declarados. Se corrigió la prueba que introducía un almacén ficticio: ahora inyecta el constante y la creación del almacén en el punto de apertura, sin depender de un número fijo de versión de IndexedDB.
+
+**Validación de CI de esta alineación:** pendiente de la ejecución disparada por los commits del manifiesto y el workflow. No se considera aprobada hasta revisar los resultados de la auditoría, build y pruebas.

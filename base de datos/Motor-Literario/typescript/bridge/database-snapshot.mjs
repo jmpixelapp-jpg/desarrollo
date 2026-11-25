@@ -51,6 +51,9 @@ function fnv1a64(update) {
 function checksumForArchiveIds(ids) {
   return fnv1a64(JSON.stringify([...ids].sort()));
 }
+function checksumForArchiveIdsInReceiptOrder(ids) {
+  return fnv1a64(JSON.stringify(ids));
+}
 
 function createArchiveContentChecksumBuilder() {
   let hash = 0xcbf29ce484222325n;
@@ -116,7 +119,8 @@ function validatePersonalIdeaFinalizationIntegrity(database) {
         new Set(ids).size !== ids.length ||
         ids.some((id, index) => index > 0 && ids[index - 1].localeCompare(id) > 0) ||
         row.record_key !== JSON.stringify([receipt.writerId, receipt.sourceProjectId, receipt.receiptId]) ||
-        receipt.archiveChecksum !== checksumForArchiveIds(ids) ||
+        (receipt.archiveChecksum !== checksumForArchiveIds(ids) &&
+          receipt.archiveChecksum !== checksumForArchiveIdsInReceiptOrder(ids)) ||
         (receipt.archiveContentChecksum !== undefined &&
           !/^fnv1a64:[0-9a-f]{16}$/u.test(receipt.archiveContentChecksum))) {
       throw new Error("El respaldo SQLite contiene un recibo de finalización inválido.");

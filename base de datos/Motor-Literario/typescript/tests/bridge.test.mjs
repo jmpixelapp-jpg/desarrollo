@@ -1368,8 +1368,16 @@ test("sincroniza archivo y consolidación de biblioteca entre proyectos y proces
         ["writer-sync-sibling", "writer-sync-source"]
       );
       assert.deepEqual(otherProcess.map(item => item.projectId), ["writer-sync-peer"]);
-      assert.ok([...sameProcess, ...otherProcess].every(item => item.writerId === "writer-shared"));
-      assert.ok(![...sameProcess, ...otherProcess].some(item =>
+      const notices = [...sameProcess, ...otherProcess];
+      assert.ok(notices.every(item => item.writerId === "writer-shared"));
+      assert.ok(notices.every(item => {
+        const keys = Object.keys(item).sort();
+        return keys.length === 2 && keys[0] === "projectId" && keys[1] === "writerId";
+      }), "los avisos solo pueden transportar las identidades de proyecto y escritor");
+      assert.ok(notices.every(item =>
+        !JSON.stringify(item).includes("La campana debe sonar antes del amanecer.")
+      ), "los avisos de sincronización nunca deben transportar texto narrativo");
+      assert.ok(!notices.some(item =>
         item.projectId === "writer-sync-private" || item.projectId === "writer-sync-other"
       ));
     };

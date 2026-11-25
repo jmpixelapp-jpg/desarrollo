@@ -3222,28 +3222,29 @@ function buildCharacterProjectEventTimeline(
   let unverifiedEventCount = 0;
   let staleEventCount = 0;
   let staleEvidenceCount = 0;
-  // Un mismo ID no puede ocupar dos posiciones temporales incompatibles
-  // dentro de la trayectoria de un personaje.
-  const temporalPositionsByEvent = new Map<string,Set<string>>();
+  // Un mismo ID debe conservar identidad, participantes y posición temporal.
+  // Las variantes incompatibles se aíslan en vez de depender del orden de entrada.
+  const eventSignaturesById = new Map<string,Set<string>>();
   for (const event of projectEvents) {
-    if (!Number.isFinite(event.timeReference?.orderValue)) continue;
     const hasActiveEvidence = (event.evidenceCount ?? event.evidence.filter(
       item => item.status !== "stale"
     ).length) > 0;
     if (!hasActiveEvidence) continue;
-    const key = JSON.stringify([
+    const signature = JSON.stringify([
+      event.label,
+      [...new Set(event.participants)].sort((a,b) => a.localeCompare(b,"en")),
       event.timelineTrackId ?? null,
-      event.timeReference!.basis,
-      event.timeReference!.precision,
-      event.timeReference!.orderValue
+      event.timeReference?.basis ?? null,
+      event.timeReference?.precision ?? null,
+      event.timeReference?.orderValue ?? null
     ]);
-    const positions = temporalPositionsByEvent.get(event.eventId) ?? new Set<string>();
-    positions.add(key);
-    temporalPositionsByEvent.set(event.eventId,positions);
+    const signatures = eventSignaturesById.get(event.eventId) ?? new Set<string>();
+    signatures.add(signature);
+    eventSignaturesById.set(event.eventId,signatures);
   }
-  const conflictingTemporalEventIds = new Set(
-    [...temporalPositionsByEvent]
-      .filter(([,positions]) => positions.size > 1)
+  const conflictingEventIds = new Set(
+    [...eventSignaturesById]
+      .filter(([,signatures]) => signatures.size > 1)
       .map(([eventId]) => eventId)
   );
 
@@ -3271,7 +3272,7 @@ function buildCharacterProjectEventTimeline(
     // NaN e infinitos no representan posiciones cronológicas ordenables.
     // Se contabilizan como eventos no verificados y no contaminan los grupos.
     if (!Number.isFinite(event.timeReference.orderValue) ||
-        conflictingTemporalEventIds.has(event.eventId)) {
+        conflictingEventIds.has(event.eventId)) {
       unverifiedEventCount++;
       continue;
     }

@@ -33,6 +33,8 @@ test("detecta ecos léxicos entre escenas con conteos y offsets absolutos", () =
   assert.equal(echo.scenes[0].occurrences[0].start, baseOffset + text.indexOf("sombra"));
   assert.equal(echo.scenes[0].occurrences[0].end, baseOffset + text.indexOf("sombra") + "sombra".length);
   assert.equal(echo.scenes[0].evidenceTruncated, false);
+  assert.deepEqual(echo.scenes.map(scene => scene.contextClassification), ["narrative-only", "narrative-only"]);
+  assert.deepEqual(echo.scenes.map(scene => scene.dialogueOccurrenceCount), [0, 0]);
 
   // "torre" aparece en dos escenas, pero solo dos veces: no alcanza el umbral de tres.
   assert.equal(result.sceneLexicalEchoes.echoes.some(item => item.normalizedWord === "torre"), false);
@@ -81,4 +83,20 @@ test("distingue recurrencia léxica en narración y diálogo reconocido", () => 
     ["dialogue", "narrative"],
     ["dialogue", "narrative"]
   ]);
+});
+test("clasifica como dialogada la recurrencia que solo aparece en citas", () => {
+  const text = [
+    "Escena 1",
+    "«La sombra cayó; la sombra se fue.»",
+    "Escena 2",
+    "«La sombra cruzó la plaza.»"
+  ].join("\\n");
+  const result = analyze(text);
+  const echo = result.sceneLexicalEchoes.echoes.find(item => item.normalizedWord === "sombra");
+
+  assert.ok(echo);
+  assert.equal(echo.totalOccurrenceCount, 3);
+  assert.deepEqual(echo.scenes.map(scene => scene.narrativeOccurrenceCount), [0, 0]);
+  assert.deepEqual(echo.scenes.map(scene => scene.dialogueOccurrenceCount), [2, 1]);
+  assert.deepEqual(echo.scenes.map(scene => scene.contextClassification), ["dialogue-only", "dialogue-only"]);
 });

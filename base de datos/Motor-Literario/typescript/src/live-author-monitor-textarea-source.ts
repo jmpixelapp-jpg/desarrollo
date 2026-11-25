@@ -7,6 +7,7 @@ export type LiveAuthorMonitorTextAreaErrorCode =
   | "missing-beforeinput"
   | "invalid-selection"
   | "unsupported-input-type"
+  | "composition-state-mismatch"
   | "inconsistent-length"
   | "resync-required";
 
@@ -32,6 +33,7 @@ export interface LiveAuthorMonitorTextAreaSourceState {
   readonly revision: number;
   readonly sequence: number;
   readonly documentLength: number;
+  readonly compositionActive: boolean;
   readonly needsResync: boolean;
 }
 
@@ -40,6 +42,7 @@ interface BeforeInputState {
   readonly end: number;
   readonly previousLength: number;
   readonly inputType: string;
+  readonly isComposing: boolean;
 }
 
 /**
@@ -60,6 +63,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
   private documentLength: number;
   private needsResync = false;
   private disposed = false;
+  private compositionActive = false;
   private pendingInput: BeforeInputState | undefined;
 
   private readonly handleBeforeInput = (event: Event): void => {
@@ -67,6 +71,16 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     const input = event as InputEvent;
     if (input.defaultPrevented) {
       this.pendingInput = undefined;
+      return;
+    }
+
+    const inputType = typeof input.inputType === "string" ? input.inputType : "";
+    const isComposing = this.compositionActive || input.isComposing === true;
+    if (inputType === "insertCompositionText" && !isComposing) {
+      this.fail(
+        "composition-state-mismatch",
+        "Se recibió insertCompositionText fuera de una composición activa; se requiere resincronización."
+      );
       return;
     }
 
@@ -86,11 +100,36 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       start,
       end,
       previousLength,
-      inputType: typeof input.inputType === "string" ? input.inputType : ""
+      inputType,
+      isComposing
     };
   };
 
-  private readonly handleInput = (): void => {
+  private readonly handleCompositionStart = (): void => {
+    if (this.disposed || this.needsResync) return;
+    if (this.pendingInput) {
+      this.fail(
+        "composition-state-mismatch",
+        "La composición comenzó antes de completar el input pendiente."
+      );
+      return;
+    }
+    this.compositionActive = true;
+  };
+
+  private readonly handleCompositionEnd = (): void => {
+    if (this.disposed) return;
+    if (this.pendingInput && !this.needsResync) {
+      this.fail(
+        "composition-state-mismatch",
+        "La composición terminó antes de recibir el input asociado a beforeinput."
+      );
+      return;
+    }
+    this.compositionActive = false;
+  };
+
+  private readonly handleInput = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
     const before = this.pendingInput;
     this.pendingInput = undefined;
@@ -98,6 +137,16 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       this.fail(
         "missing-beforeinput",
         "Se recibió input sin su beforeinput correspondiente; no se inventará un rango de edición."
+      );
+      return;
+    }
+
+    const input = event as InputEvent;
+    if ((before.inputType === "insertCompositionText" && !before.isComposing) ||
+        (input.isComposing === true && !before.isComposing)) {
+      this.fail(
+        "composition-state-mismatch",
+        "El estado de composición cambió entre beforeinput e input; no se enviará un delta ambiguo."
       );
       return;
     }
@@ -235,6 +284,8 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     if (this.listeners.size === 1) {
       this.element.addEventListener("beforeinput", this.handleBeforeInput);
       this.element.addEventListener("input", this.handleInput);
+      this.element.addEventListener("compositionstart", this.handleCompositionStart);
+      this.element.addEventListener("compositionend", this.handleCompositionEnd);
     }
 
     let subscribed = true;
@@ -245,7 +296,10 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       if (this.listeners.size === 0) {
         this.element.removeEventListener("beforeinput", this.handleBeforeInput);
         this.element.removeEventListener("input", this.handleInput);
+        this.element.removeEventListener("compositionstart", this.handleCompositionStart);
+        this.element.removeEventListener("compositionend", this.handleCompositionEnd);
         this.pendingInput = undefined;
+        this.compositionActive = false;
       }
     };
   }
@@ -256,6 +310,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       revision: this.revision,
       sequence: this.sequence,
       documentLength: this.documentLength,
+      compositionActive: this.compositionActive,
       needsResync: this.needsResync
     });
   }
@@ -283,6 +338,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.sequence = snapshot.sequence;
     this.documentLength = snapshot.text.length;
     this.pendingInput = undefined;
+    this.compositionActive = false;
     this.needsResync = false;
     return this.getState();
   }
@@ -298,13 +354,17 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.disposed = true;
     this.element.removeEventListener("beforeinput", this.handleBeforeInput);
     this.element.removeEventListener("input", this.handleInput);
+    this.element.removeEventListener("compositionstart", this.handleCompositionStart);
+    this.element.removeEventListener("compositionend", this.handleCompositionEnd);
     this.listeners.clear();
     this.pendingInput = undefined;
+    this.compositionActive = false;
   }
 
   private fail(code: LiveAuthorMonitorTextAreaErrorCode, message: string): void {
     this.needsResync = true;
     this.pendingInput = undefined;
+    this.compositionActive = false;
     this.report(new LiveAuthorMonitorTextAreaSourceError(code, message));
   }
 

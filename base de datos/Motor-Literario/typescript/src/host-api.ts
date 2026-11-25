@@ -7,12 +7,13 @@ import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, Dictio
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
 import type {
   ProjectSetting, ProjectSettingSource, ProjectJsonValue,
-  LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack
+  LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle
 } from "./project-data";
 import {
   cloneProjectSetting, validateProjectSetting, cloneLanguageProfile,
   cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef,
-  cloneStyleProfile, cloneTimelineTrack, validateStyleProfile, validateTimelineTrack
+  cloneStyleProfile, cloneTimelineTrack, validateStyleProfile, validateTimelineTrack,
+  cloneRecordLifecycle, cloneRelationLifecycle, validateRecordLifecycle, validateRelationLifecycle
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
@@ -1612,6 +1613,131 @@ export class HostEngineApi {
     });
   }
 
+  /** Recupera el historial inmutable de cambios de una ficha del libro activo. */
+  async getRecordLifecycleHistory(recordId: string): Promise<readonly RecordLifecycle[]> {
+    if (typeof recordId !== "string" || !recordId.trim()) throw new Error("Identificador de ficha inválido.");
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadRecordLifecycles;
+      if (!load) throw new Error("El adaptador no admite historial de fichas.");
+      const entities = await this.requireKnowledgeStore().loadEntities(projectId);
+      const scopedEntities = requireProjectScopedRecords(entities, projectId, "entidades");
+      if (!scopedEntities.some(entity => entity.id === recordId)) {
+        throw new Error("La ficha no existe en el proyecto activo.");
+      }
+      const records = await load.call(this.store, projectId, recordId);
+      if (!Array.isArray(records)) throw new Error("El historial de ficha no es una colección.");
+      let previous: RecordLifecycle | undefined;
+      for (const item of records) {
+        validateRecordLifecycle(item, projectId);
+        if (item.recordId !== recordId ||
+            (!previous && (item.revision !== 1 || item.previousLabel !== null || item.previousState !== null)) ||
+            (previous && (item.revision !== previous.revision + 1 ||
+              item.previousLabel !== previous.newLabel ||
+              item.previousState !== previous.newState ||
+              item.changedAt < previous.changedAt))) {
+          throw new Error("El historial de ficha contiene una transición discontinua o ajena.");
+        }
+        previous = item;
+      }
+      return records.map(cloneRecordLifecycle);
+    });
+  }
+
+  /** Añade una transición append-only; nunca reemplaza eventos históricos. */
+  async appendRecordLifecycle(input: Omit<RecordLifecycle, "projectId">): Promise<RecordLifecycle> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadRecordLifecycles;
+      const append = this.store.appendRecordLifecycle;
+      if (!load || !append) throw new Error("El adaptador no admite historial de fichas.");
+      const record: RecordLifecycle = { ...input, projectId };
+      validateRecordLifecycle(record, projectId);
+      const entities = requireProjectScopedRecords(
+        await this.requireKnowledgeStore().loadEntities(projectId), projectId, "entidades"
+      );
+      if (!entities.some(entity => entity.id === record.recordId)) {
+        throw new Error("La ficha no existe en el proyecto activo.");
+      }
+      const history = await load.call(this.store, projectId, record.recordId);
+      if (!Array.isArray(history)) throw new Error("El historial de ficha no es una colección.");
+      const previous = history[history.length - 1];
+      if (!previous
+        ? record.revision !== 1 || record.previousLabel !== null || record.previousState !== null
+        : record.revision !== previous.revision + 1 ||
+          record.previousLabel !== previous.newLabel ||
+          record.previousState !== previous.newState ||
+          record.changedAt < previous.changedAt) {
+        throw new Error("La transición de ficha debe continuar exactamente la última revisión durable.");
+      }
+      await append.call(this.store, record);
+      return cloneRecordLifecycle(record);
+    });
+  }
+
+  /** Recupera el historial inmutable de cambios de una relación del libro activo. */
+  async getRelationLifecycleHistory(relationId: string): Promise<readonly RelationLifecycle[]> {
+    if (typeof relationId !== "string" || !relationId.trim()) throw new Error("Identificador de relación inválido.");
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadRelationLifecycles;
+      if (!load) throw new Error("El adaptador no admite historial de relaciones.");
+      const relations = requireProjectScopedRecords(
+        await this.requireRelationStore().loadRelations(projectId), projectId, "relaciones"
+      );
+      if (!relations.some(relation => relation.id === relationId)) {
+        throw new Error("La relación no existe en el proyecto activo.");
+      }
+      const records = await load.call(this.store, projectId, relationId);
+      if (!Array.isArray(records)) throw new Error("El historial de relación no es una colección.");
+      let previous: RelationLifecycle | undefined;
+      for (const item of records) {
+        validateRelationLifecycle(item, projectId);
+        if (item.relationId !== relationId ||
+            (!previous && (item.revision !== 1 || item.previousLabel !== null || item.previousState !== null)) ||
+            (previous && (item.revision !== previous.revision + 1 ||
+              item.previousLabel !== previous.newLabel ||
+              item.previousState !== previous.newState ||
+              item.changedAt < previous.changedAt))) {
+          throw new Error("El historial de relación contiene una transición discontinua o ajena.");
+        }
+        previous = item;
+      }
+      return records.map(cloneRelationLifecycle);
+    });
+  }
+
+  /** Añade una transición append-only de relación. */
+  async appendRelationLifecycle(input: Omit<RelationLifecycle, "projectId">): Promise<RelationLifecycle> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadRelationLifecycles;
+      const append = this.store.appendRelationLifecycle;
+      if (!load || !append) throw new Error("El adaptador no admite historial de relaciones.");
+      const record: RelationLifecycle = { ...input, projectId };
+      validateRelationLifecycle(record, projectId);
+      const relations = requireProjectScopedRecords(
+        await this.requireRelationStore().loadRelations(projectId), projectId, "relaciones"
+      );
+      if (!relations.some(relation => relation.id === record.relationId)) {
+        throw new Error("La relación no existe en el proyecto activo.");
+      }
+      const history = await load.call(this.store, projectId, record.relationId);
+      if (!Array.isArray(history)) throw new Error("El historial de relación no es una colección.");
+      const previous = history[history.length - 1];
+      if (!previous
+        ? record.revision !== 1 || record.previousLabel !== null || record.previousState !== null
+        : record.revision !== previous.revision + 1 ||
+          record.previousLabel !== previous.newLabel ||
+          record.previousState !== previous.newState ||
+          record.changedAt < previous.changedAt) {
+        throw new Error("La transición de relación debe continuar exactamente la última revisión durable.");
+      }
+      await append.call(this.store, record);
+      return cloneRelationLifecycle(record);
+    });
+  }
+
   async getStyleProfiles(): Promise<readonly StyleProfile[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
@@ -2271,6 +2397,8 @@ export class HostEngineApi {
       languageResourceRefs: Boolean(this.store.saveLanguageResourceRef && this.store.loadLanguageResourceRefs),
       styleProfiles: Boolean(this.store.saveStyleProfile && this.store.loadStyleProfiles),
       timelineTracks: Boolean(this.store.saveTimelineTrack && this.store.loadTimelineTracks),
+      recordLifecycleHistory: Boolean(this.store.appendRecordLifecycle && this.store.loadRecordLifecycles),
+      relationLifecycleHistory: Boolean(this.store.appendRelationLifecycle && this.store.loadRelationLifecycles),
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),

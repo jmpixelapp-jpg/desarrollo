@@ -726,6 +726,15 @@ export interface LiteraryCharacterDocumentedDecision {
     | "single-document-only"
     | "unknown-due-to-incomplete-catalog"
     | "not-applicable";
+  /** IDs de acontecimientos posteriores en la misma pista y escala temporal verificable. */
+  readonly laterDocumentedEventIds: readonly string[];
+  readonly laterDocumentedEventCount: number;
+  readonly laterEventChronologyStatus:
+    | "later-events-found"
+    | "no-later-event-in-snapshot"
+    | "unknown-time-reference"
+    | "unknown-due-to-incomplete-catalog"
+    | "not-applicable";
   /** Cambios de estado registrados explícitamente con reason=writer. */
   readonly writerDecisionCount: number;
 }
@@ -4536,6 +4545,45 @@ function buildCharacterNarrativeTrajectories(
           : omittedProjectEventCount > 0
             ? "unknown-due-to-incomplete-catalog" as const
             : "single-document-only" as const;
+      // La cronología posterior solo compara referencias con la misma pista,
+      // base y precisión; no convierte proximidad temporal en causalidad.
+      const decisionTimeReferences = materializedProjectEvents
+        .filter(event => event.participants.includes(entityId) &&
+          event.timelineTrackId !== undefined &&
+          event.timeReference !== undefined &&
+          Number.isFinite(event.timeReference.orderValue) &&
+          (event.evidenceCount ?? event.evidence.filter(item => item.status !== "stale").length) > 0)
+        .map(event => ({
+          timelineTrackId:event.timelineTrackId!,
+          basis:event.timeReference!.basis,
+          precision:event.timeReference!.precision,
+          orderValue:event.timeReference!.orderValue
+        }));
+      const hasComparableDecisionTime = decisionTimeReferences.length > 0;
+      const laterDocumentedEventIds = [...new Set(projectEvents
+        .filter(event => event.participants.includes(entityId) &&
+          event.timelineTrackId !== undefined &&
+          event.timeReference !== undefined &&
+          Number.isFinite(event.timeReference.orderValue) &&
+          (event.evidenceCount ?? event.evidence.filter(item => item.status !== "stale").length) > 0 &&
+          decisionTimeReferences.some(reference =>
+            reference.timelineTrackId === event.timelineTrackId &&
+            reference.basis === event.timeReference!.basis &&
+            reference.precision === event.timeReference!.precision &&
+            event.timeReference!.orderValue > reference.orderValue
+          ))
+        .map(event => event.eventId)
+        .filter(eventId => !materializedEventIds.includes(eventId))
+      )].sort((a,b) => a.localeCompare(b,"en"));
+      const laterEventChronologyStatus = materializedEventIds.length === 0
+        ? "not-applicable" as const
+        : !hasComparableDecisionTime
+          ? "unknown-time-reference" as const
+          : laterDocumentedEventIds.length > 0
+            ? "later-events-found" as const
+            : omittedProjectEventCount > 0
+              ? "unknown-due-to-incomplete-catalog" as const
+              : "no-later-event-in-snapshot" as const;
       const decision:LiteraryCharacterDocumentedDecision = {
         ideaId:idea.ideaId,
         text:idea.text,
@@ -4580,6 +4628,9 @@ function buildCharacterNarrativeTrajectories(
         crossDocumentEventIds,
         crossDocumentEventEvidenceCount:crossDocumentEventEvidence.length,
         crossDocumentContinuityStatus,
+        laterDocumentedEventIds:laterDocumentedEventIds.slice(0,50),
+        laterDocumentedEventCount:laterDocumentedEventIds.length,
+        laterEventChronologyStatus,
         writerDecisionCount:idea.writerDecisionCount
       };
       const decisions=decisionsByCharacter.get(entityId) ?? [];

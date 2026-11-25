@@ -3266,7 +3266,7 @@ export class HostEngineApi {
             summary.sourceProjectName !== project.projectName ||
             !Number.isSafeInteger(summary.archivedCount) || summary.archivedCount < 0 ||
             !Number.isFinite(summary.finalizedAt) || summary.finalizedAt < 0 ||
-            typeof summary.archiveChecksum !== "string" || !summary.archiveChecksum.trim() ||
+            (typeof summary.archiveChecksum !== "string" || !/^fnv1a64:[0-9a-f]{16}$/.test(summary.archiveChecksum)) ||
             typeof summary.alreadyFinalized !== "boolean") {
           throw new Error("Integridad de biblioteca: el resumen de finalización es inválido.");
         }

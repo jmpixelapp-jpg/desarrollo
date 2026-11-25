@@ -1460,13 +1460,12 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     () => analyzeLiteraryFragment({ ...input, knownProjectIdeas: [idea, { ...idea }] }),
     /catálogo global de ideas/
   );
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
-    }),
-    /catálogo global de ideas/
-  );
+  const legacySelfReference = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea", "global-idea"] }]
+  }).ideaGraph;
+  assert.equal(legacySelfReference.selfReferenceCount, 1);
+  assert.equal(legacySelfReference.cycleCount, 1);
   assert.throws(
     () => analyzeLiteraryFragment({
       ...input,

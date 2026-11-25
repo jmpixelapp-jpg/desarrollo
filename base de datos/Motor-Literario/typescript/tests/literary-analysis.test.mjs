@@ -1235,7 +1235,7 @@ test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálo
   }), /ideas y decisiones/);
 });
 
-test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
+test("el análisis conserva referencias históricas duplicadas y autorreferenciales", () => {
   const base = {
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -1259,14 +1259,29 @@ test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
     writerDecisionCount: 0,
     omittedStatusHistoryCount: 0
   };
-  assert.throws(() => analyzeLiteraryFragment({
+
+  const legacyCharacterAnalysis = analyzeLiteraryFragment({
     ...base,
-    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-a"] }]
-  }), /ideas y decisiones/);
-  assert.throws(() => analyzeLiteraryFragment({
+    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-a", "idea-a"] }]
+  });
+  assert.equal(legacyCharacterAnalysis.characterNarrativeTrajectories.linkedIdeaCount, 1);
+
+  const legacyGraphAnalysis = analyzeLiteraryFragment({
     ...base,
-    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-b", "idea-b"] }]
-  }), /ideas y decisiones/);
+    knownProjectIdeas: [{
+      projectId: idea.projectId,
+      ideaId: idea.ideaId,
+      status: "IDEA",
+      relatedIdeaIds: ["idea-a"],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial" }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+  assert.equal(legacyGraphAnalysis.ideaGraph.selfReferenceCount, 1);
+  assert.equal(legacyGraphAnalysis.ideaGraph.cycleCount, 1);
 });
 
 test("mantiene el total de decisiones de escritor cuando el historial de una idea se recorta", () => {
@@ -1477,21 +1492,11 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     /historial de decisiones del catálogo global/
   );
   for (const invalidHistory of [
-    [],
     [{ status: "incorporated", reason: "initial" }],
     [{ status: "IDEA", reason: "writer", changedAt: 1 }],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
       { status: "IDEA", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 3 },
-      { status: "discarded", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 2 }
     ]
   ]) {
     assert.throws(

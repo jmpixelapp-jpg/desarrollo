@@ -770,9 +770,12 @@ export interface LiteraryIdeaGraphWeakComponent {
 export interface LiteraryIdeaGraphStatusProfile {
   readonly status: NarrativeIdea["status"];
   readonly ideaCount: number;
+  /** Ideas sin entradas desde otros nodos del snapshot; puede haber fuentes omitidas. */
   readonly sourceIdeaCount: number;
   readonly terminalWithinSnapshotIdeaCount: number;
   readonly isolatedWithinSnapshotIdeaCount: number;
+  /** Entradas procedentes únicamente de ideas incluidas en este snapshot. */
+  /** Suma de entradas cuyo origen pertenece al snapshot. */
   readonly incomingReferenceCount: number;
   readonly includedOutgoingReferenceCount: number;
   readonly notIncludedOutgoingReferenceCount: number;
@@ -798,13 +801,15 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
   /** Ideas omitidas del alcance indicado por catalogScope. */
   readonly omittedIdeaCount: number;
+  /** Aristas declaradas por nodos incluidos en el snapshot, antes de limitar las muestras. */
   readonly referenceCount: number;
+  /** Aristas cuyos dos extremos pertenecen al snapshot. */
   readonly includedReferenceCount: number;
-  /** Referencias cuyo destino no aparece en el snapshot, incluidas las ausencias confirmadas. */
+  /** Aristas cuyo destino no está incluido, por omisión o ausencia del catálogo. */
   readonly notIncludedReferenceCount: number;
-  /** Referencias sin destino en el catálogo cuando no se omitió ninguna idea. */
+  /** Subconjunto sin destino, solo cuando projectCatalogComplete es true. */
   readonly missingFromProjectReferenceCount: number;
-  /** Pares de ideas que se enlazan mutuamente de forma explícita. */
+  /** Pares de aristas inversas explícitas entre ideas incluidas en el snapshot. */
   readonly reciprocalReferencePairCount: number;
   /** Nodos sin referencias entrantes desde el snapshot; no contempla fuentes omitidas. */
   readonly sourceNodeCount: number;

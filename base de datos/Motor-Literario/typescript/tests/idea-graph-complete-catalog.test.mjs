@@ -1256,6 +1256,10 @@ test("la resonancia léxica conserva la frecuencia de los motivos compartidos", 
       { term: "luz", leftFrequency: 1, rightFrequency: 3 },
       { term: "memoria", leftFrequency: 2, rightFrequency: 1 }
     ]);
+    assert.equal(
+      lexical.resonances[0].frequencyWeightedJaccardSimilarity,
+      0.429
+    );
   } finally {
     api.dispose();
   }

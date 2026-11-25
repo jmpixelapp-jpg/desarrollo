@@ -9890,6 +9890,34 @@ test("la API analiza el documento abierto sin modificar el manuscrito", async ()
 
 
 
+
+test("la API vincula acontecimientos persistidos a escenas del documento y revisión activos", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({store});
+  api.initializeProject({projectId:"scene-event-api",projectName:"Continuidad"});
+  const text = "ESCENA: Vestíbulo\nAna abrió la puerta. La alarma sonó.";
+  const phrase = "La alarma sonó.";
+  const start = text.indexOf(phrase);
+  await store.saveEntity({
+    projectId:"scene-event-api",id:"ana",kind:"character",canonicalName:"Ana",
+    normalizedName:"ana",aliases:[],evidence:[],firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
+  await store.saveEvent({
+    projectId:"scene-event-api",id:"alarm",label:"Suena la alarma",participants:["ana"],
+    evidence:[{documentId:"chapter",revision:0,start,end:start+phrase.length,excerpt:phrase}]
+  });
+  await store.saveEvent({
+    projectId:"scene-event-api",id:"stale",label:"Evento antiguo",participants:["ana"],
+    evidence:[{documentId:"chapter",revision:1,start,end:start+phrase.length,excerpt:phrase}]
+  });
+  await api.openDocument({documentId:"chapter",text,revision:0,sequence:0});
+  const before = api.getSnapshot("chapter");
+  const result = await api.analyzeLiteraryDocument("chapter");
+  assert.deepEqual(result.explicitScenes[0].eventLinks.map(item => item.eventId),["alarm"]);
+  assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,true);
+  assert.deepEqual(api.getSnapshot("chapter"),before);
+});
+
 test("la API relaciona personajes del proyecto con escenas por nombre y alias", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({store});
@@ -10103,4 +10131,52 @@ test("omite personajes con alias ambiguos y nombres que solo aparecen como parte
     ]
   });
   assert.deepEqual(result.explicitScenes[0].characterMentions.map(item => item.entityId),[]);
+});
+
+
+test("vincula acontecimientos a escenas solo con evidencia de la misma revisión", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "ESCENA: Patio\nAna abrió la puerta. La alarma sonó.\n***\nESCENA: Calle\nAna salió corriendo.";
+  const eventEvidence = "La alarma sonó.";
+  const evidenceStart = text.indexOf(eventEvidence);
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-event-links",documentId:"chapter",revision:8,text,baseOffset:400,
+    knownCharacters:[{entityId:"ana",canonicalName:"Ana"}],
+    knownEvents:[
+      {
+        eventId:"alarm",label:"Suena la alarma",participants:["ana","guard"],
+        evidence:[{documentId:"chapter",revision:8,start:400+evidenceStart,end:400+evidenceStart+eventEvidence.length,excerpt:eventEvidence}]
+      },
+      {
+        eventId:"stale-alarm",label:"Alarma histórica",participants:[],
+        evidence:[{documentId:"chapter",revision:7,start:400+evidenceStart,end:400+evidenceStart+eventEvidence.length,excerpt:eventEvidence}]
+      },
+      {
+        eventId:"other-document",label:"Otra escena",participants:[],
+        evidence:[{documentId:"other",revision:8,start:400+evidenceStart,end:400+evidenceStart+eventEvidence.length,excerpt:eventEvidence}]
+      }
+    ]
+  });
+  assert.equal(result.explicitScenes.length,2);
+  assert.deepEqual(result.explicitScenes[0].eventLinks.map(item => item.eventId),["alarm"]);
+  assert.deepEqual(result.explicitScenes[0].eventLinks[0].participants,[
+    {entityId:"ana",mentionedByName:true},
+    {entityId:"guard",mentionedByName:false}
+  ]);
+  assert.deepEqual(result.explicitScenes[1].eventLinks,[]);
+  assert.ok(result.explicitScenes[0].eventLinks[0].matchingEvidence[0].start >= 400);
+});
+
+test("no convierte ausencia de mención literal en contradicción", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "ESCENA: Noche\nLa puerta se cerró.";
+  const start = text.indexOf("La puerta");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-event-absence",documentId:"chapter",revision:1,text,
+    knownEvents:[{
+      eventId:"quiet-event",label:"La guardia escucha",participants:["ana"],
+      evidence:[{documentId:"chapter",revision:1,start,end:start+text.length-start,excerpt:"La puerta se cerró."}]
+    }]
+  });
+  assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,false);
 });

@@ -1410,13 +1410,30 @@ export class HostEngineApi {
             aliases:entity.aliases
           }))
       : [];
+    const knownEvents = this.store.loadEvents
+      ? (await this.getNarrativeEvents())
+          .map(event => ({
+            eventId:event.id,
+            label:event.label,
+            participants:event.participants,
+            evidence:event.evidence.filter(evidence =>
+              evidence.status !== "stale" &&
+              evidence.documentId === documentId &&
+              evidence.revision === snapshot.revision &&
+              evidence.end > start &&
+              evidence.start < rangeEnd
+            )
+          }))
+          .filter(event => event.evidence.length > 0)
+      : [];
     return analyzeLiteraryFragment({
       projectId,
       documentId,
       revision: snapshot.revision,
       text: snapshot.text.slice(start, rangeEnd),
       baseOffset: start,
-      knownCharacters
+      knownCharacters,
+      knownEvents
     });
   }
 

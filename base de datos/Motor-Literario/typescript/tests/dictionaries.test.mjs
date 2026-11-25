@@ -164,6 +164,21 @@ test("persiste metadatos por ficha relacionada desde la creación de la entrada"
   assert.equal(links[0].createdAt, 20);
 });
 
+test("crea metadatos separados para los vínculos declarados al crear una entrada", async () => {
+  const store = new DictionaryMemoryStore();
+  store.entities.set(JSON.stringify(["book-one", "entity:ana"]), structuredClone(entity));
+  const api = new HostEngineApi({ store });
+  api.initializeProject(project);
+  await api.saveProjectDictionary(dictionaryInput());
+  await api.saveDictionaryEntry(entryInput({ relatedEntityIds: ["entity:ana"] }));
+  const links = await api.getDictionaryEntryEntityLinks("dict-es", "entry-casa");
+  assert.equal(links.length, 1);
+  assert.equal(links[0].recordId, "entity:ana");
+  assert.equal(links[0].linkKind, "RELATED");
+  assert.equal(links[0].provenanceKind, "WRITER");
+  assert.equal(links[0].createdAt, 20);
+});
+
 test("rechaza formas normalizadas duplicadas dentro del mismo diccionario", async () => {
   const api = new HostEngineApi({ store: new DictionaryMemoryStore() });
   api.initializeProject(project);

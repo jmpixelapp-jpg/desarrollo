@@ -125,6 +125,8 @@ El archivo `typescript/tests/literary-analysis-graph-determinism.test.mjs` conce
 | Componentes | Se verifican componentes débiles desconectados y puntos de articulación. |
 | Muestras acotadas | Con 103 componentes y 103 ciclos se mantienen los totales, 100 muestras y 3 omitidos. |
 | Dos saltos | Se comprueban destinos compartidos/exclusivos, deduplicación y conservación de ciclos. |
+| Presupuesto de dos saltos | Un catálogo sintético de 1.503 ideas fuerza el límite de 1.000.000 de expansiones y comprueba el estado de truncamiento y los agregados de las fuentes completas anteriores. |
+| Catálogo vacío | Se comprueban los contadores cero, las colecciones vacías y la cobertura terminal neutral de 1 para un snapshot sin nodos. |
 
 Estas pruebas describen contratos, no demuestran por sí mismas que la suite se haya ejecutado. La verificación automatizada completa se realiza desde `typescript/` con `npm test`, que primero compila, valida el esquema y almacenamiento, y después ejecuta las suites Node. También existen `npm run typecheck`, `npm run build` y `npm run bench`.
 
@@ -143,6 +145,8 @@ Registro de commits de la línea de trabajo del análisis de ideas en `main`:
 - `4353945`: puntos de articulación en componentes débiles desconectados.
 - `95d8f50`: límites de muestras de componentes y ciclos con totales y omitidos.
 - `b681a9c`: deduplicación de caminos de dos saltos y preservación de ciclos en el fixture de prueba.
+- `0974302`: invariantes del catálogo vacío y métricas de cobertura.
+- `492753b`: prueba de estrés que fuerza el presupuesto de un millón de expansiones de convergencia a dos saltos.
 
 Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en su commit de GitHub para conocer su diff exacto. El trabajo concurrente de otros colaboradores puede intercalar commits en `main`; no atribuir esos cambios a esta línea de trabajo.
 

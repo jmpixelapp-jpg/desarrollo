@@ -1769,7 +1769,7 @@ export class HostEngineApi {
       return {
         projectId:idea.projectId,
         ideaId:idea.id,
-        text:idea.text,
+        ...(idea.text.length <= 100_000 ? { text: idea.text } : {}),
         status:idea.status,
         originDocumentId:idea.originDocumentId,
         sourceProjectName:idea.sourceProjectName,

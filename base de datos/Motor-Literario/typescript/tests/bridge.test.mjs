@@ -541,6 +541,18 @@ test("una instancia puede descartar sus cachés narrativas y leer cambios confir
       projectId: "shared-project", method: "getNarrativeIdeas", args: []
     });
     assert.equal(stale[0].status, "IDEA");
+    await assert.rejects(
+      first.client.request("project.call", {
+        projectId: "shared-project",
+        method: "setNarrativeIdeaStatus",
+        args: [stale[0].id, "discarded"]
+      }),
+      /cambió en otra instancia/
+    );
+    const unchangedByStaleWrite = await second.client.request("project.call", {
+      projectId: "shared-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(unchangedByStaleWrite[0].status, "incorporated");
 
     await first.client.request("project.call", {
       projectId: "shared-project", method: "refreshNarrativeKnowledge", args: []

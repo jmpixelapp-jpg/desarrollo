@@ -2864,12 +2864,147 @@ function buildCharacterEventEvidenceProfiles(
   };
 }
 
+function buildCharacterProjectEventTimeline(
+  entityId: string,
+  projectEvents: readonly LiteraryAnalysisKnownProjectEvent[]
+): LiteraryCharacterProjectEventTimeline {
+  const groups = new Map<string,{
+    readonly timelineTrackId: string | null;
+    readonly basis: NarrativeTimeReference["basis"];
+    readonly precision: NarrativeTimeReference["precision"];
+    readonly orderValue: number;
+    events: Map<string,LiteraryAnalysisKnownProjectEvent>;
+    evidence: LiteraryCharacterProjectEventTimelineEvidence[];
+    rawReferences: Set<string>;
+    documents: Set<string>;
+  }>();
+  let sourceEventCount = 0;
+  let timedEventCount = 0;
+  let untimedEventCount = 0;
+  let staleEventCount = 0;
+
+  for (const event of projectEvents) {
+    if (!event.participants.includes(entityId)) continue;
+    sourceEventCount++;
+    const currentEvidence = event.evidence.filter(item => item.status !== "stale");
+    if (currentEvidence.length === 0) {
+      if (event.evidence.length > 0) staleEventCount++;
+      continue;
+    }
+    if (!event.timeReference) {
+      untimedEventCount++;
+      continue;
+    }
+    timedEventCount++;
+    const reference = event.timeReference;
+    const timelineTrackId = event.timelineTrackId ?? null;
+    const key = JSON.stringify([
+      timelineTrackId,reference.basis,reference.precision,reference.orderValue
+    ]);
+    const group = groups.get(key) ?? {
+      timelineTrackId,
+      basis:reference.basis,
+      precision:reference.precision,
+      orderValue:reference.orderValue,
+      events:new Map<string,LiteraryAnalysisKnownProjectEvent>(),
+      evidence:[],
+      rawReferences:new Set<string>(),
+      documents:new Set<string>()
+    };
+    group.events.set(event.eventId,event);
+    group.rawReferences.add(reference.raw);
+    for (const evidence of currentEvidence) {
+      group.documents.add(evidence.documentId);
+      group.evidence.push({
+        eventId:event.eventId,
+        eventLabel:event.label,
+        documentId:evidence.documentId,
+        revision:evidence.revision,
+        occurrence:{start:evidence.start,end:evidence.end},
+        excerpt:evidence.excerpt
+      });
+    }
+    groups.set(key,group);
+  }
+
+  const allPoints = [...groups.values()].map(group => {
+    const orderedEvents = [...group.events.keys()].sort((a,b) => a.localeCompare(b,"en"));
+    const orderedEvidence = [...group.evidence].sort((a,b) =>
+      a.documentId.localeCompare(b.documentId,"en") ||
+      a.revision-b.revision ||
+      a.occurrence.start-b.occurrence.start ||
+      a.eventId.localeCompare(b.eventId,"en")
+    );
+    return {
+      timelineTrackId:group.timelineTrackId,
+      basis:group.basis,
+      precision:group.precision,
+      orderValue:group.orderValue,
+      rawTimeReferences:[...group.rawReferences].sort((a,b) => a.localeCompare(b,"es")),
+      eventCount:orderedEvents.length,
+      eventIds:orderedEvents.slice(0,50),
+      omittedEventIdCount:Math.max(0,orderedEvents.length-50),
+      documentIds:[...group.documents].sort((a,b) => a.localeCompare(b,"en")),
+      evidenceCount:orderedEvidence.length,
+      evidenceSamples:orderedEvidence.slice(0,20),
+      evidenceTruncated:orderedEvidence.length>20
+    };
+  }).sort((a,b) =>
+    (a.timelineTrackId ?? "").localeCompare(b.timelineTrackId ?? "","en") ||
+    a.basis.localeCompare(b.basis,"en") ||
+    a.precision.localeCompare(b.precision,"en") ||
+    a.orderValue-b.orderValue
+  );
+
+  const timelineSeries = new Map<string,typeof allPoints>();
+  for (const point of allPoints) {
+    // Sin una pista declarada se exponen los puntos, pero no se enlazan entre sí.
+    if (point.timelineTrackId === null) continue;
+    const key = JSON.stringify([point.timelineTrackId,point.basis,point.precision]);
+    const series = timelineSeries.get(key) ?? [];
+    series.push(point);
+    timelineSeries.set(key,series);
+  }
+  const allTransitions: LiteraryCharacterProjectEventTimelineTransition[] = [];
+  for (const series of timelineSeries.values()) {
+    for (let index=1; index<series.length; index++) {
+      const previous = series[index-1]!;
+      const next = series[index]!;
+      allTransitions.push({
+        timelineTrackId:previous.timelineTrackId,
+        basis:previous.basis,
+        precision:previous.precision,
+        fromOrderValue:previous.orderValue,
+        toOrderValue:next.orderValue,
+        previousEventCount:previous.eventCount,
+        nextEventCount:next.eventCount,
+        previousEventIds:previous.eventIds,
+        nextEventIds:next.eventIds
+      });
+    }
+  }
+
+  return {
+    sourceEventCount,
+    timedEventCount,
+    untimedEventCount,
+    staleEventCount,
+    pointCount:allPoints.length,
+    omittedPointCount:Math.max(0,allPoints.length-200),
+    transitionCount:allTransitions.length,
+    omittedTransitionCount:Math.max(0,allTransitions.length-200),
+    points:allPoints.slice(0,200),
+    transitions:allTransitions.slice(0,200)
+  };
+}
+
 function buildCharacterNarrativeTrajectories(
   scenes: readonly LiteraryExplicitSceneSegment[],
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[],
   attributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis,
   eventEvidence: LiteraryCharacterEventEvidenceAnalysis,
-  dependencies: LiteraryEventDependencyAnalysis
+  dependencies: LiteraryEventDependencyAnalysis,
+  projectEvents: readonly LiteraryAnalysisKnownProjectEvent[]
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
   for (const profile of attributeEvolution.profiles) {
@@ -3001,6 +3136,7 @@ function buildCharacterNarrativeTrajectories(
       incompleteSceneIndexes,
       attributes:attributeProfiles,
       eventParticipation:eventProfiles,
+      projectEventTimeline:buildCharacterProjectEventTimeline(character.entityId,projectEvents),
       causalRelations,
       scenes:scenesWithEvidence
     };
@@ -4332,7 +4468,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const characterNarrativeTrajectories = buildCharacterNarrativeTrajectories(
     explicitScenes,input.knownCharacters ?? [],characterAttributeEvolution,
-    characterEventEvidenceProfiles,eventDependencyAnalysis
+    characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? []
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);

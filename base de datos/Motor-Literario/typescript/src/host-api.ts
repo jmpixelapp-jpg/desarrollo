@@ -3540,7 +3540,7 @@ export class HostEngineApi {
     const work = this.knowledgeTail.then(async () => {
       const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
       if (receipt === undefined) return undefined;
-      const ids = receipt.archivedIdeaIds;
+      const ids = receipt?.archivedIdeaIds;
       if (!receipt || receipt.writerId !== writerId ||
           receipt.sourceProjectId !== project.projectId ||
           typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||

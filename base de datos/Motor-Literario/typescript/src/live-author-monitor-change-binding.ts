@@ -227,11 +227,13 @@ export function bindLiveAuthorMonitorEditorChanges(
 
   const stop = (() => {
     if (disposed) return;
-    const hadPending = pending.length > 0;
+    if (pending.length > 0) {
+      throw new Error(
+        "No se puede detener el enlace mientras existan cambios pendientes; reintente la cola FIFO o descarte solo tras resincronizar con un snapshot autoritativo."
+      );
+    }
     disposed = true;
-    pending.length = 0;
     pendingReason = undefined;
-    if (hadPending) publishBackpressure();
     try { unsubscribeSource?.(); } finally { unsubscribeRetrySignal?.(); }
   }) as LiveAuthorMonitorChangeBindingControl;
 

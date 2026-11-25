@@ -20,22 +20,30 @@ class FakeTextArea {
     this.listeners.get(type)?.delete(listener);
   }
 
-  emitBeforeInput(inputType) {
-    const event = { defaultPrevented: false, inputType };
+  emitBeforeInput(inputType, isComposing = false) {
+    const event = { defaultPrevented: false, inputType, isComposing };
     for (const listener of [...(this.listeners.get("beforeinput") ?? [])]) listener(event);
   }
 
-  emitInput() {
-    const event = { inputType: "" };
+  emitInput(isComposing = false) {
+    const event = { inputType: "", isComposing };
     for (const listener of [...(this.listeners.get("input") ?? [])]) listener(event);
   }
 
-  edit({ start, end, nextValue, inputType = "insertText" }) {
+  emitCompositionStart() {
+    for (const listener of [...(this.listeners.get("compositionstart") ?? [])]) listener({});
+  }
+
+  emitCompositionEnd() {
+    for (const listener of [...(this.listeners.get("compositionend") ?? [])]) listener({});
+  }
+
+  edit({ start, end, nextValue, inputType = "insertText", isComposing = false }) {
     this.selectionStart = start;
     this.selectionEnd = end;
-    this.emitBeforeInput(inputType);
+    this.emitBeforeInput(inputType, isComposing);
     this.value = nextValue;
-    this.emitInput();
+    this.emitInput(isComposing);
   }
 }
 
@@ -85,6 +93,7 @@ test("convierte escritura y reemplazo de selección en deltas UTF-16 consecutivo
     revision: 6,
     sequence: 11,
     documentLength: 5,
+    compositionActive: false,
     needsResync: false
   });
   f.stop();
@@ -199,9 +208,13 @@ test("desmonta listeners al retirar la última suscripción y al disponer el ada
   const f = fixture();
   assert.equal(f.element.listeners.get("beforeinput").size, 1);
   assert.equal(f.element.listeners.get("input").size, 1);
+  assert.equal(f.element.listeners.get("compositionstart").size, 1);
+  assert.equal(f.element.listeners.get("compositionend").size, 1);
   f.stop();
   assert.equal(f.element.listeners.get("beforeinput").size, 0);
   assert.equal(f.element.listeners.get("input").size, 0);
+  assert.equal(f.element.listeners.get("compositionstart").size, 0);
+  assert.equal(f.element.listeners.get("compositionend").size, 0);
 
   // Retirar la última suscripción no dispone el adaptador; permite remontarlo.
   const stopAgain = f.source.subscribeChanges(() => {});
@@ -242,3 +255,101 @@ test("rechaza inputType vacío o ajeno a inserción/eliminación sin inventar un
   f.source.dispose();
 });
 
+
+test("captura actualizaciones IME sucesivas como deltas consecutivos y cierra el estado de composición", () => {
+  const f = fixture("abc", 2, 7);
+  f.element.emitCompositionStart();
+  assert.equal(f.source.getState().compositionActive, true);
+
+  // Primera representación provisional compuesta.
+  f.element.edit({
+    start: 3,
+    end: 3,
+    nextValue: "abcに",
+    inputType: "insertCompositionText",
+    isComposing: true
+  });
+  // El IME reemplaza el texto provisional anterior por una forma candidata nueva.
+  f.element.edit({
+    start: 3,
+    end: 4,
+    nextValue: "abc日本",
+    inputType: "insertCompositionText",
+    isComposing: true
+  });
+
+  assert.deepEqual(f.changes, [
+    {
+      documentId: "chapter-1",
+      sequence: 8,
+      baseRevision: 2,
+      start: 3,
+      end: 3,
+      replacement: "に"
+    },
+    {
+      documentId: "chapter-1",
+      sequence: 9,
+      baseRevision: 3,
+      start: 3,
+      end: 4,
+      replacement: "日本"
+    }
+  ]);
+  assert.equal(f.source.getState().compositionActive, true);
+  assert.equal(f.source.getState().documentLength, 5);
+
+  f.element.emitCompositionEnd();
+  assert.equal(f.source.getState().compositionActive, false);
+  assert.equal(f.source.getState().needsResync, false);
+
+  f.element.edit({
+    start: 5,
+    end: 5,
+    nextValue: "abc日本!",
+    inputType: "insertText"
+  });
+  assert.equal(f.changes[2].sequence, 10);
+  assert.equal(f.changes[2].baseRevision, 4);
+  f.stop();
+  f.source.dispose();
+});
+
+test("rechaza insertCompositionText fuera de composición y no inventa un rango", () => {
+  const f = fixture("abc");
+  f.element.edit({
+    start: 3,
+    end: 3,
+    nextValue: "abcx",
+    inputType: "insertCompositionText",
+    isComposing: false
+  });
+
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.source.getState().compositionActive, false);
+  assert.equal(f.errors[0].code, "composition-state-mismatch");
+  f.stop();
+  f.source.dispose();
+});
+
+test("exige resincronización si la composición termina sin el input asociado", () => {
+  const f = fixture("abc");
+  f.element.emitCompositionStart();
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+  f.element.emitBeforeInput("insertCompositionText", true);
+  f.element.emitCompositionEnd();
+
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.source.getState().compositionActive, false);
+  assert.equal(f.errors[0].code, "composition-state-mismatch");
+
+  // El input tardío se ignora hasta resincronizar.
+  f.element.value = "abcx";
+  f.element.emitInput(false);
+  assert.equal(f.changes.length, 0);
+  f.stop();
+  f.source.dispose();
+});

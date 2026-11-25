@@ -1450,6 +1450,51 @@ async function saveEventWithLifecycle(
   });
 }
 
+function validateLiveAuthorMonitorCheckpoint(
+  checkpoint: StoredLiveAuthorMonitorCheckpoint,
+  projectId?: string,
+  documentId?: string
+): void {
+  const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
+  const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
+  if (!checkpoint || checkpoint.version !== 1 ||
+      typeof checkpoint.projectId !== "string" || !checkpoint.projectId.trim() ||
+      (projectId !== undefined && checkpoint.projectId !== projectId) ||
+      typeof checkpoint.documentId !== "string" || !checkpoint.documentId.trim() ||
+      (documentId !== undefined && checkpoint.documentId !== documentId) ||
+      typeof checkpoint.sessionId !== "string" || !checkpoint.sessionId.trim() ||
+      !finiteNonNegative(checkpoint.savedAt) ||
+      !finiteNonNegative(checkpoint.sessionDurationMs) ||
+      !finiteNonNegative(checkpoint.activeDurationMs) ||
+      !finiteNonNegative(checkpoint.idleDurationMs) ||
+      Math.abs(checkpoint.sessionDurationMs -
+        checkpoint.activeDurationMs - checkpoint.idleDurationMs) > 1 ||
+      !(checkpoint.lastActivityAgeMs === null ||
+        (finiteNonNegative(checkpoint.lastActivityAgeMs) &&
+          checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1)) ||
+      !integerNonNegative(checkpoint.pauseCount) ||
+      !integerNonNegative(checkpoint.acceptedChanges) ||
+      !integerNonNegative(checkpoint.rejectedChanges) ||
+      !integerNonNegative(checkpoint.committedChanges) ||
+      !integerNonNegative(checkpoint.failedChanges) ||
+      checkpoint.committedChanges + checkpoint.failedChanges > checkpoint.acceptedChanges ||
+      !integerNonNegative(checkpoint.insertedCharacters) ||
+      !integerNonNegative(checkpoint.deletedCharacters) ||
+      !integerNonNegative(checkpoint.currentDocumentLength) ||
+      !integerNonNegative(checkpoint.revision) ||
+      !integerNonNegative(checkpoint.sequence) ||
+      !integerNonNegative(checkpoint.resynchronizations) ||
+      !finiteNonNegative(checkpoint.lastCommitLatencyMs) ||
+      !finiteNonNegative(checkpoint.totalCommitLatencyMs) ||
+      !Array.isArray(checkpoint.commitLatencies) ||
+      checkpoint.commitLatencies.length > 4096 ||
+      checkpoint.commitLatencies.some(value => !finiteNonNegative(value)) ||
+      checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
+        checkpoint.totalCommitLatencyMs + 1) {
+    throw new Error("Checkpoint de monitoreo malformado o perteneciente a otra identidad.");
+  }
+}
+
 /**
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
@@ -4990,6 +5035,107 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.onabort = () => reject(
         transaction.error ?? validationError ?? new Error("Se canceló la lectura consistente del documento y su journal.")
       );
+    });
+  }
+
+  async saveLiveAuthorMonitorCheckpoint(
+    checkpoint: StoredLiveAuthorMonitorCheckpoint
+  ): Promise<void> {
+    validateLiveAuthorMonitorCheckpoint(checkpoint);
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "readwrite");
+      const store = transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS);
+      let failure: Error | undefined;
+      const existingRequest = store.get([checkpoint.projectId, checkpoint.documentId]);
+      existingRequest.onsuccess = () => {
+        const existing = existingRequest.result as StoredLiveAuthorMonitorCheckpoint | undefined;
+        if (existing !== undefined) {
+          if (!existing || !Number.isFinite(existing.savedAt) || existing.savedAt < 0) {
+            failure = new Error("El checkpoint existente del monitor está malformado.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            return;
+          }
+          if (existing.savedAt > checkpoint.savedAt) {
+            failure = new Error("Se rechazó guardar un checkpoint anterior al ya persistido.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            return;
+          }
+        }
+        try {
+          store.put(structuredClone(checkpoint));
+        } catch (error) {
+          failure = error instanceof Error ? error : new Error("No se pudo clonar el checkpoint.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        }
+      };
+      existingRequest.onerror = () => {
+        failure = existingRequest.error ?? new Error("No se pudo comprobar el checkpoint anterior.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ??
+        new Error("No se pudo guardar el checkpoint del monitor."));
+      transaction.onabort = () => reject(failure ?? transaction.error ??
+        new Error("Se canceló el guardado del checkpoint del monitor."));
+    });
+  }
+
+  async loadLiveAuthorMonitorCheckpoint(
+    projectId: string,
+    documentId: string
+  ): Promise<StoredLiveAuthorMonitorCheckpoint | undefined> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof documentId !== "string" || !documentId.trim()) {
+      throw new Error("Identidad inválida para leer el checkpoint del monitor.");
+    }
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "readonly");
+      const request = transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS)
+        .get([projectId, documentId]);
+      let result: StoredLiveAuthorMonitorCheckpoint | undefined;
+      let validationError: Error | undefined;
+      request.onsuccess = () => {
+        const checkpoint = request.result as StoredLiveAuthorMonitorCheckpoint | undefined;
+        if (checkpoint === undefined) return;
+        try {
+          validateLiveAuthorMonitorCheckpoint(checkpoint, projectId, documentId);
+          result = structuredClone(checkpoint);
+        } catch (error) {
+          validationError = error instanceof Error ? error :
+            new Error("El checkpoint persistido del monitor es inválido.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        }
+      };
+      request.onerror = () => {
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => {
+        if (validationError) reject(validationError);
+        else resolve(result);
+      };
+      transaction.onerror = () => reject(transaction.error ??
+        new Error("No se pudo leer el checkpoint del monitor."));
+      transaction.onabort = () => reject(validationError ?? transaction.error ??
+        new Error("Se canceló la lectura del checkpoint del monitor."));
+    });
+  }
+
+  async deleteLiveAuthorMonitorCheckpoint(projectId: string, documentId: string): Promise<void> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof documentId !== "string" || !documentId.trim()) {
+      throw new Error("Identidad inválida para eliminar el checkpoint del monitor.");
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "readwrite");
+      transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS).delete([projectId, documentId]);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ??
+        new Error("No se pudo eliminar el checkpoint del monitor."));
+      transaction.onabort = () => reject(transaction.error ??
+        new Error("Se canceló la eliminación del checkpoint del monitor."));
     });
   }
 

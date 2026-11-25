@@ -5610,8 +5610,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     (input.knownIdeas ?? []).map(idea => [idea.ideaId, idea.text] as const)
   );
   const graphIdeas = (input.knownProjectIdeas ?? input.knownIdeas ?? []).map(idea => {
-    if (idea.text !== undefined || !knownIdeaTextById.has(idea.ideaId)) return idea;
-    return { ...idea, text: knownIdeaTextById.get(idea.ideaId) };
+    if (idea.text !== undefined) return idea;
+    const knownText = knownIdeaTextById.get(idea.ideaId);
+    return knownText === undefined ? idea : { ...idea, text: knownText };
   });
   const usesProjectIdeaCatalog = input.knownProjectIdeas !== undefined;
   const graphOmittedIdeaCount = usesProjectIdeaCatalog

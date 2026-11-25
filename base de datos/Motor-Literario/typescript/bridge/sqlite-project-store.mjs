@@ -390,11 +390,12 @@ export class SqliteProjectStore {
     const missingLibraryKeys = database.prepare(
       "SELECT record_key, value_json FROM " + TABLE +
       " WHERE collection = ? AND sort_key IS NULL ORDER BY record_key"
-    ).all("personal-idea-library");
+    );
     const updateLibraryKey = database.prepare(
       "UPDATE " + TABLE + " SET sort_key = ? WHERE collection = ? AND record_key = ?"
     );
-    for (const row of missingLibraryKeys) {
+    // La migración también es streaming: no materializa una biblioteca grande en RAM.
+    for (const row of missingLibraryKeys.iterate("personal-idea-library")) {
       const entry = JSON.parse(row.value_json);
       if (!entry || typeof entry.sourceProjectId !== "string" ||
           typeof entry.idea?.id !== "string") {

@@ -140,7 +140,7 @@ motor.onNotification("engine.personalIdeaLibraryChanged", message => {
 });
 ~~~
 
-`engine.personalIdeaLibraryChanged` é um aviso de invalidação, não transporta ideas nem datos narrativos. Se uma idea é arquivada o consolidada em qualquer libro do escritor, el puente avisa a todos los proyectos abiertos asociados a esa misma identidad autenticada. La aplicación vuelve a consultar las páginas de la biblioteca; nunca usa el `writerId` recibido para cambiar la identidad autenticada ni para autorizar consultas. Los proyectos de otros escritores no reciben el aviso.
+`engine.personalIdeaLibraryChanged` es un aviso de invalidación: no transporta ideas ni datos narrativos. Cuando se archiva o consolida una idea en cualquier libro del escritor, el puente avisa a todos los proyectos abiertos asociados a esa misma identidad autenticada. La aplicación vuelve a consultar las páginas de la biblioteca y comprueba que el `writerId` recibido coincide con el escritor autenticado; nunca utiliza ese valor para cambiar la identidad ni para autorizar consultas. Los proyectos de otros escritores no reciben el aviso.
 
 Enviar cada operación de edición como un reemplazo:
 

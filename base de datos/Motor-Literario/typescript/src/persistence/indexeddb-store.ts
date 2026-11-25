@@ -279,7 +279,9 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
       (idea.status !== "IDEA" && idea.status !== "incorporated" && idea.status !== "discarded") ||
       typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
       typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||
-      !Array.isArray(idea.evidence)) {
+      !Array.isArray(idea.evidence) ||
+      (idea.omittedStatusHistoryCount !== undefined &&
+        (!Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0))) {
     throw new Error(`Registro de ${label} malformado: faltan datos narrativos obligatorios.`);
   }
   for (const evidence of idea.evidence) {

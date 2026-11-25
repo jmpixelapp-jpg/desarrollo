@@ -23,7 +23,7 @@ Las carpetas `engine/` y `storage/` contienen un prototipo histórico en Rust. N
 
 ## Integración con la aplicación anfitriona
 
-La guía de integración vigente define el módulo TypeScript, el ciclo de vida del documento, el contrato de cambios UTF-16, la recuperación, las consultas narrativas, los errores y las pruebas de aceptación: [Guía de integración del anfitrión](docs/integration/GUIA_INTEGRACION_ANFITRION_V1.md). La antigua especificación JSON-RPC pertenece al prototipo Rust y no es el protocolo de integración actual.
+La integración dispone de dos modalidades: [guía general del anfitrión](docs/integration/GUIA_INTEGRACION_ANFITRION_V1.md) y [puente JSON-RPC entre procesos](docs/integration/BRIDGE_PROCESS_PROTOCOL_V1.md). El puente ejecuta un proceso compañero por stdin/stdout y persiste en SQLite local. La antigua especificación JSON-RPC bajo `docs/specifications/` pertenece al prototipo Rust y no es el protocolo actual.
 
 ## Base de datos MLDB
 

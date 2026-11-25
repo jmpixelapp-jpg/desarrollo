@@ -845,7 +845,11 @@ export interface LiteraryIdeaGraphNode {
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
   /** Entradas desde ideas incluidas en el snapshot actual. */
-  readonly incomingReferenceCount: number;
+  readonly incomingReferenceCount: number; 
+  /** Destinos distintos alcanzados directamente desde este nodo. */
+  readonly distinctOutgoingIdeaCount: number;
+  /** Fuentes distintas que apuntan directamente a este nodo. */
+  readonly distinctIncomingIdeaCount: number;
   /** Salidas cuyo destino también está incluido en el snapshot actual. */
   readonly includedOutgoingReferenceCount: number;
   /** Salidas explícitas cuyo destino no está incluido en el snapshot actual. */
@@ -1037,7 +1041,15 @@ export interface LiteraryIdeaGraphAnalysis {
   /** Nodos sin salidas hacia otros nodos incluidos; pueden conservar salidas externas. */
   readonly terminalWithinSnapshotNodeCount: number;
   /** Nodos con alguna ruta dirigida hacia un terminal dentro del snapshot. */
-  readonly terminalReachableNodeCount: number;
+  readonly terminalReachableNodeCount: number; 
+  /** Nodos con más de un destino directo: bifurcaciones dirigidas. */
+  readonly directedBranchNodeCount: number;
+  /** Nodos con más de una fuente directa: convergencias dirigidas. */
+  readonly directedConvergenceNodeCount: number;
+  /** Aristas de salida de nodos con bifurcación, usando destinos únicos. */
+  readonly directedBranchEdgeCount: number;
+  /** Aristas entrantes a nodos con convergencia, usando fuentes únicas. */
+  readonly directedConvergenceEdgeCount: number;
   /** Nodos sin ruta dirigida hacia un terminal dentro del snapshot. */
   readonly terminalUnreachableNodeCount: number;
   readonly terminalReachabilityCoverage: number;
@@ -3860,6 +3872,8 @@ function buildLiteraryIdeaGraph(
     directReferenceStatusCounts,
     directReferenceStatusAlignment,
     incomingReferenceCount: incoming[index]!,
+    distinctOutgoingIdeaCount: new Set(adjacency[index]!).size,
+    distinctIncomingIdeaCount: 0,
     includedOutgoingReferenceCount: adjacency[index]!.length,
     notIncludedOutgoingReferenceCount: outgoingExternal[index]!,
     statusHistory: idea.statusHistory.map(change => ({ ...change })),
@@ -4091,10 +4105,26 @@ function buildLiteraryIdeaGraph(
     }
   }
   let terminalReachableNodeCount = 0;
+  let directedBranchNodeCount = 0;
+  let directedConvergenceNodeCount = 0;
+  let directedBranchEdgeCount = 0;
+  let directedConvergenceEdgeCount = 0;
   for (let index = 0; index < ideaCount; index++) {
     if (minimumDirectedHopsToTerminal[index] !== -1) terminalReachableNodeCount++;
+    const distinctIncomingIdeaCount = new Set(reverseAdjacency[index]!).size;
+    const distinctOutgoingIdeaCount = new Set(adjacency[index]!).size;
+    if (distinctOutgoingIdeaCount > 1) {
+      directedBranchNodeCount++;
+      directedBranchEdgeCount += distinctOutgoingIdeaCount;
+    }
+    if (distinctIncomingIdeaCount > 1) {
+      directedConvergenceNodeCount++;
+      directedConvergenceEdgeCount += distinctIncomingIdeaCount;
+    }
     nodes[index] = {
       ...nodes[index]!,
+      distinctIncomingIdeaCount,
+      distinctOutgoingIdeaCount,
       minimumDirectedHopsToTerminal: minimumDirectedHopsToTerminal[index] === -1
         ? null : minimumDirectedHopsToTerminal[index]!,
       terminalReachabilityStatus: minimumDirectedHopsToTerminal[index] === -1
@@ -4322,7 +4352,11 @@ function buildLiteraryIdeaGraph(
     sourceNodeCount,
     terminalWithinSnapshotNodeCount,
     terminalReachableNodeCount,
-    terminalUnreachableNodeCount: ideaCount - terminalReachableNodeCount,
+    terminalUnreachableNodeCount: ideaCount - terminalReachableNodeCount,    directedBranchNodeCount,
+    directedConvergenceNodeCount,
+    directedBranchEdgeCount,
+    directedConvergenceEdgeCount,
+
     terminalReachabilityCoverage: ideaCount === 0 ? 1 : terminalReachableNodeCount / ideaCount,
     isolatedWithinSnapshotNodeCount,
     weakComponentCount: allWeakComponents.length,

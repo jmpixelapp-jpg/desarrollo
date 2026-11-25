@@ -4991,7 +4991,8 @@ function isValidNarrativeIdeaStatusHistory(
           ? omittedStatusHistoryCount === 0
             ? change.reason !== "initial"
             : change.reason === "initial"
-          : change.reason === "initial") ||
+          : change.reason === "initial" ||
+            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
         (change.changedAt !== undefined &&
           (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
         (change.changedAt !== undefined && previousChangedAt !== undefined &&

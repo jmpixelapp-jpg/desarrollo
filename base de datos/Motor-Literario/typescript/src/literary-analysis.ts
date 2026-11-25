@@ -4987,11 +4987,13 @@ function isValidNarrativeIdeaStatusHistory(
     if (!change ||
         !["IDEA","incorporated","discarded"].includes(change.status) ||
         !["initial","writer","text-revised"].includes(change.reason) ||
+        (change.reason === "text-revised" && change.status !== "IDEA") ||
         (index === 0
           ? omittedStatusHistoryCount === 0
             ? change.reason !== "initial"
             : change.reason === "initial"
-          : change.reason === "initial") ||
+          : change.reason === "initial" ||
+            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
         (change.changedAt !== undefined &&
           (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
         (change.changedAt !== undefined && previousChangedAt !== undefined &&
@@ -5000,10 +5002,13 @@ function isValidNarrativeIdeaStatusHistory(
     }
     if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
   }
+  const visibleWriterDecisionCount = value.filter(
+    (change: NarrativeIdeaStatusChange) => change.reason === "writer"
+  ).length;
+  // El prefijo omitido contiene el estado inicial, que no cuenta como decisión del escritor.
   return value[value.length - 1]?.status === currentStatus &&
-    writerDecisionCount >= value.filter(
-      (change: NarrativeIdeaStatusChange) => change.reason === "writer"
-    ).length;
+    writerDecisionCount >= visibleWriterDecisionCount &&
+    writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
 }
 
 function validateInput(input: LiteraryAnalysisInput): number {

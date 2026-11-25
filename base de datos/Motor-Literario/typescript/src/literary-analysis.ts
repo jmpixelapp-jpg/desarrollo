@@ -255,14 +255,21 @@ export interface LiteraryCharacterCoMentionPattern {
 }
 export interface LiteraryCharacterMentionCountByScene {
   readonly sceneIndex: number;
+  readonly sceneWordCount: number;
   readonly mentionCount: number;
+  /** Menciones literales por cada 1.000 palabras de esta escena. */
+  readonly mentionRatePer1000Words: number;
 }
 export interface LiteraryCharacterMentionDistribution {
   readonly entityId: string;
   readonly canonicalName: string;
   /** Total de coincidencias literales, incluso cuando se limitan las ocurrencias de evidencia. */
   readonly totalMentionCount: number;
-  /** Conteo de menciones por escena; no equivale a la cantidad de ejemplos UTF-16 conservados. */
+  /** Palabras de todas las escenas explícitas, incluidas las escenas sin mención del personaje. */
+  readonly totalSceneWordCount: number;
+  /** Total de menciones por cada 1.000 palabras de todas las escenas explícitas. */
+  readonly mentionRatePer1000Words: number;
+  /** Serie completa por escena, con ceros explícitos y tasa normalizada; no son muestras de offsets. */
   readonly mentionCountByScene: readonly LiteraryCharacterMentionCountByScene[];
   /** Escenas explícitas con al menos una mención literal no ambigua. */
   readonly sceneIndexes: readonly number[];
@@ -1936,7 +1943,7 @@ function buildCharacterMentionDistributions(
     readonly entityId: string;
     readonly canonicalName: string;
     sceneIndexes: number[];
-    mentionCountByScene: LiteraryCharacterMentionCountByScene[];
+    mentionCountByScene: Map<number,number>;
     totalMentionCount: number;
   }>();
   for (const scene of scenes) {
@@ -1945,23 +1952,31 @@ function buildCharacterMentionDistributions(
         entityId:mention.entityId,
         canonicalName:mention.canonicalName,
         sceneIndexes:[],
-        mentionCountByScene:[],
+        mentionCountByScene:new Map<number,number>(),
         totalMentionCount:0
       };
       if (group.sceneIndexes[group.sceneIndexes.length-1] !== scene.sceneIndex) {
         group.sceneIndexes.push(scene.sceneIndex);
-        group.mentionCountByScene.push({
-          sceneIndex:scene.sceneIndex,
-          mentionCount:mention.mentionCount
-        });
       }
+      group.mentionCountByScene.set(scene.sceneIndex,mention.mentionCount);
       group.totalMentionCount += mention.mentionCount;
       groups.set(mention.entityId,group);
     }
   }
 
+  const totalSceneWordCount = scenes.reduce((total,scene) => total+scene.wordCount,0);
   const characters = [...groups.values()].map(group => {
     const sceneIndexes = [...group.sceneIndexes];
+    const mentionCountByScene = scenes.map(scene => {
+      const mentionCount = group.mentionCountByScene.get(scene.sceneIndex) ?? 0;
+      return {
+        sceneIndex:scene.sceneIndex,
+        sceneWordCount:scene.wordCount,
+        mentionCount,
+        mentionRatePer1000Words:scene.wordCount > 0
+          ? roundMetric(mentionCount/scene.wordCount*1000) : 0
+      };
+    });
     const firstSceneIndex = sceneIndexes[0] ?? 0;
     const lastSceneIndex = sceneIndexes[sceneIndexes.length-1] ?? 0;
     let longestConsecutiveSceneRun = 0;
@@ -1976,7 +1991,10 @@ function buildCharacterMentionDistributions(
       entityId:group.entityId,
       canonicalName:group.canonicalName,
       totalMentionCount:group.totalMentionCount,
-      mentionCountByScene:group.mentionCountByScene,
+      totalSceneWordCount,
+      mentionRatePer1000Words:totalSceneWordCount > 0
+        ? roundMetric(group.totalMentionCount/totalSceneWordCount*1000) : 0,
+      mentionCountByScene,
       sceneIndexes,
       sceneCount:sceneIndexes.length,
       firstSceneIndex,

@@ -9869,6 +9869,29 @@ test("la recuperación local no inventa un snapshot cuando el documento nunca fu
 
 test("IndexedDB registra el cierre del libro y repite la transferencia usando el mismo recibo durable", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const originalBroadcastChannel = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class FinalizationBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    constructor(name) { this.name = name; FinalizationBroadcastChannel.channels.add(this); }
+    postMessage(data) {
+      for (const channel of FinalizationBroadcastChannel.channels) {
+        if (channel === this || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: structuredClone(data) }));
+      }
+    }
+    close() { FinalizationBroadcastChannel.channels.delete(this); }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true, value: FinalizationBroadcastChannel
+  });
+  const finalizationBroadcastAssertions = [];
+  const observer = new IndexedDbProjectStore();
+  const unsubscribeFinalizationObserver = observer.subscribePersonalIdeaLibraryChanges(
+    value => finalizationBroadcastAssertions.push(value)
+  );
   const projectId = "finalization-receipt-book";
   const writerId = "finalization-receipt-writer";
   const projectName = "El libro finalizado";
@@ -9932,12 +9955,40 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-project");
                 return {
-                  getAll(requestedProjectId) {
-                    return transaction.request(() =>
-                      structuredClone(projectIdeas.filter(item => item.projectId === requestedProjectId))
-                    );
+                  openCursor(requestedProjectId) {
+                    const request = {};
+                    const ordered = projectIdeas
+                      .filter(item => item.projectId === requestedProjectId)
+                      .sort((first, second) => first.id.localeCompare(second.id));
+                    let index = 0;
+                    const advance = () => {
+                      transaction.pendingRequests++;
+                      queueMicrotask(() => {
+                        if (transaction.aborted) return;
+                        const item = ordered[index++];
+                        request.result = item
+                          ? {
+                              value: structuredClone(item),
+                              continue: advance
+                            }
+                          : null;
+                        request.onsuccess?.();
+                        transaction.pendingRequests--;
+                        transaction.maybeComplete();
+                      });
+                    };
+                    advance();
+                    return request;
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const item = projectIdeas.find(entry =>
+                    entry.projectId === key[0] && entry.id === key[1]
+                  );
+                  return item ? structuredClone(item) : undefined;
+                });
               },
               delete(key) {
                 const [requestedProjectId, ideaId] = key;
@@ -9953,14 +10004,20 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-writer-source");
                 return {
-                  getAll(key) {
+                  count(key) {
                     return transaction.request(() =>
-                      [...library.values()]
-                        .filter(entry => entry.writerId === key[0] && entry.sourceProjectId === key[1])
-                        .map(entry => structuredClone(entry))
+                      [...library.values()].filter(entry =>
+                        entry.writerId === key[0] && entry.sourceProjectId === key[1]
+                      ).length
                     );
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const entry = library.get(makeKey(key));
+                  return entry ? structuredClone(entry) : undefined;
+                });
               },
               add(entry) {
                 const key = makeKey([entry.writerId, entry.sourceProjectId, entry.idea.id]);
@@ -10018,6 +10075,9 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(projectIdeas.length, 0);
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(finalizationBroadcastAssertions, [writerId],
+      "la transferencia confirmada notifica una vez a la biblioteca del escritor");
 
     const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
     assert.ok(receipt);
@@ -10034,6 +10094,9 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(retryArchive[0].idea.id, "idea-to-archive");
     assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(finalizationBroadcastAssertions, [writerId],
+      "repetir un recibo no publica una segunda transferencia");
     assert.equal(
       (await store.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
       receipt.archiveChecksum
@@ -10052,8 +10115,13 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
   } finally {
+    unsubscribeFinalizationObserver();
+    observer.dispose?.();
+    FinalizationBroadcastChannel.channels.clear();
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;
+    if (originalBroadcastChannel) Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);
+    else delete globalThis.BroadcastChannel;
   }
 });
 

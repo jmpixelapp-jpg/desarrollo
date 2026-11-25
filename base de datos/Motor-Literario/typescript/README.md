@@ -137,23 +137,30 @@ El respaldo contiene el manuscrito y los datos privados de la biblioteca en clar
 
 `HostEngineApi` expone `exportDatabaseBackup()` y `restoreDatabaseBackup(backup)` cuando el adaptador local implementa ambas operaciones. El almacenamiento `IndexedDbProjectStore` realiza la instantánea y la restauración atómica. La exportación lee todos los object stores de la versión abierta dentro de una sola transacción readonly y devuelve un paquete JSON con el número de versión, fecha y checksum FNV-1a para detectar alteraciones accidentales. Incluye documentos, journal, conocimiento narrativo, biblioteca personal, diccionarios, historiales, configuraciones, evidencias, autorizaciones y recibos. Antes de exportar y antes de restaurar se comprueban también los recibos de finalización y las entradas de biblioteca que referencian: propietario, IDs, conteo, procedencia y checksum incremental del contenido archivado. Un paquete con una idea alterada no se restaura aunque se haya recalculado su checksum exterior. Los recibos legacy sin checksum de contenido siguen siendo compatibles.
 
-`HostEngineApi.exportDatabaseBackup()` espera automáticamente a que terminen el journal, el análisis, los diagnósticos y el conocimiento pendientes. El anfitrión solo debe guardar el paquete devuelto como un archivo privado mediante su propio mecanismo de archivos:
+`HostEngineApi.exportDatabaseBackup()` espera automáticamente a que terminen el journal, el análisis, los diagnósticos y el conocimiento pendientes. El paquete se puede guardar como archivo privado con los helpers exportados por `src/index.ts`:
 
 ~~~ts
+import { downloadIndexedDbBackupFile } from "./src/index";
+
 const backup = await api.exportDatabaseBackup();
-await hostFiles.writePrivateFile(
-  "motor-literario-backup.json",
-  JSON.stringify(backup)
-);
+downloadIndexedDbBackupFile(backup, "motor-literario-backup.json");
 ~~~
 
-Para restaurar, leer y validar el JSON antes de abrir proyectos o documentos en la sesión del editor:
+Para restaurar, usar un control de archivo del anfitrión y una instancia nueva de `HostEngineApi`, sin proyecto inicializado. Cancelar la selección no ejecuta ninguna restauración:
 
 ~~~ts
-const backup = JSON.parse(await hostFiles.readPrivateFile("motor-literario-backup.json"));
-// Ejecutar con una instancia nueva, antes de initializeProject().
-await api.restoreDatabaseBackup(backup);
+import { readIndexedDbBackupFile } from "./src/index";
+
+const input = document.querySelector<HTMLInputElement>("#motor-backup-file");
+const file = input?.files?.[0];
+if (file) {
+  const backup = await readIndexedDbBackupFile(file);
+  // maintenanceApi es una instancia nueva, antes de initializeProject().
+  await maintenanceApi.restoreDatabaseBackup(backup);
+}
 ~~~
+
+`readIndexedDbBackupFile()` rechaza archivos vacíos, JSON malformado y raíces que no sean objetos. La validación completa de formato, versión, checksum, almacenes, recibos y contenido sigue a cargo de `restoreDatabaseBackup()`, que aborta sin reemplazo parcial.
 
 La restauración exige una instancia de `HostEngineApi` sin proyecto inicializado; rechaza hacerlo desde una sesión activa. El anfitrión debe cerrar los editores y crear esa instancia de mantenimiento antes de abrir libros. Exige coincidencia exacta de versión y nombres de almacenes. Reemplaza todas las colecciones dentro de una sola transacción readwrite: si una escritura falla, IndexedDB aborta la transacción y conserva el estado anterior. Después de confirmar, publica invalidaciones de conocimiento narrativo y biblioteca para que las otras pestañas recarguen sus datos. El anfitrión debe ejecutar la restauración en modo de mantenimiento, sin sesiones de edición activas, y reconstruir las instancias del motor que dependan de los datos restaurados.
 
@@ -169,7 +176,7 @@ El núcleo TypeScript ya incluye monitoreo incremental, cola no bloqueante con l
 
 La recuperación local mediante `recoverDocument(documentId)` funciona cuando existe un snapshot durable y un journal continuo. Si nunca se guardó un snapshot base, o el journal está corrupto, el motor no inventa ni elimina datos: exige una copia autoritativa del anfitrión y conserva la información en conflicto.
 
-Siguen siendo límites deliberados la comprensión semántica general, la inferencia automática y fiable de acontecimientos y cronología no explícita, la resolución literaria completa de contradicciones, la clasificación automática de afirmaciones históricas que quedaron obsoletas al cambiar el texto, y las mediciones de latencia en equipos y adaptadores reales de cada plataforma. La CI registrada el 25 de noviembre de 2026 pasó typecheck, build, validación, 293 pruebas (284 aprobadas, 0 fallidas y 9 omitidas) y benchmark. Esto no sustituye la validación de un ciclo real de copia de seguridad y restauración en el programa anfitrión ni las pruebas de IndexedDB en los sistemas objetivo; hasta completar esa validación externa, deben mantenerse copias independientes de los manuscritos importantes.
+Siguen siendo límites deliberados la comprensión semántica general, la inferencia automática y fiable de acontecimientos y cronología no explícita, la resolución literaria completa de contradicciones, la clasificación automática de afirmaciones históricas que quedaron obsoletas al cambiar el texto, y las mediciones de latencia en equipos y adaptadores reales de cada plataforma. Un registro anterior de CI del 25 de noviembre de 2026 informó typecheck, build, validación, 293 pruebas (284 aprobadas, 0 fallidas y 9 omitidas) y benchmark; ese resultado histórico no pertenece a la revisión actual de este PR. La ejecución más reciente de esta rama falló antes de iniciar cualquier paso (`steps: []`), por lo que no hay resultado confirmado de typecheck, build, suite ni benchmark para el código actual. Esto tampoco sustituye la aceptación del ciclo de respaldo/restauración en el programa anfitrión y las pruebas de IndexedDB en los sistemas objetivo; deben mantenerse copias independientes de los manuscritos importantes.
 
 
 ## Cronología narrativa explícita (primera capa)

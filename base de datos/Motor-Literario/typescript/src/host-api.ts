@@ -1322,6 +1322,11 @@ export class HostEngineApi {
       const reloaded = await this.loadNarrativeEntitiesFromStore();
       const merged = reloaded.find(entity => entity.id === targetEntityId);
       if (!merged) throw new Error("La entidad consolidada no pudo recuperarse del almacenamiento.");
+      if (project.writerId) {
+        try { this.onPersonalIdeaLibraryChanged?.(project.writerId); } catch (error) {
+          this.onKnowledgeError?.(error);
+        }
+      }
       return cloneNarrativeRecord(merged);
     });
     this.knowledgeTail = work.then(() => undefined, () => undefined);
@@ -3642,7 +3647,9 @@ export class HostEngineApi {
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryPagedQuery: Boolean(this.store.loadPersonalIdeasPage),
-      personalIdeaLibraryChangeNotifications: Boolean(this.store.subscribePersonalIdeaLibraryChanges),
+      personalIdeaLibraryChangeNotifications: Boolean(
+        this.store.subscribePersonalIdeaLibraryChanges || this.onPersonalIdeaLibraryChanged
+      ),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
       ),

@@ -91,7 +91,7 @@ function validateFinalizationReceipt(
       !Array.isArray(receipt.archivedIdeaIds) ||
       receipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
       new Set(receipt.archivedIdeaIds).size !== receipt.archivedIdeaIds.length ||
-      [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1]!.localeCompare(id) > 0) ||
+      [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1]! > id) ||
       typeof receipt.archiveChecksum !== "string" ||
       receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds)) {
     throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");

@@ -253,10 +253,81 @@ El adaptador `LiveAuthorMonitorTextAreaSource` usa `selectionStart`, `selectionE
 
 Las pruebas `live-author-monitor-textarea-source.test.mjs`, `live-author-monitor-change-binding.test.mjs` y `live-author-monitor-textarea-integration.test.mjs` verifican rangos, secuencias, UTF-16, actualizaciones IME consecutivas, estados de composición incompletos, operaciones ambiguas, contrapresión FIFO, reintentos automáticos, ciclo de vida y resincronización durable.
 
-## 12. Validación CI aislada del monitor
+
+## 12. Integración con el historial nativo del editor (undo/redo)
+
+Los editores que exponen transacciones nativas deben usar `LiveAuthorMonitorEditorTransactionSource` y `mountLiveAuthorMonitorEditorTransactions`. Este camino no intenta convertir `historyUndo` o `historyRedo` de un `textarea` en deltas por inferencia: el editor anfitrión entrega el cambio que su propio historial ya aplicó.
+
+El contrato del adaptador es:
+
+- `getSnapshot(documentId)` devuelve el snapshot local actual del editor: texto, revisión y secuencia. Al montar debe coincidir exactamente con el snapshot durable de `HostEngineApi`.
+- `subscribeTransactions(documentId, listener)` escucha operaciones locales ya aplicadas y las entrega en orden. El proveedor debe cancelar la suscripción cuando se invoque el callback de desmontaje.
+- Cada transacción incluye un `transactionId` estable y único, `kind` (`edit`, `undo` o `redo`) y un `change` completo con `documentId`, `sequence`, `baseRevision`, `start`, `end` y `replacement`.
+- Undo debe emitir el delta inverso real producido por el historial; redo debe emitir el delta realmente reaplicado. Las secuencias pertenecen al flujo de cambios del documento y siempre avanzan, incluso al deshacer. No se reutilizan la secuencia ni la revisión anteriores del estado que se restauró.
+- Los rangos usan offsets UTF-16. Una transacción de varios rangos debe normalizarse en el adaptador a un delta contiguo equivalente o a una secuencia de cambios atómicos con revisiones/secuencias consecutivas.
+
+Ejemplo de montaje, una vez que el anfitrión ha implementado el proveedor sobre la API transaccional de su editor:
+
+```ts
+import {
+  mountLiveAuthorMonitorEditorTransactions,
+  type LiveAuthorMonitorEditorTransactionProvider
+} from "./motor-literario";
+
+// El adaptador del anfitrión convierte el evento nativo ya aplicado
+// en { transactionId, kind, change }. No simula beforeinput/input.
+const editorProvider: LiveAuthorMonitorEditorTransactionProvider = {
+  getSnapshot: documentId => nativeEditor.getDocumentSnapshot(documentId),
+  subscribeTransactions: (documentId, listener) =>
+    nativeEditor.subscribeTransactions(documentId, transaction => {
+      listener({
+        transactionId: transaction.id,
+        kind: transaction.historyAction, // edit | undo | redo
+        change: transaction.appliedDelta
+      });
+    })
+};
+
+const stopAuthorMonitor = mountLiveAuthorMonitorEditorTransactions({
+  documentId,
+  editor: editorProvider,
+  hostApi: api,
+  onBackpressure: state => renderEditorQueueState(state),
+  onAdmission: (change, admission) =>
+    renderEditorAdmission(change, admission),
+  onError: (error, change) =>
+    reportEditorSynchronizationError(error, change)
+});
+
+// Indicadores de historial y del stream, sin leer el manuscrito desde el monitor.
+const state = authorMonitorState();
+const pending = stopAuthorMonitor.getPendingChanges();
+
+// Antes de desmontar la pestaña:
+stopAuthorMonitor.dispose();
+```
+
+El montaje verifica antes de escuchar transacciones que:
+
+1. el documento está abierto en `HostEngineApi`;
+2. el motor está durable y no tiene cambios pendientes;
+3. el snapshot local del editor coincide con el snapshot autoritativo;
+4. existe una sesión de métricas para el documento.
+
+Cada transacción se entrega una sola vez a `HostEngineApi.onEditorChange`. El monitor no registra admisiones ni commits por segunda vez. El enlace usa las mismas señales automáticas de reintento y contrapresión FIFO descritas en la sección 10.
+
+La fuente mantiene una ventana acotada de identificadores de transacción (512 por defecto; configurable entre 1 y 4096). Una notificación repetida con el mismo ID y secuencia se descarta. Si el editor reutiliza el ID en otra secuencia, emite un hueco o presenta una revisión base incorrecta, el stream se suspende y solicita resincronización.
+
+`resynchronize()` solo se permite cuando el motor está durable, sin cambios pendientes, y el snapshot actual del editor coincide exactamente con el del motor. Entonces se reconcilian las métricas, se restablece la fuente de transacciones y se limpia el backlog antiguo. `dispose()` retira tanto la suscripción del editor como la del monitor, sin cerrar el documento ni disponer `HostEngineApi`.
+
+La fuente conserva únicamente longitud, revisión, secuencia, tipo de última transacción y los IDs de la ventana de deduplicación. No conserva copias del manuscrito ni cadenas de reemplazo. Los editores que no expongan transacciones nativas deben seguir usando el adaptador `textarea`; para ellos, las operaciones undo/redo sin un delta autoritativo siguen exigiendo resincronización.
+
+Pruebas: `live-author-monitor-editor-transaction-source.test.mjs` y `live-author-monitor-editor-transaction-integration.test.mjs`, que verifican edición/undo/redo, IDs duplicados o reutilizados, huecos de secuencia, montaje, reintentos FIFO, recuperación y desmontaje.
+
+## 13. Validación CI aislada del monitor
 
 El workflow `.github/workflows/live-author-monitor.yml` construye el bundle de runtime con Vite y ejecuta exclusivamente las pruebas `tests/live-author-monitor*.test.mjs`. Esta validación separada permite verificar el monitor y su integración con el editor aunque una comprobación de tipos de otro módulo del motor interrumpa el workflow general. No reemplaza el chequeo TypeScript estricto ni la suite completa: ambos deben volver a quedar verdes antes de declarar validación global.
 
-**Ejecución aislada del 25 de noviembre de 2026:** el bundle Vite y las pruebas específicas del monitor finalizaron correctamente: **54 aprobadas, 0 fallidas y 0 omitidas**. [Ejecución CI 45718042810](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45718042810). Esta ejecución cubre el montaje directo del textarea, el ciclo de composición IME, el estado observable de contrapresión, la cola FIFO, los reintentos automáticos, el aislamiento de errores visuales y la resincronización durable.
+**Ejecución aislada del 25 de noviembre de 2026:** el bundle Vite y las pruebas específicas del monitor finalizaron correctamente: **68 aprobadas, 0 fallidas y 0 omitidas**. [Ejecución CI 45718951512](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45718951512). Esta ejecución cubre el montaje directo del textarea, el ciclo de composición IME, las transacciones nativas de edición/undo/redo, el estado observable de contrapresión, la cola FIFO, los reintentos automáticos, la deduplicación y la resincronización durable.
 
 **Estado de la CI general:** la ejecución [45718171479](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45718171479) pasó la instalación y llegó al chequeo estricto, pero este continúa bloqueado por errores en `typescript/src/literary-analysis.ts`, incluidos tipos de nulabilidad, resultados narrativos que contienen `null` y la propiedad obligatoria `temporalConsistency` al construir un `LiteraryCharacterCausalRelation`. El log no contiene errores de tipado en los archivos de este monitor. El archivo narrativo no se modificó para evitar interferir con el trabajo paralelo. La suite general y el benchmark quedaron omitidos por el fallo previo del typecheck; la CI aislada no sustituye la validación global.

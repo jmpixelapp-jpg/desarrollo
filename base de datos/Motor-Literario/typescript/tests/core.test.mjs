@@ -9297,3 +9297,90 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     else delete globalThis.indexedDB;
   }
 });
+
+
+test("recupera un documento desde el snapshot local y su journal sin reenviar el texto del anfitrión", async () => {
+  const store = new MemoryStore();
+  const changes = [];
+  store.appendChange = async change => {
+    changes.push(structuredClone(change));
+  };
+  store.loadDocumentWithChanges = async (projectId, documentId) => {
+    const document = await store.loadDocument(projectId, documentId);
+    return {
+      document,
+      changes: changes
+        .filter(change => change.projectId === projectId &&
+          change.documentId === documentId &&
+          change.sequence > (document?.sequence ?? -1))
+        .sort((first, second) => first.sequence - second.sequence)
+        .map(change => structuredClone(change))
+    };
+  };
+  store.compactChanges = async (projectId, documentId, throughSequence) => {
+    for (let index = changes.length - 1; index >= 0; index--) {
+      const change = changes[index];
+      if (change.projectId === projectId &&
+          change.documentId === documentId &&
+          change.sequence <= throughSequence) {
+        changes.splice(index, 1);
+      }
+    }
+  };
+
+  const identity = {
+    projectId: "local-recovery-without-host-snapshot",
+    projectName: "Recuperación local"
+  };
+  const firstProcess = new HostEngineApi({ store });
+  firstProcess.initializeProject(identity);
+  await firstProcess.openDocument({
+    documentId: "chapter-1",
+    text: "Texto inicial",
+    revision: 0,
+    sequence: 0
+  });
+
+  const admission = firstProcess.onEditorChange({
+    documentId: "chapter-1",
+    sequence: 1,
+    baseRevision: 0,
+    start: "Texto inicial".length,
+    end: "Texto inicial".length,
+    replacement: " y una continuación"
+  });
+  assert.equal(admission.status, "queued");
+  await firstProcess.flushPendingChanges();
+  assert.equal(changes.length, 1);
+  assert.equal((await store.loadDocument(identity.projectId, "chapter-1")).text, "Texto inicial");
+
+  // El segundo proceso solo conoce el ID del documento; el texto se recupera
+  // desde el snapshot durable y el delta confirmado.
+  const restartedProcess = new HostEngineApi({ store });
+  restartedProcess.initializeProject(identity);
+  await restartedProcess.recoverDocument("chapter-1");
+  await restartedProcess.flushPendingChanges();
+
+  const recovered = restartedProcess.getSnapshot("chapter-1");
+  assert.equal(recovered.text, "Texto inicial y una continuación");
+  assert.equal(recovered.revision, 1);
+  assert.equal(recovered.sequence, 1);
+  assert.equal(changes.length, 0);
+  const durable = await store.loadDocument(identity.projectId, "chapter-1");
+  assert.equal(durable.text, recovered.text);
+  assert.equal(durable.revision, recovered.revision);
+  assert.equal(durable.sequence, recovered.sequence);
+});
+
+test("la recuperación local no inventa un snapshot cuando el documento nunca fue guardado", async () => {
+  const api = new HostEngineApi({ store: new MemoryStore() });
+  api.initializeProject({
+    projectId: "missing-local-recovery",
+    projectName: "Sin snapshot durable"
+  });
+  await assert.rejects(
+    api.recoverDocument("chapter-missing"),
+    /No existe un snapshot durable/
+  );
+  assert.equal(api.getSnapshot("chapter-missing"), undefined);
+});

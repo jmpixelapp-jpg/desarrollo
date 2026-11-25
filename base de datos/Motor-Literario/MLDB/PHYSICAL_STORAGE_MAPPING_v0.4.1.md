@@ -23,7 +23,7 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `narrative-assertions` | `[projectId, id]` | `by-project`, `by-entity` | Afirmaciones históricas explícitas |
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
 | `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |
-| `dictionary-entries` | `[projectId, id]` | `by-project`, `by-dictionary`, `by-dictionary-normalized` único | Entradas, atributos JSON y vínculos con entidades |
+| `dictionary-entries` | `[projectId, id]` | `by-project`, `by-dictionary`, `by-dictionary-normalized` único | Entradas y atributos JSON extensibles |
 | `dictionary-entry-entities` | `[projectId, entryId, recordId]` | `by-project`, `by-entry`, `by-record` | Metadatos de cada vínculo: tipo, procedencia y fecha |
 | `manuscript-fragments` | `[projectId, id]` | `by-project`, `by-document-revision`, `by-parent` | Fragmentos con offsets UTF-16, revisión y jerarquía |
 | `record-attributes` | `[projectId, id]` | `by-project`, `by-record-key` | Atributos JSON extensibles de fichas |

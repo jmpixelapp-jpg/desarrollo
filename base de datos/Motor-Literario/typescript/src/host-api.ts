@@ -3215,6 +3215,141 @@ export class HostEngineApi {
   }
 
   /**
+   * Sincroniza atómicamente los vínculos de una idea como una instantánea.
+   * expectedLinks evita sobrescribir cambios de otra instancia del anfitrión.
+   * La comparación se hace como conjunto; desiredLinks conserva el orden recibido.
+   */
+  async synchronizeNarrativeIdeaLinks(
+    ideaId: string,
+    expectedLinks: {
+      readonly relatedIdeaIds: readonly string[];
+      readonly relatedEntityIds: readonly string[];
+    },
+    desiredLinks: {
+      readonly relatedIdeaIds: readonly string[];
+      readonly relatedEntityIds: readonly string[];
+    }
+  ): Promise<NarrativeIdea> {
+    const projectId = this.requireProject().projectId;
+    if (typeof ideaId !== "string" || !ideaId.trim() ||
+        !expectedLinks || typeof expectedLinks !== "object" ||
+        !desiredLinks || typeof desiredLinks !== "object") {
+      throw new Error("Datos de sincronización de vínculos narrativos inválidos.");
+    }
+
+    const validateIds = (value: readonly string[], label: string): string[] => {
+      if (!Array.isArray(value) || value.length > MAX_NARRATIVE_IDEA_REFERENCES) {
+        throw new Error(`La lista de vínculos ${label} excede el límite permitido o no es válida.`);
+      }
+      const seen = new Set<string>();
+      const ids: string[] = [];
+      for (const id of value) {
+        if (typeof id !== "string" || !id.trim() || id === ideaId || seen.has(id)) {
+          throw new Error(`La lista de vínculos ${label} contiene un ID inválido, duplicado o autorreferente.`);
+        }
+        seen.add(id);
+        ids.push(id);
+      }
+      return ids;
+    };
+    const expectedIdeaIds = validateIds(expectedLinks.relatedIdeaIds, "a ideas esperados");
+    const expectedEntityIds = validateIds(expectedLinks.relatedEntityIds, "a fichas esperados");
+    const desiredIdeaIds = validateIds(desiredLinks.relatedIdeaIds, "a ideas");
+    const desiredEntityIds = validateIds(desiredLinks.relatedEntityIds, "a fichas");
+
+    return this.enqueueKnowledgeOperation(async () => {
+      const store = this.requireIdeaStore();
+      const entityReader = this.requireKnowledgeReaderStore();
+      const [ideaRecords, entityRecords] = await Promise.all([
+        store.loadIdeas(projectId),
+        entityReader.loadEntities(projectId)
+      ]);
+      const ideas = requireProjectScopedRecords(ideaRecords, projectId, "ideas");
+      const entities = requireProjectScopedRecords(entityRecords, projectId, "entidades");
+      const current = ideas.find(idea => idea.id === ideaId);
+      if (!current) {
+        this.narrativeIdeas.clear();
+        this.ideasLoaded = false;
+        this.ideaEvidenceIndex = undefined;
+        this.ideaLineIndex = undefined;
+        throw new Error("La idea que se desea sincronizar no existe en el proyecto activo.");
+      }
+
+      const installFreshCatalogs = (override?: NarrativeIdea): void => {
+        this.narrativeIdeas.clear();
+        for (const item of ideas) {
+          this.narrativeIdeas.set(item.id, item.id === ideaId && override ? override : item);
+        }
+        this.ideasLoaded = true;
+        this.ideaEvidenceIndex = undefined;
+        this.ideaLineIndex = undefined;
+
+        this.narrativeEntities.clear();
+        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
+        this.entitiesLoaded = true;
+        this.entityEvidenceIndex = undefined;
+        this.entityNameIndex = undefined;
+      };
+      const sameIds = (left: readonly string[], right: readonly string[]): boolean => {
+        if (left.length !== right.length) return false;
+        const rightSet = new Set(right);
+        return left.every(id => rightSet.has(id));
+      };
+
+      const currentIdeaIds = current.relatedIdeaIds ?? [];
+      const currentEntityIds = current.relatedEntityIds ?? [];
+      if (!sameIds(currentIdeaIds, expectedIdeaIds) ||
+          !sameIds(currentEntityIds, expectedEntityIds)) {
+        installFreshCatalogs();
+        throw new Error(
+          "La idea cambió en otra instancia; actualiza la vista antes de volver a sincronizar sus vínculos."
+        );
+      }
+
+      const availableIdeaIds = new Set(ideas.map(idea => idea.id));
+      const availableEntityIds = new Set(entities.map(entity => entity.id));
+      if (desiredIdeaIds.some(id => !availableIdeaIds.has(id))) {
+        installFreshCatalogs();
+        throw new Error("La sincronización contiene una idea de destino inexistente o ajena al proyecto.");
+      }
+      if (desiredEntityIds.some(id => !availableEntityIds.has(id))) {
+        installFreshCatalogs();
+        throw new Error("La sincronización contiene una ficha de destino inexistente o ajena al proyecto.");
+      }
+
+      if (sameIds(currentIdeaIds, desiredIdeaIds) &&
+          sameIds(currentEntityIds, desiredEntityIds)) {
+        installFreshCatalogs();
+        return cloneNarrativeRecord(current);
+      }
+
+      if (!store.saveIdeaIfUnchanged && !store.updateIdeaIfUnchanged) {
+        installFreshCatalogs();
+        throw new Error(
+          "La sincronización por lote requiere escritura CAS para proteger los vínculos concurrentes."
+        );
+      }
+
+      const updated: NarrativeIdea = {
+        ...current,
+        relatedIdeaIds: desiredIdeaIds,
+        relatedEntityIds: desiredEntityIds
+      };
+      try {
+        await this.persistIdeaUpdate(store, updated, current);
+      } catch (error) {
+        this.narrativeIdeas.clear();
+        this.ideasLoaded = false;
+        this.ideaEvidenceIndex = undefined;
+        this.ideaLineIndex = undefined;
+        throw error;
+      }
+      installFreshCatalogs(updated);
+      return cloneNarrativeRecord(updated);
+    });
+  }
+
+  /**
    * Crea o elimina una referencia dirigida a otra idea del mismo libro.
    * La relación se almacena en la idea de origen para no duplicar escrituras.
    */

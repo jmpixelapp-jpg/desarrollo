@@ -4090,7 +4090,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes.",
       "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; separan ocurrencias en narración y diálogo reconocido, no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16.",
       "Los perfiles de personajes separan menciones nominales literales de asociaciones a acontecimientos con evidencia vigente de la misma revisión. Una mención no prueba participación; una asociación de participante no prueba presencia física, acción, causalidad ni cambio del personaje. Las escenas con muestras truncadas declaran el estado como desconocido en vez de tratarlo como ausencia.",
-      "La evolución de atributos compara afirmaciones explícitas de edad, ubicación y rol en escenas de la misma revisión del documento analizado. Solo los cambios entre valores únicos se clasifican como changed-value; varios valores en una escena o la falta de afirmación no se resuelven como contradicción ni como continuidad."
+      "La evolución de atributos compara afirmaciones explícitas de edad, ubicación y rol en escenas de la misma revisión del documento analizado. Solo los cambios entre valores únicos se clasifican como changed-value; varios valores en una escena o la falta de afirmación no se resuelven como contradicción ni como continuidad.",
+      "La cronología de atributos entre capítulos compara únicamente referencias temporales explícitas con la misma base y precisión; las afirmaciones sin fecha comparable no se ordenan. Varios valores asociados al mismo punto temporal se conservan como multiple-values-at-same-time, y una fecha explícita no demuestra causalidad ni resuelve contradicciones."
     ]
   };
 }

@@ -127,6 +127,15 @@ test("muestra y actualiza varios documentos abiertos sin mostrar contenido priva
   assert.equal(status(cardFor(root, "chapter-2")).textContent, "En pausa");
   f.monitor.recordCommit({ ticketId: "ticket-1", status: "applied", revision: 1 });
   assert.equal(metric(cardFor(root, "chapter-1"), "revision").textContent, "1 / 1");
+
+  // El resumen del capítulo también refleja pausas acumuladas al reanudar.
+  f.setTime(20_000);
+  f.monitor.recordAdmission({
+    documentId: "chapter-1", sequence: 2, baseRevision: 1,
+    start: 4, end: 4, replacement: "?"
+  }, { status: "queued", ticketId: "ticket-2" });
+  assert.equal(metric(cardFor(root, "chapter-1"), "pauses").textContent, "1");
+  assert.equal(metric(cardFor(root, "chapter-1"), "idle").textContent, "00:19");
   refresh();
   assert.equal(findCards(root).length, 2);
   unmount();

@@ -1062,6 +1062,15 @@ test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async ()
 
     const schema = database.prepare("PRAGMA table_info(bridge_records)").all();
     assert.ok(schema.some(column => column.name === "sort_key"));
+    const plan = database.prepare(
+      "EXPLAIN QUERY PLAN SELECT value_json FROM bridge_records " +
+      "WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
+      "ORDER BY sort_key LIMIT ?"
+    ).all(writerId, "", 3);
+    assert.ok(
+      plan.some(row => row.detail.includes("bridge_records_personal_library_page")),
+      "la consulta keyset debe usar el índice parcial de biblioteca"
+    );
     store.close();
   } finally {
     try { database.close(); } catch { /* El almacenamiento puede haber cerrado la conexión. */ }

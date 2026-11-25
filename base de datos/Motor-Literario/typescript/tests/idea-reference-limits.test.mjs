@@ -24,11 +24,11 @@ test("IndexedDB rechaza más de 500 referencias explícitas por categoría", asy
 
   await assert.rejects(
     store.saveIdea(baseIdea({ relatedIdeaIds: tooManyIdeaLinks })),
-    /superiores al límite de 500/
+    /máximo 500/
   );
   await assert.rejects(
     store.saveIdea(baseIdea({ relatedEntityIds: tooManyEntityLinks })),
-    /superiores al límite de 500/
+    /máximo 500/
   );
   await assert.rejects(
     store.saveIdea(baseIdea({

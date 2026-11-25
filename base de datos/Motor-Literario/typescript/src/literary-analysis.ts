@@ -3252,6 +3252,7 @@ function buildLiteraryIdeaGraph(
   omittedIdeaCount: number,
   catalogScope: LiteraryIdeaGraphAnalysis["catalogScope"]
 ): LiteraryIdeaGraphAnalysis {
+  // El desempate exacto distingue IDs Unicode que pueden compartir colación lingüística.
   const compareIdeaIds = (left: string, right: string): number => {
     const localizedOrder = left.localeCompare(right, "en");
     if (localizedOrder !== 0) return localizedOrder;

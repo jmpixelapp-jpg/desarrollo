@@ -29,6 +29,42 @@ function analyze(ideas) {
   }).ideaGraph.lexicalResonances;
 }
 
+function analyzeGraph(ideas, options = {}) {
+  return analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-1",
+    revision: 1,
+    text: "Fragmento narrativo de prueba.",
+    knownProjectIdeas: ideas,
+    knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0
+  }).ideaGraph;
+}
+
+test("memoiza el grafo completo, aísla las respuestas e invalida cambios estructurales", () => {
+  const ideas = [
+    { ...idea("graph-a", "memoria espejo luz"), relatedIdeaIds: ["graph-b"] },
+    { ...idea("graph-b", "memoria espejo destino"), relatedIdeaIds: ["graph-a"] }
+  ];
+  const first = analyzeGraph(ideas);
+  assert.equal(first.cycleCount, 1);
+  assert.equal(first.referenceCount, 2);
+  const expected = structuredClone(first);
+
+  first.nodes[0].statusHistory[0].reason = "mutación externa";
+  first.cycles[0].ideaIds.pop();
+  const repeated = analyzeGraph(ideas);
+  assert.deepEqual(repeated, expected);
+
+  const changed = analyzeGraph([
+    ideas[0],
+    { ...ideas[1], status: "incorporated", relatedIdeaIds: [] }
+  ]);
+  assert.equal(changed.cycleCount, 0);
+  assert.equal(changed.referenceCount, 1);
+  assert.equal(changed.nodes.find(node => node.ideaId === "graph-b").status, "incorporated");
+  assert.equal(changed.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 1);
+});
+
 test("detecta resonancias por términos literales compartidos sin alterar el grafo", () => {
   const ideas = [
     idea("idea-a", "La luz revela la memoria del espejo"),
@@ -48,6 +84,26 @@ test("detecta resonancias por términos literales compartidos sin alterar el gra
   assert.equal(result.resonances[0].overlapCoefficient, 0.75);
   assert.deepEqual(result.resonances[0].sharedTerms, ["espejo", "luz", "memoria"]);
   assert.deepEqual(ideas.map(item => item.relatedIdeaIds), [[], [], []]);
+});
+
+test("reutiliza una instantánea léxica exacta sin exponer el objeto interno de caché", () => {
+  const ideas = [
+    idea("cache-a", "memoria espejo luz"),
+    idea("cache-b", "memoria espejo destino")
+  ];
+  const first = analyze(ideas);
+  assert.equal(first.resonances.length, 1);
+  first.resonances[0].sharedTerms[0] = "mutación externa";
+
+  const repeated = analyze(ideas);
+  assert.deepEqual(repeated.resonances[0].sharedTerms, ["espejo", "memoria"]);
+
+  const changed = analyze([
+    ideas[0],
+    idea("cache-b", "tormenta ventanas cerradas")
+  ]);
+  assert.equal(changed.candidatePairCount, 0);
+  assert.deepEqual(changed.resonances, []);
 });
 
 test("excluye términos ubicuos para evitar coincidencias poco informativas", () => {

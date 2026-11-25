@@ -1711,15 +1711,26 @@ test("SQLite recupera una finalización tras terminar el proceso con una transfe
     child.stderr.on("data", chunk => { childStderr += chunk; });
     let output = "";
     const staged = new Promise((resolveStage, rejectStage) => {
+      const timeout = setTimeout(() => {
+        rejectStage(new Error("El proceso hijo no dejó la transferencia sin confirmar a tiempo. " + childStderr));
+      }, 15_000);
+      const resolveOnce = () => {
+        clearTimeout(timeout);
+        resolveStage();
+      };
+      const rejectOnce = error => {
+        clearTimeout(timeout);
+        rejectStage(error);
+      };
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", chunk => {
         output += chunk;
-        if (output.includes("STAGED\n")) resolveStage();
+        if (output.includes("STAGED\\n")) resolveOnce();
       });
-      child.once("error", rejectStage);
+      child.once("error", rejectOnce);
       child.once("exit", (code, signal) => {
-        if (!output.includes("STAGED\n")) {
-          rejectStage(new Error(
+        if (!output.includes("STAGED\\n")) {
+          rejectOnce(new Error(
             "El proceso terminó antes de dejar la transferencia sin confirmar. " +
             "exit=" + String(code) + " signal=" + String(signal) + " stderr=" + childStderr
           ));

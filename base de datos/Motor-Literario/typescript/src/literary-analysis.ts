@@ -3277,6 +3277,7 @@ function buildCharacterProjectEventTimeline(
 const MAX_IDEA_GRAPH_REFERENCE_SAMPLES = 5_000;
 const MAX_IDEA_GRAPH_CYCLE_SAMPLES = 100;
 const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
+/** Presupuesto agregado máximo de texto UTF-16 transferido al análisis léxico de ideas. */
 export const MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS = 2_000_000;
 const MAX_IDEA_LEXICAL_TERMS_PER_IDEA = 100;
 const MIN_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY = 2;
@@ -3592,8 +3593,8 @@ function buildLiteraryIdeaGraph(
 
 /**
  * Encuentra proximidad léxica entre ideas sin inferir equivalencia temática.
- * Se indexan términos normalizados compartidos por un máximo de cuarenta ideas;
- * los términos ubicuos se excluyen para reducir coincidencias poco informativas.
+ * El filtro de frecuencia usa el 40% del catálogo, con mínimo dos y máximo
+ * cuarenta ideas, para adaptarse tanto a libros pequeños como a catálogos amplios.
  */
 function buildLiteraryIdeaLexicalResonances(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[]

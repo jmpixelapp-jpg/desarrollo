@@ -10675,6 +10675,31 @@ test("la distribución de menciones queda vacía sin escenas explícitas ni coin
   });
 });
 
+test("limita a cien perfiles de personajes e informa los omitidos", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const knownCharacters = Array.from({length:101},(_,index) => {
+    const suffix = String(index).padStart(3,"0");
+    return {entityId:"person-"+suffix,canonicalName:"Personaje "+suffix};
+  });
+  const names = knownCharacters.map(item => item.canonicalName);
+  const text = [
+    "ESCENA 1",names.slice(0,34).join(" "),"***",
+    "ESCENA 2",names.slice(34,68).join(" "),"***",
+    "ESCENA 3",names.slice(68).join(" ")
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"character-mention-distribution-limit",documentId:"chapter",revision:1,
+    text,knownCharacters
+  });
+
+  assert.equal(result.characterMentionDistributions.explicitSceneCount,3);
+  assert.equal(result.characterMentionDistributions.characterCount,101);
+  assert.equal(result.characterMentionDistributions.omittedCharacterCount,1);
+  assert.equal(result.characterMentionDistributions.characters.length,100);
+  assert.equal(result.characterMentionDistributions.characters[0].entityId,"person-000");
+  assert.equal(result.characterMentionDistributions.characters[99].entityId,"person-099");
+});
+
 test("clasifica señales gramaticales por escena y excluye el diálogo", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

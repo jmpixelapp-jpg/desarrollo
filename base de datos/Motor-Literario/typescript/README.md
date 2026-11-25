@@ -110,7 +110,7 @@ Las actualizaciones se comparan con la versión leída para rechazar escrituras 
 
 Métodos del anfitrión: `saveProjectDictionary`, `getProjectDictionaries`, `saveDictionaryEntry`, `getDictionaryEntries` y `setDictionaryEntryEntityLink`.
 
-El puente confirma la finalización en una transacción SQLite inmediata. Si el proceso se interrumpe antes del commit, la recuperación del WAL revierte toda la transferencia: la idea permanece en el libro, no aparece en la biblioteca y no existe recibo. Un reintento vuelve a procesar el conjunto completo. Ante un cierre ordenado, `bridge.shutdown` deja de admitir solicitudes, espera las operaciones ya aceptadas, vacía las colas pendientes y solo entonces cierra la base. El anfitrión debe esperar la respuesta de apagado; no debe terminar el proceso con `kill` durante una finalización activa.
+El puente confirma la finalización en una transacción SQLite inmediata. Si el proceso se interrumpe antes del commit, la recuperación del WAL revierte toda la transferencia: la idea permanece en el libro, no aparece en la biblioteca y no existe recibo. Un reintento vuelve a procesar el conjunto completo. Ante un cierre ordenado, `bridge.shutdown` deja de admitir solicitudes, espera las operaciones ya aceptadas, vacía las colas pendientes y solo entonces cierra la base. Si el vaciado falla, el puente devuelve el error, no cierra SQLite y reabre la admisión y el sondeo de cambios para que el anfitrión pueda corregir la causa y reintentar; el cursor de sincronización se conserva para no perder avisos externos. El anfitrión debe esperar la respuesta de apagado; no debe terminar el proceso con `kill` durante una finalización activa.
 
 ## Respaldo y restauración local del puente SQLite
 

@@ -3589,24 +3589,72 @@ function buildLiteraryIdeaGraph(
     }
   }
 
-  const countStatusReversals = (
+  const summarizeStatusHistory = (
     history: readonly NarrativeIdeaStatusChange[]
-  ): number => {
+  ) => {
     const seenStatuses = new Set<NarrativeIdea["status"]>();
     let previousStatus: NarrativeIdea["status"] | undefined;
-    let reversalCount = 0;
+    let previousAt: number | undefined;
+    let observedStatusTransitionCount = 0;
+    let statusReversalCount = 0;
+    let nonMonotonicStatusTimestampCount = 0;
+    let comparableStatusTimestampPairCount = 0;
+    let uncomparableStatusTimestampPairCount = 0;
+    let observedInitialStatusRecordCount = 0;
+    let observedWriterStatusChangeCount = 0;
+    let observedTextRevisionStatusChangeCount = 0;
+    let earliestKnownStatusChangeAt: number | null = null;
+    let latestKnownStatusChangeAt: number | null = null;
+
     for (const change of history) {
-      if (
-        previousStatus !== undefined &&
-        change.status !== previousStatus &&
-        seenStatuses.has(change.status)
-      ) {
-        reversalCount++;
+      if (previousStatus !== undefined && change.status !== previousStatus) {
+        observedStatusTransitionCount++;
+        if (seenStatuses.has(change.status)) statusReversalCount++;
       }
       seenStatuses.add(change.status);
       previousStatus = change.status;
+
+      if (previousAt !== undefined && change.changedAt !== undefined) {
+        comparableStatusTimestampPairCount++;
+        if (change.changedAt < previousAt) nonMonotonicStatusTimestampCount++;
+      } else if (previousAt !== undefined || change.changedAt !== undefined || history.length > 1) {
+        // La comparabilidad se cuenta por pares adyacentes, incluso cuando
+        // una de las dos marcas temporales está ausente.
+        if (previousStatus !== undefined && history.length > 1) {
+          uncomparableStatusTimestampPairCount++;
+        }
+      }
+
+      if (change.changedAt !== undefined) {
+        earliestKnownStatusChangeAt = earliestKnownStatusChangeAt === null
+          ? change.changedAt
+          : Math.min(earliestKnownStatusChangeAt, change.changedAt);
+        latestKnownStatusChangeAt = latestKnownStatusChangeAt === null
+          ? change.changedAt
+          : Math.max(latestKnownStatusChangeAt, change.changedAt);
+      }
+      if (change.reason === "initial") observedInitialStatusRecordCount++;
+      if (change.reason === "writer") observedWriterStatusChangeCount++;
+      if (change.reason === "text-revised") observedTextRevisionStatusChangeCount++;
+      previousAt = change.changedAt;
     }
-    return reversalCount;
+
+    return {
+      observedStatusTransitionCount,
+      statusReversalCount,
+      nonMonotonicStatusTimestampCount,
+      comparableStatusTimestampPairCount,
+      uncomparableStatusTimestampPairCount,
+      observedInitialStatusRecordCount,
+      observedWriterStatusChangeCount,
+      observedTextRevisionStatusChangeCount,
+      earliestKnownStatusChangeAt,
+      latestKnownStatusChangeAt,
+      knownStatusHistorySpanMs: earliestKnownStatusChangeAt === null ||
+        latestKnownStatusChangeAt === null
+        ? null
+        : latestKnownStatusChangeAt - earliestKnownStatusChangeAt
+    };
   };
 
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => ({
@@ -3618,68 +3666,7 @@ function buildLiteraryIdeaGraph(
     statusHistory: idea.statusHistory.map(change => ({ ...change })),
     omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
     writerDecisionCount: idea.writerDecisionCount,
-    observedStatusTransitionCount: idea.statusHistory.reduce(
-      (count, change, changeIndex, history) =>
-        count + (changeIndex > 0 && change.status !== history[changeIndex - 1]!.status ? 1 : 0),
-      0
-    ),
-    statusReversalCount: countStatusReversals(idea.statusHistory),
-    nonMonotonicStatusTimestampCount: idea.statusHistory.reduce(
-      (count, change, changeIndex, history) => {
-        if (changeIndex === 0) return count;
-        const previousAt = history[changeIndex - 1]!.changedAt;
-        return previousAt !== undefined && change.changedAt !== undefined &&
-          change.changedAt < previousAt ? count + 1 : count;
-      },
-      0
-    ),
-    comparableStatusTimestampPairCount: idea.statusHistory.reduce(
-      (count, change, changeIndex, history) => {
-        if (changeIndex === 0) return count;
-        return history[changeIndex - 1]!.changedAt !== undefined &&
-          change.changedAt !== undefined ? count + 1 : count;
-      },
-      0
-    ),
-    uncomparableStatusTimestampPairCount: idea.statusHistory.reduce(
-      (count, change, changeIndex, history) => {
-        if (changeIndex === 0) return count;
-        return history[changeIndex - 1]!.changedAt === undefined ||
-          change.changedAt === undefined ? count + 1 : count;
-      },
-      0
-    ),
-    observedInitialStatusRecordCount: idea.statusHistory.filter(
-      change => change.reason === "initial"
-    ).length,
-    observedWriterStatusChangeCount: idea.statusHistory.filter(
-      change => change.reason === "writer"
-    ).length,
-    observedTextRevisionStatusChangeCount: idea.statusHistory.filter(
-      change => change.reason === "text-revised"
-    ).length,
-    earliestKnownStatusChangeAt: idea.statusHistory.reduce<number | null>(
-      (earliest, change) => change.changedAt === undefined
-        ? earliest
-        : earliest === null ? change.changedAt : Math.min(earliest, change.changedAt),
-      null
-    ),
-    latestKnownStatusChangeAt: idea.statusHistory.reduce<number | null>(
-      (latest, change) => change.changedAt === undefined
-        ? latest
-        : latest === null ? change.changedAt : Math.max(latest, change.changedAt),
-      null
-    ),
-    knownStatusHistorySpanMs: (() => {
-      let earliest: number | null = null;
-      let latest: number | null = null;
-      for (const change of idea.statusHistory) {
-        if (change.changedAt === undefined) continue;
-        earliest = earliest === null ? change.changedAt : Math.min(earliest, change.changedAt);
-        latest = latest === null ? change.changedAt : Math.max(latest, change.changedAt);
-      }
-      return earliest === null || latest === null ? null : latest - earliest;
-    })(),
+    ...summarizeStatusHistory(idea.statusHistory),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));

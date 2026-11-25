@@ -242,7 +242,7 @@ test("rechaza restaurar un respaldo de una versión de esquema diferente", async
     // The schema version is checked before the checksum.
     await assert.rejects(
       store.restoreDatabaseBackup(oldVersion),
-      /checksum.*no coincide/iu
+      /versión del respaldo IndexedDB.*no coincide/iu
     );
     assert.deepEqual(database.state.get("documents"), [documentRecord]);
   } finally {

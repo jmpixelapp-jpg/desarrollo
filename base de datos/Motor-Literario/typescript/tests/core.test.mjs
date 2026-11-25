@@ -11838,3 +11838,43 @@ test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas
     else delete globalThis.indexedDB;
   }
 });
+
+
+test("la API paginada mantiene compatibilidad con adaptadores antiguos de biblioteca", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-legacy-pages";
+  const projectId = "legacy-pages-book";
+  const makeEntry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro antiguo",
+    category: "Libro antiguo",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro antiguo",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-b"]), makeEntry("idea-b"));
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-a"]), makeEntry("idea-a"));
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro antiguo",
+    writerId
+  });
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.equal(first.items[0].contextStatus, "missing-legacy-context");
+  assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-a" });
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.equal(second.nextCursor, null);
+});

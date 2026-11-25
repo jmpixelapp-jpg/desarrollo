@@ -3995,6 +3995,9 @@ export class IndexedDbProjectStore implements ProjectStore {
       let archiveContentChecksum: string | undefined;
       const archived: PersonalIdeaLibraryEntry[] = [];
       const archivedIdeaIds: string[] = [];
+      // Las referencias mutuas entre ideas trasladadas juntas deben seguir
+      // resolviéndose después de borrar cada registro del libro en esta transacción.
+      const archivedIdeaIdSet = new Set<string>();
       const identityOwners = new Map<string, string>();
       const legacyIdeaCache = new Map<string, NarrativeIdea>();
 
@@ -4203,6 +4206,12 @@ export class IndexedDbProjectStore implements ProjectStore {
             return;
           }
           visited.add(relatedId);
+          // Una idea ya transferida tiene su propia entrada de biblioteca;
+          // no debe reaparecer como contexto ni tratarse como referencia rota.
+          if (archivedIdeaIdSet.has(relatedId)) {
+            collectContextIdeas();
+            return;
+          }
           readIdea(relatedId, relatedIdea => {
             if (!relatedIdea) {
               throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
@@ -4261,6 +4270,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                 ideas.delete([projectId, idea.id]);
                 if (collectEntries) archived.push(entry);
                 archivedIdeaIds.push(idea.id);
+                archivedIdeaIdSet.add(idea.id);
                 didChange = true;
                 callback();
               } catch (error) {
@@ -4301,6 +4311,15 @@ export class IndexedDbProjectStore implements ProjectStore {
           return;
         }
         const relatedId = relatedIds[relatedIndex]!;
+        if (archivedIdeaIdSet.has(relatedId)) {
+          if (idea.status !== "IDEA") {
+            throw new Error(
+              "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+            );
+          }
+          validateLinksAndMaybeArchive(idea, relatedIndex + 1, continueCursor);
+          return;
+        }
         readIdea(relatedId, relatedIdea => {
           if (!relatedIdea) {
             throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");

@@ -238,7 +238,7 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 
 **Hallazgo:** el adaptador IndexedDB ya creaba `live-author-monitor-checkpoints` y utilizaba la base versión 23, pero el manifiesto activo `storage_mapping_v0.4.2.json` todavía declaraba versión 22 y no describía este almacén operativo. El audit script ya apuntaba a v0.4.2, mientras una prueba leía de forma obsoleta v0.4.1 y esperaba 24 tablas.
 
-**Corrección del alcance:** se preservó el manifiesto histórico `storage_mapping_v0.4.1.json` sin cambios. La definición actualizada se aplicó al manifiesto activo `storage_mapping_v0.4.2.json`.
+**Corrección del alcance:** se preservó el manifiesto histórico `storage_mapping_v0.4.1.json` sin cambios. La definición actualizada se aplicó al manifiesto activo `storage_mapping_v0.4.2.json`. El audit estático confirma que el almacén y sus índices también figuran en la rutina `ensureIndex` de las migraciones.
 
 **Cambios:**
 - Se actualizó `runtime.database_version` de 22 a 23 en el manifiesto activo y `mapping_version` de 12 a 13.
@@ -251,7 +251,7 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 
 **Ejecuciones anteriores:** las ejecuciones [45723541249](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723541249) y [45723473909](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723473909) fallaron porque sus commits todavía auditaban el manifiesto anterior al ajuste del manifiesto activo. No se toman como validación de esta corrección. La nueva ejecución debe probar el commit posterior a `85e4b42` y correr tanto validación física como las pruebas.
 
-**Estado de CI:** pendiente de la nueva ejecución. No se marca como aprobado hasta verificar auditoría, build y pruebas.
+**Resultado verificado:** CI específica [45723969106](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723969106) aprobó esquema y auditoría física (25 tablas del motor, 33 almacenes), build Vite y 98/98 pruebas después de alinear manifiesto, índices y tests de auditoría.
 
 
 **Corrección adicional del audit estático:** `audit-storage-implementation.mjs` deriva los índices esperados desde las llamadas `ensureIndex` de la rutina de migración, no solamente desde los `createIndex` que se ejecutan al crear el almacén. Se añadió `ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId")` para que el índice permanezca declarado y se valide también en las migraciones. Commit: [c83e27f — registrar índice del checkpoint en migraciones](https://github.com/jmpixelapp-jpg/desarrollo/commit/c83e27f5721c7fe774ecdd2cb119b02d88575d9a). La nueva ejecución de CI está en curso; el resultado se añadirá cuando concluya.
@@ -279,3 +279,22 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **Commits:** [a552b00 — lifecycle explícito de IndexedDB](https://github.com/jmpixelapp-jpg/desarrollo/commit/a552b009902206357502bd78099baea028f6e0b2), [273e0b9 — prueba de operaciones de checkpoint](https://github.com/jmpixelapp-jpg/desarrollo/commit/273e0b9ec2493b12dca2dfbf1d82bf2cd775df4c), [64bbebe — dependencia de prueba](https://github.com/jmpixelapp-jpg/desarrollo/commit/64bbebeab6bee38d1910932b877d2d9f79d332fe), [2dca17b — polyfill en el test](https://github.com/jmpixelapp-jpg/desarrollo/commit/2dca17b54eb2454026a298a6409f325e6dd1035e).
 
 **Validación verificada:** CI específica [45724325962](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724325962), commit `2dca17b54eb2454026a298a6409f325e6dd1035e`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 33 almacenes), build Vite y **99/99 pruebas aprobadas, 0 fallidas y 0 omitidas**. La primera prueba sin polyfill falló porque el runner Node no expuso `indexedDB` global; `fake-indexeddb/auto` resolvió ese límite en la prueba, sin cambiar el runtime de producción. La CI general [45724345892](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724345892) continúa fallando exclusivamente en `src/literary-analysis.ts` por errores TS2322, TS2677, TS18047 y TS2345; no reporta errores en el monitor ni en IndexedDB.
+
+**Ampliación de la prueba de migración:** el test ahora crea una base v22 con los almacenes existentes, inserta un documento, dispara la migración a v23, verifica el nuevo almacén/keyPath/índice, persiste un checkpoint y confirma que el documento previo no perdió texto ni revisión. Commit: [623a339 — probar la migración v22 a v23](https://github.com/jmpixelapp-jpg/desarrollo/commit/623a3397588ca135ab781d0a0a597a2f7ef53958).
+
+**Resultado CI actualizado:** ejecución [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335), commit `623a3397588ca135ab781d0a0a597a2f7ef53958`: schema 0.4.2 válido, 25 tablas del motor y 33 almacenes físicos, build Vite correcto y **100/100 pruebas aprobadas, 0 fallidas y 0 omitidas**. La validación global [45724540283](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540283) sigue fallando solo por los errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`; el log no reporta errores del monitor, HostEngineApi, contratos ni IndexedDB.
+
+
+## 13. Nueva entrega — migración IndexedDB v22 a v23 (25 de noviembre de 2026)
+
+**Objetivo:** verificar que la incorporación del almacén de checkpoints no elimina ni altera documentos existentes durante la actualización de la base local.
+
+**Prueba añadida:** live-author-monitor-indexeddb.test.mjs crea una base v22 con todos los almacenes previos del manifiesto, guarda un documento antes de la migración y abre la base con IndexedDbProjectStore, provocando el upgrade a v23. Comprueba que la base termina en versión 23, que el almacén de checkpoints tiene la keyPath compuesta correcta y el índice by-project, que el checkpoint se puede escribir y leer y que el documento previo conserva su texto/revisión.
+
+**Archivos:** typescript/tests/live-author-monitor-indexeddb.test.mjs; se amplía la cobertura de la sección 27 y añade la sección 28 de la especificación.
+
+**Commit:** [623a339 — prueba de migración v22 a v23](https://github.com/jmpixelapp-jpg/desarrollo/commit/623a3397588ca135ab781d0a0a597a2f7ef53958).
+
+**Resultado verificado:** CI aislada [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335), build Vite correcto, MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 33 almacenes) y **100/100 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+**Límite:** el escenario utiliza fake-indexeddb en memoria. La prueba de navegador real con cierre/reapertura física sigue pendiente.

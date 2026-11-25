@@ -198,19 +198,17 @@ stopAuthorMonitoring();
 El anfitrión puede conectar su fuente nativa de cambios mediante bindLiveAuthorMonitorEditorChanges. La fuente debe entregar un EditorChange ya calculado por el adaptador específico del editor; el enlace no sintetiza offsets ni intercepta eventos DOM.
 
 - Llama a HostEngineApi.onEditorChange exactamente una vez por delta.
-- Devuelve el resultado queued o rejected a onAdmission, para que el anfitrión confirme tickets o conserve/reintente deltas rechazados.
+- Devuelve el resultado queued o rejected a onAdmission. El enlace conserva automáticamente los rechazos y puede reintentarlos en FIFO mediante retryPending o subscribeRetrySignal.
 - Informa excepciones a onError y deja al anfitrión la política de recuperación.
 - No registra eventos manuales adicionales en LiveAuthorMonitor, porque HostEngineApi ya incorpora admisiones y commits.
 
 ensureLiveAuthorMonitorDocument(documentId) restaura una sesión de observabilidad que se cerró mientras el documento del motor seguía abierto. Devuelve la sesión existente si ya está activa; en caso contrario, utiliza el snapshot actual del motor. Rechaza si el documento tiene cambios pendientes (pendingSequence !== sequence) o necesita resincronización. La integración con la pestaña activa usa este método automáticamente si la sesión no existe.
 
-## 11. Próximo tramo
+## 11. Adaptador nativo para textarea y reintento automático
 
-## 11. Adaptador nativo para textarea
+El módulo `live-author-monitor-textarea-source.ts` conecta un `HTMLTextAreaElement` sin React ni dependencias. Convierte el par nativo `beforeinput`/`input` en un `EditorChange` ordenado y se conecta con `bindLiveAuthorMonitorEditorChanges`.
 
-El módulo \`live-author-monitor-textarea-source.ts\` conecta un \`HTMLTextAreaElement\` sin React ni dependencias. Convierte el par nativo \`beforeinput\`/\`input\` en un \`EditorChange\` ordenado y se conecta con \`bindLiveAuthorMonitorEditorChanges\`.
-
-\`\`\`ts
+```ts
 import {
   LiveAuthorMonitorTextAreaSource,
   bindLiveAuthorMonitorEditorChanges
@@ -225,32 +223,20 @@ const source = new LiveAuthorMonitorTextAreaSource({
   onError: error => reportEditorSynchronizationError(error)
 });
 
-let retryScheduled = false;
 const binding = bindLiveAuthorMonitorEditorChanges({
   source,
   sink: api,
+  // Los commits y las admisiones publican métricas; el enlace reintenta
+  // automáticamente su cola FIFO cuando recibe cualquiera de esas señales.
+  subscribeRetrySignal: listener =>
+    api.subscribeLiveAuthorMonitor(() => listener()),
   onAdmission: (change, admission) => {
-    if (admission.status !== "rejected") return;
-    if (admission.reason === "queue_full") {
-      // El enlace retiene este delta y todos los posteriores. Vaciar la cola
-      // durable y reintentar conserva el orden y la revisión base.
-      if (!retryScheduled) {
-        retryScheduled = true;
-        void api.flushPendingChanges().then(() => {
-          retryScheduled = false;
-          binding.retryPending();
-        }).catch(error => {
-          retryScheduled = false;
-          reportEditorSynchronizationError(error, change);
-        });
-      }
-      return;
+    if (admission.status === "rejected" && admission.reason !== "queue_full") {
+      source.requireResynchronization(
+        "El motor rechazó un delta que requiere reconciliación."
+      );
+      reportEditorSynchronizationError(admission, change);
     }
-
-    // Tras resolver el conflicto y hacer coincidir el textarea con el snapshot:
-    // source.resynchronize(snapshot);
-    // binding.discardPendingAfterResynchronization();
-    source.requireResynchronization("El motor rechazó un delta que requiere reconciliación.");
   },
   onError: (error, change) => reportEditorSynchronizationError(error, change)
 });
@@ -258,17 +244,19 @@ const binding = bindLiveAuthorMonitorEditorChanges({
 // Al desmontar el editor:
 binding();
 source.dispose();
-\`\`\`
+```
 
 Reglas del adaptador:
 
 - Comprueba que el texto visible coincida con el snapshot autoritativo al iniciarse y al resincronizarse.
-- Usa \`selectionStart\`, \`selectionEnd\`, longitud anterior y \`inputType\`; no mantiene una segunda copia del manuscrito.
+- Usa `selectionStart`, `selectionEnd`, longitud anterior y `inputType`; no mantiene una segunda copia del manuscrito.
 - Admite inserción, pegado, reemplazo de selección y borrado hacia atrás/adelante. Los offsets y las longitudes son unidades UTF-16, incluidos los pares sustitutos.
-- No inventa rangos si falta \`beforeinput\`, cambia el valor por código sin una operación equivalente o no puede determinar la dirección de borrado: suspende el stream y notifica \`onError\`.
-- \`historyUndo\` y \`historyRedo\` requieren el contrato de historial del editor anfitrión. Tras reconciliar el contenido visible con un snapshot del motor, llamar a \`source.resynchronize(snapshot)\`.
-- El enlace retiene en FIFO cualquier delta rechazado o cuyo envío arroje un error; mientras exista backlog, no envía eventos posteriores. \`retryPending()\` reanuda el envío en orden cuando el anfitrión detecta capacidad; \`getPendingChanges()\` permite inspeccionar el backlog.
-- \`discardPendingAfterResynchronization()\` solo se usa después de reconciliar el texto visible y el motor con un snapshot autoritativo. No se usa para resolver un \`queue_full\` temporal.
-- La función devuelta sigue siendo invocable como \`binding()\`; cancela el stream y libera el backlog. \`source.dispose()\` retira listeners. Ninguno cierra el documento ni dispone \`HostEngineApi\`.
+- No inventa rangos si falta `beforeinput`, cambia el valor por código sin una operación equivalente o no puede determinar la dirección de borrado: suspende el stream y notifica `onError`.
+- `historyUndo` y `historyRedo` requieren el contrato de historial del editor anfitrión. Tras reconciliar el contenido visible con un snapshot del motor, llamar a `source.resynchronize(snapshot)`.
+- El enlace retiene en FIFO cualquier delta rechazado o cuyo envío arroje un error; mientras exista backlog, no envía eventos posteriores.
+- `subscribeRetrySignal` permite enlazar los eventos de métricas del anfitrión. Cada commit/admisión genera una señal que intenta vaciar el backlog; si el motor continúa lleno, el delta permanece retenido para la próxima señal.
+- `retryPending()` sigue disponible para reintentos explícitos; `getPendingChanges()` permite inspeccionar el backlog.
+- `discardPendingAfterResynchronization()` solo se usa después de reconciliar el texto visible y el motor con un snapshot autoritativo. No se usa para resolver un `queue_full` temporal.
+- La función devuelta sigue siendo invocable como `binding()`; cancela el stream, la señal de reintento y libera el backlog. `source.dispose()` retira listeners. Ninguno cierra el documento ni dispone `HostEngineApi`.
 
-Las pruebas dedicadas \`live-author-monitor-textarea-source.test.mjs\` y \`live-author-monitor-change-binding.test.mjs\` cubren rangos, secuencias, reemplazos, borrados, UTF-16, undo/redo, resincronización, errores y contrapresión FIFO. Los editores que manejan su propio historial/composición deben implementar la misma interfaz \`subscribeChanges\` con sus operaciones transaccionales nativas.
+Las pruebas dedicadas `live-author-monitor-textarea-source.test.mjs` y `live-author-monitor-change-binding.test.mjs` cubren rangos, secuencias, reemplazos, borrados, UTF-16, undo/redo, resincronización, errores, contrapresión FIFO y reintentos automáticos. Los editores que manejan su propio historial/composición deben implementar la misma interfaz `subscribeChanges` con sus operaciones transaccionales nativas.

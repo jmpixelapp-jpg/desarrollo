@@ -30,7 +30,7 @@ class DictionaryMemoryStore {
     return [...this.entries.values()].filter(item => item.projectId === projectId && item.dictionaryId === dictionaryId)
       .map(item => structuredClone(item));
   }
-  async saveDictionaryEntry(entry, expectedCurrent) {
+  async saveDictionaryEntry(entry, expectedCurrent, links = []) {
     if (!this.dictionaries.has(JSON.stringify([entry.projectId, entry.dictionaryId]))) throw new Error("El diccionario no existe en el proyecto activo.");
     const key = JSON.stringify([entry.projectId, entry.id]);
     const current = this.entries.get(key);
@@ -49,6 +49,13 @@ class DictionaryMemoryStore {
     );
     if (duplicate) throw new Error("duplicate_form");
     this.entries.set(key, structuredClone(entry));
+    for (const [linkKey, link] of this.entryLinks) {
+      if (link.projectId === entry.projectId && link.entryId === entry.id) this.entryLinks.delete(linkKey);
+    }
+    for (const link of links) {
+      if (!entry.relatedEntityIds.includes(link.recordId)) throw new Error("link_entry_mismatch");
+      this.entryLinks.set(JSON.stringify([link.projectId, link.entryId, link.recordId]), structuredClone(link));
+    }
   }
   async saveEntity(entity) {
     this.entities.set(JSON.stringify([entity.projectId, entity.id]), structuredClone(entity));
@@ -140,6 +147,21 @@ test("normaliza la forma y conserva atributos JSON extensibles", async () => {
   assert.equal(saved.surfaceForm, "  Cása  ");
   assert.deepEqual(saved.attributes.senses, ["dwelling", "home"]);
   assert.deepEqual(await api.getDictionaryEntries("dict-es"), [saved]);
+});
+
+test("persiste metadatos por ficha relacionada desde la creación de la entrada", async () => {
+  const store = new DictionaryMemoryStore();
+  store.entities.set(JSON.stringify(["book-one", "entity:ana"]), structuredClone(entity));
+  const api = new HostEngineApi({ store });
+  api.initializeProject(project);
+  await api.saveProjectDictionary(dictionaryInput());
+  await api.saveDictionaryEntry(entryInput({ relatedEntityIds: ["entity:ana"] }));
+  const links = await api.getDictionaryEntryEntityLinks("dict-es", "entry-casa");
+  assert.equal(links.length, 1);
+  assert.equal(links[0].recordId, "entity:ana");
+  assert.equal(links[0].linkKind, "RELATED");
+  assert.equal(links[0].provenanceKind, "WRITER");
+  assert.equal(links[0].createdAt, 20);
 });
 
 test("rechaza formas normalizadas duplicadas dentro del mismo diccionario", async () => {

@@ -1089,3 +1089,120 @@ test("SQLite guarda cada cambio de acontecimiento junto con su historial append-
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtrar a otros escritores", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-writer-library-sync-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let first;
+  let second;
+  try {
+    first = startBridge(databasePath);
+    second = startBridge(databasePath);
+    await Promise.all([first.client.hello(), second.client.hello()]);
+
+    await first.client.openProject({
+      projectId: "writer-sync-source",
+      projectName: "Libro de origen",
+      writerId: "writer-shared"
+    });
+    await first.client.openProject({
+      projectId: "writer-sync-sibling",
+      projectName: "Otro libro del mismo escritor",
+      writerId: "writer-shared"
+    });
+    await first.client.openProject({
+      projectId: "writer-sync-private",
+      projectName: "Libro de otro escritor",
+      writerId: "writer-private"
+    });
+    await second.client.openProject({
+      projectId: "writer-sync-peer",
+      projectName: "Libro abierto en otro proceso",
+      writerId: "writer-shared"
+    });
+    await second.client.openProject({
+      projectId: "writer-sync-other",
+      projectName: "Otro escritor en otro proceso",
+      writerId: "writer-other"
+    });
+
+    const waitForProjects = (client, expectedCount) => new Promise((resolveNotice, rejectNotice) => {
+      const received = [];
+      const timer = setTimeout(() => {
+        unsubscribe();
+        rejectNotice(new Error("No llegaron todas las notificaciones de biblioteca esperadas: " +
+          received.map(item => item.projectId).join(", ")));
+      }, 15_000);
+      const unsubscribe = client.onNotification("engine.personalIdeaLibraryChanged", params => {
+        received.push(params);
+        if (received.length >= expectedCount) {
+          clearTimeout(timer);
+          unsubscribe();
+          resolveNotice(received);
+        }
+      });
+    });
+
+    const firstNotices = waitForProjects(first.client, 2);
+    const secondNotices = waitForProjects(second.client, 1);
+
+    await first.client.openDocument("writer-sync-source", {
+      documentId: "chapter-ideas",
+      text: "IDEA: La campana debe sonar antes del amanecer.",
+      revision: 0,
+      sequence: 0
+    });
+    await first.client.flushProject("writer-sync-source");
+
+    const archived = await first.client.request("project.call", {
+      projectId: "writer-sync-source",
+      method: "archiveUnincorporatedIdeas",
+      args: []
+    });
+    assert.equal(archived.length, 1);
+    assert.equal(archived[0].writerId, "writer-shared");
+
+    const [sameProcess, otherProcess] = await Promise.all([firstNotices, secondNotices]);
+    assert.deepEqual(
+      sameProcess.map(item => item.projectId).sort(),
+      ["writer-sync-sibling", "writer-sync-source"]
+    );
+    assert.deepEqual(otherProcess.map(item => item.projectId), ["writer-sync-peer"]);
+    assert.ok([...sameProcess, ...otherProcess].every(item => item.writerId === "writer-shared"));
+    assert.ok(![...sameProcess, ...otherProcess].some(item =>
+      item.projectId === "writer-sync-private" || item.projectId === "writer-sync-other"
+    ));
+
+    const peerPage = await second.client.getPersonalIdeaLibraryPage(
+      "writer-sync-peer", null, 50
+    );
+    assert.equal(peerPage.items.length, 1);
+    assert.equal(peerPage.items[0].idea.text, "La campana debe sonar antes del amanecer.");
+
+    const privatePage = await second.client.getPersonalIdeaLibraryPage(
+      "writer-sync-other", null, 50
+    );
+    assert.equal(privatePage.items.length, 0);
+  } finally {
+    if (first) {
+      try {
+        const exited = waitForExit(first.child);
+        await first.client.shutdown();
+        await exited;
+      } catch {
+        first.child.kill();
+      }
+    }
+    if (second) {
+      try {
+        const exited = waitForExit(second.child);
+        await second.client.shutdown();
+        await exited;
+      } catch {
+        second.child.kill();
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});

@@ -1519,6 +1519,87 @@ function backupProjectAndWriterIdentities(
     writerIds: [...writerIds].sort()
   };
 }
+function validatePersonalIdeaBackupIntegrity(
+  stores: Readonly<Record<string, readonly unknown[]>>
+): void {
+  const rawEntries = stores[PERSONAL_IDEAS];
+  const rawReceipts = stores[FINALIZATION_RECEIPTS];
+  if (!Array.isArray(rawEntries) || !Array.isArray(rawReceipts)) {
+    throw new Error("El respaldo IndexedDB no contiene las colecciones de biblioteca y recibos.");
+  }
+
+  const entryByKey = new Map<string, PersonalIdeaLibraryEntry>();
+  const countByOwnerAndProject = new Map<string, number>();
+  for (const value of rawEntries) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const entry = value as PersonalIdeaLibraryEntry;
+    if (typeof entry.writerId !== "string" || !entry.writerId.trim() ||
+        typeof entry.sourceProjectId !== "string" || !entry.sourceProjectId.trim() ||
+        !entry.idea || typeof entry.idea.id !== "string" || !entry.idea.id.trim()) continue;
+    const key = JSON.stringify([entry.writerId, entry.sourceProjectId, entry.idea.id]);
+    if (entryByKey.has(key)) {
+      throw new Error("El respaldo IndexedDB contiene entradas de biblioteca duplicadas.");
+    }
+    entryByKey.set(key, entry);
+    const ownerKey = JSON.stringify([entry.writerId, entry.sourceProjectId]);
+    countByOwnerAndProject.set(ownerKey, (countByOwnerAndProject.get(ownerKey) ?? 0) + 1);
+  }
+
+  const seenReceipts = new Set<string>();
+  for (const value of rawReceipts) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("El respaldo IndexedDB contiene un recibo de finalización malformado.");
+    }
+    const receipt = value as StoredProjectFinalizationReceipt;
+    validateFinalizationReceipt(receipt, receipt.writerId, receipt.sourceProjectId);
+    const ownerKey = JSON.stringify([receipt.writerId, receipt.sourceProjectId]);
+    if (seenReceipts.has(ownerKey)) {
+      throw new Error("El respaldo IndexedDB contiene más de un recibo para el mismo escritor y libro.");
+    }
+    seenReceipts.add(ownerKey);
+    if ((countByOwnerAndProject.get(ownerKey) ?? 0) !== receipt.archivedIdeaIds.length) {
+      throw new Error("El respaldo IndexedDB no conserva todas las entradas de la biblioteca del recibo.");
+    }
+
+    const archivedIds = new Set(receipt.archivedIdeaIds);
+    const contentChecksum = receipt.archiveContentChecksum === undefined
+      ? undefined
+      : createPersonalIdeaArchiveChecksumBuilder();
+    for (const ideaId of receipt.archivedIdeaIds) {
+      const entry = entryByKey.get(JSON.stringify([receipt.writerId, receipt.sourceProjectId, ideaId]));
+      if (!entry || entry.writerId !== receipt.writerId ||
+          entry.sourceProjectId !== receipt.sourceProjectId ||
+          entry.sourceProjectName !== receipt.sourceProjectName ||
+          entry.category !== receipt.sourceProjectName ||
+          !entry.idea || entry.idea.projectId !== receipt.sourceProjectId ||
+          entry.idea.id !== ideaId || entry.idea.sourceProjectName !== receipt.sourceProjectName ||
+          entry.idea.status !== "IDEA" || !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 ||
+          (entry.context !== undefined && (!entry.context || entry.context.version !== 1))) {
+        throw new Error("El respaldo IndexedDB contiene una entrada incompatible con su recibo de finalización.");
+      }
+      validateNarrativeIdeaRecord(entry.idea, "idea archivada del respaldo");
+      if (entry.context) {
+        validatePersonalIdeaLibraryContext(
+          entry.context, receipt.sourceProjectId, receipt.sourceProjectName, "contexto del respaldo"
+        );
+        const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+        const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+        for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
+          if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
+              (idea.relatedIdeaIds ?? []).some(relatedId =>
+                !contextIdeaIds.has(relatedId) && !archivedIds.has(relatedId)
+              )) {
+            throw new Error("El respaldo IndexedDB contiene referencias archivadas sin destino resoluble.");
+          }
+        }
+      }
+      contentChecksum?.add(entry);
+    }
+    if (contentChecksum && contentChecksum.digest() !== receipt.archiveContentChecksum) {
+      throw new Error("El respaldo IndexedDB no coincide con el checksum del contenido archivado.");
+    }
+  }
+}
 
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
@@ -2124,6 +2205,7 @@ export class IndexedDbProjectStore implements ProjectStore {
           return;
         }
         try {
+          validatePersonalIdeaBackupIntegrity(stores);
           const payload: Omit<IndexedDbDatabaseBackup, "checksum"> = {
             format: INDEXEDDB_BACKUP_FORMAT,
             formatVersion: 1,
@@ -2210,6 +2292,8 @@ export class IndexedDbProjectStore implements ProjectStore {
     } catch (error) {
       throw new Error("El respaldo IndexedDB contiene datos no serializables: " + String(error));
     }
+
+    validatePersonalIdeaBackupIntegrity(normalizedStores);
 
     const transaction = db.transaction(currentNames, "readwrite");
     const previousStores: Record<string, readonly unknown[]> = Object.create(null);

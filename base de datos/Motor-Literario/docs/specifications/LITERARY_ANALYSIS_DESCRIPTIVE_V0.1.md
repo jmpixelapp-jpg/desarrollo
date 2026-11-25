@@ -63,6 +63,12 @@ Cada escena explícita incluye `voiceSignals`, calculado sobre sus tokens y fuer
 
 Estas señales no identifican al narrador ni la focalización: pueden corresponder a narración citada, estilo indirecto u otros usos gramaticales. La exclusión del diálogo depende de los formatos que reconoce el detector y no garantiza separar todas las voces de un texto.
 
+### Perfil agregado de señales gramaticales por escena
+
+La propiedad `sceneVoiceProfile` resume las escenas explícitas incluidas en el fragmento: cantidad de escenas, total de señales, conteos acumulados por categoría, distribución de escenas por clasificación y cobertura de cada categoría. `sceneShare` es una fracción entre 0 y 1 que expresa la proporción de escenas con al menos una señal de la categoría, no su peso narrativo. `sceneSnapshots` conserva una entrada por escena en orden textual, con índice, clasificación y conteos; el índice remite a `explicitScenes`, donde están las muestras y offsets inspeccionables.
+
+El perfil agrega únicamente pronombres explícitos detectados fuera de los rangos de diálogo reconocidos. Una categoría más frecuente o presente en más escenas no permite atribuir la narración a una persona gramatical, identificar un narrador ni concluir que la voz permanece o cambia entre escenas. Con cero escenas explícitas, los totales, distribuciones y coberturas son cero y la secuencia queda vacía.
+
 ### Variaciones de señales gramaticales entre escenas
 
 La propiedad `sceneVoiceTransitions` compara las señales `voiceSignals` de cada par de escenas explícitas contiguas. Informa la clasificación anterior y siguiente, si la clasificación cambió, la diferencia de conteos por categoría (siguiente menos anterior) y las categorías cuyo conteo varió. Los índices se corresponden con los de `explicitScenes`; no se comparan escenas no contiguas ni se inventan transiciones implícitas.

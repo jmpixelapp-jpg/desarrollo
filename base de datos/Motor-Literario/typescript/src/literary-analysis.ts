@@ -195,6 +195,34 @@ export interface LiterarySceneVoiceTransition {
   readonly countDelta: LiteraryVoiceSignalCounts;
   readonly changedCategories: readonly (keyof LiteraryVoiceSignalCounts)[];
 }
+export interface LiterarySceneVoiceSnapshot {
+  readonly sceneIndex: number;
+  readonly classification: LiteraryVoiceSignalClassification;
+  readonly counts: LiteraryVoiceSignalCounts;
+  readonly totalSignals: number;
+}
+export interface LiterarySceneVoiceCategoryCoverage {
+  readonly category: keyof LiteraryVoiceSignalCounts;
+  readonly occurrences: number;
+  readonly scenesWithOccurrences: number;
+  /** Fracción entre 0 y 1 de escenas explícitas con al menos una señal de esta categoría. */
+  readonly sceneShare: number;
+}
+export interface LiterarySceneVoiceProfile {
+  readonly sceneCount: number;
+  readonly totalSignals: number;
+  readonly categoryTotals: LiteraryVoiceSignalCounts;
+  readonly classificationSceneCounts: {
+    readonly firstPerson: number;
+    readonly secondPerson: number;
+    readonly thirdPerson: number;
+    readonly mixed: number;
+    readonly undetermined: number;
+  };
+  readonly categoryCoverage: readonly LiterarySceneVoiceCategoryCoverage[];
+  /** Instantáneas en orden textual; conservan una referencia por índice a explicitScenes. */
+  readonly sceneSnapshots: readonly LiterarySceneVoiceSnapshot[];
+}
 export interface LiteraryExplicitSceneSegment {
   readonly sceneIndex: number;
   readonly markerType: "scene-heading" | "scene-divider";
@@ -224,6 +252,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneContinuity: readonly LiterarySceneContinuityTransition[];
   /** Variaciones de señales gramaticales entre escenas contiguas; no demuestra cambio de narrador. */
   readonly sceneVoiceTransitions: readonly LiterarySceneVoiceTransition[];
+  /** Resumen cuantitativo de señales gramaticales a lo largo de las escenas explícitas. */
+  readonly sceneVoiceProfile: LiterarySceneVoiceProfile;
   /** Pares de personajes mencionados en las mismas escenas; no implica interacción o relación. */
   readonly characterCoMentions: readonly LiteraryCharacterCoMentionPattern[];
   readonly voiceSignals: LiteraryVoiceSignal;
@@ -699,6 +729,62 @@ function compareSceneVoiceSignals(
   return transitions;
 }
 
+function buildSceneVoiceProfile(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneVoiceProfile {
+  const categories: readonly (keyof LiteraryVoiceSignalCounts)[] = [
+    "firstPerson","secondPerson","thirdPerson"
+  ];
+  const categoryTotals: LiteraryVoiceSignalCounts = {
+    firstPerson:0,secondPerson:0,thirdPerson:0
+  };
+  const scenesWithOccurrences: Record<keyof LiteraryVoiceSignalCounts,number> = {
+    firstPerson:0,secondPerson:0,thirdPerson:0
+  };
+  const classificationSceneCounts = {
+    firstPerson:0,secondPerson:0,thirdPerson:0,mixed:0,undetermined:0
+  };
+  let totalSignals = 0;
+
+  for (const scene of scenes) {
+    const counts = scene.voiceSignals.counts;
+    for (const category of categories) {
+      categoryTotals[category] += counts[category];
+      if (counts[category] > 0) scenesWithOccurrences[category]++;
+    }
+    totalSignals += counts.firstPerson + counts.secondPerson + counts.thirdPerson;
+    switch (scene.voiceSignals.classification) {
+      case "first-person-signals": classificationSceneCounts.firstPerson++; break;
+      case "second-person-signals": classificationSceneCounts.secondPerson++; break;
+      case "third-person-signals": classificationSceneCounts.thirdPerson++; break;
+      case "mixed-signals": classificationSceneCounts.mixed++; break;
+      case "undetermined": classificationSceneCounts.undetermined++; break;
+    }
+  }
+
+  return {
+    sceneCount:scenes.length,
+    totalSignals,
+    categoryTotals,
+    classificationSceneCounts,
+    categoryCoverage:categories.map(category => ({
+      category,
+      occurrences:categoryTotals[category],
+      scenesWithOccurrences:scenesWithOccurrences[category],
+      sceneShare:scenes.length > 0
+        ? roundMetric(scenesWithOccurrences[category]/scenes.length)
+        : 0
+    })),
+    sceneSnapshots:scenes.map(scene => ({
+      sceneIndex:scene.sceneIndex,
+      classification:scene.voiceSignals.classification,
+      counts:{...scene.voiceSignals.counts},
+      totalSignals:scene.voiceSignals.counts.firstPerson +
+        scene.voiceSignals.counts.secondPerson + scene.voiceSignals.counts.thirdPerson
+    }))
+  };
+}
+
 function findCharacterCoMentionPatterns(
   scenes: readonly LiteraryExplicitSceneSegment[]
 ): LiteraryCharacterCoMentionPattern[] {
@@ -1042,6 +1128,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
+  const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
@@ -1217,6 +1304,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     explicitScenes,
     sceneContinuity,
     sceneVoiceTransitions,
+    sceneVoiceProfile,
     characterCoMentions,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
@@ -1232,6 +1320,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",
       "La continuidad compara solo escenas explícitas contiguas: las menciones literales y la evidencia por ID de acontecimiento describen cobertura textual, no presencia física, cronología ni contradicciones.",
       "Las variaciones gramaticales entre escenas comparan conteos de pronombres explícitos fuera del diálogo reconocido; no demuestran un cambio de narrador, focalización ni voz autoral.",
+      "El perfil de voz agrega señales y clasificaciones por escena explícita; la cobertura indica en cuántas escenas aparece una categoría, no la identidad ni continuidad de una voz narrativa.",
       "La co-mención agrupa nombres de personajes conocidos que aparecen en una misma escena explícita; no demuestra interacción, relación, diálogo ni presencia física compartida.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",

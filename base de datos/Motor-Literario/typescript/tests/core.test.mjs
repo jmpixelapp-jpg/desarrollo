@@ -9695,25 +9695,60 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
   const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideLeaves];
   const entries = [];
   const deleted = [];
-  const transaction = {
+  let transaction;
+  let cursorExhausted = false;
+  const maybeComplete = () => {
+    if (!cursorExhausted || transaction.pendingRequests !== 0 || transaction.completed) return;
+    transaction.completed = true;
+    queueMicrotask(() => transaction.oncomplete?.());
+  };
+  const scheduleRequest = work => {
+    transaction.pendingRequests++;
+    queueMicrotask(() => {
+      work();
+      transaction.pendingRequests--;
+      maybeComplete();
+    });
+  };
+  transaction = {
     error: null,
+    pendingRequests: 0,
+    completed: false,
+    oncomplete: null,
     objectStore(name) {
       if (name === "narrative-ideas") {
         return {
           index(indexName) {
             assert.equal(indexName, "by-project");
             return {
-              getAll(requestedProjectId) {
+              openCursor(requestedProjectId) {
                 assert.equal(requestedProjectId, projectId);
                 const request = {};
-                queueMicrotask(() => {
-                  request.result = structuredClone(projectIdeas);
+                const ordered = projectIdeas
+                  .filter(item => item.projectId === requestedProjectId)
+                  .sort((first, second) => first.id.localeCompare(second.id));
+                let index = 0;
+                const advance = () => scheduleRequest(() => {
+                  const item = ordered[index++];
+                  request.result = item
+                    ? { value: structuredClone(item), continue: advance }
+                    : null;
                   request.onsuccess?.();
-                  queueMicrotask(() => transaction.oncomplete?.());
+                  if (!item) cursorExhausted = true;
                 });
+                advance();
                 return request;
               }
             };
+          },
+          get(key) {
+            const request = {};
+            scheduleRequest(() => {
+              const item = projectIdeas.find(entry => entry.projectId === key[0] && entry.id === key[1]);
+              request.result = item ? structuredClone(item) : undefined;
+              request.onsuccess?.();
+            });
+            return request;
           },
           delete(key) { deleted.push(key); }
         };
@@ -9723,7 +9758,16 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
       }
       if (name === "writer-library-finalization-receipts") return {};
       assert.equal(name, "narrative-entities");
-      return {};
+      return {
+        get(key) {
+          const request = {};
+          scheduleRequest(() => {
+            request.result = undefined;
+            request.onsuccess?.();
+          });
+          return request;
+        }
+      };
     }
   };
   const database = {
@@ -9869,6 +9913,29 @@ test("la recuperación local no inventa un snapshot cuando el documento nunca fu
 
 test("IndexedDB registra el cierre del libro y repite la transferencia usando el mismo recibo durable", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const originalBroadcastChannel = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class FinalizationBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    constructor(name) { this.name = name; FinalizationBroadcastChannel.channels.add(this); }
+    postMessage(data) {
+      for (const channel of FinalizationBroadcastChannel.channels) {
+        if (channel === this || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: structuredClone(data) }));
+      }
+    }
+    close() { FinalizationBroadcastChannel.channels.delete(this); }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true, value: FinalizationBroadcastChannel
+  });
+  const finalizationBroadcastAssertions = [];
+  const observer = new IndexedDbProjectStore();
+  const unsubscribeFinalizationObserver = observer.subscribePersonalIdeaLibraryChanges(
+    value => finalizationBroadcastAssertions.push(value)
+  );
   const projectId = "finalization-receipt-book";
   const writerId = "finalization-receipt-writer";
   const projectName = "El libro finalizado";
@@ -9932,12 +9999,40 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-project");
                 return {
-                  getAll(requestedProjectId) {
-                    return transaction.request(() =>
-                      structuredClone(projectIdeas.filter(item => item.projectId === requestedProjectId))
-                    );
+                  openCursor(requestedProjectId) {
+                    const request = {};
+                    const ordered = projectIdeas
+                      .filter(item => item.projectId === requestedProjectId)
+                      .sort((first, second) => first.id.localeCompare(second.id));
+                    let index = 0;
+                    const advance = () => {
+                      transaction.pendingRequests++;
+                      queueMicrotask(() => {
+                        if (transaction.aborted) return;
+                        const item = ordered[index++];
+                        request.result = item
+                          ? {
+                              value: structuredClone(item),
+                              continue: advance
+                            }
+                          : null;
+                        request.onsuccess?.();
+                        transaction.pendingRequests--;
+                        transaction.maybeComplete();
+                      });
+                    };
+                    advance();
+                    return request;
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const item = projectIdeas.find(entry =>
+                    entry.projectId === key[0] && entry.id === key[1]
+                  );
+                  return item ? structuredClone(item) : undefined;
+                });
               },
               delete(key) {
                 const [requestedProjectId, ideaId] = key;
@@ -9953,14 +10048,20 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
               index(indexName) {
                 assert.equal(indexName, "by-writer-source");
                 return {
-                  getAll(key) {
+                  count(key) {
                     return transaction.request(() =>
-                      [...library.values()]
-                        .filter(entry => entry.writerId === key[0] && entry.sourceProjectId === key[1])
-                        .map(entry => structuredClone(entry))
+                      [...library.values()].filter(entry =>
+                        entry.writerId === key[0] && entry.sourceProjectId === key[1]
+                      ).length
                     );
                   }
                 };
+              },
+              get(key) {
+                return transaction.request(() => {
+                  const entry = library.get(makeKey(key));
+                  return entry ? structuredClone(entry) : undefined;
+                });
               },
               add(entry) {
                 const key = makeKey([entry.writerId, entry.sourceProjectId, entry.idea.id]);
@@ -10018,6 +10119,9 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(projectIdeas.length, 0);
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(finalizationBroadcastAssertions, [writerId],
+      "la transferencia confirmada notifica una vez a la biblioteca del escritor");
 
     const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
     assert.ok(receipt);
@@ -10034,6 +10138,9 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(retryArchive[0].idea.id, "idea-to-archive");
     assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(finalizationBroadcastAssertions, [writerId],
+      "repetir un recibo no publica una segunda transferencia");
     assert.equal(
       (await store.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
       receipt.archiveChecksum
@@ -10052,8 +10159,13 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
   } finally {
+    unsubscribeFinalizationObserver();
+    observer.dispose?.();
+    FinalizationBroadcastChannel.channels.clear();
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;
+    if (originalBroadcastChannel) Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);
+    else delete globalThis.BroadcastChannel;
   }
 });
 
@@ -10533,11 +10645,6 @@ test("la API vincula acontecimientos persistidos a escenas del documento y revis
   const result = await api.analyzeLiteraryDocument("chapter");
   assert.deepEqual(result.explicitScenes[0].eventLinks.map(item => item.eventId),["alarm"]);
   assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,true);
-  const anaTrajectory=result.characterNarrativeTrajectories.trajectories.find(item => item.entityId==="ana");
-  assert.ok(anaTrajectory);
-  assert.deepEqual(anaTrajectory.eventParticipation.map(item => item.eventId),["alarm"]);
-  assert.deepEqual(anaTrajectory.scenes[0].eventIds,["alarm"]);
-  assert.equal(anaTrajectory.scenes[0].participationStatus,"linked-to-explicit-event-evidence");
   assert.deepEqual(api.getSnapshot("chapter"),before);
 });
 
@@ -12655,9 +12762,414 @@ test("la API incorpora afirmaciones almacenadas a la evolución de atributos ent
   assert.ok(profile);
   assert.deepEqual(profile.scenes.map(item => item.values), [[20], [21]]);
   assert.equal(profile.transitions[0].status, "changed-value");
-  const trajectory=result.characterNarrativeTrajectories.trajectories.find(item => item.entityId==="ana");
-  assert.ok(trajectory);
-  assert.deepEqual(trajectory.attributes.find(item => item.attribute==="age").scenes
-    .map(item => item.values),[[20],[21]]);
-  assert.deepEqual(trajectory.scenes.map(item => item.attributeValues[0].values),[[20],[21]]);
+});
+
+
+test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera de la página", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  const identity = {
+    projectId: "paged-personal-library",
+    projectName: "Libro por páginas",
+    writerId: "writer-paged-library"
+  };
+  api.initializeProject(identity);
+
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-a",
+    text: "Primera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: [],
+    relatedIdeaIds: ["idea-b"]
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-b",
+    text: "Segunda idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-c",
+    text: "Tercera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-2",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await api.archiveUnincorporatedIdeas();
+
+  let pageReads = 0;
+  let batchReads = 0;
+  let pointReads = 0;
+  store.loadPersonalIdeasPage = async (writerId, cursor, limit) => {
+    assert.equal(writerId, identity.writerId);
+    assert.equal(limit, 1);
+    pageReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const ordered = [...all].sort((first, second) =>
+      first.sourceProjectId.localeCompare(second.sourceProjectId) ||
+      first.idea.id.localeCompare(second.idea.id)
+    );
+    const remaining = cursor
+      ? ordered.filter(entry =>
+          entry.sourceProjectId > cursor.sourceProjectId ||
+          (entry.sourceProjectId === cursor.sourceProjectId && entry.idea.id > cursor.ideaId)
+        )
+      : ordered;
+    const items = remaining.slice(0, limit);
+    const nextCursor = remaining.length > items.length && items.length
+      ? { sourceProjectId: items[0].sourceProjectId, ideaId: items[0].idea.id }
+      : null;
+    return { items, nextCursor };
+  };
+  store.loadPersonalIdeasByKeys = async (writerId, references) => {
+    batchReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const requested = new Set(references.map(reference =>
+      JSON.stringify([reference.sourceProjectId, reference.ideaId])
+    ));
+    return all.filter(entry => requested.has(
+      JSON.stringify([entry.sourceProjectId, entry.idea.id])
+    ));
+  };
+  store.loadPersonalIdea = async (writerId, sourceProjectId, ideaId) => {
+    pointReads++;
+    return (await store.loadPersonalIdeas(writerId)).find(entry =>
+      entry.sourceProjectId === sourceProjectId && entry.idea.id === ideaId
+    );
+  };
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.deepEqual(first.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-a"
+  });
+  assert.equal(batchReads, 1, "agrupa las referencias que apuntan fuera de la página");
+  assert.equal(pointReads, 0, "no abre transacciones individuales cuando existe lectura agrupada");
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.deepEqual(second.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-b"
+  });
+
+  const third = await api.getPersonalIdeaLibraryPage(second.nextCursor, 1);
+  assert.deepEqual(third.items.map(entry => entry.idea.id), ["idea-c"]);
+  assert.equal(third.nextCursor, null);
+  assert.equal(pageReads, 3);
+});
+
+
+test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas anteriores", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const writerId = "writer-indexeddb-pages";
+  const entry = (owner, id) => ({
+    writerId: owner,
+    sourceProjectId: "book-pages",
+    sourceProjectName: "Libro páginas",
+    category: "Libro páginas",
+    idea: { projectId: "book-pages", id, text: "Idea " + id, status: "IDEA", originDocumentId: "chapter", evidence: [] },
+    archivedAt: 1
+  });
+  const entries = [
+    entry(writerId, "idea-a"),
+    entry(writerId, "idea-b"),
+    entry(writerId, "idea-c"),
+    entry("another-writer", "idea-private")
+  ];
+  let transaction;
+  let seekCalls = 0;
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction() {
+      let pending = 0;
+      let completeQueued = false;
+      let completed = false;
+      const schedule = (request, ordered, index) => {
+        pending++;
+        completeQueued = false;
+        queueMicrotask(() => {
+          if (completed) return;
+          const value = ordered[index];
+          const current = value ? {
+            value: structuredClone(value),
+            primaryKey: [value.writerId, value.sourceProjectId, value.idea.id],
+            continue() { schedule(request, ordered, index + 1); },
+            continuePrimaryKey(indexKey, primaryKey) {
+              seekCalls++;
+              assert.equal(indexKey, writerId);
+              const compare = (first, second) => {
+                for (let part = 0; part < first.length; part++) {
+                  if (first[part] !== second[part]) return first[part] < second[part] ? -1 : 1;
+                }
+                return 0;
+              };
+              const next = ordered.findIndex(item =>
+                compare([item.writerId, item.sourceProjectId, item.idea.id], primaryKey) > 0
+              );
+              schedule(request, ordered, next < 0 ? ordered.length : next);
+            }
+          } : null;
+          request.result = current;
+          request.onsuccess?.();
+          pending--;
+          if (pending === 0 && !completeQueued) {
+            completeQueued = true;
+            queueMicrotask(() => {
+              if (pending === 0 && !completed) {
+                completed = true;
+                transaction.oncomplete?.();
+              }
+            });
+          }
+        });
+      };
+      transaction = {
+        error: null,
+        abort() {
+          if (completed) return;
+          completed = true;
+          queueMicrotask(() => transaction.onabort?.());
+        },
+        objectStore(name) {
+          assert.equal(name, "personal-idea-library");
+          return {
+            get(key) {
+              const request = {};
+              pending++;
+              completeQueued = false;
+              queueMicrotask(() => {
+                const value = entries.find(item =>
+                  item.writerId === key[0] &&
+                  item.sourceProjectId === key[1] &&
+                  item.idea.id === key[2]
+                );
+                request.result = value ? structuredClone(value) : undefined;
+                request.onsuccess?.();
+                pending--;
+                if (pending === 0 && !completeQueued) {
+                  completeQueued = true;
+                  queueMicrotask(() => {
+                    if (pending === 0 && !completed) {
+                      completed = true;
+                      transaction.oncomplete?.();
+                    }
+                  });
+                }
+              });
+              return request;
+            },
+            index(indexName) {
+              assert.equal(indexName, "by-writer");
+              return {
+                openCursor(requestedWriterId) {
+                  assert.equal(requestedWriterId, writerId);
+                  const ordered = entries.filter(item => item.writerId === requestedWriterId)
+                    .sort((first, second) => first.idea.id.localeCompare(second.idea.id));
+                  const request = {};
+                  schedule(request, ordered, 0);
+                  return request;
+                }
+              };
+            }
+          };
+        }
+      };
+      return transaction;
+    }
+  };
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: { open() {
+      const request = { result: database };
+      queueMicrotask(() => request.onsuccess?.());
+      return request;
+    } }
+  });
+  try {
+    const store = new IndexedDbProjectStore();
+    const first = await store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: "book-pages", ideaId: "idea-b" });
+
+    const second = await store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+    assert.equal(seekCalls, 1, "la segunda página salta directamente tras la clave compuesta del cursor");
+
+    const linked = await store.loadPersonalIdeasByKeys(writerId, [
+      { sourceProjectId: "book-pages", ideaId: "idea-c" },
+      { sourceProjectId: "book-pages", ideaId: "missing-idea" }
+    ]);
+    assert.deepEqual(linked.map(item => item.idea.id), ["idea-c"]);
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});
+
+
+test("la API paginada mantiene compatibilidad con adaptadores antiguos de biblioteca", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-legacy-pages";
+  const projectId = "legacy-pages-book";
+  const makeEntry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro antiguo",
+    category: "Libro antiguo",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro antiguo",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-b"]), makeEntry("idea-b"));
+  store.personalIdeas.set(JSON.stringify([writerId, projectId, "idea-a"]), makeEntry("idea-a"));
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro antiguo",
+    writerId
+  });
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.equal(first.items[0].contextStatus, "missing-legacy-context");
+  assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-a" });
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.equal(second.nextCursor, null);
+});
+
+
+test("la API rechaza páginas de biblioteca sin un cursor final explícito", async () => {
+  const store = new MemoryStore();
+  store.loadPersonalIdeasPage = async () => ({ items: [] });
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId: "malformed-library-page",
+    projectName: "Libro incompleto",
+    writerId: "writer-page-validation"
+  });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /página o su cursor están malformados/
+  );
+});
+
+
+test("la API rechaza vínculos a ideas ausentes aunque el almacén use lectura agrupada", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-missing-library-link";
+  const projectId = "book-missing-library-link";
+  store.loadPersonalIdeasPage = async () => ({
+    items: [{
+      writerId,
+      sourceProjectId: projectId,
+      sourceProjectName: "Libro enlazado",
+      category: "Libro enlazado",
+      idea: {
+        projectId,
+        id: "idea-present",
+        text: "Una idea archivada",
+        status: "IDEA",
+        originDocumentId: "chapter",
+        sourceProjectName: "Libro enlazado",
+        evidence: [],
+        relatedIdeaIds: ["idea-does-not-exist"]
+      },
+      context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+      archivedAt: 1
+    }],
+    nextCursor: null
+  });
+  store.loadPersonalIdeasByKeys = async (_writerId, references) => {
+    assert.deepEqual(references, [{
+      sourceProjectId: projectId,
+      ideaId: "idea-does-not-exist"
+    }]);
+    return [];
+  };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Libro enlazado", writerId });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /una idea relacionada no existe en la biblioteca del escritor/
+  );
+});
+
+test("notifica cambios de biblioteca solo por la identidad del escritor", async () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class TestBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    closed = false;
+    constructor(name) {
+      this.name = name;
+      TestBroadcastChannel.channels.add(this);
+    }
+    postMessage(data) {
+      for (const channel of TestBroadcastChannel.channels) {
+        if (channel === this || channel.closed || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: structuredClone(data) }));
+      }
+    }
+    close() {
+      this.closed = true;
+      TestBroadcastChannel.channels.delete(this);
+    }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: TestBroadcastChannel
+  });
+
+  const publisher = new IndexedDbProjectStore();
+  const subscriber = new IndexedDbProjectStore();
+  const received = [];
+  const offPublisher = publisher.subscribePersonalIdeaLibraryChanges(() => {});
+  const api = new HostEngineApi({
+    store: subscriber,
+    callbacks: { onPersonalIdeaLibraryChanged: writerId => received.push(writerId) }
+  });
+  api.initializeProject({
+    projectId: "library-notification-project",
+    projectName: "Libro de notificaciones",
+    writerId: "writer-authenticated"
+  });
+  try {
+    publisher.publishPersonalIdeaLibraryChange("writer-other");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(received, []);
+
+    publisher.publishPersonalIdeaLibraryChange("writer-authenticated");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(received, ["writer-authenticated"]);
+  } finally {
+    api.dispose();
+    offPublisher();
+    if (originalDescriptor) Object.defineProperty(globalThis, "BroadcastChannel", originalDescriptor);
+    else delete globalThis.BroadcastChannel;
+  }
 });

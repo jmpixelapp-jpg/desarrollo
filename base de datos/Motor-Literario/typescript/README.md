@@ -130,7 +130,7 @@ El respaldo contiene el manuscrito y los datos privados de la biblioteca en clar
 
 `HostEngineApi` expone `exportDatabaseBackup()` y `restoreDatabaseBackup(backup)` cuando el adaptador local implementa ambas operaciones. El almacenamiento `IndexedDbProjectStore` realiza la instantánea y la restauración atómica. La exportación lee todos los object stores de la versión abierta dentro de una sola transacción readonly y devuelve un paquete JSON con el número de versión, fecha y checksum FNV-1a para detectar alteraciones accidentales. Incluye documentos, journal, conocimiento narrativo, biblioteca personal, diccionarios, historiales, configuraciones, evidencias, autorizaciones y recibos.
 
-El anfitrión debe vaciar primero las colas del motor y guardar el paquete como un archivo privado mediante su propio mecanismo de archivos:
+`HostEngineApi.exportDatabaseBackup()` espera automáticamente a que terminen el journal, el análisis, los diagnósticos y el conocimiento pendientes. El anfitrión solo debe guardar el paquete devuelto como un archivo privado mediante su propio mecanismo de archivos:
 
 ~~~ts
 const backup = await api.exportDatabaseBackup();

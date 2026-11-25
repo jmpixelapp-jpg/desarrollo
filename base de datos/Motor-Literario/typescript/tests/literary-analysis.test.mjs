@@ -2132,7 +2132,7 @@ test("la cronología aísla IDs reutilizados con identidades narrativas distinta
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
-    text: "Escena 1\\nAna.",
+    text: "Escena 1\nAna.",
     knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
     knownProjectEvents: [
       makeEvent("La tormenta"),

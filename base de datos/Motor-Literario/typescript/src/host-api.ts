@@ -4045,18 +4045,22 @@ export class HostEngineApi {
   private scheduleLiveAuthorMonitorCheckpoint(documentId: string): void {
     if (!this.store.saveLiveAuthorMonitorCheckpoint) return;
     const previous = this.liveMonitorCheckpointTails.get(documentId) ?? Promise.resolve();
-    const queued = previous.then(async () => {
+    const queued = previous.catch(() => undefined).then(async () => {
       const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
       if (checkpoint) await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
-    }).catch(error => {
-      this.reportKnowledgeError(error);
     });
     this.liveMonitorCheckpointTails.set(documentId, queued);
-    void queued.finally(() => {
+    // El guardado en segundo plano informa el fallo, pero conserva el rechazo
+    // original para que closeSafely/disposeSafely no anuncien persistencia falsa.
+    void queued.catch(error => {
+      try { this.reportKnowledgeError(error); } catch { /* El diagnóstico no altera la cola. */ }
+    });
+    const cleanup = (): void => {
       if (this.liveMonitorCheckpointTails.get(documentId) === queued) {
         this.liveMonitorCheckpointTails.delete(documentId);
       }
-    });
+    };
+    void queued.then(cleanup, cleanup);
   }
 
   private async enqueueLiveAuthorMonitorCheckpoint(

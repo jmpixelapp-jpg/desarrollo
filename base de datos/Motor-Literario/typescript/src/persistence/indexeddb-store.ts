@@ -306,7 +306,8 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
     }
   }
   if (idea.statusHistory !== undefined) {
-    if (!Array.isArray(idea.statusHistory)) {
+    if (!Array.isArray(idea.statusHistory) ||
+        (idea.statusHistory.length === 0 && (idea.omittedStatusHistoryCount ?? 0) === 0)) {
       throw new Error(`Registro de ${label} malformado: historial inválido.`);
     }
     for (let index = 0; index < idea.statusHistory.length; index++) {
@@ -316,14 +317,14 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
           (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
           (change.reason !== "initial" && change.reason !== "writer" && change.reason !== "text-revised") ||
           (change.reason === "text-revised" && change.status !== "IDEA") ||
-          (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-            (change.status === idea.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
-          false) {
+          (index === 0
+            ? (idea.omittedStatusHistoryCount ?? 0) === 0
+              ? change.reason !== "initial"
+              : change.reason === "initial"
+            : change.reason === "initial" ||
+              (change.status === idea.statusHistory[index - 1]?.status && change.reason !== "writer"))) {
         throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);
       }
-    }
-    if (idea.statusHistory.length === 0) {
-      throw new Error(`Registro de ${label} malformado: el historial no coincide con el estado actual.`);
     }
   }
 }

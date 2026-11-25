@@ -513,7 +513,7 @@ El manifiesto histórico `storage_mapping_v0.4.1.json` se mantiene sin alterar. 
 
 El workflow específico del monitor ejecuta `npm run validate:schema` antes del build y las pruebas. También ejecuta `tests/storage-implementation-audit.test.mjs` contra el manifiesto activo para detectar almacenes físicos no declarados. La prueba de auditoría deja de depender de un número fijo de tablas y de una versión IndexedDB incrustada en un reemplazo de texto.
 
-**Validación de CI de esta alineación:** pendiente de la ejecución disparada por los commits del manifiesto activo y el workflow. No se considera aprobada hasta revisar los resultados de la auditoría, build y pruebas.
+**Validación de CI de esta alineación:** ejecución [45723969106](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723969106) y ejecución ampliada [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335). La última confirma esquema 0.4.2 válido, auditoría física correcta con 25 tablas y 33 almacenes, build Vite y 100 pruebas aprobadas.
 
 
 El índice `by-project` también se declara mediante `ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId")` dentro de la rutina de migración `onupgradeneeded`. El manifiesto y la auditoría comparan las definiciones del almacén y de sus índices; crear el índice solo en la rama que crea el objectStore no es suficiente para satisfacer la auditoría de migraciones.
@@ -537,3 +537,19 @@ La prueba verifica:
 
 
 **Validación CI verificada:** ejecución [45724325962](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724325962), commit `2dca17b54eb2454026a298a6409f325e6dd1035e`: esquema 0.4.2 válido, 25 tablas del motor y 33 almacenes IndexedDB, build Vite correcto y **99 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye el test del adaptador IndexedDB contra `fake-indexeddb@6.2.8`.
+
+
+## 28. Migración de base v22 a v23 sin pérdida de documentos
+
+La prueba de runtime del almacén incluye un escenario de actualización desde una base IndexedDB versión 22 que ya contiene todos los almacenes existentes del manifiesto v0.4.2 y un documento guardado. Se abre después mediante IndexedDbProjectStore, que activa la migración a la versión 23 y crea live-author-monitor-checkpoints.
+
+La prueba comprueba:
+- la versión final de la base es 23;
+- existe el almacén de checkpoints con keyPath [projectId, documentId];
+- existe el índice by-project con keyPath projectId;
+- se puede guardar y recuperar un checkpoint en la base migrada;
+- el registro anterior de documents conserva su texto y revisión originales.
+
+El test usa fake-indexeddb en memoria. Verifica el código de migración, las transacciones y la preservación de registros durante la actualización, pero sigue sin sustituir una prueba E2E en navegador con IndexedDB físico y reinicio real.
+
+**Validación CI:** ejecución [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335), commit 623a3397588ca135ab781d0a0a597a2f7ef53958: MLDB 0.4.2 válido; auditoría física correcta (25 tablas, 33 almacenes); build Vite correcto; 100 pruebas aprobadas, 0 fallidas y 0 omitidas.

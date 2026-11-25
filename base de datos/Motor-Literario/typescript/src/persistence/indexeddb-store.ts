@@ -4,6 +4,16 @@ import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea,
 import type { NarrativeAssertion } from "../narrative-history";
 import type { ProjectDictionary, DictionaryEntry } from "../dictionaries";
 import { validateProjectDictionary, validateDictionaryEntry } from "../dictionaries";
+import type {
+  ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
+  ImportAuthorization, SchemaMigration
+} from "../mldb-records";
+import {
+  validateManuscriptFragment, validateRecordAttribute, validateRelationAttribute,
+  validateActiveSuggestion, validateImportAuthorization, validateSchemaMigration,
+  cloneManuscriptFragment, cloneRecordAttribute, cloneRelationAttribute,
+  cloneActiveSuggestion, cloneImportAuthorization, cloneSchemaMigration
+} from "../mldb-records";
 import type { ProjectSetting } from "../project-data";
 import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type LanguageResourceRef,
   cloneLanguageProfile, cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef,
@@ -14,7 +24,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 17;
+const DATABASE_VERSION = 18;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -37,6 +47,12 @@ const STYLE_PROFILES = "style-profiles";
 const TIMELINE_TRACKS = "timeline-tracks";
 const RECORD_LIFECYCLES = "record-lifecycles";
 const RELATION_LIFECYCLES = "relation-lifecycles";
+const MANUSCRIPT_FRAGMENTS = "manuscript-fragments";
+const RECORD_ATTRIBUTES = "record-attributes";
+const RELATION_ATTRIBUTES = "relation-attributes";
+const ACTIVE_SUGGESTIONS = "active-suggestions";
+const IMPORT_AUTHORIZATIONS = "import-authorizations";
+const SCHEMA_MIGRATIONS = "schema-migrations";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -1143,7 +1159,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         return;
       }
 
-      request.onupgradeneeded = () => {
+      request.onupgradeneeded = (event) => {
         // Si onblocked ya rechazó la apertura, el navegador puede reanudar
         // esta migración cuando se cierre la conexión que la bloqueaba.
         // Abortamos antes de tocar el esquema para no modificar la base
@@ -1253,6 +1269,41 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           diagnostics.createIndex("by-project", "projectId", { unique: false });
         }
+        if (!db.objectStoreNames.contains(MANUSCRIPT_FRAGMENTS)) {
+          const fragments = db.createObjectStore(MANUSCRIPT_FRAGMENTS, { keyPath: ["projectId", "id"] });
+          fragments.createIndex("by-project", "projectId", { unique: false });
+          fragments.createIndex("by-document-revision", ["projectId", "documentId", "revision"], { unique: false });
+          fragments.createIndex("by-parent", ["projectId", "parentFragmentId"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(RECORD_ATTRIBUTES)) {
+          const attributes = db.createObjectStore(RECORD_ATTRIBUTES, { keyPath: ["projectId", "id"] });
+          attributes.createIndex("by-project", "projectId", { unique: false });
+          attributes.createIndex("by-record-key", ["projectId", "recordId", "attributeKey"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(RELATION_ATTRIBUTES)) {
+          const attributes = db.createObjectStore(RELATION_ATTRIBUTES, { keyPath: ["projectId", "id"] });
+          attributes.createIndex("by-project", "projectId", { unique: false });
+          attributes.createIndex("by-relation-key", ["projectId", "relationId", "attributeKey"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(ACTIVE_SUGGESTIONS)) {
+          const suggestions = db.createObjectStore(ACTIVE_SUGGESTIONS, { keyPath: ["projectId", "id"] });
+          suggestions.createIndex("by-project", "projectId", { unique: false });
+          suggestions.createIndex("by-document-revision", ["projectId", "documentId", "documentRevision"], { unique: false });
+          suggestions.createIndex("by-status-priority", ["projectId", "status", "priority"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(IMPORT_AUTHORIZATIONS)) {
+          const authorizations = db.createObjectStore(IMPORT_AUTHORIZATIONS, {
+            keyPath: ["writerId", "sourceProjectId", "targetProjectId", "authorizationId"]
+          });
+          authorizations.createIndex("by-writer", "writerId", { unique: false });
+          authorizations.createIndex("by-source-target", ["writerId", "sourceProjectId", "targetProjectId"], { unique: false });
+          authorizations.createIndex("by-target", ["writerId", "targetProjectId"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(SCHEMA_MIGRATIONS)) {
+          const migrations = db.createObjectStore(SCHEMA_MIGRATIONS, { keyPath: "migrationId" });
+          migrations.createIndex("by-to-version", "toVersion", { unique: false });
+          migrations.createIndex("by-applied-at", "appliedAt", { unique: false });
+        }
         if (!db.objectStoreNames.contains(DICTIONARIES)) {
           const dictionaries = db.createObjectStore(DICTIONARIES, {
             keyPath: ["projectId", "id"]
@@ -1352,6 +1403,32 @@ export class IndexedDbProjectStore implements ProjectStore {
           DICTIONARY_ENTRIES, "by-dictionary-normalized",
           ["projectId", "dictionaryId", "normalizedForm"], true
         );
+        ensureIndex(MANUSCRIPT_FRAGMENTS, "by-project", "projectId");
+        ensureIndex(MANUSCRIPT_FRAGMENTS, "by-document-revision", ["projectId", "documentId", "revision"]);
+        ensureIndex(MANUSCRIPT_FRAGMENTS, "by-parent", ["projectId", "parentFragmentId"]);
+        ensureIndex(RECORD_ATTRIBUTES, "by-project", "projectId");
+        ensureIndex(RECORD_ATTRIBUTES, "by-record-key", ["projectId", "recordId", "attributeKey"]);
+        ensureIndex(RELATION_ATTRIBUTES, "by-project", "projectId");
+        ensureIndex(RELATION_ATTRIBUTES, "by-relation-key", ["projectId", "relationId", "attributeKey"]);
+        ensureIndex(ACTIVE_SUGGESTIONS, "by-project", "projectId");
+        ensureIndex(ACTIVE_SUGGESTIONS, "by-document-revision", ["projectId", "documentId", "documentRevision"]);
+        ensureIndex(ACTIVE_SUGGESTIONS, "by-status-priority", ["projectId", "status", "priority"]);
+        ensureIndex(IMPORT_AUTHORIZATIONS, "by-writer", "writerId");
+        ensureIndex(IMPORT_AUTHORIZATIONS, "by-source-target", ["writerId", "sourceProjectId", "targetProjectId"]);
+        ensureIndex(IMPORT_AUTHORIZATIONS, "by-target", ["writerId", "targetProjectId"]);
+        ensureIndex(SCHEMA_MIGRATIONS, "by-to-version", "toVersion");
+        ensureIndex(SCHEMA_MIGRATIONS, "by-applied-at", "appliedAt");
+        const nextVersion = event?.newVersion ?? DATABASE_VERSION;
+        const migration: SchemaMigration = {
+          migrationId: `indexeddb-v${nextVersion}`,
+          fromVersion: String(event?.oldVersion ?? 0),
+          toVersion: String(nextVersion),
+          appliedAt: Date.now(),
+          result: "APPLIED",
+          checksum: `motor-literario-mldb-0.4.1-indexeddb-${nextVersion}`
+        };
+        validateSchemaMigration(migration);
+        upgrade.objectStore(SCHEMA_MIGRATIONS).put(cloneSchemaMigration(migration));
       };
       request.onsuccess = () => {
         const db = request.result;

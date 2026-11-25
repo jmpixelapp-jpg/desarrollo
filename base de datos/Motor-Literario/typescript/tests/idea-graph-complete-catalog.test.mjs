@@ -888,3 +888,44 @@ test("la caché de resonancia léxica no expone referencias mutables", async () 
     api.dispose();
   }
 });
+
+
+test("la caché léxica se invalida cuando cambia el texto de una idea", async () => {
+  const ideas = ["memoria espejo destino", "memoria espejo destino"].map((text, index) => ({
+    projectId,
+    id: "lexical-invalidation-" + index,
+    text,
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds: [],
+    relatedEntityIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  }));
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-invalidation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa actualización debe invalidar la caché.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.deepEqual(before.resonances[0].sharedTerms, ["destino", "espejo", "memoria"]);
+
+    ideas[1] = { ...ideas[1], text: "memoria destino" };
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(after.candidatePairCount, 1);
+    assert.equal(after.resonances.length, 1);
+    assert.equal(after.resonances[0].leftTermCount, 3);
+    assert.equal(after.resonances[0].rightTermCount, 2);
+    assert.equal(after.resonances[0].sharedTermCount, 2);
+    assert.deepEqual(after.resonances[0].sharedTerms, ["destino", "memoria"]);
+  } finally {
+    api.dispose();
+  }
+});

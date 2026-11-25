@@ -437,7 +437,7 @@ function findDocumentLineRecord<T extends { readonly id: string }>(
   lineStart: number,
   excludedIds: ReadonlySet<string> = new Set()
 ): T | undefined {
-  const ids = index.get(`${documentId}\\u0000${lineStart}`);
+  const ids = index.get(`${documentId}\u0000${lineStart}`);
   if (!ids) return undefined;
   for (const id of ids) {
     if (excludedIds.has(id)) continue;

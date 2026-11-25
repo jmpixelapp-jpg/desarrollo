@@ -206,15 +206,6 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     });
     assert.equal(ideas.length, 2);
     assert.ok(ideas.every(idea => idea.status === "IDEA"));
-    const orderedIdeas = [...ideas].sort((first, second) =>
-      first.id < second.id ? -1 : first.id > second.id ? 1 : 0
-    );
-    await client.request("project.call", {
-      projectId: "idea-project",
-      method: "setNarrativeIdeaLink",
-      args: [orderedIdeas[0].id, orderedIdeas[1].id, true]
-    });
-
     const archived = await client.request("project.call", {
       projectId: "idea-project",
       method: "archiveUnincorporatedIdeas",
@@ -1074,6 +1065,10 @@ test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async ()
     const second = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
     assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
     assert.equal(second.nextCursor, null);
+    assert.equal(
+      store.loadPersonalIdea(writerId, projectId, "idea-b").idea.id,
+      "idea-b"
+    );
 
     const schema = database.prepare("PRAGMA table_info(bridge_records)").all();
     assert.ok(schema.some(column => column.name === "sort_key"));

@@ -3,8 +3,8 @@ import type {
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
-import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput } from "./dictionaries";
-import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
+import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput, DictionaryEntryEntityLink } from "./dictionaries";
+import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry, validateDictionaryEntryEntityLink } from "./dictionaries";
 import type {
   ProjectRecord, ProjectRecordInput, RecordName,
   ProjectRelation, ProjectEvidence, TimelineOccurrence, EvidenceSubjectKind,
@@ -2489,17 +2489,60 @@ export class HostEngineApi {
     });
   }
 
-  /** Enlaza o desenlaza una ficha solo después de comprobar que ambas pertenecen al mismo libro. */
+  /** Devuelve los vínculos que ya conservan tipo, procedencia y fecha propios. */
+  async getDictionaryEntryEntityLinks(
+    dictionaryId: string,
+    entryId: string
+  ): Promise<readonly DictionaryEntryEntityLink[]> {
+    if (typeof dictionaryId !== "string" || !dictionaryId.trim() ||
+        typeof entryId !== "string" || !entryId.trim()) {
+      throw new Error("Identidad de diccionario o entrada inválida.");
+    }
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const store = this.requireDictionaryStore();
+      const load = store.loadDictionaryEntryEntityLinks;
+      if (!load) throw new Error("El adaptador no conserva metadatos individuales de vínculos de diccionario.");
+      const entries = await store.loadDictionaryEntries(projectId, dictionaryId);
+      if (!Array.isArray(entries)) throw new Error("La colección de entradas es inválida.");
+      const entry = entries.find(item => item.id === entryId);
+      if (!entry) throw new Error("La entrada no existe en el diccionario del libro activo.");
+      validateDictionaryEntry(entry, "entrada de vínculos");
+      const links = await load.call(store, projectId, entryId);
+      if (!Array.isArray(links)) throw new Error("La colección de vínculos explícitos es inválida.");
+      const ids = new Set<string>();
+      for (const link of links) {
+        validateDictionaryEntryEntityLink(link, projectId, entryId);
+        if (ids.has(link.recordId) || !entry.relatedEntityIds.includes(link.recordId)) {
+          throw new Error("El almacenamiento devolvió un vínculo duplicado o ajeno a la entrada.");
+        }
+        ids.add(link.recordId);
+      }
+      return links.map(link => structuredClone(link));
+    });
+  }
+
+  /**
+   * Enlaza o desenlaza una ficha del mismo libro. El cambio de la entrada y
+   * el registro de metadatos del vínculo se guardan atómicamente cuando el
+   * adaptador ofrece la operación transaccional.
+   */
   async setDictionaryEntryEntityLink(
     dictionaryId: string,
     entryId: string,
     entityId: string,
-    linked: boolean
+    linked: boolean,
+    details?: {
+      readonly linkKind?: string;
+      readonly provenanceKind?: string;
+      readonly createdAt?: number;
+    }
   ): Promise<DictionaryEntry> {
     if (typeof dictionaryId !== "string" || !dictionaryId.trim() ||
         typeof entryId !== "string" || !entryId.trim() ||
         typeof entityId !== "string" || !entityId.trim() ||
-        typeof linked !== "boolean") {
+        typeof linked !== "boolean" ||
+        (details !== undefined && (!details || typeof details !== "object"))) {
       throw new Error("Datos de vínculo de diccionario inválidos.");
     }
     return this.enqueueKnowledgeOperation(async () => {
@@ -2509,15 +2552,23 @@ export class HostEngineApi {
       if (!Array.isArray(entries)) throw new Error("La colección de entradas es inválida.");
       const current = entries.find(entry => entry.id === entryId);
       if (!current) throw new Error("La entrada no existe en el diccionario del libro activo.");
+      validateDictionaryEntry(current, "entrada de vínculo");
       const entities = await this.loadNarrativeEntitiesFromStore();
       const entity = entities.find(item => item.id === entityId);
       if (linked && !entity) {
         throw new Error("No se puede enlazar una ficha que no existe en el mismo libro.");
       }
+      const existingLinks = store.loadDictionaryEntryEntityLinks
+        ? await store.loadDictionaryEntryEntityLinks(projectId, entryId)
+        : [];
+      const existingLink = existingLinks.find(item => item.recordId === entityId);
       const relatedEntityIds = new Set(current.relatedEntityIds);
       if (linked) relatedEntityIds.add(entityId);
       else relatedEntityIds.delete(entityId);
-      if (relatedEntityIds.size === current.relatedEntityIds.length) {
+      if (linked && relatedEntityIds.size === current.relatedEntityIds.length && existingLink) {
+        return cloneNarrativeRecord(current);
+      }
+      if (!linked && !current.relatedEntityIds.includes(entityId) && !existingLink) {
         return cloneNarrativeRecord(current);
       }
       const updated: DictionaryEntry = {
@@ -2526,7 +2577,23 @@ export class HostEngineApi {
         updatedAt: Math.max(Date.now(), current.updatedAt)
       };
       validateDictionaryEntry(updated);
-      await store.saveDictionaryEntry(updated, current);
+      const link: DictionaryEntryEntityLink = {
+        projectId,
+        entryId,
+        recordId: entityId,
+        linkKind: details?.linkKind ?? existingLink?.linkKind ?? "RELATED",
+        provenanceKind: details?.provenanceKind ?? existingLink?.provenanceKind ?? "WRITER",
+        createdAt: details?.createdAt ?? existingLink?.createdAt ?? Date.now()
+      };
+      validateDictionaryEntryEntityLink(link, projectId, entryId);
+      const setLink = store.setDictionaryEntryEntityLink;
+      if (setLink) {
+        await setLink.call(store, updated, current, link, linked);
+      } else {
+        // Compatibilidad con adaptadores antiguos: conserva el vínculo simple,
+        // pero no anuncia metadatos por vínculo que el adaptador no persiste.
+        await store.saveDictionaryEntry(updated, current);
+      }
       return cloneNarrativeRecord(updated);
     });
   }
@@ -2930,6 +2997,7 @@ export class HostEngineApi {
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),
+      dictionaryEntryEntityMetadata: Boolean(this.store.loadDictionaryEntryEntityLinks && this.store.setDictionaryEntryEntityLink),
       externalRuntimeServices: false
     });
   }

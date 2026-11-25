@@ -1335,6 +1335,48 @@ async function loadLifecycleHistory<T extends LifecycleHistoryRecord>(
  */
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
+  private narrativeChangeChannel: BroadcastChannel | undefined;
+  private readonly narrativeChangeListeners = new Set<(projectId: string) => void>();
+
+  private ensureNarrativeChangeChannel(): BroadcastChannel | undefined {
+    if (typeof BroadcastChannel === "undefined") return undefined;
+    if (this.narrativeChangeChannel) return this.narrativeChangeChannel;
+    try {
+      const channel = new BroadcastChannel(DATABASE_NAME + ":narrative-changes:v1");
+      channel.onmessage = event => {
+        const message = event.data;
+        if (!message || typeof message !== "object" ||
+            (message as { readonly type?: unknown }).type !== "motor-literario:narrative-change") return;
+        const projectId = (message as { readonly projectId?: unknown }).projectId;
+        if (typeof projectId !== "string" || !projectId.trim()) return;
+        for (const listener of this.narrativeChangeListeners) {
+          try { listener(projectId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
+        }
+      };
+      this.narrativeChangeChannel = channel;
+      return channel;
+    } catch {
+      // Algunos perfiles privados o entornos embebidos pueden bloquear BroadcastChannel.
+      return undefined;
+    }
+  }
+
+  subscribeNarrativeChanges(listener: (projectId: string) => void): () => void {
+    if (typeof listener !== "function") throw new TypeError("Se requiere un suscriptor de cambios narrativos.");
+    if (!this.ensureNarrativeChangeChannel()) return () => undefined;
+    this.narrativeChangeListeners.add(listener);
+    return () => this.narrativeChangeListeners.delete(listener);
+  }
+
+  private publishNarrativeChange(projectId: string): void {
+    const channel = this.ensureNarrativeChangeChannel();
+    if (!channel) return;
+    try {
+      channel.postMessage({ type: "motor-literario:narrative-change", projectId });
+    } catch {
+      // La sincronización es complementaria: nunca debe invalidar una escritura ya confirmada.
+    }
+  }
 
   private open(): Promise<IDBDatabase> {
     if (typeof indexedDB === "undefined") {

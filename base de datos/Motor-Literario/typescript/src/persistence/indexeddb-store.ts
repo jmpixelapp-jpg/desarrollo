@@ -1452,6 +1452,7 @@ export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;
   private readonly narrativeChangeListeners = new Set<(projectId: string) => void>();
+  private readonly personalIdeaLibraryChangeListeners = new Set<(writerId: string) => void>();
 
   private ensureNarrativeChangeChannel(): BroadcastChannel | undefined {
     if (typeof BroadcastChannel === "undefined") return undefined;
@@ -1460,12 +1461,22 @@ export class IndexedDbProjectStore implements ProjectStore {
       const channel = new BroadcastChannel(DATABASE_NAME + ":narrative-changes:v1");
       channel.onmessage = event => {
         const message = event.data;
-        if (!message || typeof message !== "object" ||
-            (message as { readonly type?: unknown }).type !== "motor-literario:narrative-change") return;
-        const projectId = (message as { readonly projectId?: unknown }).projectId;
-        if (typeof projectId !== "string" || !projectId.trim()) return;
-        for (const listener of this.narrativeChangeListeners) {
-          try { listener(projectId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
+        if (!message || typeof message !== "object") return;
+        const type = (message as { readonly type?: unknown }).type;
+        if (type === "motor-literario:narrative-change") {
+          const projectId = (message as { readonly projectId?: unknown }).projectId;
+          if (typeof projectId !== "string" || !projectId.trim()) return;
+          for (const listener of this.narrativeChangeListeners) {
+            try { listener(projectId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
+          }
+          return;
+        }
+        if (type === "motor-literario:personal-idea-library-change") {
+          const writerId = (message as { readonly writerId?: unknown }).writerId;
+          if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256) return;
+          for (const listener of this.personalIdeaLibraryChangeListeners) {
+            try { listener(writerId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
+          }
         }
       };
       // En Node, un canal de notificaciones no debe mantener vivo el proceso.
@@ -1478,17 +1489,32 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
   }
 
+  private closeNarrativeChangeChannelWhenUnused(): void {
+    if (this.narrativeChangeListeners.size > 0 ||
+        this.personalIdeaLibraryChangeListeners.size > 0 ||
+        !this.narrativeChangeChannel) return;
+    this.narrativeChangeChannel.onmessage = null;
+    this.narrativeChangeChannel.close();
+    this.narrativeChangeChannel = undefined;
+  }
+
   subscribeNarrativeChanges(listener: (projectId: string) => void): () => void {
     if (typeof listener !== "function") throw new TypeError("Se requiere un suscriptor de cambios narrativos.");
     if (!this.ensureNarrativeChangeChannel()) return () => undefined;
     this.narrativeChangeListeners.add(listener);
     return () => {
       this.narrativeChangeListeners.delete(listener);
-      if (this.narrativeChangeListeners.size === 0 && this.narrativeChangeChannel) {
-        this.narrativeChangeChannel.onmessage = null;
-        this.narrativeChangeChannel.close();
-        this.narrativeChangeChannel = undefined;
-      }
+      this.closeNarrativeChangeChannelWhenUnused();
+    };
+  }
+
+  subscribePersonalIdeaLibraryChanges(listener: (writerId: string) => void): () => void {
+    if (typeof listener !== "function") throw new TypeError("Se requiere un suscriptor de cambios de biblioteca.");
+    if (!this.ensureNarrativeChangeChannel()) return () => undefined;
+    this.personalIdeaLibraryChangeListeners.add(listener);
+    return () => {
+      this.personalIdeaLibraryChangeListeners.delete(listener);
+      this.closeNarrativeChangeChannelWhenUnused();
     };
   }
 
@@ -1501,6 +1527,16 @@ export class IndexedDbProjectStore implements ProjectStore {
       channel.postMessage({ type: "motor-literario:narrative-change", projectId });
     } catch {
       // La sincronización es complementaria: nunca debe invalidar una escritura ya confirmada.
+    }
+  }
+
+  private publishPersonalIdeaLibraryChange(writerId: string): void {
+    const channel = this.ensureNarrativeChangeChannel();
+    if (!channel) return;
+    try {
+      channel.postMessage({ type: "motor-literario:personal-idea-library-change", writerId });
+    } catch {
+      // La notificación es complementaria y no debe invalidar una transferencia ya confirmada.
     }
   }
 
@@ -3817,7 +3853,10 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.oncomplete = () => {
         if (!finished) {
           finished = true;
-          if (didChange) this.publishNarrativeChange(projectId);
+          if (didChange) {
+            this.publishNarrativeChange(projectId);
+            this.publishPersonalIdeaLibraryChange(writerId);
+          }
           resolve(archived);
         }
       };
@@ -4558,6 +4597,9 @@ export class IndexedDbProjectStore implements ProjectStore {
       });
       transaction.oncomplete = () => {
         this.publishNarrativeChange(projectId);
+        if (writerId && results[5].length > 0) {
+          this.publishPersonalIdeaLibraryChange(writerId);
+        }
         resolve();
       };
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo consolidar la identidad narrativa."));

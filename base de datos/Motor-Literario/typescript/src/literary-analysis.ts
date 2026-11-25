@@ -726,6 +726,9 @@ export interface LiteraryIdeaGraphNode {
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
   readonly omittedStatusHistoryCount: number;
   readonly writerDecisionCount: number;
+  /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
+  readonly activeEvidenceCount: number;
+  readonly staleEvidenceCount: number;
   /** Entradas desde ideas incluidas en el snapshot actual. */
   readonly incomingReferenceCount: number;
   /** Salidas cuyo destino también está incluido en el snapshot actual. */
@@ -762,6 +765,11 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly omittedStatusHistoryCount: number;
   /** Transiciones explícitas registradas por el escritor. */
   readonly writerDecisionCount: number;
+  readonly activeEvidenceCount: number;
+  readonly staleEvidenceCount: number;
+  readonly ideasWithActiveEvidenceCount: number;
+  readonly ideasWithStaleEvidenceCount: number;
+  readonly ideasWithoutActiveEvidenceCount: number;
 }
 export interface LiteraryIdeaGraphAnalysis {
   readonly ideaCount: number;
@@ -3253,7 +3261,9 @@ function buildLiteraryIdeaGraph(
     notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0,
     statusHistory: idea.statusHistory,
     omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
-    writerDecisionCount: idea.writerDecisionCount
+    writerDecisionCount: idea.writerDecisionCount,
+    activeEvidenceCount: idea.evidenceCount,
+    staleEvidenceCount: idea.staleEvidenceCount
   }));
 
   // Tarjan: detecta componentes cíclicos en O(V + E), sin atribuir causalidad
@@ -3389,7 +3399,22 @@ function buildLiteraryIdeaGraph(
       ),
       writerDecisionCount: matchingNodes.reduce(
         (total, node) => total + node.writerDecisionCount, 0
-      )
+      ),
+      activeEvidenceCount: matchingNodes.reduce(
+        (total, node) => total + node.activeEvidenceCount, 0
+      ),
+      staleEvidenceCount: matchingNodes.reduce(
+        (total, node) => total + node.staleEvidenceCount, 0
+      ),
+      ideasWithActiveEvidenceCount: matchingNodes.filter(
+        node => node.activeEvidenceCount > 0
+      ).length,
+      ideasWithStaleEvidenceCount: matchingNodes.filter(
+        node => node.staleEvidenceCount > 0
+      ).length,
+      ideasWithoutActiveEvidenceCount: matchingNodes.filter(
+        node => node.activeEvidenceCount === 0
+      ).length
     };
   });
 

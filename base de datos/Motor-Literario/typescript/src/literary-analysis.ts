@@ -712,6 +712,13 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
 export interface LiteraryIdeaGraphNode {
   readonly ideaId: string;
   readonly status: NarrativeIdea["status"];
+  /** Historial visible de estados; puede estar acotado por omittedStatusHistoryCount. */
+  readonly statusHistory: readonly NarrativeIdeaStatusChange[];
+  readonly omittedStatusHistoryCount: number;
+  readonly writerDecisionCount: number;
+  /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
+  readonly activeEvidenceCount: number;
+  readonly staleEvidenceCount: number;
   /** Entradas desde ideas incluidas en el snapshot actual. */
   readonly incomingReferenceCount: number;
   /** Salidas cuyo destino también está incluido en el snapshot actual. */
@@ -743,6 +750,16 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly incomingReferenceCount: number;
   readonly includedOutgoingReferenceCount: number;
   readonly notIncludedOutgoingReferenceCount: number;
+  /** Registros visibles del historial, incluido el estado inicial cuando está disponible. */
+  readonly statusHistoryRecordCount: number;
+  readonly omittedStatusHistoryCount: number;
+  /** Transiciones explícitas registradas por el escritor. */
+  readonly writerDecisionCount: number;
+  readonly activeEvidenceCount: number;
+  readonly staleEvidenceCount: number;
+  readonly ideasWithActiveEvidenceCount: number;
+  readonly ideasWithStaleEvidenceCount: number;
+  readonly ideasWithoutActiveEvidenceCount: number;
 }
 export interface LiteraryIdeaGraphAnalysis {
   readonly ideaCount: number;
@@ -752,6 +769,8 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly referenceCount: number;
   readonly includedReferenceCount: number;
   readonly notIncludedReferenceCount: number;
+  /** Pares de ideas que se enlazan mutuamente de forma explícita. */
+  readonly reciprocalReferencePairCount: number;
   /** Nodos sin referencias entrantes desde el snapshot; no contempla fuentes omitidas. */
   readonly sourceNodeCount: number;
   /** Nodos sin salidas hacia otros nodos incluidos; pueden conservar salidas externas. */
@@ -3231,7 +3250,12 @@ function buildLiteraryIdeaGraph(
     status: idea.status,
     incomingReferenceCount: incoming.get(idea.ideaId) ?? 0,
     includedOutgoingReferenceCount: adjacency.get(idea.ideaId)!.length,
-    notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0
+    notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0,
+    statusHistory: idea.statusHistory,
+    omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
+    writerDecisionCount: idea.writerDecisionCount,
+    activeEvidenceCount: idea.evidenceCount,
+    staleEvidenceCount: idea.staleEvidenceCount
   }));
 
   // Tarjan: detecta componentes cíclicos en O(V + E), sin atribuir causalidad
@@ -3325,6 +3349,20 @@ function buildLiteraryIdeaGraph(
     left.representativeIdeaId.localeCompare(right.representativeIdeaId, "en")
   );
 
+  const directedTargets = new Map<string, Set<string>>();
+  for (const idea of orderedIdeas) {
+    directedTargets.set(idea.ideaId, new Set(adjacency.get(idea.ideaId) ?? []));
+  }
+  let reciprocalReferencePairCount = 0;
+  for (const idea of orderedIdeas) {
+    for (const targetId of adjacency.get(idea.ideaId) ?? []) {
+      if (idea.ideaId.localeCompare(targetId, "en") < 0 &&
+          directedTargets.get(targetId)?.has(idea.ideaId)) {
+        reciprocalReferencePairCount++;
+      }
+    }
+  }
+
   const sourceNodeCount = nodes.filter(node => node.incomingReferenceCount === 0).length;
   const terminalWithinSnapshotNodeCount = nodes.filter(
     node => node.includedOutgoingReferenceCount === 0
@@ -3358,7 +3396,31 @@ function buildLiteraryIdeaGraph(
       ),
       notIncludedOutgoingReferenceCount: matchingNodes.reduce(
         (total, node) => total + node.notIncludedOutgoingReferenceCount, 0
-      )
+      ),
+      statusHistoryRecordCount: matchingNodes.reduce(
+        (total, node) => total + node.statusHistory.length, 0
+      ),
+      omittedStatusHistoryCount: matchingNodes.reduce(
+        (total, node) => total + node.omittedStatusHistoryCount, 0
+      ),
+      writerDecisionCount: matchingNodes.reduce(
+        (total, node) => total + node.writerDecisionCount, 0
+      ),
+      activeEvidenceCount: matchingNodes.reduce(
+        (total, node) => total + node.activeEvidenceCount, 0
+      ),
+      staleEvidenceCount: matchingNodes.reduce(
+        (total, node) => total + node.staleEvidenceCount, 0
+      ),
+      ideasWithActiveEvidenceCount: matchingNodes.filter(
+        node => node.activeEvidenceCount > 0
+      ).length,
+      ideasWithStaleEvidenceCount: matchingNodes.filter(
+        node => node.staleEvidenceCount > 0
+      ).length,
+      ideasWithoutActiveEvidenceCount: matchingNodes.filter(
+        node => node.activeEvidenceCount === 0
+      ).length
     };
   });
 
@@ -3369,6 +3431,7 @@ function buildLiteraryIdeaGraph(
     referenceCount,
     includedReferenceCount,
     notIncludedReferenceCount,
+    reciprocalReferencePairCount,
     sourceNodeCount,
     terminalWithinSnapshotNodeCount,
     isolatedWithinSnapshotNodeCount,

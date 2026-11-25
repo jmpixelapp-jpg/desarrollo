@@ -4987,6 +4987,7 @@ function isValidNarrativeIdeaStatusHistory(
     if (!change ||
         !["IDEA","incorporated","discarded"].includes(change.status) ||
         !["initial","writer","text-revised"].includes(change.reason) ||
+        (change.reason === "text-revised" && change.status !== "IDEA") ||
         (index === 0
           ? omittedStatusHistoryCount === 0
             ? change.reason !== "initial"

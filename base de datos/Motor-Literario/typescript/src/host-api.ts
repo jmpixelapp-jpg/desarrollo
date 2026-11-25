@@ -3586,12 +3586,16 @@ export class HostEngineApi {
             receipt.archiveChecksum !== checksumForPersonalIdeaIdsInReceiptOrder(ids))) {
         throw new Error("Integridad de biblioteca: los IDs del recibo no están ordenados o su checksum no coincide.");
       }
-      if (receipt.archiveContentChecksum !== undefined) {
-        const loadByKeys = this.store.loadPersonalIdeasByKeys;
-        if (!loadByKeys) {
-          throw new Error("Integridad de biblioteca: el adaptador no permite verificar el contenido del recibo.");
-        }
-        const contentChecksum = createPersonalIdeaArchiveChecksumBuilder();
+      const loadByKeys = this.store.loadPersonalIdeasByKeys;
+      if (receipt.archiveContentChecksum !== undefined && !loadByKeys) {
+        throw new Error("Integridad de biblioteca: el adaptador no permite verificar el contenido del recibo.");
+      }
+      if (loadByKeys) {
+        // También los recibos legacy deben demostrar que todos sus IDs siguen
+        // presentes; el checksum de contenido se compara cuando el formato lo trae.
+        const contentChecksum = receipt.archiveContentChecksum !== undefined
+          ? createPersonalIdeaArchiveChecksumBuilder()
+          : undefined;
         for (let offset = 0; offset < ids.length; offset += 128) {
           const batchIds = ids.slice(offset, offset + 128);
           const references = batchIds.map(ideaId => ({
@@ -3616,10 +3620,11 @@ export class HostEngineApi {
                 entry.category !== receipt.sourceProjectName) {
               throw new Error("Integridad de biblioteca: una entrada no coincide con la procedencia del recibo.");
             }
-            contentChecksum.add(entry);
+            contentChecksum?.add(entry);
           }
         }
-        if (contentChecksum.digest() !== receipt.archiveContentChecksum) {
+        if (contentChecksum &&
+            contentChecksum.digest() !== receipt.archiveContentChecksum) {
           throw new Error("Integridad de biblioteca: el contenido archivado no coincide con el checksum del recibo.");
         }
       }

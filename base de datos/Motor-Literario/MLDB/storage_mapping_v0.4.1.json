@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 6,
+  "mapping_version": 7,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 18,
+    "database_version": 19,
     "object_stores": [
       {
         "name": "project-settings",
@@ -171,6 +171,83 @@
           [
             "by-project",
             "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "project-records",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-type",
+            [
+              "projectId",
+              "recordType"
+            ],
+            false
+          ],
+          [
+            "by-project-name",
+            [
+              "projectId",
+              "primaryName"
+            ],
+            false
+          ],
+          [
+            "by-project-label-state",
+            [
+              "projectId",
+              "label",
+              "state"
+            ],
+            false
+          ],
+          [
+            "by-project-updated",
+            [
+              "projectId",
+              "updatedAt"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "record-names",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-record",
+            [
+              "projectId",
+              "recordId"
+            ],
+            false
+          ],
+          [
+            "by-name",
+            [
+              "projectId",
+              "name"
+            ],
             false
           ]
         ]
@@ -650,13 +727,13 @@
         "project"
       ],
       "keyPrefixes": [
-        "project/narrative-entities/"
+        "project/records/"
       ],
       "representation": "record",
-      "contract": "NarrativeEntity en narrative-entities; cobertura actual character/place/object, no todos los tipos dinámicos del esquema.",
-      "implementationStatus": "partial",
+      "contract": "ProjectRecord genérico con recordType abierto, primaryName opcional y control optimista de currentVersion; nombres separados en record-names.",
+      "implementationStatus": "implemented",
       "objectStores": [
-        "narrative-entities"
+        "project-records"
       ],
       "keyPath": [
         [
@@ -672,13 +749,19 @@
         "project"
       ],
       "keyPrefixes": [
-        "project/narrative-entities/names/"
+        "project/record-names/"
       ],
       "representation": "embedded",
-      "contract": "NarrativeEntity.canonicalName + NarrativeEntity.aliases.",
+      "contract": "RecordName separado, ligado a una ficha del mismo proyecto; admite nombre principal, alias, títulos y nombres anteriores.",
       "implementationStatus": "implemented",
       "objectStores": [
-        "narrative-entities"
+        "record-names"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
       ]
     },
     {

@@ -446,6 +446,30 @@ test("reconcilia dos altas concurrentes del mismo vínculo como una sola asociac
   api.dispose();
 });
 
+test("serializa vínculos y decisiones editoriales simultáneas en una misma instancia", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-target-a"), idea("idea-target-b")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  const [linkedA, updatedStatus, linkedB] = await Promise.all([
+    api.setNarrativeIdeaLink("idea-source", "idea-target-a", true),
+    api.setNarrativeIdeaStatus("idea-source", "incorporated"),
+    api.setNarrativeIdeaLink("idea-source", "idea-target-b", true)
+  ]);
+
+  const persisted = store.ideas.get(projectId + ":idea-source");
+  assert.deepEqual(persisted.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+  assert.equal(persisted.status, "incorporated");
+  assert.equal(persisted.statusHistory.at(-1).reason, "writer");
+  assert.deepEqual(linkedA.relatedIdeaIds, ["idea-target-a"]);
+  assert.equal(updatedStatus.status, "incorporated");
+  assert.deepEqual(linkedB.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+  assert.equal(store.writes, 3);
+  api.dispose();
+});
+
 test("mantiene el límite de 500 vínculos por categoría antes de persistir", async () => {
   const relatedIdeaIds = Array.from({ length: 500 }, (_, index) =>
     "idea-related-" + String(index).padStart(3, "0")

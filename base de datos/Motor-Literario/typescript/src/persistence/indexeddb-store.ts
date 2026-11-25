@@ -2155,7 +2155,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         else resolve(result ? structuredClone(result) : undefined);
       };
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudieron leer los diagnósticos."));
-      transaction.onabort = () => reject(transaction.error ?? validationError ?? new Error("Se canceló la lectura de diagnósticos."));
+      transaction.onabort = () => reject(validationError ?? transaction.error ?? new Error("Se canceló la lectura de diagnósticos."));
     });
   }
 
@@ -2194,7 +2194,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       };
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo leer el documento."));
       transaction.onabort = () => reject(
-        transaction.error ?? new Error("Se canceló la lectura consistente del documento.")
+        validationError ?? transaction.error ?? new Error("Se canceló la lectura consistente del documento.")
       );
     });
   }

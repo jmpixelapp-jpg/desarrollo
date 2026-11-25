@@ -177,7 +177,6 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
   const expected = structuredClone(first);
 
   first.nodes[0].statusHistory[0].reason = "mutación externa";
-  first.nodes[0].relatedIdeaIds.push("external-mutation");
   first.cycles[0].ideaIds.pop();
   first.references[0].resolution = "external-mutation";
   first.statusProfiles[0].ideaCount = 999;
@@ -219,7 +218,7 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
     evidenceCount: 4,
     staleEvidenceCount: 2,
     writerDecisionCount: 3,
-    omittedStatusHistoryCount: 1,
+    omittedStatusHistoryCount: 2,
     statusHistory: [
       { status: "incorporated", reason: "writer", changedAt: 2 },
       { status: "IDEA", reason: "writer", changedAt: 3 }

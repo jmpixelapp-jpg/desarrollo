@@ -534,12 +534,20 @@ async function processRequest(request) {
 
 async function closeGracefully() {
   if (!store || store.closed) return;
+  // La entrada STDIN también puede terminar por EOF o por una línea excesiva.
+  // En ambos casos no se cierra SQLite mientras quede una petición aceptada.
+  shuttingDown = true;
+  await Promise.allSettled([...inFlight]);
+  await Promise.allSettled([...activeDispatches]);
+  if (!store || store.closed) return;
   try { await drainKnowledgeSync(); } catch (error) { writeError(error); }
   try { await flushAll(); } catch (error) { writeError(error); }
   for (const record of projects.values()) record.api.dispose();
   projects.clear();
   lastNarrativeVersions.clear();
   pendingNarrativeSyncs.clear();
+  pendingWriterLibrarySyncs.clear();
+  lastWriterLibraryVersions.clear();
   try { store.close(); } catch (error) { writeError(error); }
 }
 

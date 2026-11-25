@@ -6,6 +6,16 @@ import { LiteraryEngine } from "./engine";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput } from "./dictionaries";
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
 import type {
+  ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
+  ImportAuthorization, SchemaMigration
+} from "./mldb-records";
+import {
+  validateManuscriptFragment, validateRecordAttribute, validateRelationAttribute,
+  validateActiveSuggestion, validateImportAuthorization, validateSchemaMigration,
+  cloneManuscriptFragment, cloneRecordAttribute, cloneRelationAttribute,
+  cloneActiveSuggestion, cloneImportAuthorization, cloneSchemaMigration
+} from "./mldb-records";
+import type {
   ProjectSetting, ProjectSettingSource, ProjectJsonValue,
   LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle
 } from "./project-data";
@@ -1738,6 +1748,244 @@ export class HostEngineApi {
     });
   }
 
+  async getManuscriptFragments(documentId?: string): Promise<readonly ManuscriptFragment[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadManuscriptFragments;
+      if (!load) throw new Error("El adaptador no admite fragmentos de manuscrito.");
+      const fragments = await load.call(this.store, projectId, documentId);
+      if (!Array.isArray(fragments)) throw new Error("El almacenamiento devolvió fragmentos inválidos.");
+      const ids = new Set<string>();
+      for (const fragment of fragments) {
+        validateManuscriptFragment(fragment, projectId);
+        if (ids.has(fragment.id)) throw new Error("Hay IDs de fragmentos duplicados.");
+        ids.add(fragment.id);
+      }
+      return fragments.map(cloneManuscriptFragment);
+    });
+  }
+
+  async saveManuscriptFragment(
+    input: Omit<ManuscriptFragment, "projectId">
+  ): Promise<ManuscriptFragment> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadManuscriptFragments;
+      const save = this.store.saveManuscriptFragment;
+      if (!load || !save) throw new Error("El adaptador no admite fragmentos de manuscrito.");
+      const fragments = await load.call(this.store, projectId);
+      if (!Array.isArray(fragments)) throw new Error("La colección de fragmentos es inválida.");
+      const byId = new Map<string, ManuscriptFragment>();
+      for (const fragment of fragments) {
+        validateManuscriptFragment(fragment, projectId);
+        if (byId.has(fragment.id)) throw new Error("Hay IDs de fragmentos duplicados.");
+        byId.set(fragment.id, fragment);
+      }
+      const candidate: ManuscriptFragment = { ...input, projectId };
+      validateManuscriptFragment(candidate, projectId);
+      if (candidate.parentFragmentId && !byId.has(candidate.parentFragmentId)) {
+        throw new Error("El fragmento padre no existe en el proyecto activo.");
+      }
+      if (candidate.parentFragmentId) {
+        const parent = byId.get(candidate.parentFragmentId)!;
+        if ((parent.documentId ?? null) !== (candidate.documentId ?? null)) {
+          throw new Error("El fragmento padre pertenece a otro documento.");
+        }
+      }
+      await save.call(this.store, cloneManuscriptFragment(candidate), byId.get(candidate.id));
+      return cloneManuscriptFragment(candidate);
+    });
+  }
+
+  async getRecordAttributes(recordId: string): Promise<readonly RecordAttribute[]> {
+    if (typeof recordId !== "string" || !recordId.trim()) throw new Error("Identificador de ficha inválido.");
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadRecordAttributes;
+      if (!load) throw new Error("El adaptador no admite atributos genéricos de fichas.");
+      const records = await load.call(this.store, projectId, recordId);
+      if (!Array.isArray(records)) throw new Error("La colección de atributos de ficha es inválida.");
+      for (const item of records) {
+        validateRecordAttribute(item, projectId);
+        if (item.recordId !== recordId) throw new Error("Un atributo pertenece a otra ficha.");
+      }
+      return records.map(cloneRecordAttribute);
+    });
+  }
+
+  async saveRecordAttribute(
+    input: Omit<RecordAttribute, "projectId">
+  ): Promise<RecordAttribute> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadRecordAttributes;
+      const save = this.store.saveRecordAttribute;
+      if (!load || !save) throw new Error("El adaptador no admite atributos genéricos de fichas.");
+      const records = await load.call(this.store, projectId, input.recordId);
+      if (!Array.isArray(records)) throw new Error("La colección de atributos de ficha es inválida.");
+      const current = records.find(item => item.id === input.id);
+      const candidate: RecordAttribute = { ...input, projectId };
+      validateRecordAttribute(candidate, projectId);
+      await save.call(this.store, cloneRecordAttribute(candidate), current);
+      return cloneRecordAttribute(candidate);
+    });
+  }
+
+  async getRelationAttributes(relationId: string): Promise<readonly RelationAttribute[]> {
+    if (typeof relationId !== "string" || !relationId.trim()) throw new Error("Identificador de relación inválido.");
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadRelationAttributes;
+      if (!load) throw new Error("El adaptador no admite atributos genéricos de relaciones.");
+      const records = await load.call(this.store, projectId, relationId);
+      if (!Array.isArray(records)) throw new Error("La colección de atributos de relación es inválida.");
+      for (const item of records) {
+        validateRelationAttribute(item, projectId);
+        if (item.relationId !== relationId) throw new Error("Un atributo pertenece a otra relación.");
+      }
+      return records.map(cloneRelationAttribute);
+    });
+  }
+
+  async saveRelationAttribute(
+    input: Omit<RelationAttribute, "projectId">
+  ): Promise<RelationAttribute> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadRelationAttributes;
+      const save = this.store.saveRelationAttribute;
+      if (!load || !save) throw new Error("El adaptador no admite atributos genéricos de relaciones.");
+      const records = await load.call(this.store, projectId, input.relationId);
+      if (!Array.isArray(records)) throw new Error("La colección de atributos de relación es inválida.");
+      const current = records.find(item => item.id === input.id);
+      const candidate: RelationAttribute = { ...input, projectId };
+      validateRelationAttribute(candidate, projectId);
+      await save.call(this.store, cloneRelationAttribute(candidate), current);
+      return cloneRelationAttribute(candidate);
+    });
+  }
+
+  async getActiveSuggestions(
+    documentId?: string,
+    status?: ActiveSuggestion["status"]
+  ): Promise<readonly ActiveSuggestion[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadActiveSuggestions;
+      if (!load) throw new Error("El adaptador no admite sugerencias activas.");
+      const records = await load.call(this.store, projectId, documentId, status);
+      if (!Array.isArray(records)) throw new Error("La colección de sugerencias es inválida.");
+      const ids = new Set<string>();
+      for (const item of records) {
+        validateActiveSuggestion(item, projectId);
+        if (ids.has(item.id)) throw new Error("Hay IDs de sugerencias duplicados.");
+        if (documentId !== undefined && item.documentId !== documentId) {
+          throw new Error("El almacenamiento devolvió una sugerencia de otro documento.");
+        }
+        if (status !== undefined && item.status !== status) {
+          throw new Error("El almacenamiento devolvió una sugerencia con otro estado.");
+        }
+        ids.add(item.id);
+      }
+      return records.map(cloneActiveSuggestion);
+    });
+  }
+
+  async saveActiveSuggestion(
+    input: Omit<ActiveSuggestion, "projectId">
+  ): Promise<ActiveSuggestion> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadActiveSuggestions;
+      const save = this.store.saveActiveSuggestion;
+      if (!load || !save) throw new Error("El adaptador no admite sugerencias activas.");
+      const records = await load.call(this.store, projectId);
+      if (!Array.isArray(records)) throw new Error("La colección de sugerencias es inválida.");
+      const current = records.find(item => item.id === input.id);
+      const candidate: ActiveSuggestion = { ...input, projectId };
+      validateActiveSuggestion(candidate, projectId);
+      await save.call(this.store, cloneActiveSuggestion(candidate), current);
+      return cloneActiveSuggestion(candidate);
+    });
+  }
+
+  async getImportAuthorizations(): Promise<readonly ImportAuthorization[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const writerId = this.requireWriterId();
+      const load = this.store.loadImportAuthorizations;
+      if (!load) throw new Error("El adaptador no admite autorizaciones de importación.");
+      const records = await load.call(this.store, writerId);
+      if (!Array.isArray(records)) throw new Error("La colección de autorizaciones es inválida.");
+      const ids = new Set<string>();
+      for (const item of records) {
+        validateImportAuthorization(item, writerId);
+        const key = JSON.stringify([item.sourceProjectId, item.targetProjectId, item.authorizationId]);
+        if (ids.has(key)) throw new Error("Hay autorizaciones duplicadas para el mismo escritor y par de proyectos.");
+        ids.add(key);
+      }
+      return records.map(cloneImportAuthorization);
+    });
+  }
+
+  /** El anfitrión debe proporcionar ambas identidades verificadas por su sesión de escritor. */
+  async authorizeImportBetweenProjects(
+    sourceProject: ProjectIdentity,
+    targetProject: ProjectIdentity,
+    authorizationId: string,
+    scope: ProjectJsonValue,
+    authorizedAt = Date.now()
+  ): Promise<ImportAuthorization> {
+    const writerId = this.requireWriterId();
+    const activeProjectId = this.requireProject().projectId;
+    if (!sourceProject || !targetProject ||
+        typeof sourceProject.projectId !== "string" || !sourceProject.projectId.trim() ||
+        typeof targetProject.projectId !== "string" || !targetProject.projectId.trim() ||
+        sourceProject.projectId === targetProject.projectId ||
+        sourceProject.writerId !== writerId || targetProject.writerId !== writerId ||
+        (activeProjectId !== sourceProject.projectId && activeProjectId !== targetProject.projectId)) {
+      throw new Error("Las dos identidades de proyecto deben estar verificadas para el mismo escritor autenticado.");
+    }
+    return this.enqueueKnowledgeOperation(async () => {
+      const append = this.store.appendImportAuthorization;
+      const load = this.store.loadImportAuthorizations;
+      if (!append || !load) throw new Error("El adaptador no admite autorizaciones de importación.");
+      const existing = await load.call(this.store, writerId);
+      if (!Array.isArray(existing)) throw new Error("La colección de autorizaciones es inválida.");
+      if (existing.some(item => item.authorizationId === authorizationId &&
+          item.sourceProjectId === sourceProject.projectId &&
+          item.targetProjectId === targetProject.projectId)) {
+        throw new Error("Esta autorización de importación ya existe; no se reemplaza.");
+      }
+      const authorization: ImportAuthorization = {
+        authorizationId, writerId,
+        sourceProjectId: sourceProject.projectId,
+        targetProjectId: targetProject.projectId,
+        authorizedBy: "WRITER",
+        scope,
+        authorizedAt
+      };
+      validateImportAuthorization(authorization, writerId);
+      await append.call(this.store, cloneImportAuthorization(authorization));
+      return cloneImportAuthorization(authorization);
+    });
+  }
+
+  async getSchemaMigrations(): Promise<readonly SchemaMigration[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadSchemaMigrations;
+      if (!load) throw new Error("El adaptador no conserva historial de migraciones.");
+      const records = await load.call(this.store);
+      if (!Array.isArray(records)) throw new Error("El historial de migraciones es inválido.");
+      const ids = new Set<string>();
+      for (const item of records) {
+        validateSchemaMigration(item);
+        if (ids.has(item.migrationId)) throw new Error("Hay IDs duplicados de migraciones.");
+        ids.add(item.migrationId);
+      }
+      return records.map(cloneSchemaMigration);
+    });
+  }
+
   async getStyleProfiles(): Promise<readonly StyleProfile[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
@@ -2399,6 +2647,12 @@ export class HostEngineApi {
       timelineTracks: Boolean(this.store.saveTimelineTrack && this.store.loadTimelineTracks),
       recordLifecycleHistory: Boolean(this.store.appendRecordLifecycle && this.store.loadRecordLifecycles),
       relationLifecycleHistory: Boolean(this.store.appendRelationLifecycle && this.store.loadRelationLifecycles),
+      manuscriptFragments: Boolean(this.store.saveManuscriptFragment && this.store.loadManuscriptFragments),
+      recordAttributes: Boolean(this.store.saveRecordAttribute && this.store.loadRecordAttributes),
+      relationAttributes: Boolean(this.store.saveRelationAttribute && this.store.loadRelationAttributes),
+      activeSuggestions: Boolean(this.store.saveActiveSuggestion && this.store.loadActiveSuggestions),
+      importAuthorizations: Boolean(this.store.appendImportAuthorization && this.store.loadImportAuthorizations),
+      schemaMigrationHistory: Boolean(this.store.loadSchemaMigrations),
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),

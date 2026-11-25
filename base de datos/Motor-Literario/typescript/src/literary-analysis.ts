@@ -897,7 +897,8 @@ function findSceneCharacterMentions(
   text: string,
   contentRange: LocalRange,
   baseOffset: number,
-  characters: readonly LiteraryAnalysisKnownCharacter[]
+  characters: readonly LiteraryAnalysisKnownCharacter[],
+  resultLimit = 40
 ): LiterarySceneCharacterMention[] {
   const nameOwners = new Map<string, Array<{
     readonly entityId: string;
@@ -964,7 +965,7 @@ function findSceneCharacterMentions(
   }
   return [...grouped.values()]
     .sort((a,b) => (a.occurrences[0]?.start ?? 0)-(b.occurrences[0]?.start ?? 0))
-    .slice(0,40)
+    .slice(0,resultLimit)
     .map(group => ({
       entityId:group.entityId,
       canonicalName:group.canonicalName,
@@ -1272,11 +1273,12 @@ function analyzeExplicitScenes(
       end:scene.contentRange.start+range.end
     }));
     const sceneSentenceWordCounts = countTokensPerRange(tokens,sceneSentenceRanges);
-    const characterMentions = findSceneCharacterMentions(
-      text,scene.contentRange,baseOffset,knownCharacters
+    const allCharacterMentions = findSceneCharacterMentions(
+      text,scene.contentRange,baseOffset,knownCharacters,knownCharacters.length
     );
+    const characterMentions = allCharacterMentions.slice(0,40);
     const eventLinkResult = findSceneEventLinks(
-      scene.contentRange,baseOffset,documentId,revision,characterMentions,knownEvents
+      scene.contentRange,baseOffset,documentId,revision,allCharacterMentions,knownEvents
     );
     return ({
     sceneIndex:index+1,

@@ -2688,6 +2688,7 @@ export class HostEngineApi {
    * No borra datos; las siguientes consultas vuelven a leer el estado durable.
    */
   async refreshNarrativeKnowledge(): Promise<void> {
+    this.requireProject();
     await this.liveAnalysisTail;
     await this.flushPendingChanges();
     await this.enqueueKnowledgeOperation(async () => {

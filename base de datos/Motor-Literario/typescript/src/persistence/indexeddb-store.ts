@@ -1090,7 +1090,14 @@ async function loadLifecycleHistory<T extends LifecycleHistoryRecord>(
     transaction.oncomplete = () => {
       if (failure) reject(failure);
       else if (!historyReady || !parentReady) reject(new Error(`La lectura del historial de ${label} quedó incompleta.`));
-      else resolve(validateLifecycleSequence(records, label).map(item => clone(item)));
+      else {
+        try {
+          const ordered = validateLifecycleSequence(records, label);
+          resolve(ordered.map(item => clone(item)));
+        } catch (error) {
+          reject(error);
+        }
+      }
     };
     transaction.onerror = () => reject(
       failure ?? transaction.error ?? new Error(`No se pudo leer el historial de ${label}.`)

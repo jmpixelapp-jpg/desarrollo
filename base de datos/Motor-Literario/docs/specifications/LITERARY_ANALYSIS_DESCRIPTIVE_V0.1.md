@@ -65,6 +65,19 @@ La coincidencia es ortográfica tras normalización Unicode NFKC y conversión a
 La API anfitriona entrega al analizador las fichas de personajes del proyecto activo (nombre canónico y alias). En cada escena explícita se localizan coincidencias literales completas, sin distinguir mayúsculas y minúsculas, y se devuelven los IDs de identidad, variantes de nombre y offsets UTF-16. Se exige identidad única del nombre o alias: si dos personajes reclaman la misma forma, esa coincidencia se omite en vez de asignarse por conjetura. El análisis no usa pronombres para atribuir presencia ni interpreta mención como participación, diálogo o focalización. El catálogo acepta hasta 500 fichas por análisis, hasta 40 personajes por escena y hasta 20 ocurrencias por personaje.
 
 
+## Evidencia de personajes a lo largo de escenas
+
+La propiedad `characterSceneEvidence` construye una serie por personaje y escena explícita a partir de dos fuentes independientes:
+
+- **Mención nominal:** coincidencia literal no ambigua con el nombre canónico o un alias conocido del proyecto dentro del contenido de la escena.
+- **Participación documentada:** el ID del personaje figura como participante declarado de un acontecimiento cuya evidencia vigente pertenece al mismo documento y revisión y se solapa con el rango de esa escena.
+
+Cada instantánea conserva ambos estados por separado, los conteos de menciones, los IDs de acontecimientos enlazados y el número de rangos de evidencia coincidentes. El perfil agregado informa escenas con mención, escenas con participación documentada, primera y última escena observadas y cobertura de evidencia por acontecimiento. Una escena puede contener mención sin participación documentada, participación documentada sin mención nominal, ambas o ninguna.
+
+La ausencia de una mención no prueba que el personaje esté ausente. La ausencia de un vínculo de participación significa únicamente que no se encontró una asociación en la evidencia disponible para ese documento y revisión; no demuestra que el personaje no intervino. El vínculo de participante tampoco demuestra presencia física, acción individual, causalidad, diálogo ni transformación psicológica. El perfil describe cobertura documental; no genera automáticamente un arco de personaje ni un juicio sobre su evolución.
+
+Los estados `unknown-due-to-mention-truncation` y `unknown-due-to-event-truncation` se usan cuando los límites de cuarenta menciones expuestas por escena o cien vínculos de acontecimientos impiden concluir que no hay evidencia. `sourceTruncatedSceneIndexes` identifica esas escenas. Los perfiles se limitan a cien y priorizan escenas con participación documentada, después cobertura nominal, frecuencia e ID estable.
+
 ## Señales gramaticales por escena
 
 Cada escena explícita incluye `voiceSignals`, calculado sobre sus tokens y fuera de los rangos de diálogo reconocidos. Devuelve conteos de pronombres explícitos de primera, segunda y tercera persona, una clasificación descriptiva y hasta 40 muestras con offsets UTF-16 absolutos. La clasificación es `undetermined` cuando no hay señales, y `mixed-signals` cuando aparecen varias categorías.

@@ -276,6 +276,50 @@ test("permite limpiar el vínculo a una ficha eliminada durante un conflicto CAS
   api.dispose();
 });
 
+test("rechaza auto-vínculos sin intentar leer ni escribir el catálogo", async () => {
+  const store = new RacingStore([idea("idea-source")]);
+  const api = createApi(store);
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-source", true),
+    /Datos de relación entre ideas inválidos/
+  );
+  assert.equal(store.writes, 0);
+  assert.equal(store.entityReads, 0);
+  api.dispose();
+});
+
+test("las altas y bajas repetidas de un vínculo son idempotentes y no escriben", async () => {
+  const store = new RacingStore([
+    idea("idea-source", { relatedIdeaIds: ["idea-target"] }),
+    idea("idea-target")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  const alreadyLinked = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target", true
+  );
+  assert.deepEqual(alreadyLinked.relatedIdeaIds, ["idea-target"]);
+  alreadyLinked.relatedIdeaIds.push("external-mutation");
+
+  const stillLinked = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target", true
+  );
+  assert.deepEqual(stillLinked.relatedIdeaIds, ["idea-target"]);
+
+  const alreadyUnlinked = await api.setNarrativeIdeaLink(
+    "idea-source", "missing-target", false
+  );
+  assert.deepEqual(alreadyUnlinked.relatedIdeaIds, ["idea-target"]);
+  assert.equal(store.writes, 0);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-target"]
+  );
+  api.dispose();
+});
+
 test("no reintenta errores de almacenamiento que no son conflictos CAS", async () => {
   const store = new RacingStore([idea("idea-source"), idea("idea-target")]);
   const api = createApi(store);

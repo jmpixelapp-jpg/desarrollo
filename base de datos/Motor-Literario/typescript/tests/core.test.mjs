@@ -3480,6 +3480,7 @@ test("la API finaliza el libro con un resumen compacto y notifica solo la primer
     }
   });
   api.initializeProject({ projectId, projectName: "Libro compacto", writerId });
+  assert.equal(api.getCapabilities().personalIdeaLibraryCompactFinalization, true);
 
   assert.deepEqual(await api.finalizeProjectToIdeaLibrary(), summary);
   assert.deepEqual(await api.finalizeProjectToIdeaLibrary(), {

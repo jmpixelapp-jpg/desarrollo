@@ -227,14 +227,14 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   assert.equal(revised.nodes[0].activeEvidenceCount, 4);
   assert.equal(revised.nodes[0].staleEvidenceCount, 2);
   assert.equal(revised.nodes[0].writerDecisionCount, 3);
-  assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
+  assert.equal(revised.nodes[0].omittedStatusHistoryCount, 2);
   assert.equal(revised.nodes[0].statusHistory.length, 2);
   const revisedProfile = revised.statusProfiles.find(profile => profile.status === "IDEA");
   assert.equal(revisedProfile.activeEvidenceCount, 4);
   assert.equal(revisedProfile.staleEvidenceCount, 2);
   assert.equal(revisedProfile.writerDecisionCount, 3);
   assert.equal(revisedProfile.statusHistoryRecordCount, 2);
-  assert.equal(revisedProfile.omittedStatusHistoryCount, 1);
+  assert.equal(revisedProfile.omittedStatusHistoryCount, 2);
 });
 
 test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {

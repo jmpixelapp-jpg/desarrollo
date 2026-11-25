@@ -10254,12 +10254,22 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
       type: "motor-literario:narrative-change",
       projectId: "book-a"
     }]);
+    assert.equal(
+      FakeBroadcastChannel.instances[1].closed,
+      true,
+      "una instancia que solo publica debe cerrar su canal temporal"
+    );
 
     unsubscribe();
     assert.equal(FakeBroadcastChannel.instances[0].closed, true);
     readerStore.publishNarrativeChange("book-b");
     await new Promise(resolve => queueMicrotask(resolve));
     assert.deepEqual(received, ["book-a"]);
+    assert.equal(
+      FakeBroadcastChannel.instances[2].closed,
+      true,
+      "un publicador sin suscriptores locales no debe retener otro canal"
+    );
   } finally {
     if (originalBroadcastChannel) {
       Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);

@@ -9919,3 +9919,24 @@ test("identifica vocabulario sensorial explícito sin inferir metáforas", async
     item => item.start >= 0 && item.end > item.start
   )));
 });
+
+
+test("calcula mediana, dispersión y transiciones bruscas del ritmo", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const longSentence = "La expedición atravesó lentamente el valle oscuro mientras la tormenta avanzaba sobre las montañas lejanas";
+  const text = "¡Alto! " + longSentence + ". ¡Corre ahora!";
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-rhythm",documentId:"chapter",revision:3,text,baseOffset:200
+  });
+  assert.ok(result.metrics.medianWordsPerSentence > 0);
+  assert.ok(result.metrics.sentenceLengthStandardDeviation > 0);
+  assert.equal(
+    result.metrics.shortSentenceCount + result.metrics.mediumSentenceCount +
+      result.metrics.longSentenceCount,
+    result.metrics.sentenceCount
+  );
+  assert.ok(result.rhythmTransitions.some(item => item.direction === "acceleration"));
+  const transition = result.rhythmTransitions.find(item => item.direction === "acceleration");
+  assert.ok(transition.occurrences.every(item => item.start >= 200 && item.end > item.start));
+  assert.equal(transition.beforeSentenceIndex + 1,transition.afterSentenceIndex);
+});

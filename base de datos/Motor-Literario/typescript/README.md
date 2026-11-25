@@ -310,7 +310,8 @@ La migración DB21 materializa los vínculos heredados que solo contenían IDs: 
 
 El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local y determinista del fragmento seleccionado:
 
-- Longitud media de oraciones y párrafos, diversidad léxica básica, longitud mínima/máxima y distribución de oraciones cortas/largas.
+- Longitud media y mediana de oraciones y párrafos, dispersión de la longitud oracional y distribución de oraciones cortas/medias/largas.
+- Candidatos a cambios bruscos de ritmo entre dos oraciones consecutivas, con rangos para inspección.
 - Estimación de diálogo a partir de comillas y líneas que comienzan con raya.
 - Repeticiones de palabras de contenido y aperturas de oración recurrentes, con ocurrencias acotadas para inspección.
 - Señales de primera, segunda y tercera persona basadas en pronombres explícitos fuera de los tramos de diálogo.

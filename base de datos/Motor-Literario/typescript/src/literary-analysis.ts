@@ -60,6 +60,9 @@ export interface LiteraryAnalysisMetrics {
   readonly sentenceCount: number;
   readonly paragraphCount: number;
   readonly averageWordsPerSentence: number;
+  readonly medianWordsPerSentence: number;
+  /** Desviación estándar poblacional de la longitud de las oraciones. */
+  readonly sentenceLengthStandardDeviation: number;
   readonly averageWordsPerParagraph: number;
   readonly lexicalDiversity: number;
   readonly dialogueWordCount: number;
@@ -70,7 +73,17 @@ export interface LiteraryAnalysisMetrics {
   readonly shortestSentenceWords: number;
   readonly longestSentenceWords: number;
   readonly shortSentenceCount: number;
+  readonly mediumSentenceCount: number;
   readonly longSentenceCount: number;
+}
+export interface LiteraryRhythmTransition {
+  readonly beforeSentenceIndex: number;
+  readonly afterSentenceIndex: number;
+  readonly beforeWordCount: number;
+  readonly afterWordCount: number;
+  readonly direction: "acceleration" | "deceleration";
+  /** Rango UTF-16 completo de ambas oraciones, ya desplazado al documento. */
+  readonly occurrences: readonly [LiteraryAnalysisOccurrence, LiteraryAnalysisOccurrence];
 }
 export type LiteraryRhythmProfile = "fragmented" | "balanced" | "extended" | "insufficient-text";
 export type LiteraryDialogueDensity = "none" | "low" | "moderate" | "high";
@@ -81,6 +94,7 @@ export interface LiteraryAnalysisResult {
   readonly range: LiteraryAnalysisOccurrence;
   readonly metrics: LiteraryAnalysisMetrics;
   readonly rhythmProfile: LiteraryRhythmProfile;
+  readonly rhythmTransitions: readonly LiteraryRhythmTransition[];
   readonly dialogueDensity: LiteraryDialogueDensity;
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
@@ -305,6 +319,36 @@ function toAbsoluteOccurrences(
   }));
 }
 
+
+function findRhythmTransitions(
+  sentenceRanges: readonly LocalRange[],
+  sentenceWordCounts: readonly number[],
+  baseOffset: number
+): LiteraryRhythmTransition[] {
+  const candidates: LiteraryRhythmTransition[] = [];
+  for (let index = 0; index + 1 < sentenceWordCounts.length; index++) {
+    const before = sentenceWordCounts[index] ?? 0;
+    const after = sentenceWordCounts[index + 1] ?? 0;
+    const shorter = Math.min(before, after);
+    const longer = Math.max(before, after);
+    if (longer < 16 || longer - shorter < 10 || longer < shorter * 2) continue;
+    const beforeRange = sentenceRanges[index]!;
+    const afterRange = sentenceRanges[index + 1]!;
+    candidates.push({
+      beforeSentenceIndex: index + 1,
+      afterSentenceIndex: index + 2,
+      beforeWordCount: before,
+      afterWordCount: after,
+      direction: after < before ? "acceleration" : "deceleration",
+      occurrences: [
+        { start: baseOffset + beforeRange.start, end: baseOffset + beforeRange.end },
+        { start: baseOffset + afterRange.start, end: baseOffset + afterRange.end }
+      ]
+    });
+  }
+  return candidates.slice(0, 20);
+}
+
 function collectSensorySignals(
   tokens: readonly WordToken[], baseOffset: number
 ): LiterarySensorySignal[] {
@@ -439,6 +483,16 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const uniqueWordCount = new Set(tokens.map(token => token.normalized)).size;
   const dialogueWordCount = countTokensInRanges(tokens,dialogueRanges);
   const averageWordsPerSentence = sentenceWordCounts.length > 0 ? wordCount / sentenceWordCounts.length : 0;
+  const orderedSentenceLengths = [...sentenceWordCounts].sort((a,b) => a-b);
+  const middle = Math.floor(orderedSentenceLengths.length / 2);
+  const medianWordsPerSentence = orderedSentenceLengths.length === 0 ? 0 :
+    orderedSentenceLengths.length % 2 === 0
+      ? (orderedSentenceLengths[middle - 1]! + orderedSentenceLengths[middle]!) / 2
+      : orderedSentenceLengths[middle]!;
+  const sentenceLengthVariance = sentenceWordCounts.length > 0
+    ? sentenceWordCounts.reduce((sum,count) => sum + (count-averageWordsPerSentence)**2,0) / sentenceWordCounts.length
+    : 0;
+  const sentenceLengthStandardDeviation = Math.sqrt(sentenceLengthVariance);
   const averageWordsPerParagraph = paragraphWordCounts.length > 0 ? wordCount / paragraphWordCounts.length : 0;
   const shortestSentenceWords = sentenceWordCounts.length > 0
     ? sentenceWordCounts.reduce((minimum, count) => Math.min(minimum, count), Number.POSITIVE_INFINITY)
@@ -467,6 +521,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sentenceCount:sentenceRanges.length,
     paragraphCount:paragraphRanges.length,
     averageWordsPerSentence:roundMetric(averageWordsPerSentence),
+    medianWordsPerSentence:roundMetric(medianWordsPerSentence),
+    sentenceLengthStandardDeviation:roundMetric(sentenceLengthStandardDeviation),
     averageWordsPerParagraph:roundMetric(averageWordsPerParagraph),
     lexicalDiversity:wordCount > 0 ? roundMetric(uniqueWordCount / wordCount) : 0,
     dialogueWordCount,
@@ -477,6 +533,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     shortestSentenceWords,
     longestSentenceWords,
     shortSentenceCount:sentenceWordCounts.filter(count => count <= 8).length,
+    mediumSentenceCount:sentenceWordCounts.filter(count => count >= 9 && count <= 24).length,
     longSentenceCount:sentenceWordCounts.filter(count => count >= 25).length
   };
   return {
@@ -486,6 +543,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     range:{start:baseOffset,end:baseOffset+text.length},
     metrics,
     rhythmProfile,
+    rhythmTransitions:findRhythmTransitions(sentenceRanges,sentenceWordCounts,baseOffset),
     dialogueDensity,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,

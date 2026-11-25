@@ -199,8 +199,15 @@ export interface LiteraryStructureMarker {
 export interface LiterarySceneCharacterMention {
   readonly entityId: string;
   readonly canonicalName: string;
+  /** Formas literales observadas; se exponen como máximo diez. */
   readonly matchedNames: readonly string[];
+  readonly matchedNameCount: number;
+  readonly matchedNamesTruncated: boolean;
+  /** Coincidencias literales contadas antes de limitar las muestras. */
+  readonly mentionCount: number;
+  /** Se conservan como máximo veinte ocurrencias UTF-16. */
   readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+  readonly occurrencesTruncated: boolean;
 }
 export interface LiterarySceneEventParticipant {
   readonly entityId: string;
@@ -246,9 +253,17 @@ export interface LiteraryCharacterCoMentionPattern {
   readonly sharedSceneCount: number;
   readonly sceneIndexes: readonly number[];
 }
+export interface LiteraryCharacterMentionCountByScene {
+  readonly sceneIndex: number;
+  readonly mentionCount: number;
+}
 export interface LiteraryCharacterMentionDistribution {
   readonly entityId: string;
   readonly canonicalName: string;
+  /** Total de coincidencias literales, incluso cuando se limitan las ocurrencias de evidencia. */
+  readonly totalMentionCount: number;
+  /** Conteo de menciones por escena; no equivale a la cantidad de ejemplos UTF-16 conservados. */
+  readonly mentionCountByScene: readonly LiteraryCharacterMentionCountByScene[];
   /** Escenas explícitas con al menos una mención literal no ambigua. */
   readonly sceneIndexes: readonly number[];
   readonly sceneCount: number;
@@ -859,6 +874,7 @@ function findSceneCharacterMentions(
     readonly entityId: string;
     readonly canonicalName: string;
     matchedNames: Map<string, number>;
+    mentionCount: number;
     occurrences: LocalRange[];
   }>();
   const excerpt = text.slice(contentRange.start,contentRange.end);
@@ -876,11 +892,13 @@ function findSceneCharacterMentions(
       entityId:owner.entityId,
       canonicalName:owner.canonicalName,
       matchedNames:new Map<string,number>(),
+      mentionCount:0,
       occurrences:[]
     };
     for (const match of excerpt.matchAll(expression)) {
       const matchedName = match[0];
       const start = contentRange.start + (match.index ?? 0);
+      group.mentionCount++;
       const previousMatch = group.matchedNames.get(matchedName);
       if (previousMatch === undefined || start < previousMatch) {
         group.matchedNames.set(matchedName,start);
@@ -903,7 +921,11 @@ function findSceneCharacterMentions(
       matchedNames:[...group.matchedNames.entries()]
         .sort((a,b) => a[1]-b[1] || a[0].localeCompare(b[0],"es"))
         .slice(0,10).map(([name]) => name),
-      occurrences:group.occurrences
+      matchedNameCount:group.matchedNames.size,
+      matchedNamesTruncated:group.matchedNames.size>10,
+      mentionCount:group.mentionCount,
+      occurrences:group.occurrences,
+      occurrencesTruncated:group.mentionCount>group.occurrences.length
     }));
 }
 function findSceneEventLinks(
@@ -1914,17 +1936,26 @@ function buildCharacterMentionDistributions(
     readonly entityId: string;
     readonly canonicalName: string;
     sceneIndexes: number[];
+    mentionCountByScene: LiteraryCharacterMentionCountByScene[];
+    totalMentionCount: number;
   }>();
   for (const scene of scenes) {
     for (const mention of scene.characterMentions) {
       const group = groups.get(mention.entityId) ?? {
         entityId:mention.entityId,
         canonicalName:mention.canonicalName,
-        sceneIndexes:[]
+        sceneIndexes:[],
+        mentionCountByScene:[],
+        totalMentionCount:0
       };
       if (group.sceneIndexes[group.sceneIndexes.length-1] !== scene.sceneIndex) {
         group.sceneIndexes.push(scene.sceneIndex);
+        group.mentionCountByScene.push({
+          sceneIndex:scene.sceneIndex,
+          mentionCount:mention.mentionCount
+        });
       }
+      group.totalMentionCount += mention.mentionCount;
       groups.set(mention.entityId,group);
     }
   }
@@ -1944,6 +1975,8 @@ function buildCharacterMentionDistributions(
     return {
       entityId:group.entityId,
       canonicalName:group.canonicalName,
+      totalMentionCount:group.totalMentionCount,
+      mentionCountByScene:group.mentionCountByScene,
       sceneIndexes,
       sceneCount:sceneIndexes.length,
       firstSceneIndex,

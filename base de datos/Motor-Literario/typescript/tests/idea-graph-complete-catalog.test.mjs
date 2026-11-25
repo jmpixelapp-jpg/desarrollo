@@ -1722,3 +1722,105 @@ test("el grafo representa de forma explícita un catálogo de ideas vacío", asy
     api.dispose();
   }
 });
+
+
+test("el muestreo de referencias mantiene contadores exactos al superar cinco mil aristas", async () => {
+  const relatedIdeaIds = Array.from(
+    { length: 5_003 },
+    (_, index) => `external-${String(index).padStart(5, "0")}`
+  );
+  const ideas = [{
+    projectId,
+    id: "reference-sample-source",
+    text: "Una única idea con muchas referencias explícitas",
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds,
+    relatedEntityIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  }];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-reference-sample-cap" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl muestreo no debe alterar los totales.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 1);
+    assert.equal(graph.referenceCount, 5_003);
+    assert.equal(graph.includedReferenceCount, 0);
+    assert.equal(graph.notIncludedReferenceCount, 5_003);
+    assert.equal(graph.missingFromProjectReferenceCount, 5_003);
+    assert.equal(graph.referenceSampleCount, 5_000);
+    assert.equal(graph.omittedReferenceSampleCount, 3);
+    assert.equal(graph.referencesTruncated, true);
+    assert.equal(graph.references.length, 5_000);
+    assert.equal(graph.references[0].toIdeaId, "external-00000");
+    assert.equal(graph.references.at(-1).toIdeaId, "external-04999");
+    assert.ok(graph.references.every(reference =>
+      reference.fromIdeaId === "reference-sample-source" &&
+      reference.resolution === "missing-from-project"
+    ));
+    assert.equal(graph.nodes[0].notIncludedOutgoingReferenceCount, 5_003);
+    assert.equal(graph.nodes[0].incomingReferenceCount, 0);
+  } finally {
+    api.dispose();
+  }
+});
+
+test("los límites de muestras de ciclos y componentes no alteran los conteos completos", async () => {
+  const ideas = Array.from({ length: 105 }, (_, index) => {
+    const id = `self-cycle-${String(index).padStart(3, "0")}`;
+    return {
+      projectId,
+      id,
+      text: `motivo-literario-unico-${index}`,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [id],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    };
+  });
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-cycle-sample-cap" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nCada idea forma su propio ciclo.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 105);
+    assert.equal(graph.referenceCount, 105);
+    assert.equal(graph.selfReferenceCount, 105);
+    assert.equal(graph.cycleCount, 105);
+    assert.equal(graph.omittedCycleCount, 5);
+    assert.equal(graph.cycles.length, 100);
+    assert.equal(graph.cycles[0].ideaIds.length, 1);
+    assert.equal(graph.cycles.at(-1).ideaIds[0], "self-cycle-099");
+    assert.equal(graph.weakComponentCount, 105);
+    assert.equal(graph.omittedWeakComponentCount, 5);
+    assert.equal(graph.weakComponents.length, 100);
+    assert.equal(graph.largestWeakComponentSize, 1);
+    assert.deepEqual(graph.weakComponents[0].ideaIds, ["self-cycle-000"]);
+    assert.deepEqual(graph.weakComponents.at(-1).ideaIds, ["self-cycle-099"]);
+    assert.equal(graph.sourceNodeCount, 0);
+    assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+  } finally {
+    api.dispose();
+  }
+});

@@ -8,6 +8,7 @@ on:
       - "base de datos/Motor-Literario/typescript/src/host-api.ts"
       - "base de datos/Motor-Literario/typescript/src/contracts.ts"
       - "base de datos/Motor-Literario/typescript/src/engine.ts"
+      - "base de datos/Motor-Literario/typescript/src/persistence/indexeddb-store.ts"
       - "base de datos/Motor-Literario/typescript/tests/live-author-monitor*.test.mjs"
       - ".github/workflows/live-author-monitor.yml"
   pull_request:

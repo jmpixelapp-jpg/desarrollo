@@ -13373,3 +13373,43 @@ test("la lectura del recibo espera a que termine la finalización en curso", asy
   assert.equal(receipt.receiptId, "finalization-v1");
   api.dispose();
 });
+test("la API rechaza recibos de biblioteca con checksum incorrecto o IDs desordenados", async () => {
+  const writerId = "writer-invalid-library-receipt";
+  const projectId = "book-invalid-library-receipt";
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro con recibo alterado",
+    writerId
+  });
+
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: ["idea-a", "idea-b"],
+    archiveChecksum: "fnv1a64:0000000000000000"
+  });
+  await assert.rejects(
+    api.getProjectFinalizationReceipt(),
+    /IDs del recibo no están ordenados o su checksum no coincide/
+  );
+
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: ["idea-b", "idea-a"],
+    archiveChecksum: "fnv1a64:b0fa017158444d90"
+  });
+  await assert.rejects(
+    api.getProjectFinalizationReceipt(),
+    /IDs del recibo no están ordenados o su checksum no coincide/
+  );
+  api.dispose();
+});

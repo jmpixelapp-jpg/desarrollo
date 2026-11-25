@@ -479,3 +479,29 @@ test("las auto-referencias forman ciclos unitarios sin inflar pares recíprocos"
   assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
   assert.equal(graph.terminalReachableNodeCount, 1);
 });
+
+
+test("las distancias a terminales usan rutas mínimas y el límite del snapshot", () => {
+  const graph = analyze([
+    idea("start", ["middle", "terminal"]),
+    idea("middle", ["terminal"]),
+    idea("terminal"),
+    idea("cycle-a", ["cycle-b"]),
+    idea("cycle-b", ["cycle-a"]),
+    idea("external-only", ["not-loaded"])
+  ], 1);
+
+  const byId = new Map(graph.nodes.map(node => [node.ideaId, node]));
+  assert.equal(byId.get("terminal").minimumDirectedHopsToTerminal, 0);
+  assert.equal(byId.get("middle").minimumDirectedHopsToTerminal, 1);
+  assert.equal(byId.get("start").minimumDirectedHopsToTerminal, 1);
+  assert.equal(byId.get("cycle-a").minimumDirectedHopsToTerminal, null);
+  assert.equal(byId.get("cycle-b").minimumDirectedHopsToTerminal, null);
+  assert.equal(byId.get("external-only").minimumDirectedHopsToTerminal, 0);
+  assert.equal(byId.get("external-only").terminalReachabilityStatus, "reaches-terminal-within-snapshot");
+  assert.equal(byId.get("external-only").notIncludedOutgoingReferenceCount, 1);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 2);
+  assert.equal(graph.terminalReachableNodeCount, 4);
+  assert.equal(graph.terminalUnreachableNodeCount, 2);
+  assert.equal(graph.terminalReachabilityCoverage, 4 / 6);
+});

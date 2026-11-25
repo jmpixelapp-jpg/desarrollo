@@ -187,9 +187,13 @@ export function mountLiveAuthorMonitorEditorTransactions(
         hostApi.resynchronizeLiveAuthorMonitor(authoritative);
       }
 
-      const state = source.resynchronize(authoritative);
-      binding.discardPendingAfterResynchronization();
-      return state;
+      // El snapshot durable ya cubre el backlog anterior. Límpialo antes
+      // de reactivar el proveedor: subscribeTransactions puede reproducir
+      // transacciones nuevas de forma síncrona durante la reconexión.
+      return source.resynchronize(
+        authoritative,
+        () => binding.discardPendingAfterResynchronization()
+      );
     },
 
     dispose: (): void => {

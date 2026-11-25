@@ -5790,7 +5790,11 @@ function isValidNarrativeIdeaStatusHistory(
   writerDecisionCount: number,
   omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
+  if (!Array.isArray(value) || value.length > 100) return false;
+  if (value.length === 0) {
+    return omittedStatusHistoryCount > 0 &&
+      writerDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
+  }
   for (let index = 0; index < value.length; index++) {
     const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
     if (!change ||
@@ -5802,7 +5806,8 @@ function isValidNarrativeIdeaStatusHistory(
             ? change.reason !== "initial"
             : change.reason === "initial"
           : change.reason === "initial" ||
-            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
+            (change.status === (value[index - 1] as NarrativeIdeaStatusChange).status &&
+              change.reason !== "writer")) ||
         (change.changedAt !== undefined &&
           (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
         false) {

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir, open as openFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const TABLE = "bridge_records";
@@ -90,8 +90,13 @@ export class SqliteProjectStore {
 
   static async open(databasePath) {
     requireText(databasePath, "MOTOR_LITERARIO_DB");
-    await mkdir(dirname(databasePath), { recursive: true });
-    const database = new DatabaseSync(databasePath, { timeout: 5000 });
+    await mkdir(dirname(databasePath), { recursive: true, mode: 0o700 });
+    const handle = await openFile(databasePath, "a", 0o600);
+    await handle.close();
+    // El directorio restringido protege también los archivos -wal y -shm.
+    // En Windows, el control efectivo se hereda además de la ACL del directorio.
+    try { await chmod(databasePath, 0o600); } catch { /* Algunos entornos no admiten chmod completo. */ }
+    const database = new DatabaseSync(databasePath);
     return new SqliteProjectStore(database, databasePath);
   }
 

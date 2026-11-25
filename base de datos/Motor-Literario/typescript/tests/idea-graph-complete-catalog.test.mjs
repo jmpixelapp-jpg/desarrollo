@@ -1813,7 +1813,7 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
     assert.equal(graph.references[0].toIdeaId, "external-00000");
     assert.equal(graph.references.at(-1).toIdeaId, "external-04999");
     assert.ok(graph.references.every(reference =>
-      reference.fromIdeaId === "reference-sample-source" &&
+      reference.fromIdeaId.startsWith("reference-sample-source-") &&
       reference.resolution === "missing-from-project"
     ));
     assert.equal(

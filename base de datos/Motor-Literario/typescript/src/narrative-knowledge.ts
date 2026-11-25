@@ -4,6 +4,9 @@
 export type NarrativeEntityType = string;
 export type NarrativeKnowledgeKind = NarrativeEntityType | "event" | "relationship" | "idea";
 
+/** Máximo de vínculos explícitos por idea, tanto a fichas como a otras ideas. */
+export const MAX_NARRATIVE_IDEA_REFERENCES = 500;
+
 export interface TextEvidence {
   readonly documentId: string;
   readonly revision: number;

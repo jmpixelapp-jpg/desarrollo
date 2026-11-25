@@ -1,3 +1,4 @@
+import type { NarrativeAssertion } from "./narrative-history";
 import { validateEventLifecycle, type EventLifecycle } from "./project-data";
 
 /**
@@ -38,6 +39,8 @@ export interface LiteraryAnalysisInput {
   readonly knownEvents?: readonly LiteraryAnalysisKnownEvent[];
   /** Historiales append-only validados de cambios explícitos de etiqueta y participantes. */
   readonly knownEventLifecycles?: readonly EventLifecycle[];
+  /** Afirmaciones históricas del proyecto; solo se asignan a escenas con evidencia vigente de esta revisión. */
+  readonly knownAssertions?: readonly NarrativeAssertion[];
 }
 export interface LiteraryAnalysisOccurrence { readonly start: number; readonly end: number; }
 export interface LiteraryRepeatedWord {
@@ -470,6 +473,60 @@ export interface LiteraryCharacterMentionDistributionAnalysis {
   /** Perfiles ordenados por cobertura, racha consecutiva y, finalmente, ID estable. */
   readonly characters: readonly LiteraryCharacterMentionDistribution[];
 }
+export interface LiteraryCharacterAttributeAssertionEvidence {
+  readonly assertionId: string;
+  readonly value: string | number;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly occurrence: LiteraryAnalysisOccurrence;
+  readonly excerpt: string;
+  readonly timeReference?: NarrativeAssertion["timeReference"];
+}
+export interface LiteraryCharacterAttributeSceneSnapshot {
+  readonly sceneIndex: number;
+  readonly assertionCount: number;
+  readonly distinctValueCount: number;
+  readonly values: readonly (string | number)[];
+  readonly assertions: readonly LiteraryCharacterAttributeAssertionEvidence[];
+  readonly evidenceTruncated: boolean;
+}
+export type LiteraryCharacterAttributeTransitionStatus =
+  | "unchanged-value" | "changed-value" | "multiple-values-in-scene";
+export interface LiteraryCharacterAttributeTransition {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  readonly interveningSceneCount: number;
+  readonly status: LiteraryCharacterAttributeTransitionStatus;
+  readonly previousValues: readonly (string | number)[];
+  readonly nextValues: readonly (string | number)[];
+  readonly previousAssertionIds: readonly string[];
+  readonly nextAssertionIds: readonly string[];
+}
+export interface LiteraryCharacterAttributeProfile {
+  readonly entityId: string;
+  readonly canonicalName: string;
+  readonly attribute: NarrativeAssertion["attribute"];
+  readonly assertionCount: number;
+  readonly sceneCount: number;
+  readonly firstSceneIndex: number;
+  readonly lastSceneIndex: number;
+  readonly changedValueTransitionCount: number;
+  readonly multipleValueSceneIndexes: readonly number[];
+  readonly scenes: readonly LiteraryCharacterAttributeSceneSnapshot[];
+  readonly transitions: readonly LiteraryCharacterAttributeTransition[];
+}
+export interface LiteraryCharacterAttributeEvolutionAnalysis {
+  readonly explicitSceneCount: number;
+  readonly sourceAssertionCount: number;
+  readonly currentRevisionAssertionCount: number;
+  readonly staleAssertionCount: number;
+  readonly outOfScopeAssertionCount: number;
+  readonly unmappedCurrentAssertionCount: number;
+  readonly profileCount: number;
+  readonly omittedProfileCount: number;
+  readonly profiles: readonly LiteraryCharacterAttributeProfile[];
+}
+
 export type LiteraryCharacterSceneMentionStatus =
   | "mentioned-by-known-name"
   | "not-mentioned-by-known-name"
@@ -916,6 +973,8 @@ export interface LiteraryAnalysisResult {
   readonly characterMentionDistributions: LiteraryCharacterMentionDistributionAnalysis;
   /** Serie por escena que separa menciones nominales de participación documentada por acontecimientos. */
   readonly characterSceneEvidence: LiteraryCharacterSceneEvidenceAnalysis;
+  /** Comparación de atributos explícitos de personajes entre escenas de la revisión vigente. */
+  readonly characterAttributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis;
   /** Evidencia de acontecimientos asociados explícitamente a participantes, desglosada por escena. */
   readonly characterEventEvidenceProfiles: LiteraryCharacterEventEvidenceAnalysis;
   /** Recurrencia de acontecimientos en escenas, independiente de que tengan participantes declarados. */
@@ -2707,6 +2766,148 @@ function buildCharacterMentionDistributions(
   };
 }
 
+function normalizeCharacterAttributeValue(value: string | number): string {
+  return typeof value === "number"
+    ? "number:" + String(value)
+    : "string:" + value.normalize("NFKC").trim().toLocaleLowerCase("es");
+}
+
+function buildCharacterAttributeEvolution(
+  scenes: readonly LiteraryExplicitSceneSegment[],
+  assertions: readonly NarrativeAssertion[],
+  documentId: string,
+  revision: number
+): LiteraryCharacterAttributeEvolutionAnalysis {
+  const groups = new Map<string, {
+    readonly entityId: string;
+    readonly canonicalName: string;
+    readonly attribute: NarrativeAssertion["attribute"];
+    readonly byScene: Map<number, NarrativeAssertion[]>;
+  }>();
+  let staleAssertionCount = 0;
+  let outOfScopeAssertionCount = 0;
+  let currentRevisionAssertionCount = 0;
+  let unmappedCurrentAssertionCount = 0;
+
+  for (const assertion of assertions) {
+    if (assertion.evidence.status === "stale") {
+      staleAssertionCount++;
+      continue;
+    }
+    if (assertion.evidence.documentId !== documentId || assertion.evidence.revision !== revision) {
+      outOfScopeAssertionCount++;
+      continue;
+    }
+    currentRevisionAssertionCount++;
+    const scene = scenes.find(item =>
+      assertion.evidence.end > item.contentRange.start &&
+      assertion.evidence.start < item.contentRange.end
+    );
+    if (!scene) {
+      unmappedCurrentAssertionCount++;
+      continue;
+    }
+    const key = JSON.stringify([assertion.entityId, assertion.attribute]);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        entityId:assertion.entityId,
+        canonicalName:assertion.entityName,
+        attribute:assertion.attribute,
+        byScene:new Map()
+      };
+      groups.set(key,group);
+    }
+    const entries = group.byScene.get(scene.sceneIndex) ?? [];
+    entries.push(assertion);
+    group.byScene.set(scene.sceneIndex,entries);
+  }
+
+  const profiles = [...groups.values()].map(group => {
+    const sceneSnapshots = scenes.flatMap(scene => {
+      const entries = group.byScene.get(scene.sceneIndex);
+      if (!entries?.length) return [];
+      const values = new Map<string,string | number>();
+      for (const assertion of entries) {
+        const key = normalizeCharacterAttributeValue(assertion.value);
+        if (!values.has(key)) values.set(key,assertion.value);
+      }
+      const ordered = [...entries].sort((a,b) =>
+        a.evidence.start-b.evidence.start || a.id.localeCompare(b.id,"en")
+      );
+      return [{
+        sceneIndex:scene.sceneIndex,
+        assertionCount:entries.length,
+        distinctValueCount:values.size,
+        values:[...values.values()],
+        assertions:ordered.slice(0,20).map(assertion => ({
+          assertionId:assertion.id,
+          value:assertion.value,
+          documentId:assertion.evidence.documentId,
+          revision:assertion.evidence.revision,
+          occurrence:{start:assertion.evidence.start,end:assertion.evidence.end},
+          excerpt:assertion.evidence.excerpt,
+          ...(assertion.timeReference ? {timeReference:assertion.timeReference} : {})
+        })),
+        evidenceTruncated:entries.length>20
+      }];
+    });
+    const transitions: LiteraryCharacterAttributeTransition[] = [];
+    for (let index=1; index<sceneSnapshots.length; index++) {
+      const previous = sceneSnapshots[index-1]!;
+      const next = sceneSnapshots[index]!;
+      const previousKeys = new Set(previous.values.map(normalizeCharacterAttributeValue));
+      const nextKeys = new Set(next.values.map(normalizeCharacterAttributeValue));
+      const sameValues = previousKeys.size===nextKeys.size &&
+        [...previousKeys].every(value => nextKeys.has(value));
+      const multipleValues = previous.distinctValueCount>1 || next.distinctValueCount>1;
+      transitions.push({
+        fromSceneIndex:previous.sceneIndex,
+        toSceneIndex:next.sceneIndex,
+        interveningSceneCount:Math.max(0,next.sceneIndex-previous.sceneIndex-1),
+        status:multipleValues
+          ? "multiple-values-in-scene"
+          : sameValues ? "unchanged-value" : "changed-value",
+        previousValues:previous.values,
+        nextValues:next.values,
+        previousAssertionIds:previous.assertions.map(item => item.assertionId),
+        nextAssertionIds:next.assertions.map(item => item.assertionId)
+      });
+    }
+    const multipleValueSceneIndexes = sceneSnapshots
+      .filter(scene => scene.distinctValueCount>1)
+      .map(scene => scene.sceneIndex);
+    return {
+      entityId:group.entityId,
+      canonicalName:group.canonicalName,
+      attribute:group.attribute,
+      assertionCount:sceneSnapshots.reduce((total,scene) => total+scene.assertionCount,0),
+      sceneCount:sceneSnapshots.length,
+      firstSceneIndex:sceneSnapshots[0]?.sceneIndex ?? 0,
+      lastSceneIndex:sceneSnapshots.at(-1)?.sceneIndex ?? 0,
+      changedValueTransitionCount:transitions.filter(item => item.status==="changed-value").length,
+      multipleValueSceneIndexes,
+      scenes:sceneSnapshots,
+      transitions
+    };
+  }).sort((a,b) =>
+    a.entityId.localeCompare(b.entityId,"en") ||
+    a.attribute.localeCompare(b.attribute,"en")
+  );
+
+  return {
+    explicitSceneCount:scenes.length,
+    sourceAssertionCount:assertions.length,
+    currentRevisionAssertionCount,
+    staleAssertionCount,
+    outOfScopeAssertionCount,
+    unmappedCurrentAssertionCount,
+    profileCount:profiles.length,
+    omittedProfileCount:Math.max(0,profiles.length-200),
+    profiles:profiles.slice(0,200)
+  };
+}
+
 function buildCharacterSceneEvidenceProfiles(
   scenes: readonly LiteraryExplicitSceneSegment[],
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[]
@@ -3380,7 +3581,9 @@ function validateInput(input: LiteraryAnalysisInput): number {
       (input.knownEvents !== undefined &&
         (!Array.isArray(input.knownEvents) || input.knownEvents.length > 2_000)) ||
       (input.knownEventLifecycles !== undefined &&
-        (!Array.isArray(input.knownEventLifecycles) || input.knownEventLifecycles.length > 20_000))) {
+        (!Array.isArray(input.knownEventLifecycles) || input.knownEventLifecycles.length > 20_000)) ||
+      (input.knownAssertions !== undefined &&
+        (!Array.isArray(input.knownAssertions) || input.knownAssertions.length > 20_000))) {
     throw new Error("Contexto de análisis literario inválido o fragmento demasiado grande.");
   }
   const knownCharacterIds = new Set<string>();
@@ -3418,6 +3621,37 @@ function validateInput(input: LiteraryAnalysisInput): number {
         throw new Error("La evidencia de acontecimiento del análisis literario es inválida.");
       }
     }
+  }
+
+  const assertionIds = new Set<string>();
+  for (const assertion of input.knownAssertions ?? []) {
+    if (!assertion || assertion.projectId !== input.projectId ||
+        typeof assertion.id !== "string" || !assertion.id.trim() ||
+        assertionIds.has(assertion.id) ||
+        !knownCharacterIds.has(assertion.entityId) ||
+        typeof assertion.entityName !== "string" || !assertion.entityName.trim() ||
+        !["age","location","role"].includes(assertion.attribute) ||
+        !(typeof assertion.value === "string" && assertion.value.trim() ||
+          typeof assertion.value === "number" && Number.isFinite(assertion.value)) ||
+        !assertion.evidence || typeof assertion.evidence.documentId !== "string" ||
+        !assertion.evidence.documentId.trim() ||
+        !Number.isSafeInteger(assertion.evidence.revision) || assertion.evidence.revision<0 ||
+        !Number.isSafeInteger(assertion.evidence.start) || assertion.evidence.start<0 ||
+        !Number.isSafeInteger(assertion.evidence.end) ||
+        assertion.evidence.end<=assertion.evidence.start ||
+        typeof assertion.evidence.excerpt !== "string" ||
+        (assertion.evidence.status!==undefined && assertion.evidence.status!=="stale") ||
+        !Number.isFinite(assertion.capturedAt) || assertion.capturedAt<0) {
+      throw new Error("Las afirmaciones históricas del análisis literario son inválidas.");
+    }
+    if (assertion.timeReference !== undefined &&
+        (!assertion.timeReference || !["calendar","story-day"].includes(assertion.timeReference.basis) ||
+          !["date","year","day-index"].includes(assertion.timeReference.precision) ||
+          typeof assertion.timeReference.raw !== "string" || !assertion.timeReference.raw.trim() ||
+          !Number.isFinite(assertion.timeReference.orderValue))) {
+      throw new Error("La referencia temporal de una afirmación histórica es inválida.");
+    }
+    assertionIds.add(assertion.id);
   }
 
   const lifecycleGroups=new Map<string,EventLifecycle[]>();
@@ -3475,6 +3709,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const sceneLexicalEchoes = buildSceneLexicalEchoes(tokens, explicitScenes, dialogueRanges, baseOffset);
   const characterSceneEvidence = buildCharacterSceneEvidenceProfiles(explicitScenes,input.knownCharacters ?? []);
+  const characterAttributeEvolution = buildCharacterAttributeEvolution(
+    explicitScenes,input.knownAssertions ?? [],input.documentId,input.revision
+  );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneEventAssociationTransitions = buildSceneEventAssociationTransitions(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
@@ -3683,6 +3920,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterCoMentions,
     characterMentionDistributions,
     characterSceneEvidence,
+    characterAttributeEvolution,
     characterEventEvidenceProfiles,
     sceneEventEvidenceProfiles,
     sceneEventSequenceMotifs,
@@ -3725,7 +3963,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Los tramos del flujo de diálogo agrupan párrafos consecutivos por presencia o ausencia de diálogo reconocido; los párrafos mixtos y dialogados comparten tramo y esto no identifica turnos ni hablantes.",
       "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes.",
       "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; separan ocurrencias en narración y diálogo reconocido, no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16.",
-      "Los perfiles de personajes separan menciones nominales literales de asociaciones a acontecimientos con evidencia vigente de la misma revisión. Una mención no prueba participación; una asociación de participante no prueba presencia física, acción, causalidad ni cambio del personaje. Las escenas con muestras truncadas declaran el estado como desconocido en vez de tratarlo como ausencia."
+      "Los perfiles de personajes separan menciones nominales literales de asociaciones a acontecimientos con evidencia vigente de la misma revisión. Una mención no prueba participación; una asociación de participante no prueba presencia física, acción, causalidad ni cambio del personaje. Las escenas con muestras truncadas declaran el estado como desconocido en vez de tratarlo como ausencia.",
+      "La evolución de atributos compara afirmaciones explícitas de edad, ubicación y rol en escenas de la misma revisión del documento analizado. Solo los cambios entre valores únicos se clasifican como changed-value; varios valores en una escena o la falta de afirmación no se resuelven como contradicción ni como continuidad."
     ]
   };
 }

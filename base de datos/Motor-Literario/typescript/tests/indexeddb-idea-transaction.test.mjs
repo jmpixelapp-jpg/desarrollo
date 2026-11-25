@@ -111,3 +111,57 @@ test("IndexedDB serializa dos CAS concurrentes sobre la misma idea y confirma so
     await deleteDatabase();
   }
 });
+
+test("IndexedDB valida destinos idea dentro del proyecto y revierte referencias inválidas", {
+  skip: typeof indexedDB === "undefined" ? "Este runtime de Node no expone IndexedDB nativo." : false
+}, async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const original = idea();
+
+  const relatedIdea = idea({
+    id: "idea-related",
+    text: "La ausencia conserva una forma.",
+    relatedIdeaIds: []
+  });
+  const foreignIdea = idea({
+    projectId: "indexeddb-idea-transaction-foreign",
+    id: relatedIdea.id,
+    text: "Mismo identificador, otro proyecto.",
+    relatedIdeaIds: []
+  });
+
+  try {
+    await store.saveIdea(original);
+
+    await assert.rejects(
+      store.saveIdeaIfUnchanged(
+        idea({ relatedIdeaIds: ["idea-missing"] }),
+        original
+      ),
+      /Referencia narrativa inválida/
+    );
+    assert.deepEqual(await store.loadIdeas(projectId), [original]);
+
+    await store.saveIdea(foreignIdea);
+    await assert.rejects(
+      store.saveIdeaIfUnchanged(
+        idea({ relatedIdeaIds: [relatedIdea.id] }),
+        original
+      ),
+      /Referencia narrativa inválida/
+    );
+    assert.deepEqual(await store.loadIdeas(projectId), [original]);
+
+    await store.saveIdea(relatedIdea);
+    const linked = idea({ relatedIdeaIds: [relatedIdea.id] });
+    await store.saveIdeaIfUnchanged(linked, original);
+    assert.deepEqual(
+      (await store.loadIdeas(projectId)).find(record => record.id === original.id),
+      linked
+    );
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

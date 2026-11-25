@@ -10099,7 +10099,10 @@ test("IndexedDB rechaza relaciones, acontecimientos y afirmaciones basados en ve
         onversionchange: null,
         close() {},
         transaction(storeNames, mode) {
-          assert.deepEqual(new Set(storeNames), new Set(["narrative-entities", item.storeName]));
+          const expectedStores = item.storeName === "narrative-events"
+            ? ["narrative-entities", "timeline-tracks", "narrative-events"]
+            : ["narrative-entities", item.storeName];
+          assert.deepEqual(new Set(storeNames), new Set(expectedStores));
           assert.equal(mode, "readwrite");
           const transaction = {
             error: null,
@@ -10170,13 +10173,14 @@ test("IndexedDB rechaza relaciones, acontecimientos y afirmaciones basados en ve
         }
       });
 
+      const persistedBefore = structuredClone(item.current);
       const store = new IndexedDbProjectStore();
       await assert.rejects(
         item.save(store, item.stale, item.expected),
         /cambió en otra instancia/
       );
       assert.equal(putCount, 0, `no debe guardarse la ${item.storeName} obsoleta`);
-      assert.deepEqual(item.current, cases.find(entry => entry.storeName === item.storeName).current);
+      assert.deepEqual(item.current, persistedBefore);
     }
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);

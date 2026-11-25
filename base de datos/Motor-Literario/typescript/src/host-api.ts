@@ -5,6 +5,8 @@ import type {
 import { LiteraryEngine } from "./engine";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput } from "./dictionaries";
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
+import type { ProjectSetting, ProjectSettingSource, ProjectJsonValue } from "./project-data";
+import { cloneProjectSetting, validateProjectSetting } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
 import { extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
@@ -1383,6 +1385,69 @@ export class HostEngineApi {
     });
   }
 
+  /** Recupera preferencias del libro activo sin mezclar otros proyectos. */
+  async getProjectSettings(): Promise<readonly ProjectSetting[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const loadSettings = this.store.loadProjectSettings;
+      if (!loadSettings) throw new Error("El adaptador de almacenamiento no admite configuraciones de proyecto.");
+      const settings = await loadSettings.call(this.store, projectId);
+      if (!Array.isArray(settings)) throw new Error("El almacenamiento devolvió configuraciones inválidas.");
+      const keys = new Set<string>();
+      for (const setting of settings) {
+        validateProjectSetting(setting, projectId);
+        if (keys.has(setting.key)) {
+          throw new Error("Integridad de configuraciones: hay claves duplicadas en el proyecto.");
+        }
+        keys.add(setting.key);
+      }
+      return settings.map(cloneProjectSetting);
+    });
+  }
+
+  /** Crea o actualiza una preferencia del proyecto con control de concurrencia optimista. */
+  async setProjectSetting(
+    key: string,
+    value: ProjectJsonValue,
+    source: ProjectSettingSource
+  ): Promise<ProjectSetting> {
+    const project = this.requireProject();
+    if (source === "WRITER") this.requireWriterId();
+    if (source !== "WRITER" && source !== "HOST") {
+      throw new Error("El origen de una configuración debe ser WRITER o HOST.");
+    }
+    if (typeof key !== "string" || !key.trim() || key.length > 256) {
+      throw new Error("La clave de configuración debe contener entre 1 y 256 caracteres.");
+    }
+    return this.enqueueKnowledgeOperation(async () => {
+      const loadSettings = this.store.loadProjectSettings;
+      const saveSetting = this.store.saveProjectSetting;
+      if (!loadSettings || !saveSetting) {
+        throw new Error("El adaptador de almacenamiento no admite configuraciones de proyecto.");
+      }
+      const settings = await loadSettings.call(this.store, project.projectId);
+      if (!Array.isArray(settings)) throw new Error("La colección de configuraciones es inválida.");
+      let current: ProjectSetting | undefined;
+      const keys = new Set<string>();
+      for (const setting of settings) {
+        validateProjectSetting(setting, project.projectId);
+        if (keys.has(setting.key)) throw new Error("Integridad de configuraciones: hay claves duplicadas.");
+        keys.add(setting.key);
+        if (setting.key === key) current = setting;
+      }
+      const candidate: ProjectSetting = {
+        projectId: project.projectId,
+        key,
+        value: structuredClone(value),
+        source,
+        updatedAt: Date.now()
+      };
+      validateProjectSetting(candidate, project.projectId);
+      await saveSetting.call(this.store, candidate, current);
+      return cloneProjectSetting(candidate);
+    });
+  }
+
   /** Devuelve los diccionarios pertenecientes únicamente al libro activo. */
   async getProjectDictionaries(): Promise<readonly ProjectDictionary[]> {
     return this.enqueueKnowledgeOperation(async () => {
@@ -1928,6 +1993,7 @@ export class HostEngineApi {
       explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
       evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
       semanticContradictionAnalysis: false,
+      projectSettings: Boolean(this.store.saveProjectSetting && this.store.loadProjectSettings),
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),

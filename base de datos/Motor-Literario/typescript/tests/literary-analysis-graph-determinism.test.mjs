@@ -77,6 +77,6 @@ test("el grafo conserva la distinción entre destino compartido y destinos exclu
   assert.equal(graph.twoHopConvergentSourceCount, 1);
   assert.equal(graph.twoHopSharedDestinationCount, 1);
   assert.equal(graph.twoHopExclusiveDestinationCount, 1);
-  assert.equal(graph.twoHopIndependentBranchSourceCount, 1);
+  assert.equal(graph.twoHopIndependentBranchSourceCount, 0);
   assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
 });

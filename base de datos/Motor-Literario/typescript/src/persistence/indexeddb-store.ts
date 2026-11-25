@@ -5054,7 +5054,9 @@ export class IndexedDbProjectStore implements ProjectStore {
     await new Promise<void>((resolve, reject) => {
       // La biblioteca se incluye incluso sin writerId para detectar
       // entradas archivadas que no podríamos mantener coherentes sin identidad.
-      const stores = [ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS];
+      const stores = [
+        ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS, FINALIZATION_RECEIPTS
+      ];
       const transaction = db.transaction(stores, "readwrite");
       const entityStore = transaction.objectStore(ENTITIES);
       const relationStore = transaction.objectStore(RELATIONS);
@@ -5062,6 +5064,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       const assertionStore = transaction.objectStore(ASSERTIONS);
       const ideaStore = transaction.objectStore(IDEAS);
       const personalIdeaStore = transaction.objectStore(PERSONAL_IDEAS);
+      const receiptStore = transaction.objectStore(FINALIZATION_RECEIPTS);
       const requests = [
         entityStore.index("by-project").getAll(projectId),
         relationStore.index("by-project").getAll(projectId),
@@ -5070,13 +5073,16 @@ export class IndexedDbProjectStore implements ProjectStore {
         ideaStore.index("by-project").getAll(projectId),
         writerId
           ? personalIdeaStore.index("by-writer-source").getAll([writerId, projectId])
-          : personalIdeaStore.index(PERSONAL_IDEA_SOURCE_INDEX).getAll(projectId)
+          : personalIdeaStore.index(PERSONAL_IDEA_SOURCE_INDEX).getAll(projectId),
+        receiptStore.get([writerId ?? "", projectId, FINALIZATION_RECEIPT_ID])
       ];
-      const results: unknown[][] = Array.from({ length: requests.length }, () => []);
+      const results: unknown[] = Array.from({ length: requests.length }, () => []);
       let remaining = requests.length;
       requests.forEach((request, index) => {
         request.onsuccess = () => {
-          results[index] = request.result as unknown[];
+          results[index] = index === 6
+            ? request.result
+            : request.result as unknown[];
           remaining--;
           if (remaining !== 0) return;
           try {
@@ -5184,11 +5190,43 @@ export class IndexedDbProjectStore implements ProjectStore {
             if (!writerId && originalPersonalEntries.length > 0) {
               throw new Error("Se requiere la identidad estable del escritor para consolidar entidades de un libro con ideas ya archivadas.");
             }
+            const finalizationReceipt = results[6] as StoredProjectFinalizationReceipt | undefined;
+            if (writerId && finalizationReceipt) {
+              validateFinalizationReceipt(finalizationReceipt, writerId, projectId);
+            }
             const personalEntries = writerId
               ? remapPersonalIdeaEntriesForEntityMerge(
                 originalPersonalEntries, writerId, projectId, sourceEntityId, mergedEntity
               )
               : [];
+            let updatedFinalizationReceipt: StoredProjectFinalizationReceipt | undefined;
+            if (finalizationReceipt) {
+              const orderedOriginal = [...originalPersonalEntries].sort((first, second) =>
+                first.idea.id.localeCompare(second.idea.id)
+              );
+              if (JSON.stringify(orderedOriginal.map(entry => entry.idea.id)) !==
+                  JSON.stringify(finalizationReceipt.archivedIdeaIds)) {
+                throw new Error("La biblioteca no coincide con los IDs del recibo durante la consolidación.");
+              }
+              const previousContent = createPersonalIdeaArchiveChecksumBuilder();
+              for (const entry of orderedOriginal) previousContent.add(entry);
+              const previousChecksum = previousContent.digest();
+              if (finalizationReceipt.archiveContentChecksum !== undefined &&
+                  previousChecksum !== finalizationReceipt.archiveContentChecksum) {
+                throw new Error("La biblioteca no coincide con el checksum del contenido archivado.");
+              }
+              const remappedById = new Map(personalEntries.map(entry => [entry.idea.id, entry]));
+              const nextContent = createPersonalIdeaArchiveChecksumBuilder();
+              for (const ideaId of finalizationReceipt.archivedIdeaIds) {
+                const entry = remappedById.get(ideaId);
+                if (!entry) throw new Error("La consolidación perdió una entrada de la biblioteca personal.");
+                nextContent.add(entry);
+              }
+              updatedFinalizationReceipt = {
+                ...finalizationReceipt,
+                archiveContentChecksum: nextContent.digest()
+              };
+            }
             entityStore.put(mergedEntity);
             entityStore.delete([projectId, sourceEntityId]);
             const relationGroups = new Map<string, Array<{
@@ -5253,6 +5291,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             personalEntries.forEach((entry, index) => {
               if (entry !== originalPersonalEntries[index]) personalIdeaStore.put(entry);
             });
+            if (updatedFinalizationReceipt) receiptStore.put(updatedFinalizationReceipt);
           } catch (error) {
             try { transaction.abort(); } catch { /* transacción ya finalizada */ }
             reject(error);

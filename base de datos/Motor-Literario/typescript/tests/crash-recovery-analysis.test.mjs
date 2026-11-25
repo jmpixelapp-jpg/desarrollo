@@ -111,6 +111,18 @@ class DurableJournalStore {
       .map(idea => structuredClone(idea));
   }
 
+  async updateIdeaIfUnchanged(idea, expectedCurrent) {
+    const key = idea.projectId + ":" + idea.id;
+    const current = this.ideas.get(key);
+    if (!current) {
+      throw new Error("La idea ya no existe en el proyecto; puede haberse archivado o eliminado desde otra instancia.");
+    }
+    if (JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+      throw new Error("La idea cambió en otra instancia; actualiza la vista antes de volver a modificarla.");
+    }
+    this.ideas.set(key, structuredClone(idea));
+  }
+
   async saveAssertion(assertion) {
     this.assertions.set(assertion.projectId + ":" + assertion.id, structuredClone(assertion));
   }

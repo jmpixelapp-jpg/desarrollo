@@ -58,7 +58,7 @@ npm test
 npm run bench
 ```
 
-La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. La ejecución más reciente debe consultarse en [GitHub Actions](https://github.com/jmpixelapp-jpg/desarrollo/actions).
+La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. En el commit `e7181ba25e1e79c9acbcf4df4a7269001b2b4ad3`, el 25 de noviembre de 2026, pasaron **312 pruebas: 303 aprobadas, 0 fallidas y 9 omitidas**; también pasaron build y benchmark. [Ver ejecución completa](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45567766129).
 
 El benchmark de CI usa escenarios sintéticos y un adaptador en memoria. Sus latencias no representan mediciones de disco ni sustituyen pruebas en los equipos y adaptadores del programa anfitrión.
 ## Límites que permanecen

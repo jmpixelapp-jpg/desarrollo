@@ -10533,6 +10533,11 @@ test("la API vincula acontecimientos persistidos a escenas del documento y revis
   const result = await api.analyzeLiteraryDocument("chapter");
   assert.deepEqual(result.explicitScenes[0].eventLinks.map(item => item.eventId),["alarm"]);
   assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,true);
+  const anaTrajectory=result.characterNarrativeTrajectories.trajectories.find(item => item.entityId==="ana");
+  assert.ok(anaTrajectory);
+  assert.deepEqual(anaTrajectory.eventParticipation.map(item => item.eventId),["alarm"]);
+  assert.deepEqual(anaTrajectory.scenes[0].eventIds,["alarm"]);
+  assert.equal(anaTrajectory.scenes[0].participationStatus,"linked-to-explicit-event-evidence");
   assert.deepEqual(api.getSnapshot("chapter"),before);
 });
 
@@ -12650,4 +12655,9 @@ test("la API incorpora afirmaciones almacenadas a la evolución de atributos ent
   assert.ok(profile);
   assert.deepEqual(profile.scenes.map(item => item.values), [[20], [21]]);
   assert.equal(profile.transitions[0].status, "changed-value");
+  const trajectory=result.characterNarrativeTrajectories.trajectories.find(item => item.entityId==="ana");
+  assert.ok(trajectory);
+  assert.deepEqual(trajectory.attributes.find(item => item.attribute==="age").scenes
+    .map(item => item.values),[[20],[21]]);
+  assert.deepEqual(trajectory.scenes.map(item => item.attributeValues[0].values),[[20],[21]]);
 });

@@ -78,6 +78,16 @@ La ausencia de una mención no prueba que el personaje esté ausente. La ausenci
 
 Los estados `unknown-due-to-mention-truncation` y `unknown-due-to-event-truncation` se usan cuando los límites de cuarenta menciones expuestas por escena o cien vínculos de acontecimientos impiden concluir que no hay evidencia. `sourceTruncatedSceneIndexes` identifica esas escenas. Los perfiles se limitan a cien y priorizan escenas con participación documentada, después cobertura nominal, frecuencia e ID estable.
 
+## Comparación de atributos explícitos entre escenas
+
+La propiedad `characterAttributeEvolution` compara afirmaciones de edad, ubicación y rol conservadas en el historial narrativo del proyecto. El anfitrión suministra las afirmaciones persistidas y el analizador solo asigna a una escena aquellas cuya evidencia no está marcada como obsoleta y coincide exactamente con el documento y la revisión analizados, además de solaparse con el rango de contenido de la escena.
+
+Cada perfil agrupa una identidad y un atributo. Sus instantáneas por escena muestran los valores observados, el número de afirmaciones y hasta veinte fragmentos de evidencia UTF-16. Las transiciones comparan las escenas consecutivas que sí contienen una afirmación de ese atributo; `interveningSceneCount` informa cuántas escenas explícitas quedan entre ambas. Los estados posibles son `unchanged-value`, `changed-value` y `multiple-values-in-scene`. Los valores textuales se comparan tras normalización NFKC, recorte de espacios y minúsculas; los valores numéricos se comparan exactamente.
+
+Las afirmaciones obsoletas se cuentan como `staleAssertionCount`; las de otros documentos o revisiones como `outOfScopeAssertionCount`; y las de la revisión actual que no se solapan con una escena explícita como `unmappedCurrentAssertionCount`. Estas categorías no se fusionan. El límite es de veinte mil afirmaciones de entrada, doscientos perfiles de salida y veinte muestras de evidencia por escena y atributo.
+
+Un valor diferente se informa como cambio observado, no como contradicción demostrada: puede reflejar paso del tiempo, corrección editorial, una forma distinta de describir el mismo atributo o una incoherencia. Varios valores dentro de una escena se conservan como `multiple-values-in-scene` sin escoger uno. La ausencia de afirmación no prueba que el atributo se mantuviera igual. Esta primera comparación se restringe a escenas del documento y revisión activos; las afirmaciones de otros capítulos se contabilizan como fuera de alcance y no se ordenan entre sí en ausencia de una referencia temporal explícita comparable.
+
 ## Señales gramaticales por escena
 
 Cada escena explícita incluye `voiceSignals`, calculado sobre sus tokens y fuera de los rangos de diálogo reconocidos. Devuelve conteos de pronombres explícitos de primera, segunda y tercera persona, una clasificación descriptiva y hasta 40 muestras con offsets UTF-16 absolutos. La clasificación es `undetermined` cuando no hay señales, y `mixed-signals` cuando aparecen varias categorías.

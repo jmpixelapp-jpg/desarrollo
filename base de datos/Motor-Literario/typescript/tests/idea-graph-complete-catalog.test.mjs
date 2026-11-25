@@ -1828,8 +1828,16 @@ test("los límites de muestras de ciclos y componentes no alteran los conteos co
 
 test("un catálogo de proyecto truncado no clasifica referencias externas como ausencias", () => {
   const idea = {
-    ...structuredClone(store.ideas[0]),
-    relatedIdeaIds: ["ghost"]
+    projectId,
+    ideaId: "partial-catalog-origin",
+    text: "Idea del catálogo parcial",
+    status: "IDEA",
+    relatedIdeaIds: ["ghost"],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
   };
   const result = analyzeLiteraryFragment({
     projectId,
@@ -1853,8 +1861,16 @@ test("un catálogo de proyecto truncado no clasifica referencias externas como a
 
 test("el catálogo heredado de ideas vinculadas nunca se presenta como exhaustivo", () => {
   const idea = {
-    ...structuredClone(store.ideas[0]),
-    relatedIdeaIds: ["ghost"]
+    projectId,
+    ideaId: "partial-catalog-origin",
+    text: "Idea del catálogo parcial",
+    status: "IDEA",
+    relatedIdeaIds: ["ghost"],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
   };
   const result = analyzeLiteraryFragment({
     projectId,
@@ -1874,19 +1890,21 @@ test("el catálogo heredado de ideas vinculadas nunca se presenta como exhaustiv
 });
 
 test("el desempate de IDs Unicode mantiene un orden canónico estable", () => {
+  const makeIdea = (ideaId, text) => ({
+    projectId,
+    ideaId,
+    text,
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
   const ideas = [
-    {
-      ...structuredClone(store.ideas[0]),
-      id: "é",
-      text: "motivo unicode compuesto",
-      relatedIdeaIds: []
-    },
-    {
-      ...structuredClone(store.ideas[0]),
-      id: "e\\u0301",
-      text: "motivo unicode descompuesto",
-      relatedIdeaIds: []
-    }
+    makeIdea("é", "motivo unicode compuesto"),
+    makeIdea("e\\u0301", "motivo unicode descompuesto")
   ];
   const analyze = (knownProjectIdeas) => analyzeLiteraryFragment({
     projectId,

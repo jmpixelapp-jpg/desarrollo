@@ -10375,33 +10375,137 @@ test("detecta secuencias recurrentes de acontecimientos en ventanas de escenas c
     "ESCENA 5","El patio quedó vacío.","***",
     "ESCENA 6","La campana suena."
   ].join("\\n");
-  const evidenceFor = excerpt => {
-    const start=text.indexOf(excerpt);
-    assert.notEqual(start,-1);
-    return {documentId:"chapter",revision:15,start,end:start+excerpt.length,excerpt};
+  const evidenceForAll = excerpt => {
+    const evidence=[];
+    let cursor=0;
+    while(true) {
+      const start=text.indexOf(excerpt,cursor);
+      if(start<0) break;
+      evidence.push({
+        documentId:"chapter",revision:15,
+        start,end:start+excerpt.length,excerpt
+      });
+      cursor=start+excerpt.length;
+    }
+    assert.ok(evidence.length>0);
+    return evidence;
   };
   const result=analyzeLiteraryFragment({
     projectId:"event-sequence-motifs",documentId:"chapter",revision:15,text,
     knownEvents:[
       {
         eventId:"storm",label:"Comienza la tormenta",participants:[],
-        evidence:[
-          evidenceFor("La tormenta comienza."),
-          evidenceFor("La tormenta comienza.",)
-        ]
+        evidence:evidenceForAll("La tormenta comienza.")
       },
       {
         eventId:"bell",label:"Suena la campana",participants:[],
-        evidence:[evidenceFor("La campana suena.")]
+        evidence:evidenceForAll("La campana suena.")
       }
     ]
   });
-  assert.equal(result.sceneEventSequenceMotifs.candidateWindowCount,9);
-  assert.equal(result.sceneEventSequenceMotifs.analyzedWindowCount,9);
-  assert.equal(result.sceneEventSequenceMotifs.emptyWindowCount,0);
-  assert.equal(result.sceneEventSequenceMotifs.sourceTruncatedWindowCount,0);
-  assert.equal(result.sceneEventSequenceMotifs.motifCount,0);
+
+  assert.deepEqual(result.sceneEventSequenceMotifs,{
+    explicitSceneCount:6,
+    candidateWindowCount:9,
+    analyzedWindowCount:9,
+    emptyWindowCount:0,
+    sourceTruncatedWindowCount:0,
+    motifCount:3,
+    omittedMotifCount:0,
+    motifs:[
+      {
+        sceneCount:3,
+        sceneSequence:[
+          {sceneOffset:1,eventIds:["storm"]},
+          {sceneOffset:2,eventIds:[]},
+          {sceneOffset:3,eventIds:["bell"]}
+        ],
+        occurrenceCount:2,
+        instances:[
+          {fromSceneIndex:1,toSceneIndex:3},
+          {fromSceneIndex:4,toSceneIndex:6}
+        ],
+        instancesTruncated:false
+      },
+      {
+        sceneCount:2,
+        sceneSequence:[
+          {sceneOffset:1,eventIds:["storm"]},
+          {sceneOffset:2,eventIds:[]}
+        ],
+        occurrenceCount:2,
+        instances:[
+          {fromSceneIndex:1,toSceneIndex:2},
+          {fromSceneIndex:4,toSceneIndex:5}
+        ],
+        instancesTruncated:false
+      },
+      {
+        sceneCount:2,
+        sceneSequence:[
+          {sceneOffset:1,eventIds:[]},
+          {sceneOffset:2,eventIds:["bell"]}
+        ],
+        occurrenceCount:2,
+        instances:[
+          {fromSceneIndex:2,toSceneIndex:3},
+          {fromSceneIndex:5,toSceneIndex:6}
+        ],
+        instancesTruncated:false
+      }
+    ]
+  });
 });
+
+test("excluye ventanas con escenas truncadas y cuenta las ventanas vacías", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","La alarma sonó.","***",
+    "ESCENA 2","El patio quedó vacío.","***",
+    "ESCENA 3","La campana repicó.","***",
+    "ESCENA 4","La biblioteca cerró.","***",
+    "ESCENA 5","El silencio continuó."
+  ].join("\\n");
+  const alarmStart=text.indexOf("La alarma sonó.");
+  const bellStart=text.indexOf("La campana repicó.");
+  const knownEvents=[
+    ...Array.from({length:101},(_,index)=>({
+      eventId:"alarm-"+String(index).padStart(3,"0"),
+      label:"Alarma "+index,
+      participants:[],
+      evidence:[{
+        documentId:"chapter",revision:16,
+        start:alarmStart,end:alarmStart+"La alarma sonó.".length,
+        excerpt:"La alarma sonó."
+      }]
+    })),
+    {
+      eventId:"bell",label:"Campana",participants:[],
+      evidence:[{
+        documentId:"chapter",revision:16,
+        start:bellStart,end:bellStart+"La campana repicó.".length,
+        excerpt:"La campana repicó."
+      }]
+    }
+  ];
+  const result=analyzeLiteraryFragment({
+    projectId:"event-sequence-truncation",documentId:"chapter",revision:16,text,knownEvents
+  });
+
+  assert.equal(result.explicitScenes[0].eventLinks.length,100);
+  assert.equal(result.explicitScenes[0].eventLinksTruncated,true);
+  assert.deepEqual(result.sceneEventSequenceMotifs,{
+    explicitSceneCount:5,
+    candidateWindowCount:7,
+    analyzedWindowCount:4,
+    emptyWindowCount:1,
+    sourceTruncatedWindowCount:2,
+    motifCount:0,
+    omittedMotifCount:0,
+    motifs:[]
+  });
+});
+
 
 test("la API publica comparaciones de continuidad con evidencia narrativa persistida", async () => {
   const store = new MemoryStore();

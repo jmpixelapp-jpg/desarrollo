@@ -474,6 +474,8 @@ export interface LiteraryCharacterMentionDistributionAnalysis {
   readonly characters: readonly LiteraryCharacterMentionDistribution[];
 }
 export interface LiteraryEventDependencyCandidate {
+  /** Identificador estable dentro de la revisión analizada. */
+  readonly candidateId: string;
   readonly firstEventId: string;
   readonly firstEventLabel: string;
   readonly secondEventId: string;
@@ -500,6 +502,56 @@ export interface LiteraryEventDependencyAnalysis {
   readonly omittedCandidateCount: number;
   /** Candidatos basados en conectores causales literales; máximo cincuenta. */
   readonly candidates: readonly LiteraryEventDependencyCandidate[];
+}
+
+export type LiteraryCharacterCausalRole =
+  | "cause-event-participant"
+  | "consequence-event-participant"
+  | "both-events-participant";
+export interface LiteraryCharacterCausalRelation {
+  readonly candidateId: string;
+  readonly characterRole: LiteraryCharacterCausalRole;
+  readonly candidate: LiteraryEventDependencyCandidate;
+}
+export interface LiteraryCharacterTrajectorySceneSnapshot {
+  readonly sceneIndex: number;
+  readonly evidenceStatus: "documented" | "no-known-evidence" | "unknown-due-to-truncation";
+  readonly mentionStatus: LiteraryCharacterSceneMentionStatus;
+  readonly participationStatus: LiteraryCharacterSceneParticipationStatus;
+  readonly eventIds: readonly string[];
+  readonly eventEvidenceRangeCount: number;
+  readonly attributeValues: readonly {
+    readonly attribute: NarrativeAssertion["attribute"];
+    readonly values: readonly (string | number)[];
+    readonly assertionIds: readonly string[];
+    readonly status: "single-value" | "multiple-values";
+  }[];
+  readonly causalCandidateIds: readonly string[];
+  readonly incompleteReasons: readonly ("mention-truncation" | "event-truncation")[];
+}
+export interface LiteraryCharacterNarrativeTrajectory {
+  readonly entityId: string;
+  readonly canonicalName: string;
+  readonly mentionSceneCount: number;
+  readonly eventParticipationSceneCount: number;
+  readonly attributeAssertionCount: number;
+  readonly causalCandidateCount: number;
+  readonly observedSceneIndexes: readonly number[];
+  readonly incompleteSceneIndexes: readonly number[];
+  readonly attributes: readonly LiteraryCharacterAttributeProfile[];
+  readonly eventParticipation: readonly LiteraryCharacterEventEvidenceProfile[];
+  readonly causalRelations: readonly LiteraryCharacterCausalRelation[];
+  readonly scenes: readonly LiteraryCharacterTrajectorySceneSnapshot[];
+}
+export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
+  readonly explicitSceneCount: number;
+  readonly catalogCharacterCount: number;
+  readonly profileCount: number;
+  readonly omittedCharacterCount: number;
+  readonly sourceTruncatedSceneCount: number;
+  readonly sourceTruncatedSceneIndexes: readonly number[];
+  readonly causalCandidateCount: number;
+  readonly trajectories: readonly LiteraryCharacterNarrativeTrajectory[];
 }
 
 export interface LiteraryCharacterAttributeAssertionEvidence {
@@ -1036,6 +1088,8 @@ export interface LiteraryAnalysisResult {
   readonly characterSceneEvidence: LiteraryCharacterSceneEvidenceAnalysis;
   /** Comparación de atributos explícitos de personajes entre escenas de la revisión vigente. */
   readonly characterAttributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis;
+  /** Trayectorias documentales que integran atributos, participación y causalidades candidatas por personaje. */
+  readonly characterNarrativeTrajectories: LiteraryCharacterNarrativeTrajectoryAnalysis;
   /** Dependencias causales candidatas entre acontecimientos, respaldadas por conectores literales del texto. */
   readonly eventDependencyAnalysis: LiteraryEventDependencyAnalysis;
   /** Evidencia de acontecimientos asociados explícitamente a participantes, desglosada por escena. */

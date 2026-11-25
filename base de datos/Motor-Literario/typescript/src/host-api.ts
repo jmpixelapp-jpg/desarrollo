@@ -419,7 +419,8 @@ function isValidPersonalIdeaEntry(
           !["IDEA", "incorporated", "discarded"].includes(change.status) ||
           (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
           !["initial", "writer", "text-revised"].includes(change.reason) ||
-          (index === 0 ? change.reason !== "initial" : change.reason === "initial") ||
+          (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
+            change.status === idea.statusHistory[index - 1]?.status) ||
           (change.changedAt !== undefined && previousChangedAt !== undefined &&
             change.changedAt < previousChangedAt)) return false;
       if (change.changedAt !== undefined) previousChangedAt = change.changedAt;

@@ -863,6 +863,10 @@ export interface LiteraryIdeaGraphNode {
     | "mixed-status"
     | "unknown-incomplete-snapshot"
     | "targets-not-in-snapshot";
+  /** Participación en un ciclo de referencias explícitas dentro del snapshot. */
+  readonly cycleMembership: "cyclic-component" | "acyclic-within-snapshot";
+  /** Número de ideas del componente fuertemente conexo; 1 también identifica auto-referencia. */
+  readonly cycleComponentSize: number;
 }
 /** Referencia explícita y resultado de resolver su destino contra el alcance de catálogo declarado. */
 export interface LiteraryIdeaGraphReference {
@@ -3927,6 +3931,23 @@ function buildLiteraryIdeaGraph(
   cycles.sort((left, right) =>
     compareIdeaIds(left.ideaIds[0]!, right.ideaIds[0]!)
   );
+
+  // Proyecta la pertenencia a componentes cíclicos en cada nodo. Se conserva
+  // el tamaño del componente aunque la lista pública de ciclos esté truncada.
+  const cycleMembershipById = new Map<string, number>();
+  for (const cycle of cycles) {
+    for (const ideaId of cycle.ideaIds) cycleMembershipById.set(ideaId, cycle.ideaIds.length);
+  }
+  for (let index = 0; index < nodes.length; index++) {
+    const cycleComponentSize = cycleMembershipById.get(nodes[index]!.ideaId) ?? 0;
+    nodes[index] = {
+      ...nodes[index]!,
+      cycleMembership: cycleComponentSize > 0
+        ? "cyclic-component"
+        : "acyclic-within-snapshot",
+      cycleComponentSize
+    };
+  }
 
   // Union-find agrupa los componentes débiles sin duplicar las aristas.
   const weakGroups = new Map<number, string[]>();

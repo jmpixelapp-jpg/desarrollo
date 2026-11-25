@@ -214,3 +214,21 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **CI específica verificada:** [45722890027](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45722890027), commit `8c2578174e002a7ba55447a607b5ea07b4a73c61`: build Vite correcto; **84/84 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye los casos de persistencia automática y recuperación de checkpoints obsoletos. La validación de tipos general [45722890012](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45722890012) ya no reporta errores en los archivos del monitor, contratos, HostEngineApi ni IndexedDB; permanece bloqueada exclusivamente por errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`. Una ejecución intermedia detectó el error de tipo `CommitResult.documentId`, que fue corregido en `8c25781`.
 
 **Limitación pendiente:** IndexedDB guarda los checkpoints por proyecto/documento, pero todavía no se implementó lease/fencing token entre dos pestañas que editen simultáneamente el mismo documento. Esto no sustituye el journal durable del manuscrito ni ofrece sincronización multi-pestaña de métricas.
+
+
+## 10. Nueva entrega — errores de checkpoint en cierre seguro (25 de noviembre de 2026)
+
+**Objetivo:** distinguir entre guardado automático no bloqueante y confirmación explícita de persistencia durante el cierre de la aplicación.
+
+**Cambio:** los fallos de escritura del checkpoint ahora permanecen registrados por documento hasta que una escritura posterior finalice correctamente. Los callbacks del motor siguen aislados: el autor puede continuar escribiendo aunque IndexedDB esté temporalmente indisponible. En cambio, `closeLiveAuthorMonitorDocumentSafely` y `disposeSafely` esperan las operaciones pendientes y no anuncian un cierre seguro si queda un error de persistencia sin resolver.
+
+**Prueba añadida:** un almacén de prueba fuerza `quota_exceeded`; la llamada a `disposeSafely()` debe rechazar la operación y la sesión de métricas debe seguir disponible en memoria. Se comprueba que no hay desmontaje silencioso tras un guardado fallido.
+
+**Archivos:**
+- `typescript/src/host-api.ts`: retención del error por documento, retry posterior y propagación al lifecycle seguro.
+- `typescript/tests/live-author-monitor-host-api.test.mjs`: regresión de fallo de almacenamiento.
+- `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`: sección 25.
+
+**Commits:** [5db2c51 — propagar fallos de checkpoint](https://github.com/jmpixelapp-jpg/desarrollo/commit/5db2c51a7e8981b0f24e300c8e931beb2d27852f), [a260ca4 — retener error hasta escritura correcta](https://github.com/jmpixelapp-jpg/desarrollo/commit/a260ca486c835a8f06b616a3709a269c564df3d0), [dde974d — prueba de no desmontaje](https://github.com/jmpixelapp-jpg/desarrollo/commit/dde974d98cd5b0c9b9dacc9c86a35ab26e4b0d95), [e4011c1 — especificación del lifecycle](https://github.com/jmpixelapp-jpg/desarrollo/commit/e4011c1686fd6c91006bea93d1dc2f1154341af8).
+
+**Resultado verificado:** CI aislada [45723191692](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723191692): build Vite correcto; **85/85 pruebas aprobadas, 0 fallidas y 0 omitidas**. La CI general [45723191936](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723191936) sigue fallando solo por errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`; no reporta errores del módulo del monitor ni de IndexedDB.

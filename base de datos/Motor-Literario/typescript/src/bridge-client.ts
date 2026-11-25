@@ -301,7 +301,7 @@ export class MotorLiterarioBridgeClient {
   }
 
   finalizeProjectToIdeaLibrary(projectId: string): Promise<ProjectFinalizationSummary> {
-    return this.request("project.call", {
+    return this.request<ProjectFinalizationSummary>("project.call", {
       projectId,
       method: "finalizeProjectToIdeaLibrary",
       args: []
@@ -311,7 +311,7 @@ export class MotorLiterarioBridgeClient {
   getProjectFinalizationReceipt(
     projectId: string
   ): Promise<StoredProjectFinalizationReceipt | null> {
-    return this.request("project.call", {
+    return this.request<StoredProjectFinalizationReceipt | null>("project.call", {
       projectId,
       method: "getProjectFinalizationReceipt",
       args: []
@@ -323,7 +323,7 @@ export class MotorLiterarioBridgeClient {
     cursor: PersonalIdeaLibraryCursor | null = null,
     limit = 50
   ): Promise<PersonalIdeaLibraryPage> {
-    return this.request("project.call", {
+    return this.request<PersonalIdeaLibraryPage>("project.call", {
       projectId,
       method: "getPersonalIdeaLibraryPage",
       args: [cursor, limit]
@@ -331,7 +331,7 @@ export class MotorLiterarioBridgeClient {
   }
 
   getRecordLifecycleHistory(projectId: string, recordId: string): Promise<readonly RecordLifecycle[]> {
-    return this.request("project.call", {
+    return this.request<readonly RecordLifecycle[]>("project.call", {
       projectId,
       method: "getRecordLifecycleHistory",
       args: [recordId]
@@ -342,7 +342,7 @@ export class MotorLiterarioBridgeClient {
     projectId: string,
     input: Omit<RecordLifecycle, "projectId">
   ): Promise<RecordLifecycle> {
-    return this.request("project.call", {
+    return this.request<RecordLifecycle>("project.call", {
       projectId,
       method: "appendRecordLifecycle",
       args: [input]
@@ -350,7 +350,7 @@ export class MotorLiterarioBridgeClient {
   }
 
   getRelationLifecycleHistory(projectId: string, relationId: string): Promise<readonly RelationLifecycle[]> {
-    return this.request("project.call", {
+    return this.request<readonly RelationLifecycle[]>("project.call", {
       projectId,
       method: "getRelationLifecycleHistory",
       args: [relationId]
@@ -361,7 +361,7 @@ export class MotorLiterarioBridgeClient {
     projectId: string,
     input: Omit<RelationLifecycle, "projectId">
   ): Promise<RelationLifecycle> {
-    return this.request("project.call", {
+    return this.request<RelationLifecycle>("project.call", {
       projectId,
       method: "appendRelationLifecycle",
       args: [input]

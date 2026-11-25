@@ -2212,7 +2212,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 22);
+      assert.equal(version, 23);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2452,7 +2452,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 22);
+    assert.equal(openedVersion, 23);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -10254,12 +10254,14 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
       type: "motor-literario:narrative-change",
       projectId: "book-a"
     }]);
+    assert.equal(FakeBroadcastChannel.instances[1].closed, true);
 
     unsubscribe();
     assert.equal(FakeBroadcastChannel.instances[0].closed, true);
     readerStore.publishNarrativeChange("book-b");
     await new Promise(resolve => queueMicrotask(resolve));
     assert.deepEqual(received, ["book-a"]);
+    assert.equal(FakeBroadcastChannel.instances[2].closed, true);
   } finally {
     if (originalBroadcastChannel) {
       Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);

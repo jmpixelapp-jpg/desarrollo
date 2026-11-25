@@ -1447,3 +1447,74 @@ test("la resonancia léxica conserva la frecuencia de los motivos compartidos", 
     api.dispose();
   }
 });
+
+
+test("la caché del grafo se invalida cuando cambian los vínculos declarados", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-link-invalidation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLos vínculos editoriales pueden cambiar.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.referenceCount, 6);
+    assert.equal(before.includedReferenceCount, 5);
+    assert.equal(before.cycleCount, 2);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.relatedIdeaIds = [];
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(after.referenceCount, 4);
+    assert.equal(after.includedReferenceCount, 3);
+    assert.equal(after.notIncludedReferenceCount, 1);
+    assert.equal(after.cycleCount, 1);
+    assert.deepEqual(after.cycles.map(cycle => cycle.ideaIds), [["solo"]]);
+    assert.equal(
+      after.references.some(reference =>
+        reference.fromIdeaId === "bridge" &&
+        (reference.toIdeaId === "finish" || reference.toIdeaId === "origin")
+      ),
+      false
+    );
+  } finally {
+    api.dispose();
+  }
+});
+
+test("el grafo conserva su orden canónico ante catálogos recibidos en distinto orden", async () => {
+  const analyze = async (ideas, writerId) => {
+    const api = new HostEngineApi({
+      store: { ...store, documents: new Map(), ideas: structuredClone(ideas) }
+    });
+    api.initializeProject({ projectId, projectName: "Book", writerId });
+    await api.openDocument({
+      documentId: "chapter",
+      text: "Escena 1\\nEl orden de entrada no debe alterar el grafo.",
+      revision: 0,
+      sequence: 0
+    });
+    try {
+      const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+      return {
+        nodeIds: graph.nodes.map(node => node.ideaId),
+        references: graph.references,
+        cycles: graph.cycles,
+        weakComponents: graph.weakComponents
+      };
+    } finally {
+      api.dispose();
+    }
+  };
+
+  const forward = await analyze(store.ideas, "writer-graph-order-forward");
+  const reversed = await analyze([...store.ideas].reverse(), "writer-graph-order-reversed");
+  assert.deepEqual(reversed, forward);
+  assert.deepEqual(forward.nodeIds, ["bridge", "finish", "origin", "solo"]);
+});

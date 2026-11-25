@@ -107,6 +107,7 @@ Las siguientes son ejecuciones observadas, no estimaciones:
 | [45721545786](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721545786) | Cola reentrante limitada | Build correcto; 76 pruebas aprobadas, 0 fallidas, 0 omitidas |
 | [45721556577](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721556577) | Prueba de desbordamiento de cola | Build correcto; 77 pruebas aprobadas, 0 fallidas, 0 omitidas |
 | [45721703791](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703791) | Validación de configuración de la cola | Build correcto; 78 pruebas aprobadas, 0 fallidas, 0 omitidas |
+| [45721849829](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721849829) | Recuperación completa tras desbordamiento reentrante | Build correcto; 78 pruebas aprobadas, 0 fallidas, 0 omitidas |
 
 **Cobertura más reciente:** el commit `4f74096c8ce17e70a3c88aa1519ec2be81585d38` añade validación del rango de `maxQueuedTransactions` (valores inválidos, límites 1 y 65536 y valor predeterminado). La CI específica [45721703791](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703791) terminó correctamente con 78/78 pruebas aprobadas.
 
@@ -164,3 +165,17 @@ La ejecución general [45721556553](https://github.com/jmpixelapp-jpg/desarrollo
 **CI general:** la ejecución [45721703703](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703703) sigue fallando antes de las pruebas generales por errores de TypeScript en `src/literary-analysis.ts`; no son errores reportados en el monitor y ese archivo no se modificó.
 
 A partir de esta entrega, cualquier avance nuevo del monitor debe actualizar esta bitácora en el mismo lote de trabajo que el código y la especificación.
+
+
+## 8. Nueva entrega — recuperación verificada tras desbordamiento (25 de noviembre de 2026)
+
+**Objetivo:** comprobar que el monitor no solo se pausa con seguridad al rebasar el límite de eventos reentrantes, sino que puede volver a trabajar después de una reconciliación correcta.
+
+**Prueba ampliada:** tras producir una ráfaga superior al límite, el source queda suspendido en la secuencia 1 y se retira del proveedor. La prueba toma el snapshot local del editor, que ya incluye las secuencias 2 y 3, lo pasa por `resynchronize()`, confirma que se reanuda en secuencia 3 y aplica una nueva edición. El monitor captura la secuencia 4. Los consumidores ven `[1, 4]`: los cambios 2 y 3 están cubiertos por el snapshot reconciliado y no se reproducen como deltas desordenados.
+
+**Archivos:** prueba `typescript/tests/live-author-monitor-editor-transaction-source.test.mjs`; especificación técnica sección 23; esta bitácora.
+
+**Commits:** [a9093da — prueba de recuperación tras overflow](https://github.com/jmpixelapp-jpg/desarrollo/commit/a9093daeac9b25bed3b2f5638f5c25fecb6d8efe), [16fcbb3 — documentación técnica de recuperación](https://github.com/jmpixelapp-jpg/desarrollo/commit/16fcbb3a44c74031d993c08c578d3b7449017af3).
+
+**Resultado verificado:** [CI específica 45721849829](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721849829), build Vite correcto, 78/78 pruebas aprobadas, 0 fallidas y 0 omitidas.
+

@@ -92,6 +92,7 @@ export interface LiteraryAnalysisInput {
   readonly knownIdeas?: readonly LiteraryAnalysisKnownIdea[];
   readonly knownRelationsOmittedCount?: number;
   readonly knownIdeasOmittedCount?: number;
+  readonly knownIdeasOmittedCount?: number;
 }
 export interface LiteraryAnalysisOccurrence { readonly start: number; readonly end: number; }
 export interface LiteraryRepeatedWord {
@@ -4416,6 +4417,14 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (!Array.isArray(input.knownProjectEvents) || input.knownProjectEvents.length > 2_000)) ||
       (input.knownProjectEventsOmittedCount !== undefined &&
         (!Number.isSafeInteger(input.knownProjectEventsOmittedCount) || input.knownProjectEventsOmittedCount < 0)) ||
+      (input.knownRelations !== undefined &&
+        (!Array.isArray(input.knownRelations) || input.knownRelations.length > 2_000)) ||
+      (input.knownIdeas !== undefined &&
+        (!Array.isArray(input.knownIdeas) || input.knownIdeas.length > 2_000)) ||
+      (input.knownRelationsOmittedCount !== undefined &&
+        (!Number.isSafeInteger(input.knownRelationsOmittedCount) || input.knownRelationsOmittedCount < 0)) ||
+      (input.knownIdeasOmittedCount !== undefined &&
+        (!Number.isSafeInteger(input.knownIdeasOmittedCount) || input.knownIdeasOmittedCount < 0)) ||
       (input.knownEventLifecycles !== undefined &&
         (!Array.isArray(input.knownEventLifecycles) || input.knownEventLifecycles.length > 20_000)) ||
       (input.knownAssertions !== undefined &&
@@ -4492,6 +4501,76 @@ function validateInput(input: LiteraryAnalysisInput): number {
           typeof evidence.excerpt !== "string" ||
           (evidence.status !== undefined && evidence.status !== "stale")) {
         throw new Error("La evidencia del catálogo global de acontecimientos es inválida.");
+      }
+    }
+  }
+
+  const relationIds = new Set<string>();
+  for (const relation of input.knownRelations ?? []) {
+    if (!relation || relation.projectId !== input.projectId ||
+        typeof relation.relationId !== "string" || !relation.relationId.trim() ||
+        relationIds.has(relation.relationId) ||
+        typeof relation.fromEntityId !== "string" || !relation.fromEntityId.trim() ||
+        typeof relation.toEntityId !== "string" || !relation.toEntityId.trim() ||
+        typeof relation.relationType !== "string" || !relation.relationType.trim() ||
+        !Number.isSafeInteger(relation.evidenceCount) || relation.evidenceCount < 0 ||
+        !Number.isSafeInteger(relation.staleEvidenceCount) || relation.staleEvidenceCount < 0 ||
+        !Array.isArray(relation.evidence) || relation.evidence.length > 20 ||
+        relation.evidenceCount < relation.evidence.length) {
+      throw new Error("El catálogo de relaciones narrativas del análisis es inválido.");
+    }
+    relationIds.add(relation.relationId);
+    for (const evidence of relation.evidence) {
+      if (!evidence || typeof evidence.documentId !== "string" || !evidence.documentId.trim() ||
+          !Number.isSafeInteger(evidence.revision) || evidence.revision < 0 ||
+          !Number.isSafeInteger(evidence.start) || evidence.start < 0 ||
+          !Number.isSafeInteger(evidence.end) || evidence.end <= evidence.start ||
+          typeof evidence.excerpt !== "string" ||
+          (evidence.status !== undefined && evidence.status !== "stale")) {
+        throw new Error("La evidencia de una relación narrativa es inválida.");
+      }
+    }
+  }
+
+  const ideaIds = new Set<string>();
+  for (const idea of input.knownIdeas ?? []) {
+    if (!idea || idea.projectId !== input.projectId ||
+        typeof idea.ideaId !== "string" || !idea.ideaId.trim() ||
+        ideaIds.has(idea.ideaId) ||
+        typeof idea.text !== "string" || !idea.text.trim() || idea.text.length > 100_000 ||
+        !["IDEA","incorporated","discarded"].includes(idea.status) ||
+        typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
+        typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||
+        !Array.isArray(idea.relatedEntityIds) || idea.relatedEntityIds.length > 500 ||
+        idea.relatedEntityIds.some(id => typeof id !== "string" || !knownCharacterIds.has(id)) ||
+        new Set(idea.relatedEntityIds).size !== idea.relatedEntityIds.length ||
+        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
+        idea.relatedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+        !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
+        !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
+        !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||
+        idea.evidenceCount < idea.evidence.length ||
+        !Array.isArray(idea.statusHistory) || idea.statusHistory.length > 100 ||
+        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
+      throw new Error("El catálogo de ideas y decisiones del análisis literario es inválido.");
+    }
+    ideaIds.add(idea.ideaId);
+    for (const evidence of idea.evidence) {
+      if (!evidence || typeof evidence.documentId !== "string" || !evidence.documentId.trim() ||
+          !Number.isSafeInteger(evidence.revision) || evidence.revision < 0 ||
+          !Number.isSafeInteger(evidence.start) || evidence.start < 0 ||
+          !Number.isSafeInteger(evidence.end) || evidence.end <= evidence.start ||
+          typeof evidence.excerpt !== "string" ||
+          (evidence.status !== undefined && evidence.status !== "stale")) {
+        throw new Error("La evidencia de una idea vinculada es inválida.");
+      }
+    }
+    for (const change of idea.statusHistory) {
+      if (!change || !["IDEA","incorporated","discarded"].includes(change.status) ||
+          !["initial","writer","text-revised"].includes(change.reason) ||
+          (change.changedAt !== undefined &&
+            (!Number.isFinite(change.changedAt) || change.changedAt < 0))) {
+        throw new Error("El historial de decisiones de una idea vinculada es inválido.");
       }
     }
   }

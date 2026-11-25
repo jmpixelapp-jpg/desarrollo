@@ -1353,6 +1353,8 @@ export class IndexedDbProjectStore implements ProjectStore {
           try { listener(projectId); } catch { /* Un suscriptor no debe bloquear a los demás. */ }
         }
       };
+      // En Node, un canal de notificaciones no debe mantener vivo el proceso.
+      (channel as BroadcastChannel & { unref?: () => void }).unref?.();
       this.narrativeChangeChannel = channel;
       return channel;
     } catch {
@@ -1376,9 +1378,8 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   private publishNarrativeChange(projectId: string): void {
-    // No crea un canal en procesos sin suscriptores; conserva el carácter
-    // opcional del mecanismo y evita mantener recursos abiertos en Node.
-    if (this.narrativeChangeListeners.size === 0) return;
+    // Una escritura directa también debe avisar a otras pestañas aunque este
+    // almacén no tenga suscriptores locales.
     const channel = this.ensureNarrativeChangeChannel();
     if (!channel) return;
     try {

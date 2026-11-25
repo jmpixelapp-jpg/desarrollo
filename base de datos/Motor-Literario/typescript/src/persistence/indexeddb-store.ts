@@ -4532,51 +4532,68 @@ export class IndexedDbProjectStore implements ProjectStore {
         };
 
         const cursorRequest = openProjectIdeaCursor();
+        let preflightCursorActive = false;
+        let preflightCursorPending = false;
         cursorRequest.onsuccess = () => {
+          if (preflightCursorActive) {
+            preflightCursorPending = true;
+            return;
+          }
+          preflightCursorActive = true;
           try {
-            if (finished) return;
-            const cursor = cursorRequest.result;
-            if (!cursor) {
-              const orderedEntityIds = [...referencedEntityIds]
-                .sort((first, second) => first.localeCompare(second));
-              let entityIndex = 0;
-              let validatingEntities = false;
-              const validateNextEntity = (): void => {
-                if (finished || validatingEntities) return;
-                validatingEntities = true;
-                try {
-                  while (!finished && entityIndex < orderedEntityIds.length) {
-                    const entityId = orderedEntityIds[entityIndex++]!;
-                    let readCompletedSynchronously = false;
-                    readEntity(entityId, entity => {
-                      readCompletedSynchronously = true;
-                      if (entity) claimEntityIdentities(entity);
-                      if (!validatingEntities && !finished) validateNextEntity();
-                    });
-                    if (!readCompletedSynchronously || finished) return;
+            do {
+              preflightCursorPending = false;
+              if (finished) return;
+              const cursor = cursorRequest.result;
+              if (!cursor) {
+                const orderedEntityIds = [...referencedEntityIds]
+                  .sort((first, second) => first.localeCompare(second));
+                let entityIndex = 0;
+                let validatingEntities = false;
+                const validateNextEntity = (): void => {
+                  if (finished || validatingEntities) return;
+                  validatingEntities = true;
+                  try {
+                    while (!finished && entityIndex < orderedEntityIds.length) {
+                      const entityId = orderedEntityIds[entityIndex++]!;
+                      let readCompletedSynchronously = false;
+                      readEntity(entityId, entity => {
+                        readCompletedSynchronously = true;
+                        if (entity) claimEntityIdentities(entity);
+                        if (!validatingEntities && !finished) validateNextEntity();
+                      });
+                      if (!readCompletedSynchronously || finished) return;
+                    }
+                    if (finished) return;
+                    // La transferencia vuelve a leer cada ficha para crear el
+                    // snapshot contextual. Ya no necesita conservar este índice.
+                    identityOwners.clear();
+                    scanProjectIdeas();
+                  } catch (error) {
+                    abortWith(error);
+                  } finally {
+                    validatingEntities = false;
                   }
-                  if (finished) return;
-                  // La transferencia vuelve a leer cada ficha para crear el
-                  // snapshot contextual. Ya no necesita conservar este índice.
-                  identityOwners.clear();
-                  scanProjectIdeas();
-                } catch (error) {
-                  abortWith(error);
-                } finally {
-                  validatingEntities = false;
-                }
-              };
-              validateNextEntity();
-              return;
-            }
-            const idea = cursor.value as NarrativeIdea;
-            if (idea.projectId !== projectId) {
-              throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
-            }
-            validateNarrativeIdeaRecord(idea, "idea narrativa");
-            validateIdeaLinks(idea, 0, () => cursor.continue());
+                };
+                validateNextEntity();
+                return;
+              }
+              const idea = cursor.value as NarrativeIdea;
+              if (idea.projectId !== projectId) {
+                throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
+              }
+              validateNarrativeIdeaRecord(idea, "idea narrativa");
+              let linksValidatedSynchronously = false;
+              validateIdeaLinks(idea, 0, () => {
+                linksValidatedSynchronously = true;
+                cursor.continue();
+              });
+              if (!linksValidatedSynchronously) return;
+            } while (preflightCursorPending);
           } catch (error) {
             abortWith(error);
+          } finally {
+            preflightCursorActive = false;
           }
         };
         cursorRequest.onerror = () => abortWith(
@@ -4586,11 +4603,20 @@ export class IndexedDbProjectStore implements ProjectStore {
 
       const scanProjectIdeas = (): void => {
         const cursorRequest = openProjectIdeaCursor();
+        let projectScanActive = false;
+        let projectScanPending = false;
         cursorRequest.onsuccess = () => {
+          if (projectScanActive) {
+            projectScanPending = true;
+            return;
+          }
+          projectScanActive = true;
           try {
-            if (finished) return;
-            const cursor = cursorRequest.result;
-            if (!cursor) {
+            do {
+              projectScanPending = false;
+              if (finished) return;
+              const cursor = cursorRequest.result;
+              if (!cursor) {
               if (supportsReceipts) {
                 archivedIdeaIds.sort((first, second) => first.localeCompare(second));
                 const contentChecksum = createPersonalIdeaArchiveChecksumBuilder();
@@ -4638,10 +4664,18 @@ export class IndexedDbProjectStore implements ProjectStore {
             if (idea.projectId !== projectId) {
               throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
             }
-            validateNarrativeIdeaRecord(idea, "idea narrativa");
-            validateLinksAndMaybeArchive(idea, 0, () => cursor.continue());
+              validateNarrativeIdeaRecord(idea, "idea narrativa");
+              let archiveValidationCompletedSynchronously = false;
+              validateLinksAndMaybeArchive(idea, 0, () => {
+                archiveValidationCompletedSynchronously = true;
+                cursor.continue();
+              });
+              if (!archiveValidationCompletedSynchronously) return;
+            } while (projectScanPending);
           } catch (error) {
             abortWith(error);
+          } finally {
+            projectScanActive = false;
           }
         };
         cursorRequest.onerror = () => abortWith(

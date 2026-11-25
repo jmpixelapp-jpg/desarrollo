@@ -505,3 +505,30 @@ test("las distancias a terminales usan rutas mínimas y el límite del snapshot"
   assert.equal(graph.terminalUnreachableNodeCount, 2);
   assert.equal(graph.terminalReachabilityCoverage, 4 / 6);
 });
+
+
+test("los puntos de articulación respetan componentes débiles desconectados", () => {
+  const graph = analyze([
+    idea("a", ["b", "c"]),
+    idea("b", ["c"]),
+    idea("c", ["d"]),
+    idea("d", ["e"]),
+    idea("e"),
+    idea("isolated")
+  ]);
+
+  const byId = new Map(graph.nodes.map(node => [node.ideaId, node]));
+  assert.equal(graph.weakComponentCount, 2);
+  assert.deepEqual(
+    graph.weakComponents.map(component => component.ideaIds),
+    [["a", "b", "c", "d", "e"], ["isolated"]]
+  );
+  assert.equal(graph.articulationPointCount, 2);
+  assert.deepEqual(graph.articulationPointIdeaIds, ["c", "d"]);
+  assert.equal(byId.get("c").articulationPointStatus, "connector");
+  assert.equal(byId.get("c").weakComponentPiecesAfterRemoval, 2);
+  assert.equal(byId.get("d").articulationPointStatus, "connector");
+  assert.equal(byId.get("d").weakComponentPiecesAfterRemoval, 2);
+  assert.equal(byId.get("a").weakComponentPiecesAfterRemoval, 1);
+  assert.equal(byId.get("isolated").weakComponentPiecesAfterRemoval, 0);
+});

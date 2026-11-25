@@ -3401,7 +3401,7 @@ export class HostEngineApi {
           !Array.isArray(ids) ||
           ids.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(ids).size !== ids.length ||
-          [...ids].some((id, index, values) => index > 0 && values[index - 1]!.localeCompare(id) > 0) ||
+          [...ids].some((id, index, values) => index > 0 && values[index - 1]! > id) ||
           typeof receipt.archiveChecksum !== "string" ||
           receipt.archiveChecksum !== checksumArchivedPersonalIdeaIds(ids)) {
         throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos o su checksum es inválido.");

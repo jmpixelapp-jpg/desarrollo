@@ -1448,6 +1448,60 @@ async function saveEventWithLifecycle(
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
+export interface IndexedDbDatabaseBackup {
+  readonly format: "motor-literario-indexeddb-backup";
+  readonly formatVersion: 1;
+  readonly databaseVersion: number;
+  readonly createdAt: number;
+  readonly stores: Readonly<Record<string, readonly unknown[]>>;
+  /** Detecta corrupción accidental; no es una firma criptográfica. */
+  readonly checksum: string;
+}
+
+const INDEXEDDB_BACKUP_FORMAT = "motor-literario-indexeddb-backup" as const;
+
+function indexedDbBackupChecksum(
+  payload: Omit<IndexedDbDatabaseBackup, "checksum">
+): string {
+  const serialized = JSON.stringify(payload);
+  if (typeof serialized !== "string") {
+    throw new Error("El respaldo IndexedDB contiene datos que no se pueden serializar como JSON.");
+  }
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
+
+function backupProjectAndWriterIdentities(
+  stores: Readonly<Record<string, readonly unknown[]>>
+): { readonly projectIds: readonly string[]; readonly writerIds: readonly string[] } {
+  const projectIds = new Set<string>();
+  const writerIds = new Set<string>();
+  for (const [storeName, records] of Object.entries(stores)) {
+    for (const value of records) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const record = value as Record<string, unknown>;
+      if (typeof record.projectId === "string" && record.projectId.trim()) {
+        projectIds.add(record.projectId);
+      }
+      if (typeof record.sourceProjectId === "string" && record.sourceProjectId.trim()) {
+        projectIds.add(record.sourceProjectId);
+      }
+      if ((storeName === PERSONAL_IDEAS || storeName === FINALIZATION_RECEIPTS) &&
+          typeof record.writerId === "string" && record.writerId.trim()) {
+        writerIds.add(record.writerId);
+      }
+    }
+  }
+  return {
+    projectIds: [...projectIds].sort(),
+    writerIds: [...writerIds].sort()
+  };
+}
+
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;
@@ -1997,6 +2051,188 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
     this.database = opening;
     return opening;
+  }
+
+  /**
+   * Exporta una instantánea JSON de todos los object stores de esta versión.
+   * Debe llamarse después de que el anfitrión haya vaciado las colas del motor.
+   */
+  async exportDatabaseBackup(): Promise<IndexedDbDatabaseBackup> {
+    const db = await this.open();
+    const storeNames = Array.from(db.objectStoreNames).sort();
+    if (storeNames.length === 0) {
+      throw new Error("La base IndexedDB no contiene almacenes que se puedan respaldar.");
+    }
+    const transaction = db.transaction(storeNames, "readonly");
+    const stores: Record<string, readonly unknown[]> = Object.create(null);
+    const requests = storeNames.map(name => transaction.objectStore(name).getAll());
+
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      let requestError: Error | undefined;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* La transacción ya pudo terminar. */ }
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+
+      requests.forEach((request, index) => {
+        request.onsuccess = () => {
+          const result = request.result;
+          if (!Array.isArray(result)) {
+            fail(new Error("IndexedDB devolvió un object store que no contiene una colección."));
+            return;
+          }
+          stores[storeNames[index]!] = result;
+        };
+        request.onerror = () => {
+          requestError = request.error ?? new Error("No se pudo leer un object store para el respaldo.");
+          try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+        };
+      });
+
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        if (requestError) {
+          reject(requestError);
+          return;
+        }
+        try {
+          const payload: Omit<IndexedDbDatabaseBackup, "checksum"> = {
+            format: INDEXEDDB_BACKUP_FORMAT,
+            formatVersion: 1,
+            databaseVersion: db.version,
+            createdAt: Date.now(),
+            stores
+          };
+          const checksum = indexedDbBackupChecksum(payload);
+          // Verifica que todo el paquete puede escribirse como JSON antes de
+          // entregarlo al anfitrión para guardarlo como archivo local.
+          const serialized = JSON.stringify({ ...payload, checksum });
+          if (typeof serialized !== "string") {
+            throw new Error("No se pudo serializar el respaldo IndexedDB.");
+          }
+          resolve({ ...payload, checksum });
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? new Error("No se pudo completar la lectura del respaldo IndexedDB.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? requestError ?? new Error("Se canceló la lectura del respaldo IndexedDB.")
+      );
+    });
+  }
+
+  /**
+   * Restaura todos los object stores en una sola transacción readwrite.
+   * La versión de esquema debe coincidir exactamente; una restauración parcial
+   * o una copia de otra versión se rechaza antes de modificar la base.
+   */
+  async restoreDatabaseBackup(value: unknown): Promise<void> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("El respaldo IndexedDB debe ser un objeto.");
+    }
+    const candidate = value as Partial<IndexedDbDatabaseBackup>;
+    if (candidate.format !== INDEXEDDB_BACKUP_FORMAT || candidate.formatVersion !== 1 ||
+        !Number.isSafeInteger(candidate.databaseVersion) || candidate.databaseVersion! < 1 ||
+        !Number.isFinite(candidate.createdAt) || candidate.createdAt! < 0 ||
+        !candidate.stores || typeof candidate.stores !== "object" || Array.isArray(candidate.stores) ||
+        typeof candidate.checksum !== "string" || !candidate.checksum.trim()) {
+      throw new Error("El manifiesto del respaldo IndexedDB está malformado o no es compatible.");
+    }
+
+    const db = await this.open();
+    if (candidate.databaseVersion !== db.version) {
+      throw new Error(
+        "La versión del respaldo IndexedDB (" + candidate.databaseVersion +
+        ") no coincide con la base abierta (" + db.version + ")."
+      );
+    }
+    const currentNames = Array.from(db.objectStoreNames).sort();
+    const backupNames = Object.keys(candidate.stores).sort();
+    if (currentNames.length !== backupNames.length ||
+        currentNames.some((name, index) => name !== backupNames[index])) {
+      throw new Error("El respaldo IndexedDB no contiene exactamente los almacenes de la versión actual.");
+    }
+    for (const name of currentNames) {
+      if (!Array.isArray(candidate.stores[name])) {
+        throw new Error("El respaldo IndexedDB no contiene una colección válida para " + name + ".");
+      }
+    }
+
+    const payload: Omit<IndexedDbDatabaseBackup, "checksum"> = {
+      format: INDEXEDDB_BACKUP_FORMAT,
+      formatVersion: 1,
+      databaseVersion: candidate.databaseVersion!,
+      createdAt: candidate.createdAt!,
+      stores: candidate.stores
+    };
+    if (indexedDbBackupChecksum(payload) !== candidate.checksum) {
+      throw new Error("El checksum del respaldo IndexedDB no coincide; no se modificó la base.");
+    }
+
+    // Normaliza el paquete mediante JSON: los object stores del motor usan
+    // registros JSON. Esto rechaza ciclos, BigInt y datos no portables.
+    let normalizedStores: Record<string, readonly unknown[]>;
+    try {
+      const serialized = JSON.stringify(candidate.stores);
+      if (typeof serialized !== "string") throw new Error("colección no serializable");
+      normalizedStores = JSON.parse(serialized) as Record<string, readonly unknown[]>;
+    } catch (error) {
+      throw new Error("El respaldo IndexedDB contiene datos no serializables: " + String(error));
+    }
+
+    const transaction = db.transaction(currentNames, "readwrite");
+    try {
+      for (const name of currentNames) {
+        const objectStore = transaction.objectStore(name);
+        objectStore.clear();
+        for (const record of normalizedStores[name]!) {
+          objectStore.add(record);
+        }
+      }
+    } catch (error) {
+      try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+      throw error;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      let finished = false;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        const identities = backupProjectAndWriterIdentities(normalizedStores);
+        for (const projectId of identities.projectIds) {
+          this.publishNarrativeChange(projectId);
+          for (const listener of this.narrativeChangeListeners) {
+            try { listener(projectId); } catch { /* Un suscriptor no bloquea a los demás. */ }
+          }
+        }
+        for (const writerId of identities.writerIds) {
+          this.publishPersonalIdeaLibraryChange(writerId);
+          for (const listener of this.personalIdeaLibraryChangeListeners) {
+            try { listener(writerId); } catch { /* Un suscriptor no bloquea a los demás. */ }
+          }
+        }
+        resolve();
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? new Error("No se pudo restaurar el respaldo IndexedDB.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? new Error("Se canceló la restauración IndexedDB; los datos anteriores se conservaron.")
+      );
+    });
   }
 
 

@@ -934,13 +934,25 @@ export class IndexedDbProjectStore implements ProjectStore {
       const receipts = transaction.objectStore(FINALIZATION_RECEIPTS);
       // La lectura del recibo se encola antes de las ideas: ambas lecturas
       // pertenecen a la misma transacción y no existe una ventana de carrera.
-      const receiptRequest = receipts.get([writerId, projectId, FINALIZATION_RECEIPT_ID]);
-      let receiptRead = false;
+      // Los navegadores siempre exponen get/add en un object store real.
+      // La comprobación también permite que adaptadores IndexedDB mínimos de
+      // compatibilidad sigan probando la ruta antigua sin simular el almacén.
+      const supportsReceipts = typeof receipts.get === "function" &&
+        typeof receipts.add === "function";
+      const receiptRequest = supportsReceipts
+        ? receipts.get([writerId, projectId, FINALIZATION_RECEIPT_ID])
+        : undefined;
+      let receiptRead = !supportsReceipts;
       let existingReceipt: StoredProjectFinalizationReceipt | undefined;
-      receiptRequest.onsuccess = () => {
-        existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
-        receiptRead = true;
-      };
+      if (receiptRequest) {
+        receiptRequest.onsuccess = () => {
+          existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
+          receiptRead = true;
+        };
+        receiptRequest.onerror = () => abortWith(
+          receiptRequest.error ?? new Error("No se pudo recuperar el recibo de finalización.")
+        );
+      }
       const request = ideas.index("by-project").getAll(projectId);
       const archived: PersonalIdeaLibraryEntry[] = [];
       let finished = false;
@@ -972,7 +984,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             archived.push(entry);
           }
           const archivedIdeaIds = pending.map(item => item.idea.id).sort();
-          receipts.add({
+          if (supportsReceipts) receipts.add({
             writerId,
             sourceProjectId: projectId,
             receiptId: FINALIZATION_RECEIPT_ID,
@@ -985,9 +997,6 @@ export class IndexedDbProjectStore implements ProjectStore {
           abortWith(error);
         }
       };
-      receiptRequest.onerror = () => abortWith(
-        receiptRequest.error ?? new Error("No se pudo recuperar el recibo de finalización.")
-      );
       request.onsuccess = () => {
         try {
           if (!receiptRead) {

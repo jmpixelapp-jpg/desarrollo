@@ -620,8 +620,8 @@ test("SQLite rechaza una escritura de entidad narrativa basada en una versión o
     await secondStore.saveEntityIfUnchanged(updated, secondRead);
 
     const staleUpdate = { ...entity, aliases: ["Ana antigua"] };
-    await assert.rejects(
-      firstStore.saveEntityIfUnchanged(staleUpdate, entity),
+    assert.throws(
+      () => firstStore.saveEntityIfUnchanged(staleUpdate, entity),
       /cambió en otra instancia/
     );
 
@@ -747,7 +747,7 @@ test("SQLite protege relaciones, acontecimientos, ideas y afirmaciones frente a 
       const stale = { ...item.original, ...(item.name === "relación" ? { relationType: "enemy" } :
         item.name === "acontecimiento" ? { label: "Versión obsoleta" } :
         item.name === "idea" ? { text: "Versión obsoleta" } : { value: "versión obsoleta" }) };
-      await assert.rejects(item.save(stale, item.original), /cambió en otra instancia/);
+      assert.throws(() => item.save(stale, item.original), /cambió en otra instancia/);
       assert.equal(item.changed(await item.read()), item.name === "relación" ? "protects" :
         item.name === "acontecimiento" ? "Ana abre la puerta" :
         item.name === "idea" ? "La puerta debe permanecer abierta." : "capitana");

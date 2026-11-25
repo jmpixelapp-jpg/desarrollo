@@ -1262,6 +1262,7 @@ test("el grafo no reutiliza omisiones de trayectorias cuando recibe el catálogo
     knownIdeasOmittedCount: 7
   });
 
+  assert.equal(result.ideaGraph.projectCatalogComplete, true);
   assert.equal(result.ideaGraph.omittedIdeaCount, 0);
   assert.equal(result.ideaGraph.notIncludedReferenceCount, 1);
   assert.equal(result.ideaGraph.missingFromProjectReferenceCount, 1);
@@ -1298,6 +1299,7 @@ test("el catálogo de compatibilidad no presenta como ausentes ideas fuera del s
   });
 
   assert.equal(result.ideaGraph.catalogScope, "character-linked-fallback");
+  assert.equal(result.ideaGraph.projectCatalogComplete, false);
   assert.equal(result.ideaGraph.omittedIdeaCount, 0);
   assert.equal(result.ideaGraph.notIncludedReferenceCount, 1);
   assert.equal(result.ideaGraph.missingFromProjectReferenceCount, 0);
@@ -1345,6 +1347,7 @@ test("el grafo conserva orden determinista ante permutaciones del catálogo", ()
   assert.deepEqual(permuted, ordered);
   assert.deepEqual(ordered.nodes.map(node => node.ideaId), ["alpha", "delta", "gamma"]);
   assert.equal(ordered.catalogScope, "project");
+  assert.equal(ordered.projectCatalogComplete, true);
 });
 
 test("valida identidad, enlaces, historial y contador de omisión del catálogo global", () => {

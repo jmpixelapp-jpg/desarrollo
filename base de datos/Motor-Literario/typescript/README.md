@@ -84,10 +84,17 @@ Al abrir un documento, el motor compara el snapshot local con el snapshot autori
 - Consultar `getSnapshot` solo cuando el anfitrión necesite una copia completa; esa operación materializa el texto.
 - Antes de cerrar o suspender, esperar `flushPendingChanges()`.
 - Si `getDocumentSyncState` indica `needsResync`, detener el envío de deltas y reabrir con el snapshot completo actual del editor.
+- Para recuperar una sesión ya guardada después de reiniciar la aplicación, inicializar la identidad del proyecto y llamar `await api.recoverDocument(documentId)`. El método recupera el snapshot local y reproduce los deltas durables; no requiere volver a enviar el texto completo. Solo funciona cuando existe una base durable válida.
 
 ## Límites deliberados
 
-Este es el primer núcleo funcional, no el motor literario completo. La suite automatizada inicial está creada, pero debe ejecutarse en un entorno con runner disponible y ampliarse. Todavía faltan mediciones reales de latencia, reconstrucción cuando el anfitrión no puede proporcionar un snapshot base, recuperación transaccional avanzada, adaptadores de almacenamiento específicos por plataforma, extracción narrativa automática, resolución de entidades, cronología, contradicciones, historial de conocimiento ampliado y comprensión semántica general. No usar con manuscritos importantes hasta completar pruebas y recuperación.
+La implementación del producto se desarrolla exclusivamente en TypeScript/JavaScript. Las carpetas Rust del repositorio son material histórico y no forman parte del runtime ni deben ampliarse.
+
+El núcleo TypeScript ya incluye monitoreo incremental, cola no bloqueante con límites de presión, journal durable, checkpoints atómicos, recuperación desde almacenamiento local, diagnósticos por revisión, extracción narrativa explícita, entidades y relaciones, acontecimientos, ideas, cronología explícita, candidatos de contradicción, historial de afirmaciones y biblioteca privada del escritor. La suite automatizada y el benchmark están conectados a GitHub Actions; el estado de cada ejecución debe consultarse en CI y no inferirse por la mera existencia de los tests.
+
+La recuperación local mediante `recoverDocument(documentId)` funciona cuando existe un snapshot durable y un journal continuo. Si nunca se guardó un snapshot base, o el journal está corrupto, el motor no inventa ni elimina datos: exige una copia autoritativa del anfitrión y conserva la información en conflicto.
+
+Siguen siendo límites deliberados la comprensión semántica general, la inferencia automática y fiable de acontecimientos y cronología no explícita, la resolución literaria completa de contradicciones, la clasificación automática de afirmaciones históricas que quedaron obsoletas al cambiar el texto, y las mediciones de latencia en equipos y adaptadores reales de cada plataforma. La base no debe considerarse lista para manuscritos irremplazables hasta que CI y las pruebas de recuperación estén en verde y se hayan validado copias de seguridad en el entorno anfitrión.
 
 
 ## Cronología narrativa explícita (primera capa)

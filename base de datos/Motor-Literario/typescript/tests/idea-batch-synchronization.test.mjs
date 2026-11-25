@@ -492,3 +492,42 @@ test("permite reintentar explícitamente con la instantánea refrescada tras un 
     api.dispose();
   }
 });
+
+
+test("permite sincronizaciones simultáneas de ideas distintas sin mezclar sus vínculos", async () => {
+  const store = new AtomicIdeaStore(
+    [
+      idea("source-a"),
+      idea("source-b"),
+      idea("target-a"),
+      idea("target-b")
+    ],
+    []
+  );
+  const apiA = createApi(store);
+  const apiB = createApi(store);
+
+  try {
+    const [updatedA, updatedB] = await Promise.all([
+      apiA.synchronizeNarrativeIdeaLinks(
+        "source-a",
+        links([], []),
+        links(["target-a"], [])
+      ),
+      apiB.synchronizeNarrativeIdeaLinks(
+        "source-b",
+        links([], []),
+        links(["target-b"], [])
+      )
+    ]);
+
+    assert.deepEqual(updatedA.relatedIdeaIds, ["target-a"]);
+    assert.deepEqual(updatedB.relatedIdeaIds, ["target-b"]);
+    assert.deepEqual(store.ideas.get(projectId + ":source-a").relatedIdeaIds, ["target-a"]);
+    assert.deepEqual(store.ideas.get(projectId + ":source-b").relatedIdeaIds, ["target-b"]);
+    assert.equal(store.writes, 2);
+  } finally {
+    apiA.dispose();
+    apiB.dispose();
+  }
+});

@@ -249,6 +249,9 @@ export interface LiteraryCharacterEventEvidenceProfile {
 }
 export interface LiteraryCharacterEventEvidenceAnalysis {
   readonly explicitSceneCount: number;
+  /** Escenas donde el límite de 100 vínculos impidió exponer todos los acontecimientos coincidentes. */
+  readonly sourceTruncatedSceneCount: number;
+  readonly sourceTruncatedSceneIndexes: readonly number[];
   readonly associationCount: number;
   readonly omittedAssociationCount: number;
   readonly characterCount: number;
@@ -647,6 +650,8 @@ export interface LiteraryExplicitSceneSegment {
   /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
   readonly characterMentions: readonly LiterarySceneCharacterMention[];
   readonly eventLinks: readonly LiterarySceneEventLink[];
+  /** Indica que hubo más de 100 acontecimientos con evidencia coincidente en esta escena. */
+  readonly eventLinksTruncated: boolean;
   /** Señales de pronombres explícitos fuera del diálogo, limitadas al contenido de esta escena. */
   readonly voiceSignals: LiteraryVoiceSignal;
 }
@@ -980,7 +985,7 @@ function findSceneEventLinks(
   revision: number,
   characters: readonly LiterarySceneCharacterMention[],
   events: readonly LiteraryAnalysisKnownEvent[]
-): LiterarySceneEventLink[] {
+): {readonly links: LiterarySceneEventLink[]; readonly truncated: boolean} {
   const sceneStart = baseOffset + contentRange.start;
   const sceneEnd = baseOffset + contentRange.end;
   const characterIds = new Set(characters.map(character => character.entityId));
@@ -1001,6 +1006,7 @@ function findSceneEventLinks(
       }))
       .sort((a,b) => a.start-b.start || a.end-b.end);
     if (matchingEvidence.length === 0) continue;
+    if (links.length >= 100) return {links,truncated:true};
     links.push({
       eventId:event.eventId,
       label:event.label,
@@ -1012,9 +1018,8 @@ function findSceneEventLinks(
         mentionedByName:characterIds.has(entityId)
       }))
     });
-    if (links.length >= 100) break;
   }
-  return links;
+  return {links,truncated:false};
 }
 
 function summarizeSceneDialogueFlow(
@@ -1270,6 +1275,9 @@ function analyzeExplicitScenes(
     const characterMentions = findSceneCharacterMentions(
       text,scene.contentRange,baseOffset,knownCharacters
     );
+    const eventLinkResult = findSceneEventLinks(
+      scene.contentRange,baseOffset,documentId,revision,characterMentions,knownEvents
+    );
     return ({
     sceneIndex:index+1,
     markerType:scene.marker.markerType as "scene-heading" | "scene-divider",
@@ -1288,9 +1296,8 @@ function analyzeExplicitScenes(
     dialogueFlowSignals,
     rhythmSignals:summarizeSceneRhythm(sceneSentenceRanges,sceneSentenceWordCounts,baseOffset),
     characterMentions,
-    eventLinks:findSceneEventLinks(
-      scene.contentRange,baseOffset,documentId,revision,characterMentions,knownEvents
-    ),
+    eventLinks:eventLinkResult.links,
+    eventLinksTruncated:eventLinkResult.truncated,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
   });});
 }
@@ -2061,8 +2068,13 @@ function buildCharacterEventEvidenceProfiles(
     a.eventId.localeCompare(b.eventId,"en")
   );
 
+  const sourceTruncatedSceneIndexes = scenes
+    .filter(scene => scene.eventLinksTruncated)
+    .map(scene => scene.sceneIndex);
   return {
     explicitSceneCount:scenes.length,
+    sourceTruncatedSceneCount:sourceTruncatedSceneIndexes.length,
+    sourceTruncatedSceneIndexes,
     associationCount:profiles.length,
     omittedAssociationCount:Math.max(0,profiles.length-200),
     characterCount:new Set(profiles.map(item => item.entityId)).size,

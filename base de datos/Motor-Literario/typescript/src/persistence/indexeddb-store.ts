@@ -4405,9 +4405,19 @@ export class IndexedDbProjectStore implements ProjectStore {
         if (typeof projectIndex.getAll !== "function") {
           throw new Error("El adaptador IndexedDB no admite recorridos por cursor.");
         }
+        let legacyCursorOnSuccess: ((event: Event) => unknown) | null = null;
         const cursorRequest = {
           result: null as IDBCursorWithValue | null,
-          onsuccess: null as ((event: Event) => unknown) | null,
+          get onsuccess(): ((event: Event) => unknown) | null {
+            return legacyCursorOnSuccess;
+          },
+          set onsuccess(handler: ((event: Event) => unknown) | null) {
+            legacyCursorOnSuccess = handler;
+            // Cuando el catálogo ya está en memoria, dispara el primer cursor
+            // al instalar el listener, dentro del callback que aún mantiene
+            // activa la transacción. No se difiere con queueMicrotask.
+            if (handler && legacyIdeaCatalogLoaded) advance();
+          },
           onerror: null as ((event: Event) => unknown) | null,
           error: null as DOMException | null
         };
@@ -4419,12 +4429,11 @@ export class IndexedDbProjectStore implements ProjectStore {
             cursorRequest.result = value
               ? ({ value, continue: continueCursor } as unknown as IDBCursorWithValue)
               : null;
-            cursorRequest.onsuccess?.({} as Event);
+            legacyCursorOnSuccess?.({} as Event);
           };
           continueCursor();
         };
         if (legacyIdeaCatalogLoaded) {
-          queueMicrotask(advance);
           return cursorRequest as unknown as IDBRequest<IDBCursorWithValue | null>;
         }
         const sourceRequest = projectIndex.getAll(projectId);

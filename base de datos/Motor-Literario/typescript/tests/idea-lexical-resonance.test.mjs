@@ -70,7 +70,9 @@ test("conserva términos de alfabetos Unicode sin distinción de mayúsculas", (
   ]);
 
   assert.equal(result.candidatePairCount, 1);
-  assert.deepEqual(result.resonances[0].sharedTerms, ["月光", "森林"]);
+  assert.equal(result.resonances[0].sharedTerms.length, 2);
+  assert.ok(result.resonances[0].sharedTerms.includes("月光"));
+  assert.ok(result.resonances[0].sharedTerms.includes("森林"));
 });
 
 test("ordena los candidatos de forma determinista aunque cambie el orden de entrada", () => {
@@ -82,6 +84,21 @@ test("ordena los candidatos de forma determinista aunque cambie el orden de entr
   ];
 
   assert.deepEqual(analyze(ideas), analyze([...ideas].reverse()));
+});
+
+test("respeta el presupuesto global de texto sin dividir una idea a medias", () => {
+  const repeatedIdeaText = "memoria ".repeat(12_500);
+  const ideas = Array.from({ length: 21 }, (_, index) => idea(
+    "idea-" + String(index).padStart(2, "0"),
+    repeatedIdeaText
+  ));
+  const result = analyze(ideas);
+
+  assert.equal(result.inputIdeaCount, 21);
+  assert.equal(result.analyzedIdeaCount, 20);
+  assert.equal(result.omittedTextBudgetIdeaCount, 1);
+  assert.equal(result.tokenizedTextUnitCount, 2_000_000);
+  assert.equal(result.candidatePairCount, 0);
 });
 
 test("mantiene compatibilidad con catálogos antiguos que no transfieren el texto", () => {

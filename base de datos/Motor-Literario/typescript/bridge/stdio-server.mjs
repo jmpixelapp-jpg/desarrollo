@@ -8,6 +8,7 @@ const MAX_LINE_BYTES = 16 * 1024 * 1024;
 const projects = new Map();
 const inFlight = new Set();
 const activeIds = new Set();
+const activeDispatches = new Set();
 let store;
 let shuttingDown = false;
 let inputBuffer = "";
@@ -477,14 +478,35 @@ async function processRequest(request) {
     return;
   }
 
+  if (shuttingDown) {
+    return send({
+      jsonrpc: "2.0",
+      id: request.id,
+      error: { code: -32000, message: "El puente está cerrando y ya no admite nuevas solicitudes." }
+    });
+  }
   const idKey = String(request.id);
   if (activeIds.has(idKey)) {
     return send({ jsonrpc: "2.0", id: request.id, error: { code: -32600, message: "ID de solicitud duplicado en curso." } });
   }
+  const shutdownRequest = request.method === "bridge.shutdown";
   activeIds.add(idKey);
 
   try {
-    const result = await dispatch(request.method, request.params);
+    if (shutdownRequest) {
+      // Cierra la admisión antes de esperar: las solicitudes ya aceptadas
+      // terminan sus escrituras y transferencias antes del flush final.
+      shuttingDown = true;
+      await Promise.all([...activeDispatches]);
+    }
+    const operation = dispatch(request.method, request.params);
+    if (!shutdownRequest) activeDispatches.add(operation);
+    let result;
+    try {
+      result = await operation;
+    } finally {
+      if (!shutdownRequest) activeDispatches.delete(operation);
+    }
     await send({ jsonrpc: "2.0", id: request.id, result: result === undefined ? null : result });
   } catch (error) {
     const payload = errorPayload(error);
@@ -492,7 +514,7 @@ async function processRequest(request) {
     await send({ jsonrpc: "2.0", id: request.id, error: payload });
   } finally {
     activeIds.delete(idKey);
-    if (shuttingDown) {
+    if (shutdownRequest) {
       store.close();
       process.stdin.pause();
       process.exitCode = 0;

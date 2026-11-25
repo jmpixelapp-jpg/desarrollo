@@ -300,8 +300,8 @@ test("separa componentes cíclicos ante aristas cruzadas entre subgrafos", async
     c: ["a"],
     d: ["e"],
     e: ["d", "f"],
-    f: ["f"],
-    g: ["a"],
+    f: ["g"],
+    g: ["f", "a"],
     h: ["g"]
   };
   const ideas = Object.entries(links).map(([id, relatedIdeaIds]) => ({
@@ -329,13 +329,13 @@ test("separa componentes cíclicos ante aristas cruzadas entre subgrafos", async
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(graph.ideaCount, 8);
-    assert.equal(graph.referenceCount, 10);
-    assert.equal(graph.includedReferenceCount, 10);
+    assert.equal(graph.referenceCount, 11);
+    assert.equal(graph.includedReferenceCount, 11);
     assert.equal(graph.cycleCount, 3);
     assert.deepEqual(graph.cycles.map(cycle => cycle.ideaIds), [
       ["a", "b", "c"],
       ["d", "e"],
-      ["f"]
+      ["f", "g"]
     ]);
     assert.equal(graph.weakComponentCount, 1);
     assert.equal(graph.largestWeakComponentSize, 8);
@@ -658,7 +658,7 @@ test("contrasta los componentes de Tarjan con un oráculo de alcanzabilidad en g
     const links = ids.map(() => []);
     for (let from = 0; from < nodesPerGraph; from++) {
       for (let to = 0; to < nodesPerGraph; to++) {
-        if (random() < 0.24) links[from].push(ids[to]);
+        if (from !== to && random() < 0.24) links[from].push(ids[to]);
       }
     }
 
@@ -1493,19 +1493,20 @@ test("la caché del grafo se invalida cuando cambian los vínculos declarados", 
   });
   try {
     const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(before.referenceCount, 6);
-    assert.equal(before.includedReferenceCount, 5);
-    assert.equal(before.cycleCount, 2);
+    assert.equal(before.referenceCount, 5);
+    assert.equal(before.includedReferenceCount, 4);
+    assert.equal(before.cycleCount, 1);
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.relatedIdeaIds = [];
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(after.referenceCount, 4);
-    assert.equal(after.includedReferenceCount, 3);
+    assert.equal(after.referenceCount, 3);
+    assert.equal(after.includedReferenceCount, 2);
     assert.equal(after.notIncludedReferenceCount, 1);
-    assert.equal(after.cycleCount, 1);
-    assert.deepEqual(after.cycles.map(cycle => cycle.ideaIds), [["solo"]]);
+    assert.equal(after.cycleCount, 0);
+    assert.deepEqual(after.cycles, []);
     assert.equal(
       after.references.some(reference =>
         reference.fromIdeaId === "bridge" &&
@@ -1583,11 +1584,12 @@ test("el grafo resuelve referencias externas cuando el catálogo incorpora el de
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 8 }]
     });
 
+    await api.refreshNarrativeKnowledge();
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     const ghostReferenceAfter = after.references.find(reference => reference.toIdeaId === "ghost");
     assert.equal(after.ideaCount, 5);
-    assert.equal(after.referenceCount, 6);
-    assert.equal(after.includedReferenceCount, 6);
+    assert.equal(after.referenceCount, 5);
+    assert.equal(after.includedReferenceCount, 5);
     assert.equal(after.notIncludedReferenceCount, 0);
     assert.equal(after.missingFromProjectReferenceCount, 0);
     assert.equal(ghostReferenceAfter.resolution, "included-in-snapshot");
@@ -1611,15 +1613,16 @@ test("el grafo reclasifica como externas las referencias al retirar una idea del
   try {
     const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(before.ideaCount, 4);
-    assert.equal(before.includedReferenceCount, 5);
+    assert.equal(before.includedReferenceCount, 4);
 
     const bridgeIndex = ideas.findIndex(idea => idea.id === "bridge");
     ideas.splice(bridgeIndex, 1);
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.ideaCount, 3);
-    assert.equal(after.referenceCount, 4);
-    assert.equal(after.includedReferenceCount, 2);
+    assert.equal(after.referenceCount, 3);
+    assert.equal(after.includedReferenceCount, 1);
     assert.equal(after.notIncludedReferenceCount, 2);
     assert.equal(after.missingFromProjectReferenceCount, 2);
     assert.deepEqual(
@@ -1654,6 +1657,7 @@ test("la caché del grafo incorpora cambios de texto en el análisis de resonanc
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.text = "nube azul horizonte distante";
 
+    await api.refreshNarrativeKnowledge();
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.lexicalResonances.analyzedIdeaCount, 4);
     assert.equal(after.lexicalResonances.candidatePairCount, 0);
@@ -1667,6 +1671,9 @@ test("la caché del grafo incorpora cambios de texto en el análisis de resonanc
 
 test("la caché del grafo actualiza perfiles al cambiar el estado editorial actual", async () => {
   const ideas = structuredClone(store.ideas);
+  const bridgeIdea = ideas.find(idea => idea.id === "bridge");
+  bridgeIdea.status = "IDEA";
+  bridgeIdea.statusHistory = bridgeIdea.statusHistory.slice(0, 3);
   const api = new HostEngineApi({
     store: { ...store, documents: new Map(), ideas }
   });
@@ -1684,6 +1691,11 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.status = "discarded";
+    bridge.statusHistory = [
+      ...bridge.statusHistory,
+      { status: "discarded", reason: "writer", changedAt: 4 }
+    ];
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     const discardedProfile = after.statusProfiles.find(profile => profile.status === "discarded");
@@ -1807,20 +1819,23 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
 
 test("los límites de muestras de ciclos y componentes no alteran los conteos completos", async () => {
   const ideas = Array.from({ length: 105 }, (_, index) => {
-    const id = `self-cycle-${String(index).padStart(3, "0")}`;
-    return {
+    const suffix = String(index).padStart(3, "0");
+    const leftId = `pair-cycle-${suffix}-a`;
+    const rightId = `pair-cycle-${suffix}-b`;
+    const common = {
       projectId,
-      id,
-      text: `motivo-literario-unico-${index}`,
       status: "IDEA",
       originDocumentId: "chapter",
       sourceProjectName: "Book",
       evidence: [],
-      relatedIdeaIds: [id],
       relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
     };
-  });
+    return [
+      { ...common, id: leftId, text: `motivo-literario-unico-${index}-a`, relatedIdeaIds: [rightId] },
+      { ...common, id: rightId, text: `motivo-literario-unico-${index}-b`, relatedIdeaIds: [leftId] }
+    ];
+  }).flat();
   const api = new HostEngineApi({
     store: { ...store, documents: new Map(), ideas }
   });
@@ -1833,20 +1848,20 @@ test("los límites de muestras de ciclos y componentes no alteran los conteos co
   });
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(graph.ideaCount, 105);
-    assert.equal(graph.referenceCount, 105);
-    assert.equal(graph.selfReferenceCount, 105);
+    assert.equal(graph.ideaCount, 210);
+    assert.equal(graph.referenceCount, 210);
+    assert.equal(graph.selfReferenceCount, 0);
     assert.equal(graph.cycleCount, 105);
     assert.equal(graph.omittedCycleCount, 5);
     assert.equal(graph.cycles.length, 100);
-    assert.equal(graph.cycles[0].ideaIds.length, 1);
-    assert.equal(graph.cycles.at(-1).ideaIds[0], "self-cycle-099");
+    assert.deepEqual(graph.cycles[0].ideaIds, ["pair-cycle-000-a", "pair-cycle-000-b"]);
+    assert.deepEqual(graph.cycles.at(-1).ideaIds, ["pair-cycle-099-a", "pair-cycle-099-b"]);
     assert.equal(graph.weakComponentCount, 105);
     assert.equal(graph.omittedWeakComponentCount, 5);
     assert.equal(graph.weakComponents.length, 100);
-    assert.equal(graph.largestWeakComponentSize, 1);
-    assert.deepEqual(graph.weakComponents[0].ideaIds, ["self-cycle-000"]);
-    assert.deepEqual(graph.weakComponents.at(-1).ideaIds, ["self-cycle-099"]);
+    assert.equal(graph.largestWeakComponentSize, 2);
+    assert.deepEqual(graph.weakComponents[0].ideaIds, ["pair-cycle-000-a", "pair-cycle-000-b"]);
+    assert.deepEqual(graph.weakComponents.at(-1).ideaIds, ["pair-cycle-099-a", "pair-cycle-099-b"]);
     assert.equal(graph.sourceNodeCount, 0);
     assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
     assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);

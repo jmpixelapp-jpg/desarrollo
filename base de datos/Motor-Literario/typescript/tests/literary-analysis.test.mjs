@@ -1624,3 +1624,76 @@ test("analiza iterativamente un ciclo largo sin depender de la pila recursiva", 
   assert.equal(graph.cycles[0].ideaIds[0], "node-0000");
   assert.equal(graph.cycles[0].ideaIds.at(-1), "node-1499");
 });
+
+
+test("aísla del caché las mutaciones de resultados del grafo de ideas", () => {
+  const projectId = "literary-analysis-test";
+  const input = {
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nLa promesa permanece.",
+    knownProjectIdeas: [
+      {
+        projectId,
+        ideaId: "idea-a",
+        text: "La promesa permanece.",
+        status: "IDEA",
+        relatedIdeaIds: ["idea-b"],
+        evidenceCount: 0,
+        staleEvidenceCount: 0,
+        statusHistory: [{ status: "IDEA", reason: "initial" }],
+        writerDecisionCount: 0,
+        omittedStatusHistoryCount: 0
+      },
+      {
+        projectId,
+        ideaId: "idea-b",
+        text: "La promesa cambia.",
+        status: "incorporated",
+        relatedIdeaIds: [],
+        evidenceCount: 0,
+        staleEvidenceCount: 0,
+        statusHistory: [
+          { status: "IDEA", reason: "initial" },
+          { status: "incorporated", reason: "writer" }
+        ],
+        writerDecisionCount: 1,
+        omittedStatusHistoryCount: 0
+      }
+    ]
+  };
+
+  const first = analyzeLiteraryFragment(input).ideaGraph;
+  first.nodes[0].statusHistory[0].reason = "tampered";
+  first.nodes.push({ ...first.nodes[0], ideaId: "injected" });
+  first.references[0].toIdeaId = "injected";
+  first.cycles.push({ ideaIds: ["injected"] });
+  first.lexicalResonances.resonances.push({
+    leftIdeaId: "injected",
+    rightIdeaId: "injected",
+    leftTermCount: 0,
+    rightTermCount: 0,
+    sharedTermCount: 0,
+    jaccardSimilarity: 0,
+    frequencyWeightedJaccardSimilarity: 0,
+    frequencyCosineSimilarity: 0,
+    leftVocabularyCoverage: 0,
+    rightVocabularyCoverage: 0,
+    leftFrequencyCoverage: 0,
+    rightFrequencyCoverage: 0,
+    overlapCoefficient: 0,
+    sharedTerms: [],
+    sharedTermFrequencies: [],
+    omittedSharedTermCount: 0
+  });
+
+  const second = analyzeLiteraryFragment(input).ideaGraph;
+  assert.equal(second.nodes.length, 2);
+  assert.equal(second.nodes[0].statusHistory[0].reason, "initial");
+  assert.equal(second.references[0].toIdeaId, "idea-b");
+  assert.equal(second.cycles.length, 0);
+  assert.equal(second.lexicalResonances.resonances.some(
+    resonance => resonance.leftIdeaId === "injected"
+  ), false);
+});

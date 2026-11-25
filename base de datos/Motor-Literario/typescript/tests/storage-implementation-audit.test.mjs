@@ -6,7 +6,7 @@ import test from "node:test";
 import { auditStorageImplementation } from "../scripts/audit-storage-implementation.mjs";
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
-const MAPPING_PATH = resolve(TEST_DIR, "../../MLDB/storage_mapping_v0.4.1.json");
+const MAPPING_PATH = resolve(TEST_DIR, "../../MLDB/storage_mapping_v0.4.2.json");
 const RUNTIME_PATH = resolve(TEST_DIR, "../src/persistence/indexeddb-store.ts");
 
 const [mappingText, runtimeSource] = await Promise.all([
@@ -15,9 +15,9 @@ const [mappingText, runtimeSource] = await Promise.all([
 ]);
 const mapping = JSON.parse(mappingText);
 
-test("las 24 tablas del motor tienen almacenes IndexedDB declarados y creados", () => {
+test("las 25 tablas del motor tienen almacenes IndexedDB declarados y creados", () => {
   const engineTables = mapping.entries.filter((entry) => entry.table !== "projects");
-  assert.equal(engineTables.length, 24);
+  assert.equal(engineTables.length, 25);
   assert.ok(engineTables.every((entry) => entry.implementationStatus === "implemented"));
   assert.deepEqual(auditStorageImplementation(mapping, runtimeSource), []);
 });
@@ -106,8 +106,8 @@ test("detecta cambios en keyPath e índices aunque el almacén exista", () => {
 
 test("detecta almacenes IndexedDB creados que no figuran en el manifiesto", () => {
   const sourceWithExtraStore = runtimeSource.replace(
-    "const DATABASE_VERSION = 21;",
-    'const DATABASE_VERSION = 21;\nconst UNDECLARED_STORE = "undeclared-store";'
+    "const DATABASE_VERSION = 22;",
+    'const DATABASE_VERSION = 22;\nconst UNDECLARED_STORE = "undeclared-store";'
   ).replace(
     "const db = request.result;",
     'const db = request.result;\n        if (!db.objectStoreNames.contains(UNDECLARED_STORE)) db.createObjectStore(UNDECLARED_STORE, { keyPath: "id" });'

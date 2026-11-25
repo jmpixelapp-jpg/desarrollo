@@ -517,3 +517,19 @@ El workflow específico del monitor ejecuta `npm run validate:schema` antes del 
 
 
 El índice `by-project` también se declara mediante `ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId")` dentro de la rutina de migración `onupgradeneeded`. El manifiesto y la auditoría comparan las definiciones del almacén y de sus índices; crear el índice solo en la rama que crea el objectStore no es suficiente para satisfacer la auditoría de migraciones.
+
+
+## 27. Prueba de runtime de IndexedDB para checkpoints
+
+La persistencia ya no se valida solo por la interfaz `ProjectStore` en memoria y la auditoría estática. Se añadió `tests/live-author-monitor-indexeddb.test.mjs`, que utiliza el IndexedDB nativo disponible en Node 22.13 o posterior y ejecuta las operaciones contra `IndexedDbProjectStore` real:
+
+- guardar y leer un checkpoint por proyecto/documento;
+- verificar que la lectura devuelve copias independientes del objeto y de las muestras de latencia;
+- rechazar una escritura con `savedAt` anterior al registro persistido;
+- aceptar una escritura más nueva y comprobar que sustituye el checkpoint;
+- aislar claves de otros proyectos y borrar el checkpoint;
+- cerrar la conexión desde `IndexedDbProjectStore.close()` al finalizar la prueba.
+
+`close()` espera una apertura pendiente, cierra la conexión IndexedDB y cierra el canal de notificaciones de la instancia. Una operación posterior puede abrir una nueva conexión.
+
+**Validación CI:** pendiente de la ejecución que incluye la nueva prueba de runtime y el método de cierre. La auditoría estática del manifiesto activo y la suite previa ya pasaron en la ejecución [45723969106](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723969106): esquema 0.4.2 válido, 25 tablas y 33 almacenes, build Vite y 98 pruebas aprobadas.

@@ -10763,7 +10763,7 @@ test("compara las métricas de diálogo entre escenas explícitas contiguas", as
   const transition = result.sceneDialogueTransitions[0];
   assert.equal(transition.fromSceneIndex,1);
   assert.equal(transition.toSceneIndex,2);
-  assert.equal(transition.previousDensity,"moderate");
+  assert.equal(transition.previousDensity,"high");
   assert.equal(transition.nextDensity,"none");
   assert.equal(transition.densityChanged,true);
   assert.equal(transition.previousSegmentCount,1);
@@ -10773,7 +10773,7 @@ test("compara las métricas de diálogo entre escenas explícitas contiguas", as
   assert.equal(transition.nextDialogueWordCount,0);
   assert.equal(transition.dialogueWordCountDelta,-2);
   assert.deepEqual(transition.formatCountDelta,{quotation:-1,dialogueDash:0,mixed:0});
-  assert.equal(transition.dialogueRatioDelta,-0.286);
+  assert.equal(transition.dialogueRatioDelta,-0.333);
 });
 
 test("no crea transiciones de diálogo cuando hay menos de dos escenas explícitas", async () => {

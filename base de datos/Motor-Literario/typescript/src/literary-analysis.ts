@@ -76,6 +76,8 @@ export interface LiteraryAnalysisKnownProjectIdea {
   readonly ideaId: string;
   /** Texto explícito de la idea; opcional para adaptadores antiguos. */
   readonly text?: string;
+  /** El anfitrión omitió este texto para respetar el presupuesto agregado de análisis. */
+  readonly textOmitted?: "budget";
   readonly status: NarrativeIdea["status"];
   readonly relatedIdeaIds: readonly string[];
   readonly evidenceCount: number;
@@ -3610,6 +3612,10 @@ function buildLiteraryIdeaLexicalResonances(
   let omittedDistinctTermCount = 0;
 
   for (const idea of ideas) {
+    if (idea.textOmitted === "budget") {
+      omittedTextBudgetIdeaCount++;
+      continue;
+    }
     if (typeof idea.text !== "string") {
       ideasWithoutTextCount++;
       continue;
@@ -5422,6 +5428,8 @@ function validateInput(input: LiteraryAnalysisInput): number {
         typeof idea.ideaId !== "string" || !idea.ideaId.trim() ||
         projectIdeaIds.has(idea.ideaId) ||
         (idea.text !== undefined && (typeof idea.text !== "string" || idea.text.length > 100_000)) ||
+        (idea.textOmitted !== undefined && idea.textOmitted !== "budget") ||
+        (idea.textOmitted === "budget" && idea.text !== undefined) ||
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
@@ -5598,7 +5606,13 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0,
     input.knownProjectEventsOmittedCount ?? 0
   );
-  const graphIdeas = input.knownProjectIdeas ?? input.knownIdeas ?? [];
+  const knownIdeaTextById = new Map(
+    (input.knownIdeas ?? []).map(idea => [idea.ideaId, idea.text] as const)
+  );
+  const graphIdeas = (input.knownProjectIdeas ?? input.knownIdeas ?? []).map(idea => {
+    if (idea.text !== undefined || !knownIdeaTextById.has(idea.ideaId)) return idea;
+    return { ...idea, text: knownIdeaTextById.get(idea.ideaId) };
+  });
   const usesProjectIdeaCatalog = input.knownProjectIdeas !== undefined;
   const graphOmittedIdeaCount = usesProjectIdeaCatalog
     ? input.knownProjectIdeasOmittedCount ?? 0

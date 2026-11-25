@@ -1596,6 +1596,47 @@ test("sincroniza archivo y consolidación de biblioteca entre proyectos y proces
 
 
 
+
+
+test("bridge.shutdown espera operaciones aceptadas que terminan con error y aun así cierra limpiamente", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-shutdown-rejected-request-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let active;
+  try {
+    active = startBridge(databasePath);
+    await active.client.hello();
+    await active.client.openProject({
+      projectId: "shutdown-rejected-project",
+      projectName: "Libro de cierre con error",
+      writerId: "writer-shutdown-rejected"
+    });
+
+    const rejected = active.client.request("project.call", {
+      projectId: "shutdown-rejected-project",
+      method: "method-not-allowed-for-test",
+      args: []
+    });
+    const shutdown = active.client.shutdown();
+
+    await assert.rejects(rejected, /no permitido por el puente/u);
+    await shutdown;
+    const exited = waitForExit(active.child);
+    assert.equal(await exited, 0);
+    active = undefined;
+  } finally {
+    if (active) {
+      try {
+        const exited = waitForExit(active.child);
+        await active.client.shutdown();
+        await exited;
+      } catch {
+        active.child.kill();
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("bridge.shutdown espera una finalización de biblioteca ya aceptada antes de cerrar SQLite", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-shutdown-library-finalization-"));
   const databasePath = resolve(directory, "motor.sqlite");

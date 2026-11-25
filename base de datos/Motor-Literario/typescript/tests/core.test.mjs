@@ -10003,3 +10003,49 @@ test("fusiona citas solapadas con una línea de diálogo para evitar doble conte
   assert.equal(result.metrics.dialogueSegmentCount,1);
   assert.equal(result.dialogueSegments[0].format,"mixed");
 });
+
+
+test("detecta capítulos, escenas y separadores explícitos sin inferir transiciones", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const prefix = "🌙 ";
+  const text = prefix + [
+    "# CAPÍTULO I: Llegada",
+    "ESCENA 1 — La estación",
+    "La viajera entró en el vestíbulo.",
+    "",
+    "* * *",
+    "",
+    "ESCENA 2: El andén",
+    "El tren llegó al amanecer."
+  ].join("\\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-scenes",documentId:"chapter",revision:7,text,baseOffset:120
+  });
+  assert.deepEqual(result.structuralMarkers.map(item => item.markerType),[
+    "chapter-heading","scene-heading","scene-divider","scene-heading"
+  ]);
+  assert.equal(result.explicitScenes.length,2);
+  assert.equal(result.explicitScenes[0].sceneIndex,1);
+  assert.equal(result.explicitScenes[1].sceneIndex,2);
+  assert.ok(result.explicitScenes.every(item =>
+    item.wordCount > 0 &&
+    item.markerOccurrence.start >= 120 &&
+    item.contentRange.start >= item.markerOccurrence.end &&
+    item.contentRange.end > item.contentRange.start
+  ));
+  assert.equal(
+    result.structuralMarkers[0].occurrence.start,
+    120 + prefix.length
+  );
+  assert.equal(result.structuralMarkers[1].lineIndex,2);
+});
+
+test("no inventa escenas cuando el fragmento no contiene marcadores explícitos", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-no-scene-inference",documentId:"chapter",revision:1,
+    text:"La mañana comenzó en silencio.\\n\\nDespués, la puerta se abrió lentamente."
+  });
+  assert.deepEqual(result.structuralMarkers,[]);
+  assert.deepEqual(result.explicitScenes,[]);
+});

@@ -103,6 +103,23 @@ export interface LiteraryRhythmTransition {
 }
 export type LiteraryRhythmProfile = "fragmented" | "balanced" | "extended" | "insufficient-text";
 export type LiteraryDialogueDensity = "none" | "low" | "moderate" | "high";
+
+export type LiteraryStructureMarkerType =
+  | "part-heading" | "chapter-heading" | "act-heading" | "scene-heading" | "scene-divider";
+export interface LiteraryStructureMarker {
+  readonly markerType: LiteraryStructureMarkerType;
+  readonly label: string;
+  readonly lineIndex: number;
+  readonly occurrence: LiteraryAnalysisOccurrence;
+}
+export interface LiteraryExplicitSceneSegment {
+  readonly sceneIndex: number;
+  readonly markerType: "scene-heading" | "scene-divider";
+  readonly heading: string;
+  readonly markerOccurrence: LiteraryAnalysisOccurrence;
+  readonly contentRange: LiteraryAnalysisOccurrence;
+  readonly wordCount: number;
+}
 export interface LiteraryAnalysisResult {
   readonly projectId: string;
   readonly documentId: string;
@@ -113,6 +130,8 @@ export interface LiteraryAnalysisResult {
   readonly rhythmTransitions: readonly LiteraryRhythmTransition[];
   readonly dialogueDensity: LiteraryDialogueDensity;
   readonly dialogueSegments: readonly LiteraryDialogueSegment[];
+  readonly structuralMarkers: readonly LiteraryStructureMarker[];
+  readonly explicitScenes: readonly LiteraryExplicitSceneSegment[];
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -252,6 +271,96 @@ function findParagraphRanges(text: string): LocalRange[] {
   if (tail) ranges.push(tail);
   return ranges;
 }
+
+interface LocalLiteraryStructureMarker extends LocalRange {
+  readonly markerType: LiteraryStructureMarkerType;
+  readonly label: string;
+  readonly lineIndex: number;
+}
+function detectLiteraryStructure(text: string): LocalLiteraryStructureMarker[] {
+  const markers: LocalLiteraryStructureMarker[] = [];
+  const headingLimit = 100;
+  let cursor = 0;
+  let lineIndex = 0;
+  while (cursor < text.length && markers.length < headingLimit) {
+    const lineStart = cursor;
+    while (cursor < text.length && text[cursor] !== "\\n" && text[cursor] !== "\\r") cursor++;
+    const lineEnd = cursor;
+    const line = text.slice(lineStart,lineEnd);
+    if (cursor < text.length && text[cursor] === "\\r") cursor++;
+    if (cursor < text.length && text[cursor] === "\\n") cursor++;
+    lineIndex++;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const heading = trimmed.match(/^(?:#{1,6}[ \\t]*)?(cap[ií]tulo|chapter|parte|part|libro|book|acto|act|escena|scene)\\b(.*)$/iu);
+    if (heading) {
+      const keyword = (heading[1] ?? "").toLocaleLowerCase("es");
+      const markerType: LiteraryStructureMarkerType =
+        /^(?:cap[ií]tulo|chapter)$/u.test(keyword) ? "chapter-heading" :
+        /^(?:parte|part|libro|book)$/u.test(keyword) ? "part-heading" :
+        /^(?:acto|act)$/u.test(keyword) ? "act-heading" : "scene-heading";
+      markers.push({
+        markerType,
+        label:trimmed.replace(/^#{1,6}[ \\t]*/u,""),
+        lineIndex,
+        start:lineStart,
+        end:lineEnd
+      });
+      continue;
+    }
+    const compact = trimmed.replace(/[ \\t]/gu,"");
+    if (/^(?:\\*{3,}|-{3,}|_{3,}|={3,}|·{3,}|•{3,})$/u.test(compact)) {
+      markers.push({
+        markerType:"scene-divider",
+        label:"Separador de escena",
+        lineIndex,
+        start:lineStart,
+        end:lineEnd
+      });
+    }
+  }
+  return markers;
+}
+function analyzeExplicitScenes(
+  text: string,
+  tokens: readonly WordToken[],
+  baseOffset: number,
+  markers: readonly LocalLiteraryStructureMarker[]
+): LiteraryExplicitSceneSegment[] {
+  const sceneMarkers = markers.filter(marker =>
+    marker.markerType === "scene-heading" || marker.markerType === "scene-divider"
+  );
+  const localRanges: LocalRange[] = [];
+  const sceneDrafts: Array<{
+    marker: LocalLiteraryStructureMarker;
+    contentRange: LocalRange;
+  }> = [];
+  for (const marker of sceneMarkers) {
+    const markerIndex = markers.indexOf(marker);
+    const nextMarker = markers[markerIndex+1];
+    const contentEnd = nextMarker?.start ?? text.length;
+    const contentRange = trimRange(text,marker.end,contentEnd);
+    if (!contentRange) continue;
+    localRanges.push(contentRange);
+    sceneDrafts.push({marker,contentRange});
+  }
+  const wordCounts = countTokensPerRange(tokens,localRanges);
+  return sceneDrafts.slice(0,100).map((scene,index) => ({
+    sceneIndex:index+1,
+    markerType:scene.marker.markerType as "scene-heading" | "scene-divider",
+    heading:scene.marker.label,
+    markerOccurrence:{
+      start:baseOffset+scene.marker.start,
+      end:baseOffset+scene.marker.end
+    },
+    contentRange:{
+      start:baseOffset+scene.contentRange.start,
+      end:baseOffset+scene.contentRange.end
+    },
+    wordCount:wordCounts[index] ?? 0
+  }));
+}
+
 function mergeRanges(ranges: readonly LocalRange[]): LocalRange[] {
   const ordered = [...ranges].filter(range => range.end > range.start)
     .sort((a,b) => a.start - b.start || a.end - b.end);
@@ -493,6 +602,14 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sentenceRanges = findSentenceRanges(text);
   const paragraphRanges = findParagraphRanges(text);
   const dialogueSegments = findDialogueSegments(text);
+  const localStructureMarkers = detectLiteraryStructure(text);
+  const structuralMarkers: LiteraryStructureMarker[] = localStructureMarkers.map(marker => ({
+    markerType:marker.markerType,
+    label:marker.label,
+    lineIndex:marker.lineIndex,
+    occurrence:{start:baseOffset+marker.start,end:baseOffset+marker.end}
+  }));
+  const explicitScenes = analyzeExplicitScenes(text,tokens,baseOffset,localStructureMarkers);
   const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
@@ -664,6 +781,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       wordCount:dialogueSegmentWordCounts[index] ?? 0,
       occurrence:{start:baseOffset+segment.start,end:baseOffset+segment.end}
     })),
+    structuralMarkers,
+    explicitScenes,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),
@@ -673,6 +792,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     caveats:[
       "El ritmo usa umbrales de longitud de oración; no mide calidad, tensión ni musicalidad.",
       "Los segmentos de diálogo son señales de formato; una línea o cita no equivale siempre a un turno completo ni permite identificar al hablante.",
+      "La estructura de escenas solo se segmenta cuando hay encabezados o separadores explícitos; no infiere cambios de escena a partir del contenido.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",

@@ -45,3 +45,8 @@ La distribución clasifica las oraciones en cortas (hasta 8 palabras), medias (9
 ## Segmentación descriptiva del diálogo
 
 El análisis reconoce contenido entre comillas angulares, curvas o rectas, además de líneas que comienzan con raya. Los rangos solapados se fusionan para evitar contar dos veces una misma intervención. Para cada segmento se informa formato, longitud en palabras y rango UTF-16; las métricas resumen número de segmentos, promedio y longitud máxima. No se asigna un hablante automáticamente: las atribuciones del tipo «dijo Ana» no se convierten en identidad sin un proceso explícito de resolución.
+
+
+## Estructura explícita de capítulos y escenas
+
+Se reconocen encabezados de parte/libro, capítulo, acto y escena cuando aparecen al inicio de una línea, con o sin prefijo Markdown de encabezado. También se detectan líneas separadoras formadas por tres o más asteriscos, guiones, guiones bajos, signos igual o puntos decorativos. Cada marcador conserva línea y rango UTF-16. Los segmentos de escena comienzan después de un encabezado de escena o separador y terminan ante el siguiente marcador estructural explícito. No se generan escenas desde párrafos, cambios de diálogo, cambios de lugar mencionados en la prosa ni inferencias semánticas. Se devuelven hasta 100 marcadores y 100 segmentos por operación.

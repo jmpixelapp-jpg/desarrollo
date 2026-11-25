@@ -59,9 +59,12 @@ test("calcula marcas temporales de decisiones sin retroceder ante relojes desinc
     { status: "IDEA", reason: "text-revised" }
   ];
 
-  assert.equal(nextNarrativeIdeaStatusChangeAt(history, 200), 250);
-  assert.equal(nextNarrativeIdeaStatusChangeAt(history, 300), 300);
+  const frozenHistory = Object.freeze(history.map(change => Object.freeze({ ...change })));
+  const before = JSON.stringify(frozenHistory);
+  assert.equal(nextNarrativeIdeaStatusChangeAt(frozenHistory, 200), 250);
+  assert.equal(nextNarrativeIdeaStatusChangeAt(frozenHistory, 300), 300);
   assert.equal(nextNarrativeIdeaStatusChangeAt([], 0), 0);
+  assert.equal(JSON.stringify(frozenHistory), before);
 });
 
 test("rechaza historiales y relojes inválidos al calcular decisiones narrativas", async () => {
@@ -69,6 +72,8 @@ test("rechaza historiales y relojes inválidos al calcular decisiones narrativas
 
   assert.throws(() => nextNarrativeIdeaStatusChangeAt(null, 1), /Historial o reloj/);
   assert.throws(() => nextNarrativeIdeaStatusChangeAt([], Number.NaN), /Historial o reloj/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([], Number.POSITIVE_INFINITY), /Historial o reloj/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([], "100"), /Historial o reloj/);
   assert.throws(() => nextNarrativeIdeaStatusChangeAt([], -1), /Historial o reloj/);
   assert.throws(() => nextNarrativeIdeaStatusChangeAt([null], 1), /decisión narrativa inválida/);
   assert.throws(() => nextNarrativeIdeaStatusChangeAt(["IDEA"], 1), /decisión narrativa inválida/);

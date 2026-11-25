@@ -1350,7 +1350,7 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
 
   try {
     for (let index = 0; index < total; index++) {
-      const suffix = String(index).padStart(4, "0");
+      const suffix = index === 298 ? "z" : index === 299 ? "ñ" : String(index).padStart(4, "0");
       const entityId = "entity:" + suffix;
       const canonicalName = "Personaje " + suffix;
       store.saveEntity({
@@ -1404,7 +1404,9 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     const receipt = store.loadProjectFinalizationReceipt(writerId, projectId);
     assert.equal(receipt.archivedIdeaIds.length, total);
     assert.equal(receipt.archivedIdeaIds[0], "idea:0000");
-    assert.equal(receipt.archivedIdeaIds[total - 1], "idea:0299");
+    assert.equal(receipt.archivedIdeaIds[total - 2], "idea:z");
+    assert.equal(receipt.archivedIdeaIds[total - 1], "idea:ñ",
+      "SQLite ordena los recibos por unidades UTF-16 y no por el locale del proceso");
     assert.equal(store.loadPersonalIdeas(writerId).length, total);
     const firstPage = store.loadPersonalIdeasPage(writerId, null, 120);
     assert.equal(firstPage.items.length, 120);

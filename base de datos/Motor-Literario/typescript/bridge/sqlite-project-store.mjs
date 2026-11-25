@@ -20,6 +20,23 @@ function encodedKey(parts) {
   return JSON.stringify(parts);
 }
 
+/**
+ * Clave de orden estable compatible con el orden lexicográfico de strings
+ * UTF-16 usado por las claves compuestas de IndexedDB.
+ * Cada unidad se codifica en cuatro dígitos hexadecimales; "!" separa
+ * componentes y ordena antes que cualquier dígito, preservando prefijos.
+ */
+function personalIdeaLibrarySortKey(sourceProjectId, ideaId) {
+  const encode = value => {
+    let result = "";
+    for (let index = 0; index < value.length; index++) {
+      result += value.charCodeAt(index).toString(16).padStart(4, "0");
+    }
+    return result;
+  };
+  return encode(sourceProjectId) + "!" + encode(ideaId) + "!";
+}
+
 function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -358,12 +375,41 @@ export class SqliteProjectStore {
       "writer_id TEXT," +
       "document_id TEXT," +
       "sequence INTEGER," +
+      "sort_key TEXT," +
       "value_json TEXT NOT NULL," +
       "PRIMARY KEY (collection, record_key)" +
       ") WITHOUT ROWID"
     );
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_project ON " + TABLE + "(collection, project_id)");
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_project_key ON " + TABLE + "(collection, project_id, record_key)");
+    // Migración compatible: bases anteriores no tienen la columna sort_key.
+    const columns = database.prepare("PRAGMA table_info(" + TABLE + ")").all();
+    if (!columns.some(column => column.name === "sort_key")) {
+      database.exec("ALTER TABLE " + TABLE + " ADD COLUMN sort_key TEXT");
+    }
+    const missingLibraryKeys = database.prepare(
+      "SELECT record_key, value_json FROM " + TABLE +
+      " WHERE collection = ? AND sort_key IS NULL ORDER BY record_key"
+    ).all("personal-idea-library");
+    const updateLibraryKey = database.prepare(
+      "UPDATE " + TABLE + " SET sort_key = ? WHERE collection = ? AND record_key = ?"
+    );
+    for (const row of missingLibraryKeys) {
+      const entry = JSON.parse(row.value_json);
+      if (!entry || typeof entry.sourceProjectId !== "string" ||
+          typeof entry.idea?.id !== "string") {
+        throw new Error("Biblioteca SQLite inconsistente: no se puede reconstruir la clave de orden.");
+      }
+      updateLibraryKey.run(
+        personalIdeaLibrarySortKey(entry.sourceProjectId, entry.idea.id),
+        "personal-idea-library",
+        row.record_key
+      );
+    }
+    database.exec(
+      "CREATE INDEX IF NOT EXISTS bridge_records_personal_library_page ON " + TABLE +
+      "(collection, writer_id, sort_key) WHERE collection = 'personal-idea-library'"
+    );
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_writer ON " + TABLE + "(collection, writer_id)");
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_document ON " + TABLE + "(collection, project_id, document_id, sequence)");
     database.exec(
@@ -504,13 +550,22 @@ export class SqliteProjectStore {
     const writerId = typeof value?.writerId === "string" ? value.writerId : null;
     const documentId = typeof value?.documentId === "string" ? value.documentId : null;
     const sequence = Number.isSafeInteger(value?.sequence) ? value.sequence : null;
+    let sortKey = null;
+    if (collection === "personal-idea-library") {
+      if (typeof value?.writerId !== "string" || !value.writerId.trim() ||
+          typeof value?.sourceProjectId !== "string" || !value.sourceProjectId.trim() ||
+          typeof value?.idea?.id !== "string" || !value.idea.id.trim()) {
+        throw new Error("Entrada de biblioteca inválida: faltan escritor, libro o ID de idea.");
+      }
+      sortKey = personalIdeaLibrarySortKey(value.sourceProjectId, value.idea.id);
+    }
     this.database.prepare(
-      "INSERT INTO " + TABLE + "(collection, record_key, project_id, writer_id, document_id, sequence, value_json) " +
-      "VALUES(?, ?, ?, ?, ?, ?, ?) " +
+      "INSERT INTO " + TABLE + "(collection, record_key, project_id, writer_id, document_id, sequence, sort_key, value_json) " +
+      "VALUES(?, ?, ?, ?, ?, ?, ?, ?) " +
       "ON CONFLICT(collection, record_key) DO UPDATE SET " +
       "project_id=excluded.project_id, writer_id=excluded.writer_id, document_id=excluded.document_id, " +
-      "sequence=excluded.sequence, value_json=excluded.value_json"
-    ).run(collection, key, projectId, writerId, documentId, sequence, JSON.stringify(value));
+      "sequence=excluded.sequence, sort_key=excluded.sort_key, value_json=excluded.value_json"
+    ).run(collection, key, projectId, writerId, documentId, sequence, sortKey, JSON.stringify(value));
     if (projectId && NARRATIVE_COLLECTIONS.has(collection)) this.bumpNarrativeVersion(projectId);
     return clone(value);
   }
@@ -1493,6 +1548,49 @@ export class SqliteProjectStore {
         this.database.exec("DROP TABLE IF EXISTS temp." + identityTable);
       }
     });
+  }
+
+
+  loadPersonalIdeasPage(writerId, cursor = null, limit = 50) {
+    requireText(writerId, "writerId");
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+        (cursor !== null && (!cursor || typeof cursor.sourceProjectId !== "string" ||
+          !cursor.sourceProjectId.trim() || typeof cursor.ideaId !== "string" ||
+          !cursor.ideaId.trim()))) {
+      throw new Error("Parámetros de paginación de biblioteca inválidos.");
+    }
+    const afterSortKey = cursor
+      ? personalIdeaLibrarySortKey(cursor.sourceProjectId, cursor.ideaId)
+      : "";
+    const rows = this.database.prepare(
+      "SELECT value_json FROM " + TABLE +
+      " WHERE collection = ? AND writer_id = ? AND sort_key > ? " +
+      "ORDER BY sort_key LIMIT ?"
+    ).all("personal-idea-library", writerId, afterSortKey, limit + 1);
+    const hasMore = rows.length > limit;
+    const selected = hasMore ? rows.slice(0, limit) : rows;
+    const items = selected.map(row => JSON.parse(row.value_json));
+    if (items.some(entry => entry.writerId !== writerId)) {
+      throw new Error("Biblioteca SQLite inconsistente: se rechazó una entrada de otro escritor.");
+    }
+    const last = items[items.length - 1];
+    return {
+      items: clone(items),
+      nextCursor: hasMore && last
+        ? { sourceProjectId: last.sourceProjectId, ideaId: last.idea.id }
+        : null
+    };
+  }
+
+  loadPersonalIdea(writerId, sourceProjectId, ideaId) {
+    requireText(writerId, "writerId");
+    requireProject(sourceProjectId, "sourceProjectId");
+    requireText(ideaId, "ideaId");
+    const entry = this.get("personal-idea-library", [writerId, sourceProjectId, ideaId]);
+    if (entry && entry.writerId !== writerId) {
+      throw new Error("Biblioteca SQLite inconsistente: se rechazó una entrada de otro escritor.");
+    }
+    return clone(entry);
   }
 
   loadPersonalIdeas(writerId) {

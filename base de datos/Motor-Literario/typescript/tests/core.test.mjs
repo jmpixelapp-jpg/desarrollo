@@ -9970,3 +9970,36 @@ test("no une frases recurrentes a través de límites de oración", async () => 
   });
   assert.equal(result.repeatedPhrases.some(item => item.phrase === "La noche Oscura"),false);
 });
+
+
+test("describe segmentos de diálogo sin asignar hablantes por conjetura", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "—No puedo esperar —dijo Ana.",
+    "—Debemos salir ahora.",
+    "«Volveré mañana», respondió Luis."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-dialogue-turns",documentId:"chapter",revision:5,text,baseOffset:300
+  });
+  assert.equal(result.metrics.dialogueSegmentCount,3);
+  assert.equal(result.dialogueSegments.length,3);
+  assert.deepEqual(result.dialogueSegments.map(item => item.format),
+    ["dialogue-dash","dialogue-dash","quotation"]);
+  assert.ok(result.dialogueSegments.every(item =>
+    item.wordCount > 0 && item.occurrence.start >= 300 && item.occurrence.end > item.occurrence.start
+  ));
+  assert.ok(result.metrics.averageWordsPerDialogueSegment > 0);
+  assert.ok(result.metrics.longestDialogueSegmentWords >= 3);
+  assert.equal("speakerId" in result.dialogueSegments[0],false);
+});
+
+test("fusiona citas solapadas con una línea de diálogo para evitar doble conteo", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-dialogue-overlap",documentId:"chapter",revision:1,
+    text:"—«No volveré», dijo Ana."
+  });
+  assert.equal(result.metrics.dialogueSegmentCount,1);
+  assert.equal(result.dialogueSegments[0].format,"mixed");
+});

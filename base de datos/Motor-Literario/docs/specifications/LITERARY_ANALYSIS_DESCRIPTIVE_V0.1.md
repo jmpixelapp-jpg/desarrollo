@@ -7,7 +7,7 @@
 
 ## Alcance
 
-El análisis entrega métricas de longitud, mediana y dispersión de oraciones, variación entre oraciones consecutivas, ritmo de párrafo, diversidad léxica superficial, densidad estimada de diálogo, señales gramaticales explícitas de persona, palabras y frases literales recurrentes de 2 a 4 términos, aperturas de oración recurrentes, candidatos a anáfora en oraciones consecutivas, vocabulario sensorial explícito por modalidad y puntuación expresiva.
+El análisis entrega métricas de longitud, mediana y dispersión de oraciones, variación entre oraciones consecutivas, ritmo de párrafo, diversidad léxica superficial, densidad estimada de diálogo, segmentos de diálogo con longitud y formato, señales gramaticales explícitas de persona, palabras y frases literales recurrentes de 2 a 4 términos, aperturas de oración recurrentes, candidatos a anáfora en oraciones consecutivas, vocabulario sensorial explícito por modalidad y puntuación expresiva.
 
 Las señales gramaticales excluyen tramos de diálogo reconocidos por comillas o líneas que empiezan con raya. Las ocurrencias devuelven offsets absolutos. El motor limita las muestras gramaticales a 40, los términos repetidos a 12 y las aperturas a 8; limita también los offsets visibles por patrón.
 
@@ -40,3 +40,8 @@ Estas métricas son indicios para inspección del escritor. No son correcciones 
 ## Ritmo y transiciones
 
 La distribución clasifica las oraciones en cortas (hasta 8 palabras), medias (9–24) y largas (25 o más). La mediana y la desviación estándar describen el conjunto sin depender solo del promedio. Se propone un contraste entre dos oraciones consecutivas cuando la más larga tiene al menos 16 palabras, supera a la otra por 10 palabras o más y duplica su longitud. El resultado marca aceleración o desaceleración según el sentido del cambio y devuelve ambos rangos UTF-16. Es un indicio para revisar cadencia, no una conclusión sobre intención narrativa.
+
+
+## Segmentación descriptiva del diálogo
+
+El análisis reconoce contenido entre comillas angulares, curvas o rectas, además de líneas que comienzan con raya. Los rangos solapados se fusionan para evitar contar dos veces una misma intervención. Para cada segmento se informa formato, longitud en palabras y rango UTF-16; las métricas resumen número de segmentos, promedio y longitud máxima. No se asigna un hablante automáticamente: las atribuciones del tipo «dijo Ana» no se convierten en identidad sin un proceso explícito de resolución.

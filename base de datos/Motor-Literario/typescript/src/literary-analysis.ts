@@ -49,6 +49,13 @@ export interface LiteraryVoiceSignalCounts {
 export type LiteraryVoiceSignalClassification =
   | "first-person-signals" | "second-person-signals" | "third-person-signals"
   | "mixed-signals" | "undetermined";
+export type LiteraryDialogueSegmentFormat = "quotation" | "dialogue-dash" | "mixed";
+export interface LiteraryDialogueSegment {
+  readonly segmentIndex: number;
+  readonly format: LiteraryDialogueSegmentFormat;
+  readonly wordCount: number;
+  readonly occurrence: LiteraryAnalysisOccurrence;
+}
 export interface LiteraryVoiceSignal {
   readonly classification: LiteraryVoiceSignalClassification;
   readonly counts: LiteraryVoiceSignalCounts;
@@ -73,6 +80,9 @@ export interface LiteraryAnalysisMetrics {
   readonly lexicalDiversity: number;
   readonly dialogueWordCount: number;
   readonly dialogueRatio: number;
+  readonly dialogueSegmentCount: number;
+  readonly averageWordsPerDialogueSegment: number;
+  readonly longestDialogueSegmentWords: number;
   readonly questionMarkCount: number;
   readonly exclamationMarkCount: number;
   readonly ellipsisCount: number;
@@ -102,6 +112,7 @@ export interface LiteraryAnalysisResult {
   readonly rhythmProfile: LiteraryRhythmProfile;
   readonly rhythmTransitions: readonly LiteraryRhythmTransition[];
   readonly dialogueDensity: LiteraryDialogueDensity;
+  readonly dialogueSegments: readonly LiteraryDialogueSegment[];
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -253,23 +264,37 @@ function mergeRanges(ranges: readonly LocalRange[]): LocalRange[] {
   }
   return merged;
 }
-function findDialogueRanges(text: string): LocalRange[] {
-  const ranges: LocalRange[] = [];
+function findDialogueSegments(text: string): Array<LocalRange & {
+  readonly format: LiteraryDialogueSegmentFormat;
+}> {
+  const segments: Array<LocalRange & { readonly format: LiteraryDialogueSegmentFormat }> = [];
   const quoted = /«([^»]+)»|“([^”]+)”|"([^"]+)"/gu;
   for (const match of text.matchAll(quoted)) {
     const content = match[1] ?? match[2] ?? match[3] ?? "";
     if (!content) continue;
     const start = (match.index ?? 0) + match[0].indexOf(content);
-    ranges.push({ start, end: start + content.length });
+    segments.push({ start, end: start + content.length, format: "quotation" });
   }
   const dashDialogue = /^[ \t]*[—–][ \t]*(.+)$/gmu;
   for (const match of text.matchAll(dashDialogue)) {
     const content = match[1] ?? "";
     if (!content) continue;
     const start = (match.index ?? 0) + match[0].indexOf(content);
-    ranges.push({ start, end: start + content.length });
+    segments.push({ start, end: start + content.length, format: "dialogue-dash" });
   }
-  return mergeRanges(ranges);
+  const ordered = segments.sort((a,b) => a.start-b.start || a.end-b.end);
+  const merged: Array<LocalRange & { readonly format: LiteraryDialogueSegmentFormat }> = [];
+  for (const segment of ordered) {
+    const previous = merged[merged.length-1];
+    if (previous && segment.start < previous.end) {
+      merged[merged.length-1] = {
+        start:previous.start,
+        end:Math.max(previous.end,segment.end),
+        format:previous.format === segment.format ? previous.format : "mixed"
+      };
+    } else merged.push(segment);
+  }
+  return merged;
 }
 function countTokensPerRange(tokens: readonly WordToken[], ranges: readonly LocalRange[]): number[] {
   let tokenIndex = 0;
@@ -467,7 +492,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const tokens = tokenize(text);
   const sentenceRanges = findSentenceRanges(text);
   const paragraphRanges = findParagraphRanges(text);
-  const dialogueRanges = findDialogueRanges(text);
+  const dialogueSegments = findDialogueSegments(text);
+  const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
+  const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
 
@@ -560,7 +587,11 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
 
   const wordCount = tokens.length;
   const uniqueWordCount = new Set(tokens.map(token => token.normalized)).size;
-  const dialogueWordCount = countTokensInRanges(tokens,dialogueRanges);
+  const dialogueWordCount = dialogueSegmentWordCounts.reduce((total,count) => total+count,0);
+  const averageWordsPerDialogueSegment = dialogueSegmentWordCounts.length > 0
+    ? dialogueWordCount/dialogueSegmentWordCounts.length : 0;
+  const longestDialogueSegmentWords = dialogueSegmentWordCounts.length > 0
+    ? dialogueSegmentWordCounts.reduce((maximum,count) => Math.max(maximum,count),0) : 0;
   const averageWordsPerSentence = sentenceWordCounts.length > 0 ? wordCount / sentenceWordCounts.length : 0;
   const orderedSentenceLengths = [...sentenceWordCounts].sort((a,b) => a-b);
   const middle = Math.floor(orderedSentenceLengths.length / 2);
@@ -606,6 +637,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     lexicalDiversity:wordCount > 0 ? roundMetric(uniqueWordCount / wordCount) : 0,
     dialogueWordCount,
     dialogueRatio:roundMetric(dialogueRatio),
+    dialogueSegmentCount:dialogueSegments.length,
+    averageWordsPerDialogueSegment:roundMetric(averageWordsPerDialogueSegment),
+    longestDialogueSegmentWords,
     questionMarkCount:[...text.matchAll(/\?/gu)].length,
     exclamationMarkCount:[...text.matchAll(/!/gu)].length,
     ellipsisCount:[...text.matchAll(/…|\.{3,}/gu)].length,
@@ -624,6 +658,12 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     rhythmProfile,
     rhythmTransitions:findRhythmTransitions(sentenceRanges,sentenceWordCounts,baseOffset),
     dialogueDensity,
+    dialogueSegments:dialogueSegments.slice(0,40).map((segment,index) => ({
+      segmentIndex:index+1,
+      format:segment.format,
+      wordCount:dialogueSegmentWordCounts[index] ?? 0,
+      occurrence:{start:baseOffset+segment.start,end:baseOffset+segment.end}
+    })),
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),
@@ -632,7 +672,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sensorySignals:collectSensorySignals(tokens,baseOffset),
     caveats:[
       "El ritmo usa umbrales de longitud de oración; no mide calidad, tensión ni musicalidad.",
-      "El diálogo se estima por comillas y líneas iniciadas con raya; otros formatos pueden quedar fuera.",
+      "Los segmentos de diálogo son señales de formato; una línea o cita no equivale siempre a un turno completo ni permite identificar al hablante.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",

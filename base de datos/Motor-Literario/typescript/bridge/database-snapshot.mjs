@@ -215,7 +215,6 @@ export async function restoreDatabaseBackup(backupPath, destinationPath) {
   const sidecars = ["-wal", "-shm", "-journal"];
   let destinationMoved = false;
   const movedSidecars = [];
-  const movedSidecars = [];
 
   try {
     await copyFile(backup, temporary, fsConstants.COPYFILE_EXCL);

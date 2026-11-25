@@ -3391,8 +3391,11 @@ export class HostEngineApi {
     return this.enqueueKnowledgeOperation(async () => {
       const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
       if (receipt === undefined) return undefined;
+      if (!receipt || typeof receipt !== "object") {
+        throw new Error("Violación de aislamiento: el adaptador devolvió un recibo de finalización inválido.");
+      }
       const ids = receipt.archivedIdeaIds;
-      if (!receipt || receipt.writerId !== writerId ||
+      if (receipt.writerId !== writerId ||
           receipt.sourceProjectId !== project.projectId ||
           receipt.receiptId !== "finalization-v1" ||
           typeof receipt.sourceProjectName !== "string" || !receipt.sourceProjectName.trim() ||

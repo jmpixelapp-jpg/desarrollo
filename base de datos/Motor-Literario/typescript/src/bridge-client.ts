@@ -1,3 +1,5 @@
+import type { PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage } from "./contracts";
+
 export interface BridgeReadable {
   on(event: "data" | "error", listener: (value: unknown) => void): unknown;
   setEncoding?(encoding: "utf8"): unknown;
@@ -292,6 +294,18 @@ export class MotorLiterarioBridgeClient {
     replacement: string;
   }): Promise<unknown> {
     return this.request("document.change", { projectId, change });
+  }
+
+  getPersonalIdeaLibraryPage(
+    projectId: string,
+    cursor: PersonalIdeaLibraryCursor | null = null,
+    limit = 50
+  ): Promise<PersonalIdeaLibraryPage> {
+    return this.request("project.call", {
+      projectId,
+      method: "getPersonalIdeaLibraryPage",
+      args: [cursor, limit]
+    });
   }
 
   async flushProject(projectId: string): Promise<void> {

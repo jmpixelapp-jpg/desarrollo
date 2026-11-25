@@ -62,14 +62,14 @@ export function auditStorageImplementation(mapping, runtimeSource) {
       try { return JSON.parse(trimmed); } catch { return undefined; }
     }
     const constant = runtimeSource.match(
-      new RegExp("^\\\\s*const\\\\s+" + trimmed + "\\\\s*=\\\\s*(?:\\\"([^\\\"]+)\\\"|'([^']+)')\\\\s*;", "m")
+      new RegExp("^\\s*const\\s+" + trimmed + "\\s*=\\s*(?:\"([^\"]+)\"|'([^']+)')\\s*;", "m")
     );
     return constant ? (constant[1] ?? constant[2]) : undefined;
   };
 
   const runtimeKeyPaths = new Map();
   for (const match of runtimeSource.matchAll(
-    /createObjectStore\\(\\s*([A-Z][A-Z0-9_]*)\\s*,\\s*\\{\\s*keyPath:\\s*(\\[[^\\]]*\\]|"[^"]+")\\s*\\}\\s*\\)/g
+    /createObjectStore\(\s*([A-Z][A-Z0-9_]*)\s*,\s*\{\s*keyPath:\s*(\[[^\]]*\]|"[^"]+")\s*\}\s*\)/g
   )) {
     const storeName = [...constantsByStore.entries()].find(([, constant]) => constant === match[1])?.[0];
     if (storeName) runtimeKeyPaths.set(storeName, resolveLiteral(match[2]));
@@ -77,7 +77,7 @@ export function auditStorageImplementation(mapping, runtimeSource) {
 
   const runtimeIndexes = new Map();
   for (const match of runtimeSource.matchAll(
-    /ensureIndex\\(\\s*([A-Z][A-Z0-9_]*)\\s*,\\s*([^,]+?)\\s*,\\s*(\\[[^\\]]*\\]|"[^"]+")\\s*(?:,\\s*(true|false))?\\s*\\)/g
+    /ensureIndex\(\s*([A-Z][A-Z0-9_]*)\s*,\s*([^,]+?)\s*,\s*(\[[^\]]*\]|"[^"]+")\s*(?:,\s*(true|false))?\s*\)/g
   )) {
     const storeName = [...constantsByStore.entries()].find(([, constant]) => constant === match[1])?.[0];
     const indexName = resolveLiteral(match[2]);

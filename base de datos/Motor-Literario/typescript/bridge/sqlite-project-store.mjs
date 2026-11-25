@@ -39,6 +39,31 @@ function requireProject(value, label = "projectId") {
   requireText(value, label);
 }
 
+function checksumArchivedIdeaIds(ids) {
+  const serialized = JSON.stringify([...ids].sort());
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
+
+function validateFinalizationReceipt(receipt, writerId, projectId) {
+  if (!receipt || receipt.writerId !== writerId ||
+      receipt.sourceProjectId !== projectId ||
+      receipt.receiptId !== "finalization-v1" ||
+      typeof receipt.sourceProjectName !== "string" || !receipt.sourceProjectName.trim() ||
+      !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+      !Array.isArray(receipt.archivedIdeaIds) ||
+      receipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+      new Set(receipt.archivedIdeaIds).size !== receipt.archivedIdeaIds.length ||
+      [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1] > id) ||
+      receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds)) {
+    throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");
+  }
+}
+
 function identityKey(projectId, id) {
   return [projectId, id];
 }
@@ -1224,16 +1249,6 @@ export class SqliteProjectStore {
     requireText(sourceProjectName, "sourceProjectName");
     if (!Number.isFinite(archivedAt) || archivedAt < 0) throw new Error("Fecha de archivo inválida.");
 
-    const checksumFor = ids => {
-      const source = JSON.stringify(ids);
-      let hash = 0xcbf29ce484222325n;
-      for (let index = 0; index < source.length; index++) {
-        hash ^= BigInt(source.charCodeAt(index));
-        hash = BigInt.asUintN(64, hash * 0x100000001b3n);
-      }
-      return "fnv1a64:" + hash.toString(16).padStart(16, "0");
-    };
-
     return this.transaction(() => {
       const receiptId = "finalization-v1";
       const receiptKey = [writerId, projectId, receiptId];
@@ -1254,15 +1269,9 @@ export class SqliteProjectStore {
       }
 
       if (existingReceipt) {
-        if (existingReceipt.writerId !== writerId || existingReceipt.sourceProjectId !== projectId ||
-            existingReceipt.receiptId !== receiptId || existingReceipt.sourceProjectName !== sourceProjectName ||
-            !Number.isFinite(existingReceipt.finalizedAt) || existingReceipt.finalizedAt < 0 ||
-            !Array.isArray(existingReceipt.archivedIdeaIds) ||
-            existingReceipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
-            new Set(existingReceipt.archivedIdeaIds).size !== existingReceipt.archivedIdeaIds.length ||
-            [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1].localeCompare(id)>0) ||
-            existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds)) {
-          throw new Error("El recibo de finalización está malformado o no pertenece al escritor y libro activos.");
+        validateFinalizationReceipt(existingReceipt, writerId, projectId);
+        if (existingReceipt.sourceProjectName !== sourceProjectName) {
+          throw new Error("El título de procedencia del recibo no coincide con el libro activo.");
         }
         if (projectIdeas.some(item => item.status === "IDEA")) {
           throw new Error("El libro ya está finalizado; las ideas nuevas requieren reapertura explícita.");
@@ -1374,7 +1383,7 @@ export class SqliteProjectStore {
       const archivedIdeaIds = pending.map(item=>item.id).sort();
       this.put("writer-library-finalization-receipts",receiptKey,{
         writerId,sourceProjectId:projectId,receiptId,sourceProjectName,
-        finalizedAt:archivedAt,archivedIdeaIds,archiveChecksum:checksumFor(archivedIdeaIds)
+        finalizedAt:archivedAt,archivedIdeaIds,archiveChecksum:checksumArchivedIdeaIds(archivedIdeaIds)
       },{insertOnly:true});
       return clone(archived);
     });
@@ -1388,7 +1397,9 @@ export class SqliteProjectStore {
   loadProjectFinalizationReceipt(writerId, projectId) {
     requireText(writerId, "writerId");
     requireProject(projectId);
-    return clone(this.get("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"]));
+    const receipt = this.get("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"]);
+    if (receipt !== undefined) validateFinalizationReceipt(receipt, writerId, projectId);
+    return clone(receipt);
   }
 
   saveDocument(document) {

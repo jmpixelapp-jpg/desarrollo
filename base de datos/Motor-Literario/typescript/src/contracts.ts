@@ -128,6 +128,10 @@ export interface PersonalIdeaLibraryPage {
 }
 
 export interface ProjectStore {
+  /** Respaldo integral opcional del adaptador local, independiente del manuscrito. */
+  exportDatabaseBackup?(): Promise<unknown>;
+  /** Restaura todos los registros del adaptador en una operación atómica. */
+  restoreDatabaseBackup?(backup: unknown): Promise<void>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Avisa cambios confirmados en la biblioteca global de un escritor, sin revelar su contenido. */

@@ -1020,6 +1020,7 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   assert.equal(graph.referenceCount, 4);
   assert.equal(graph.includedReferenceCount, 3);
   assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.reciprocalReferencePairCount, 1);
   assert.equal(graph.sourceNodeCount, 1);
   assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
   assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);

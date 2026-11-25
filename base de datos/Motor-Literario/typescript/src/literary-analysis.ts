@@ -779,6 +779,8 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly referenceCount: number;
   readonly includedReferenceCount: number;
   readonly notIncludedReferenceCount: number;
+  /** Pares de ideas que se enlazan mutuamente de forma explícita. */
+  readonly reciprocalReferencePairCount: number;
   /** Nodos sin referencias entrantes desde el snapshot; no contempla fuentes omitidas. */
   readonly sourceNodeCount: number;
   /** Nodos sin salidas hacia otros nodos incluidos; pueden conservar salidas externas. */
@@ -3357,6 +3359,20 @@ function buildLiteraryIdeaGraph(
     left.representativeIdeaId.localeCompare(right.representativeIdeaId, "en")
   );
 
+  const directedTargets = new Map<string, Set<string>>();
+  for (const idea of orderedIdeas) {
+    directedTargets.set(idea.ideaId, new Set(adjacency.get(idea.ideaId) ?? []));
+  }
+  let reciprocalReferencePairCount = 0;
+  for (const idea of orderedIdeas) {
+    for (const targetId of adjacency.get(idea.ideaId) ?? []) {
+      if (idea.ideaId.localeCompare(targetId, "en") < 0 &&
+          directedTargets.get(targetId)?.has(idea.ideaId)) {
+        reciprocalReferencePairCount++;
+      }
+    }
+  }
+
   const sourceNodeCount = nodes.filter(node => node.incomingReferenceCount === 0).length;
   const terminalWithinSnapshotNodeCount = nodes.filter(
     node => node.includedOutgoingReferenceCount === 0
@@ -3425,6 +3441,7 @@ function buildLiteraryIdeaGraph(
     referenceCount,
     includedReferenceCount,
     notIncludedReferenceCount,
+    reciprocalReferencePairCount,
     sourceNodeCount,
     terminalWithinSnapshotNodeCount,
     isolatedWithinSnapshotNodeCount,

@@ -307,3 +307,104 @@ test("permite iniciar una nueva identidad de sesión en el mismo snapshot durabl
     await store.close();
   }
 });
+
+
+test("dos pestañas compiten atómicamente y solo una adquiere el lease", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-race-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const now = Date.now();
+
+  try {
+    const contenders = await Promise.all([
+      store.acquireLiveAuthorMonitorLease(projectId, documentId, "tab-a", now, 30_000),
+      store.acquireLiveAuthorMonitorLease(projectId, documentId, "tab-b", now, 30_000)
+    ]);
+    assert.equal(contenders.filter(Boolean).length, 1);
+    const winner = contenders.find(Boolean);
+    const loser = contenders[0] ? "tab-b" : "tab-a";
+    assert.ok(winner);
+    assert.equal(winner.fencingToken, 1);
+
+    const lost = await store.acquireLiveAuthorMonitorLease(
+      projectId,
+      documentId,
+      loser,
+      now + 1,
+      30_000
+    );
+    assert.equal(lost, undefined);
+
+    const renewed = await store.renewLiveAuthorMonitorLease(winner, now + 2, 30_000);
+    assert.ok(renewed);
+    assert.equal(renewed.ownerId, winner.ownerId);
+    assert.equal(renewed.fencingToken, winner.fencingToken);
+    assert.ok(renewed.expiresAt > winner.expiresAt);
+
+    const released = await store.releaseLiveAuthorMonitorLease(renewed, now + 3);
+    assert.equal(released, true);
+    const next = await store.acquireLiveAuthorMonitorLease(
+      projectId,
+      documentId,
+      loser,
+      now + 4,
+      30_000
+    );
+    assert.ok(next);
+    assert.equal(next.fencingToken, renewed.fencingToken + 1);
+  } finally {
+    await store.close();
+  }
+});
+
+test("el fencing token invalida escrituras del propietario anterior tras expirar el lease", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-fence-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const now = Date.now();
+
+  try {
+    const firstLease = await acquireLease(store, projectId, documentId, "tab-old", now, 30_000);
+    const initial = checkpoint(projectId, documentId, now);
+    await store.saveLiveAuthorMonitorCheckpoint(initial, firstLease);
+
+    // Simula el instante exacto de expiración; el segundo propietario obtiene el fence siguiente.
+    const takeover = await store.acquireLiveAuthorMonitorLease(
+      projectId,
+      documentId,
+      "tab-new",
+      firstLease.expiresAt,
+      30_000
+    );
+    assert.ok(takeover);
+    assert.equal(takeover.fencingToken, firstLease.fencingToken + 1);
+
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(
+        checkpoint(projectId, documentId, Date.now() + 1, {
+          sessionId: "stale-session",
+          revision: 0,
+          sequence: 0
+        }),
+        firstLease
+      ),
+      /fencing token/
+    );
+
+    const nextCheckpoint = checkpoint(projectId, documentId, Date.now() + 2, {
+      sessionId: "fresh-session",
+      revision: 0,
+      sequence: 0
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(nextCheckpoint, takeover);
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      nextCheckpoint
+    );
+
+    assert.equal(await store.releaseLiveAuthorMonitorLease(firstLease, Date.now()), false);
+    assert.equal(await store.releaseLiveAuthorMonitorLease(takeover, Date.now()), true);
+  } finally {
+    await store.close();
+  }
+});

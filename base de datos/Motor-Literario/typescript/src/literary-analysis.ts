@@ -3956,6 +3956,13 @@ function buildLiteraryIdeaGraph(
   const statusProfiles: LiteraryIdeaGraphStatusProfile[] = profileStatuses.map(
     status => profileTotals.get(status)!
   );
+  const statusHistoryConsistency = statusProfiles.reduce((totals, profile) => ({
+    consistentIdeaCount: totals.consistentIdeaCount + profile.statusHistoryConsistentIdeaCount,
+    mismatchIdeaCount: totals.mismatchIdeaCount + profile.statusHistoryMismatchIdeaCount,
+    unknownIdeaCount: totals.unknownIdeaCount + profile.statusHistoryConsistencyUnknownIdeaCount
+  }), { consistentIdeaCount: 0, mismatchIdeaCount: 0, unknownIdeaCount: 0 });
+  const verifiableIdeaCount = statusHistoryConsistency.consistentIdeaCount +
+    statusHistoryConsistency.mismatchIdeaCount;
 
   const lexicalResonances = buildLiteraryIdeaLexicalResonances(orderedIdeas);
   const result: LiteraryIdeaGraphAnalysis = {
@@ -3965,12 +3972,9 @@ function buildLiteraryIdeaGraph(
     ideaCount: orderedIdeas.length,
     statusProfiles,
     statusHistoryConsistency: {
-      consistentIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency === "consistent").length,
-      mismatchIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency === "mismatch").length,
-      unknownIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency === "unknown").length,
-      verifiableIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency !== "unknown").length,
-      verificationCoverage: nodes.length === 0 ? 0 :
-        nodes.filter(node => node.currentStatusHistoryConsistency !== "unknown").length / nodes.length
+      ...statusHistoryConsistency,
+      verifiableIdeaCount,
+      verificationCoverage: nodes.length === 0 ? 0 : verifiableIdeaCount / nodes.length
     },
     omittedIdeaCount,
     referenceCount,

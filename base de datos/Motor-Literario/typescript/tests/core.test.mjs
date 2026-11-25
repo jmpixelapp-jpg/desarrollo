@@ -2172,7 +2172,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 17);
+      assert.equal(version, 18);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2203,7 +2203,13 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
       { name: "document-diagnostics", keyPath: ["projectId", "documentId"] },
       { name: "project-dictionaries", keyPath: ["projectId", "id"] },
-      { name: "dictionary-entries", keyPath: ["projectId", "id"] }
+      { name: "dictionary-entries", keyPath: ["projectId", "id"] },
+      { name: "manuscript-fragments", keyPath: ["projectId", "id"] },
+      { name: "record-attributes", keyPath: ["projectId", "id"] },
+      { name: "relation-attributes", keyPath: ["projectId", "id"] },
+      { name: "active-suggestions", keyPath: ["projectId", "id"] },
+      { name: "import-authorizations", keyPath: ["writerId", "sourceProjectId", "targetProjectId", "authorizationId"] },
+      { name: "schema-migrations", keyPath: "migrationId" }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
       ["project-settings", "by-project"],
@@ -2241,7 +2247,22 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["project-dictionaries", "by-project-language-name"],
       ["dictionary-entries", "by-project"],
       ["dictionary-entries", "by-dictionary"],
-      ["dictionary-entries", "by-dictionary-normalized"]
+      ["dictionary-entries", "by-dictionary-normalized"],
+      ["manuscript-fragments", "by-project"],
+      ["manuscript-fragments", "by-document-revision"],
+      ["manuscript-fragments", "by-parent"],
+      ["record-attributes", "by-project"],
+      ["record-attributes", "by-record-key"],
+      ["relation-attributes", "by-project"],
+      ["relation-attributes", "by-relation-key"],
+      ["active-suggestions", "by-project"],
+      ["active-suggestions", "by-document-revision"],
+      ["active-suggestions", "by-status-priority"],
+      ["import-authorizations", "by-writer"],
+      ["import-authorizations", "by-source-target"],
+      ["import-authorizations", "by-target"],
+      ["schema-migrations", "by-to-version"],
+      ["schema-migrations", "by-applied-at"]
     ]);
     assert.equal(createdIndexes.find(index => index.name === "by-document-sequence")?.unique, true);
   } finally {
@@ -2306,7 +2327,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
-    "project-dictionaries", "dictionary-entries"
+    "project-dictionaries", "dictionary-entries", "manuscript-fragments",
+    "record-attributes", "relation-attributes", "active-suggestions",
+    "import-authorizations", "schema-migrations"
   ];
   const stores = new Map(names.map(name => [name, {
     indexNames: { contains: () => false },
@@ -2355,7 +2378,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 17);
+    assert.equal(openedVersion, 18);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -2414,7 +2437,9 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
-    "project-dictionaries", "dictionary-entries"
+    "project-dictionaries", "dictionary-entries", "manuscript-fragments",
+    "record-attributes", "relation-attributes", "active-suggestions",
+    "import-authorizations", "schema-migrations"
   ];
   const deleted = [];
   const created = [];

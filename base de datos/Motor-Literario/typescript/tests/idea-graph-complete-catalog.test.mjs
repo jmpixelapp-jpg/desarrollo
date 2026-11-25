@@ -320,56 +320,38 @@ test("el anfitrión recorta IDs Unicode colacionados de forma determinista", asy
   assert.equal(first.nodes.some(node => node.ideaId === composedIdea.id), false);
 });
 
-
-test("no reintroduce textos omitidos por tamaño a través de la lista de ideas ligadas a personajes", async () => {
-  const oversizedIdea = {
-    projectId,
-    id: "oversized-linked-idea",
-    text: "x".repeat(100_001),
-    status: "IDEA",
-    originDocumentId: "chapter",
-    sourceProjectName: "Book",
-    evidence: [],
-    relatedIdeaIds: [],
-    relatedEntityIds: ["character-1"],
-    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
-  };
-  const entity = {
-    projectId,
-    id: "character-1",
-    kind: "character",
-    canonicalName: "Iria",
-    normalizedName: "iria",
-    aliases: [],
-    evidence: [],
-    firstSeenAt: 1,
-    lastSeenAt: 1,
-    extractionVersion: 1
-  };
-  const oversizedStore = {
+test("aplica el presupuesto agregado del texto de ideas en el anfitrión sin romper el grafo", async () => {
+  const largeStore = {
     ...store,
     documents: new Map(),
-    ideas: [oversizedIdea],
-    async loadEntities(project) {
-      return project === projectId ? [structuredClone(entity)] : [];
-    }
+    ideas: Array.from({ length: 22 }, (_, index) => ({
+      projectId,
+      id: "budget-idea-" + String(index).padStart(2, "0"),
+      text: "x".repeat(100_000),
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }))
   };
-  const api = new HostEngineApi({ store: oversizedStore });
-  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-oversized" });
+  const api = new HostEngineApi({ store: largeStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-budget" });
   await api.openDocument({
     documentId: "chapter",
-    text: "Escena 1\nIria contempla el camino.",
+    text: "Escena 1\\nEl manuscrito conserva todas las ideas.",
     revision: 0,
     sequence: 0
   });
   try {
-    const result = await api.analyzeLiteraryDocument("chapter");
-    assert.equal(result.ideaGraph.ideaCount, 1);
-    assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount, 1);
-    assert.equal(result.ideaGraph.lexicalResonances.inputIdeaCount, 1);
-    assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount, 0);
-    assert.equal(result.ideaGraph.lexicalResonances.omittedTextBudgetIdeaCount, 1);
-    assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount, 0);
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 22);
+    assert.equal(graph.lexicalResonances.inputIdeaCount, 22);
+    assert.equal(graph.lexicalResonances.analyzedIdeaCount, 20);
+    assert.equal(graph.lexicalResonances.omittedTextBudgetIdeaCount, 2);
+    assert.equal(graph.lexicalResonances.tokenizedTextUnitCount, 2_000_000);
   } finally {
     api.dispose();
   }

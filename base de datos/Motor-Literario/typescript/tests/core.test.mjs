@@ -13515,3 +13515,54 @@ test("la API rechaza recibos de biblioteca con checksum incorrecto o IDs desorde
   );
   api.dispose();
 });
+
+test("HostEngineApi entrega los textos privados de ideas al análisis de resonancias léxicas", async () => {
+  const projectId = "host-idea-lexical-resonance";
+  const store = new MemoryStore();
+  const makeIdea = (id, text) => ({
+    projectId,
+    id,
+    text,
+    status: "IDEA",
+    originDocumentId: "chapter-source",
+    sourceProjectName: "Libro privado",
+    evidence: [],
+    relatedEntityIds: [],
+    relatedIdeaIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  });
+  store.ideas.set(projectId + ":idea-alpha", makeIdea(
+    "idea-alpha",
+    "La brújula antigua revela una puerta escondida bajo el cristal oscuro."
+  ));
+  store.ideas.set(projectId + ":idea-beta", makeIdea(
+    "idea-beta",
+    "El cristal oscuro protege la puerta secreta tras la brújula antigua."
+  ));
+
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId, projectName: "Libro privado", writerId: "writer-private" });
+    await api.openDocument({
+      documentId: "chapter-one",
+      text: "Escena 1\nLa protagonista observa el horizonte.",
+      revision: 0,
+      sequence: 0
+    });
+    await api.flushPendingChanges();
+
+    const result = await api.analyzeLiteraryDocument("chapter-one");
+    const lexical = result.ideaGraph.lexicalResonances;
+
+    assert.equal(lexical.inputIdeaCount, 2);
+    assert.equal(lexical.analyzedIdeaCount, 2);
+    assert.equal(lexical.ideasWithoutTextCount, 0);
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.deepEqual(
+      lexical.resonances.map(item => [item.leftIdeaId, item.rightIdeaId]),
+      [["idea-alpha", "idea-beta"]]
+    );
+  } finally {
+    api.dispose();
+  }
+});

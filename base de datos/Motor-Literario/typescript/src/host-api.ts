@@ -6,10 +6,12 @@ import { LiteraryEngine } from "./engine";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput } from "./dictionaries";
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
 import type {
+  ProjectRecord, ProjectRecordInput, RecordName,
   ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
   ImportAuthorization, SchemaMigration
 } from "./mldb-records";
 import {
+  validateProjectRecord, validateRecordName, cloneProjectRecord, cloneRecordName,
   validateManuscriptFragment, validateRecordAttribute, validateRelationAttribute,
   validateActiveSuggestion, validateImportAuthorization, validateSchemaMigration,
   cloneManuscriptFragment, cloneRecordAttribute, cloneRelationAttribute,
@@ -1630,11 +1632,17 @@ export class HostEngineApi {
       const projectId = this.requireProject().projectId;
       const load = this.store.loadRecordLifecycles;
       if (!load) throw new Error("El adaptador no admite historial de fichas.");
-      const entities = await this.requireKnowledgeStore().loadEntities(projectId);
-      const scopedEntities = requireProjectScopedRecords(entities, projectId, "entidades");
-      if (!scopedEntities.some(entity => entity.id === recordId)) {
-        throw new Error("La ficha no existe en el proyecto activo.");
+      const loadRecords = this.store.loadProjectRecords;
+      if (!loadRecords) throw new Error("El adaptador no admite fichas MLDB genéricas.");
+      const projectRecords = await loadRecords.call(this.store, projectId);
+      if (!Array.isArray(projectRecords)) throw new Error("La colección de fichas MLDB es inválida.");
+      const recordIds = new Set<string>();
+      for (const item of projectRecords) {
+        validateProjectRecord(item, projectId);
+        if (recordIds.has(item.id)) throw new Error("Hay IDs duplicados de fichas MLDB.");
+        recordIds.add(item.id);
       }
+      if (!recordIds.has(recordId)) throw new Error("La ficha no existe en el proyecto activo.");
       const records = await load.call(this.store, projectId, recordId);
       if (!Array.isArray(records)) throw new Error("El historial de ficha no es una colección.");
       let previous: RecordLifecycle | undefined;
@@ -1663,12 +1671,17 @@ export class HostEngineApi {
       if (!load || !append) throw new Error("El adaptador no admite historial de fichas.");
       const record: RecordLifecycle = { ...input, projectId };
       validateRecordLifecycle(record, projectId);
-      const entities = requireProjectScopedRecords(
-        await this.requireKnowledgeStore().loadEntities(projectId), projectId, "entidades"
-      );
-      if (!entities.some(entity => entity.id === record.recordId)) {
-        throw new Error("La ficha no existe en el proyecto activo.");
+      const loadRecords = this.store.loadProjectRecords;
+      if (!loadRecords) throw new Error("El adaptador no admite fichas MLDB genéricas.");
+      const projectRecords = await loadRecords.call(this.store, projectId);
+      if (!Array.isArray(projectRecords)) throw new Error("La colección de fichas MLDB es inválida.");
+      const recordIds = new Set<string>();
+      for (const item of projectRecords) {
+        validateProjectRecord(item, projectId);
+        if (recordIds.has(item.id)) throw new Error("Hay IDs duplicados de fichas MLDB.");
+        recordIds.add(item.id);
       }
+      if (!recordIds.has(record.recordId)) throw new Error("La ficha no existe en el proyecto activo.");
       const history = await load.call(this.store, projectId, record.recordId);
       if (!Array.isArray(history)) throw new Error("El historial de ficha no es una colección.");
       const previous = history[history.length - 1];
@@ -1794,6 +1807,121 @@ export class HostEngineApi {
       }
       await save.call(this.store, cloneManuscriptFragment(candidate), byId.get(candidate.id));
       return cloneManuscriptFragment(candidate);
+    });
+  }
+
+  async getProjectRecords(): Promise<readonly ProjectRecord[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadProjectRecords;
+      if (!load) throw new Error("El adaptador no admite fichas MLDB genéricas.");
+      const records = await load.call(this.store, projectId);
+      if (!Array.isArray(records)) throw new Error("La colección de fichas MLDB es inválida.");
+      const ids = new Set<string>();
+      for (const record of records) {
+        validateProjectRecord(record, projectId);
+        if (ids.has(record.id)) throw new Error("Hay IDs duplicados de fichas MLDB.");
+        ids.add(record.id);
+      }
+      return records.map(cloneProjectRecord);
+    });
+  }
+
+  /** El nombre principal puede permanecer null hasta que el escritor lo conozca. */
+  async saveProjectRecord(input: ProjectRecordInput): Promise<ProjectRecord> {
+    const projectId = this.requireProject().projectId;
+    if (!input || typeof input !== "object") throw new Error("Datos de ficha MLDB inválidos.");
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadProjectRecords;
+      const save = this.store.saveProjectRecord;
+      if (!load || !save) throw new Error("El adaptador no admite fichas MLDB genéricas.");
+      const records = await load.call(this.store, projectId);
+      if (!Array.isArray(records)) throw new Error("La colección de fichas MLDB es inválida.");
+      const byId = new Map<string, ProjectRecord>();
+      for (const record of records) {
+        validateProjectRecord(record, projectId);
+        if (byId.has(record.id)) throw new Error("Hay IDs duplicados de fichas MLDB.");
+        byId.set(record.id, record);
+      }
+      const current = byId.get(input.id);
+      const candidate: ProjectRecord = {
+        projectId,
+        id: input.id,
+        recordType: input.recordType,
+        primaryName: input.primaryName ?? null,
+        description: input.description ?? null,
+        label: input.label,
+        state: input.state,
+        confidence: input.confidence,
+        confirmationKind: input.confirmationKind,
+        provenanceKind: input.provenanceKind,
+        createdAt: current?.createdAt ?? input.createdAt,
+        updatedAt: input.updatedAt,
+        currentVersion: current ? current.currentVersion + 1 : 1
+      };
+      validateProjectRecord(candidate, projectId);
+      if (current && candidate.updatedAt < current.updatedAt) {
+        throw new Error("La fecha de actualización de la ficha no puede retroceder.");
+      }
+      await save.call(this.store, cloneProjectRecord(candidate), current);
+      return cloneProjectRecord(candidate);
+    });
+  }
+
+  async getRecordNames(recordId?: string): Promise<readonly RecordName[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadRecordNames;
+      if (!load) throw new Error("El adaptador no admite nombres de fichas.");
+      if (recordId !== undefined && (typeof recordId !== "string" || !recordId.trim())) {
+        throw new Error("Identificador de ficha inválido.");
+      }
+      if (recordId !== undefined) {
+        const records = await this.getProjectRecords();
+        if (!records.some(record => record.id === recordId)) {
+          throw new Error("La ficha no existe en el proyecto activo.");
+        }
+      }
+      const names = await load.call(this.store, projectId, recordId);
+      if (!Array.isArray(names)) throw new Error("La colección de nombres de fichas es inválida.");
+      const ids = new Set<string>();
+      for (const name of names) {
+        validateRecordName(name, projectId);
+        if (ids.has(name.id)) throw new Error("Hay IDs duplicados de nombres de fichas.");
+        if (recordId !== undefined && name.recordId !== recordId) {
+          throw new Error("El almacenamiento devolvió un nombre de otra ficha.");
+        }
+        ids.add(name.id);
+      }
+      return names.map(cloneRecordName);
+    });
+  }
+
+  async saveRecordName(input: Omit<RecordName, "projectId">): Promise<RecordName> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const loadRecords = this.store.loadProjectRecords;
+      const loadNames = this.store.loadRecordNames;
+      const save = this.store.saveRecordName;
+      if (!loadRecords || !loadNames || !save) throw new Error("El adaptador no admite nombres de fichas.");
+      const [records, names] = await Promise.all([
+        loadRecords.call(this.store, projectId),
+        loadNames.call(this.store, projectId, input.recordId)
+      ]);
+      if (!Array.isArray(records) || !Array.isArray(names)) {
+        throw new Error("Las colecciones de fichas o nombres son inválidas.");
+      }
+      const record = records.find(item => item.id === input.recordId);
+      if (!record) throw new Error("La ficha del nombre no existe en el proyecto activo.");
+      validateProjectRecord(record, projectId);
+      const current = names.find(item => item.id === input.id);
+      const candidate: RecordName = { ...input, projectId };
+      validateRecordName(candidate, projectId);
+      if (candidate.isPrimary && record.primaryName !== candidate.name) {
+        throw new Error("El nombre principal debe coincidir con el nombre vigente de la ficha.");
+      }
+      await save.call(this.store, cloneRecordName(candidate), current);
+      return cloneRecordName(candidate);
     });
   }
 
@@ -2662,6 +2790,8 @@ export class HostEngineApi {
       activeSuggestions: Boolean(this.store.saveActiveSuggestion && this.store.loadActiveSuggestions),
       importAuthorizations: Boolean(this.store.appendImportAuthorization && this.store.loadImportAuthorizations),
       schemaMigrationHistory: Boolean(this.store.loadSchemaMigrations),
+      projectRecords: Boolean(this.store.loadProjectRecords && this.store.saveProjectRecord),
+      recordNames: Boolean(this.store.loadRecordNames && this.store.saveRecordName),
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),

@@ -9935,6 +9935,29 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     sourceProjectName: projectName,
     evidence: []
   }));
+  // La red conserva más de mil nodos de contexto sin superar el límite
+  // de 500 enlaces por idea: la raíz apunta a ramas y cada rama a sus hojas.
+  const wideBranchCount = 3;
+  const wideBranchSize = Math.ceil(wideCount / wideBranchCount);
+  const wideBranchIds = Array.from({ length: wideBranchCount }, (_, index) =>
+    `wide-branch-${String(index).padStart(2, "0")}`
+  );
+  const wideBranches = Array.from({ length: wideBranchCount }, (_, branchIndex) => {
+    const firstLeafIndex = branchIndex * wideBranchSize;
+    const branchLeafCount = Math.min(wideBranchSize, wideCount - firstLeafIndex);
+    return {
+      projectId,
+      id: wideBranchIds[branchIndex],
+      text: `Rama contextual ${branchIndex}`,
+      status: "incorporated",
+      originDocumentId: "chapter",
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedIdeaIds: Array.from({ length: branchLeafCount }, (_, index) =>
+        `wide-leaf-${String(firstLeafIndex + index).padStart(4, "0")}`
+      )
+    };
+  });
   const wideRoot = {
     projectId,
     id: "context-wide-root",
@@ -9943,9 +9966,7 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     originDocumentId: "chapter",
     sourceProjectName: projectName,
     evidence: [],
-    relatedIdeaIds: Array.from({ length: wideCount }, (_, index) =>
-      `wide-leaf-${String(index).padStart(4, "0")}`
-    )
+    relatedIdeaIds: wideBranchIds
   };
   const wideLeaves = Array.from({ length: wideCount }, (_, index) => ({
     projectId,
@@ -9956,7 +9977,9 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     sourceProjectName: projectName,
     evidence: []
   }));
-  const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideLeaves];
+  const projectIdeas = [
+    ...pendingIdeas, ...smallContexts, wideRoot, ...wideBranches, ...wideLeaves
+  ];
   const entries = [];
   const deleted = [];
   const transaction = {
@@ -10032,10 +10055,13 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     }
     const wideEntry = entries.find(item => item.idea.id === "pending-wide");
     assert.ok(wideEntry);
-    assert.equal(wideEntry.context.relatedIdeas.length, wideCount + 1);
+    assert.equal(
+      wideEntry.context.relatedIdeas.length,
+      wideCount + wideBranchCount + 1
+    );
     assert.deepEqual(
       wideEntry.context.relatedIdeas.map(idea => idea.id),
-      [...["context-wide-root"], ...wideLeaves.map(idea => idea.id)].sort()
+      ["context-wide-root", ...wideBranchIds, ...wideLeaves.map(idea => idea.id)].sort()
     );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);

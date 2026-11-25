@@ -2270,6 +2270,21 @@ export class IndexedDbProjectStore implements ProjectStore {
     );
   }
 
+  async loadProjectEventLifecycles(projectId: string): Promise<readonly EventLifecycle[]> {
+    if(typeof projectId!=="string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para consultar historiales de acontecimientos.");
+    }
+    const db=await this.open();
+    const transaction=db.transaction(EVENT_LIFECYCLES,"readonly");
+    const request=transaction.objectStore(EVENT_LIFECYCLES).index("by-project").getAll(projectId);
+    const records=await readAfterTransaction(
+      transaction,request,"No se pudieron leer los historiales de acontecimientos."
+    ) as EventLifecycle[];
+    if(!Array.isArray(records))throw new Error("Los historiales de acontecimientos no son una colección.");
+    for(const item of records)validateEventLifecycle(item,projectId);
+    return records.map(cloneEventLifecycle);
+  }
+
   async saveEventAndAppendLifecycleIfUnchanged(
     event: NarrativeEvent,
     expectedCurrent: NarrativeEvent,

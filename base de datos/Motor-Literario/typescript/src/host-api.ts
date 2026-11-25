@@ -218,6 +218,16 @@ function requireNarrativeEntityReferences<T extends { readonly projectId: string
 }
 
 
+function checksumArchivedPersonalIdeaIds(ids: readonly string[]): string {
+  const serialized = JSON.stringify([...ids].sort());
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
+
 function requireUniquePersonalIdeaEntries(
   entries: unknown,
   writerId: string,
@@ -3367,29 +3377,65 @@ export class HostEngineApi {
   }
 
 
-  /** Consulta el recibo durable que demuestra la transferencia de cierre de este libro. */
+  /** Consulta y contrasta el recibo durable con las ideas archivadas del mismo libro. */
   async getProjectFinalizationReceipt(): Promise<StoredProjectFinalizationReceipt | undefined> {
     const project = this.requireProject();
     const writerId = this.requireWriterId();
     const loadReceipt = this.store.loadProjectFinalizationReceipt;
-    if (!loadReceipt) {
-      throw new Error("El almacenamiento no admite recibos durables de finalización.");
+    const loadPersonalIdeas = this.store.loadPersonalIdeas;
+    if (!loadReceipt || !loadPersonalIdeas) {
+      throw new Error("El almacenamiento no admite la verificación completa de la finalización y su biblioteca personal.");
     }
-    const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
-    if (receipt === undefined) return undefined;
-    const ids = receipt.archivedIdeaIds;
-    if (!receipt || receipt.writerId !== writerId ||
-        receipt.sourceProjectId !== project.projectId ||
-        typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||
-        receipt.sourceProjectName !== project.projectName ||
-        !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
-        !Array.isArray(ids) ||
-        ids.some(id => typeof id !== "string" || !id.trim()) ||
-        new Set(ids).size !== ids.length ||
-        typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
-      throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
-    }
-    return cloneNarrativeRecord(receipt);
+
+    // La lectura comparte la cola con el archivo: no observa un recibo antes
+    // de que la transferencia y su biblioteca hayan quedado confirmadas.
+    const work = this.knowledgeTail.then(async () => {
+      const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
+      if (receipt === undefined) return undefined;
+      if (!receipt || typeof receipt !== "object") {
+        throw new Error("Violación de aislamiento: el adaptador devolvió un recibo de finalización inválido.");
+      }
+
+      const ids = receipt.archivedIdeaIds;
+      if (receipt.writerId !== writerId ||
+          receipt.sourceProjectId !== project.projectId ||
+          receipt.receiptId !== "finalization-v1" ||
+          receipt.sourceProjectName !== project.projectName ||
+          !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+          !Array.isArray(ids) ||
+          ids.some(id => typeof id !== "string" || !id.trim()) ||
+          new Set(ids).size !== ids.length ||
+          [...ids].some((id, index, values) => index > 0 && values[index - 1]! > id) ||
+          typeof receipt.archiveChecksum !== "string" ||
+          receipt.archiveChecksum !== checksumArchivedPersonalIdeaIds(ids)) {
+        throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos o su checksum es inválido.");
+      }
+
+      const writerEntries = await loadPersonalIdeas.call(this.store, writerId);
+      if (!Array.isArray(writerEntries)) {
+        throw new Error("Integridad de biblioteca: no se pudo verificar el contenido archivado del libro.");
+      }
+      // Solo se contrasta este libro. La biblioteca del escritor puede contener
+      // entradas válidas de otros libros con IDs de idea coincidentes.
+      const projectEntries = writerEntries.filter(entry =>
+        entry !== null && typeof entry === "object" &&
+        (entry as PersonalIdeaLibraryEntry).sourceProjectId === project.projectId
+      );
+      const validatedEntries = requireUniquePersonalIdeaEntries(
+        projectEntries, writerId, project.projectId
+      );
+      if (validatedEntries.some(entry => entry.sourceProjectName !== project.projectName)) {
+        throw new Error("Integridad de biblioteca: el título de origen archivado no coincide con el libro finalizado.");
+      }
+      const libraryIds = validatedEntries.map(entry => entry.idea.id).sort();
+      if (JSON.stringify(libraryIds) !== JSON.stringify(ids)) {
+        throw new Error("Integridad de biblioteca: el recibo de finalización no coincide con las ideas archivadas del libro.");
+      }
+
+      return cloneNarrativeRecord(receipt);
+    });
+    this.knowledgeTail = work.then(() => undefined, () => undefined);
+    return work;
   }
 
   async setNarrativeIdeaStatus(
@@ -3784,7 +3830,9 @@ export class HostEngineApi {
       projectWideNarrativeIdeaGraph: Boolean(this.store.loadIdeas && this.store.loadEntities),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryFinalizationReceipts: Boolean(
-        this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
+        this.store.archiveUnincorporatedIdeas &&
+        this.store.loadPersonalIdeas &&
+        this.store.loadProjectFinalizationReceipt
       ),
       explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
       evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),

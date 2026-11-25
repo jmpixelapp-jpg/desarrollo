@@ -1,0 +1,47 @@
+name: Finalization receipt integrity
+
+on:
+  pull_request:
+    paths:
+      - "base de datos/Motor-Literario/typescript/src/host-api.ts"
+      - "base de datos/Motor-Literario/typescript/src/persistence/indexeddb-store.ts"
+      - "base de datos/Motor-Literario/typescript/bridge/sqlite-project-store.mjs"
+      - "base de datos/Motor-Literario/typescript/tests/finalization-receipt-library-consistency.test.mjs"
+      - "base de datos/Motor-Literario/typescript/tests/sqlite-finalization-receipt-validation.test.mjs"
+      - ".github/workflows/finalization-receipt-integrity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "base de datos/Motor-Literario/typescript/src/host-api.ts"
+      - "base de datos/Motor-Literario/typescript/src/persistence/indexeddb-store.ts"
+      - "base de datos/Motor-Literario/typescript/bridge/sqlite-project-store.mjs"
+      - "base de datos/Motor-Literario/typescript/tests/finalization-receipt-library-consistency.test.mjs"
+      - "base de datos/Motor-Literario/typescript/tests/sqlite-finalization-receipt-validation.test.mjs"
+      - ".github/workflows/finalization-receipt-integrity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  finalization-receipt:
+    name: Verify receipt against persisted idea library
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "base de datos/Motor-Literario/typescript"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install development tools
+        run: npm install --no-audit --no-fund
+      - name: Build runtime bundle
+        run: npx vite build
+      - name: Verify host API and SQLite receipt integrity
+        run: >-
+          node --test
+          tests/finalization-receipt-library-consistency.test.mjs
+          tests/sqlite-finalization-receipt-validation.test.mjs

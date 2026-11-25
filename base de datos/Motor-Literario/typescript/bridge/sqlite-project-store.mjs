@@ -39,6 +39,32 @@ function requireProject(value, label = "projectId") {
   requireText(value, label);
 }
 
+function checksumArchivedIdeaIds(ids) {
+  const serialized = JSON.stringify([...ids].sort());
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
+
+function validateFinalizationReceipt(receipt, writerId, projectId) {
+  if (!receipt || receipt.writerId !== writerId ||
+      receipt.sourceProjectId !== projectId ||
+      receipt.receiptId !== "finalization-v1" ||
+      typeof receipt.sourceProjectName !== "string" || !receipt.sourceProjectName.trim() ||
+      !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+      !Array.isArray(receipt.archivedIdeaIds) ||
+      receipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+      new Set(receipt.archivedIdeaIds).size !== receipt.archivedIdeaIds.length ||
+      [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1] > id) ||
+      typeof receipt.archiveChecksum !== "string" ||
+      receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds)) {
+    throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");
+  }
+}
+
 function identityKey(projectId, id) {
   return [projectId, id];
 }
@@ -1388,7 +1414,9 @@ export class SqliteProjectStore {
   loadProjectFinalizationReceipt(writerId, projectId) {
     requireText(writerId, "writerId");
     requireProject(projectId);
-    return clone(this.get("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"]));
+    const receipt = this.get("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"]);
+    if (receipt !== undefined) validateFinalizationReceipt(receipt, writerId, projectId);
+    return clone(receipt);
   }
 
   saveDocument(document) {

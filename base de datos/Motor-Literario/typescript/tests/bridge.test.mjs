@@ -1305,6 +1305,9 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     assert.equal(receipt.archivedIdeaIds[0], "idea:0000");
     assert.equal(receipt.archivedIdeaIds[total - 1], "idea:0299");
     assert.equal(store.loadPersonalIdeas(writerId).length, total);
+    const retry = store.archiveUnincorporatedIdeas(projectId, writerId, sourceProjectName, 600);
+    assert.deepEqual(retry, [], "un reintento valida el recibo sin volver a devolver todas las ideas");
+    assert.equal(store.loadPersonalIdeas(writerId).length, total);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });

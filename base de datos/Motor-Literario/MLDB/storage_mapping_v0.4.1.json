@@ -595,7 +595,7 @@
         "project/dictionary-entries/related-entities/"
       ],
       "representation": "embedded",
-      "contract": "DictionaryEntryRecord.relatedEntityIds; vínculos confirmados y validados en la misma transacción que la entrada.",
+      "contract": "DictionaryEntry.relatedEntityIds; vínculos confirmados y validados en la misma transacción que la entrada.",
       "implementationStatus": "implemented",
       "objectStores": [
         "dictionary-entries",

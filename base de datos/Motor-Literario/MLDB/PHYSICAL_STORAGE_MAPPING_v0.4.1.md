@@ -48,7 +48,7 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `schema_migrations` | Versión nativa de IndexedDB y migraciones `onupgradeneeded` | Parcial; sin tabla de historial separada |
 | `project_dictionaries` | `project-dictionaries` | Implementado; unicidad por proyecto, idioma y nombre normalizado |
 | `dictionary_entries` | `dictionary-entries` | Implementado; actualización comparada y forma normalizada única |
-| `dictionary_entry_entities` | `DictionaryEntryRecord.relatedEntityIds` / `DictionaryEntry.relatedEntityIds` embebido | Implementado; referencias verificadas transaccionalmente dentro del libro |
+| `dictionary_entry_entities` | `DictionaryEntry.relatedEntityIds` embebido | Implementado; referencias verificadas transaccionalmente dentro del libro |
 | `record_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
 | `relation_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
 | `writer_library_ideas` | `personal-idea-library` | Implementado con transacción de transferencia |

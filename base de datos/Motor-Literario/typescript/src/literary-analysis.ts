@@ -751,6 +751,7 @@ export interface LiteraryIdeaGraphNode {
   /** Salidas explícitas cuyo destino no está incluido en el snapshot actual. */
   readonly notIncludedOutgoingReferenceCount: number;
 }
+/** Referencia explícita y resultado de resolver su destino contra el alcance de catálogo declarado. */
 export interface LiteraryIdeaGraphReference {
   readonly fromIdeaId: string;
   readonly toIdeaId: string;
@@ -794,9 +795,11 @@ export interface LiteraryIdeaGraphAnalysis {
   /** Distribución estructural de los nodos por estado editorial explícito. */
   readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
   /** Ideas del catálogo global que el anfitrión no incluyó en este snapshot. */
+  /** Ideas omitidas del alcance indicado por catalogScope. */
   readonly omittedIdeaCount: number;
   readonly referenceCount: number;
   readonly includedReferenceCount: number;
+  /** Referencias cuyo destino no aparece en el snapshot, incluidas las ausencias confirmadas. */
   readonly notIncludedReferenceCount: number;
   /** Referencias sin destino en el catálogo cuando no se omitió ninguna idea. */
   readonly missingFromProjectReferenceCount: number;
@@ -3235,8 +3238,9 @@ const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
 
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
- * Un destino ausente del snapshot se cuenta como referencia no incluida,
- * nunca como referencia rota ni como prueba de inexistencia.
+ * Los destinos no incluidos permanecen indeterminados cuando hay ideas omitidas
+ * o se usa el catálogo heredado; solo se declaran ausentes si el catálogo del
+ * proyecto se suministró completo.
  */
 function buildLiteraryIdeaGraph(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[],

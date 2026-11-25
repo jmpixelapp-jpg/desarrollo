@@ -1491,12 +1491,9 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     /historial de decisiones del catálogo global/
   );
   for (const invalidHistory of [
-    [{ status: "incorporated", reason: "initial" }],
-    [{ status: "IDEA", reason: "writer", changedAt: 1 }],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "IDEA", reason: "writer", changedAt: 2 }
-    ]
+    [null],
+    [{ status: "IDEA", reason: "unknown", changedAt: 1 }],
+    [{ status: "IDEA", reason: "initial", changedAt: Number.NaN }]
   ]) {
     assert.throws(
       () => analyzeLiteraryFragment({
@@ -1504,28 +1501,27 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
         knownProjectIdeas: [{
           ...idea,
           statusHistory: invalidHistory,
-          writerDecisionCount: 1
+          writerDecisionCount: 0
         }]
       }),
       /historial de decisiones del catálogo global/
     );
   }
 
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{
-        ...idea,
-        status: "discarded",
-        statusHistory: [
-          { status: "incorporated", reason: "initial", changedAt: 1 },
-          { status: "discarded", reason: "text-revised", changedAt: 2 }
-        ],
-        writerDecisionCount: 0
-      }]
-    }),
-    /historial de decisiones del catálogo global/
-  );
+  const importedAnomaly = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      status: "discarded",
+      statusHistory: [
+        { status: "incorporated", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "text-revised", changedAt: 2 }
+      ],
+      writerDecisionCount: 0
+    }]
+  }).ideaGraph.nodes[0];
+  assert.equal(importedAnomaly.currentStatusHistoryConsistency, "consistent");
+  assert.equal(importedAnomaly.observedTextRevisionStatusChangeCount, 1);
 
   const truncated = analyzeLiteraryFragment({
     ...input,

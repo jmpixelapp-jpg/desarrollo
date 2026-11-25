@@ -2238,3 +2238,72 @@ test("contrasta las dependencias causales con el orden temporal del proyecto", (
   assert.equal(trajectory.causalRelations.length, 1);
   assert.equal(trajectory.causalRelations[0].temporalConsistency, "contradiction");
 });
+
+
+test("vincula decisiones con acontecimientos posteriores solo en escalas temporales comparables", () => {
+  const text = "Escena 1\nAna decide cruzar el puente.";
+  const phrase = "Ana decide cruzar el puente.";
+  const start = text.indexOf(phrase);
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase
+  };
+  const makeEvent = (eventId, orderValue, options = {}) => ({
+    projectId: "literary-analysis-test",
+    eventId,
+    label: eventId,
+    participants: ["ana-id"],
+    timelineTrackId: options.track ?? "main",
+    timeReference: {
+      basis: options.basis ?? "calendar",
+      precision: options.precision ?? "year",
+      raw: String(orderValue),
+      orderValue
+    },
+    evidence: [evidence]
+  });
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownEvents: [{
+      eventId: "decision-event",
+      label: "La decisión",
+      participants: ["ana-id"],
+      evidence: [evidence]
+    }],
+    knownProjectEvents: [
+      makeEvent("decision-event", 2020),
+      makeEvent("later-event", 2022),
+      makeEvent("other-track", 2023, { track: "dreams" }),
+      makeEvent("other-basis", 2024, { basis: "relative" }),
+      makeEvent("earlier-event", 2019)
+    ],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "ana-decision",
+      text: "Ana decide cruzar el puente.",
+      status: "incorporated",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 1,
+      staleEvidenceCount: 0,
+      evidence: [evidence],
+      statusHistory: [{ status: "incorporated", reason: "writer" }],
+      writerDecisionCount: 1,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+  const decision = result.characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.deepEqual(decision.materializedEventIds, ["decision-event"]);
+  assert.deepEqual(decision.laterDocumentedEventIds, ["later-event"]);
+  assert.equal(decision.laterDocumentedEventCount, 1);
+  assert.equal(decision.laterEventChronologyStatus, "later-events-found");
+});

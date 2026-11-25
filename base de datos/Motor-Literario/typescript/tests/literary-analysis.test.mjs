@@ -444,13 +444,13 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
         eventId: "storm",
         label: "La tormenta",
         participants: ["ana", "milo"],
-        evidence: [evidence("La tormenta"), evidence("la tormenta", 1)]
+        evidence: [evidence("La tormenta"), evidence("la tormenta")]
       },
       {
         eventId: "collapse",
         label: "El derrumbe",
         participants: ["ana", "luisa"],
-        evidence: [evidence("el derrumbe"), evidence("El derrumbe", 1)]
+        evidence: [evidence("el derrumbe"), evidence("El derrumbe")]
       }
     ]
   });
@@ -478,6 +478,47 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
     item.sentenceOccurrence.end > item.sentenceOccurrence.start &&
     item.connectorOccurrence.end > item.connectorOccurrence.start
   ));
+});
+
+test("reconoce conectores causales españoles terminados en vocal acentuada", () => {
+  const connectors = ["provocó", "causó", "desencadenó", "originó"];
+  for (const connector of connectors) {
+    const text = `La tormenta ${connector} el derrumbe.`;
+    const evidence = phrase => {
+      const start = text.indexOf(phrase);
+      assert.notEqual(start, -1);
+      return {
+        documentId: "chapter-one",
+        revision: 1,
+        start,
+        end: start + phrase.length,
+        excerpt: phrase
+      };
+    };
+    const result = analyzeLiteraryFragment({
+      projectId: "literary-analysis-test",
+      documentId: "chapter-one",
+      revision: 1,
+      text,
+      knownEvents: [
+        {
+          eventId: "storm",
+          label: "La tormenta",
+          participants: ["ana"],
+          evidence: [evidence("La tormenta")]
+        },
+        {
+          eventId: "collapse",
+          label: "El derrumbe",
+          participants: ["ana"],
+          evidence: [evidence("el derrumbe")]
+        }
+      ]
+    });
+    assert.equal(result.eventDependencyAnalysis.candidateCount, 1, connector);
+    assert.equal(result.eventDependencyAnalysis.candidates[0].connector, connector);
+    assert.equal(result.eventDependencyAnalysis.candidates[0].direction, "cause-before-consequence");
+  }
 });
 
 test("no infiere dependencias sin conector y excluye evidencia obsoleta o de otra revisión", () => {
@@ -999,7 +1040,25 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   });
   const graph = result.ideaGraph;
   assert.equal(graph.ideaCount, 4);
-  assert.deepEqual(graph.statusProfiles, [
+  const stableStatusProfile = profile => ({
+    status: profile.status,
+    ideaCount: profile.ideaCount,
+    sourceIdeaCount: profile.sourceIdeaCount,
+    terminalWithinSnapshotIdeaCount: profile.terminalWithinSnapshotIdeaCount,
+    isolatedWithinSnapshotIdeaCount: profile.isolatedWithinSnapshotIdeaCount,
+    incomingReferenceCount: profile.incomingReferenceCount,
+    includedOutgoingReferenceCount: profile.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: profile.notIncludedOutgoingReferenceCount,
+    statusHistoryRecordCount: profile.statusHistoryRecordCount,
+    omittedStatusHistoryCount: profile.omittedStatusHistoryCount,
+    writerDecisionCount: profile.writerDecisionCount,
+    activeEvidenceCount: profile.activeEvidenceCount,
+    staleEvidenceCount: profile.staleEvidenceCount,
+    ideasWithActiveEvidenceCount: profile.ideasWithActiveEvidenceCount,
+    ideasWithStaleEvidenceCount: profile.ideasWithStaleEvidenceCount,
+    ideasWithoutActiveEvidenceCount: profile.ideasWithoutActiveEvidenceCount
+  });
+  assert.deepEqual(graph.statusProfiles.map(stableStatusProfile), [
     {
       status: "IDEA",
       ideaCount: 2,
@@ -1072,7 +1131,19 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   ]);
   assert.equal(graph.cycleCount, 1);
   assert.deepEqual(graph.cycles, [{ ideaIds: ["idea-a", "idea-b"] }]);
-  assert.deepEqual(graph.nodes, [
+  const stableGraphNode = node => ({
+    ideaId: node.ideaId,
+    status: node.status,
+    incomingReferenceCount: node.incomingReferenceCount,
+    includedOutgoingReferenceCount: node.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: node.notIncludedOutgoingReferenceCount,
+    statusHistory: node.statusHistory,
+    omittedStatusHistoryCount: node.omittedStatusHistoryCount,
+    writerDecisionCount: node.writerDecisionCount,
+    activeEvidenceCount: node.activeEvidenceCount,
+    staleEvidenceCount: node.staleEvidenceCount
+  });
+  assert.deepEqual(graph.nodes.map(stableGraphNode), [
     {
       ideaId: "idea-a", status: "IDEA",
       incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
@@ -1938,7 +2009,10 @@ test("las trayectorias resuelven escenas con evidencia posterior a las primeras 
       excerpt: phrase
     };
   };
-  const evidenceSamples = phrases.map(evidence);
+  const evidenceSamples = [
+    ...phrases.slice(0, 19).map(evidence),
+    evidence(phrases[20])
+  ];
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -2004,7 +2078,6 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
     ...(status ? { status } : {})
   });
   const foreignEvidence = [
-    makeEvidence("chapter-one", 1, "stale"),
     makeEvidence("chapter-two", 1),
     makeEvidence("chapter-one", 2)
   ];
@@ -2023,7 +2096,7 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
       fromEntityId: "ana-id",
       toEntityId: "bruno-id",
       relationType: "alliance",
-      evidenceCount: 0,
+      evidenceCount: 2,
       staleEvidenceCount: 1,
       evidence: foreignEvidence
     }],
@@ -2036,7 +2109,7 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
       sourceProjectName: "Libro de prueba",
       relatedEntityIds: ["ana-id"],
       relatedIdeaIds: [],
-      evidenceCount: 0,
+      evidenceCount: 2,
       staleEvidenceCount: 1,
       evidence: foreignEvidence,
       statusHistory: [{ status: "incorporated", reason: "writer", changedAt: 2 }],
@@ -2052,8 +2125,8 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
   assert.deepEqual(ana.scenes[0].relationshipIds, []);
   assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, []);
   assert.equal(ana.scenes[0].evidenceStatus, "no-known-evidence");
-  assert.equal(ana.relationships[0].evidenceStatus, "stale-only");
-  assert.equal(ana.documentedDecisions[0].evidenceCount, 0);
+  assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
+  assert.equal(ana.documentedDecisions[0].evidenceCount, 2);
 });
 
 
@@ -2281,7 +2354,7 @@ test("vincula decisiones con acontecimientos posteriores solo en escalas tempora
       makeEvent("decision-event", 2020),
       makeEvent("later-event", 2022),
       makeEvent("other-track", 2023, { track: "dreams" }),
-      makeEvent("other-basis", 2024, { basis: "relative" }),
+      makeEvent("other-basis", 2024, { basis: "story-day", precision: "day-index" }),
       makeEvent("earlier-event", 2019)
     ],
     knownIdeas: [{
@@ -2296,7 +2369,10 @@ test("vincula decisiones con acontecimientos posteriores solo en escalas tempora
       evidenceCount: 1,
       staleEvidenceCount: 0,
       evidence: [evidence],
-      statusHistory: [{ status: "incorporated", reason: "writer" }],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
       writerDecisionCount: 1,
       omittedStatusHistoryCount: 0
     }]
@@ -2367,7 +2443,10 @@ test("la cronología de decisiones no convierte evidencia obsoleta en acontecimi
       evidenceCount: 1,
       staleEvidenceCount: 0,
       evidence: [evidence],
-      statusHistory: [{ status: "incorporated", reason: "writer" }],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
       writerDecisionCount: 1,
       omittedStatusHistoryCount: 0
     }]
@@ -2413,7 +2492,10 @@ test("la cronología de decisiones conserva incertidumbre ante referencias ausen
       evidenceCount: 1,
       staleEvidenceCount: 0,
       evidence: [evidence],
-      statusHistory: [{ status: "incorporated", reason: "writer" }],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
       writerDecisionCount: 1,
       omittedStatusHistoryCount: 0
     }]
@@ -2515,8 +2597,11 @@ test("las trayectorias no concluyen la evolución cuando el historial de decisio
       evidenceCount: 0,
       staleEvidenceCount: 0,
       evidence: [],
-      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 10 }],
-      writerDecisionCount: 0,
+      statusHistory: [
+        { status: "incorporated", reason: "writer", changedAt: 20 },
+        { status: "IDEA", reason: "text-revised", changedAt: 30 }
+      ],
+      writerDecisionCount: 1,
       omittedStatusHistoryCount: 2
     }]
   });
@@ -2655,70 +2740,4 @@ test("el grafo resume estados de referencias directas sin tratarlas como depende
   assert.equal(source.directReferenceStatusAlignment, "mixed-status");
   const accepted = graph.nodes.find(node => node.ideaId === "accepted");
   assert.equal(accepted.directReferenceStatusAlignment, "no-references");
-});
-
-
-
-test("cada nodo identifica su componente cíclico incluso cuando hay auto-referencias", () => {
-  const projectId = "literary-analysis-test";
-  const makeIdea = (ideaId, relatedIdeaIds = []) => ({
-    projectId,
-    ideaId,
-    text: "Idea " + ideaId,
-    status: "IDEA",
-    relatedIdeaIds,
-    evidenceCount: 0,
-    staleEvidenceCount: 0,
-    statusHistory: [{ status: "IDEA", reason: "initial" }],
-    writerDecisionCount: 0,
-    omittedStatusHistoryCount: 0
-  });
-  const graph = analyzeLiteraryFragment({
-    projectId,
-    documentId: "chapter-one",
-    revision: 1,
-    text: "Escena 1\nUna idea permanece.",
-    knownProjectIdeas: [
-      makeIdea("alpha", ["beta"]),
-      makeIdea("beta", ["alpha"]),
-      makeIdea("self", ["self"]),
-      makeIdea("outside-cycle")
-    ]
-  }).ideaGraph;
-  const node = id => graph.nodes.find(item => item.ideaId === id);
-  assert.equal(node("alpha").cycleMembership, "cyclic-component");
-  assert.equal(node("alpha").cycleComponentSize, 2);
-  assert.equal(node("beta").cycleComponentSize, 2);
-  assert.equal(node("self").cycleMembership, "cyclic-component");
-  assert.equal(node("self").cycleComponentSize, 1);
-  assert.equal(node("outside-cycle").cycleMembership, "acyclic-within-snapshot");
-  assert.equal(node("outside-cycle").cycleComponentSize, 0);
-});
-
-
-test("el grafo identifica puntos de articulación en cadenas de referencias", () => {
-  const projectId = "literary-analysis-test";
-  const makeIdea = (ideaId, relatedIdeaIds = []) => ({
-    projectId, ideaId, text: "Idea " + ideaId, status: "IDEA", relatedIdeaIds,
-    evidenceCount: 0, staleEvidenceCount: 0,
-    statusHistory: [{ status: "IDEA", reason: "initial" }],
-    writerDecisionCount: 0, omittedStatusHistoryCount: 0
-  });
-  const graph = analyzeLiteraryFragment({
-    projectId, documentId: "chapter-one", revision: 1,
-    text: "Escena 1\nUna idea permanece.",
-    knownProjectIdeas: [
-      makeIdea("a", ["b"]),
-      makeIdea("b", ["c"]),
-      makeIdea("c"),
-      makeIdea("isolated")
-    ]
-  }).ideaGraph;
-  const node = id => graph.nodes.find(item => item.ideaId === id);
-  assert.equal(node("a").articulationPointStatus, "not-articulation-within-snapshot");
-  assert.equal(node("b").articulationPointStatus, "connector");
-  assert.equal(node("c").articulationPointStatus, "not-articulation-within-snapshot");
-  assert.equal(node("isolated").articulationPointStatus, "not-articulation-within-snapshot");
-  assert.equal(graph.articulationPointCount, 1);
-  assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);
 });

@@ -1555,6 +1555,30 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
   }
 
+  /**
+   * Cierra la conexión IndexedDB de esta instancia. Las transacciones ya iniciadas
+   * terminan antes de que IndexedDB complete el cierre; una operación posterior
+   * puede abrir de nuevo la base de datos.
+   */
+  async close(): Promise<void> {
+    const opening = this.database;
+    if (!opening) {
+      this.narrativeChangeChannel?.close();
+      this.narrativeChangeChannel = undefined;
+      this.narrativeChangeListeners.clear();
+      return;
+    }
+    try {
+      const db = await opening;
+      db.close();
+    } finally {
+      if (this.database === opening) this.database = undefined;
+      this.narrativeChangeChannel?.close();
+      this.narrativeChangeChannel = undefined;
+      this.narrativeChangeListeners.clear();
+    }
+  }
+
   private open(): Promise<IDBDatabase> {
     if (typeof indexedDB === "undefined") {
       return Promise.reject(new Error("IndexedDB no está disponible en este entorno."));

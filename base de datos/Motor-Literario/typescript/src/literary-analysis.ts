@@ -817,8 +817,14 @@ export interface LiteraryIdeaLexicalResonanceAnalysis {
   readonly ignoredHighFrequencyTermCount: number;
   readonly minimumSharedTermCount: number;
   readonly maxTermDocumentFrequency: number;
+  /** Pares que alcanzaron el umbral dentro del índice acotado. */
   readonly candidatePairCount: number;
+  /** Pares encontrados que no caben en la muestra final de cien. */
   readonly omittedCandidatePairCount: number;
+  /** Máximo de pares que se conservan durante la agregación. */
+  readonly maxIndexedPairCount: number;
+  /** Aportes término-par omitidos al alcanzar el límite del índice; hace explícita la truncación. */
+  readonly omittedPairTermContributionCount: number;
   /** Candidatos ordenados por cantidad de términos compartidos y Jaccard; máximo cien. */
   readonly resonances: readonly LiteraryIdeaLexicalResonance[];
 }
@@ -3281,6 +3287,7 @@ const MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY = 40;
 const MIN_IDEA_LEXICAL_SHARED_TERMS = 2;
 const MAX_IDEA_LEXICAL_RESONANCE_SAMPLES = 100;
 const MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES = 12;
+const MAX_IDEA_LEXICAL_INDEXED_PAIR_COUNT = 100_000;
 const IDEA_ENGLISH_STOP_WORDS = new Set([
   "the","and","for","with","from","that","this","these","those","then","than","there","their","them",
   "they","you","your","yours","our","ours","his","her","hers","its","who","whom","what","when","where",
@@ -3645,7 +3652,13 @@ function buildLiteraryIdeaLexicalResonances(
 
   const pairTerms = new Map<number, string[]>();
   let ignoredHighFrequencyTermCount = 0;
-  for (const [term, ideaIndexes] of postings) {
+  let omittedPairTermContributionCount = 0;
+  // Los términos raros aportan candidatos más específicos. El orden total
+  // permite truncar el índice de forma reproducible cuando se alcanza el cupo.
+  const orderedPostings = [...postings.entries()].sort((left, right) =>
+    left[1].length - right[1].length || compareTerms(left[0], right[0])
+  );
+  for (const [term, ideaIndexes] of orderedPostings) {
     if (ideaIndexes.length > MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY) {
       ignoredHighFrequencyTermCount++;
       continue;
@@ -3655,9 +3668,16 @@ function buildLiteraryIdeaLexicalResonances(
         const leftIndex = ideaIndexes[left]!;
         const rightIndex = ideaIndexes[right]!;
         const key = leftIndex * prepared.length + rightIndex;
-        const shared = pairTerms.get(key) ?? [];
-        shared.push(term);
-        pairTerms.set(key, shared);
+        const shared = pairTerms.get(key);
+        if (shared) {
+          shared.push(term);
+        } else if (pairTerms.size < MAX_IDEA_LEXICAL_INDEXED_PAIR_COUNT) {
+          pairTerms.set(key, [term]);
+        } else {
+          // Cuenta aportes término-par omitidos, no IDs únicos: una misma pareja
+          // puede reaparecer por más de un término después de agotarse el cupo.
+          omittedPairTermContributionCount++;
+        }
       }
     }
   }
@@ -3714,6 +3734,8 @@ function buildLiteraryIdeaLexicalResonances(
     omittedCandidatePairCount: Math.max(
       0, allResonances.length - MAX_IDEA_LEXICAL_RESONANCE_SAMPLES
     ),
+    maxIndexedPairCount: MAX_IDEA_LEXICAL_INDEXED_PAIR_COUNT,
+    omittedPairTermContributionCount,
     resonances: allResonances.slice(0, MAX_IDEA_LEXICAL_RESONANCE_SAMPLES)
   };
 }

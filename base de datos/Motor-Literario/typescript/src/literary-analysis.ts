@@ -74,6 +74,8 @@ export interface LiteraryAnalysisKnownIdea {
 export interface LiteraryAnalysisKnownProjectIdea {
   readonly projectId: string;
   readonly ideaId: string;
+  /** Texto explícito de la idea; opcional para adaptadores antiguos. */
+  readonly text?: string;
   readonly status: NarrativeIdea["status"];
   readonly relatedIdeaIds: readonly string[];
   readonly evidenceCount: number;
@@ -790,7 +792,39 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly ideasWithStaleEvidenceCount: number;
   readonly ideasWithoutActiveEvidenceCount: number;
 }
+export interface LiteraryIdeaLexicalResonance {
+  readonly leftIdeaId: string;
+  readonly rightIdeaId: string;
+  readonly leftTermCount: number;
+  readonly rightTermCount: number;
+  readonly sharedTermCount: number;
+  /** Intersección dividida por la unión de términos literales normalizados. */
+  readonly jaccardSimilarity: number;
+  /** Intersección dividida por el tamaño del vocabulario menor. */
+  readonly overlapCoefficient: number;
+  /** Muestra ordenada de términos compartidos; no implica equivalencia semántica. */
+  readonly sharedTerms: readonly string[];
+  readonly omittedSharedTermCount: number;
+}
+export interface LiteraryIdeaLexicalResonanceAnalysis {
+  readonly inputIdeaCount: number;
+  readonly analyzedIdeaCount: number;
+  readonly ideasWithoutTextCount: number;
+  readonly omittedTextBudgetIdeaCount: number;
+  readonly tokenizedTextUnitCount: number;
+  readonly indexedTermCount: number;
+  readonly omittedDistinctTermCount: number;
+  readonly ignoredHighFrequencyTermCount: number;
+  readonly minimumSharedTermCount: number;
+  readonly maxTermDocumentFrequency: number;
+  readonly candidatePairCount: number;
+  readonly omittedCandidatePairCount: number;
+  /** Candidatos ordenados por cantidad de términos compartidos y Jaccard; máximo cien. */
+  readonly resonances: readonly LiteraryIdeaLexicalResonance[];
+}
 export interface LiteraryIdeaGraphAnalysis {
+  /** Coincidencias léxicas entre textos de ideas; nunca crean vínculos del grafo. */
+  readonly lexicalResonances: LiteraryIdeaLexicalResonanceAnalysis;
   /** Catálogo de entrada completo del proyecto o compatibilidad con el subconjunto ligado a personajes. */
   readonly catalogScope: "project" | "character-linked-fallback";
   /** true solo con catálogo de proyecto y sin ideas omitidas; el modo heredado nunca es exhaustivo. */
@@ -3241,6 +3275,22 @@ function buildCharacterProjectEventTimeline(
 const MAX_IDEA_GRAPH_REFERENCE_SAMPLES = 5_000;
 const MAX_IDEA_GRAPH_CYCLE_SAMPLES = 100;
 const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
+const MAX_IDEA_LEXICAL_TEXT_UNITS = 2_000_000;
+const MAX_IDEA_LEXICAL_TERMS_PER_IDEA = 100;
+const MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY = 40;
+const MIN_IDEA_LEXICAL_SHARED_TERMS = 2;
+const MAX_IDEA_LEXICAL_RESONANCE_SAMPLES = 100;
+const MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES = 12;
+const IDEA_ENGLISH_STOP_WORDS = new Set([
+  "the","and","for","with","from","that","this","these","those","then","than","there","their","them",
+  "they","you","your","yours","our","ours","his","her","hers","its","who","whom","what","when","where",
+  "which","while","because","about","into","onto","over","under","between","through","during","before",
+  "after","above","below","again","also","only","very","more","most","some","such","each","every","both",
+  "any","all","few","many","much","other","another","same","own","once","here","there","how","why","can",
+  "could","would","should","will","shall","may","might","must","not","does","did","doing","done","have",
+  "has","had","having","was","were","been","being","are","am","is","be","do","of","to","in","on","by",
+  "as","at","an","a","or","if","it","i","he","she","we","me","my","mine","us"
+]);
 
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
@@ -3504,7 +3554,9 @@ function buildLiteraryIdeaGraph(
     };
   });
 
+  const lexicalResonances = buildLiteraryIdeaLexicalResonances(orderedIdeas);
   return {
+    lexicalResonances,
     catalogScope,
     projectCatalogComplete,
     ideaCount: orderedIdeas.length,
@@ -3532,6 +3584,137 @@ function buildLiteraryIdeaGraph(
     nodes,
     references,
     cycles: cycles.slice(0, MAX_IDEA_GRAPH_CYCLE_SAMPLES)
+  };
+}
+
+/**
+ * Encuentra proximidad léxica entre ideas sin inferir equivalencia temática.
+ * Se indexan términos normalizados compartidos por un máximo de cuarenta ideas;
+ * los términos ubicuos se excluyen para reducir coincidencias poco informativas.
+ */
+function buildLiteraryIdeaLexicalResonances(
+  ideas: readonly LiteraryAnalysisKnownProjectIdea[]
+): LiteraryIdeaLexicalResonanceAnalysis {
+  const compareTerms = (left: string, right: string): number => {
+    const localized = left.localeCompare(right, "es");
+    return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
+  };
+  const prepared: { ideaId: string; terms: string[] }[] = [];
+  let tokenizedTextUnitCount = 0;
+  let ideasWithoutTextCount = 0;
+  let omittedTextBudgetIdeaCount = 0;
+  let omittedDistinctTermCount = 0;
+
+  for (const idea of ideas) {
+    if (typeof idea.text !== "string") {
+      ideasWithoutTextCount++;
+      continue;
+    }
+    if (tokenizedTextUnitCount + idea.text.length > MAX_IDEA_LEXICAL_TEXT_UNITS) {
+      omittedTextBudgetIdeaCount++;
+      continue;
+    }
+    tokenizedTextUnitCount += idea.text.length;
+    const frequencies = new Map<string, number>();
+    for (const token of tokenize(idea.text)) {
+      const term = token.normalized;
+      if (term.length < 3 || !Array.from(term).some(character => character.toLocaleLowerCase("es") !== character.toLocaleUpperCase("es")) ||
+          STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term)) continue;
+      frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
+    }
+    const rankedTerms = [...frequencies.entries()].sort((left, right) =>
+      right[1] - left[1] || compareTerms(left[0], right[0])
+    );
+    omittedDistinctTermCount += Math.max(
+      0, rankedTerms.length - MAX_IDEA_LEXICAL_TERMS_PER_IDEA
+    );
+    prepared.push({
+      ideaId: idea.ideaId,
+      terms: rankedTerms.slice(0, MAX_IDEA_LEXICAL_TERMS_PER_IDEA).map(([term]) => term)
+    });
+  }
+
+  const postings = new Map<string, number[]>();
+  for (let ideaIndex = 0; ideaIndex < prepared.length; ideaIndex++) {
+    for (const term of prepared[ideaIndex]!.terms) {
+      const indexes = postings.get(term) ?? [];
+      indexes.push(ideaIndex);
+      postings.set(term, indexes);
+    }
+  }
+
+  const pairTerms = new Map<number, string[]>();
+  let ignoredHighFrequencyTermCount = 0;
+  for (const [term, ideaIndexes] of postings) {
+    if (ideaIndexes.length > MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY) {
+      ignoredHighFrequencyTermCount++;
+      continue;
+    }
+    for (let left = 0; left < ideaIndexes.length; left++) {
+      for (let right = left + 1; right < ideaIndexes.length; right++) {
+        const leftIndex = ideaIndexes[left]!;
+        const rightIndex = ideaIndexes[right]!;
+        const key = leftIndex * prepared.length + rightIndex;
+        const shared = pairTerms.get(key) ?? [];
+        shared.push(term);
+        pairTerms.set(key, shared);
+      }
+    }
+  }
+
+  const allResonances: LiteraryIdeaLexicalResonance[] = [];
+  for (const [key, sharedTerms] of pairTerms) {
+    if (sharedTerms.length < MIN_IDEA_LEXICAL_SHARED_TERMS) continue;
+    const leftIndex = Math.floor(key / prepared.length);
+    const rightIndex = key % prepared.length;
+    const left = prepared[leftIndex]!;
+    const right = prepared[rightIndex]!;
+    const sharedTermCount = sharedTerms.length;
+    const unionTermCount = left.terms.length + right.terms.length - sharedTermCount;
+    const orderedSharedTerms = [...sharedTerms].sort(compareTerms);
+    allResonances.push({
+      leftIdeaId: left.ideaId,
+      rightIdeaId: right.ideaId,
+      leftTermCount: left.terms.length,
+      rightTermCount: right.terms.length,
+      sharedTermCount,
+      jaccardSimilarity: roundMetric(sharedTermCount / unionTermCount),
+      overlapCoefficient: roundMetric(
+        sharedTermCount / Math.min(left.terms.length, right.terms.length)
+      ),
+      sharedTerms: orderedSharedTerms.slice(0, MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES),
+      omittedSharedTermCount: Math.max(
+        0, orderedSharedTerms.length - MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES
+      )
+    });
+  }
+  const compareIdeaIds = (left: string, right: string): number => {
+    const localized = left.localeCompare(right, "en");
+    return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
+  };
+  allResonances.sort((left, right) =>
+    right.sharedTermCount - left.sharedTermCount ||
+    right.jaccardSimilarity - left.jaccardSimilarity ||
+    compareIdeaIds(left.leftIdeaId, right.leftIdeaId) ||
+    compareIdeaIds(left.rightIdeaId, right.rightIdeaId)
+  );
+
+  return {
+    inputIdeaCount: ideas.length,
+    analyzedIdeaCount: prepared.length,
+    ideasWithoutTextCount,
+    omittedTextBudgetIdeaCount,
+    tokenizedTextUnitCount,
+    indexedTermCount: postings.size,
+    omittedDistinctTermCount,
+    ignoredHighFrequencyTermCount,
+    minimumSharedTermCount: MIN_IDEA_LEXICAL_SHARED_TERMS,
+    maxTermDocumentFrequency: MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY,
+    candidatePairCount: allResonances.length,
+    omittedCandidatePairCount: Math.max(
+      0, allResonances.length - MAX_IDEA_LEXICAL_RESONANCE_SAMPLES
+    ),
+    resonances: allResonances.slice(0, MAX_IDEA_LEXICAL_RESONANCE_SAMPLES)
   };
 }
 
@@ -5155,6 +5338,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
     if (!idea || idea.projectId !== input.projectId ||
         typeof idea.ideaId !== "string" || !idea.ideaId.trim() ||
         projectIdeaIds.has(idea.ideaId) ||
+        (idea.text !== undefined && (typeof idea.text !== "string" || idea.text.length > 100_000)) ||
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||

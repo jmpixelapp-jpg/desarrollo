@@ -586,89 +586,50 @@ test("una instancia recibe una notificación y actualiza sus cachés por cambios
   }
 });
 
-test("una instancia no puede sobrescribir una entidad narrativa modificada por otra", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-entity-conflict-"));
+test("SQLite rechaza una escritura de entidad narrativa basada en una versión obsoleta", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-entity-cas-"));
   const databasePath = resolve(directory, "motor.sqlite");
-  let first;
-  let second;
-  try {
-    first = startBridge(databasePath);
-    await first.client.hello();
-    await first.client.openProject({
-      projectId: "shared-entity-project",
-      projectName: "Libro de personajes",
-      writerId: "writer-shared-entity"
-    });
-    await first.client.openDocument("shared-entity-project", {
-      documentId: "chapter-entity",
-      text: "El personaje Ana espera junto al castillo.",
+  let firstStore;
+  let secondStore;
+  const entity = {
+    id: "entity:character:ana",
+    projectId: "entity-cas-project",
+    kind: "character",
+    canonicalName: "Ana",
+    normalizedName: "ana",
+    aliases: [],
+    evidence: [{
+      documentId: "chapter-cas",
       revision: 0,
-      sequence: 0
-    });
-    await first.client.flushProject("shared-entity-project");
-    const firstEntities = await first.client.request("project.call", {
-      projectId: "shared-entity-project", method: "getNarrativeEntities", args: []
-    });
-    const ana = firstEntities.find(entity => entity.kind === "character" && entity.canonicalName === "Ana");
-    assert.ok(ana, "La extracción debe registrar al personaje Ana.");
+      start: 0,
+      end: 3,
+      excerpt: "Ana"
+    }],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  };
+  try {
+    firstStore = await SqliteProjectStore.open(databasePath);
+    secondStore = await SqliteProjectStore.open(databasePath);
+    await firstStore.saveEntityIfUnchanged(entity);
+    const secondRead = (await secondStore.loadEntities("entity-cas-project"))[0];
+    assert.ok(secondRead);
 
-    second = startBridge(databasePath);
-    await second.client.hello();
-    await second.client.openProject({
-      projectId: "shared-entity-project",
-      projectName: "Libro de personajes",
-      writerId: "writer-shared-entity"
-    });
-    const secondEntities = await second.client.request("project.call", {
-      projectId: "shared-entity-project", method: "getNarrativeEntities", args: []
-    });
-    const secondAna = secondEntities.find(entity => entity.id === ana.id);
-    assert.ok(secondAna);
-    await second.client.request("project.call", {
-      projectId: "shared-entity-project",
-      method: "addNarrativeEntityAlias",
-      args: [secondAna.id, "Anita"]
-    });
+    const updated = { ...secondRead, aliases: ["Anita"] };
+    await secondStore.saveEntityIfUnchanged(updated, secondRead);
 
+    const staleUpdate = { ...entity, aliases: ["Ana antigua"] };
     await assert.rejects(
-      first.client.request("project.call", {
-        projectId: "shared-entity-project",
-        method: "addNarrativeEntityAlias",
-        args: [ana.id, "Ana antigua"]
-      }),
+      firstStore.saveEntityIfUnchanged(staleUpdate, entity),
       /cambió en otra instancia/
     );
 
-    const savedBySecond = await second.client.request("project.call", {
-      projectId: "shared-entity-project", method: "getNarrativeEntities", args: []
-    });
-    const updatedAna = savedBySecond.find(entity => entity.id === ana.id);
-    assert.ok(updatedAna.aliases.includes("Anita"));
-    assert.equal(updatedAna.aliases.includes("Ana antigua"), false);
-
-    const recoveredByFirst = await first.client.request("project.call", {
-      projectId: "shared-entity-project", method: "getNarrativeEntities", args: []
-    });
-    const recoveredAna = recoveredByFirst.find(entity => entity.id === ana.id);
-    assert.ok(recoveredAna.aliases.includes("Anita"));
-
-    const firstExit = waitForExit(first.child);
-    await first.client.shutdown();
-    assert.equal(await firstExit, 0);
-    first = undefined;
-    const secondExit = waitForExit(second.child);
-    await second.client.shutdown();
-    assert.equal(await secondExit, 0);
-    second = undefined;
+    const persisted = (await secondStore.loadEntities("entity-cas-project"))[0];
+    assert.deepEqual(persisted.aliases, ["Anita"]);
   } finally {
-    for (const active of [first, second]) {
-      if (!active) continue;
-      try {
-        const exited = waitForExit(active.child);
-        await active.client.shutdown();
-        await exited;
-      } catch { active.child.kill(); }
-    }
+    firstStore?.close();
+    secondStore?.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

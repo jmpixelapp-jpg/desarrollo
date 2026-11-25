@@ -3725,7 +3725,11 @@ export class IndexedDbProjectStore implements ProjectStore {
             }
             legacyIdeaCache.clear();
             for (const value of values as NarrativeIdea[]) {
-              if (value && typeof value.id === "string") legacyIdeaCache.set(value.id, value);
+              if (!value || typeof value.id !== "string") continue;
+              if (legacyIdeaCache.has(value.id)) {
+                throw new Error("Integridad de ideas inconsistente: se encontraron identificadores duplicados.");
+              }
+              legacyIdeaCache.set(value.id, value);
             }
             let index = 0;
             const advance = (): void => {
@@ -3748,6 +3752,119 @@ export class IndexedDbProjectStore implements ProjectStore {
         return cursorRequest as unknown as IDBRequest<IDBCursorWithValue | null>;
       };
 
+      /**
+       * Primera pasada sin escrituras: valida el grafo completo y la propiedad
+       * de los IDs históricos antes de añadir una sola entrada a la biblioteca.
+       * Solo conserva IDs de fichas relacionados, no colecciones narrativas.
+       */
+      const preflightProjectIdeas = (): void => {
+        const referencedEntityIds = new Set<string>();
+
+        const collectContextEntityIds = (idea: NarrativeIdea, callback: () => void): void => {
+          for (const entityId of idea.relatedEntityIds ?? []) referencedEntityIds.add(entityId);
+          const visited = new Set<string>([idea.id]);
+          const queue = [...(idea.relatedIdeaIds ?? [])];
+          let queueIndex = 0;
+          const next = (): void => {
+            if (finished) return;
+            if (queueIndex >= queue.length) {
+              callback();
+              return;
+            }
+            const relatedId = queue[queueIndex++]!;
+            if (visited.has(relatedId)) {
+              next();
+              return;
+            }
+            visited.add(relatedId);
+            readIdea(relatedId, related => {
+              if (!related) {
+                throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+              }
+              if (related.status === "IDEA") {
+                next();
+                return;
+              }
+              for (const entityId of related.relatedEntityIds ?? []) referencedEntityIds.add(entityId);
+              queue.push(...(related.relatedIdeaIds ?? []));
+              next();
+            });
+          };
+          next();
+        };
+
+        const validateIdeaLinks = (
+          idea: NarrativeIdea,
+          relatedIndex: number,
+          callback: () => void
+        ): void => {
+          const relatedIds = idea.relatedIdeaIds ?? [];
+          if (relatedIndex >= relatedIds.length) {
+            if (idea.status === "IDEA") collectContextEntityIds(idea, callback);
+            else callback();
+            return;
+          }
+          const relatedId = relatedIds[relatedIndex]!;
+          readIdea(relatedId, related => {
+            if (!related) {
+              throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+            }
+            if (idea.status !== "IDEA" && related.status === "IDEA") {
+              throw new Error(
+                "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+              );
+            }
+            validateIdeaLinks(idea, relatedIndex + 1, callback);
+          });
+        };
+
+        const cursorRequest = openProjectIdeaCursor();
+        cursorRequest.onsuccess = () => {
+          try {
+            if (finished) return;
+            const cursor = cursorRequest.result;
+            if (!cursor) {
+              const orderedEntityIds = [...referencedEntityIds]
+                .sort((first, second) => first.localeCompare(second));
+              let entityIndex = 0;
+              const validateNextEntity = (): void => {
+                if (finished) return;
+                if (entityIndex >= orderedEntityIds.length) {
+                  // La transferencia vuelve a leer cada ficha para crear el
+                  // snapshot contextual. Ya no necesita conservar este índice.
+                  identityOwners.clear();
+                  scanProjectIdeas();
+                  return;
+                }
+                const entityId = orderedEntityIds[entityIndex++]!;
+                readEntity(entityId, entity => {
+                  if (!entity) return;
+                  try {
+                    claimEntityIdentities(entity);
+                    validateNextEntity();
+                  } catch (error) {
+                    abortWith(error);
+                  }
+                });
+              };
+              validateNextEntity();
+              return;
+            }
+            const idea = cursor.value as NarrativeIdea;
+            if (idea.projectId !== projectId) {
+              throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
+            }
+            validateNarrativeIdeaRecord(idea, "idea narrativa");
+            validateIdeaLinks(idea, 0, () => cursor.continue());
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+        cursorRequest.onerror = () => abortWith(
+          cursorRequest.error ?? new Error("No se pudieron validar las ideas del proyecto antes del archivo.")
+        );
+      };
+
       const scanProjectIdeas = (): void => {
         const cursorRequest = openProjectIdeaCursor();
         cursorRequest.onsuccess = () => {
@@ -3756,10 +3873,10 @@ export class IndexedDbProjectStore implements ProjectStore {
             const cursor = cursorRequest.result;
             if (!cursor) return;
             const idea = cursor.value as NarrativeIdea;
-            validateNarrativeIdeaRecord(idea, "idea narrativa");
             if (idea.projectId !== projectId) {
               throw new Error("Aislamiento de ideas inconsistente: se rechazó un registro de otro proyecto.");
             }
+            validateNarrativeIdeaRecord(idea, "idea narrativa");
             validateLinksAndMaybeArchive(idea, 0, () => cursor.continue());
           } catch (error) {
             abortWith(error);
@@ -3819,10 +3936,10 @@ export class IndexedDbProjectStore implements ProjectStore {
         receiptRequest.onsuccess = () => {
           existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
           if (existingReceipt) scanExistingReceiptIdeas();
-          else scanProjectIdeas();
+          else preflightProjectIdeas();
         };
       } else {
-        scanProjectIdeas();
+        preflightProjectIdeas();
       }
 
       transaction.oncomplete = () => {

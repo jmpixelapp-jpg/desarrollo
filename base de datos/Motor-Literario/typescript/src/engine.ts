@@ -623,6 +623,7 @@ export class LiteraryEngine {
       changeStart: change.start,
       changeEnd: change.end,
       replacementLength: change.replacement.length,
+      changeReplacement: change.replacement,
       previousAffectedStart,
       previousAffectedEnd,
       diagnostics

@@ -4109,6 +4109,85 @@ export class IndexedDbProjectStore implements ProjectStore {
     ) as PersonalIdeaLibraryEntry | undefined;
   }
 
+  /**
+   * Recupera referencias externas a una página en una sola transacción readonly.
+   * Las entradas inexistentes se omiten para que la API anfitriona detecte
+   * explícitamente vínculos huérfanos comparando las claves solicitadas.
+   */
+  async loadPersonalIdeasByKeys(
+    writerId: string,
+    references: readonly PersonalIdeaLibraryCursor[]
+  ): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
+        !Array.isArray(references) || references.length > 128) {
+      throw new Error("Parámetros inválidos para la lectura agrupada de la biblioteca personal.");
+    }
+    const seen = new Set<string>();
+    for (const reference of references) {
+      if (!reference || typeof reference.sourceProjectId !== "string" ||
+          !reference.sourceProjectId.trim() ||
+          typeof reference.ideaId !== "string" || !reference.ideaId.trim()) {
+        throw new Error("La lectura agrupada recibió una referencia malformada.");
+      }
+      const key = JSON.stringify([reference.sourceProjectId, reference.ideaId]);
+      if (seen.has(key)) throw new Error("La lectura agrupada recibió referencias duplicadas.");
+      seen.add(key);
+    }
+    if (references.length === 0) return [];
+
+    const db = await this.open();
+    const transaction = db.transaction(PERSONAL_IDEAS, "readonly");
+    const store = transaction.objectStore(PERSONAL_IDEAS);
+    const requests = references.map(reference =>
+      store.get([writerId, reference.sourceProjectId, reference.ideaId])
+    );
+    const results: (PersonalIdeaLibraryEntry | undefined)[] = new Array(references.length);
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      let requestError: DOMException | null = null;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* La transacción ya pudo terminar. */ }
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      requests.forEach((request, index) => {
+        request.onsuccess = () => {
+          results[index] = request.result as PersonalIdeaLibraryEntry | undefined;
+        };
+        request.onerror = () => {
+          requestError = request.error;
+          try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+        };
+      });
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        if (requestError) {
+          reject(requestError);
+          return;
+        }
+        const entries = results.filter(
+          (entry): entry is PersonalIdeaLibraryEntry => entry !== undefined
+        );
+        for (let index = 0; index < entries.length; index++) {
+          const entry = entries[index]!;
+          if (entry.writerId !== writerId) {
+            reject(new Error("Biblioteca personal inconsistente: la lectura agrupada devolvió otro escritor."));
+            return;
+          }
+        }
+        resolve(entries);
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? requestError ?? new Error("No se pudieron recuperar las ideas relacionadas.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? requestError ?? new Error("Se canceló la lectura agrupada de ideas relacionadas.")
+      );
+    });
+  }
+
   async loadPersonalIdeas(writerId: string): Promise<readonly PersonalIdeaLibraryEntry[]> {
     if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256) {
       throw new Error("Identificador de escritor inválido.");

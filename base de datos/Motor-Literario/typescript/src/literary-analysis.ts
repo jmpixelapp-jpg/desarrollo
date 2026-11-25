@@ -3279,6 +3279,7 @@ const MAX_IDEA_GRAPH_CYCLE_SAMPLES = 100;
 const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
 export const MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS = 2_000_000;
 const MAX_IDEA_LEXICAL_TERMS_PER_IDEA = 100;
+const MIN_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY = 2;
 const MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY = 40;
 const MIN_IDEA_LEXICAL_SHARED_TERMS = 2;
 const MAX_IDEA_LEXICAL_RESONANCE_SAMPLES = 100;
@@ -3656,6 +3657,13 @@ function buildLiteraryIdeaLexicalResonances(
   // Un arreglo triangular de un byte por par evita millones de Map/Array
   // temporales cuando muchas ideas comparten vocabulario de frecuencia media.
   const ideaCount = prepared.length;
+  const maxTermDocumentFrequency = Math.max(
+    MIN_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY,
+    Math.min(
+      MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY,
+      Math.ceil(ideaCount * 0.4)
+    )
+  );
   const pairRowStarts = new Float64Array(ideaCount);
   for (let index = 0; index < ideaCount; index++) {
     pairRowStarts[index] = index * (2 * ideaCount - index - 1) / 2;
@@ -3666,7 +3674,7 @@ function buildLiteraryIdeaLexicalResonances(
   let ignoredHighFrequencyTermCount = 0;
 
   for (const ideaIndexes of postings.values()) {
-    if (ideaIndexes.length > MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY) {
+    if (ideaIndexes.length > maxTermDocumentFrequency) {
       ignoredHighFrequencyTermCount++;
       continue;
     }
@@ -3765,7 +3773,7 @@ function buildLiteraryIdeaLexicalResonances(
     topPairs.map(pair => [pair.key, []])
   );
   for (const [term, ideaIndexes] of postings) {
-    if (ideaIndexes.length > MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY) continue;
+    if (ideaIndexes.length > maxTermDocumentFrequency) continue;
     for (let left = 0; left < ideaIndexes.length; left++) {
       for (let right = left + 1; right < ideaIndexes.length; right++) {
         const shared = selectedTerms.get(pairIndex(ideaIndexes[left]!, ideaIndexes[right]!));
@@ -3801,7 +3809,7 @@ function buildLiteraryIdeaLexicalResonances(
     omittedDistinctTermCount,
     ignoredHighFrequencyTermCount,
     minimumSharedTermCount: MIN_IDEA_LEXICAL_SHARED_TERMS,
-    maxTermDocumentFrequency: MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY,
+    maxTermDocumentFrequency,
     candidatePairCount,
     omittedCandidatePairCount: Math.max(
       0, candidatePairCount - resonances.length

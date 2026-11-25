@@ -2210,6 +2210,9 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "schema-migrations", keyPath: "migrationId" },
       { name: "project-records", keyPath: ["projectId", "id"] },
       { name: "record-names", keyPath: ["projectId", "id"] },
+      { name: "project-relations", keyPath: ["projectId", "id"] },
+      { name: "project-evidences", keyPath: ["projectId", "id"] },
+      { name: "timeline-occurrences", keyPath: ["projectId", "id"] },
       { name: "project-dictionaries", keyPath: ["projectId", "id"] },
       { name: "dictionary-entries", keyPath: ["projectId", "id"] }
     ]);
@@ -2268,6 +2271,18 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["record-names", "by-project"],
       ["record-names", "by-record"],
       ["record-names", "by-name"],
+      ["project-relations", "by-project"],
+      ["project-relations", "by-source"],
+      ["project-relations", "by-target"],
+      ["project-relations", "by-type"],
+      ["project-evidences", "by-project"],
+      ["project-evidences", "by-subject-record"],
+      ["project-evidences", "by-subject-relation"],
+      ["project-evidences", "by-document"],
+      ["project-evidences", "by-fragment"],
+      ["timeline-occurrences", "by-project"],
+      ["timeline-occurrences", "by-event-record"],
+      ["timeline-occurrences", "by-track-order"],
       ["project-dictionaries", "by-project"],
       ["project-dictionaries", "by-project-language-name"],
       ["dictionary-entries", "by-project"],
@@ -2339,7 +2354,8 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
-    "import-authorizations", "schema-migrations"
+    "import-authorizations", "schema-migrations", "project-records", "record-names",
+    "project-relations", "project-evidences", "timeline-occurrences"
   ];
   const stores = new Map(names.map(name => [name, {
     indexNames: { contains: () => false },
@@ -2440,7 +2456,27 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["import-authorizations", "by-source-target"],
       ["import-authorizations", "by-target"],
       ["schema-migrations", "by-to-version"],
-      ["schema-migrations", "by-applied-at"]
+      ["schema-migrations", "by-applied-at"],
+      ["project-records", "by-project"],
+      ["project-records", "by-project-type"],
+      ["project-records", "by-project-name"],
+      ["project-records", "by-project-label-state"],
+      ["project-records", "by-project-updated"],
+      ["record-names", "by-project"],
+      ["record-names", "by-record"],
+      ["record-names", "by-name"],
+      ["project-relations", "by-project"],
+      ["project-relations", "by-source"],
+      ["project-relations", "by-target"],
+      ["project-relations", "by-type"],
+      ["project-evidences", "by-project"],
+      ["project-evidences", "by-subject-record"],
+      ["project-evidences", "by-subject-relation"],
+      ["project-evidences", "by-document"],
+      ["project-evidences", "by-fragment"],
+      ["timeline-occurrences", "by-project"],
+      ["timeline-occurrences", "by-event-record"],
+      ["timeline-occurrences", "by-track-order"]
     ];
     assert.deepEqual(createdIndexes.map(([storeName, indexName]) => [storeName, indexName]), expected);
     assert.equal(
@@ -2464,7 +2500,8 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
-    "import-authorizations", "schema-migrations"
+    "import-authorizations", "schema-migrations", "project-records", "record-names",
+    "project-relations", "project-evidences", "timeline-occurrences"
   ];
   const deleted = [];
   const created = [];

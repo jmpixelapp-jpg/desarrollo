@@ -80,9 +80,11 @@ Los tiempos se calculan con **performance.now()** cuando está disponible. El re
 
 ## 5. Validación
 
-Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs**: apertura y edición; tiempo activo y pausas; rechazos; tickets y latencias p50/p95; commit fallido y resincronización; cierre bloqueado con pendientes; aislamiento entre documentos y suscriptores; validación de secuencia, límite de sesiones y reloj monotónico.
+Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs**: apertura y edición; tiempo activo y pausas; rechazos; tickets y latencias p50/p95; commit fallido y resincronización; cierre bloqueado con pendientes; aislamiento entre documentos y suscriptores; validación de secuencia, límite de sesiones y reloj monotónico; transición a inactividad sin nuevas pulsaciones; refresco global; cancelación del planificador y validación del filtro documental.
 
-La suite aislada pasa 8/8 pruebas y TypeScript compila en modo estricto. La integración con una interfaz de autor real y la ejecución de la suite completa del repositorio deben validarse en el entorno anfitrión/CI; este avance no afirma que exista ya un panel visual conectado.
+**Validación específica del monitor:** las 11 pruebas del módulo (8 existentes y 3 nuevas) pasaron en GitHub Actions. El chequeo estricto de TypeScript también pasó. [Ejecución 45709063673](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45709063673).
+
+**Validación global pendiente:** la ejecución completa terminó con 256 pruebas aprobadas, 34 fallidas, 222 canceladas y 9 omitidas (521 en total). Los fallos identificados corresponden a otras áreas: pruebas de IndexedDB y migraciones, sincronización CAS de ideas, análisis literario y auditoría del esquema de almacenamiento. Las 11 pruebas del monitor no registraron fallos. El benchmark se omitió porque el paso de pruebas terminó con error. Por tanto, este avance no se declara globalmente validado ni sustituye la integración visual en la aplicación anfitriona.
 
 ## 6. Refresco continuo del panel
 

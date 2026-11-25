@@ -10784,3 +10784,59 @@ test("no crea transiciones de diálogo cuando hay menos de dos escenas explícit
   });
   assert.deepEqual(result.sceneDialogueTransitions,[]);
 });
+
+
+test("limita las evidencias de diálogo por escena sin truncar los conteos", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const segments = Array.from({length:21},() => "«palabra clara»");
+  const text = ["ESCENA 1",...segments].join("\n");
+  const baseOffset = 5100;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-truncation",documentId:"chapter",revision:2,text,baseOffset
+  });
+  const profile = result.explicitScenes[0].dialogueSignals;
+  const visible20Start = [...text.matchAll(/palabra clara/gu)][19]!.index!;
+  assert.equal(profile.segmentCount,21);
+  assert.equal(profile.dialogueWordCount,42);
+  assert.equal(profile.formatCounts.quotation,21);
+  assert.equal(profile.averageWordsPerSegment,2);
+  assert.equal(profile.longestSegmentWords,2);
+  assert.equal(profile.segments.length,20);
+  assert.equal(profile.evidenceTruncated,true);
+  assert.equal(profile.segments[19].segmentIndex,20);
+  assert.equal(profile.segments[19].occurrence.start,baseOffset+visible20Start);
+  assert.equal(profile.segments[19].occurrence.end,baseOffset+visible20Start+"palabra clara".length);
+});
+
+test("recorta una cita que atraviesa un separador sin incluir encabezados en las escenas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "«Luz tenue",
+    "***",
+    "ESCENA 2",
+    "y sombra al final»."
+  ].join("\n");
+  const baseOffset = 6300;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-boundary",documentId:"chapter",revision:3,text,baseOffset
+  });
+  const [first,second] = result.explicitScenes;
+  assert.equal(result.explicitScenes.length,2);
+  assert.equal(first.wordCount,2);
+  assert.equal(second.wordCount,4);
+  assert.equal(first.dialogueSignals.segmentCount,1);
+  assert.equal(first.dialogueSignals.dialogueWordCount,2);
+  assert.equal(second.dialogueSignals.segmentCount,1);
+  assert.equal(second.dialogueSignals.dialogueWordCount,4);
+  assert.equal(first.dialogueSignals.segments[0].occurrence.start,
+    baseOffset+text.indexOf("Luz"));
+  assert.equal(first.dialogueSignals.segments[0].occurrence.end,
+    baseOffset+text.indexOf("tenue")+"tenue".length);
+  assert.equal(second.dialogueSignals.segments[0].occurrence.start,
+    baseOffset+text.indexOf("y sombra"));
+  assert.equal(second.dialogueSignals.segments[0].occurrence.end,
+    baseOffset+text.indexOf("final")+"final".length);
+  assert.equal(first.dialogueSignals.dialogueRatio,1);
+  assert.equal(second.dialogueSignals.dialogueRatio,1);
+});

@@ -9877,6 +9877,48 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
   }
 });
 
+test("HostEngineApi invalida la caché y avisa al anfitrión ante cambios de otra pestaña", async () => {
+  const store = new MemoryStore();
+  const listeners = new Set();
+  store.subscribeNarrativeChanges = listener => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
+  let resolveNotice;
+  const notice = new Promise(resolve => { resolveNotice = resolve; });
+  const api = new HostEngineApi({
+    store,
+    callbacks: {
+      onKnowledgeChanged: projectId => resolveNotice(projectId)
+    }
+  });
+  const identity = {
+    projectId: "cross-tab-cache",
+    projectName: "Libro compartido",
+    writerId: "writer-cross-tab"
+  };
+  api.initializeProject(identity);
+  const idea = {
+    projectId: identity.projectId,
+    id: "idea-1",
+    text: "La campana anuncia el regreso.",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  };
+  await store.saveIdea(idea);
+  assert.equal((await api.getNarrativeIdeas())[0].status, "IDEA");
+
+  await store.saveIdea({ ...idea, status: "incorporated" });
+  for (const listener of listeners) listener(identity.projectId);
+
+  assert.equal(await notice, identity.projectId);
+  assert.equal((await api.getNarrativeIdeas())[0].status, "incorporated");
+  api.dispose();
+  assert.equal(listeners.size, 0, "dispose debe retirar la suscripción local");
+});
+
 test("IndexedDB rechaza una entidad obsoleta sin sustituir la versión confirmada", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const projectId = "indexeddb-entity-cas";

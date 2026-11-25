@@ -126,7 +126,12 @@ test("ordena los candidatos de forma determinista aunque cambie el orden de entr
     idea("idea-d", "memoria espejo destino")
   ];
 
-  assert.deepEqual(analyze(ideas), analyze([...ideas].reverse()));
+  const forward = analyze(ideas);
+  const reversed = analyze([...ideas].reverse());
+  assert.deepEqual(forward, reversed);
+  assert.equal(forward.candidatePairCount, 1);
+  assert.equal(forward.resonances[0].leftIdeaId, "idea-a");
+  assert.equal(forward.resonances[0].rightIdeaId, "idea-d");
 });
 
 test("limita la salida a los cien pares mejor clasificados y declara el excedente", () => {

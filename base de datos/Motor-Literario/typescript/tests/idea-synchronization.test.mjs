@@ -378,7 +378,7 @@ test("rechaza altas de vínculos entre ideas si el destino fue eliminado externa
   );
 
   assert.equal(store.ideaReads, 1);
-  assert.equal(store.writes, 0);
+  assert.equal(store.writes, 1, "CAS ejecuta una escritura que rechaza el destino ya eliminado");
   assert.deepEqual(
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     []
@@ -463,7 +463,7 @@ test("recupera la cola y la caché tras un fallo de persistencia", async () => {
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-target-b"]
   );
-  assert.equal(store.ideaReads, 3, "la siguiente operación recarga la caché invalidada");
+  assert.equal(store.ideaReads, 2, "la siguiente operación recarga la caché invalidada sin lecturas previas redundantes");
   assert.equal(store.writes, 2);
   api.dispose();
 });
@@ -530,7 +530,7 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   const reloaded = await api.getNarrativeIdeas();
   const reloadedSource = reloaded.find(item => item.id === "idea-source");
   assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 5, "incluye la recarga posterior a los tres conflictos");
+  assert.equal(store.ideaReads, 4, "incluye una única recarga por cada conflicto y la lectura posterior");
 
   assert.equal(store.writes, 3);
   api.dispose();

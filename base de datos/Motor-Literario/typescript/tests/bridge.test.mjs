@@ -1390,18 +1390,18 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     store.loadIdeas = () => { throw new Error("No debe materializar la colección completa de ideas."); };
     store.loadEntities = () => { throw new Error("No debe materializar la colección completa de entidades."); };
 
-    let archived;
+    let summary;
     try {
-      archived = store.archiveUnincorporatedIdeas(projectId, writerId, sourceProjectName, 500);
+      summary = store.archiveUnincorporatedIdeasSummary(projectId, writerId, sourceProjectName, 500);
     } finally {
       store.loadIdeas = aggregateIdeaLoader;
       store.loadEntities = aggregateEntityLoader;
     }
 
-    assert.equal(archived.length, total);
-    assert.equal(archived[0].context.relatedEntities.length, 1);
-    assert.equal(archived[0].context.relatedEntities[0].id, "entity:0000");
-    assert.equal(archived[total - 1].context.relatedEntities[0].id, "entity:0299");
+    assert.equal(summary.archivedCount, total);
+    assert.equal(summary.alreadyFinalized, false);
+    assert.match(summary.archiveChecksum, /^fnv1a64:[0-9a-f]{16}$/);
+    assert.equal(Array.isArray(summary), false);
     assert.equal(store.loadIdeas(projectId).length, 0);
 
     const receipt = store.loadProjectFinalizationReceipt(writerId, projectId);
@@ -1409,8 +1409,21 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     assert.equal(receipt.archivedIdeaIds[0], "idea:0000");
     assert.equal(receipt.archivedIdeaIds[total - 1], "idea:0299");
     assert.equal(store.loadPersonalIdeas(writerId).length, total);
-    const retry = store.archiveUnincorporatedIdeas(projectId, writerId, sourceProjectName, 600);
-    assert.deepEqual(retry, [], "un reintento valida el recibo sin volver a devolver todas las ideas");
+    const firstPage = store.loadPersonalIdeasPage(writerId, null, 120);
+    assert.equal(firstPage.items.length, 120);
+    assert.ok(firstPage.nextCursor);
+    const secondPage = store.loadPersonalIdeasPage(writerId, firstPage.nextCursor, 120);
+    assert.equal(secondPage.items.length, 120);
+    assert.equal(secondPage.libraryVersion, firstPage.libraryVersion);
+    const thirdPage = store.loadPersonalIdeasPage(writerId, secondPage.nextCursor, 120);
+    assert.equal(thirdPage.items.length, 60);
+    assert.equal(thirdPage.nextCursor, null);
+    const retry = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, sourceProjectName, 600
+    );
+    assert.equal(retry.alreadyFinalized, true);
+    assert.equal(retry.archivedCount, summary.archivedCount);
+    assert.equal(retry.archiveChecksum, summary.archiveChecksum);
     assert.equal(store.loadPersonalIdeas(writerId).length, total);
   } finally {
     store.close();

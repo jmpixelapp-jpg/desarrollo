@@ -1303,3 +1303,46 @@ test("el catálogo de compatibilidad no presenta como ausentes ideas fuera del s
   assert.equal(result.ideaGraph.missingFromProjectReferenceCount, 0);
   assert.equal(result.ideaGraph.references[0].resolution, "not-in-snapshot");
 });
+
+test("el grafo conserva orden determinista ante permutaciones del catálogo", () => {
+  const projectId = "literary-analysis-test";
+  const catalog = [
+    {
+      projectId, ideaId: "delta", status: "IDEA", relatedIdeaIds: ["alpha"],
+      evidenceCount: 0, staleEvidenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      writerDecisionCount: 0, omittedStatusHistoryCount: 0
+    },
+    {
+      projectId, ideaId: "alpha", status: "incorporated", relatedIdeaIds: ["gamma"],
+      evidenceCount: 2, staleEvidenceCount: 1,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
+      writerDecisionCount: 1, omittedStatusHistoryCount: 0
+    },
+    {
+      projectId, ideaId: "gamma", status: "discarded", relatedIdeaIds: [],
+      evidenceCount: 0, staleEvidenceCount: 0,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "writer", changedAt: 3 }
+      ],
+      writerDecisionCount: 1, omittedStatusHistoryCount: 0
+    }
+  ];
+  const analyzeCatalog = knownProjectIdeas => analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nLa idea permanece.",
+    knownProjectIdeas
+  }).ideaGraph;
+
+  const ordered = analyzeCatalog(catalog);
+  const permuted = analyzeCatalog([catalog[2], catalog[0], catalog[1]]);
+  assert.deepEqual(permuted, ordered);
+  assert.deepEqual(ordered.nodes.map(node => node.ideaId), ["alpha", "delta", "gamma"]);
+  assert.equal(ordered.catalogScope, "project");
+});

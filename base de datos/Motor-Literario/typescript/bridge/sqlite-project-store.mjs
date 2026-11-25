@@ -146,6 +146,31 @@ function validateEntitySnapshotHistory(entities) {
     }
   }
 }
+function validateNarrativeIdeaStatusHistory(idea) {
+  if (idea.statusHistory === undefined) return;
+  if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length === 0) {
+    throw new Error("Historial de estados de idea inválido.");
+  }
+  let previousTime;
+  for (let index = 0; index < idea.statusHistory.length; index++) {
+    const item = idea.statusHistory[index];
+    if (!item || !["IDEA", "incorporated", "discarded"].includes(item.status) ||
+        !["initial", "writer", "text-revised"].includes(item.reason) ||
+        (item.reason === "text-revised" && item.status !== "IDEA") ||
+        (index === 0 ? item.reason !== "initial" : item.reason === "initial" ||
+          item.status === idea.statusHistory[index - 1]?.status) ||
+        (item.changedAt !== undefined &&
+          (!Number.isFinite(item.changedAt) || item.changedAt < 0 ||
+            (previousTime !== undefined && item.changedAt < previousTime)))) {
+      throw new Error("Historial de estados de idea inválido.");
+    }
+    if (item.changedAt !== undefined) previousTime = item.changedAt;
+  }
+  if (idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
+    throw new Error("El historial de estados no coincide con la idea actual.");
+  }
+}
+
 function validateNarrativeIdeaReferenceLimit(idea) {
   for (const links of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
     if (links !== undefined &&
@@ -179,29 +204,7 @@ function validateNarrativeIdea(idea, projectId, label = "idea") {
     }
   }
   if (idea.relatedIdeaIds?.includes(idea.id)) throw new Error("Una idea no puede enlazarse a sí misma.");
-  if (idea.statusHistory !== undefined) {
-    if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length === 0) {
-      throw new Error("Historial de estados de idea inválido.");
-    }
-    let previousTime;
-    for (let i = 0; i < idea.statusHistory.length; i++) {
-      const item = idea.statusHistory[i];
-      if (!item || !["IDEA", "incorporated", "discarded"].includes(item.status) ||
-          !["initial", "writer", "text-revised"].includes(item.reason) ||
-          (item.reason === "text-revised" && item.status !== "IDEA") ||
-          (i === 0 ? item.reason !== "initial" : item.reason === "initial" ||
-            item.status === idea.statusHistory[i - 1]?.status) ||
-          (item.changedAt !== undefined &&
-            (!Number.isFinite(item.changedAt) || item.changedAt < 0 ||
-              (previousTime !== undefined && item.changedAt < previousTime)))) {
-        throw new Error("Historial de estados de idea inválido.");
-      }
-      if (item.changedAt !== undefined) previousTime = item.changedAt;
-    }
-    if (idea.statusHistory.at(-1).status !== idea.status) {
-      throw new Error("El historial de estados no coincide con la idea actual.");
-    }
-  }
+  validateNarrativeIdeaStatusHistory(idea);
 }
 function validateNarrativeRelation(relation, projectId) {
   requireProjectRecord(relation, "relación narrativa");
@@ -1446,6 +1449,7 @@ export class SqliteProjectStore {
   saveIdea(idea) {
     requireProjectRecord(idea, "idea narrativa");
     validateNarrativeIdeaReferenceLimit(idea);
+    validateNarrativeIdeaStatusHistory(idea);
     return this.transaction(() => {
       for (const id of idea.relatedEntityIds ?? []) {
         if (!this.get("narrative-entities", identityKey(idea.projectId, id))) throw new Error("La idea enlaza una ficha inexistente.");
@@ -1462,6 +1466,7 @@ export class SqliteProjectStore {
   saveIdeaIfUnchanged(idea, expectedCurrent) {
     requireProjectRecord(idea, "idea narrativa");
     validateNarrativeIdeaReferenceLimit(idea);
+    validateNarrativeIdeaStatusHistory(idea);
     if (expectedCurrent !== undefined) {
       requireProjectRecord(expectedCurrent, "idea anterior");
       if (idea.projectId !== expectedCurrent.projectId || idea.id !== expectedCurrent.id) {

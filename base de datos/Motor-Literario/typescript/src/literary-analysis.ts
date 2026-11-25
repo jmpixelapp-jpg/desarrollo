@@ -5268,8 +5268,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.knownProjectEventsOmittedCount ?? 0
   );
   const graphIdeas = input.knownProjectIdeas ?? input.knownIdeas ?? [];
-  const graphOmittedIdeaCount = input.knownProjectIdeasOmittedCount ??
-    input.knownIdeasOmittedCount ?? 0;
+  const graphOmittedIdeaCount = input.knownProjectIdeas !== undefined
+    ? input.knownProjectIdeasOmittedCount ?? 0
+    : input.knownIdeasOmittedCount ?? 0;
   const ideaGraph = buildLiteraryIdeaGraph(
     graphIdeas,graphOmittedIdeaCount
   );

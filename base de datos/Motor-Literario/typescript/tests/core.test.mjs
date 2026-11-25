@@ -2202,14 +2202,14 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "writer-library-finalization-receipts", keyPath: ["writerId", "sourceProjectId", "receiptId"] },
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
       { name: "document-diagnostics", keyPath: ["projectId", "documentId"] },
-      { name: "project-dictionaries", keyPath: ["projectId", "id"] },
-      { name: "dictionary-entries", keyPath: ["projectId", "id"] },
       { name: "manuscript-fragments", keyPath: ["projectId", "id"] },
       { name: "record-attributes", keyPath: ["projectId", "id"] },
       { name: "relation-attributes", keyPath: ["projectId", "id"] },
       { name: "active-suggestions", keyPath: ["projectId", "id"] },
       { name: "import-authorizations", keyPath: ["writerId", "sourceProjectId", "targetProjectId", "authorizationId"] },
-      { name: "schema-migrations", keyPath: "migrationId" }
+      { name: "schema-migrations", keyPath: "migrationId" },
+      { name: "project-dictionaries", keyPath: ["projectId", "id"] },
+      { name: "dictionary-entries", keyPath: ["projectId", "id"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
       ["project-settings", "by-project"],

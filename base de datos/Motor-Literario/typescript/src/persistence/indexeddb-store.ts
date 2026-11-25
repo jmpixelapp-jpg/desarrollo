@@ -1516,7 +1516,9 @@ export class IndexedDbProjectStore implements ProjectStore {
           checksum: `motor-literario-mldb-0.4.1-indexeddb-${nextVersion}`
         };
         validateSchemaMigration(migration);
-        upgrade.objectStore(SCHEMA_MIGRATIONS).put(cloneSchemaMigration(migration));
+        if (event) {
+          upgrade.objectStore(SCHEMA_MIGRATIONS).put(cloneSchemaMigration(migration));
+        }
       };
       request.onsuccess = () => {
         const db = request.result;

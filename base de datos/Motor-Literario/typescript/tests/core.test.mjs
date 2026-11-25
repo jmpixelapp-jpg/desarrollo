@@ -10801,7 +10801,9 @@ test("limita las evidencias de diálogo por escena sin truncar los conteos", asy
     projectId:"scene-dialogue-truncation",documentId:"chapter",revision:2,text,baseOffset
   });
   const profile = result.explicitScenes[0].dialogueSignals;
-  const visible20Start = [...text.matchAll(/palabra clara/gu)][19]!.index!;
+  const visible20Match = [...text.matchAll(/palabra clara/gu)][19];
+  assert.ok(visible20Match);
+  const visible20Start = visible20Match.index ?? -1;
   assert.equal(profile.segmentCount,21);
   assert.equal(profile.dialogueWordCount,42);
   assert.equal(profile.formatCounts.quotation,21);

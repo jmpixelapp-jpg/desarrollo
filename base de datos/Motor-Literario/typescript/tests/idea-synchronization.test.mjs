@@ -208,6 +208,31 @@ test("rechaza el vínculo a ficha si la entidad destino desaparece durante CAS",
   api.dispose();
 });
 
+test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-target"), idea("idea-external")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => {
+    store.ideas.delete(projectId + ":idea-target");
+    return { ...current, relatedIdeaIds: ["idea-external"] };
+  };
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-target", true),
+    /Ambas ideas deben existir en el proyecto activo/
+  );
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-external"]
+  );
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.writes, 1);
+  api.dispose();
+});
+
 test("permite limpiar el vínculo a una idea eliminada durante un conflicto CAS", async () => {
   const store = new RacingStore([
     idea("idea-source", { relatedIdeaIds: ["idea-target"] }),

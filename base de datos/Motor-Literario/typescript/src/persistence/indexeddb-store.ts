@@ -2,8 +2,8 @@ import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, Sto
 import { normalizeEntityName } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
-import type { ProjectDictionary, DictionaryEntry } from "../dictionaries";
-import { validateProjectDictionary, validateDictionaryEntry } from "../dictionaries";
+import type { ProjectDictionary, DictionaryEntry, DictionaryEntryEntityLink } from "../dictionaries";
+import { validateProjectDictionary, validateDictionaryEntry, validateDictionaryEntryEntityLink } from "../dictionaries";
 import type {
   ProjectRecord, RecordName, ProjectRelation, ProjectEvidence, TimelineOccurrence, EvidenceSubjectKind,
   ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
@@ -29,7 +29,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 20;
+const DATABASE_VERSION = 21;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -45,6 +45,7 @@ const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
 const DICTIONARIES = "project-dictionaries";
 const DICTIONARY_ENTRIES = "dictionary-entries";
+const DICTIONARY_ENTRY_ENTITIES = "dictionary-entry-entities";
 const PROJECT_SETTINGS = "project-settings";
 const LANGUAGE_PROFILES = "language-profiles";
 const LANGUAGE_RESOURCE_REFS = "language-resource-refs";
@@ -1460,6 +1461,14 @@ export class IndexedDbProjectStore implements ProjectStore {
             { unique: true }
           );
         }
+        if (!db.objectStoreNames.contains(DICTIONARY_ENTRY_ENTITIES)) {
+          const links = db.createObjectStore(DICTIONARY_ENTRY_ENTITIES, {
+            keyPath: ["projectId", "entryId", "recordId"]
+          });
+          links.createIndex("by-project", "projectId", { unique: false });
+          links.createIndex("by-entry", ["projectId", "entryId"], { unique: false });
+          links.createIndex("by-record", ["projectId", "recordId"], { unique: false });
+        }
 
         // Las bases creadas por versiones anteriores pueden tener ya el
         // object store pero carecer de un índice añadido posteriormente.
@@ -1536,6 +1545,9 @@ export class IndexedDbProjectStore implements ProjectStore {
           DICTIONARY_ENTRIES, "by-dictionary-normalized",
           ["projectId", "dictionaryId", "normalizedForm"], true
         );
+        ensureIndex(DICTIONARY_ENTRY_ENTITIES, "by-project", "projectId");
+        ensureIndex(DICTIONARY_ENTRY_ENTITIES, "by-entry", ["projectId", "entryId"]);
+        ensureIndex(DICTIONARY_ENTRY_ENTITIES, "by-record", ["projectId", "recordId"]);
         ensureIndex(MANUSCRIPT_FRAGMENTS, "by-project", "projectId");
         ensureIndex(MANUSCRIPT_FRAGMENTS, "by-document-revision", ["projectId", "documentId", "revision"]);
         ensureIndex(MANUSCRIPT_FRAGMENTS, "by-parent", ["projectId", "parentFragmentId"]);
@@ -2775,6 +2787,213 @@ export class IndexedDbProjectStore implements ProjectStore {
       );
       transaction.onabort = () => reject(
         validationError ?? transaction.error ?? new Error("Se canceló el guardado de la entrada.")
+      );
+    });
+  }
+
+  async loadDictionaryEntryEntityLinks(
+    projectId: string,
+    entryId: string
+  ): Promise<readonly DictionaryEntryEntityLink[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof entryId !== "string" || !entryId.trim()) {
+      throw new Error("Identidad de proyecto o entrada inválida para consultar vínculos.");
+    }
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(
+        [DICTIONARIES, DICTIONARY_ENTRIES, DICTIONARY_ENTRY_ENTITIES, ENTITIES],
+        "readonly"
+      );
+      const links = transaction.objectStore(DICTIONARY_ENTRY_ENTITIES);
+      const entries = transaction.objectStore(DICTIONARY_ENTRIES);
+      const dictionaryStore = transaction.objectStore(DICTIONARIES);
+      const entryRequest = entries.get([projectId, entryId]);
+      const linksRequest = links.index("by-entry").getAll([projectId, entryId]);
+      let entry: DictionaryEntry | undefined;
+      let records: DictionaryEntryEntityLink[] = [];
+      let entryReady = false;
+      let linksReady = false;
+      let pendingEntities = 0;
+      let failure: Error | undefined;
+      let finished = false;
+      const abortWith = (error: unknown): void => {
+        if (finished) return;
+        failure = error instanceof Error ? error : new Error("No se pudieron leer los vínculos de diccionario.");
+        finished = true;
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      const finishIfReady = (): void => {
+        if (finished || !entryReady || !linksReady || pendingEntities !== 0) return;
+        try {
+          if (!entry) throw new Error("La entrada solicitada no existe en el proyecto activo.");
+          const dictionaryRequest = dictionaryStore.get([projectId, entry.dictionaryId]);
+          dictionaryRequest.onsuccess = () => {
+            try {
+              const dictionary = dictionaryRequest.result as ProjectDictionary | undefined;
+              if (!dictionary || dictionary.projectId !== projectId || dictionary.id !== entry!.dictionaryId) {
+                throw new Error("El diccionario de los vínculos no existe en el proyecto activo.");
+              }
+              validateProjectDictionary(dictionary, "diccionario de vínculos");
+            } catch (error) { abortWith(error); }
+          };
+          dictionaryRequest.onerror = () => abortWith(
+            dictionaryRequest.error ?? new Error("No se pudo verificar el diccionario de los vínculos.")
+          );
+        } catch (error) {
+          abortWith(error);
+        }
+      };
+      entryRequest.onsuccess = () => {
+        try {
+          entry = entryRequest.result as DictionaryEntry | undefined;
+          if (entry) validateDictionaryEntry(entry, "entrada de vínculos");
+          entryReady = true;
+          finishIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      entryRequest.onerror = () => abortWith(
+        entryRequest.error ?? new Error("No se pudo leer la entrada de los vínculos.")
+      );
+      linksRequest.onsuccess = () => {
+        try {
+          records = linksRequest.result as DictionaryEntryEntityLink[];
+          if (!Array.isArray(records)) throw new Error("Los vínculos de diccionario no forman una colección.");
+          const ids = new Set<string>();
+          for (const link of records) {
+            validateDictionaryEntryEntityLink(link, projectId, entryId);
+            if (ids.has(link.recordId)) throw new Error("Hay fichas repetidas en los vínculos de diccionario.");
+            ids.add(link.recordId);
+            const request = transaction.objectStore(ENTITIES).get([projectId, link.recordId]);
+            pendingEntities++;
+            request.onsuccess = () => {
+              try {
+                const entity = request.result as NarrativeEntity | undefined;
+                if (!entity || entity.projectId !== projectId || entity.id !== link.recordId) {
+                  throw new Error("Un vínculo de diccionario apunta a una ficha inexistente o ajena.");
+                }
+                validateNarrativeEntityRecord(entity, "ficha vinculada a entrada de diccionario");
+                pendingEntities--;
+                finishIfReady();
+              } catch (error) { abortWith(error); }
+            };
+            request.onerror = () => abortWith(
+              request.error ?? new Error("No se pudo verificar una ficha vinculada a diccionario.")
+            );
+          }
+          linksReady = true;
+          finishIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      linksRequest.onerror = () => abortWith(
+        linksRequest.error ?? new Error("No se pudieron leer los vínculos de diccionario.")
+      );
+      transaction.oncomplete = () => {
+        if (failure) reject(failure);
+        else if (!entryReady || !linksReady || pendingEntities !== 0) {
+          reject(new Error("La validación de vínculos de diccionario quedó incompleta."));
+        } else {
+          const legacyIds = new Set(entry?.relatedEntityIds ?? []);
+          for (const link of records) legacyIds.delete(link.recordId);
+          resolve(records.map(link => structuredClone(link)));
+        }
+      };
+      transaction.onerror = () => reject(
+        failure ?? transaction.error ?? new Error("No se pudieron leer los vínculos de diccionario.")
+      );
+      transaction.onabort = () => reject(
+        failure ?? transaction.error ?? new Error("Se canceló la lectura de vínculos de diccionario.")
+      );
+    });
+  }
+
+  async setDictionaryEntryEntityLink(
+    entry: DictionaryEntry,
+    expectedCurrent: DictionaryEntry,
+    link: DictionaryEntryEntityLink,
+    linked: boolean
+  ): Promise<void> {
+    validateDictionaryEntry(entry, "entrada actualizada");
+    validateDictionaryEntry(expectedCurrent, "entrada anterior");
+    validateDictionaryEntryEntityLink(link, entry.projectId, entry.id);
+    if (entry.projectId !== expectedCurrent.projectId || entry.id !== expectedCurrent.id ||
+        entry.dictionaryId !== expectedCurrent.dictionaryId ||
+        typeof linked !== "boolean" ||
+        (linked && !entry.relatedEntityIds.includes(link.recordId)) ||
+        (!linked && entry.relatedEntityIds.includes(link.recordId))) {
+      throw new Error("La actualización del vínculo y la entrada no coincide.");
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(
+        [DICTIONARIES, DICTIONARY_ENTRIES, DICTIONARY_ENTRY_ENTITIES, ENTITIES],
+        "readwrite"
+      );
+      const dictionaries = transaction.objectStore(DICTIONARIES);
+      const entries = transaction.objectStore(DICTIONARY_ENTRIES);
+      const links = transaction.objectStore(DICTIONARY_ENTRY_ENTITIES);
+      const dictionaryRequest = dictionaries.get([entry.projectId, entry.dictionaryId]);
+      const entryRequest = entries.get([entry.projectId, entry.id]);
+      const entityRequest = linked
+        ? transaction.objectStore(ENTITIES).get([entry.projectId, link.recordId])
+        : undefined;
+      let dictionaryReady = false;
+      let entryReady = false;
+      let entityReady = !linked;
+      let failure: Error | undefined;
+      let finished = false;
+      const abortWith = (error: unknown): void => {
+        if (finished) return;
+        failure = error instanceof Error ? error : new Error("No se pudo actualizar el vínculo de diccionario.");
+        finished = true;
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      const commitIfReady = (): void => {
+        if (finished || !dictionaryReady || !entryReady || !entityReady) return;
+        try {
+          const dictionary = dictionaryRequest.result as ProjectDictionary | undefined;
+          if (!dictionary || dictionary.projectId !== entry.projectId ||
+              dictionary.id !== entry.dictionaryId) {
+            throw new Error("El diccionario del vínculo no existe en el proyecto activo.");
+          }
+          validateProjectDictionary(dictionary, "diccionario del vínculo");
+          const current = entryRequest.result as DictionaryEntry | undefined;
+          if (!current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+            throw new Error("La entrada cambió en otra instancia; vuelve a leerla antes de modificar sus vínculos.");
+          }
+          if (linked) {
+            const entity = entityRequest?.result as NarrativeEntity | undefined;
+            if (!entity || entity.projectId !== entry.projectId || entity.id !== link.recordId) {
+              throw new Error("No existe la ficha relacionada en el mismo proyecto.");
+            }
+            validateNarrativeEntityRecord(entity, "ficha relacionada con diccionario");
+            links.put(structuredClone(link));
+          } else {
+            links.delete([link.projectId, link.entryId, link.recordId]);
+          }
+          entries.put(structuredClone(entry));
+        } catch (error) { abortWith(error); }
+      };
+      dictionaryRequest.onsuccess = () => { dictionaryReady = true; commitIfReady(); };
+      dictionaryRequest.onerror = () => abortWith(
+        dictionaryRequest.error ?? new Error("No se pudo verificar el diccionario del vínculo.")
+      );
+      entryRequest.onsuccess = () => { entryReady = true; commitIfReady(); };
+      entryRequest.onerror = () => abortWith(
+        entryRequest.error ?? new Error("No se pudo verificar la entrada del vínculo.")
+      );
+      if (entityRequest) {
+        entityRequest.onsuccess = () => { entityReady = true; commitIfReady(); };
+        entityRequest.onerror = () => abortWith(
+          entityRequest.error ?? new Error("No se pudo verificar la ficha del vínculo.")
+        );
+      }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(
+        failure ?? transaction.error ?? new Error("No se pudo actualizar el vínculo de diccionario.")
+      );
+      transaction.onabort = () => reject(
+        failure ?? transaction.error ?? new Error("Se canceló la actualización del vínculo de diccionario.")
       );
     });
   }

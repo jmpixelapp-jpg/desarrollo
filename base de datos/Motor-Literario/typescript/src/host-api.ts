@@ -1,3 +1,4 @@
+import { analyzeLiteraryFragment, type LiteraryAnalysisResult } from "./literary-analysis";
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
@@ -1375,6 +1376,37 @@ export class HostEngineApi {
       this.getNarrativeEvents(), this.getNarrativeEntities()
     ]);
     return detectExplicitStateContradictions(this.requireProject().projectId, events, entities);
+  }
+
+
+  /**
+   * Analiza un rango del documento tras completar las ediciones admitidas.
+   * Operación de solo lectura: no guarda resultados ni modifica el manuscrito.
+   */
+  async analyzeLiteraryDocument(
+    documentId: string,
+    start = 0,
+    end?: number
+  ): Promise<LiteraryAnalysisResult> {
+    if (typeof documentId !== "string" || !documentId.trim() ||
+        !Number.isSafeInteger(start) || start < 0 ||
+        (end !== undefined && (!Number.isSafeInteger(end) || end < start))) {
+      throw new Error("Rango inválido para el análisis literario.");
+    }
+    await this.flushPendingChanges();
+    const snapshot = this.engine.getSnapshot(documentId);
+    if (!snapshot) throw new Error("El documento debe estar abierto para analizarlo.");
+    const rangeEnd = end ?? snapshot.text.length;
+    if (rangeEnd > snapshot.text.length) {
+      throw new Error("El rango del análisis supera la longitud del documento.");
+    }
+    return analyzeLiteraryFragment({
+      projectId: this.requireProject().projectId,
+      documentId,
+      revision: snapshot.revision,
+      text: snapshot.text.slice(start, rangeEnd),
+      baseOffset: start
+    });
   }
 
   /** Resuelve tanto el ID canónico como los IDs históricos absorbidos por una consolidación. */

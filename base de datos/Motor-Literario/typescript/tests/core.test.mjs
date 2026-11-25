@@ -9812,3 +9812,78 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     else delete globalThis.indexedDB;
   }
 });
+
+
+test("el análisis literario mide ritmo, diálogo y repeticiones con offsets UTF-16", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "La sombra cubría el camino. La sombra parecía interminable.",
+    "",
+    "La sombra avanzó lentamente. La sombra se detuvo.",
+    "—¿Vienes conmigo? —preguntó Ana.",
+    "«Yo no puedo», respondió Luis."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-metrics", documentId:"chapter", revision:4, text, baseOffset:100
+  });
+  assert.equal(result.range.start,100);
+  assert.equal(result.range.end,100+text.length);
+  assert.equal(result.metrics.paragraphCount,2);
+  assert.equal(result.metrics.sentenceCount,7);
+  assert.ok(result.metrics.wordCount > 15);
+  assert.ok(result.metrics.dialogueWordCount > 0);
+  assert.ok(result.metrics.dialogueRatio > 0);
+  assert.equal(result.repeatedWords.find(item => item.word === "sombra")?.count,4);
+  assert.ok(result.repeatedWords.find(item => item.word === "sombra").occurrences
+    .every(item => item.start >= 100 && item.end > item.start));
+  assert.equal(result.voiceSignals.counts.firstPerson,0,
+    "los pronombres dentro del diálogo no cuentan como señales fuera de diálogo");
+  assert.ok(result.caveats.length >= 3);
+});
+
+test("las señales gramaticales separan pronombres narrativos y pronombres en diálogo", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"voice-signals",documentId:"chapter",revision:1,
+    text:"Yo recuerdo la casa. Yo escuché el viento. «Tú debes volver», dijo Ana."
+  });
+  assert.equal(result.voiceSignals.classification,"first-person-signals");
+  assert.equal(result.voiceSignals.counts.firstPerson,2);
+  assert.equal(result.voiceSignals.counts.secondPerson,0);
+  assert.equal(result.voiceSignals.samples.length,2);
+});
+
+test("los offsets literarios respetan UTF-16 y limitan el tamaño del fragmento", async () => {
+  const { analyzeLiteraryFragment, MAX_LITERARY_ANALYSIS_TEXT_UNITS } =
+    await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"unicode-literary",documentId:"chapter",revision:2,
+    text:"🧭 Yo vi la luz.",baseOffset:50
+  });
+  const yo = result.voiceSignals.samples.find(item => item.term === "Yo");
+  assert.ok(yo);
+  assert.equal(yo.start,53,"el emoji ocupa dos unidades UTF-16");
+  assert.equal(result.range.end,50+"🧭 Yo vi la luz.".length);
+  assert.throws(() => analyzeLiteraryFragment({
+    projectId:"large",documentId:"chapter",revision:0,
+    text:"x".repeat(MAX_LITERARY_ANALYSIS_TEXT_UNITS+1)
+  }),/demasiado grande/i);
+});
+
+test("la API analiza el documento abierto sin modificar el manuscrito", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({store});
+  api.initializeProject({projectId:"literary-api",projectName:"Análisis"});
+  const text = "Yo crucé el puente. Yo miré atrás. La noche llegó.";
+  await api.openDocument({documentId:"chapter",text,revision:0,sequence:0});
+  const before = api.getSnapshot("chapter");
+  const result = await api.analyzeLiteraryDocument("chapter",3,text.length);
+  const after = api.getSnapshot("chapter");
+  assert.equal(result.range.start,3);
+  assert.equal(result.range.end,text.length);
+  assert.equal(result.revision,0);
+  assert.deepEqual(after,before);
+  assert.equal(result.voiceSignals.classification,"first-person-signals");
+  await assert.rejects(() => api.analyzeLiteraryDocument("missing"),/abierto/i);
+  await assert.rejects(() => api.analyzeLiteraryDocument("chapter",0,text.length+1),/supera/i);
+});

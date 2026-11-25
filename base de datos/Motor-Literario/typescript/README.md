@@ -305,3 +305,20 @@ Todos los vínculos se guardan en `dictionary-entry-entities`, con `linkKind`, `
 La migración DB21 materializa los vínculos heredados que solo contenían IDs: usa `RELATED` como tipo genérico, `MIGRATION` como procedencia explícita y la fecha real de migración como `createdAt`. No presenta esa fecha como si fuera la fecha histórica original. La tabla queda completamente implementada y las asociaciones anteriores no se pierden.
 
 \n\nLa auditoría física del manifiesto `MLDB/storage_mapping_v0.4.1.json` verifica las 24 tablas propiedad del motor, la tabla `projects` bajo control del anfitrión, la versión/nombre de IndexedDB y los 31 almacenes declarados, incluidos diagnósticos y recibos operativos. Se ejecuta junto con la validación del esquema mediante `npm run validate:schema`.\n
+
+## Análisis literario descriptivo
+
+El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local y determinista del fragmento seleccionado:
+
+- Longitud media de oraciones y párrafos, diversidad léxica básica, longitud mínima/máxima y distribución de oraciones cortas/largas.
+- Estimación de diálogo a partir de comillas y líneas que comienzan con raya.
+- Repeticiones de palabras de contenido y aperturas de oración recurrentes, con ocurrencias acotadas para inspección.
+- Señales de primera, segunda y tercera persona basadas en pronombres explícitos fuera de los tramos de diálogo.
+- Conteos de interrogaciones, exclamaciones y elipsis.
+
+La API `analyzeLiteraryDocument(documentId, start?, end?)` espera a que terminen los cambios admitidos y analiza el rango UTF-16 solicitado en la revisión vigente. Es una operación de solo lectura, no persiste sugerencias ni modifica el manuscrito. Los resultados identifican proyecto, documento, revisión y rango; las ocurrencias usan offsets UTF-16 absolutos.
+
+Los perfiles de ritmo son umbrales descriptivos de longitud de oración, no juicios de calidad. Las señales gramaticales no identifican por sí solas al narrador: los pronombres tácitos, el estilo indirecto y los formatos de diálogo no reconocidos pueden cambiar el resultado. El motor expone estas limitaciones en cada respuesta.
+
+El análisis acepta hasta 2.000.000 de unidades UTF-16 por operación. Los documentos mayores deben analizarse por rangos y conservar su revisión al comparar resultados.
+

@@ -1708,6 +1708,7 @@ export class SqliteProjectStore {
 
           const archivedIds = new Set(existingReceipt.archivedIdeaIds);
           const contentChecksum = createArchiveContentChecksumBuilder();
+          const restoredEntries = collectEntries ? [] : undefined;
           for (const id of existingReceipt.archivedIdeaIds) {
             const entry = this.get("personal-idea-library", [writerId, projectId, id]);
             if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
@@ -1720,6 +1721,7 @@ export class SqliteProjectStore {
             validateNarrativeIdea(entry.idea, projectId, "idea archivada");
             validatePersonalIdeaContext(entry.context, projectId, sourceProjectName);
             contentChecksum.add(entry);
+            restoredEntries?.push(entry);
             const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
             const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
             for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
@@ -1734,7 +1736,7 @@ export class SqliteProjectStore {
               calculatedContentChecksum !== existingReceipt.archiveContentChecksum) {
             throw new Error("La biblioteca personal no coincide con el checksum del contenido archivado.");
           }
-          return collectEntries ? [] : {
+          return collectEntries ? clone(restoredEntries) : {
             writerId, sourceProjectId: projectId, sourceProjectName,
             archivedCount: existingReceipt.archivedIdeaIds.length,
             finalizedAt: existingReceipt.finalizedAt,

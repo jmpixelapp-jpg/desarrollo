@@ -8,11 +8,13 @@ import type { ProjectSetting } from "../project-data";
 import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type LanguageResourceRef,
   cloneLanguageProfile, cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef,
   type StyleProfile, type TimelineTrack, cloneStyleProfile, cloneTimelineTrack,
-  validateStyleProfile, validateTimelineTrack
+  validateStyleProfile, validateTimelineTrack,
+  type RecordLifecycle, type RelationLifecycle,
+  cloneRecordLifecycle, cloneRelationLifecycle, validateRecordLifecycle, validateRelationLifecycle
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 16;
+const DATABASE_VERSION = 17;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -33,6 +35,8 @@ const LANGUAGE_PROFILES = "language-profiles";
 const LANGUAGE_RESOURCE_REFS = "language-resource-refs";
 const STYLE_PROFILES = "style-profiles";
 const TIMELINE_TRACKS = "timeline-tracks";
+const RECORD_LIFECYCLES = "record-lifecycles";
+const RELATION_LIFECYCLES = "relation-lifecycles";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -910,6 +914,193 @@ async function saveSimpleProjectRecord<T extends { readonly projectId: string; r
   });
 }
 
+
+type LifecycleHistoryRecord = {
+  readonly projectId: string;
+  readonly id: string;
+  readonly revision: number;
+  readonly previousLabel: string | null;
+  readonly newLabel: string;
+  readonly previousState: string | null;
+  readonly newState: string;
+  readonly changedAt: number;
+};
+
+function validateLifecycleSequence<T extends LifecycleHistoryRecord>(
+  records: readonly T[],
+  label: string
+): readonly T[] {
+  if (!Array.isArray(records)) throw new Error(`El historial de ${label} no es una colección.`);
+  const ordered = [...records].sort((first, second) => first.revision - second.revision);
+  const ids = new Set<string>();
+  let previous: T | undefined;
+  for (const item of ordered) {
+    if (!item || typeof item.id !== "string" || !item.id.trim() ||
+        ids.has(item.id) || !Number.isSafeInteger(item.revision) || item.revision < 1) {
+      throw new Error(`El historial de ${label} contiene identificadores o revisiones duplicadas.`);
+    }
+    ids.add(item.id);
+    if (!previous) {
+      if (item.revision !== 1 || item.previousLabel !== null || item.previousState !== null) {
+        throw new Error(`El historial de ${label} debe comenzar en revisión 1 sin estado previo.`);
+      }
+    } else if (item.revision !== previous.revision + 1 ||
+        item.previousLabel !== previous.newLabel ||
+        item.previousState !== previous.newState ||
+        item.changedAt < previous.changedAt) {
+      throw new Error(`El historial de ${label} contiene una transición discontinua o una fecha regresiva.`);
+    }
+    previous = item;
+  }
+  return ordered;
+}
+
+async function appendLifecycleRecord<T extends LifecycleHistoryRecord>(
+  db: IDBDatabase,
+  historyStoreName: string,
+  parentStoreName: string,
+  item: T,
+  subjectId: string,
+  label: string,
+  validate: (value: T, expectedProjectId?: string) => void
+): Promise<void> {
+  validate(item, item.projectId);
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction([historyStoreName, parentStoreName], "readwrite");
+    const historyStore = transaction.objectStore(historyStoreName);
+    const parentStore = transaction.objectStore(parentStoreName);
+    const parentRequest = parentStore.get([item.projectId, subjectId]);
+    const historyRequest = historyStore.index("by-subject").getAll([item.projectId, subjectId]);
+    let parentReady = false;
+    let historyReady = false;
+    let history: T[] = [];
+    let failure: Error | undefined;
+    let finished = false;
+
+    const abortWith = (error: unknown): void => {
+      if (finished) return;
+      failure = error instanceof Error ? error : new Error(`No se pudo guardar el ciclo de vida de ${label}.`);
+      finished = true;
+      try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    const commitIfReady = (): void => {
+      if (finished || !parentReady || !historyReady) return;
+      try {
+        const parent = parentRequest.result as { readonly projectId?: string; readonly id?: string } | undefined;
+        if (!parent || parent.projectId !== item.projectId || parent.id !== subjectId) {
+          throw new Error(`No existe el elemento de destino del historial de ${label} en el proyecto activo.`);
+        }
+        const ordered = validateLifecycleSequence(history, label);
+        const previous = ordered[ordered.length - 1];
+        if (!previous) {
+          if (item.revision !== 1 || item.previousLabel !== null || item.previousState !== null) {
+            throw new Error(`El primer cambio de ${label} debe comenzar en revisión 1 y no declarar estado previo.`);
+          }
+        } else if (item.revision !== previous.revision + 1 ||
+            item.previousLabel !== previous.newLabel ||
+            item.previousState !== previous.newState ||
+            item.changedAt < previous.changedAt) {
+          throw new Error(`El cambio de ${label} no continúa la última revisión durable.`);
+        }
+        if (ordered.some(existing => existing.id === item.id)) {
+          throw new Error(`El ID del evento histórico de ${label} ya existe.`);
+        }
+        // add es deliberado: un evento confirmado nunca se reemplaza ni se edita.
+        historyStore.add(item);
+      } catch (error) {
+        abortWith(error);
+      }
+    };
+
+    parentRequest.onsuccess = () => { parentReady = true; commitIfReady(); };
+    parentRequest.onerror = () => abortWith(
+      parentRequest.error ?? new Error(`No se pudo verificar el elemento de destino del historial de ${label}.`)
+    );
+    historyRequest.onsuccess = () => {
+      try {
+        history = historyRequest.result as T[];
+        if (!Array.isArray(history)) throw new Error(`El historial de ${label} almacenado no es una colección.`);
+        for (const record of history) validate(record, item.projectId);
+        historyReady = true;
+        commitIfReady();
+      } catch (error) {
+        abortWith(error);
+      }
+    };
+    historyRequest.onerror = () => abortWith(
+      historyRequest.error ?? new Error(`No se pudo leer el historial de ${label}.`)
+    );
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(
+      failure ?? transaction.error ?? new Error(`No se pudo guardar el historial de ${label}.`)
+    );
+    transaction.onabort = () => reject(
+      failure ?? transaction.error ?? new Error(`Se canceló el guardado del historial de ${label}.`)
+    );
+  });
+}
+
+async function loadLifecycleHistory<T extends LifecycleHistoryRecord>(
+  db: IDBDatabase,
+  historyStoreName: string,
+  parentStoreName: string,
+  projectId: string,
+  subjectId: string,
+  label: string,
+  validate: (value: T, expectedProjectId?: string) => void,
+  clone: (value: T) => T
+): Promise<readonly T[]> {
+  const transaction = db.transaction([historyStoreName, parentStoreName], "readonly");
+  const historyRequest = transaction.objectStore(historyStoreName).index("by-subject")
+    .getAll([projectId, subjectId]);
+  const parentRequest = transaction.objectStore(parentStoreName).get([projectId, subjectId]);
+  return new Promise((resolve, reject) => {
+    let historyReady = false;
+    let parentReady = false;
+    let records: T[] = [];
+    let failure: Error | undefined;
+    const abortWith = (error: unknown): void => {
+      failure = error instanceof Error ? error : new Error(`No se pudo leer el historial de ${label}.`);
+      try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    historyRequest.onsuccess = () => {
+      try {
+        records = historyRequest.result as T[];
+        if (!Array.isArray(records)) throw new Error(`El historial de ${label} no es una colección.`);
+        for (const record of records) validate(record, projectId);
+        historyReady = true;
+      } catch (error) {
+        abortWith(error);
+      }
+    };
+    historyRequest.onerror = () => abortWith(
+      historyRequest.error ?? new Error(`No se pudo leer el historial de ${label}.`)
+    );
+    parentRequest.onsuccess = () => {
+      const parent = parentRequest.result as { readonly projectId?: string; readonly id?: string } | undefined;
+      if (!parent || parent.projectId !== projectId || parent.id !== subjectId) {
+        abortWith(new Error(`No existe el elemento solicitado en el historial de ${label}.`));
+      } else {
+        parentReady = true;
+      }
+    };
+    parentRequest.onerror = () => abortWith(
+      parentRequest.error ?? new Error(`No se pudo verificar el elemento del historial de ${label}.`)
+    );
+    transaction.oncomplete = () => {
+      if (failure) reject(failure);
+      else if (!historyReady || !parentReady) reject(new Error(`La lectura del historial de ${label} quedó incompleta.`));
+      else resolve(validateLifecycleSequence(records, label).map(item => clone(item)));
+    };
+    transaction.onerror = () => reject(
+      failure ?? transaction.error ?? new Error(`No se pudo leer el historial de ${label}.`)
+    );
+    transaction.onabort = () => reject(
+      failure ?? transaction.error ?? new Error(`Se canceló la lectura del historial de ${label}.`)
+    );
+  });
+}
+
 /**
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
@@ -990,6 +1181,18 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           tracks.createIndex("by-project", "projectId", { unique: false });
           tracks.createIndex("by-project-name", ["projectId", "trackName"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(RECORD_LIFECYCLES)) {
+          const lifecycles = db.createObjectStore(RECORD_LIFECYCLES, { keyPath: ["projectId", "id"] });
+          lifecycles.createIndex("by-project", "projectId", { unique: false });
+          lifecycles.createIndex("by-subject", ["projectId", "recordId"], { unique: false });
+          lifecycles.createIndex("by-subject-revision", ["projectId", "recordId", "revision"], { unique: true });
+        }
+        if (!db.objectStoreNames.contains(RELATION_LIFECYCLES)) {
+          const lifecycles = db.createObjectStore(RELATION_LIFECYCLES, { keyPath: ["projectId", "id"] });
+          lifecycles.createIndex("by-project", "projectId", { unique: false });
+          lifecycles.createIndex("by-subject", ["projectId", "relationId"], { unique: false });
+          lifecycles.createIndex("by-subject-revision", ["projectId", "relationId", "revision"], { unique: true });
         }
         if (!db.objectStoreNames.contains(DOCUMENTS)) {
           const store = db.createObjectStore(DOCUMENTS, { keyPath: ["projectId", "documentId"] });
@@ -1109,6 +1312,12 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(STYLE_PROFILES, "by-project-name", ["projectId", "profileName"]);
         ensureIndex(TIMELINE_TRACKS, "by-project", "projectId");
         ensureIndex(TIMELINE_TRACKS, "by-project-name", ["projectId", "trackName"]);
+        ensureIndex(RECORD_LIFECYCLES, "by-project", "projectId");
+        ensureIndex(RECORD_LIFECYCLES, "by-subject", ["projectId", "recordId"]);
+        ensureIndex(RECORD_LIFECYCLES, "by-subject-revision", ["projectId", "recordId", "revision"], true);
+        ensureIndex(RELATION_LIFECYCLES, "by-project", "projectId");
+        ensureIndex(RELATION_LIFECYCLES, "by-subject", ["projectId", "relationId"]);
+        ensureIndex(RELATION_LIFECYCLES, "by-subject-revision", ["projectId", "relationId", "revision"], true);
         ensureIndex(DOCUMENTS, "by-project", "projectId");
         ensureIndex(CHANGES, CHANGE_INDEX, ["projectId", "documentId", "sequence"], true);
         ensureIndex(ENTITIES, "by-project", "projectId");
@@ -1441,6 +1650,42 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar la referencia de recurso."));
       transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado de la referencia de recurso."));
     });
+  }
+
+  async loadRecordLifecycles(projectId: string, recordId: string): Promise<readonly RecordLifecycle[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof recordId !== "string" || !recordId.trim()) {
+      throw new Error("Identidad de proyecto o ficha inválida.");
+    }
+    return loadLifecycleHistory(
+      await this.open(), RECORD_LIFECYCLES, ENTITIES,
+      projectId, recordId, "ficha", validateRecordLifecycle, cloneRecordLifecycle
+    );
+  }
+
+  async appendRecordLifecycle(item: RecordLifecycle): Promise<void> {
+    return appendLifecycleRecord(
+      await this.open(), RECORD_LIFECYCLES, ENTITIES,
+      item, item.recordId, "ficha", validateRecordLifecycle
+    );
+  }
+
+  async loadRelationLifecycles(projectId: string, relationId: string): Promise<readonly RelationLifecycle[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof relationId !== "string" || !relationId.trim()) {
+      throw new Error("Identidad de proyecto o relación inválida.");
+    }
+    return loadLifecycleHistory(
+      await this.open(), RELATION_LIFECYCLES, RELATIONS,
+      projectId, relationId, "relación", validateRelationLifecycle, cloneRelationLifecycle
+    );
+  }
+
+  async appendRelationLifecycle(item: RelationLifecycle): Promise<void> {
+    return appendLifecycleRecord(
+      await this.open(), RELATION_LIFECYCLES, RELATIONS,
+      item, item.relationId, "relación", validateRelationLifecycle
+    );
   }
 
   async loadStyleProfiles(projectId: string): Promise<readonly StyleProfile[]> {

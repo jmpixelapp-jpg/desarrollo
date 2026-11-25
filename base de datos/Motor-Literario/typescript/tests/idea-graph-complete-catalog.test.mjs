@@ -29,6 +29,7 @@ const store = {
 
 test("el grafo literario incluye ideas sin vínculos a personajes", async () => {
   const api = new HostEngineApi({store});
+  assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, true);
   api.initializeProject({projectId,projectName:"Book",writerId:"writer-graph"});
   await api.openDocument({documentId:"chapter",text:"Escena 1\nLa tarde avanza.",revision:0,sequence:0});
   try {
@@ -43,6 +44,13 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
     assert.equal(result.ideaGraph.weakComponentCount,2);
     assert.equal(result.ideaGraph.largestWeakComponentSize,3);
   } finally { api.dispose(); }
+});
+
+
+test("declara la capacidad de grafo global solo con lectura del catálogo", () => {
+  const api = new HostEngineApi({ store: { ...store, loadIdeas: undefined } });
+  assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, false);
+  api.dispose();
 });
 
 test("limita la muestra del catálogo global sin alterar los totales del grafo", async () => {

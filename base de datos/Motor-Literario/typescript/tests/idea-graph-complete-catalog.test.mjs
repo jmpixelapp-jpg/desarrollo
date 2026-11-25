@@ -89,8 +89,8 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
   }
 });
 
-test("el analizador descriptivo rechaza historiales editoriales no válidos", () => {
-  assert.throws(() => analyzeLiteraryFragment({
+test("el analizador conserva y diagnostica historiales editoriales no monótonos", () => {
+  const result = analyzeLiteraryFragment({
     projectId,
     documentId: "chapter",
     revision: 1,
@@ -111,7 +111,11 @@ test("el analizador descriptivo rechaza historiales editoriales no válidos", ()
       writerDecisionCount: 2,
       omittedStatusHistoryCount: 0
     }]
-  }), /historial de decisiones del catálogo global de ideas es inválido/);
+  });
+  const node = result.ideaGraph.nodes[0];
+  assert.equal(node.nonMonotonicStatusTimestampCount, 1);
+  assert.equal(node.observedStatusTransitionCount, 3);
+  assert.equal(node.currentStatusHistoryConsistency, "mismatch");
 });
 test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
   const api = new HostEngineApi({ store: { ...store, documents: new Map() } });

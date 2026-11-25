@@ -10,6 +10,10 @@ function idea(ideaId, relatedIdeaIds = []) {
     ideaId,
     text: "Idea " + ideaId,
     status: "IDEA",
+    originDocumentId: "chapter-graph",
+    sourceProjectName: "Libro de prueba",
+    relatedEntityIds: [],
+    evidence: [],
     relatedIdeaIds,
     evidenceCount: 0,
     staleEvidenceCount: 0,
@@ -451,4 +455,186 @@ test("los perfiles por estado conservan los totales de nodos y referencias dirig
       ["discarded", "IDEA", 1]
     ]
   );
+});
+
+
+test("las auto-referencias forman ciclos unitarios sin inflar pares recíprocos", () => {
+  const graph = analyze([
+    idea("self", ["self"]),
+    idea("pair-a", ["pair-b"]),
+    idea("pair-b", ["pair-a"]),
+    idea("terminal")
+  ]);
+
+  assert.equal(graph.selfReferenceCount, 1);
+  assert.equal(graph.reciprocalReferencePairCount, 1);
+  assert.equal(graph.cycleCount, 2);
+  assert.deepEqual(
+    graph.cycles.map(cycle => cycle.ideaIds),
+    [["pair-a", "pair-b"], ["self"]]
+  );
+
+  const self = graph.nodes.find(node => node.ideaId === "self");
+  const pairA = graph.nodes.find(node => node.ideaId === "pair-a");
+  const terminal = graph.nodes.find(node => node.ideaId === "terminal");
+  assert.equal(self.cycleMembership, "cyclic-component");
+  assert.equal(self.cycleComponentSize, 1);
+  assert.equal(self.minimumDirectedHopsToTerminal, null);
+  assert.equal(pairA.cycleMembership, "cyclic-component");
+  assert.equal(pairA.cycleComponentSize, 2);
+  assert.equal(terminal.terminalReachabilityStatus, "reaches-terminal-within-snapshot");
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
+  assert.equal(graph.terminalReachableNodeCount, 1);
+});
+
+
+test("las distancias a terminales usan rutas mínimas y el límite del snapshot", () => {
+  const graph = analyze([
+    idea("start", ["middle", "terminal"]),
+    idea("middle", ["terminal"]),
+    idea("terminal"),
+    idea("cycle-a", ["cycle-b"]),
+    idea("cycle-b", ["cycle-a"]),
+    idea("external-only", ["not-loaded"])
+  ], 1);
+
+  const byId = new Map(graph.nodes.map(node => [node.ideaId, node]));
+  assert.equal(byId.get("terminal").minimumDirectedHopsToTerminal, 0);
+  assert.equal(byId.get("middle").minimumDirectedHopsToTerminal, 1);
+  assert.equal(byId.get("start").minimumDirectedHopsToTerminal, 1);
+  assert.equal(byId.get("cycle-a").minimumDirectedHopsToTerminal, null);
+  assert.equal(byId.get("cycle-b").minimumDirectedHopsToTerminal, null);
+  assert.equal(byId.get("external-only").minimumDirectedHopsToTerminal, 0);
+  assert.equal(byId.get("external-only").terminalReachabilityStatus, "reaches-terminal-within-snapshot");
+  assert.equal(byId.get("external-only").notIncludedOutgoingReferenceCount, 1);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 2);
+  assert.equal(graph.terminalReachableNodeCount, 4);
+  assert.equal(graph.terminalUnreachableNodeCount, 2);
+  assert.equal(graph.terminalReachabilityCoverage, 4 / 6);
+});
+
+
+test("los puntos de articulación respetan componentes débiles desconectados", () => {
+  const graph = analyze([
+    idea("a", ["b", "c"]),
+    idea("b", ["c"]),
+    idea("c", ["d"]),
+    idea("d", ["e"]),
+    idea("e"),
+    idea("isolated")
+  ]);
+
+  const byId = new Map(graph.nodes.map(node => [node.ideaId, node]));
+  assert.equal(graph.weakComponentCount, 2);
+  assert.deepEqual(
+    graph.weakComponents.map(component => component.ideaIds),
+    [["a", "b", "c", "d", "e"], ["isolated"]]
+  );
+  assert.equal(graph.articulationPointCount, 2);
+  assert.deepEqual(graph.articulationPointIdeaIds, ["c", "d"]);
+  assert.equal(byId.get("c").articulationPointStatus, "connector");
+  assert.equal(byId.get("c").weakComponentPiecesAfterRemoval, 2);
+  assert.equal(byId.get("d").articulationPointStatus, "connector");
+  assert.equal(byId.get("d").weakComponentPiecesAfterRemoval, 2);
+  assert.equal(byId.get("a").weakComponentPiecesAfterRemoval, 1);
+  assert.equal(byId.get("isolated").weakComponentPiecesAfterRemoval, 0);
+});
+
+
+test("las muestras de componentes y ciclos informan los elementos omitidos", () => {
+  const isolatedIdeas = Array.from({ length: 103 }, (_, index) =>
+    idea("isolated-" + String(index).padStart(3, "0"))
+  );
+  const isolatedGraph = analyze(isolatedIdeas);
+  assert.equal(isolatedGraph.weakComponentCount, 103);
+  assert.equal(isolatedGraph.weakComponents.length, 100);
+  assert.equal(isolatedGraph.omittedWeakComponentCount, 3);
+  assert.equal(isolatedGraph.largestWeakComponentSize, 1);
+  assert.equal(isolatedGraph.weakComponents[0].representativeIdeaId, "isolated-000");
+  assert.equal(isolatedGraph.weakComponents.at(-1).representativeIdeaId, "isolated-099");
+
+  const cyclicIdeas = Array.from({ length: 103 }, (_, index) => {
+    const id = "cycle-" + String(index).padStart(3, "0");
+    return idea(id, [id]);
+  });
+  const cyclicGraph = analyze(cyclicIdeas);
+  assert.equal(cyclicGraph.cycleCount, 103);
+  assert.equal(cyclicGraph.cycles.length, 100);
+  assert.equal(cyclicGraph.omittedCycleCount, 3);
+  assert.equal(cyclicGraph.selfReferenceCount, 103);
+  assert.equal(cyclicGraph.cycles[0].ideaIds[0], "cycle-000");
+  assert.equal(cyclicGraph.cycles.at(-1).ideaIds[0], "cycle-099");
+});
+
+
+test("el análisis de dos saltos deduplica intermediarios y destinos sin borrar ciclos", () => {
+  const graph = analyze([
+    idea("origin", ["branch-a", "branch-b", "branch-a"]),
+    idea("branch-a", ["origin", "shared", "shared"]),
+    idea("branch-b", ["shared", "terminal"]),
+    idea("shared"),
+    idea("terminal")
+  ]);
+
+  assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
+  assert.equal(graph.twoHopConvergentSourceCount, 1);
+  assert.equal(graph.twoHopSharedDestinationCount, 1);
+  // El agregado suma destinos exclusivos de todos los orígenes bifurcados:
+  // origin aporta dos y branch-a aporta otros dos.
+  assert.equal(graph.twoHopExclusiveDestinationCount, 4);
+  assert.equal(graph.twoHopIndependentBranchSourceCount, 1);
+  assert.equal(graph.includedReferenceCount, 6);
+  assert.equal(graph.selfReferenceCount, 0);
+  assert.equal(graph.cycleCount, 1);
+  assert.deepEqual(
+    graph.cycles.map(cycle => cycle.ideaIds),
+    [["branch-a", "origin"]]
+  );
+});
+
+
+test("el catálogo vacío mantiene métricas de cobertura coherentes y no inventa nodos", () => {
+  const graph = analyze([]);
+
+  assert.equal(graph.ideaCount, 0);
+  assert.equal(graph.omittedIdeaCount, 0);
+  assert.equal(graph.projectCatalogComplete, true);
+  assert.equal(graph.referenceCount, 0);
+  assert.equal(graph.includedReferenceCount, 0);
+  assert.equal(graph.notIncludedReferenceCount, 0);
+  assert.equal(graph.weakComponentCount, 0);
+  assert.equal(graph.omittedWeakComponentCount, 0);
+  assert.equal(graph.cycleCount, 0);
+  assert.equal(graph.selfReferenceCount, 0);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+  assert.equal(graph.terminalReachableNodeCount, 0);
+  assert.equal(graph.terminalUnreachableNodeCount, 0);
+  assert.equal(graph.terminalReachabilityCoverage, 1);
+  assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
+  assert.deepEqual(graph.nodes, []);
+  assert.deepEqual(graph.references, []);
+});
+
+
+test("la convergencia a dos saltos declara el truncamiento al agotar su presupuesto", () => {
+  const destinations = Array.from({ length: 500 }, (_, index) =>
+    "destination-" + String(index).padStart(3, "0")
+  );
+  const sources = Array.from({ length: 1_001 }, (_, index) =>
+    idea("source-" + String(index).padStart(4, "0"), ["branch-a", "branch-b"])
+  );
+  const catalog = [
+    ...sources,
+    idea("branch-a", destinations),
+    idea("branch-b", destinations),
+    ...destinations.map(id => idea(id))
+  ];
+
+  const graph = analyze(catalog);
+
+  assert.equal(graph.ideaCount, 1_503);
+  assert.equal(graph.twoHopConvergenceAnalysisStatus, "truncated-by-work-budget");
+  // El último origen no se completa: estos agregados son parciales al truncarse.
+  assert.equal(graph.twoHopConvergentSourceCount, 1_000);
+  assert.equal(graph.twoHopSharedDestinationCount, 500_000);
 });

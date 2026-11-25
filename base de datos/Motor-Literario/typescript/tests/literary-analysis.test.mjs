@@ -1235,7 +1235,7 @@ test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálo
   }), /ideas y decisiones/);
 });
 
-test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
+test("analiza referencias heredadas duplicadas o autorreferenciales sin perderlas", () => {
   const base = {
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -1259,14 +1259,19 @@ test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
     writerDecisionCount: 0,
     omittedStatusHistoryCount: 0
   };
-  assert.throws(() => analyzeLiteraryFragment({
+  const selfReference = analyzeLiteraryFragment({
     ...base,
     knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-a"] }]
-  }), /ideas y decisiones/);
-  assert.throws(() => analyzeLiteraryFragment({
+  }).ideaGraph;
+  assert.equal(selfReference.selfReferenceCount, 1);
+  assert.equal(selfReference.cycleCount, 1);
+
+  const duplicateReferences = analyzeLiteraryFragment({
     ...base,
     knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-b", "idea-b"] }]
-  }), /ideas y decisiones/);
+  }).ideaGraph;
+  assert.equal(duplicateReferences.referenceCount, 2);
+  assert.equal(duplicateReferences.notIncludedReferenceCount, 2);
 });
 
 test("mantiene el total de decisiones de escritor cuando el historial de una idea se recorta", () => {
@@ -1445,13 +1450,12 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     () => analyzeLiteraryFragment({ ...input, knownProjectIdeas: [idea, { ...idea }] }),
     /catálogo global de ideas/
   );
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
-    }),
-    /catálogo global de ideas/
-  );
+  const selfReferenceGraph = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
+  }).ideaGraph;
+  assert.equal(selfReferenceGraph.selfReferenceCount, 1);
+  assert.equal(selfReferenceGraph.cycleCount, 1);
   assert.throws(
     () => analyzeLiteraryFragment({
       ...input,

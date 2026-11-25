@@ -1,0 +1,407 @@
+#!/usr/bin/env node
+
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+import { SqliteProjectStore } from "./sqlite-project-store.mjs";
+
+const PROTOCOL_VERSION = "1.0.0";
+const MAX_LINE_BYTES = 16 * 1024 * 1024;
+const projects = new Map();
+const inFlight = new Set();
+const activeIds = new Set();
+let store;
+let shuttingDown = false;
+let inputBuffer = "";
+
+const PUBLIC_API_METHODS = new Set([
+  "extractNarrativeKnowledge",
+  "addNarrativeEntityAlias",
+  "mergeNarrativeEntities",
+  "getNarrativeEntityIdentityCandidates",
+  "getNarrativeEntities",
+  "getNarrativeRelations",
+  "getNarrativeEvents",
+  "setNarrativeEventTimelineTrack",
+  "getNarrativeTimeline",
+  "getNarrativeContradictions",
+  "analyzeLiteraryDocument",
+  "resolveNarrativeEntityId",
+  "getNarrativeEntityHistory",
+  "getNarrativeAssertions",
+  "getProjectSettings",
+  "setProjectSetting",
+  "getLanguageProfiles",
+  "saveLanguageProfile",
+  "getLanguageResourceRefs",
+  "saveLanguageResourceRef",
+  "getRecordLifecycleHistory",
+  "appendRecordLifecycle",
+  "getRelationLifecycleHistory",
+  "appendRelationLifecycle",
+  "getManuscriptFragments",
+  "saveManuscriptFragment",
+  "getProjectRecords",
+  "saveProjectRecord",
+  "getRecordNames",
+  "saveRecordName",
+  "getProjectRelations",
+  "saveProjectRelation",
+  "getProjectEvidences",
+  "saveProjectEvidence",
+  "getTimelineOccurrences",
+  "saveTimelineOccurrence",
+  "getRecordAttributes",
+  "saveRecordAttribute",
+  "getRelationAttributes",
+  "saveRelationAttribute",
+  "getActiveSuggestions",
+  "saveActiveSuggestion",
+  "getImportAuthorizations",
+  "authorizeImportBetweenProjects",
+  "getSchemaMigrations",
+  "getStyleProfiles",
+  "saveStyleProfile",
+  "getTimelineTracks",
+  "saveTimelineTrack",
+  "getProjectDictionaries",
+  "saveProjectDictionary",
+  "getDictionaryEntries",
+  "saveDictionaryEntry",
+  "getDictionaryEntryEntityLinks",
+  "setDictionaryEntryEntityLink",
+  "getNarrativeIdeas",
+  "setNarrativeIdeaEntityLink",
+  "setNarrativeIdeaLink",
+  "archiveUnincorporatedIdeas",
+  "getPersonalIdeaLibrary",
+  "getProjectFinalizationReceipt",
+  "setNarrativeIdeaStatus"
+]);
+
+function send(message) {
+  const line = JSON.stringify(message) + "\n";
+  if (Buffer.byteLength(line, "utf8") > MAX_LINE_BYTES) {
+    throw new Error("La respuesta supera el límite de 16 MiB del puente.");
+  }
+  return new Promise((resolveWrite, rejectWrite) => {
+    process.stdout.write(line, error => error ? rejectWrite(error) : resolveWrite());
+  });
+}
+
+function errorPayload(error) {
+  const safe = error instanceof Error ? error : new Error(String(error));
+  return {
+    code: -32000,
+    message: safe.message || "Error interno del Motor Literario.",
+    data: { name: safe.name || "Error" }
+  };
+}
+
+function requireObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(label + " debe ser un objeto JSON.");
+  }
+  return value;
+}
+
+function requireString(value, label) {
+  if (typeof value !== "string" || !value.trim()) throw new TypeError(label + " es obligatorio.");
+  return value;
+}
+
+function getProject(projectId) {
+  const id = requireString(projectId, "projectId");
+  const record = projects.get(id);
+  if (!record) throw new Error("El proyecto no está abierto en el puente.");
+  return record.api;
+}
+
+function openProject(params) {
+  requireObject(params, "params");
+  const projectId = requireString(params.projectId, "projectId");
+  const projectName = requireString(params.projectName, "projectName");
+  if (params.writerId !== undefined) requireString(params.writerId, "writerId");
+  const identity = {
+    projectId,
+    projectName,
+    ...(params.writerId === undefined ? {} : { writerId: params.writerId })
+  };
+  const existing = projects.get(projectId);
+  if (existing) {
+    existing.api.initializeProject(identity);
+    return { projectId, alreadyOpen: true, capabilities: existing.api.getCapabilities() };
+  }
+
+  const { HostEngineApi } = globalThis.__motorLiterarioModule;
+  const api = new HostEngineApi({
+    store,
+    callbacks: {
+      onAnalysis(result) {
+        void send({ jsonrpc: "2.0", method: "engine.analysis", params: result }).catch(writeError);
+      },
+      onCommit(result) {
+        void send({ jsonrpc: "2.0", method: "engine.commit", params: { projectId, result } }).catch(writeError);
+      },
+      onKnowledgeError(error) {
+        void send({
+          jsonrpc: "2.0",
+          method: "engine.knowledgeError",
+          params: {
+            projectId,
+            error: {
+              name: error instanceof Error ? error.name : "Error",
+              message: error instanceof Error ? error.message : String(error)
+            }
+          }
+        }).catch(writeError);
+      }
+    }
+  });
+  api.initializeProject(identity);
+  projects.set(projectId, { api, identity });
+  return { projectId, alreadyOpen: false, capabilities: api.getCapabilities() };
+}
+
+function writeError(error) {
+  process.stderr.write("[motor-literario-bridge] " + String(error?.message ?? error) + "\n");
+}
+
+async function flushAll() {
+  const failures = [];
+  for (const [projectId, record] of projects) {
+    try {
+      await record.api.flushPendingChanges();
+    } catch (error) {
+      failures.push({ projectId, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  if (failures.length) {
+    throw new Error("No se pudo vaciar completamente la cola de todos los proyectos: " +
+      failures.map(item => item.projectId + ": " + item.message).join("; "));
+  }
+}
+
+async function dispatch(method, rawParams) {
+  const params = rawParams === undefined ? {} : requireObject(rawParams, "params");
+
+  switch (method) {
+    case "bridge.hello":
+      return {
+        bridgeProtocolVersion: PROTOCOL_VERSION,
+        motorApiVersion: globalThis.__motorLiterarioModule.MOTOR_LITERARIO_API_VERSION,
+        runtime: "node",
+        transport: "json-rpc-2.0-stdio-jsonl",
+        storage: "sqlite-local",
+        sqliteDatabase: store.databasePath,
+        processIsolation: true,
+        notifications: ["engine.analysis", "engine.commit", "engine.knowledgeError"],
+        maxMessageBytes: MAX_LINE_BYTES
+      };
+
+    case "bridge.health":
+      return {
+        storage: store.health(),
+        openProjects: [...projects.keys()],
+        inFlightRequests: activeIds.size
+      };
+
+    case "project.open":
+      return openProject(params);
+
+    case "project.close": {
+      const projectId = requireString(params.projectId, "projectId");
+      const record = projects.get(projectId);
+      if (!record) return { projectId, alreadyClosed: true };
+      await record.api.flushPendingChanges();
+      projects.delete(projectId);
+      return { projectId, closed: true };
+    }
+
+    case "document.open": {
+      const api = getProject(params.projectId);
+      await api.openDocument(requireObject(params.snapshot, "snapshot"));
+      return api.getSnapshot(params.snapshot.documentId) ?? null;
+    }
+
+    case "document.recover": {
+      const api = getProject(params.projectId);
+      const documentId = requireString(params.documentId, "documentId");
+      await api.recoverDocument(documentId);
+      return api.getSnapshot(documentId) ?? null;
+    }
+
+    case "document.change": {
+      const api = getProject(params.projectId);
+      return api.onEditorChange(requireObject(params.change, "change"));
+    }
+
+    case "document.commit":
+      return getProject(params.projectId).pollCommit(requireString(params.ticketId, "ticketId")) ?? null;
+
+    case "document.snapshot":
+      return getProject(params.projectId).getSnapshot(requireString(params.documentId, "documentId")) ?? null;
+
+    case "document.syncState":
+      return getProject(params.projectId).getDocumentSyncState(requireString(params.documentId, "documentId"));
+
+    case "document.diagnostics":
+      return getProject(params.projectId).getDocumentDiagnostics(requireString(params.documentId, "documentId"));
+
+    case "engine.flush":
+      await getProject(params.projectId).flushPendingChanges();
+      return { flushed: true };
+
+    case "engine.metrics":
+      return getProject(params.projectId).getLiveAnalysisMetrics();
+
+    case "engine.capabilities":
+      return getProject(params.projectId).getCapabilities();
+
+    case "project.call": {
+      const api = getProject(params.projectId);
+      const methodName = requireString(params.method, "method");
+      if (!PUBLIC_API_METHODS.has(methodName)) {
+        const error = new Error("Método de HostEngineApi no permitido por el puente: " + methodName);
+        error.code = -32601;
+        throw error;
+      }
+      if (typeof api[methodName] !== "function") {
+        const error = new Error("El método no está disponible en esta versión de HostEngineApi: " + methodName);
+        error.code = -32601;
+        throw error;
+      }
+      if (params.args !== undefined && !Array.isArray(params.args)) throw new TypeError("args debe ser un arreglo.");
+      const args = params.args ?? [];
+      if (args.length > 32) throw new TypeError("Una llamada del proyecto no puede contener más de 32 argumentos.");
+      return await Reflect.apply(api[methodName], api, args);
+    }
+
+    case "bridge.shutdown":
+      await flushAll();
+      shuttingDown = true;
+      for (const record of projects.values()) {
+        // HostEngineApi deja de recibir solicitudes; las referencias se liberan al cerrar el proceso.
+        void record;
+      }
+      projects.clear();
+      return { shutdown: true, storage: store.health() };
+
+    default: {
+      const error = new Error("Método JSON-RPC desconocido: " + method);
+      error.code = -32601;
+      throw error;
+    }
+  }
+}
+
+async function processRequest(request) {
+  if (!request || typeof request !== "object" || Array.isArray(request) ||
+      request.jsonrpc !== "2.0" || typeof request.method !== "string" ||
+      !request.method.trim() ||
+      (request.id !== undefined && !["string", "number"].includes(typeof request.id))) {
+    return send({
+      jsonrpc: "2.0",
+      id: request && (typeof request.id === "string" || typeof request.id === "number") ? request.id : null,
+      error: { code: -32600, message: "Solicitud JSON-RPC 2.0 inválida." }
+    });
+  }
+
+  if (request.id === undefined) {
+    // Este puente usa solicitudes con respuesta para que el anfitrión pueda
+    // correlacionar confirmaciones. No admite notificaciones sin ID.
+    return;
+  }
+
+  const idKey = String(request.id);
+  if (activeIds.has(idKey)) {
+    return send({ jsonrpc: "2.0", id: request.id, error: { code: -32600, message: "ID de solicitud duplicado en curso." } });
+  }
+  activeIds.add(idKey);
+
+  try {
+    const result = await dispatch(request.method, request.params);
+    await send({ jsonrpc: "2.0", id: request.id, result: result === undefined ? null : result });
+  } catch (error) {
+    const payload = errorPayload(error);
+    if (Number.isInteger(error?.code)) payload.code = error.code;
+    await send({ jsonrpc: "2.0", id: request.id, error: payload });
+  } finally {
+    activeIds.delete(idKey);
+    if (shuttingDown) {
+      store.close();
+      process.stdin.pause();
+      process.exitCode = 0;
+    }
+  }
+}
+
+async function closeGracefully() {
+  if (!store || store.closed) return;
+  try { await flushAll(); } catch (error) { writeError(error); }
+  projects.clear();
+  try { store.close(); } catch (error) { writeError(error); }
+}
+
+async function main() {
+  const nodeParts = process.versions.node.split(".").map(Number);
+  if (nodeParts[0] < 22 || (nodeParts[0] === 22 && nodeParts[1] < 13)) {
+    throw new Error("El puente requiere Node.js 22.13.0 o posterior para node:sqlite.");
+  }
+
+  let databasePath = process.env.MOTOR_LITERARIO_DB;
+  const args = process.argv.slice(2);
+  for (let index = 0; index < args.length; index++) {
+    if (args[index] === "--db") databasePath = args[index + 1];
+  }
+  if (!databasePath) {
+    throw new Error("Indique la ruta local con --db <archivo.sqlite> o MOTOR_LITERARIO_DB.");
+  }
+
+  const moduleUrl = new URL("../dist/motor-literario.js", import.meta.url);
+  const motorModule = await import(pathToFileURL(resolve(moduleUrl.pathname)).href);
+  globalThis.__motorLiterarioModule = motorModule;
+  store = await SqliteProjectStore.open(resolve(databasePath));
+
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", chunk => {
+    inputBuffer += chunk;
+    if (Buffer.byteLength(inputBuffer, "utf8") > MAX_LINE_BYTES * 2) {
+      writeError(new Error("El búfer de entrada supera el límite de seguridad."));
+      process.exitCode = 1;
+      process.stdin.pause();
+      void closeGracefully();
+      return;
+    }
+    let newline;
+    while ((newline = inputBuffer.indexOf("\n")) >= 0) {
+      const line = inputBuffer.slice(0, newline).replace(/\r$/u, "");
+      inputBuffer = inputBuffer.slice(newline + 1);
+      if (!line.trim()) continue;
+      if (Buffer.byteLength(line, "utf8") > MAX_LINE_BYTES) {
+        void send({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Solicitud superior a 16 MiB." } });
+        continue;
+      }
+      let request;
+      try { request = JSON.parse(line); } catch {
+        void send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "JSON inválido." } });
+        continue;
+      }
+      const task = processRequest(request).catch(writeError);
+      inFlight.add(task);
+      void task.finally(() => inFlight.delete(task));
+    }
+  });
+
+  process.stdin.on("end", () => {
+    void (async () => {
+      await Promise.allSettled([...inFlight]);
+      await closeGracefully();
+    })();
+  });
+}
+
+main().catch(error => {
+  process.stderr.write("[motor-literario-bridge] " + String(error?.stack ?? error) + "\n");
+  process.exitCode = 1;
+  process.stdin.pause();
+});

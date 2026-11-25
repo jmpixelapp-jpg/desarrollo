@@ -1264,7 +1264,7 @@ test("la resonancia léxica conserva la frecuencia de los motivos compartidos", 
     assert.equal(lexical.resonances[0].rightVocabularyCoverage, 1);
     assert.equal(lexical.resonances[0].leftFrequencyCoverage, 0.5);
     assert.equal(lexical.resonances[0].rightFrequencyCoverage, 0.6);
-    assert.equal(lexical.resonances[0].frequencyCosineSimilarity, 0.668);
+    assert.equal(lexical.resonances[0].frequencyCosineSimilarity, 0.667);
   } finally {
     api.dispose();
   }

@@ -155,3 +155,12 @@ La transición también expone la longitud media y la longitud máxima de los se
 Cada perfil `dialogueSignals` de escena incluye `dialogueWordsPer1000NarrativeWords`: palabras de diálogo reconocidas por cada 1.000 palabras de narración fuera de los rangos de diálogo detectados. Se calcula como `dialogueWordCount / narrativeWordCount * 1000`, con redondeo a tres decimales; si no hay palabras narrativas, el valor es cero. No sustituye a `dialogueRatio`, cuyo denominador son todas las palabras de la escena.
 
 La transición `sceneDialogueTransitions` expone la tasa anterior, la siguiente y el delta (siguiente menos anterior). La tasa permite comparar escenas con distintas cantidades de narración, pero depende de la precisión del detector de diálogo y no representa duración, número de turnos ni cantidad de hablantes.
+
+
+### Flujo de diálogo por párrafos
+
+Cada escena explícita expone `dialogueFlowSignals`, que clasifica los párrafos con palabras reconocidas como `narrative-only` (sin diálogo detectado), `dialogue-only` (todas sus palabras pertenecen a segmentos de diálogo reconocidos) o `mixed` (contienen palabras dialogadas y no dialogadas). El perfil informa la cantidad de párrafos por clase, la cantidad y proporción de párrafos que contienen diálogo, las transiciones entre clases de párrafos consecutivos y el número de cambios de clase.
+
+Los párrafos de solo puntuación, sin palabras reconocidas, no entran en el denominador. Los índices de párrafo siguen el orden de los rangos de párrafo detectados dentro de la escena; cada muestra conserva su rango UTF-16 absoluto. Se exponen hasta 40 muestras iniciales y `evidenceTruncated` indica si hay más. Los conteos y transiciones se calculan sobre todos los párrafos con palabras, no solo sobre las muestras visibles.
+
+Esta clasificación es estructural y léxica: depende de los segmentos de diálogo reconocidos y del separador de párrafos (líneas en blanco). Un párrafo mixto no identifica qué persona habla ni distingue narración indirecta, citas no reconocidas o voz del narrador. La proporción de párrafos dialogados no equivale a la proporción de palabras dialogadas ni al número de turnos conversacionales.

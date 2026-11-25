@@ -10755,6 +10755,55 @@ test("mantiene el perfil de diálogo vacío cuando una escena no contiene segmen
   });
 });
 
+test("describe el flujo de diálogo por párrafos sin atribuir hablantes", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "La casa permanecía en silencio.",
+    "",
+    "—Ven conmigo, Ana.",
+    "",
+    "«No iré», respondió Ana.",
+    "",
+    "La puerta quedó abierta."
+  ].join("\n");
+  const baseOffset = 7300;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow",documentId:"chapter",revision:4,text,baseOffset
+  });
+  const flow = result.explicitScenes[0].dialogueFlowSignals;
+  assert.equal(flow.paragraphCount,4);
+  assert.deepEqual(flow.classificationCounts,{narrativeOnly:2,dialogueOnly:1,mixed:1});
+  assert.equal(flow.dialogueBearingParagraphCount,2);
+  assert.equal(flow.dialogueBearingParagraphRatio,0.5);
+  assert.deepEqual(flow.classificationTransitionCounts,{
+    narrativeOnlyToNarrativeOnly:0,
+    narrativeOnlyToDialogueOnly:1,
+    narrativeOnlyToMixed:0,
+    dialogueOnlyToNarrativeOnly:0,
+    dialogueOnlyToDialogueOnly:0,
+    dialogueOnlyToMixed:1,
+    mixedToNarrativeOnly:1,
+    mixedToDialogueOnly:0,
+    mixedToMixed:0
+  });
+  assert.equal(flow.classificationChangeCount,3);
+  assert.deepEqual(flow.paragraphs.map(paragraph => paragraph.classification),[
+    "narrative-only","dialogue-only","mixed","narrative-only"
+  ]);
+  assert.deepEqual(flow.paragraphs.map(paragraph => paragraph.dialogueWordCount),[0,3,2,0]);
+  const mixedStart = baseOffset+text.indexOf("«No iré»");
+  assert.deepEqual(flow.paragraphs[2].occurrence,{
+    start:mixedStart,end:mixedStart+"«No iré», respondió Ana.".length
+  });
+  assert.equal(flow.evidenceTruncated,false);  assert.equal(result.explicitScenes[0].dialogueFlowSignals.paragraphCount,1);
+  assert.deepEqual(result.explicitScenes[0].dialogueFlowSignals.classificationCounts,{
+    narrativeOnly:1,dialogueOnly:0,mixed:0
+  });
+  assert.equal(result.explicitScenes[0].dialogueFlowSignals.dialogueBearingParagraphCount,0);
+
+});
+
 test("compara las métricas de diálogo entre escenas explícitas contiguas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = "ESCENA 1\nLa tarde cayó lentamente. “Hola, Ana.”\n***\nESCENA 2\nEl viento cruzó la plaza.";

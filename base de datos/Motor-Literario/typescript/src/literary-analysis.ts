@@ -361,6 +361,43 @@ export interface LiterarySceneVoiceProfile {
   /** Instantáneas en orden textual; conservan una referencia por índice a explicitScenes. */
   readonly sceneSnapshots: readonly LiterarySceneVoiceSnapshot[];
 }
+export type LiterarySceneDialogueParagraphClassification = "narrative-only" | "dialogue-only" | "mixed";
+export interface LiterarySceneDialogueParagraph {
+  readonly paragraphIndex: number;
+  readonly classification: LiterarySceneDialogueParagraphClassification;
+  readonly wordCount: number;
+  readonly dialogueWordCount: number;
+  readonly occurrence: LiteraryAnalysisOccurrence;
+}
+export interface LiterarySceneDialogueFlowProfile {
+  /** Párrafos con al menos una palabra reconocida dentro de la escena. */
+  readonly paragraphCount: number;
+  readonly classificationCounts: {
+    readonly narrativeOnly: number;
+    readonly dialogueOnly: number;
+    readonly mixed: number;
+  };
+  /** Párrafos con diálogo reconocido, sean solo diálogo o mixtos. */
+  readonly dialogueBearingParagraphCount: number;
+  /** Fracción de párrafos con diálogo reconocido respecto de los párrafos con palabras. */
+  readonly dialogueBearingParagraphRatio: number;
+  /** Transiciones entre clasificaciones de párrafos consecutivos en orden textual. */
+  readonly classificationTransitionCounts: {
+    readonly narrativeOnlyToNarrativeOnly: number;
+    readonly narrativeOnlyToDialogueOnly: number;
+    readonly narrativeOnlyToMixed: number;
+    readonly dialogueOnlyToNarrativeOnly: number;
+    readonly dialogueOnlyToDialogueOnly: number;
+    readonly dialogueOnlyToMixed: number;
+    readonly mixedToNarrativeOnly: number;
+    readonly mixedToDialogueOnly: number;
+    readonly mixedToMixed: number;
+  };
+  readonly classificationChangeCount: number;
+  /** Se exponen como máximo 40 párrafos iniciales con offsets UTF-16 absolutos. */
+  readonly paragraphs: readonly LiterarySceneDialogueParagraph[];
+  readonly evidenceTruncated: boolean;
+}
 export interface LiterarySceneDialogueSegment {
   /** Índice local al conjunto de segmentos de diálogo de esta escena. */
   readonly segmentIndex: number;
@@ -425,6 +462,9 @@ export interface LiteraryExplicitSceneSegment {
   /** Palabras de narración fuera de los rangos de diálogo reconocidos. */
   readonly narrativeWordCount: number;
   /** Distribución cuantitativa de los segmentos de diálogo recortados a esta escena. */
+  readonly dialogueSignals: LiterarySceneDialogueProfile;
+  /** Distribución por párrafo de narración, diálogo exclusivo y párrafos mixtos. */
+  readonly dialogueFlowSignals: LiterarySceneDialogueFlowProfile;
   readonly dialogueSignals: LiterarySceneDialogueProfile;
   /** Ritmo de las oraciones completas de la escena; incluye diálogo y mantiene evidencia propia. */
   readonly rhythmSignals: LiterarySceneRhythmProfile;
@@ -784,6 +824,77 @@ function findSceneEventLinks(
   return links;
 }
 
+function summarizeSceneDialogueFlow(
+  tokens: readonly WordToken[],
+  text: string,
+  contentRange: LocalRange,
+  dialogueRanges: readonly LocalRange[],
+  baseOffset: number
+): LiterarySceneDialogueFlowProfile {
+  const sceneText = text.slice(contentRange.start,contentRange.end);
+  const paragraphRanges = findParagraphRanges(sceneText).map(range => ({
+    start:contentRange.start+range.start,
+    end:contentRange.start+range.end
+  }));
+  const wordCounts = countTokensPerRange(tokens,paragraphRanges);
+  const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,paragraphRanges,dialogueRanges);
+  const paragraphs: LiterarySceneDialogueParagraph[] = [];
+  for (let index=0; index<paragraphRanges.length; index++) {
+    const wordCount = wordCounts[index] ?? 0;
+    if (wordCount === 0) continue;
+    const dialogueWordCount = Math.max(0,wordCount-(narrativeWordCounts[index] ?? 0));
+    const classification: LiterarySceneDialogueParagraphClassification =
+      dialogueWordCount === 0 ? "narrative-only" :
+      dialogueWordCount >= wordCount ? "dialogue-only" : "mixed";
+    const range = paragraphRanges[index]!;
+    paragraphs.push({
+      paragraphIndex:index+1,
+      classification,
+      wordCount,
+      dialogueWordCount,
+      occurrence:{start:baseOffset+range.start,end:baseOffset+range.end}
+    });
+  }
+  const classificationCounts = {narrativeOnly:0,dialogueOnly:0,mixed:0};
+  const classificationTransitionCounts = {
+    narrativeOnlyToNarrativeOnly:0,
+    narrativeOnlyToDialogueOnly:0,
+    narrativeOnlyToMixed:0,
+    dialogueOnlyToNarrativeOnly:0,
+    dialogueOnlyToDialogueOnly:0,
+    dialogueOnlyToMixed:0,
+    mixedToNarrativeOnly:0,
+    mixedToDialogueOnly:0,
+    mixedToMixed:0
+  };
+  const classificationKey = (value: LiterarySceneDialogueParagraphClassification) =>
+    value === "narrative-only" ? "narrativeOnly" :
+    value === "dialogue-only" ? "dialogueOnly" : "mixed";
+  let classificationChangeCount = 0;
+  for (let index=0; index<paragraphs.length; index++) {
+    const current = paragraphs[index]!.classification;
+    classificationCounts[classificationKey(current)]++;
+    if (index === 0) continue;
+    const previous = paragraphs[index-1]!.classification;
+    const transitionKey =
+      `${classificationKey(previous)}To${classificationKey(current)}` as keyof typeof classificationTransitionCounts;
+    classificationTransitionCounts[transitionKey]++;
+    if (previous !== current) classificationChangeCount++;
+  }
+  const dialogueBearingParagraphCount = classificationCounts.dialogueOnly+classificationCounts.mixed;
+  return {
+    paragraphCount:paragraphs.length,
+    classificationCounts,
+    dialogueBearingParagraphCount,
+    dialogueBearingParagraphRatio:roundMetric(paragraphs.length > 0
+      ? dialogueBearingParagraphCount/paragraphs.length : 0),
+    classificationTransitionCounts,
+    classificationChangeCount,
+    paragraphs:paragraphs.slice(0,40),
+    evidenceTruncated:paragraphs.length>40
+  };
+}
+
 function analyzeExplicitScenes(
   text: string,
   tokens: readonly WordToken[],
@@ -864,6 +975,10 @@ function analyzeExplicitScenes(
       })),
       evidenceTruncated:localDialogueSegments.length>20
     };
+    const dialogueFlowSignals = summarizeSceneDialogueFlow(
+      tokens,text,scene.contentRange,dialogueRanges,baseOffset
+    );
+    const sceneText = text.slice(scene.contentRange.start,scene.contentRange.end);
     const sceneText = text.slice(scene.contentRange.start,scene.contentRange.end);
     const sceneSentenceRanges = findSentenceRanges(sceneText).map(range => ({
       start:scene.contentRange.start+range.start,
@@ -888,6 +1003,7 @@ function analyzeExplicitScenes(
     wordCount:wordCounts[index] ?? 0,
     narrativeWordCount:narrativeWordCounts[index] ?? 0,
     dialogueSignals,
+    dialogueFlowSignals,
     rhythmSignals:summarizeSceneRhythm(sceneSentenceRanges,sceneSentenceWordCounts,baseOffset),
     characterMentions,
     eventLinks:findSceneEventLinks(

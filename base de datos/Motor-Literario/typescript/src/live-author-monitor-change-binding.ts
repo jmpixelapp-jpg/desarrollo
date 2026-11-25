@@ -16,25 +16,42 @@ export interface LiveAuthorMonitorChangeSink {
 export interface LiveAuthorMonitorChangeBindingOptions {
   readonly source: LiveAuthorMonitorEditorChangeSource;
   readonly sink: LiveAuthorMonitorChangeSink;
-  /** Se llama una vez con la respuesta real de admisión, incluida la contrapresión. */
+  /** Se llama una vez por cada intento real de admisión, incluida la contrapresión. */
   readonly onAdmission: (change: EditorChange, admission: ChangeAdmission) => void;
   /** Recibe errores de envío o de la callback de admisión sin romper la notificación del editor. */
   readonly onError: (error: unknown, change: EditorChange) => void;
 }
 
 /**
+ * El handle sigue siendo una función invocable para conservar el uso histórico
+ * stopChanges(). Además expone reintento e inspección de la cola diferida.
+ */
+export interface LiveAuthorMonitorChangeBindingControl {
+  (): void;
+  /** Reenvía en orden todos los deltas retenidos hasta que el motor vuelva a rechazarlos. */
+  retryPending(): void;
+  /** Devuelve una copia inmutable de los deltas que aún no fueron admitidos. */
+  getPendingChanges(): readonly EditorChange[];
+  /**
+   * Descarta el backlog solo después de reconciliar editor y motor con un
+   * snapshot autoritativo. No debe usarse para ocultar un queue_full temporal.
+   */
+  discardPendingAfterResynchronization(): void;
+}
+
+/**
  * Une el flujo de deltas de un editor con HostEngineApi.onEditorChange.
  *
- * No sintetiza offsets ni captura DOM: el adaptador concreto del editor debe
- * emitir el delta exacto. No duplica recordAdmission/recordCommit porque
- * HostEngineApi ya alimenta LiveAuthorMonitor dentro del flujo normal.
+ * Si el motor devuelve queue_full, retiene el delta rechazado y todos los
+ * eventos posteriores, sin enviarlos fuera de orden. El anfitrión llama a
+ * retryPending cuando la cola del motor haya liberado capacidad.
  *
- * El anfitrión debe usar onAdmission para conservar/reintentar en orden los
- * deltas rechazados; esta función no elimina ni reordena cambios.
+ * No sintetiza offsets ni llama manualmente a recordAdmission/recordCommit:
+ * HostEngineApi ya alimenta LiveAuthorMonitor dentro del flujo normal.
  */
 export function bindLiveAuthorMonitorEditorChanges(
   options: LiveAuthorMonitorChangeBindingOptions
-): () => void {
+): LiveAuthorMonitorChangeBindingControl {
   if (!options || !options.source ||
       typeof options.source.subscribeChanges !== "function") {
     throw new TypeError("source debe implementar subscribeChanges.");
@@ -47,23 +64,83 @@ export function bindLiveAuthorMonitorEditorChanges(
   }
 
   let disposed = false;
-  const unsubscribe = options.source.subscribeChanges(change => {
-    if (disposed) return;
-    try {
-      const admission = options.sink.onEditorChange(change);
-      options.onAdmission(change, admission);
-    } catch (error) {
-      options.onError(error, change);
-    }
-  });
+  let retrying = false;
+  const pending: EditorChange[] = [];
 
+  const reportError = (error: unknown, change: EditorChange): void => {
+    try { options.onError(error, change); } catch {
+      // La interfaz de diagnóstico no debe interrumpir el stream del editor.
+    }
+  };
+
+  const reportAdmission = (change: EditorChange, admission: ChangeAdmission): void => {
+    try { options.onAdmission(change, admission); } catch (error) {
+      reportError(error, change);
+    }
+  };
+
+  const submitNewChange = (change: EditorChange): void => {
+    if (disposed) return;
+    if (pending.length > 0) {
+      pending.push(change);
+      return;
+    }
+
+    let admission: ChangeAdmission;
+    try {
+      admission = options.sink.onEditorChange(change);
+    } catch (error) {
+      pending.push(change);
+      reportError(error, change);
+      return;
+    }
+
+    if (admission.status === "rejected") pending.push(change);
+    reportAdmission(change, admission);
+  };
+
+  const retryPending = (): void => {
+    if (disposed || retrying || pending.length === 0) return;
+    retrying = true;
+    try {
+      while (!disposed && pending.length > 0) {
+        const change = pending[0];
+        if (!change) break;
+
+        let admission: ChangeAdmission;
+        try {
+          admission = options.sink.onEditorChange(change);
+        } catch (error) {
+          reportError(error, change);
+          break;
+        }
+
+        if (admission.status === "queued") pending.shift();
+        reportAdmission(change, admission);
+        if (admission.status === "rejected") break;
+      }
+    } finally {
+      retrying = false;
+    }
+  };
+
+  const unsubscribe = options.source.subscribeChanges(submitNewChange);
   if (typeof unsubscribe !== "function") {
     throw new TypeError("subscribeChanges debe devolver una función de cancelación.");
   }
 
-  return () => {
+  const stop = (() => {
     if (disposed) return;
     disposed = true;
+    pending.length = 0;
     unsubscribe();
+  }) as LiveAuthorMonitorChangeBindingControl;
+
+  stop.retryPending = retryPending;
+  stop.getPendingChanges = () => Object.freeze([...pending]);
+  stop.discardPendingAfterResynchronization = () => {
+    if (disposed) return;
+    pending.length = 0;
   };
+  return stop;
 }

@@ -440,6 +440,21 @@ export interface LiterarySceneDialogueFlowTransition {
   };
   readonly classificationTransitionCountDelta: LiterarySceneDialogueFlowProfile["classificationTransitionCounts"];
   readonly classificationChangeCountDelta: number;
+  readonly previousRunCount: number;
+  readonly nextRunCount: number;
+  readonly runCountDelta: number;
+  readonly previousDialogueBearingRunCount: number;
+  readonly nextDialogueBearingRunCount: number;
+  readonly dialogueBearingRunCountDelta: number;
+  readonly previousNarrativeOnlyRunCount: number;
+  readonly nextNarrativeOnlyRunCount: number;
+  readonly narrativeOnlyRunCountDelta: number;
+  readonly previousLongestDialogueBearingRunParagraphs: number;
+  readonly nextLongestDialogueBearingRunParagraphs: number;
+  readonly longestDialogueBearingRunParagraphsDelta: number;
+  readonly previousLongestNarrativeOnlyRunParagraphs: number;
+  readonly nextLongestNarrativeOnlyRunParagraphs: number;
+  readonly longestNarrativeOnlyRunParagraphsDelta: number;
 }
 
 export interface LiterarySceneDialogueFlowSnapshot {
@@ -1329,7 +1344,24 @@ function buildSceneDialogueFlowTransitions(
         mixedToMixed:
           next.classificationTransitionCounts.mixedToMixed-previous.classificationTransitionCounts.mixedToMixed
       },
-      classificationChangeCountDelta:next.classificationChangeCount-previous.classificationChangeCount
+      classificationChangeCountDelta:next.classificationChangeCount-previous.classificationChangeCount,
+      previousRunCount:previous.runCount,
+      nextRunCount:next.runCount,
+      runCountDelta:next.runCount-previous.runCount,
+      previousDialogueBearingRunCount:previous.dialogueBearingRunCount,
+      nextDialogueBearingRunCount:next.dialogueBearingRunCount,
+      dialogueBearingRunCountDelta:next.dialogueBearingRunCount-previous.dialogueBearingRunCount,
+      previousNarrativeOnlyRunCount:previous.narrativeOnlyRunCount,
+      nextNarrativeOnlyRunCount:next.narrativeOnlyRunCount,
+      narrativeOnlyRunCountDelta:next.narrativeOnlyRunCount-previous.narrativeOnlyRunCount,
+      previousLongestDialogueBearingRunParagraphs:previous.longestDialogueBearingRunParagraphs,
+      nextLongestDialogueBearingRunParagraphs:next.longestDialogueBearingRunParagraphs,
+      longestDialogueBearingRunParagraphsDelta:
+        next.longestDialogueBearingRunParagraphs-previous.longestDialogueBearingRunParagraphs,
+      previousLongestNarrativeOnlyRunParagraphs:previous.longestNarrativeOnlyRunParagraphs,
+      nextLongestNarrativeOnlyRunParagraphs:next.longestNarrativeOnlyRunParagraphs,
+      longestNarrativeOnlyRunParagraphsDelta:
+        next.longestNarrativeOnlyRunParagraphs-previous.longestNarrativeOnlyRunParagraphs
     });
   }
   return transitions;

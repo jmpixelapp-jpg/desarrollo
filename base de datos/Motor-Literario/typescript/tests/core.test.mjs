@@ -11340,6 +11340,21 @@ test("compara el flujo de párrafos dialogados entre escenas explícitas contigu
     mixedToMixed:0
   });
   assert.equal(transition.classificationChangeCountDelta,-2);
+  assert.equal(transition.previousRunCount,3);
+  assert.equal(transition.nextRunCount,2);
+  assert.equal(transition.runCountDelta,-1);
+  assert.equal(transition.previousDialogueBearingRunCount,1);
+  assert.equal(transition.nextDialogueBearingRunCount,1);
+  assert.equal(transition.dialogueBearingRunCountDelta,0);
+  assert.equal(transition.previousNarrativeOnlyRunCount,2);
+  assert.equal(transition.nextNarrativeOnlyRunCount,1);
+  assert.equal(transition.narrativeOnlyRunCountDelta,-1);
+  assert.equal(transition.previousLongestDialogueBearingRunParagraphs,2);
+  assert.equal(transition.nextLongestDialogueBearingRunParagraphs,1);
+  assert.equal(transition.longestDialogueBearingRunParagraphsDelta,-1);
+  assert.equal(transition.previousLongestNarrativeOnlyRunParagraphs,1);
+  assert.equal(transition.nextLongestNarrativeOnlyRunParagraphs,1);
+  assert.equal(transition.longestNarrativeOnlyRunParagraphsDelta,0);
 });
 
 test("no crea transiciones de flujo de diálogo con menos de dos escenas explícitas", async () => {

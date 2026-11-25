@@ -263,9 +263,31 @@ La API expone consultas y operaciones tipadas para que el anfitrión construya s
 - `getNarrativeEntities()`, `getNarrativeRelations()`, `getNarrativeEvents()`, `getNarrativeIdeas()` y `getNarrativeAssertions()`.
 - `getNarrativeTimeline()` y `getNarrativeContradictions()`: la cronología y las contradicciones son vistas/candidatos conservadores, no una resolución semántica completa.
 - `getNarrativeEntityHistory(entityId)`, `resolveNarrativeEntityId(entityId)` y `getNarrativeEntityIdentityCandidates()`.
-- `setNarrativeIdeaStatus(ideaId, status)`, `setNarrativeIdeaEntityLink(...)` y `setNarrativeIdeaLink(...)`.
+- `setNarrativeIdeaStatus(ideaId, status)`, `setNarrativeIdeaEntityLink(...)` y `setNarrativeIdeaLink(...)` para mutaciones individuales.
+- `synchronizeNarrativeIdeaLinks(ideaId, expectedLinks, desiredLinks)` para reemplazar conjuntamente los vínculos a ideas y fichas desde la instantánea que el editor mostró al escritor.
 
-Cada idea admite hasta 500 vínculos explícitos por categoría: 500 a fichas y 500 a otras ideas. El anfitrión y los adaptadores de almacenamiento usan `MAX_NARRATIVE_IDEA_REFERENCES` y rechazan el vínculo 501 antes de escribir.
+La sincronización por lote compara los IDs como conjuntos, valida todos los destinos dentro del proyecto y persiste ambas listas en una sola escritura CAS. El anfitrión debe enviar en `expectedLinks` las dos listas que sirvieron de base para la edición; si otro proceso cambió cualquiera de ellas, la API rechaza la operación para que la interfaz recargue y reconcilie en lugar de borrar cambios ajenos. Un adaptador sin CAS solo admite el caso idempotente sin cambios; las sustituciones que modificarían el registro se rechazan. Cada idea admite hasta 500 vínculos explícitos por categoría: 500 a fichas y 500 a otras ideas. El anfitrión y los adaptadores de almacenamiento usan `MAX_NARRATIVE_IDEA_REFERENCES` y rechazan el vínculo 501 antes de escribir.
+
+Ejemplo:
+```ts
+const current = await motor.getNarrativeIdeas();
+const idea = current.find(item => item.id === ideaId);
+if (!idea) throw new Error("La idea ya no existe.");
+
+await motor.synchronizeNarrativeIdeaLinks(
+  ideaId,
+  {
+    relatedIdeaIds: idea.relatedIdeaIds ?? [],
+    relatedEntityIds: idea.relatedEntityIds ?? []
+  },
+  {
+    relatedIdeaIds: selectedIdeaIds,
+    relatedEntityIds: selectedEntityIds
+  }
+);
+```
+
+La vista debe refrescarse cuando la operación indique que la instantánea quedó obsoleta. No debe reenviar automáticamente el mismo `desiredLinks` contra una lectura nueva sin resolver primero los cambios concurrentes.
 
 La extracción narrativa inicial se programa al abrir/recuperar el documento y continúa de manera incremental con las ediciones. Su alcance es deliberadamente conservador: usa indicadores textuales explícitos; los acontecimientos requieren `ACONTECIMIENTO:` o `EVENTO:`, y las ideas requieren `IDEA:`. No atribuir al motor inferencias semánticas que todavía no realiza.
 

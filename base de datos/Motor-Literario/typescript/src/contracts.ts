@@ -1,5 +1,5 @@
 import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
-import type { ProjectSetting } from "./project-data";
+import type { ProjectSetting, LanguageProfile, LanguageResourceRef } from "./project-data";
 
 /** Contratos públicos. La identidad del proyecto siempre pertenece al anfitrión. */
 
@@ -103,6 +103,12 @@ export interface ProjectStore {
   /** Preferencias persistentes del libro, siempre aisladas por projectId. */
   loadProjectSettings?(projectId: string): Promise<readonly ProjectSetting[]>;
   saveProjectSetting?(setting: ProjectSetting, expectedCurrent?: ProjectSetting): Promise<void>;
+
+  /** Perfiles lingüísticos y referencias a recursos declarados por el anfitrión. */
+  loadLanguageProfiles?(projectId: string): Promise<readonly LanguageProfile[]>;
+  saveLanguageProfile?(profile: LanguageProfile, expectedCurrent?: LanguageProfile): Promise<void>;
+  loadLanguageResourceRefs?(projectId: string, profileId?: string): Promise<readonly LanguageResourceRef[]>;
+  saveLanguageResourceRef?(resource: LanguageResourceRef, expectedCurrent?: LanguageResourceRef): Promise<void>;
 
   /** Diccionarios y vocabulario propios, siempre aislados por proyecto. */
   saveDictionary?(dictionary: ProjectDictionary, expectedCurrent?: ProjectDictionary): Promise<void>;

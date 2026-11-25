@@ -7,8 +7,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
 
-const DEFAULT_SCHEMA = resolve(dirname(fileURLToPath(import.meta.url)), "../../MLDB/schema_v0.4.1.json");
-const DEFAULT_MAPPING = resolve(dirname(fileURLToPath(import.meta.url)), "../../MLDB/storage_mapping_v0.4.1.json");
+const DEFAULT_SCHEMA = resolve(dirname(fileURLToPath(import.meta.url)), "../../MLDB/schema_v0.4.2.json");
+const DEFAULT_MAPPING = resolve(dirname(fileURLToPath(import.meta.url)), "../../MLDB/storage_mapping_v0.4.2.json");
 
 function parseColumnMetadata(table) {
   const columns = new Map();

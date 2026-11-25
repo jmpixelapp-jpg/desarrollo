@@ -175,11 +175,10 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
             !["initial", "writer", "text-revised"].includes(change.reason) ||
             (change.reason === "text-revised" && change.status !== "IDEA") ||
             (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-              change.status === item.statusHistory[index - 1]?.status) ||
+              (change.status === item.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
             (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
             false) invalid();
       }
-      if (item.statusHistory[item.statusHistory.length - 1]?.status !== item.status) invalid();
     }
   } else if (collection === "afirmaciones") {
     if (typeof item.entityId !== "string" || !item.entityId.trim() ||
@@ -1734,7 +1733,7 @@ export class HostEngineApi {
     });
     const projectIdeaCatalogAvailable = Boolean(this.store.loadIdeas);
     const projectIdeas = projectIdeaCatalogAvailable
-      ? await this.getNarrativeIdeas()
+      ? await this.getNarrativeIdeasForAnalysis()
       : [];
     // Mantiene el mismo desempate Unicode que el analizador antes de aplicar el límite de 2.000.
     const orderedProjectIdeas = [...projectIdeas].sort((left,right) => {
@@ -3133,41 +3132,60 @@ export class HostEngineApi {
   }
 
   async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
-    return this.enqueueKnowledgeOperation(async () => {
-      const projectId = this.requireProject().projectId;
-      if (!this.ideasLoaded) {
-        const loaded = requireProjectScopedRecords(
-          await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
-        );
-        for (const idea of loaded) this.narrativeIdeas.set(idea.id, idea);
-        this.ideasLoaded = true;
-      }
+    return this.enqueueKnowledgeOperation(() => this.loadNarrativeIdeasSnapshot(false));
+  }
 
-      const ideas = [...this.narrativeIdeas.values()];
-      if (ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
-        if (!this.store.loadEntities) {
-          throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
-        }
-        // La lectura de ideas es también un límite de reconciliación: el catálogo
-        // de entidades puede haber cambiado desde otra instancia del anfitrión.
-        // No validar contra una caché caliente que oculte destinos eliminados.
-        const entities = requireProjectScopedRecords(
-          await this.requireKnowledgeReaderStore().loadEntities(projectId),
-          projectId,
-          "entidades"
-        );
-        this.narrativeEntities.clear();
-        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
-        this.entitiesLoaded = true;
-        this.entityEvidenceIndex = undefined;
-        this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
+  /** El grafo conserva autorreferencias históricas; el API de edición no las admite. */
+  private async getNarrativeIdeasForAnalysis(): Promise<readonly NarrativeIdea[]> {
+    return this.enqueueKnowledgeOperation(() => this.loadNarrativeIdeasSnapshot(true));
+  }
+
+  private async loadNarrativeIdeasSnapshot(
+    allowHistoricalSelfReferences: boolean
+  ): Promise<readonly NarrativeIdea[]> {
+    const projectId = this.requireProject().projectId;
+    const newlyLoaded = !this.ideasLoaded;
+    const ideas = newlyLoaded
+      ? requireProjectScopedRecords(
+          await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
+        )
+      : [...this.narrativeIdeas.values()];
+
+    if (!allowHistoricalSelfReferences &&
+        ideas.some(idea => idea.relatedIdeaIds?.includes(idea.id))) {
+      throw new Error("Integridad narrativa: una idea no puede enlazarse a sí misma.");
+    }
+
+    let entities: readonly NarrativeEntity[] | undefined;
+    if (ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
+      if (!this.store.loadEntities) {
+        throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
       }
-      return cloneNarrativeRecords(ideas);
-    });
+      entities = requireProjectScopedRecords(
+        await this.requireKnowledgeReaderStore().loadEntities(projectId),
+        projectId,
+        "entidades"
+      );
+      requireNarrativeEntityReferences(
+        ideas, projectId, entities,
+        idea => idea.relatedEntityIds ?? [], "ideas"
+      );
+    }
+
+    // La caché solo se actualiza después de validar toda la instantánea.
+    if (newlyLoaded) {
+      this.narrativeIdeas.clear();
+      for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
+      this.ideasLoaded = true;
+    }
+    if (entities) {
+      this.narrativeEntities.clear();
+      for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
+      this.entitiesLoaded = true;
+      this.entityEvidenceIndex = undefined;
+      this.entityNameIndex = undefined;
+    }
+    return cloneNarrativeRecords(ideas);
   }
 
   /** Encola cambios manuales de conocimiento detrás de los análisis ya admitidos. */

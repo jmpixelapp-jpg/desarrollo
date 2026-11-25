@@ -1887,7 +1887,7 @@ test("las trayectorias resuelven escenas con evidencia posterior a las primeras 
     ...phrases.slice(0, 20),
     "Escena 2",
     phrases[20]
-  ].join("\\n");
+  ].join("\n");
   const evidence = phrase => {
     const start = text.indexOf(phrase);
     assert.notEqual(start, -1);

@@ -272,11 +272,9 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
       resolveLibraryNotification(params);
     });
 
-    const summary = await client.request("project.call", {
-      projectId: "compact-finalization-project",
-      method: "finalizeProjectToIdeaLibrary",
-      args: []
-    });
+    const summary = await client.finalizeProjectToIdeaLibrary(
+      "compact-finalization-project"
+    );
     assert.equal(summary.writerId, "writer-compact");
     assert.equal(summary.sourceProjectId, "compact-finalization-project");
     assert.equal(summary.sourceProjectName, "Libro compacto");
@@ -290,30 +288,24 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
       writerId: "writer-compact"
     });
 
-    const page = await client.request("project.call", {
-      projectId: "compact-finalization-project",
-      method: "getPersonalIdeaLibraryPage",
-      args: [null, 1]
-    });
+    const page = await client.getPersonalIdeaLibraryPage(
+      "compact-finalization-project", null, 1
+    );
     assert.equal(page.items.length, 1);
     assert.equal(page.items[0].idea.text, "Una ciudad conserva la memoria de sus habitantes.");
     assert.equal(page.nextCursor, null);
     assert.ok(Number.isSafeInteger(page.libraryVersion));
     assert.ok(page.libraryVersion >= 1);
 
-    const retry = await client.request("project.call", {
-      projectId: "compact-finalization-project",
-      method: "finalizeProjectToIdeaLibrary",
-      args: []
-    });
+    const summary = await client.finalizeProjectToIdeaLibrary(
+      "compact-finalization-project"
+    );
     assert.equal(retry.alreadyFinalized, true);
     assert.deepEqual({ ...retry, alreadyFinalized: false }, summary);
 
-    const unchangedPage = await client.request("project.call", {
-      projectId: "compact-finalization-project",
-      method: "getPersonalIdeaLibraryPage",
-      args: [null, 1]
-    });
+    const page = await client.getPersonalIdeaLibraryPage(
+      "compact-finalization-project", null, 1
+    );
     assert.equal(unchangedPage.libraryVersion, page.libraryVersion,
       "el reintento idempotente no incrementa la generación de la biblioteca");
     await new Promise(resolve => setTimeout(resolve, 100));

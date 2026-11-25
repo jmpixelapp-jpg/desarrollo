@@ -209,3 +209,152 @@ function LiteraryAnalysisForEvidence(text, knownEvents) {
     knownEvents
   });
 }
+
+function makeAssertion({
+  id, attribute = "age", value, text, phrase,
+  documentId = "chapter-one", revision = 2, status, timeReference
+}) {
+  const start = text.indexOf(phrase);
+  if (start < 0) throw new Error("No se encontró el fragmento de evidencia de prueba.");
+  return {
+    projectId: "literary-analysis-test",
+    id,
+    entityId: "ana-id",
+    entityName: "Ana",
+    attribute,
+    value,
+    evidence: {
+      documentId,
+      revision,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase,
+      ...(status ? { status } : {})
+    },
+    ...(timeReference ? { timeReference } : {}),
+    capturedAt: 100
+  };
+}
+
+test("compara cambios y permanencias de atributos únicos entre escenas", () => {
+  const text = [
+    "Escena 1",
+    "Ana tenía 18 años.",
+    "Escena 2",
+    "Ana tenía 20 años.",
+    "Escena 3",
+    "Ana tenía 20 años."
+  ].join("\n");
+  const knownAssertions = [
+    makeAssertion({ id: "age-18", value: 18, text, phrase: "Ana tenía 18 años." }),
+    makeAssertion({ id: "age-20-a", value: 20, text, phrase: "Ana tenía 20 años.", revision: 2 }),
+    makeAssertion({ id: "age-20-b", value: 20, text, phrase: "Ana tenía 20 años.", revision: 2 })
+  ];
+  // Las dos afirmaciones "20" se anclan primero en la segunda aparición y en la tercera escena.
+  const secondStart = text.indexOf("Ana tenía 20 años.");
+  const thirdStart = text.indexOf("Ana tenía 20 años.", secondStart + 1);
+  knownAssertions[1] = {
+    ...knownAssertions[1],
+    id: "age-20-scene-2",
+    evidence: { ...knownAssertions[1].evidence, start: secondStart, end: secondStart + "Ana tenía 20 años.".length }
+  };
+  knownAssertions[2] = {
+    ...knownAssertions[2],
+    id: "age-20-scene-3",
+    evidence: { ...knownAssertions[2].evidence, start: thirdStart, end: thirdStart + "Ana tenía 20 años.".length }
+  };
+  knownAssertions.push(
+    makeAssertion({
+      id: "age-stale",
+      value: 17,
+      text,
+      phrase: "Ana tenía 18 años.",
+      revision: 1,
+      status: "stale"
+    }),
+    makeAssertion({
+      id: "role-other-chapter",
+      attribute: "role",
+      value: "capitana",
+      text: "Ana era capitana.",
+      phrase: "Ana era capitana.",
+      documentId: "chapter-two",
+      revision: 1
+    })
+  );
+
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 2,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownAssertions
+  });
+  const profile = result.characterAttributeEvolution.profiles.find(item =>
+    item.entityId === "ana-id" && item.attribute === "age"
+  );
+
+  assert.ok(profile);
+  assert.equal(profile.assertionCount, 3);
+  assert.equal(profile.sceneCount, 3);
+  assert.deepEqual(profile.scenes.map(scene => scene.values), [[18], [20], [20]]);
+  assert.deepEqual(profile.transitions.map(item => item.status), ["changed-value", "unchanged-value"]);
+  assert.equal(profile.changedValueTransitionCount, 1);
+  assert.equal(result.characterAttributeEvolution.sourceAssertionCount, 5);
+  assert.equal(result.characterAttributeEvolution.currentRevisionAssertionCount, 3);
+  assert.equal(result.characterAttributeEvolution.staleAssertionCount, 1);
+  assert.equal(result.characterAttributeEvolution.outOfScopeAssertionCount, 1);
+  assert.equal(result.characterAttributeEvolution.unmappedCurrentAssertionCount, 0);
+});
+
+test("no convierte varios valores explícitos en una escena en una contradicción resuelta", () => {
+  const text = [
+    "Escena 1",
+    "Ana tenía 20 años.",
+    "Ana tenía 21 años.",
+    "Escena 2",
+    "Ana tenía 22 años."
+  ].join("\n");
+  const knownAssertions = [
+    makeAssertion({ id: "age-20", value: 20, text, phrase: "Ana tenía 20 años." }),
+    makeAssertion({ id: "age-21", value: 21, text, phrase: "Ana tenía 21 años." }),
+    makeAssertion({ id: "age-22", value: 22, text, phrase: "Ana tenía 22 años." })
+  ];
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 2,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownAssertions
+  });
+  const profile = result.characterAttributeEvolution.profiles.find(item => item.attribute === "age");
+
+  assert.ok(profile);
+  assert.deepEqual(profile.multipleValueSceneIndexes, [1]);
+  assert.equal(profile.transitions[0].status, "multiple-values-in-scene");
+  assert.deepEqual(profile.scenes[0].values, [20, 21]);
+  assert.equal(profile.scenes[0].assertionCount, 2);
+});
+
+test("rechaza afirmaciones históricas ajenas al proyecto o a personajes no conocidos", () => {
+  const text = ["Escena 1", "Ana tenía 20 años."].join("\n");
+  const assertion = makeAssertion({ id: "age-20", value: 20, text, phrase: "Ana tenía 20 años." });
+  assert.throws(() => analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 2,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownAssertions: [{ ...assertion, projectId: "other-project" }]
+  }), /afirmaciones históricas/);
+  assert.throws(() => analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 2,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownAssertions: [{ ...assertion, entityId: "unknown-character" }]
+  }), /afirmaciones históricas/);
+});

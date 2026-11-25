@@ -298,3 +298,19 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **Resultado verificado:** CI aislada [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335), build Vite correcto, MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 33 almacenes) y **100/100 pruebas aprobadas, 0 fallidas, 0 omitidas**.
 
 **Límite:** el escenario utiliza fake-indexeddb en memoria. La prueba de navegador real con cierre/reapertura física sigue pendiente.
+
+
+
+## 14. Nueva entrega — reapertura del almacén tras cierre explícito (25 de noviembre de 2026)
+
+**Objetivo:** demostrar que IndexedDbProjectStore.close() libera la conexión, pero no inutiliza la instancia ni pierde los checkpoints ya escritos.
+
+**Prueba ampliada:** tras guardar y actualizar un checkpoint, el test cierra la conexión; a continuación usa la misma instancia para leer el checkpoint. La siguiente operación debe abrir una conexión nueva y devolver datos idénticos. Después borra el checkpoint y comprueba que ya no existe. El caso de migración v22→v23 también sigue incluido en el mismo archivo.
+
+**Archivo:** typescript/tests/live-author-monitor-indexeddb.test.mjs.
+
+**Commit:** [1a48078 — probar reapertura tras close()](https://github.com/jmpixelapp-jpg/desarrollo/commit/1a48078743c450bb7c90e4dd78c75b1eac902fbc).
+
+**Resultado verificado:** CI aislada [45724732118](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724732118), build Vite correcto, esquema 0.4.2 válido, auditoría física correcta (25 tablas, 33 almacenes) y 100/100 pruebas aprobadas, 0 fallidas, 0 omitidas.
+
+**Límite:** fake-indexeddb valida el comportamiento del adaptador en memoria; la prueba de navegador real con almacenamiento físico y reinicio del navegador sigue pendiente.

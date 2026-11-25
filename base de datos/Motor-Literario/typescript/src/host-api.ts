@@ -378,6 +378,15 @@ function checksumForPersonalIdeaIds(ids: readonly string[]): string {
   }
   return "fnv1a64:" + hash.toString(16).padStart(16, "0");
 }
+function checksumForPersonalIdeaIdsInReceiptOrder(ids: readonly string[]): string {
+  const source = JSON.stringify(ids);
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < source.length; index++) {
+    hash ^= BigInt(source.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
 
 function isValidPersonalIdeaEntry(
   value: unknown,
@@ -3546,7 +3555,8 @@ export class HostEngineApi {
         throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
       }
       if (ids.some((id, index) => index > 0 && ids[index - 1]!.localeCompare(id) > 0) ||
-          receipt.archiveChecksum !== checksumForPersonalIdeaIds(ids)) {
+          (receipt.archiveChecksum !== checksumForPersonalIdeaIds(ids) &&
+            receipt.archiveChecksum !== checksumForPersonalIdeaIdsInReceiptOrder(ids))) {
         throw new Error("Integridad de biblioteca: los IDs del recibo no están ordenados o su checksum no coincide.");
       }
       if (receipt.archiveContentChecksum !== undefined) {

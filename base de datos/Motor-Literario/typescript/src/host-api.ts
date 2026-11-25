@@ -466,11 +466,12 @@ function validatePersonalIdeaLibraryPage(
     throw new Error("Integridad de biblioteca: la página o su cursor están malformados.");
   }
 
-  const hasLibraryVersion = candidate.libraryVersion !== undefined;
+  const libraryVersion = candidate.libraryVersion;
+  const hasLibraryVersion = libraryVersion !== undefined;
   const restartRequired = candidate.restartRequired === true;
   if (cursor?.libraryVersion !== undefined &&
       (!hasLibraryVersion ||
-        (candidate.libraryVersion !== cursor.libraryVersion && !restartRequired))) {
+        (libraryVersion !== cursor.libraryVersion && !restartRequired))) {
     throw new Error("Integridad de biblioteca: la generación cambió sin solicitar reiniciar la paginación.");
   }
   if (restartRequired &&
@@ -478,7 +479,7 @@ function validatePersonalIdeaLibraryPage(
     throw new Error("Integridad de biblioteca: una resincronización debe devolver una página vacía y sin cursor.");
   }
   if (candidate.nextCursor !== null && hasLibraryVersion &&
-      candidate.nextCursor.libraryVersion !== candidate.libraryVersion) {
+      candidate.nextCursor.libraryVersion !== libraryVersion) {
     throw new Error("Integridad de biblioteca: el cursor siguiente pertenece a otra generación.");
   }
   if (candidate.nextCursor !== null && !hasLibraryVersion &&
@@ -555,7 +556,7 @@ function validatePersonalIdeaLibraryPage(
     page: {
       items,
       nextCursor,
-      ...(hasLibraryVersion ? { libraryVersion: candidate.libraryVersion } : {}),
+      ...(libraryVersion === undefined ? {} : { libraryVersion }),
       ...(restartRequired ? { restartRequired: true } : {})
     },
     unresolved: [...unresolvedByKey.values()]
@@ -3284,7 +3285,9 @@ export class HostEngineApi {
           return {
             items: [],
             nextCursor: null,
-            libraryVersion: checked.page.libraryVersion,
+            ...(checked.page.libraryVersion === undefined
+              ? {}
+              : { libraryVersion: checked.page.libraryVersion }),
             restartRequired: true
           };
         }

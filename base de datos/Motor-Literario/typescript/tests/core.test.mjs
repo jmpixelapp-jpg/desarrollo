@@ -5750,7 +5750,7 @@ test("IndexedDB rechaza vínculos de idea duplicados y autorreferenciales antes 
       originDocumentId: "chapter", sourceProjectName: "Libro", evidence: [] };
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-b", "idea-b"] }),
-      /referencias inválidas o duplicadas/i
+      /referencias inválidas, duplicadas/i
     );
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-a"] }),
@@ -9831,8 +9831,8 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
       `wide-branch-${String(index).padStart(3, "0")}`
     )
   };
-  // Cada idea admite como máximo 500 vínculos; se distribuyen las 1.200
-  // hojas entre tres ramas para probar el recorrido completo del contexto.
+  // Cada idea admite como máximo 500 vínculos; se distribuyen las 1.200 hojas
+  // entre tres ramas para probar el recorrido completo sin registros inválidos.
   const wideBranches = Array.from({ length: 3 }, (_, branchIndex) => ({
     projectId,
     id: `wide-branch-${String(branchIndex).padStart(3, "0")}`,

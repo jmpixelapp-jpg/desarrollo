@@ -2266,7 +2266,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   const names = [
     "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
-    "narrative-assertions"
+    "narrative-assertions", "document-diagnostics"
   ];
   const stores = new Map(names.map(name => [name, {
     indexNames: { contains: () => false },
@@ -2346,7 +2346,7 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
   const names = [
     "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
-    "narrative-assertions"
+    "narrative-assertions", "document-diagnostics"
   ];
   const deleted = [];
   const created = [];

@@ -450,7 +450,7 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
         eventId: "collapse",
         label: "El derrumbe",
         participants: ["ana", "luisa"],
-        evidence: [evidence("el derrumbe"), evidence("El derrumbe", 1)]
+        evidence: [evidence("el derrumbe"), evidence("El derrumbe")]
       }
     ]
   });
@@ -1376,13 +1376,12 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     () => analyzeLiteraryFragment({ ...input, knownProjectIdeas: [idea, { ...idea }] }),
     /catálogo global de ideas/
   );
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
-    }),
-    /catálogo global de ideas/
-  );
+  const selfLoop = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
+  }).ideaGraph;
+  assert.equal(selfLoop.cycleCount, 1);
+  assert.deepEqual(selfLoop.cycles, [{ ideaIds: ["global-idea"] }]);
   assert.throws(
     () => analyzeLiteraryFragment({
       ...input,

@@ -112,6 +112,19 @@ export interface StoredLiveAuthorMonitorCheckpoint {
   readonly commitLatencies: readonly number[];
 }
 
+/** Lease temporal de titularidad del monitor, con fencing token monotónico por documento. */
+export interface StoredLiveAuthorMonitorLease {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly ownerId: string;
+  /** Aumenta cada vez que cambia la titularidad tras expirar o liberar una reserva. */
+  readonly fencingToken: number;
+  readonly acquiredAt: number;
+  readonly expiresAt: number;
+  readonly updatedAt: number;
+}
+
 export interface StoredDiagnostics {
   readonly projectId: string;
   readonly documentId: string;
@@ -245,8 +258,28 @@ export interface ProjectStore {
   compactChanges?(projectId: string, documentId: string, throughSequence: number): Promise<void>;
   /** Guarda el snapshot y elimina los deltas incluidos en una sola transacción durable. */
   saveDocumentAndCompactChanges?(document: StoredDocument, throughSequence: number): Promise<void>;
-  /** Guarda y recupera checkpoints de métricas del autor sin texto del manuscrito. */
-  saveLiveAuthorMonitorCheckpoint?(checkpoint: StoredLiveAuthorMonitorCheckpoint): Promise<void>;
+  /** Adquiere, renueva y libera la titularidad temporal del monitor por pestaña. */
+  acquireLiveAuthorMonitorLease?(
+    projectId: string,
+    documentId: string,
+    ownerId: string,
+    now: number,
+    leaseDurationMs: number
+  ): Promise<StoredLiveAuthorMonitorLease | undefined>;
+  renewLiveAuthorMonitorLease?(
+    lease: StoredLiveAuthorMonitorLease,
+    now: number,
+    leaseDurationMs: number
+  ): Promise<StoredLiveAuthorMonitorLease | undefined>;
+  releaseLiveAuthorMonitorLease?(
+    lease: StoredLiveAuthorMonitorLease,
+    now: number
+  ): Promise<boolean>;
+  /** Guarda checkpoints solo bajo un lease vigente y su fencing token actual. */
+  saveLiveAuthorMonitorCheckpoint?(
+    checkpoint: StoredLiveAuthorMonitorCheckpoint,
+    lease?: StoredLiveAuthorMonitorLease
+  ): Promise<void>;
   loadLiveAuthorMonitorCheckpoint?(
     projectId: string,
     documentId: string

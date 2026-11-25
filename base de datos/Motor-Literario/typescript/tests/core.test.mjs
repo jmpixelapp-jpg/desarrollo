@@ -4058,7 +4058,9 @@ test("rebasea evidencias posteriores e invalida líneas editadas en todas las co
   assert.equal(luisEvidence.start, original.indexOf("Luis") + prefix.length);
   assert.equal(luisEvidence.status, undefined);
   const ana = entities.find(item => item.canonicalName === "Ana");
-  assert.equal(ana.evidence.find(item => item.documentId === "chapter-a").status, "stale");
+  // La inserción de un párrafo completo antes de la primera línea desplaza
+  // la evidencia original; no altera el contenido de esa línea.
+  assert.equal(ana.evidence.find(item => item.documentId === "chapter-a").status, undefined);
 
   const relation = (await api.getNarrativeRelations())[0];
   assert.equal(relation.evidence[0].status, undefined);

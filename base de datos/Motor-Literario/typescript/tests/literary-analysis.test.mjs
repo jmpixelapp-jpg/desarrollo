@@ -480,7 +480,7 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
   ));
 });
 
-test("no infiere dependencias cuando no hay conector causal o la evidencia está obsoleta", () => {
+test("no infiere dependencias sin conector y excluye evidencia obsoleta o de otra revisión", () => {
   const text = "La tormenta precedió el derrumbe.";
   const startStorm = text.indexOf("La tormenta");
   const startCollapse = text.indexOf("el derrumbe");
@@ -511,13 +511,38 @@ test("no infiere dependencias cuando no hay conector causal o la evidencia está
           revision: 1,
           start: startCollapse,
           end: startCollapse + "el derrumbe".length,
-          excerpt: "el derrumbe",
+          excerpt: "el derrumbe"
+        }]
+      },
+      {
+        eventId: "stale-event",
+        label: "Acontecimiento obsoleto",
+        participants: [],
+        evidence: [{
+          documentId: "chapter-one",
+          revision: 1,
+          start: startStorm,
+          end: startStorm + "La tormenta".length,
+          excerpt: "La tormenta",
           status: "stale"
+        }]
+      },
+      {
+        eventId: "other-revision",
+        label: "Acontecimiento de otra revisión",
+        participants: [],
+        evidence: [{
+          documentId: "chapter-one",
+          revision: 2,
+          start: startCollapse,
+          end: startCollapse + "el derrumbe".length,
+          excerpt: "el derrumbe"
         }]
       }
     ]
   });
 
+  assert.equal(result.eventDependencyAnalysis.evidenceAnchorCount, 2);
   assert.equal(result.eventDependencyAnalysis.candidateCount, 0);
   assert.deepEqual(result.eventDependencyAnalysis.candidates, []);
 });

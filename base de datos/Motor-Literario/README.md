@@ -61,6 +61,21 @@ npm run bench
 La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. En el commit `e7181ba25e1e79c9acbcf4df4a7269001b2b4ad3`, el 25 de noviembre de 2026, pasaron **312 pruebas: 303 aprobadas, 0 fallidas y 9 omitidas**; también pasaron build y benchmark. [Ver ejecución completa](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45567766129).
 
 El benchmark de CI usa escenarios sintéticos y un adaptador en memoria. Sus latencias no representan mediciones de disco ni sustituyen pruebas en los equipos y adaptadores del programa anfitrión.
+## Análisis literario e inteligencia de ideas
+
+El núcleo TypeScript incorpora un análisis determinista del catálogo de ideas del proyecto:
+
+- El grafo global conserva ideas independientes y vínculos explícitos, y distingue referencias internas, externas al snapshot y ausentes.
+- Calcula componentes débiles y fuertemente conexos, ciclos (incluidas auto-referencias), reciprocidad, fuentes, terminales y nodos aislados. El recorrido de componentes fuertemente conexos es iterativo para evitar desbordamientos de pila en grafos profundos.
+- Produce métricas globales y perfiles por estado editorial en una sola pasada de agregación.
+- Detecta resonancias léxicas mediante términos literales normalizados Unicode, filtrado adaptativo de términos ubicuos y medidas de solapamiento. La salida está limitada a los pares mejor clasificados y nunca convierte una coincidencia de palabras en una relación semántica o causal.
+- Aplica presupuestos explícitos de catálogo, texto y resultados. La omisión de texto por presupuesto queda identificada y no se confunde con la ausencia de texto.
+- La memoización usa una clave exacta de la instantánea y devuelve copias aisladas; los cambios de contenido, estado, historial, evidencia, vínculos o alcance invalidan el resultado anterior.
+
+La sincronización de ideas utiliza escrituras condicionales por versión (CAS), reintentos acotados para conflictos concurrentes de vínculos, serialización de mutaciones dentro de una instancia, operaciones idempotentes y limpieza de referencias heredadas a destinos eliminados. Las altas de vínculos a fichas o a otras ideas vuelven a comprobar el catálogo durable, incluso después de conflictos CAS; las lecturas de ideas vinculadas revalidan las fichas. Así se rechazan destinos eliminados por otra instancia, también cuando desaparecen durante un reintento de escritura. Los cambios de estado editorial no se fusionan automáticamente cuando hay decisiones concurrentes incompatibles.
+
+Estas capacidades son análisis estructural y lexical explicable, no comprensión semántica general. Las coincidencias léxicas no prueban equivalencia, intención, causalidad ni continuidad narrativa; las decisiones editoriales siguen perteneciendo al escritor.
+
 ## Límites que permanecen
 
 La base de datos y su persistencia están implementadas, pero eso no significa que el motor literario completo esté terminado. Siguen fuera del alcance de la base de datos la comprensión semántica general, la inferencia fiable de acontecimientos y cronologías no explícitos, la resolución literaria completa de contradicciones y la clasificación semántica de afirmaciones que quedaron obsoletas al reescribirse el texto.

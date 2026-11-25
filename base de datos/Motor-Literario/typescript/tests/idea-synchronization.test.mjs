@@ -208,6 +208,31 @@ test("rechaza el vínculo a ficha si la entidad destino desaparece durante CAS",
   api.dispose();
 });
 
+test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-target"), idea("idea-external")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => {
+    store.ideas.delete(projectId + ":idea-target");
+    return { ...current, relatedIdeaIds: ["idea-external"] };
+  };
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-target", true),
+    /Ambas ideas deben existir en el proyecto activo/
+  );
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-external"]
+  );
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.writes, 1);
+  api.dispose();
+});
+
 test("permite limpiar el vínculo a una idea eliminada durante un conflicto CAS", async () => {
   const store = new RacingStore([
     idea("idea-source", { relatedIdeaIds: ["idea-target"] }),
@@ -333,6 +358,31 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
     /fallo de almacenamiento/
   );
   assert.equal(store.writes, 1);
+  api.dispose();
+});
+
+test("rechaza altas de vínculos entre ideas si el destino fue eliminado externamente", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-deleted")
+  ]);
+  const api = createApi(store);
+
+  const initial = await api.getNarrativeIdeas();
+  assert.equal(initial.length, 2);
+  assert.equal(store.ideaReads, 1);
+
+  store.ideas.delete(projectId + ":idea-deleted");
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-deleted", true),
+    /Ambas ideas deben existir en el proyecto activo/
+  );
+
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.writes, 0);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    []
+  );
   api.dispose();
 });
 

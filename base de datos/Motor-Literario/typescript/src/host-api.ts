@@ -3255,6 +3255,17 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
+      } else if (referenceKind === "relatedIdeaIds" && linked) {
+        // Una idea destino también puede desaparecer desde otra instancia.
+        // Las altas consultan el catálogo durable y no confían en la caché caliente.
+        const ideas = requireProjectScopedRecords(
+          await store.loadIdeas(projectId), projectId, "ideas"
+        );
+        this.narrativeIdeas.clear();
+        for (const item of ideas) this.narrativeIdeas.set(item.id, item);
+        this.ideasLoaded = true;
+        this.ideaEvidenceIndex = undefined;
+        this.ideaLineIndex = undefined;
       }
 
       const idea = this.narrativeIdeas.get(ideaId);

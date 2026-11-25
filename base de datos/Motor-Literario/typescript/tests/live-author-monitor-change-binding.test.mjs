@@ -51,10 +51,14 @@ test("entrega rechazos y conserva el mismo delta para contrapresión del anfitri
   const f = sourceFixture();
   const retained = [];
   const delta = change();
-  const rejected = { status: "rejected", reason: "queue_full" };
+  let capacityAvailable = false;
   const stop = bindLiveAuthorMonitorEditorChanges({
     source: f.source,
-    sink: { onEditorChange: () => rejected },
+    sink: {
+      onEditorChange: () => capacityAvailable
+        ? { status: "queued", ticketId: "ticket-1" }
+        : { status: "rejected", reason: "queue_full" }
+    },
     onAdmission: (value, admission) => {
       if (admission.status === "rejected") retained.push({ value, reason: admission.reason });
     },
@@ -62,7 +66,15 @@ test("entrega rechazos y conserva el mismo delta para contrapresión del anfitri
   });
   f.emit(delta);
   assert.deepEqual(retained, [{ value: delta, reason: "queue_full" }]);
+  assert.throws(() => stop(), /cambios pendientes/);
+  assert.deepEqual(stop.getPendingChanges(), [delta]);
+  assert.equal(f.listeners.size, 1, "el stream sigue activo mientras el backlog no se resuelva");
+
+  capacityAvailable = true;
+  stop.retryPending();
+  assert.deepEqual(stop.getPendingChanges(), []);
   stop();
+  assert.equal(f.listeners.size, 0);
 });
 
 test("el desmontaje cancela la fuente una sola vez e ignora notificaciones tardías", () => {

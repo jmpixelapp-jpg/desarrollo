@@ -119,6 +119,16 @@ test("actualiza escritura, pausa y durabilidad mediante eventos y refresco", () 
   assert.equal(metric(panel, "pending").textContent, "0");
   assert.equal(metric(panel, "revision").textContent, "1 / 1");
   assert.match(findNode(panel, node => node.className === "ml-author-monitor__durability").textContent, /confirmados/);
+
+  // Una nueva edición tras superar idleAfterMs registra una pausa completa.
+  f.setTime(20_000);
+  f.monitor.recordAdmission({
+    documentId: "chapter-1", sequence: 2, baseRevision: 1,
+    start: 18, end: 18, replacement: "?"
+  }, { status: "queued", ticketId: "ticket-2" });
+  assert.equal(metric(panel, "pauses").textContent, "1");
+  assert.equal(metric(panel, "idle").textContent, "00:19");
+
   unmount();
   const previous = status(panel).textContent;
   f.setTime(1_000);

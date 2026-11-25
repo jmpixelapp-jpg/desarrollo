@@ -165,8 +165,7 @@ function openProject(params) {
             }
           }
         }).catch(writeError);
-      }
-      ,
+      },
       onPersonalIdeaLibraryChanged(writerId) {
         notifyPersonalIdeaLibraryChanged(writerId);
       }
@@ -186,6 +185,10 @@ function openProject(params) {
 
 function notifyPersonalIdeaLibraryChanged(writerId) {
   if (typeof writerId !== "string" || !writerId.trim()) return;
+  if (store?.getWriterLibraryVersion) {
+    lastWriterLibraryVersions.set(writerId, store.getWriterLibraryVersion(writerId));
+    pendingWriterLibrarySyncs.delete(writerId);
+  }
   for (const [projectId, record] of projects) {
     if (record.identity.writerId !== writerId) continue;
     void send({
@@ -232,6 +235,12 @@ async function pollExternalNarrativeChanges() {
       const previousVersion = lastWriterLibraryVersions.get(writerId);
       if (previousVersion !== undefined && currentVersion !== previousVersion) {
         pendingWriterLibrarySyncs.set(writerId, currentVersion);
+      }
+    }
+  } else {
+    for (const [writerId, currentVersion] of writerLibraryVersions) {
+      if (!pendingWriterLibrarySyncs.has(writerId)) {
+        lastWriterLibraryVersions.set(writerId, currentVersion);
       }
     }
   }

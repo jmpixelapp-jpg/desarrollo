@@ -3081,7 +3081,7 @@ export class HostEngineApi {
         return cloneNarrativeRecord(updated);
       } catch (error) {
         const isVersionConflict = error instanceof Error &&
-          /\\bidea\\b.*\\bcambió en otra instancia\\b/iu.test(error.message);
+          /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
         if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
 
         // persistIdeaUpdate ya invalida la caché de ideas al fallar el CAS.

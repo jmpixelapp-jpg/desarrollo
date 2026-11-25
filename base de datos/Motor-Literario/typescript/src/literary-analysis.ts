@@ -18,6 +18,12 @@ export interface LiteraryRepeatedWord {
   readonly count: number;
   readonly occurrences: readonly LiteraryAnalysisOccurrence[];
 }
+export interface LiteraryRepeatedPhrase {
+  readonly phrase: string;
+  readonly wordCount: number;
+  readonly count: number;
+  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+}
 export interface LiterarySentenceOpening {
   readonly opening: string;
   readonly count: number;
@@ -98,6 +104,7 @@ export interface LiteraryAnalysisResult {
   readonly dialogueDensity: LiteraryDialogueDensity;
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
+  readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
   readonly repeatedSentenceOpenings: readonly LiterarySentenceOpening[];
   readonly anaphoraCandidates: readonly LiteraryAnaphoraCandidate[];
   readonly sensorySignals: readonly LiterarySensorySignal[];
@@ -319,6 +326,78 @@ function toAbsoluteOccurrences(
   }));
 }
 
+
+
+function findRepeatedPhrases(
+  text: string,
+  tokens: readonly WordToken[],
+  sentenceRanges: readonly LocalRange[],
+  baseOffset: number
+): LiteraryRepeatedPhrase[] {
+  const groups = new Map<string, {
+    readonly phrase: string;
+    readonly wordCount: number;
+    count: number;
+    occurrences: LocalRange[];
+  }>();
+  let sentenceTokenCursor = 0;
+  for (const sentence of sentenceRanges) {
+    while (sentenceTokenCursor < tokens.length &&
+      tokens[sentenceTokenCursor]!.end <= sentence.start) sentenceTokenCursor++;
+    const indexes: number[] = [];
+    let cursor = sentenceTokenCursor;
+    while (cursor < tokens.length && tokens[cursor]!.start < sentence.end) {
+      if (tokens[cursor]!.end <= sentence.end) indexes.push(cursor);
+      cursor++;
+    }
+    for (let start = 0; start < indexes.length; start++) {
+      for (let size = 2; size <= 4 && start + size <= indexes.length; size++) {
+        const phraseTokens = indexes.slice(start,start+size).map(index => tokens[index]!);
+        const hasHardBreak = phraseTokens.slice(1).some((token,index) => {
+          const previous = phraseTokens[index]!;
+          return /[,;:.!?…\r\n]/u.test(text.slice(previous.end,token.start));
+        });
+        if (hasHardBreak) break;
+        const contentWords = phraseTokens.filter(token =>
+          !STOP_WORDS.has(token.normalized) && token.normalized.length > 2
+        ).length;
+        if (contentWords < 2) continue;
+        const key = phraseTokens.map(token => token.normalized).join(" ");
+        const first = phraseTokens[0]!;
+        const last = phraseTokens[phraseTokens.length-1]!;
+        let group = groups.get(key);
+        if (!group) {
+          group = {
+            phrase: phraseTokens.map(token => token.text).join(" "),
+            wordCount:size,
+            count:0,
+            occurrences:[]
+          };
+          groups.set(key,group);
+        }
+        group.count++;
+        if (group.occurrences.length < 20) {
+          group.occurrences.push({start:first.start,end:last.end});
+        }
+      }
+    }
+    sentenceTokenCursor = cursor;
+  }
+  return [...groups.values()]
+    .filter(group => group.count >= 2)
+    .sort((a,b) => b.count-a.count || b.wordCount-a.wordCount ||
+      a.phrase.localeCompare(b.phrase,"es"))
+    .slice(0,12)
+    .map(group => ({
+      phrase:group.phrase,
+      wordCount:group.wordCount,
+      count:group.count,
+      occurrences:group.occurrences.map(item => ({
+        start:baseOffset+item.start,
+        end:baseOffset+item.end
+      }))
+    }));
+}
 
 function findRhythmTransitions(
   sentenceRanges: readonly LocalRange[],
@@ -547,6 +626,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     dialogueDensity,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
+    repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),
     repeatedSentenceOpenings,
     anaphoraCandidates,
     sensorySignals:collectSensorySignals(tokens,baseOffset),
@@ -556,6 +636,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",
+      "Las frases recurrentes requieren coincidencia literal de 2 a 4 palabras dentro de una oración y no prueban un motivo temático.",
       "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos."
     ]
   };

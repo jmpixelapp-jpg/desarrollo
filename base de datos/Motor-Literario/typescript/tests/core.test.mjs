@@ -9940,3 +9940,33 @@ test("calcula mediana, dispersión y transiciones bruscas del ritmo", async () =
   assert.ok(transition.occurrences.every(item => item.start >= 200 && item.end > item.start));
   assert.equal(transition.beforeSentenceIndex + 1,transition.afterSentenceIndex);
 });
+
+
+test("detecta frases recurrentes literales de dos a cuatro palabras con evidencia", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "La puerta antigua de hierro se abrió lentamente.",
+    "La puerta antigua de hierro volvió a cerrarse.",
+    "El sendero oscuro condujo al río."
+  ].join(" ");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-phrases",documentId:"chapter",revision:2,text,baseOffset:75
+  });
+  const candidate = result.repeatedPhrases.find(item =>
+    item.phrase.toLocaleLowerCase("es") === "la puerta antigua" && item.wordCount === 3
+  );
+  assert.ok(candidate);
+  assert.equal(candidate.count,2);
+  assert.equal(candidate.occurrences.length,2);
+  assert.ok(candidate.occurrences.every(item => item.start >= 75 && item.end > item.start));
+  assert.ok(result.repeatedPhrases.every(item => item.wordCount >= 2 && item.wordCount <= 4));
+});
+
+test("no une frases recurrentes a través de límites de oración", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-phrase-boundaries",documentId:"chapter",revision:1,
+    text:"La noche. Oscura plaza. La noche. Oscura plaza."
+  });
+  assert.equal(result.repeatedPhrases.some(item => item.phrase === "La noche Oscura"),false);
+});

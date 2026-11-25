@@ -69,6 +69,19 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     ]);
     assert.equal(result.ideaGraph.weakComponentCount,2);
     assert.equal(result.ideaGraph.largestWeakComponentSize,3);
+
+    // La respuesta es propiedad del consumidor: mutarla no debe envenenar la caché.
+    result.ideaGraph.cycles[0].ideaIds[0] = "corrupted";
+    result.ideaGraph.references[0].fromIdeaId = "corrupted";
+    result.ideaGraph.weakComponents[0].ideaIds[0] = "corrupted";
+    result.ideaGraph.nodes[0].statusHistory[0].status = "discarded";
+    const repeated = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.deepEqual(repeated.cycles.map(cycle => cycle.ideaIds), [
+      ["bridge","finish","origin"], ["solo"]
+    ]);
+    assert.equal(repeated.references[0].fromIdeaId, "bridge");
+    assert.equal(repeated.weakComponents[0].ideaIds[0], "bridge");
+    assert.equal(repeated.nodes[0].statusHistory[0].status, "IDEA");
   } finally { api.dispose(); }
 });
 

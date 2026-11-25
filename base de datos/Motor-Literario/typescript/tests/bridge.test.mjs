@@ -483,25 +483,15 @@ test("el archivo de ideas conserva contexto independiente para cada entrada de b
     const anita = entities.find(item => item.canonicalName === "Anita");
     assert.ok(ana);
     assert.ok(anita);
-    const ideas = await client.request("project.call", {
-      projectId: "idea-context-project", method: "getNarrativeIdeas", args: []
-    });
+    const ideas = await client.getNarrativeIdeas("idea-context-project");
     assert.equal(ideas.length, 2);
     const campana = ideas.find(item => item.text.includes("campana"));
     const puerta = ideas.find(item => item.text.includes("puerta"));
     assert.ok(campana);
     assert.ok(puerta);
-    await client.request("project.call", {
-      projectId: "idea-context-project", method: "setNarrativeIdeaEntityLink",
-      args: [campana.id, ana.id, true]
-    });
-    await client.request("project.call", {
-      projectId: "idea-context-project", method: "setNarrativeIdeaEntityLink",
-      args: [puerta.id, anita.id, true]
-    });
-    const archived = await client.request("project.call", {
-      projectId: "idea-context-project", method: "archiveUnincorporatedIdeas", args: []
-    });
+    await client.setNarrativeIdeaEntityLink("idea-context-project", campana.id, ana.id, true);
+    await client.setNarrativeIdeaEntityLink("idea-context-project", puerta.id, anita.id, true);
+    const archived = await client.archiveUnincorporatedIdeas("idea-context-project");
     assert.equal(archived.length, 2);
     const campanaEntry = archived.find(entry => entry.idea.id === campana.id);
     const puertaEntry = archived.find(entry => entry.idea.id === puerta.id);
@@ -510,9 +500,7 @@ test("el archivo de ideas conserva contexto independiente para cada entrada de b
     assert.equal(campanaEntry.context.relatedIdeas.length, 0);
     assert.equal(puertaEntry.context.relatedIdeas.length, 0);
 
-    const repeated = await client.request("project.call", {
-      projectId: "idea-context-project", method: "archiveUnincorporatedIdeas", args: []
-    });
+    const repeated = await client.archiveUnincorporatedIdeas("idea-context-project");
     assert.equal(repeated.length, 2);
     assert.deepEqual(repeated.map(entry => entry.idea.id).sort(), [campana.id, puerta.id].sort());
 
@@ -547,35 +535,19 @@ test("el archivo rechaza referencias desde ideas que permanecerán en el libro",
       sequence: 0
     });
     await client.flushProject("idea-graph-project");
-    const ideas = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getNarrativeIdeas", args: []
-    });
+    const ideas = await client.getNarrativeIdeas("idea-graph-project");
     assert.equal(ideas.length, 2);
     const retained = ideas.find(item => item.text.includes("campana"));
     const pending = ideas.find(item => item.text.includes("puerta"));
-    await client.request("project.call", {
-      projectId: "idea-graph-project", method: "setNarrativeIdeaLink",
-      args: [retained.id, pending.id, true]
-    });
-    await client.request("project.call", {
-      projectId: "idea-graph-project", method: "setNarrativeIdeaStatus",
-      args: [retained.id, "incorporated"]
-    });
+    await client.setNarrativeIdeaLink("idea-graph-project", retained.id, pending.id, true);
+    await client.setNarrativeIdeaStatus("idea-graph-project", retained.id, "incorporated");
     await assert.rejects(
-      client.request("project.call", {
-        projectId: "idea-graph-project", method: "archiveUnincorporatedIdeas", args: []
-      }),
+      client.archiveUnincorporatedIdeas("idea-graph-project"),
       error => error?.code === -32000 && /depende de una idea que se trasladaría/.test(error.message)
     );
-    const library = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getPersonalIdeaLibrary", args: []
-    });
-    const remaining = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getNarrativeIdeas", args: []
-    });
-    const receipt = await client.request("project.call", {
-      projectId: "idea-graph-project", method: "getProjectFinalizationReceipt", args: []
-    });
+    const library = await client.getPersonalIdeaLibrary("idea-graph-project");
+    const remaining = await client.getNarrativeIdeas("idea-graph-project");
+    const receipt = await client.getProjectFinalizationReceipt("idea-graph-project");
     assert.equal(library.length, 0);
     assert.equal(remaining.length, 2);
     assert.equal(receipt, null);
@@ -614,9 +586,7 @@ test("una instancia recibe una notificación y actualiza sus cachés por cambios
       sequence: 0
     });
     await first.client.flushProject("shared-project");
-    const firstIdeas = await first.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const firstIdeas = await first.client.getNarrativeIdeas("shared-project");
     assert.equal(firstIdeas.length, 1);
     assert.equal(firstIdeas[0].status, "IDEA");
 
@@ -627,9 +597,7 @@ test("una instancia recibe una notificación y actualiza sus cachés por cambios
       projectName: "Libro compartido",
       writerId: "writer-shared"
     });
-    const secondIdeas = await second.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const secondIdeas = await second.client.getNarrativeIdeas("shared-project");
     assert.equal(secondIdeas.length, 1);
 
     const knowledgeChanged = new Promise((resolveNotice, rejectNotice) => {
@@ -644,25 +612,17 @@ test("una instancia recibe una notificación y actualiza sus cachés por cambios
         }
       });
     });
-    await second.client.request("project.call", {
-      projectId: "shared-project",
-      method: "setNarrativeIdeaStatus",
-      args: [secondIdeas[0].id, "incorporated"]
-    });
+    await second.client.setNarrativeIdeaStatus("shared-project", secondIdeas[0].id, "incorporated");
     const notice = await knowledgeChanged;
     assert.equal(notice.projectId, "shared-project");
 
-    const automaticallyRefreshed = await first.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const automaticallyRefreshed = await first.client.getNarrativeIdeas("shared-project");
     assert.equal(automaticallyRefreshed[0].status, "incorporated");
 
     await first.client.request("project.call", {
       projectId: "shared-project", method: "refreshNarrativeKnowledge", args: []
     });
-    const explicitlyRefreshed = await first.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
+    const explicitlyRefreshed = await first.client.getNarrativeIdeas("shared-project");
     assert.equal(explicitlyRefreshed[0].status, "incorporated");
 
     const firstExit = waitForExit(first.child);

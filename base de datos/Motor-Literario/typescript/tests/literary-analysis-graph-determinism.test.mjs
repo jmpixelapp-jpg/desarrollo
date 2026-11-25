@@ -558,3 +558,27 @@ test("las muestras de componentes y ciclos informan los elementos omitidos", () 
   assert.equal(cyclicGraph.cycles[0].ideaIds[0], "cycle-000");
   assert.equal(cyclicGraph.cycles.at(-1).ideaIds[0], "cycle-099");
 });
+
+
+test("el análisis de dos saltos deduplica intermediarios y destinos sin borrar ciclos", () => {
+  const graph = analyze([
+    idea("origin", ["branch-a", "branch-b", "branch-a"]),
+    idea("branch-a", ["origin", "shared", "shared"]),
+    idea("branch-b", ["shared", "terminal"]),
+    idea("shared"),
+    idea("terminal")
+  ]);
+
+  assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
+  assert.equal(graph.twoHopConvergentSourceCount, 1);
+  assert.equal(graph.twoHopSharedDestinationCount, 1);
+  assert.equal(graph.twoHopExclusiveDestinationCount, 2);
+  assert.equal(graph.twoHopIndependentBranchSourceCount, 1);
+  assert.equal(graph.includedReferenceCount, 7);
+  assert.equal(graph.selfReferenceCount, 0);
+  assert.equal(graph.cycleCount, 1);
+  assert.deepEqual(
+    graph.cycles.map(cycle => cycle.ideaIds),
+    [["branch-a", "origin"]]
+  );
+});

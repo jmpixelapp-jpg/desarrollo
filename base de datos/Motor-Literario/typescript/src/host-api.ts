@@ -3955,6 +3955,39 @@ export class HostEngineApi {
     });
   }
 
+  /**
+   * Exporta una instantánea integral del adaptador local después de confirmar
+   * el journal, el análisis, los diagnósticos y el conocimiento pendientes.
+   * El anfitrión es responsable de guardar el paquete en un archivo privado.
+   */
+  async exportDatabaseBackup(): Promise<unknown> {
+    const exportBackup = this.store.exportDatabaseBackup;
+    if (!exportBackup) {
+      throw new Error("El adaptador de almacenamiento no admite respaldo integral.");
+    }
+    await this.flushPendingChanges();
+    return exportBackup.call(this.store);
+  }
+
+  /**
+   * Restaura una instantánea integral antes de inicializar cualquier proyecto
+   * en esta instancia de la API. Así no puede reemplazar datos bajo una sesión
+   * de edición activa; el anfitrión debe abrir una instancia nueva después.
+   */
+  async restoreDatabaseBackup(backup: unknown): Promise<void> {
+    const restoreBackup = this.store.restoreDatabaseBackup;
+    if (!restoreBackup) {
+      throw new Error("El adaptador de almacenamiento no admite restauración integral.");
+    }
+    if (this.project) {
+      throw new Error(
+        "La restauración requiere una instancia del anfitrión sin proyecto inicializado. " +
+        "Cierra las sesiones de edición y restaura antes de initializeProject()."
+      );
+    }
+    await restoreBackup.call(this.store, backup);
+  }
+
   initializeProject(identity: ProjectIdentity): void {
     if (!identity || typeof identity.projectId !== "string" || !identity.projectId.trim() ||
         typeof identity.projectName !== "string" || !identity.projectName.trim() ||

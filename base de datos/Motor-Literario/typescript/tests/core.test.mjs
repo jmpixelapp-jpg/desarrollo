@@ -13566,3 +13566,70 @@ test("HostEngineApi entrega los textos privados de ideas al análisis de resonan
     api.dispose();
   }
 });
+
+test("la API verifica el contenido completo de las ideas archivadas al leer el recibo", async () => {
+  const writerId = "writer-content-receipt";
+  const projectId = "book-content-receipt";
+  const projectName = "Libro con checksum de contenido";
+  const entry = {
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: projectName,
+    category: projectName,
+    idea: {
+      projectId,
+      id: "idea-content-receipt",
+      text: "La carta permanece bajo la lluvia.",
+      status: "IDEA",
+      originDocumentId: "chapter-content",
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedEntityIds: [],
+      relatedIdeaIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+    archivedAt: 10
+  };
+  const hash = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  const ids = [entry.idea.id];
+  const receipt = {
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: projectName,
+    finalizedAt: 10,
+    archivedIdeaIds: ids,
+    archiveChecksum: hash(JSON.stringify(ids)),
+    archiveContentChecksum: hash(JSON.stringify([entry]))
+  };
+  const store = new MemoryStore();
+  store.loadProjectFinalizationReceipt = async () => structuredClone(receipt);
+  store.loadPersonalIdeasByKeys = async (authenticatedWriterId, references) => {
+    assert.equal(authenticatedWriterId, writerId);
+    assert.deepEqual(references, [{ sourceProjectId: projectId, ideaId: entry.idea.id }]);
+    return [structuredClone(entry)];
+  };
+
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId, projectName, writerId });
+    const validated = await api.getProjectFinalizationReceipt();
+    assert.equal(validated.archiveContentChecksum, receipt.archiveContentChecksum);
+
+    entry.idea.text = "Contenido alterado después del archivo.";
+    await assert.rejects(
+      api.getProjectFinalizationReceipt(),
+      /contenido archivado no coincide con el checksum del recibo/u
+    );
+  } finally {
+    api.dispose();
+  }
+});

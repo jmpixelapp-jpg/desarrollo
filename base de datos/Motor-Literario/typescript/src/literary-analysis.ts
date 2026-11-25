@@ -502,6 +502,33 @@ export interface LiteraryCharacterAttributeTransition {
   readonly previousAssertionIds: readonly string[];
   readonly nextAssertionIds: readonly string[];
 }
+export interface LiteraryCharacterAttributeTimelinePoint {
+  readonly basis: NonNullable<NarrativeAssertion["timeReference"]>["basis"];
+  readonly precision: NonNullable<NarrativeAssertion["timeReference"]>["precision"];
+  readonly orderValue: number;
+  readonly rawTimeReferences: readonly string[];
+  readonly assertionCount: number;
+  readonly distinctValueCount: number;
+  readonly values: readonly (string | number)[];
+  readonly documentIds: readonly string[];
+  readonly assertions: readonly LiteraryCharacterAttributeAssertionEvidence[];
+  readonly evidenceTruncated: boolean;
+}
+export type LiteraryCharacterAttributeTimelineTransitionStatus =
+  | "unchanged-value" | "changed-value" | "multiple-values-at-same-time";
+export interface LiteraryCharacterAttributeTimelineTransition {
+  readonly basis: NonNullable<NarrativeAssertion["timeReference"]>["basis"];
+  readonly precision: NonNullable<NarrativeAssertion["timeReference"]>["precision"];
+  readonly fromOrderValue: number;
+  readonly toOrderValue: number;
+  readonly fromTimeReferences: readonly string[];
+  readonly toTimeReferences: readonly string[];
+  readonly status: LiteraryCharacterAttributeTimelineTransitionStatus;
+  readonly previousValues: readonly (string | number)[];
+  readonly nextValues: readonly (string | number)[];
+  readonly previousAssertionIds: readonly string[];
+  readonly nextAssertionIds: readonly string[];
+}
 export interface LiteraryCharacterAttributeProfile {
   readonly entityId: string;
   readonly canonicalName: string;
@@ -514,6 +541,11 @@ export interface LiteraryCharacterAttributeProfile {
   readonly multipleValueSceneIndexes: readonly number[];
   readonly scenes: readonly LiteraryCharacterAttributeSceneSnapshot[];
   readonly transitions: readonly LiteraryCharacterAttributeTransition[];
+  /** Afirmaciones con referencias temporales comparables, incluso desde otros capítulos. */
+  readonly projectTimelineAssertionCount: number;
+  readonly projectTimelinePointCount: number;
+  readonly projectTimeline: readonly LiteraryCharacterAttributeTimelinePoint[];
+  readonly projectTimelineTransitions: readonly LiteraryCharacterAttributeTimelineTransition[];
 }
 export interface LiteraryCharacterAttributeEvolutionAnalysis {
   readonly explicitSceneCount: number;
@@ -2783,6 +2815,7 @@ function buildCharacterAttributeEvolution(
     readonly canonicalName: string;
     readonly attribute: NarrativeAssertion["attribute"];
     readonly byScene: Map<number, NarrativeAssertion[]>;
+    readonly timedAssertions: NarrativeAssertion[];
   }>();
   let staleAssertionCount = 0;
   let outOfScopeAssertionCount = 0;
@@ -2794,19 +2827,21 @@ function buildCharacterAttributeEvolution(
       staleAssertionCount++;
       continue;
     }
-    if (assertion.evidence.documentId !== documentId || assertion.evidence.revision !== revision) {
-      outOfScopeAssertionCount++;
-      continue;
-    }
-    currentRevisionAssertionCount++;
-    const scene = scenes.find(item =>
-      assertion.evidence.end > item.contentRange.start &&
-      assertion.evidence.start < item.contentRange.end
-    );
-    if (!scene) {
-      unmappedCurrentAssertionCount++;
-      continue;
-    }
+    const inCurrentRevision = assertion.evidence.documentId === documentId &&
+      assertion.evidence.revision === revision;
+    if (!inCurrentRevision) outOfScopeAssertionCount++;
+    else currentRevisionAssertionCount++;
+
+    const scene = inCurrentRevision
+      ? scenes.find(item =>
+          assertion.evidence.end > item.contentRange.start &&
+          assertion.evidence.start < item.contentRange.end
+        )
+      : undefined;
+    if (inCurrentRevision && !scene) unmappedCurrentAssertionCount++;
+    // Las afirmaciones de otros capítulos solo se conservan si incluyen una referencia temporal explícita.
+    if (!scene && !assertion.timeReference) continue;
+
     const key = JSON.stringify([assertion.entityId, assertion.attribute]);
     let group = groups.get(key);
     if (!group) {
@@ -2814,13 +2849,17 @@ function buildCharacterAttributeEvolution(
         entityId:assertion.entityId,
         canonicalName:assertion.entityName,
         attribute:assertion.attribute,
-        byScene:new Map()
+        byScene:new Map(),
+        timedAssertions:[]
       };
       groups.set(key,group);
     }
-    const entries = group.byScene.get(scene.sceneIndex) ?? [];
-    entries.push(assertion);
-    group.byScene.set(scene.sceneIndex,entries);
+    if (assertion.timeReference) group.timedAssertions.push(assertion);
+    if (scene) {
+      const entries = group.byScene.get(scene.sceneIndex) ?? [];
+      entries.push(assertion);
+      group.byScene.set(scene.sceneIndex,entries);
+    }
   }
 
   const profiles = [...groups.values()].map(group => {
@@ -2877,6 +2916,89 @@ function buildCharacterAttributeEvolution(
     const multipleValueSceneIndexes = sceneSnapshots
       .filter(scene => scene.distinctValueCount>1)
       .map(scene => scene.sceneIndex);
+    const timelineGroups = new Map<string, NarrativeAssertion[]>();
+    for (const assertion of group.timedAssertions) {
+      const reference = assertion.timeReference!;
+      const key = JSON.stringify([reference.basis,reference.precision,reference.orderValue]);
+      const entries = timelineGroups.get(key) ?? [];
+      entries.push(assertion);
+      timelineGroups.set(key,entries);
+    }
+    const timelinePoints = [...timelineGroups.values()].map(entries => {
+      const reference = entries[0]!.timeReference!;
+      const values = new Map<string,string | number>();
+      const rawReferences = new Set<string>();
+      const documents = new Set<string>();
+      const ordered = [...entries].sort((a,b) =>
+        a.evidence.documentId.localeCompare(b.evidence.documentId,"en") ||
+        a.evidence.revision-b.evidence.revision ||
+        a.evidence.start-b.evidence.start ||
+        a.id.localeCompare(b.id,"en")
+      );
+      for (const assertion of entries) {
+        const valueKey = normalizeCharacterAttributeValue(assertion.value);
+        if (!values.has(valueKey)) values.set(valueKey,assertion.value);
+        rawReferences.add(assertion.timeReference!.raw);
+        documents.add(assertion.evidence.documentId);
+      }
+      return {
+        basis:reference.basis,
+        precision:reference.precision,
+        orderValue:reference.orderValue,
+        rawTimeReferences:[...rawReferences].sort((a,b) => a.localeCompare(b,"es")),
+        assertionCount:entries.length,
+        distinctValueCount:values.size,
+        values:[...values.values()],
+        documentIds:[...documents].sort((a,b) => a.localeCompare(b,"en")),
+        assertions:ordered.slice(0,20).map(assertion => ({
+          assertionId:assertion.id,
+          value:assertion.value,
+          documentId:assertion.evidence.documentId,
+          revision:assertion.evidence.revision,
+          occurrence:{start:assertion.evidence.start,end:assertion.evidence.end},
+          excerpt:assertion.evidence.excerpt,
+          timeReference:assertion.timeReference!
+        })),
+        evidenceTruncated:entries.length>20
+      };
+    }).sort((a,b) =>
+      a.basis.localeCompare(b.basis,"en") ||
+      a.precision.localeCompare(b.precision,"en") ||
+      a.orderValue-b.orderValue
+    );
+    const timelineSeries = new Map<string, typeof timelinePoints>();
+    for (const point of timelinePoints) {
+      const key = JSON.stringify([point.basis,point.precision]);
+      const points = timelineSeries.get(key) ?? [];
+      points.push(point);
+      timelineSeries.set(key,points);
+    }
+    const projectTimelineTransitions: LiteraryCharacterAttributeTimelineTransition[] = [];
+    for (const points of timelineSeries.values()) {
+      for (let index=1; index<points.length; index++) {
+        const previous = points[index-1]!;
+        const next = points[index]!;
+        const previousKeys = new Set(previous.values.map(normalizeCharacterAttributeValue));
+        const nextKeys = new Set(next.values.map(normalizeCharacterAttributeValue));
+        const sameValues = previousKeys.size===nextKeys.size &&
+          [...previousKeys].every(value => nextKeys.has(value));
+        projectTimelineTransitions.push({
+          basis:previous.basis,
+          precision:previous.precision,
+          fromOrderValue:previous.orderValue,
+          toOrderValue:next.orderValue,
+          fromTimeReferences:previous.rawTimeReferences,
+          toTimeReferences:next.rawTimeReferences,
+          status:previous.distinctValueCount>1 || next.distinctValueCount>1
+            ? "multiple-values-at-same-time"
+            : sameValues ? "unchanged-value" : "changed-value",
+          previousValues:previous.values,
+          nextValues:next.values,
+          previousAssertionIds:previous.assertions.map(item => item.assertionId),
+          nextAssertionIds:next.assertions.map(item => item.assertionId)
+        });
+      }
+    }
     return {
       entityId:group.entityId,
       canonicalName:group.canonicalName,
@@ -2888,7 +3010,11 @@ function buildCharacterAttributeEvolution(
       changedValueTransitionCount:transitions.filter(item => item.status==="changed-value").length,
       multipleValueSceneIndexes,
       scenes:sceneSnapshots,
-      transitions
+      transitions,
+      projectTimelineAssertionCount:group.timedAssertions.length,
+      projectTimelinePointCount:timelinePoints.length,
+      projectTimeline:timelinePoints,
+      projectTimelineTransitions
     };
   }).sort((a,b) =>
     a.entityId.localeCompare(b.entityId,"en") ||

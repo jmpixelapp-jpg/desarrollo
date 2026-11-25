@@ -66,6 +66,7 @@ export interface LiteraryAnalysisKnownIdea {
   readonly staleEvidenceCount: number;
   readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
+  readonly writerDecisionCount: number;
   readonly omittedStatusHistoryCount: number;
 }
 export interface LiteraryAnalysisInput {
@@ -3187,7 +3188,7 @@ function buildCharacterNarrativeTrajectories(
         evidenceTruncated:idea.evidenceCount>idea.evidence.length,
         statusHistory:idea.statusHistory,
         omittedStatusHistoryCount:idea.omittedStatusHistoryCount,
-        writerDecisionCount:idea.statusHistory.filter(change => change.reason==="writer").length
+        writerDecisionCount:idea.writerDecisionCount
       };
       const decisions=decisionsByCharacter.get(entityId) ?? [];
       decisions.push(decision);
@@ -4672,6 +4673,8 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||
         idea.evidenceCount < idea.evidence.length ||
         !Array.isArray(idea.statusHistory) || idea.statusHistory.length > 100 ||
+        !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
+        idea.writerDecisionCount < idea.statusHistory.filter(change => change.reason==="writer").length ||
         !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
       throw new Error("El catálogo de ideas y decisiones del análisis literario es inválido.");
     }

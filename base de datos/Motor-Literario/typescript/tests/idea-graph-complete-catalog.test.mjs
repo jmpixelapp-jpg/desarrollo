@@ -18,8 +18,8 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
       statusHistory:[
         {status:"IDEA",reason:"initial",changedAt:1},
-        {status:"incorporated",reason:"writer",changedAt:2},
-        {status:"IDEA",reason:"writer",changedAt:3}
+        {status:"incorporated",reason:"writer",changedAt:3},
+        {status:"IDEA",reason:"writer",changedAt:2}
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
@@ -53,6 +53,12 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
     assert.equal(bridgeNode.observedStatusTransitionCount, 2);
     assert.equal(bridgeNode.statusReversalCount, 1);
+    assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .nonMonotonicStatusTimestampCount,
+      1
+    );
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .statusReversalCount,

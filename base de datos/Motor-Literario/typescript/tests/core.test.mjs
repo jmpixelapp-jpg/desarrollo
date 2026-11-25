@@ -11719,3 +11719,122 @@ test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera
   assert.equal(third.nextCursor, null);
   assert.equal(pageReads, 3);
 });
+
+
+test("IndexedDB pagina la biblioteca con su clave primaria sin recorrer páginas anteriores", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const writerId = "writer-indexeddb-pages";
+  const entry = (owner, id) => ({
+    writerId: owner,
+    sourceProjectId: "book-pages",
+    sourceProjectName: "Libro páginas",
+    category: "Libro páginas",
+    idea: { projectId: "book-pages", id, text: "Idea " + id, status: "IDEA", originDocumentId: "chapter", evidence: [] },
+    archivedAt: 1
+  });
+  const entries = [
+    entry(writerId, "idea-a"),
+    entry(writerId, "idea-b"),
+    entry(writerId, "idea-c"),
+    entry("another-writer", "idea-private")
+  ];
+  let transaction;
+  let seekCalls = 0;
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction() {
+      let pending = 0;
+      let completeQueued = false;
+      let completed = false;
+      const schedule = (request, ordered, index) => {
+        pending++;
+        completeQueued = false;
+        queueMicrotask(() => {
+          if (completed) return;
+          const value = ordered[index];
+          const current = value ? {
+            value: structuredClone(value),
+            primaryKey: [value.writerId, value.sourceProjectId, value.idea.id],
+            continue() { schedule(request, ordered, index + 1); },
+            continuePrimaryKey(indexKey, primaryKey) {
+              seekCalls++;
+              assert.equal(indexKey, writerId);
+              const compare = (first, second) => {
+                for (let part = 0; part < first.length; part++) {
+                  if (first[part] !== second[part]) return first[part] < second[part] ? -1 : 1;
+                }
+                return 0;
+              };
+              const next = ordered.findIndex(item =>
+                compare([item.writerId, item.sourceProjectId, item.idea.id], primaryKey) > 0
+              );
+              schedule(request, ordered, next < 0 ? ordered.length : next);
+            }
+          } : null;
+          request.result = current;
+          request.onsuccess?.();
+          pending--;
+          if (pending === 0 && !completeQueued) {
+            completeQueued = true;
+            queueMicrotask(() => {
+              if (pending === 0 && !completed) {
+                completed = true;
+                transaction.oncomplete?.();
+              }
+            });
+          }
+        });
+      };
+      transaction = {
+        error: null,
+        abort() {
+          if (completed) return;
+          completed = true;
+          queueMicrotask(() => transaction.onabort?.());
+        },
+        objectStore(name) {
+          assert.equal(name, "personal-idea-library");
+          return {
+            index(indexName) {
+              assert.equal(indexName, "by-writer");
+              return {
+                openCursor(requestedWriterId) {
+                  assert.equal(requestedWriterId, writerId);
+                  const ordered = entries.filter(item => item.writerId === requestedWriterId)
+                    .sort((first, second) => first.idea.id.localeCompare(second.idea.id));
+                  const request = {};
+                  schedule(request, ordered, 0);
+                  return request;
+                }
+              };
+            }
+          };
+        }
+      };
+      return transaction;
+    }
+  };
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: { open() {
+      const request = { result: database };
+      queueMicrotask(() => request.onsuccess?.());
+      return request;
+    } }
+  });
+  try {
+    const store = new IndexedDbProjectStore();
+    const first = await store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: "book-pages", ideaId: "idea-b" });
+
+    const second = await store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+    assert.equal(seekCalls, 1, "la segunda página salta directamente tras la clave compuesta del cursor");
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});

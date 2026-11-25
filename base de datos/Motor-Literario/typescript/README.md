@@ -126,6 +126,32 @@ El respaldo contiene el manuscrito y los datos privados de la biblioteca en clar
 
 **Alcance:** esta utilidad respalda la base SQLite del puente Node. No respalda IndexedDB del navegador. La aplicación anfitriona que utilice IndexedDB debe implementar su propio flujo de exportación/importación y probarlo en el navegador de destino; no debe presentar una copia SQLite como respaldo de IndexedDB.
 
+## Respaldo y restauración de IndexedDB del navegador
+
+`IndexedDbProjectStore` incluye `exportDatabaseBackup()` y `restoreDatabaseBackup(backup)`. La exportación lee todos los object stores de la versión abierta dentro de una sola transacción readonly y devuelve un paquete JSON con el número de versión, fecha y checksum FNV-1a para detectar alteraciones accidentales. Incluye documentos, journal, conocimiento narrativo, biblioteca personal, diccionarios, historiales, configuraciones, evidencias, autorizaciones y recibos.
+
+El anfitrión debe vaciar primero las colas del motor y guardar el paquete como un archivo privado mediante su propio mecanismo de archivos:
+
+~~~ts
+await api.flushPendingChanges();
+const backup = await indexedDbStore.exportDatabaseBackup();
+await hostFiles.writePrivateFile(
+  "motor-literario-backup.json",
+  JSON.stringify(backup)
+);
+~~~
+
+Para restaurar, leer y validar el JSON antes de abrir proyectos o documentos en la sesión del editor:
+
+~~~ts
+const backup = JSON.parse(await hostFiles.readPrivateFile("motor-literario-backup.json"));
+await indexedDbStore.restoreDatabaseBackup(backup);
+~~~
+
+La restauración exige coincidencia exacta de versión y nombres de almacenes. Reemplaza todas las colecciones dentro de una sola transacción readwrite: si una escritura falla, IndexedDB aborta la transacción y conserva el estado anterior. Después de confirmar, publica invalidaciones de conocimiento narrativo y biblioteca para que las otras pestañas recarguen sus datos. El anfitrión debe ejecutar la restauración en modo de mantenimiento, sin sesiones de edición activas, y reconstruir las instancias del motor que dependan de los datos restaurados.
+
+El paquete contiene texto narrativo, ideas y datos privados sin cifrar. El anfitrión es responsable de guardarlo en una ubicación protegida y de aplicar cifrado en reposo cuando corresponda. El checksum no es una firma criptográfica ni autentica al creador. La exportación es una operación manual que materializa todos los almacenes en memoria; no debe ejecutarse durante la escritura normal ni en cada cambio del editor.
+
 ## Límites deliberados
 
 La implementación del producto se desarrolla exclusivamente en TypeScript/JavaScript. Las carpetas Rust del repositorio son material histórico y no forman parte del runtime ni deben ampliarse.

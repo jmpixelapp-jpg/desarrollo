@@ -16,7 +16,7 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
-      sourceProjectName:"Book", evidence:[], relatedIdeaIds:[], relatedEntityIds:[],
+      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] }
   ],
   async saveDocument(doc) { this.documents.set(doc.projectId+":"+doc.documentId,structuredClone(doc)); },
@@ -39,9 +39,14 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
     const result=await api.analyzeLiteraryDocument("chapter");
     assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount,0);
     assert.equal(result.ideaGraph.ideaCount,4);
-    assert.equal(result.ideaGraph.referenceCount,3);
+    assert.equal(result.ideaGraph.referenceCount,4);
     assert.equal(result.ideaGraph.includedReferenceCount,3);
-    assert.equal(result.ideaGraph.notIncludedReferenceCount,0);
+    assert.equal(result.ideaGraph.notIncludedReferenceCount,1);
+    assert.equal(result.ideaGraph.missingFromProjectReferenceCount,1);
+    assert.equal(
+      result.ideaGraph.references.find(reference => reference.toIdeaId === "ghost").resolution,
+      "missing-from-project"
+    );
     assert.equal(result.ideaGraph.cycleCount,1);
     assert.deepEqual(result.ideaGraph.cycles[0].ideaIds,["bridge","finish","origin"]);
     assert.equal(result.ideaGraph.weakComponentCount,2);
@@ -109,6 +114,7 @@ test("limita la muestra y clasifica referencias a ideas fuera del snapshot", asy
     assert.equal(graph.referenceCount, 10_000);
     assert.equal(graph.includedReferenceCount, 9_999);
     assert.equal(graph.notIncludedReferenceCount, 1);
+    assert.equal(graph.missingFromProjectReferenceCount, 0);
     assert.equal(graph.referenceSampleCount, 5_000);
     assert.equal(graph.omittedReferenceSampleCount, 5_000);
     assert.equal(graph.referencesTruncated, true);

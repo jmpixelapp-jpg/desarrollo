@@ -3255,9 +3255,10 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-      } else if (referenceKind === "relatedIdeaIds" && linked) {
-        // Una idea destino también puede desaparecer desde otra instancia.
-        // Las altas consultan el catálogo durable y no confían en la caché caliente.
+      } else if (referenceKind === "relatedIdeaIds" && linked &&
+          !store.saveIdeaIfUnchanged && !store.updateIdeaIfUnchanged) {
+        // Los adaptadores sin CAS no pueden comprobar el destino en la misma
+        // transacción de escritura: revalidan el catálogo durable antes de guardar.
         const ideas = requireProjectScopedRecords(
           await store.loadIdeas(projectId), projectId, "ideas"
         );

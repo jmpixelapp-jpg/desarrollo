@@ -4514,7 +4514,7 @@ function buildCharacterNarrativeTrajectories(
         ? "both-events-participant"
         : inCause ? "cause-event-participant" : "consequence-event-participant";
       const relations = relationsByCharacter.get(entityId) ?? [];
-      relations.push({candidateId:candidate.candidateId,characterRole,candidate});
+      relations.push({candidateId:candidate.candidateId,characterRole,candidate,temporalConsistency:"insufficient-data"});
       relationsByCharacter.set(entityId,relations);
     }
   }

@@ -70,6 +70,7 @@ test("la copia SQLite restaura manuscrito, conocimiento, biblioteca e historial 
       projectId, writerId, projectName, 20
     );
     assert.equal(finalized.archivedCount, 1);
+    assert.match(finalized.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
     source.close();
     source = undefined;
 
@@ -136,6 +137,7 @@ test("la copia SQLite restaura manuscrito, conocimiento, biblioteca e historial 
     const receipt = restored.loadProjectFinalizationReceipt(writerId, projectId);
     assert.deepEqual(receipt.archivedIdeaIds, ["idea-key"]);
     assert.equal(receipt.finalizedAt, 20);
+    assert.equal(receipt.archiveContentChecksum, finalized.archiveContentChecksum);
 
     previous = await SqliteProjectStore.open(restoredSummary.recoveryPath);
     assert.equal(
@@ -180,6 +182,57 @@ test("rechaza un respaldo corrupto sin alterar la base que se pretendía restaur
   } finally {
     target?.close();
     verification?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("verificar un respaldo SQLite rechaza contenido archivado distinto del recibo", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-snapshot-library-tamper-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "snapshot-content-checksum";
+  const writerId = "snapshot-content-writer";
+  const projectName = "Libro con checksum";
+  let store;
+  try {
+    store = await SqliteProjectStore.open(databasePath);
+    store.saveIdea({
+      projectId,
+      id: "idea-protected",
+      text: "El mapa permanece dentro del libro.",
+      status: "IDEA",
+      originDocumentId: "chapter-map",
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedEntityIds: [],
+      relatedIdeaIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    });
+    const summary = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 10
+    );
+    assert.match(summary.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
+    store.close();
+    store = undefined;
+
+    // La copia válida debe pasar antes de simular una alteración accidental.
+    const valid = await verifyDatabaseBackup(databasePath);
+    assert.ok(valid.recordCount > 0);
+
+    store = await SqliteProjectStore.open(databasePath);
+    const original = store.loadPersonalIdea(writerId, projectId, "idea-protected");
+    store.put("personal-idea-library", [writerId, projectId, "idea-protected"], {
+      ...original,
+      idea: { ...original.idea, text: "El mapa fue alterado después del archivo." }
+    }, { expectedCurrent: original });
+    store.close();
+    store = undefined;
+
+    await assert.rejects(
+      verifyDatabaseBackup(databasePath),
+      /checksum del contenido archivado/u
+    );
+  } finally {
+    store?.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

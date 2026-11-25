@@ -4219,14 +4219,14 @@ function buildLiteraryIdeaGraph(
     const fromStatus = orderedIdeas[sourceIndex]!.status;
     for (const targetIndex of adjacency[sourceIndex]!) {
       const toStatus = orderedIdeas[targetIndex]!.status;
-      const key = fromStatus + "\\u0000" + toStatus;
+      const key = fromStatus + "|" + toStatus;
       statusTransitionCounts.set(key, (statusTransitionCounts.get(key) ?? 0) + 1);
     }
   }
   const statusTransitionProfiles: LiteraryIdeaGraphStatusTransitionProfile[] = [];
   for (const fromStatus of profileStatuses) {
     for (const toStatus of profileStatuses) {
-      const referenceCount = statusTransitionCounts.get(fromStatus + "\\u0000" + toStatus) ?? 0;
+      const referenceCount = statusTransitionCounts.get(fromStatus + "|" + toStatus) ?? 0;
       if (referenceCount > 0) statusTransitionProfiles.push({ fromStatus, toStatus, referenceCount });
     }
   }

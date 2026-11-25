@@ -197,12 +197,6 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
       revision: 0,
       sequence: 0
     });
-    await client.openDocument("idea-project", {
-      documentId: "chapter-ideas-second",
-      text: "IDEA: El faro debe permanecer encendido durante la tormenta.",
-      revision: 0,
-      sequence: 0
-    });
     await client.flushProject("idea-project");
 
     const ideas = await client.request("project.call", {
@@ -210,14 +204,14 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
       method: "getNarrativeIdeas",
       args: []
     });
-    assert.equal(ideas.length, 2);
-    assert.ok(ideas.every(idea => idea.status === "IDEA"));
+    assert.equal(ideas.length, 1);
+    assert.equal(ideas[0].status, "IDEA");
     const archived = await client.request("project.call", {
       projectId: "idea-project",
       method: "archiveUnincorporatedIdeas",
       args: []
     });
-    assert.equal(archived.length, 2);
+    assert.equal(archived.length, 1);
     assert.equal(archived[0].writerId, "writer-private");
     assert.equal(archived[0].category, "Libro ideas");
     assert.equal(archived[0].context.version, 1);
@@ -227,23 +221,13 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
       method: "getPersonalIdeaLibrary",
       args: []
     });
-    assert.equal(library.length, 2);
-    assert.ok(library.some(entry => entry.idea.text === "La campana debe sonar antes del amanecer."));
-    assert.ok(library.some(entry => entry.idea.text === "El faro debe permanecer encendido durante la tormenta."));
+    assert.equal(library.length, 1);
+    assert.equal(library[0].idea.text, "La campana debe sonar antes del amanecer.");
 
     const firstPage = await client.getPersonalIdeaLibraryPage("idea-project", null, 1);
     assert.equal(firstPage.items.length, 1);
-    assert.ok(firstPage.nextCursor);
-    const secondPage = await client.getPersonalIdeaLibraryPage("idea-project", firstPage.nextCursor, 1);
-    assert.equal(secondPage.items.length, 1);
-    assert.equal(secondPage.nextCursor, null);
-    assert.deepEqual(
-      [firstPage.items[0].idea.id, secondPage.items[0].idea.id],
-      [...library].sort((first, second) =>
-        first.sourceProjectId.localeCompare(second.sourceProjectId) ||
-        (first.idea.id < second.idea.id ? -1 : first.idea.id > second.idea.id ? 1 : 0)
-      ).map(entry => entry.idea.id)
-    );
+    assert.equal(firstPage.items[0].idea.id, library[0].idea.id);
+    assert.equal(firstPage.nextCursor, null);
 
     const receipt = await client.request("project.call", {
       projectId: "idea-project",

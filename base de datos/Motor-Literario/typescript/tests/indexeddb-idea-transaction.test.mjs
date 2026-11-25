@@ -22,7 +22,7 @@ const idea = (extra = {}) => ({
 const entity = {
   projectId,
   id: "entity-memory",
-  kind: "concept",
+  kind: "character",
   canonicalName: "Memoria",
   normalizedName: "memoria",
   aliases: [],

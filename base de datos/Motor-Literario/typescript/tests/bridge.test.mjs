@@ -1592,6 +1592,119 @@ test("sincroniza archivo y consolidación de biblioteca entre proyectos y proces
   }
 });
 
+
+
+test("SQLite recupera una finalización tras terminar el proceso con una transferencia sin confirmar", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-process-crash-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "library-process-crash-project";
+  const writerId = "writer-process-crash";
+  const projectName = "Libro interrumpido por cierre del proceso";
+  const ids = ["idea-a", "idea-b", "idea-c"];
+  let store = await SqliteProjectStore.open(databasePath);
+  let child;
+  try {
+    for (const id of ids) {
+      store.saveIdea({
+        projectId,
+        id,
+        text: "Contenido de " + id,
+        status: "IDEA",
+        originDocumentId: "chapter-crash",
+        sourceProjectName: projectName,
+        evidence: [],
+        relatedIdeaIds: [],
+        statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+      });
+    }
+
+    // El proceso hijo reproduce el primer movimiento de la transacción de
+    // archivo y se mantiene vivo sin confirmar. El padre lo termina de forma
+    // abrupta cuando la inserción y el borrado ya están en el WAL.
+    const childScript = [
+      'import { DatabaseSync } from "node:sqlite";',
+      "const db = new DatabaseSync(process.argv[1]);",
+      'db.exec("PRAGMA busy_timeout = 5000");',
+      'db.exec("BEGIN IMMEDIATE");',
+      'const projectId = "library-process-crash-project";',
+      'const writerId = "writer-process-crash";',
+      'const projectName = "Libro interrumpido por cierre del proceso";',
+      'const ideaId = "idea-a";',
+      'const row = db.prepare("SELECT value_json FROM bridge_records WHERE collection = ? AND record_key = ?").get("narrative-ideas", JSON.stringify([projectId, ideaId]));',
+      'if (!row) throw new Error("La idea de origen no existe.");',
+      "const idea = JSON.parse(row.value_json);",
+      "const entry = { writerId, sourceProjectId: projectId, sourceProjectName: projectName, category: projectName, idea, context: { version: 1, relatedIdeas: [], relatedEntities: [] }, archivedAt: 100 };",
+      'const encode = value => Array.from({ length: value.length }, (_, index) => value.charCodeAt(index).toString(16).padStart(4, "0")).join("");',
+      'const sortKey = encode(projectId) + "!" + encode(ideaId) + "!";',
+      'db.prepare("INSERT INTO bridge_records(collection, record_key, project_id, writer_id, document_id, sequence, sort_key, value_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?)").run("personal-idea-library", JSON.stringify([writerId, projectId, ideaId]), null, writerId, null, null, sortKey, JSON.stringify(entry));',
+      'db.prepare("DELETE FROM bridge_records WHERE collection = ? AND record_key = ?").run("narrative-ideas", JSON.stringify([projectId, ideaId]));',
+      'process.stdout.write("STAGED\\n");',
+      "setInterval(() => {}, 1000);"
+    ].join("\n");
+    child = spawn(process.execPath, ["--input-type=module", "-e", childScript, databasePath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      env: { ...process.env }
+    });
+    let childStderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", chunk => { childStderr += chunk; });
+    let output = "";
+    const staged = new Promise((resolveStage, rejectStage) => {
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", chunk => {
+        output += chunk;
+        if (output.includes("STAGED\\n")) resolveStage();
+      });
+      child.once("error", rejectStage);
+      child.once("exit", (code, signal) => {
+        if (!output.includes("STAGED\\n")) {
+          rejectStage(new Error(
+            "El proceso terminó antes de dejar la transferencia sin confirmar. " +
+            "exit=" + String(code) + " signal=" + String(signal) + " stderr=" + childStderr
+          ));
+        }
+      });
+    });
+    await staged;
+
+    const exited = waitForExit(child);
+    assert.equal(child.kill(), true, "el proceso hijo debe poder terminarse abruptamente");
+    await exited;
+    child = undefined;
+
+    // La siguiente conexión fuerza la recuperación del WAL y debe observar
+    // íntegramente el estado anterior, nunca el movimiento parcial.
+    store.close();
+    store = await SqliteProjectStore.open(databasePath);
+    assert.deepEqual(store.loadIdeas(projectId).map(idea => idea.id).sort(), ids);
+    assert.deepEqual(store.loadPersonalIdeas(writerId), []);
+    assert.equal(store.loadProjectFinalizationReceipt(writerId, projectId), undefined);
+
+    const retry = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 200
+    );
+    assert.equal(retry.archivedCount, ids.length);
+    assert.equal(retry.alreadyFinalized, false);
+    assert.deepEqual(store.loadIdeas(projectId), []);
+    assert.deepEqual(
+      store.loadPersonalIdeas(writerId).map(entry => entry.idea.id).sort(),
+      ids
+    );
+    assert.deepEqual(
+      store.loadProjectFinalizationReceipt(writerId, projectId).archivedIdeaIds,
+      ids
+    );
+  } finally {
+    if (child && child.exitCode === null) {
+      child.kill();
+      await waitForExit(child);
+    }
+    store?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("SQLite revierte una finalización interrumpida a mitad de transferencia y permite reintentarla", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-finalization-recovery-"));
   const databasePath = resolve(directory, "motor.sqlite");

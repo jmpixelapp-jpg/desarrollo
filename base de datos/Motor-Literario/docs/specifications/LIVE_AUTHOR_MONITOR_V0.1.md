@@ -197,6 +197,7 @@ El anfitrión puede conectar su fuente nativa de cambios mediante bindLiveAuthor
 
 - Llama a HostEngineApi.onEditorChange exactamente una vez por delta.
 - Devuelve el resultado queued o rejected a onAdmission. El enlace conserva automáticamente los rechazos y puede reintentarlos en FIFO mediante retryPending o subscribeRetrySignal.
+- El handle de desmontaje no descarta cambios retenidos: si la cola FIFO todavía contiene deltas, detener el enlace lanza un error y conserva las suscripciones para permitir el reintento o una resincronización autoritativa.
 - Publica transiciones de contrapresión mediante onBackpressure: estado clear/backpressured, cantidad pendiente, primera/última secuencia y causa (queue_full, rejected o sink_error). Cada snapshot es inmutable, no contiene texto del manuscrito y solo se emite cuando cambia el estado observable; los errores del callback visual quedan aislados.
 - Informa excepciones de envío a onError y deja al anfitrión la política de recuperación. Los errores de la callback visual onBackpressure quedan aislados para no interrumpir la escritura.
 - No registra eventos manuales adicionales en LiveAuthorMonitor, porque HostEngineApi ya incorpora admisiones y commits.
@@ -245,7 +246,7 @@ El montaje:
 - En `queue_full`, conserva el delta rechazado y todos los siguientes. Si otra señal encuentra todavía la cola llena, no elimina ni reordena nada.
 - Suspende la fuente ante rechazos no recuperables o entradas ambiguas.
 - `resynchronize()` exige que el motor no tenga cambios pendientes ni necesite resincronización, que el textarea coincida con el snapshot autoritativo y que las métricas puedan reconciliarse; solo entonces elimina el backlog antiguo.
-- `dispose()` retira tanto los listeners del textarea como la suscripción de reintento. No cierra el documento ni dispone `HostEngineApi`.
+- `dispose()` retira los listeners del textarea y la suscripción de reintento solo cuando no queda backlog. Si hay deltas sin admitir, lanza un error y mantiene viva la integración; primero debe ejecutarse `retryPending()` o una `resynchronize()` válida. No cierra el documento ni dispone `HostEngineApi`.
 
 El adaptador `LiveAuthorMonitorTextAreaSource` usa `selectionStart`, `selectionEnd`, longitud anterior e `inputType`; no mantiene una copia sombra del manuscrito. Admite inserciones, pegados, reemplazos de selección y eliminaciones hacia atrás/adelante, con offsets UTF-16. Si falta `beforeinput`, el tipo de operación es desconocido, el valor cambia fuera del flujo de eventos o el rango no puede reconstruirse sin ambigüedad, suspende el stream y notifica `onError`.
 
@@ -318,7 +319,7 @@ Cada transacción se entrega una sola vez a `HostEngineApi.onEditorChange`. El m
 
 La fuente mantiene una ventana acotada de identificadores de transacción (512 por defecto; configurable entre 1 y 4096). Una notificación repetida con el mismo ID y secuencia se descarta. Si el editor reutiliza el ID en otra secuencia, emite un hueco o presenta una revisión base incorrecta, el stream se suspende y solicita resincronización.
 
-`resynchronize()` solo se permite cuando el motor está durable, sin cambios pendientes, y el snapshot actual del editor coincide exactamente con el del motor. Entonces se reconcilian las métricas, se restablece la fuente de transacciones y se limpia el backlog antiguo. `dispose()` retira tanto la suscripción del editor como la del monitor, sin cerrar el documento ni disponer `HostEngineApi`.
+`resynchronize()` solo se permite cuando el motor está durable, sin cambios pendientes, y el snapshot actual del editor coincide exactamente con el del motor. Entonces se reconcilian las métricas, se restablece la fuente de transacciones y se limpia el backlog antiguo. `dispose()` retira las suscripciones solo si el backlog está vacío; si quedan transacciones sin admitir, lanza un error y mantiene la integración montada para que se pueda reintentar o resincronizar. No cierra el documento ni dispone `HostEngineApi`.
 
 La fuente conserva únicamente longitud, revisión, secuencia, tipo de última transacción y los IDs de la ventana de deduplicación. No conserva copias del manuscrito ni cadenas de reemplazo. Los editores que no expongan transacciones nativas deben seguir usando el adaptador `textarea`; para ellos, las operaciones undo/redo sin un delta autoritativo siguen exigiendo resincronización.
 
@@ -367,3 +368,14 @@ El snapshot del monitor ya contabiliza `idleDurationMs` y `pauseCount`; a partir
 - Las cifras proceden del snapshot de métricas; las vistas no leen el manuscrito ni modifican el historial de edición.
 
 Las pruebas del panel y del workspace avanzan el reloj controlado, registran una edición, dejan transcurrir el umbral y registran otra edición. Comprueban que aparece una pausa y que el tiempo acumulado se representa correctamente como duración.
+
+## 17. Desmontaje seguro y protección del backlog
+
+Una cola FIFO con deltas aún no admitidos forma parte del estado necesario para completar la sincronización del documento. Por tanto, detener el enlace mientras `getPendingChanges()` no está vacío ya no limpia esos deltas silenciosamente.
+
+- La función de parada devuelta por `bindLiveAuthorMonitorEditorChanges` lanza un error antes de cambiar el estado o retirar suscripciones si todavía hay cambios pendientes.
+- `dispose()` de los adaptadores textarea y transaccional aplica la misma comprobación antes de marcar la integración como dispuesta. Un desmontaje rechazado conserva listeners del editor y la señal automática de reintento.
+- El anfitrión puede resolver el backlog con `retryPending()`. Para descartarlo, debe ejecutar una `resynchronize()` que demuestre que el snapshot actual del editor y el snapshot autoritativo durable del motor coinciden exactamente; solo entonces se permite limpiar la cola y desmontar.
+- Los errores de desmontaje deben mostrarse al anfitrión como una condición de sincronización pendiente, no ignorarse. La pestaña o editor debe permanecer montado hasta admitir los deltas o completar la resincronización.
+
+Las pruebas de regresión verifican el enlace base, la integración textarea y el proveedor transaccional: un desmontaje prematuro se rechaza, conserva el backlog y mantiene los listeners activos; una vez admitidos los cambios en FIFO, el desmontaje se completa y retira las suscripciones. Esto protege deltas capturados por el monitor frente a una pérdida silenciosa durante el cambio de pestaña o cierre de la vista.

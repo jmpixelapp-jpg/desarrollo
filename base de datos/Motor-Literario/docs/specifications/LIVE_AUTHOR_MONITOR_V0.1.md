@@ -1,6 +1,6 @@
 # Monitoreo de actividad del autor en vivo — contrato v0.1
 
-- **Estado:** núcleo, refresco temporal, panel DOM, tablero multi-documento, selección de pestaña activa y enlace tipado del stream de cambios disponibles; la conexión al editor concreto del anfitrión requiere su adaptador de deltas.
+- **Estado:** núcleo, refresco temporal, panel DOM, tablero multi-documento, selección de pestaña activa, enlace tipado del stream y adaptador nativo para textarea disponibles. Los editores con historial propio pueden requerir un adaptador específico.
 - **Runtime:** TypeScript/JavaScript puro; sin dependencias externas ni servicios remotos.
 - **Ubicación:** **typescript/src/live-author-monitor.ts**, **live-author-monitor-panel.ts**, **live-author-monitor-workspace.ts**, **live-author-monitor-editor-integration.ts** y **live-author-monitor-change-binding.ts**.
 - **Alcance:** métricas por sesión y documento, eventos de admisión/commit, pausas, ritmo estimado, resincronización y suscripciones.
@@ -205,3 +205,55 @@ El anfitrión puede conectar su fuente nativa de cambios mediante bindLiveAuthor
 ensureLiveAuthorMonitorDocument(documentId) restaura una sesión de observabilidad que se cerró mientras el documento del motor seguía abierto. Devuelve la sesión existente si ya está activa; en caso contrario, utiliza el snapshot actual del motor. Rechaza si el documento tiene cambios pendientes (pendingSequence !== sequence) o necesita resincronización. La integración con la pestaña activa usa este método automáticamente si la sesión no existe.
 
 ## 11. Próximo tramo
+
+## 11. Adaptador nativo para textarea
+
+El módulo \`live-author-monitor-textarea-source.ts\` conecta un \`HTMLTextAreaElement\` sin React ni dependencias. Convierte el par nativo \`beforeinput\`/\`input\` en un \`EditorChange\` ordenado y se conecta con \`bindLiveAuthorMonitorEditorChanges\`.
+
+\`\`\`ts
+import {
+  LiveAuthorMonitorTextAreaSource,
+  bindLiveAuthorMonitorEditorChanges
+} from "./motor-literario";
+
+const snapshot = api.getSnapshot(documentId);
+if (!snapshot) throw new Error("El documento no está abierto");
+
+const source = new LiveAuthorMonitorTextAreaSource({
+  element: editorTextArea,
+  initialSnapshot: snapshot,
+  onError: error => reportEditorSynchronizationError(error)
+});
+
+const stopChanges = bindLiveAuthorMonitorEditorChanges({
+  source,
+  sink: api,
+  onAdmission: (change, admission) => {
+    if (admission.status === "rejected") {
+      // queue_full es reintentable: conservar el delta exacto y reintentarlo
+      // en orden antes de enviar deltas posteriores.
+      retainRejectedDelta(change, admission);
+      if (admission.reason !== "queue_full") {
+        source.requireResynchronization("El motor rechazó un delta que requiere reconciliación.");
+      }
+    }
+  },
+  onError: (error, change) => reportEditorSynchronizationError(error, change)
+});
+
+// Al desmontar el editor:
+stopChanges();
+source.dispose();
+\`\`\`
+
+Reglas del adaptador:
+
+- Comprueba que el texto visible coincida con el snapshot autoritativo al iniciarse y al resincronizarse.
+- Usa \`selectionStart\`, \`selectionEnd\`, longitud anterior y \`inputType\`; no mantiene una segunda copia del manuscrito.
+- Admite inserción, pegado, reemplazo de selección y borrado hacia atrás/adelante. Los offsets y las longitudes son unidades UTF-16, incluidos los pares sustitutos.
+- No inventa rangos si falta \`beforeinput\`, cambia el valor por código sin una operación equivalente o no puede determinar la dirección de borrado: suspende el stream y notifica \`onError\`.
+- \`historyUndo\` y \`historyRedo\` requieren el contrato de historial del editor anfitrión. Tras reconciliar el contenido visible con un snapshot del motor, llamar a \`source.resynchronize(snapshot)\`.
+- En una respuesta \`queue_full\`, el anfitrión conserva el delta rechazado y lo reintenta en orden; no debe enviar un delta posterior antes de recuperar el anterior. Los rechazos no recuperables suspenden el adaptador mediante \`requireResynchronization\`.
+- La función de desmontaje retira listeners; \`dispose()\` libera el adaptador. Ninguno cierra el documento ni dispone \`HostEngineApi\`.
+
+La prueba dedicada \`typescript/tests/live-author-monitor-textarea-source.test.mjs\` cubre rangos, secuencias, reemplazos, borrados, UTF-16, undo/redo, resincronización, errores de entrada y desmontaje. Los editores que manejan su propio historial/composición deben implementar la misma interfaz \`subscribeChanges\` con sus operaciones transaccionales nativas.

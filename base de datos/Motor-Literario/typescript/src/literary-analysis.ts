@@ -3277,7 +3277,7 @@ function buildCharacterProjectEventTimeline(
 const MAX_IDEA_GRAPH_REFERENCE_SAMPLES = 5_000;
 const MAX_IDEA_GRAPH_CYCLE_SAMPLES = 100;
 const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
-const MAX_IDEA_LEXICAL_TEXT_UNITS = 2_000_000;
+export const MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS = 2_000_000;
 const MAX_IDEA_LEXICAL_TERMS_PER_IDEA = 100;
 const MAX_IDEA_LEXICAL_TERM_DOCUMENT_FREQUENCY = 40;
 const MIN_IDEA_LEXICAL_SHARED_TERMS = 2;
@@ -3620,7 +3620,7 @@ function buildLiteraryIdeaLexicalResonances(
       ideasWithoutTextCount++;
       continue;
     }
-    if (tokenizedTextUnitCount + idea.text.length > MAX_IDEA_LEXICAL_TEXT_UNITS) {
+    if (tokenizedTextUnitCount + idea.text.length > MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS) {
       omittedTextBudgetIdeaCount++;
       continue;
     }

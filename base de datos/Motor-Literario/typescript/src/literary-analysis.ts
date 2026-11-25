@@ -947,7 +947,7 @@ function countTokensOutsideRangesPerRange(
       excludedRanges[excludedIndex]!.end <= token.start) excludedIndex++;
     const excluded = excludedRanges[excludedIndex];
     if (excluded && token.start < excluded.end && token.end > excluded.start) continue;
-    counts[scopeIndex]++;
+    counts[scopeIndex] = (counts[scopeIndex] ?? 0) + 1;
   }
   return counts;
 }

@@ -32,7 +32,7 @@ function waitForExit(child) {
   return new Promise(resolveExit => {
     if (child.exitCode !== null) return resolveExit(child.exitCode);
     if (child.signalCode !== null) return resolveExit(128);
-    child.once("exit", code => resolveExit(code));
+    child.once("exit", code => resolveExit(code ?? 128));
   });
 }
 

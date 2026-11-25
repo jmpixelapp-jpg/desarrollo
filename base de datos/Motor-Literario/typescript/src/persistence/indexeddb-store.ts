@@ -5074,7 +5074,9 @@ export class IndexedDbProjectStore implements ProjectStore {
         writerId
           ? personalIdeaStore.index("by-writer-source").getAll([writerId, projectId])
           : personalIdeaStore.index(PERSONAL_IDEA_SOURCE_INDEX).getAll(projectId),
-        receiptStore.get([writerId ?? "", projectId, FINALIZATION_RECEIPT_ID])
+        ...(writerId
+          ? [receiptStore.get([writerId, projectId, FINALIZATION_RECEIPT_ID])]
+          : [])
       ];
       const results: unknown[] = Array.from({ length: requests.length }, () => []);
       let remaining = requests.length;
@@ -5190,7 +5192,9 @@ export class IndexedDbProjectStore implements ProjectStore {
             if (!writerId && originalPersonalEntries.length > 0) {
               throw new Error("Se requiere la identidad estable del escritor para consolidar entidades de un libro con ideas ya archivadas.");
             }
-            const finalizationReceipt = results[6] as StoredProjectFinalizationReceipt | undefined;
+            const finalizationReceipt = writerId
+              ? results[6] as StoredProjectFinalizationReceipt | undefined
+              : undefined;
             if (writerId && finalizationReceipt) {
               validateFinalizationReceipt(finalizationReceipt, writerId, projectId);
             }

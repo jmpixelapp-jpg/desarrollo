@@ -1548,6 +1548,52 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(DICTIONARY_ENTRY_ENTITIES, "by-project", "projectId");
         ensureIndex(DICTIONARY_ENTRY_ENTITIES, "by-entry", ["projectId", "entryId"]);
         ensureIndex(DICTIONARY_ENTRY_ENTITIES, "by-record", ["projectId", "recordId"]);
+
+        // v21 separa los vínculos y conserva las asociaciones existentes.
+        // Su fecha registra la materialización de la migración, no una fecha
+        // histórica inventada; la procedencia queda explícitamente marcada.
+        if ((event as IDBVersionChangeEvent).oldVersion < 21) {
+          const legacyEntries = upgrade.objectStore(DICTIONARY_ENTRIES);
+          const migratedLinks = upgrade.objectStore(DICTIONARY_ENTRY_ENTITIES);
+          const entityStore = upgrade.objectStore(ENTITIES);
+          const migrationTimestamp = Date.now();
+          const cursorRequest = legacyEntries.openCursor();
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (!cursor) return;
+            const legacyEntry = cursor.value as DictionaryEntry;
+            const ids = Array.isArray(legacyEntry.relatedEntityIds)
+              ? [...new Set(legacyEntry.relatedEntityIds)]
+              : [];
+            if (ids.length === 0) {
+              cursor.continue();
+              return;
+            }
+            let pending = ids.length;
+            for (const recordId of ids) {
+              const entityRequest = entityStore.get([legacyEntry.projectId, recordId]);
+              entityRequest.onsuccess = () => {
+                const entity = entityRequest.result as NarrativeEntity | undefined;
+                if (!entity || entity.projectId !== legacyEntry.projectId || entity.id !== recordId) {
+                  upgrade.abort();
+                  return;
+                }
+                migratedLinks.put({
+                  projectId: legacyEntry.projectId,
+                  entryId: legacyEntry.id,
+                  recordId,
+                  linkKind: "RELATED",
+                  provenanceKind: "MIGRATION",
+                  createdAt: migrationTimestamp
+                } satisfies DictionaryEntryEntityLink);
+                pending--;
+                if (pending === 0) cursor.continue();
+              };
+              entityRequest.onerror = () => upgrade.abort();
+            }
+          };
+          cursorRequest.onerror = () => upgrade.abort();
+        }
         ensureIndex(MANUSCRIPT_FRAGMENTS, "by-project", "projectId");
         ensureIndex(MANUSCRIPT_FRAGMENTS, "by-document-revision", ["projectId", "documentId", "revision"]);
         ensureIndex(MANUSCRIPT_FRAGMENTS, "by-parent", ["projectId", "parentFragmentId"]);
@@ -2663,7 +2709,8 @@ export class IndexedDbProjectStore implements ProjectStore {
   /** Persiste una entrada solo si su diccionario y todas sus fichas relacionadas existen en el libro. */
   async saveDictionaryEntry(
     entry: DictionaryEntry,
-    expectedCurrent?: DictionaryEntry
+    expectedCurrent?: DictionaryEntry,
+    suppliedLinks?: readonly DictionaryEntryEntityLink[]
   ): Promise<void> {
     validateDictionaryEntry(entry, "entrada de diccionario");
     if (expectedCurrent !== undefined) {
@@ -2672,16 +2719,37 @@ export class IndexedDbProjectStore implements ProjectStore {
         throw new Error("La actualización de entrada cambió su identidad.");
       }
     }
+    const linksToSave = suppliedLinks ?? entry.relatedEntityIds.map(recordId => ({
+      projectId: entry.projectId,
+      entryId: entry.id,
+      recordId,
+      linkKind: "RELATED",
+      provenanceKind: entry.provenanceKind,
+      createdAt: entry.createdAt
+    }));
+    const linkIds = new Set<string>();
+    for (const link of linksToSave) {
+      validateDictionaryEntryEntityLink(link, entry.projectId, entry.id);
+      if (linkIds.has(link.recordId)) throw new Error("La entrada contiene metadatos duplicados para una ficha.");
+      linkIds.add(link.recordId);
+    }
+    if (linkIds.size !== entry.relatedEntityIds.length ||
+        entry.relatedEntityIds.some(id => !linkIds.has(id))) {
+      throw new Error("Cada ficha relacionada debe tener exactamente un registro de metadatos.");
+    }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(
-        [DICTIONARIES, DICTIONARY_ENTRIES, ENTITIES], "readwrite"
+        [DICTIONARIES, DICTIONARY_ENTRIES, DICTIONARY_ENTRY_ENTITIES, ENTITIES], "readwrite"
       );
       const dictionaries = transaction.objectStore(DICTIONARIES);
       const entries = transaction.objectStore(DICTIONARY_ENTRIES);
+      const links = transaction.objectStore(DICTIONARY_ENTRY_ENTITIES);
       const entities = transaction.objectStore(ENTITIES);
       let dictionaryChecked = false;
       let entryChecked = false;
+      let linksChecked = false;
+      let currentLinks: DictionaryEntryEntityLink[] = [];
       let pendingEntities = entry.relatedEntityIds.length;
       let finished = false;
       let validationError: Error | undefined;
@@ -2694,7 +2762,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         try { transaction.abort(); } catch { /* transacción ya abortada */ }
       };
       const commitIfReady = (): void => {
-        if (finished || !dictionaryChecked || !entryChecked || pendingEntities !== 0) return;
+        if (finished || !dictionaryChecked || !entryChecked || !linksChecked || pendingEntities !== 0) return;
         try {
           if (expectedCurrent === undefined) {
             if (currentEntry !== undefined) {
@@ -2710,6 +2778,10 @@ export class IndexedDbProjectStore implements ProjectStore {
             }
             entries.put(entry);
           }
+          for (const oldLink of currentLinks) {
+            links.delete([oldLink.projectId, oldLink.entryId, oldLink.recordId]);
+          }
+          for (const link of linksToSave) links.put(structuredClone(link));
         } catch (error) {
           abortWith(error);
         }
@@ -2752,6 +2824,20 @@ export class IndexedDbProjectStore implements ProjectStore {
       };
       entryRequest.onerror = () => abortWith(
         entryRequest.error ?? new Error("No se pudo comprobar la entrada anterior.")
+      );
+
+      const existingLinksRequest = links.index("by-entry").getAll([entry.projectId, entry.id]);
+      existingLinksRequest.onsuccess = () => {
+        try {
+          currentLinks = existingLinksRequest.result as DictionaryEntryEntityLink[];
+          if (!Array.isArray(currentLinks)) throw new Error("Los vínculos anteriores no forman una colección.");
+          for (const link of currentLinks) validateDictionaryEntryEntityLink(link, entry.projectId, entry.id);
+          linksChecked = true;
+          commitIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      existingLinksRequest.onerror = () => abortWith(
+        existingLinksRequest.error ?? new Error("No se pudieron leer los vínculos anteriores.")
       );
 
       for (const entityId of entry.relatedEntityIds) {
@@ -2895,7 +2981,11 @@ export class IndexedDbProjectStore implements ProjectStore {
         } else {
           const legacyIds = new Set(entry?.relatedEntityIds ?? []);
           for (const link of records) legacyIds.delete(link.recordId);
-          resolve(records.map(link => structuredClone(link)));
+          if (legacyIds.size > 0) {
+            reject(new Error("Hay vínculos heredados sin metadatos; la migración de diccionarios quedó incompleta."));
+          } else {
+            resolve(records.map(link => structuredClone(link)));
+          }
         }
       };
       transaction.onerror = () => reject(

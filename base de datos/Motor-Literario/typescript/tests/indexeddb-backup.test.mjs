@@ -24,11 +24,12 @@ function createFakeDatabase(initialStores, options = {}) {
           assert.ok(working.has(name), "object store must be in the transaction scope");
           return {
             getAll() {
+              const snapshot = clone(working.get(name));
               const request = { result: undefined, onsuccess: null, onerror: null };
               pending++;
               queueMicrotask(() => {
                 if (ended) return;
-                request.result = clone(working.get(name));
+                request.result = clone(snapshot);
                 request.onsuccess?.();
                 pending--;
                 scheduleCompletion();
@@ -167,11 +168,61 @@ test("rechaza checksum alterado antes de iniciar una restauración", async () =>
   }
 });
 
-test("restaura manuscrito, biblioteca y recibos dentro de una única transacción", async () => {
+test("restaura manuscrito, biblioteca y recibos e invalida identidades anteriores y restauradas", async () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class TestBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    constructor(name) {
+      this.name = name;
+      TestBroadcastChannel.channels.add(this);
+    }
+    postMessage(data) {
+      for (const channel of TestBroadcastChannel.channels) {
+        if (channel === this || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: clone(data) }));
+      }
+    }
+    close() { TestBroadcastChannel.channels.delete(this); }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: TestBroadcastChannel
+  });
+  const oldDocument = {
+    ...documentRecord,
+    projectId: "old-project",
+    documentId: "old-chapter",
+    text: "Proyecto anterior."
+  };
+  const oldIdea = {
+    ...archivedIdea,
+    writerId: "old-writer",
+    sourceProjectId: "old-project",
+    sourceProjectName: "Libro anterior",
+    category: "Libro anterior",
+    idea: {
+      ...archivedIdea.idea,
+      projectId: "old-project",
+      id: "old-idea",
+      sourceProjectName: "Libro anterior",
+      originDocumentId: "old-chapter"
+    }
+  };
   const currentDatabase = createFakeDatabase({
-    documents: [{ ...documentRecord, text: "Texto local posterior." }],
-    "personal-idea-library": [],
-    "writer-library-finalization-receipts": []
+    documents: [oldDocument],
+    "personal-idea-library": [oldIdea],
+    "writer-library-finalization-receipts": [{
+      writerId: "old-writer",
+      sourceProjectId: "old-project",
+      receiptId: "finalization-v1",
+      sourceProjectName: "Libro anterior",
+      finalizedAt: 10,
+      archivedIdeaIds: ["old-idea"],
+      archiveChecksum: "fnv1a64:0000000000000000"
+    }]
   });
   const backupSource = attach(createFakeDatabase({
     documents: [documentRecord],
@@ -187,17 +238,27 @@ test("restaura manuscrito, biblioteca y recibos dentro de una única transacció
     }]
   }));
   const target = attach(currentDatabase);
+  const changedProjects = [];
+  const changedWriters = [];
+  const offProjects = target.subscribeNarrativeChanges(id => changedProjects.push(id));
+  const offWriters = target.subscribePersonalIdeaLibraryChanges(id => changedWriters.push(id));
   try {
     const backup = await backupSource.exportDatabaseBackup();
     await target.restoreDatabaseBackup(backup);
 
+    assert.deepEqual(changedProjects.sort(), ["backup-project", "old-project"]);
+    assert.deepEqual(changedWriters.sort(), ["backup-writer", "old-writer"]);
     assert.deepEqual(currentDatabase.state.get("documents"), [documentRecord]);
     assert.deepEqual(currentDatabase.state.get("personal-idea-library"), [archivedIdea]);
     assert.equal(currentDatabase.state.get("writer-library-finalization-receipts")[0].writerId, "backup-writer");
     assert.equal(currentDatabase.state.get("writer-library-finalization-receipts")[0].archivedIdeaIds[0], "idea-key");
   } finally {
+    offProjects();
+    offWriters();
     backupSource.database = undefined;
     target.database = undefined;
+    if (originalDescriptor) Object.defineProperty(globalThis, "BroadcastChannel", originalDescriptor);
+    else delete globalThis.BroadcastChannel;
   }
 });
 

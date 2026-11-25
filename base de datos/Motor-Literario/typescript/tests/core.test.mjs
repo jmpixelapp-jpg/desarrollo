@@ -13698,3 +13698,67 @@ test("la API verifica el contenido completo de las ideas archivadas al leer el r
     api.dispose();
   }
 });
+
+test("la verificación del recibo pagina más de 128 ideas sin exigir que sus vínculos queden dentro del lote", async () => {
+  const writerId = "writer-content-receipt-pages";
+  const projectId = "book-content-receipt-pages";
+  const projectName = "Libro con recibo paginado";
+  const ids = Array.from({ length: 129 }, (_, index) =>
+    "idea-" + String(index).padStart(3, "0")
+  );
+  const entries = ids.map((id, index) => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: projectName,
+    category: projectName,
+    idea: {
+      projectId,
+      id,
+      text: "Contenido privado " + id,
+      status: "IDEA",
+      originDocumentId: "chapter-" + id,
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedEntityIds: [],
+      relatedIdeaIds: index === 0 ? [ids[128]] : []
+    },
+    context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+    archivedAt: index + 1
+  }));
+  const hash = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  const receipt = {
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: projectName,
+    finalizedAt: 200,
+    archivedIdeaIds: ids,
+    archiveChecksum: hash(JSON.stringify(ids)),
+    archiveContentChecksum: hash(JSON.stringify(entries))
+  };
+  const reads = [];
+  const byId = new Map(entries.map(entry => [entry.idea.id, entry]));
+  const store = new MemoryStore();
+  store.loadProjectFinalizationReceipt = async () => structuredClone(receipt);
+  store.loadPersonalIdeasByKeys = async (authenticatedWriterId, references) => {
+    assert.equal(authenticatedWriterId, writerId);
+    reads.push(references.length);
+    return references.map(reference => structuredClone(byId.get(reference.ideaId)));
+  };
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId, projectName, writerId });
+    const result = await api.getProjectFinalizationReceipt();
+    assert.equal(result.archivedIdeaIds.length, 129);
+    assert.deepEqual(reads, [128, 1]);
+  } finally {
+    api.dispose();
+  }
+});

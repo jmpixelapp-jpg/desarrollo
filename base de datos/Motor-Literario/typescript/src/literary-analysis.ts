@@ -701,6 +701,12 @@ export interface LiteraryCharacterDocumentedDecision {
   readonly evidenceTruncated: boolean;
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
   readonly omittedStatusHistoryCount: number;
+  /** Compara el estado actual de la idea con el último estado visible del historial. */
+  readonly currentStatusHistoryConsistency: "consistent" | "mismatch" | "unknown";
+  /** Retrocesos entre marcas temporales conocidas de cambios adyacentes. */
+  readonly nonMonotonicStatusTimestampCount: number;
+  /** Pares adyacentes con ambas marcas temporales disponibles. */
+  readonly comparableStatusTimestampPairCount: number;
   /** Cambios de estado registrados explícitamente con reason=writer. */
   readonly writerDecisionCount: number;
 }
@@ -4491,6 +4497,19 @@ function buildCharacterNarrativeTrajectories(
           idea.evidenceCount>Math.min(20,idea.evidence.length),
         statusHistory:idea.statusHistory,
         omittedStatusHistoryCount:idea.omittedStatusHistoryCount,
+        currentStatusHistoryConsistency:idea.omittedStatusHistoryCount > 0 ||
+          idea.statusHistory.length === 0
+          ? "unknown"
+          : idea.statusHistory[idea.statusHistory.length-1]!.status === idea.status
+            ? "consistent" : "mismatch",
+        nonMonotonicStatusTimestampCount:idea.statusHistory.slice(1).reduce((count,change,index) => {
+          const previous = idea.statusHistory[index]!;
+          return count + (previous.changedAt !== undefined && change.changedAt !== undefined &&
+            change.changedAt < previous.changedAt ? 1 : 0);
+        },0),
+        comparableStatusTimestampPairCount:idea.statusHistory.slice(1).filter((change,index) =>
+          idea.statusHistory[index]!.changedAt !== undefined && change.changedAt !== undefined
+        ).length,
         writerDecisionCount:idea.writerDecisionCount
       };
       const decisions=decisionsByCharacter.get(entityId) ?? [];

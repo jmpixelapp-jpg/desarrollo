@@ -256,6 +256,14 @@ Cada apertura reserva sincrónicamente el identificador del documento antes de i
 
 La tabla lógica `timeline_occurrences` está embebida en los acontecimientos: cada evento puede conservar su referencia temporal explícita y el `timelineTrackId` que el escritor le asigne. El vínculo se valida en la misma transacción de IndexedDB contra una pista del mismo proyecto. La API `setNarrativeEventTimelineTrack(eventId, trackId)` asocia una pista; enviar `undefined` retira la asociación. El motor no elige una pista por similitud ni transforma una fecha ausente en fecha inventada.
 
+### Historial de etiquetas y estados
+
+Los historiales de fichas y relaciones se guardan como registros append-only, separados de la ficha vigente. Cada transición conserva el valor anterior y el nuevo, la revisión consecutiva, el motivo y el momento del cambio. El anfitrión deriva el autor del `writerId` de la sesión autenticada; el motor no acepta que una petición se atribuya a otro escritor.
+
+Las escrituras comprueban dentro de una transacción que la ficha o relación exista en el mismo proyecto, que la revisión continúe la cadena anterior y que los valores previos coincidan con la última transición durable. Las lecturas validan la continuidad completa antes de devolver el historial. La base local usa los almacenes `record-lifecycles` y `relation-lifecycles`, con índices únicos por entidad/relación y revisión.
+
+API: `getRecordLifecycleHistory()`, `appendRecordLifecycle()`, `getRelationLifecycleHistory()` y `appendRelationLifecycle()`.
+
 ### Perfiles de estilo y pistas cronológicas
 
 Los perfiles de estilo guardan observaciones y preferencias de voz, punto de vista, diálogos y otros rasgos mediante JSON extensible y procedencia. No reescriben el manuscrito ni uniforman automáticamente la voz del escritor.

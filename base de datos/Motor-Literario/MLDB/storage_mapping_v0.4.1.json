@@ -1,6 +1,6 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 4,
+  "mapping_version": 5,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
@@ -758,7 +758,7 @@
         "system/indexeddb-version/"
       ],
       "representation": "embedded",
-      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=16); sin tabla de historial separada.",
+      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=17); sin tabla de historial separada.",
       "implementationStatus": "partial",
       "objectStores": []
     },
@@ -833,7 +833,7 @@
         "project/record-lifecycles/"
       ],
       "representation": "record",
-      "contract": "RecordLifecycle append-only en record-lifecycles; revisión consecutiva, continuidad de etiqueta/estado y referencia transaccional a narrative-entities.",
+      "contract": "Historial append-only de cambios de etiqueta y estado de fichas, con revisión consecutiva y autor derivado del escritor autenticado.",
       "implementationStatus": "implemented",
       "objectStores": [
         "record-lifecycles"
@@ -855,7 +855,7 @@
         "project/relation-lifecycles/"
       ],
       "representation": "record",
-      "contract": "RelationLifecycle append-only en relation-lifecycles; revisión consecutiva, continuidad de etiqueta/estado y referencia transaccional a narrative-relations.",
+      "contract": "Historial append-only de cambios de etiqueta y estado de relaciones, con revisión consecutiva y autor derivado del escritor autenticado.",
       "implementationStatus": "implemented",
       "objectStores": [
         "relation-lifecycles"

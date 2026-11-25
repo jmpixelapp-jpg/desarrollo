@@ -33,12 +33,11 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
       statusHistory:[
         {status:"IDEA",reason:"initial",changedAt:1},
-        {status:"IDEA",reason:"writer",changedAt:2},
-        {status:"incorporated",reason:"writer",changedAt:3},
+        {status:"incorporated",reason:"writer",changedAt:2},
+        {status:"discarded",reason:"writer",changedAt:3},
         {status:"IDEA",reason:"writer",changedAt:4},
-        {status:"discarded",reason:"writer",changedAt:5},
-        {status:"incorporated",reason:"writer",changedAt:6},
-        {status:"IDEA",reason:"writer",changedAt:7}
+        {status:"incorporated",reason:"writer",changedAt:5},
+        {status:"IDEA",reason:"writer",changedAt:6}
       ] }
   ],
   async saveDocument(doc) { this.documents.set(doc.projectId+":"+doc.documentId,structuredClone(doc)); },
@@ -74,6 +73,7 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
       changedAt: 4
     });
     bridge.status = "IDEA";
+    await api.refreshNarrativeKnowledge();
 
     const after = await api.analyzeLiteraryDocument("chapter");
     const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
@@ -183,12 +183,12 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 0);
     assert.equal(soloNode.observedStatusTransitionCount, 5);
     assert.equal(soloNode.statusReversalCount, 3);
-    assert.equal(soloNode.comparableStatusTimestampPairCount, 6);
+    assert.equal(soloNode.comparableStatusTimestampPairCount, 5);
     assert.equal(soloNode.uncomparableStatusTimestampPairCount, 0);
     assert.equal(soloNode.nonMonotonicStatusTimestampCount, 0);
     assert.equal(soloNode.earliestKnownStatusChangeAt, 1);
-    assert.equal(soloNode.latestKnownStatusChangeAt, 7);
-    assert.equal(soloNode.knownStatusHistorySpanMs, 6);
+    assert.equal(soloNode.latestKnownStatusChangeAt, 6);
+    assert.equal(soloNode.knownStatusHistorySpanMs, 5);
     assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 0);
     assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
     assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);

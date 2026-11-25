@@ -1,4 +1,4 @@
-import type { PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage } from "./contracts";
+import type { PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, ProjectFinalizationSummary } from "./contracts";
 
 export interface BridgeReadable {
   on(event: "data" | "error", listener: (value: unknown) => void): unknown;
@@ -305,6 +305,14 @@ export class MotorLiterarioBridgeClient {
       projectId,
       method: "getPersonalIdeaLibraryPage",
       args: [cursor, limit]
+    });
+  }
+
+  finalizeProjectToIdeaLibrary(projectId: string): Promise<ProjectFinalizationSummary> {
+    return this.request("project.call", {
+      projectId,
+      method: "finalizeProjectToIdeaLibrary",
+      args: []
     });
   }
 

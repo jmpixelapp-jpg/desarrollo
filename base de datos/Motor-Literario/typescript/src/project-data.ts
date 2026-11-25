@@ -228,3 +228,85 @@ export function cloneStyleProfile(profile: StyleProfile): StyleProfile {
 export function cloneTimelineTrack(track: TimelineTrack): TimelineTrack {
   return structuredClone(track);
 }
+
+
+/** Cambio inmutable de etiqueta o estado de una ficha narrativa. */
+export interface RecordLifecycle {
+  readonly projectId: string;
+  readonly id: string;
+  readonly recordId: string;
+  /** Secuencia monotónica que comienza en 1 para cada ficha. */
+  readonly revision: number;
+  readonly previousLabel: string | null;
+  readonly newLabel: string;
+  readonly previousState: string | null;
+  readonly newState: string;
+  readonly changedBy: string;
+  readonly changeReason?: string | null;
+  readonly changedAt: number;
+}
+
+/** Cambio inmutable de etiqueta o estado de una relación narrativa. */
+export interface RelationLifecycle {
+  readonly projectId: string;
+  readonly id: string;
+  readonly relationId: string;
+  readonly revision: number;
+  readonly previousLabel: string | null;
+  readonly newLabel: string;
+  readonly previousState: string | null;
+  readonly newState: string;
+  readonly changedBy: string;
+  readonly changeReason?: string | null;
+  readonly changedAt: number;
+}
+
+function validateLifecycleShape(
+  item: Record<string, unknown>,
+  expectedProjectId: string | undefined,
+  subjectKey: "recordId" | "relationId",
+  label: string
+): void {
+  const subjectId = item[subjectKey];
+  if (typeof item.projectId !== "string" || !item.projectId.trim() ||
+      (expectedProjectId !== undefined && item.projectId !== expectedProjectId) ||
+      typeof item.id !== "string" || !item.id.trim() || item.id.length > 256 ||
+      typeof subjectId !== "string" || !subjectId.trim() || subjectId.length > 256 ||
+      !Number.isSafeInteger(item.revision) || (item.revision as number) < 1 ||
+      (item.previousLabel !== null &&
+        (typeof item.previousLabel !== "string" || !item.previousLabel.trim() || item.previousLabel.length > 512)) ||
+      typeof item.newLabel !== "string" || !item.newLabel.trim() || item.newLabel.length > 512 ||
+      (item.previousState !== null &&
+        (typeof item.previousState !== "string" || !item.previousState.trim() || item.previousState.length > 128)) ||
+      typeof item.newState !== "string" || !item.newState.trim() || item.newState.length > 128 ||
+      typeof item.changedBy !== "string" || !item.changedBy.trim() || item.changedBy.length > 256 ||
+      (item.changeReason !== undefined && item.changeReason !== null &&
+        (typeof item.changeReason !== "string" || item.changeReason.length > 4_096)) ||
+      typeof item.changedAt !== "number" || !Number.isFinite(item.changedAt) || item.changedAt < 0) {
+    throw new Error(`Registro de ciclo de vida de ${label} inválido: identidad, transición o fecha incorrectas.`);
+  }
+}
+
+export function validateRecordLifecycle(
+  item: RecordLifecycle,
+  expectedProjectId?: string
+): void {
+  if (!item || typeof item !== "object") throw new Error("Registro de ciclo de vida de ficha inválido.");
+  validateLifecycleShape(item as unknown as Record<string, unknown>, expectedProjectId, "recordId", "ficha");
+}
+
+export function validateRelationLifecycle(
+  item: RelationLifecycle,
+  expectedProjectId?: string
+): void {
+  if (!item || typeof item !== "object") throw new Error("Registro de ciclo de vida de relación inválido.");
+  validateLifecycleShape(item as unknown as Record<string, unknown>, expectedProjectId, "relationId", "relación");
+}
+
+export function cloneRecordLifecycle(item: RecordLifecycle): RecordLifecycle {
+  return structuredClone(item);
+}
+
+export function cloneRelationLifecycle(item: RelationLifecycle): RelationLifecycle {
+  return structuredClone(item);
+}

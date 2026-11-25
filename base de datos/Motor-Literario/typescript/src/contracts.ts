@@ -1,5 +1,5 @@
 import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
-import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack } from "./project-data";
+import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle } from "./project-data";
 
 /** Contratos públicos. La identidad del proyecto siempre pertenece al anfitrión. */
 
@@ -100,6 +100,13 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Historial append-only de etiquetas y estados de fichas y relaciones. */
+  loadRecordLifecycles?(projectId: string, recordId: string): Promise<readonly RecordLifecycle[]>;
+  appendRecordLifecycle?(item: RecordLifecycle): Promise<void>;
+  loadRelationLifecycles?(projectId: string, relationId: string): Promise<readonly RelationLifecycle[]>;
+  appendRelationLifecycle?(item: RelationLifecycle): Promise<void>;
+
+
   /** Preferencias persistentes del libro, siempre aisladas por projectId. */
   loadProjectSettings?(projectId: string): Promise<readonly ProjectSetting[]>;
   saveProjectSetting?(setting: ProjectSetting, expectedCurrent?: ProjectSetting): Promise<void>;

@@ -795,6 +795,34 @@ export interface LiteraryExplicitSceneSegment {
   /** Señales de pronombres explícitos fuera del diálogo, limitadas al contenido de esta escena. */
   readonly voiceSignals: LiteraryVoiceSignal;
 }
+/**
+ * Recurrencia literal de una palabra de contenido entre escenas explícitas.
+ * No agrupa sinónimos, flexiones ni conceptos semánticamente relacionados.
+ */
+export interface LiterarySceneLexicalEchoScene {
+  readonly sceneIndex: number;
+  readonly occurrenceCount: number;
+  /** Muestras UTF-16 absolutas; se conservan como máximo doce por escena. */
+  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+  readonly evidenceTruncated: boolean;
+}
+export interface LiterarySceneLexicalEcho {
+  /** Primera forma literal encontrada para la forma normalizada. */
+  readonly word: string;
+  readonly normalizedWord: string;
+  readonly sceneCount: number;
+  readonly totalOccurrenceCount: number;
+  readonly scenes: readonly LiterarySceneLexicalEchoScene[];
+}
+export interface LiterarySceneLexicalEchoAnalysis {
+  readonly explicitSceneCount: number;
+  /** Candidatos con al menos tres apariciones repartidas entre dos escenas. */
+  readonly candidateCount: number;
+  readonly omittedCandidateCount: number;
+  /** Ordenados por cobertura de escenas y frecuencia; máximo veinte. */
+  readonly echoes: readonly LiterarySceneLexicalEcho[];
+}
+
 export interface LiteraryAnalysisResult {
   readonly projectId: string;
   readonly documentId: string;
@@ -807,6 +835,8 @@ export interface LiteraryAnalysisResult {
   readonly dialogueSegments: readonly LiteraryDialogueSegment[];
   readonly structuralMarkers: readonly LiteraryStructureMarker[];
   readonly explicitScenes: readonly LiteraryExplicitSceneSegment[];
+  /** Coincidencias léxicas recurrentes entre escenas explícitas; no atribuye significado temático. */
+  readonly sceneLexicalEchoes: LiterarySceneLexicalEchoAnalysis;
   /** Comparaciones descriptivas entre escenas explícitas contiguas, nunca diagnósticos de contradicción. */
   readonly sceneContinuity: readonly LiterarySceneContinuityTransition[];
   /** Variaciones métricas del ritmo entre escenas contiguas, independientes de las señales gramaticales. */
@@ -2621,6 +2651,83 @@ function buildCharacterMentionDistributions(
   };
 }
 
+function buildSceneLexicalEchoes(
+  tokens: readonly WordToken[],
+  scenes: readonly LiteraryExplicitSceneSegment[],
+  baseOffset: number
+): LiterarySceneLexicalEchoAnalysis {
+  const groups = new Map<string, {
+    readonly word: string;
+    totalOccurrenceCount: number;
+    readonly scenes: Map<number, { occurrenceCount: number; occurrences: LocalRange[] }>;
+  }>();
+  let tokenCursor = 0;
+
+  // Las escenas y los tokens están ordenados por posición; cada token se visita como máximo una vez.
+  for (const scene of scenes) {
+    const start = scene.contentRange.start - baseOffset;
+    const end = scene.contentRange.end - baseOffset;
+    while (tokenCursor < tokens.length && tokens[tokenCursor]!.end <= start) tokenCursor++;
+
+    let cursor = tokenCursor;
+    while (cursor < tokens.length && tokens[cursor]!.start < end) {
+      const token = tokens[cursor]!;
+      if (token.start >= start && token.end <= end &&
+          !STOP_WORDS.has(token.normalized) && token.normalized.length >= 3) {
+        let group = groups.get(token.normalized);
+        if (!group) {
+          group = { word: token.text, totalOccurrenceCount: 0, scenes: new Map() };
+          groups.set(token.normalized, group);
+        }
+        group.totalOccurrenceCount++;
+        let sceneGroup = group.scenes.get(scene.sceneIndex);
+        if (!sceneGroup) {
+          sceneGroup = { occurrenceCount: 0, occurrences: [] };
+          group.scenes.set(scene.sceneIndex, sceneGroup);
+        }
+        sceneGroup.occurrenceCount++;
+        if (sceneGroup.occurrences.length < 12) {
+          sceneGroup.occurrences.push({ start: token.start, end: token.end });
+        }
+      }
+      cursor++;
+    }
+    tokenCursor = cursor;
+  }
+
+  const candidates = [...groups.entries()]
+    .filter(([, group]) => group.totalOccurrenceCount >= 3 && group.scenes.size >= 2)
+    .sort((a, b) =>
+      b[1].scenes.size - a[1].scenes.size ||
+      b[1].totalOccurrenceCount - a[1].totalOccurrenceCount ||
+      a[0].localeCompare(b[0], "es")
+    );
+  const echoes = candidates.slice(0, 20).map(([normalizedWord, group]) => ({
+    word: group.word,
+    normalizedWord,
+    sceneCount: group.scenes.size,
+    totalOccurrenceCount: group.totalOccurrenceCount,
+    scenes: [...group.scenes.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([sceneIndex, sceneGroup]) => ({
+        sceneIndex,
+        occurrenceCount: sceneGroup.occurrenceCount,
+        occurrences: sceneGroup.occurrences.map(item => ({
+          start: baseOffset + item.start,
+          end: baseOffset + item.end
+        })),
+        evidenceTruncated: sceneGroup.occurrenceCount > sceneGroup.occurrences.length
+      }))
+  }));
+
+  return {
+    explicitSceneCount: scenes.length,
+    candidateCount: candidates.length,
+    omittedCandidateCount: Math.max(0, candidates.length - echoes.length),
+    echoes
+  };
+}
+
 function mergeRanges(ranges: readonly LocalRange[]): LocalRange[] {
   const ordered = [...ranges].filter(range => range.end > range.start)
     .sort((a,b) => a.start - b.start || a.end - b.end);
@@ -3132,6 +3239,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? [],
     input.knownEvents ?? [],dialogueRanges,dialogueSegments,input.documentId,input.revision
   );
+  const sceneLexicalEchoes = buildSceneLexicalEchoes(tokens, explicitScenes, baseOffset);
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneEventAssociationTransitions = buildSceneEventAssociationTransitions(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
@@ -3325,6 +3433,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     })),
     structuralMarkers,
     explicitScenes,
+    sceneLexicalEchoes,
     sceneContinuity,
     sceneEventAssociationTransitions,
     sceneRhythmTransitions,
@@ -3378,7 +3487,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Las frases recurrentes requieren coincidencia literal de 2 a 4 palabras dentro de una oración y no prueban un motivo temático.",
       "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos.",
       "Los tramos del flujo de diálogo agrupan párrafos consecutivos por presencia o ausencia de diálogo reconocido; los párrafos mixtos y dialogados comparten tramo y esto no identifica turnos ni hablantes.",
-      "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes."
+      "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes.",
+      "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16."
     ]
   };
 }

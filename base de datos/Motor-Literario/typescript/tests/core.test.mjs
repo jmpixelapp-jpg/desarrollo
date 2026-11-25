@@ -11627,3 +11627,95 @@ test("limita las muestras de tramos del flujo sin truncar sus métricas", async 
   assert.equal(flow.runs[39].runIndex,40);
   assert.equal(flow.runs[39].fromParagraphIndex,40);
 });
+
+
+test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera de la página", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  const identity = {
+    projectId: "paged-personal-library",
+    projectName: "Libro por páginas",
+    writerId: "writer-paged-library"
+  };
+  api.initializeProject(identity);
+
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-a",
+    text: "Primera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: [],
+    relatedIdeaIds: ["idea-b"]
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-b",
+    text: "Segunda idea",
+    status: "IDEA",
+    originDocumentId: "chapter-1",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await store.saveIdea({
+    projectId: identity.projectId,
+    id: "idea-c",
+    text: "Tercera idea",
+    status: "IDEA",
+    originDocumentId: "chapter-2",
+    sourceProjectName: identity.projectName,
+    evidence: []
+  });
+  await api.archiveUnincorporatedIdeas();
+
+  let pageReads = 0;
+  let pointReads = 0;
+  store.loadPersonalIdeasPage = async (writerId, cursor, limit) => {
+    assert.equal(writerId, identity.writerId);
+    assert.equal(limit, 1);
+    pageReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const ordered = [...all].sort((first, second) =>
+      first.sourceProjectId.localeCompare(second.sourceProjectId) ||
+      first.idea.id.localeCompare(second.idea.id)
+    );
+    const remaining = cursor
+      ? ordered.filter(entry =>
+          entry.sourceProjectId > cursor.sourceProjectId ||
+          (entry.sourceProjectId === cursor.sourceProjectId && entry.idea.id > cursor.ideaId)
+        )
+      : ordered;
+    const items = remaining.slice(0, limit);
+    const nextCursor = remaining.length > items.length && items.length
+      ? { sourceProjectId: items[0].sourceProjectId, ideaId: items[0].idea.id }
+      : null;
+    return { items, nextCursor };
+  };
+  store.loadPersonalIdea = async (writerId, sourceProjectId, ideaId) => {
+    pointReads++;
+    return (await store.loadPersonalIdeas(writerId)).find(entry =>
+      entry.sourceProjectId === sourceProjectId && entry.idea.id === ideaId
+    );
+  };
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.deepEqual(first.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-a"
+  });
+  assert.equal(pointReads, 1, "resuelve una referencia a una idea situada en otra página");
+
+  const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
+  assert.deepEqual(second.nextCursor, {
+    sourceProjectId: identity.projectId,
+    ideaId: "idea-b"
+  });
+
+  const third = await api.getPersonalIdeaLibraryPage(second.nextCursor, 1);
+  assert.deepEqual(third.items.map(entry => entry.idea.id), ["idea-c"]);
+  assert.equal(third.nextCursor, null);
+  assert.equal(pageReads, 3);
+});

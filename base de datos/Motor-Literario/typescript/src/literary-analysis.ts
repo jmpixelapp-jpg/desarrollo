@@ -3316,6 +3316,18 @@ const IDEA_FRENCH_STOP_WORDS = new Set([
   "sur","ta","te","tes","toi","ton","tous","tout","toute","toutes","tu","un","une","vos","votre","vous",
   "y","être","été","était","étaient","est","es","sommes","êtes","ont","avoir","avait","avaient"
 ]);
+const IDEA_ITALIAN_STOP_WORDS = new Set([
+  "a","ad","al","allo","ai","agli","all","alla","alle","anche","avere","aveva","avevano","abbiamo",
+  "che","chi","ci","coi","col","come","con","contro","cui","da","dal","dallo","dai","dagli","dall",
+  "dalla","dalle","de","dei","degli","del","dello","della","delle","di","dopo","dove","e","è","ed",
+  "era","erano","essere","fa","fra","gli","ha","hai","hanno","ho","i","il","in","io","la","le","lei",
+  "li","lo","loro","lui","ma","me","mi","mia","mie","miei","mio","ne","nei","nel","nello","nella",
+  "nelle","no","noi","non","nostra","nostre","nostri","nostro","o","ogni","per","perché","più","quale",
+  "quali","quando","quanto","quanta","quanti","quante","quasi","quel","quella","quelle","quelli","quello",
+  "questa","queste","questi","questo","qui","quindi","se","sei","senza","si","sia","siamo","siete","sono",
+  "su","sul","sullo","sui","sugli","sulla","sulle","tra","tu","tua","tue","tuo","tutti","tutto","un",
+  "una","uno","va","vi","voi","vostra","vostre","vostri","vostro"
+]);
 
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
@@ -3769,7 +3781,8 @@ function buildLiteraryIdeaLexicalResonances(
       const term = token.normalized;
       if (Array.from(term).length < 2 || !/\p{L}/u.test(term) ||
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
-          IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term)) continue;
+          IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term) ||
+          IDEA_ITALIAN_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>

@@ -401,3 +401,32 @@ test("limita transacciones reentrantes pendientes y exige resincronización sin 
   f.stop();
   f.source.dispose();
 });
+
+
+test("valida el rango entero de maxQueuedTransactions y admite sus límites", () => {
+  const snapshot = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const invalidLimits = [0, -1, 1.5, 65537, Number.NaN, Number.POSITIVE_INFINITY];
+
+  for (const maxQueuedTransactions of invalidLimits) {
+    const editor = new FakeTransactionalEditor(snapshot);
+    assert.throws(() => new LiveAuthorMonitorEditorTransactionSource({
+      documentId: snapshot.documentId,
+      initialSnapshot: snapshot,
+      provider: editor,
+      maxQueuedTransactions
+    }), /maxQueuedTransactions/);
+    assert.equal(editor.listeners.size, 0);
+  }
+
+  for (const maxQueuedTransactions of [1, 65536, undefined]) {
+    const editor = new FakeTransactionalEditor(snapshot);
+    const source = new LiveAuthorMonitorEditorTransactionSource({
+      documentId: snapshot.documentId,
+      initialSnapshot: snapshot,
+      provider: editor,
+      ...(maxQueuedTransactions === undefined ? {} : { maxQueuedTransactions })
+    });
+    source.dispose();
+    assert.equal(editor.listeners.size, 0);
+  }
+});

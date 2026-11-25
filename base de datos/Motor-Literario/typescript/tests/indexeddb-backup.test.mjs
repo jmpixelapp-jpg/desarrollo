@@ -239,7 +239,7 @@ test("rechaza restaurar un respaldo de una versión de esquema diferente", async
   try {
     const backup = await store.exportDatabaseBackup();
     const oldVersion = { ...backup, databaseVersion: 21 };
-    // The version is part of the checksum, so this fails checksum first.
+    // The schema version is checked before the checksum.
     await assert.rejects(
       store.restoreDatabaseBackup(oldVersion),
       /checksum.*no coincide/iu

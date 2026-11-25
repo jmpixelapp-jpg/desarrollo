@@ -2923,7 +2923,7 @@ export class HostEngineApi {
       importAuthorizations: Boolean(this.store.appendImportAuthorization && this.store.loadImportAuthorizations),
       schemaMigrationHistory: Boolean(this.store.loadSchemaMigrations),
       projectRecords: true,
-      recordNames: Boolean(this.store.loadRecordNames && this.store.saveRecordName),
+      recordNames: true,
       projectRelations: true,
       projectEvidences: true,
       timelineOccurrences: true,

@@ -19,3 +19,4 @@ export * from "./live-author-monitor-workspace";
 export * from "./live-author-monitor-editor-integration";
 export * from "./live-author-monitor-change-binding";
 export * from "./live-author-monitor-textarea-source";
+export * from "./live-author-monitor-textarea-integration";

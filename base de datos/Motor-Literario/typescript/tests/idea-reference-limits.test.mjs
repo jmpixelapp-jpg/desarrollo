@@ -176,3 +176,34 @@ test("fusionar ideas conserva evidencia histórica y deduplica solo registros id
   assert.deepEqual(merged.relatedIdeaIds, ["idea-related"]);
   assert.equal(previous.evidence.length, 2);
 });
+
+test("fusiona sin perder vínculos explícitos de ideas y elimina solo duplicados", async () => {
+  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
+  const previous = baseIdea({ relatedIdeaIds: ["idea-a", "idea-b"] });
+  const incoming = baseIdea({ relatedIdeaIds: ["idea-b", "idea-c"] });
+  const originalPrevious = [...previous.relatedIdeaIds];
+  const originalIncoming = [...incoming.relatedIdeaIds];
+
+  const merged = mergeNarrativeIdea(previous, incoming);
+
+  assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-b", "idea-c"]);
+  assert.deepEqual(previous.relatedIdeaIds, originalPrevious);
+  assert.deepEqual(incoming.relatedIdeaIds, originalIncoming);
+});
+
+test("la fusión de ideas respeta el máximo de 500 vínculos después de unir catálogos", async () => {
+  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
+  const existingIds = Array.from({ length: 500 }, (_, index) => "idea-" + index);
+  const previous = baseIdea({ relatedIdeaIds: existingIds });
+  const duplicateOnly = baseIdea({ relatedIdeaIds: ["idea-0", "idea-499"] });
+
+  const atLimit = mergeNarrativeIdea(previous, duplicateOnly);
+  assert.equal(atLimit.relatedIdeaIds.length, 500);
+  assert.deepEqual(atLimit.relatedIdeaIds, existingIds);
+
+  const overflow = baseIdea({ relatedIdeaIds: ["idea-0", "idea-extra"] });
+  assert.throws(
+    () => mergeNarrativeIdea(previous, overflow),
+    /referencias explícitas a ideas superan el límite de 500/
+  );
+});

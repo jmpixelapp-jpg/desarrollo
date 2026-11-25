@@ -79,3 +79,35 @@ test("IndexedDB revierte una idea inválida y conserva CAS frente a instantánea
     await deleteDatabase();
   }
 });
+
+
+test("IndexedDB serializa dos CAS concurrentes sobre la misma idea y confirma solo uno", {
+  skip: typeof indexedDB === "undefined" ? "Este runtime de Node no expone IndexedDB nativo." : false
+}, async () => {
+  await deleteDatabase();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  const original = idea();
+
+  try {
+    await firstStore.saveIdea(original);
+    const first = idea({ text: "Primera edición concurrente." });
+    const second = idea({ text: "Segunda edición concurrente." });
+
+    const outcomes = await Promise.allSettled([
+      firstStore.saveIdeaIfUnchanged(first, original),
+      secondStore.saveIdeaIfUnchanged(second, original)
+    ]);
+
+    assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
+    assert.equal(outcomes.filter(result => result.status === "rejected").length, 1);
+    const rejected = outcomes.find(result => result.status === "rejected");
+    assert.match(String(rejected.reason?.message), /cambió en otra instancia/);
+
+    const [durable] = await firstStore.loadIdeas(projectId);
+    assert.ok([first.text, second.text].includes(durable.text));
+  } finally {
+    await Promise.all([firstStore.close(), secondStore.close()]);
+    await deleteDatabase();
+  }
+});

@@ -4656,16 +4656,16 @@ function buildCharacterNarrativeTrajectories(
             : omittedProjectEventCount > 0
               ? "unknown-due-to-incomplete-catalog" as const
               : "no-later-event-in-snapshot" as const;
-      const relatedIdeaStateProfiles = idea.relatedIdeaIds
-        .map(ideaId => {
+      const relatedIdeaStateProfiles: LiteraryCharacterRelatedIdeaState[] = idea.relatedIdeaIds
+        .flatMap((ideaId): LiteraryCharacterRelatedIdeaState[] => {
           const relatedIdea = knownIdeaById.get(ideaId);
-          return relatedIdea ? {
+          if (!relatedIdea) return [];
+          return [{
             ideaId,
             status:relatedIdea.status,
-            resolution:"included-in-analysis-snapshot" as const
-          } : null;
+            resolution:"included-in-analysis-snapshot"
+          }];
         })
-        .filter((profile): profile is LiteraryCharacterRelatedIdeaState => profile !== null)
         .sort((left,right) => left.ideaId.localeCompare(right.ideaId,"en"));
       const relatedIdeaStatuses = new Set(relatedIdeaStateProfiles.map(profile => profile.status));
       const relatedIdeaStateDivergenceCount = Math.max(0,relatedIdeaStatuses.size-1);
@@ -4780,7 +4780,7 @@ function buildCharacterNarrativeTrajectories(
         ? "both-events-participant"
         : inCause ? "cause-event-participant" : "consequence-event-participant";
       const relations = relationsByCharacter.get(entityId) ?? [];
-      relations.push({candidateId:candidate.candidateId,characterRole,candidate});
+      relations.push({candidateId:candidate.candidateId,characterRole,candidate,temporalConsistency:"insufficient-data"});
       relationsByCharacter.set(entityId,relations);
     }
   }

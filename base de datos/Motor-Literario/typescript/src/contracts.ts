@@ -1,4 +1,5 @@
 import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
+import type { ProjectSetting } from "./project-data";
 
 /** Contratos públicos. La identidad del proyecto siempre pertenece al anfitrión. */
 
@@ -99,6 +100,10 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Preferencias persistentes del libro, siempre aisladas por projectId. */
+  loadProjectSettings?(projectId: string): Promise<readonly ProjectSetting[]>;
+  saveProjectSetting?(setting: ProjectSetting, expectedCurrent?: ProjectSetting): Promise<void>;
+
   /** Diccionarios y vocabulario propios, siempre aislados por proyecto. */
   saveDictionary?(dictionary: ProjectDictionary, expectedCurrent?: ProjectDictionary): Promise<void>;
   loadDictionaries?(projectId: string): Promise<readonly ProjectDictionary[]>;

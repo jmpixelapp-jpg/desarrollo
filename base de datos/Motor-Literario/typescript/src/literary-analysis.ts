@@ -867,6 +867,8 @@ export interface LiteraryIdeaGraphNode {
   readonly cycleMembership: "cyclic-component" | "acyclic-within-snapshot";
   /** Número de ideas del componente fuertemente conexo; 1 también identifica auto-referencia. */
   readonly cycleComponentSize: number;
+  /** Nodo de articulación en el grafo no dirigido derivado de referencias explícitas. */
+  readonly articulationPointStatus: "connector" | "not-articulation-within-snapshot";
 }
 /** Referencia explícita y resultado de resolver su destino contra el alcance de catálogo declarado. */
 export interface LiteraryIdeaGraphReference {
@@ -1024,6 +1026,11 @@ export interface LiteraryIdeaGraphAnalysis {
   /** Componentes del snapshot no visibles por el límite de muestras. */
   readonly omittedWeakComponentCount: number;
   readonly largestWeakComponentSize: number;
+  /** Cantidad de nodos cuya retirada separa componentes del grafo no dirigido del snapshot. */
+  readonly articulationPointCount: number;
+  /** Muestra determinista de nodos de articulación; máximo 100. */
+  readonly articulationPointIdeaIds: readonly string[];
+  readonly omittedArticulationPointCount: number;
   readonly weakComponents: readonly LiteraryIdeaGraphWeakComponent[];
   /** Componentes cíclicos detectados dentro del snapshot. */
   readonly cycleCount: number;
@@ -3949,6 +3956,85 @@ function buildLiteraryIdeaGraph(
     };
   }
 
+  // Puntos de articulación sobre la proyección no dirigida de las referencias.
+  // La DFS es iterativa para soportar cadenas largas sin agotar la pila del runtime.
+  const undirectedAdjacency: number[][] = Array.from({ length: ideaCount }, () => []);
+  const undirectedNeighborSets = Array.from({ length: ideaCount }, () => new Set<number>());
+  for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
+    for (const targetIndex of adjacency[sourceIndex]!) {
+      undirectedNeighborSets[sourceIndex]!.add(targetIndex);
+      undirectedNeighborSets[targetIndex]!.add(sourceIndex);
+    }
+  }
+  for (let index = 0; index < ideaCount; index++) {
+    undirectedAdjacency[index] = [...undirectedNeighborSets[index]!].sort((a,b) => a-b);
+  }
+  const articulationDiscovery = new Int32Array(ideaCount);
+  const articulationLow = new Int32Array(ideaCount);
+  const articulationParent = new Int32Array(ideaCount);
+  const articulationChildCount = new Int32Array(ideaCount);
+  const isArticulation = new Uint8Array(ideaCount);
+  articulationDiscovery.fill(-1);
+  articulationParent.fill(-1);
+  let articulationClock = 0;
+  const articulationStack: number[] = [];
+  const articulationNext: number[] = [];
+  for (let root = 0; root < ideaCount; root++) {
+    if (articulationDiscovery[root] !== -1) continue;
+    articulationDiscovery[root] = articulationClock;
+    articulationLow[root] = articulationClock++;
+    articulationStack.push(root);
+    articulationNext.push(0);
+    while (articulationStack.length > 0) {
+      const frame = articulationStack.length - 1;
+      const current = articulationStack[frame]!;
+      const neighbors = undirectedAdjacency[current]!;
+      const next = articulationNext[frame]!;
+      if (next < neighbors.length) {
+        const target = neighbors[next]!;
+        articulationNext[frame] = next + 1;
+        if (articulationDiscovery[target] === -1) {
+          articulationParent[target] = current;
+          articulationChildCount[current] = articulationChildCount[current]! + 1;
+          articulationDiscovery[target] = articulationClock;
+          articulationLow[target] = articulationClock++;
+          articulationStack.push(target);
+          articulationNext.push(0);
+        } else if (target !== articulationParent[current]) {
+          articulationLow[current] = Math.min(
+            articulationLow[current]!, articulationDiscovery[target]!
+          );
+        }
+        continue;
+      }
+      articulationStack.pop();
+      articulationNext.pop();
+      const parent = articulationParent[current]!;
+      if (parent !== -1) {
+        articulationLow[parent] = Math.min(articulationLow[parent]!, articulationLow[current]!);
+        if (articulationParent[parent] !== -1 &&
+            articulationLow[current]! >= articulationDiscovery[parent]!) {
+          isArticulation[parent] = 1;
+        }
+      } else if (articulationChildCount[current]! > 1) {
+        isArticulation[current] = 1;
+      }
+    }
+  }
+  const articulationPointIndexes: number[] = [];
+  for (let index = 0; index < ideaCount; index++) {
+    if (isArticulation[index] === 1) articulationPointIndexes.push(index);
+  }
+  const articulationPointIdeaIds = articulationPointIndexes.map(index => orderedIdeas[index]!.ideaId);
+  for (let index = 0; index < nodes.length; index++) {
+    nodes[index] = {
+      ...nodes[index]!,
+      articulationPointStatus: isArticulation[index] === 1
+        ? "connector"
+        : "not-articulation-within-snapshot"
+    };
+  }
+
   // Union-find agrupa los componentes débiles sin duplicar las aristas.
   const weakGroups = new Map<number, string[]>();
   for (let index = 0; index < ideaCount; index++) {
@@ -4156,6 +4242,9 @@ function buildLiteraryIdeaGraph(
       0, allWeakComponents.length - MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES
     ),
     largestWeakComponentSize: allWeakComponents[0]?.ideaIds.length ?? 0,
+    articulationPointCount: articulationPointIndexes.length,
+    articulationPointIdeaIds: articulationPointIdeaIds.slice(0, MAX_IDEA_GRAPH_CYCLE_SAMPLES),
+    omittedArticulationPointCount: Math.max(0, articulationPointIdeaIds.length - MAX_IDEA_GRAPH_CYCLE_SAMPLES),
     weakComponents: allWeakComponents.slice(0, MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES),
     cycleCount: cycles.length,
     omittedCycleCount: Math.max(0, cycles.length - MAX_IDEA_GRAPH_CYCLE_SAMPLES),

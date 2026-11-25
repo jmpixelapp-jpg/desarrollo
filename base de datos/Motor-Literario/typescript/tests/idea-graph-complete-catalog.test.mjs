@@ -14,17 +14,21 @@ const store = {
     { projectId, id:"origin", text:"La luz revela la memoria del espejo", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["bridge"], relatedEntityIds:["character-ana"],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
-    { projectId, id:"bridge", text:"El espejo conserva la memoria y la luz", status:"IDEA", originDocumentId:"chapter",
+    { projectId, id:"bridge", text:"El espejo conserva la memoria y la luz", status:"discarded", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
       statusHistory:[
         {status:"IDEA",reason:"initial",changedAt:1},
         {status:"incorporated",reason:"writer",changedAt:2},
-        {status:"IDEA",reason:"writer",changedAt:3},
-        {status:"discarded",reason:"text-revised"}
+        {status:"IDEA",reason:"text-revised",changedAt:3},
+        {status:"discarded",reason:"writer"}
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}], omittedStatusHistoryCount:2 },
+      statusHistory:[
+        {status:"IDEA",reason:"initial",changedAt:1},
+        {status:"incorporated",reason:"writer",changedAt:2},
+        {status:"IDEA",reason:"text-revised",changedAt:3}
+      ] },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
       statusHistory:[
@@ -60,8 +64,8 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
   try {
     const before = await api.analyzeLiteraryDocument("chapter");
     const beforeBridge = before.ideaGraph.nodes.find(node => node.ideaId === "bridge");
-    assert.equal(beforeBridge.currentStatusHistoryConsistency, "mismatch");
-    assert.equal(before.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 1);
+    assert.equal(beforeBridge.currentStatusHistoryConsistency, "consistent");
+    assert.equal(before.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.statusHistory.push({
@@ -69,23 +73,24 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
       reason: "writer",
       changedAt: 4
     });
+    bridge.status = "IDEA";
 
     const after = await api.analyzeLiteraryDocument("chapter");
     const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
     assert.equal(afterBridge.currentStatusHistoryConsistency, "consistent");
     assert.equal(afterBridge.observedStatusTransitionCount, 4);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 3);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 4);
     assert.equal(after.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 1);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.verifiableIdeaCount, 3);
-    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 0.75);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 0);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verifiableIdeaCount, 4);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 1);
   } finally {
     api.dispose();
   }
 });
 
-test("el analizador directo cuantifica marcas temporales no monotónicas", () => {
-  const result = analyzeLiteraryFragment({
+test("el analizador descriptivo rechaza historiales editoriales no válidos", () => {
+  assert.throws(() => analyzeLiteraryFragment({
     projectId,
     documentId: "chapter",
     revision: 1,
@@ -100,23 +105,14 @@ test("el analizador directo cuantifica marcas temporales no monotónicas", () =>
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 1 },
         { status: "incorporated", reason: "writer", changedAt: 3 },
-        { status: "IDEA", reason: "writer", changedAt: 2 },
+        { status: "IDEA", reason: "text-revised", changedAt: 2 },
         { status: "discarded", reason: "writer" }
       ],
-      writerDecisionCount: 3,
+      writerDecisionCount: 2,
       omittedStatusHistoryCount: 0
     }]
-  });
-
-  const node = result.ideaGraph.nodes[0];
-  assert.equal(node.currentStatusHistoryConsistency, "mismatch");
-  assert.equal(node.nonMonotonicStatusTimestampCount, 1);
-  assert.equal(node.comparableStatusTimestampPairCount, 2);
-  assert.equal(node.uncomparableStatusTimestampPairCount, 1);
-  assert.equal(node.earliestKnownStatusChangeAt, 1);
-  assert.equal(node.latestKnownStatusChangeAt, 3);
+  }), /historial de decisiones del catálogo global de ideas es inválido/);
 });
-
 test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
   const api = new HostEngineApi({ store: { ...store, documents: new Map() } });
   api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-cache-isolation" });
@@ -296,24 +292,24 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
     const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
-    assert.equal(bridgeNode.currentStatusHistoryConsistency, "mismatch");
+    assert.equal(bridgeNode.currentStatusHistoryConsistency, "consistent");
     assert.equal(bridgeNode.observedStatusTransitionCount, 3);
     assert.equal(bridgeNode.statusReversalCount, 1);
     const soloNode = result.ideaGraph.nodes.find(node => node.ideaId === "solo");
     assert.equal(soloNode.currentStatusHistoryConsistency, "consistent");
     const finishNode = result.ideaGraph.nodes.find(node => node.ideaId === "finish");
-    assert.equal(finishNode.currentStatusHistoryConsistency, "unknown");
+    assert.equal(finishNode.currentStatusHistoryConsistency, "consistent");
     assert.deepEqual(result.ideaGraph.statusHistoryConsistency, {
-      consistentIdeaCount: 2,
-      mismatchIdeaCount: 1,
-      unknownIdeaCount: 1,
-      verifiableIdeaCount: 3,
-      verificationCoverage: 0.75
+      consistentIdeaCount: 4,
+      mismatchIdeaCount: 0,
+      unknownIdeaCount: 0,
+      verifiableIdeaCount: 4,
+      verificationCoverage: 1
     });
     const ideaProfile = result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA");
-    assert.equal(ideaProfile.statusHistoryConsistentIdeaCount, 2);
-    assert.equal(ideaProfile.statusHistoryMismatchIdeaCount, 1);
-    assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 1);
+    assert.equal(ideaProfile.statusHistoryConsistentIdeaCount, 3);
+    assert.equal(ideaProfile.statusHistoryMismatchIdeaCount, 0);
+    assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 0);
     assert.equal(soloNode.observedStatusTransitionCount, 5);
     assert.equal(soloNode.statusReversalCount, 3);
     assert.equal(soloNode.comparableStatusTimestampPairCount, 6);
@@ -332,57 +328,57 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(bridgeNode.latestKnownStatusChangeAt, 3);
     assert.equal(bridgeNode.knownStatusHistorySpanMs, 2);
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .nonMonotonicStatusTimestampCount,
       0
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .comparableStatusTimestampPairCount,
       2
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .uncomparableStatusTimestampPairCount,
       1
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .observedInitialStatusRecordCount,
       1
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .observedWriterStatusChangeCount,
       2
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .observedTextRevisionStatusChangeCount,
       1
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .earliestKnownStatusChangeAt,
       1
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .latestKnownStatusChangeAt,
       3
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .knownStatusHistorySpanMs,
       2
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .statusReversalCount,
       1
     );
     assert.equal(
-      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "discarded")
         .observedStatusTransitionCount,
       3
     );
@@ -1258,6 +1254,7 @@ test("la caché léxica se invalida cuando cambia el texto de una idea", async (
     assert.deepEqual(before.resonances[0].sharedTerms, ["destino", "espejo", "memoria"]);
 
     ideas[1] = { ...ideas[1], text: "memoria destino" };
+    await api.refreshNarrativeKnowledge();
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
     assert.equal(after.candidatePairCount, 1);
     assert.equal(after.resonances.length, 1);
@@ -1440,7 +1437,7 @@ test("la resonancia léxica excluye stopwords frecuentes en sueco", async () => 
   const ideas = [
     {
       projectId, id: "lexical-swedish-stopwords-a",
-      text: "en minne och en spegel med ett ljus",
+      text: "ett minne och en spegel med en natt",
       status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
       evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]

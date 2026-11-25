@@ -84,6 +84,18 @@ export interface StoredDiagnostics {
   readonly updatedAt: number;
 }
 
+/** Recibo durable e idempotente de la transferencia al cerrar un libro. */
+export interface StoredProjectFinalizationReceipt {
+  readonly writerId: string;
+  readonly sourceProjectId: string;
+  readonly receiptId: string;
+  readonly sourceProjectName: string;
+  readonly finalizedAt: number;
+  readonly archivedIdeaIds: readonly string[];
+  /** Checksum determinista del conjunto ordenado de IDs archivados. */
+  readonly archiveChecksum: string;
+}
+
 export interface ProjectStore {
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;
@@ -136,6 +148,10 @@ export interface ProjectStore {
   /** Transfiere atómicamente ideas aún no incorporadas a la biblioteca privada del escritor. */
   archiveUnincorporatedIdeas?(projectId: string, writerId: string, sourceProjectName: string, archivedAt: number): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadPersonalIdeas?(writerId: string): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
+  loadProjectFinalizationReceipt?(
+    writerId: string,
+    projectId: string
+  ): Promise<StoredProjectFinalizationReceipt | undefined>;
 }
 
 export interface EngineOptions {

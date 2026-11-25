@@ -19,14 +19,14 @@ function idea(ideaId, relatedIdeaIds = []) {
   };
 }
 
-function analyze(knownProjectIdeas) {
+function analyze(knownProjectIdeas, knownProjectIdeasOmittedCount = 0) {
   return analyzeLiteraryFragment({
     projectId,
     documentId: "chapter-graph",
     revision: 1,
     text: "Escena 1\nLas ideas se conectan en distintas direcciones.",
     knownProjectIdeas,
-    knownProjectIdeasOmittedCount: 0
+    knownProjectIdeasOmittedCount
   }).ideaGraph;
 }
 
@@ -99,4 +99,47 @@ test("las instantáneas cacheadas del grafo no se contaminan al mutar resultados
   assert.deepEqual(second, expected);
   assert.equal(second.nodes.some(node => node.ideaId === "mutated-node"), false);
   assert.equal(second.references.some(reference => reference.toIdeaId === "mutated-reference"), false);
+});
+
+
+test("la caché invalida el grafo cuando cambia una referencia de la misma instantánea", () => {
+  const catalog = [
+    idea("source", ["first-target"]),
+    idea("first-target"),
+    idea("second-target")
+  ];
+
+  const before = analyze(catalog);
+  assert.equal(before.includedReferenceCount, 1);
+
+  catalog[0].relatedIdeaIds.splice(0, 1, "second-target");
+  const after = analyze(catalog);
+
+  assert.equal(after.includedReferenceCount, 1);
+  assert.deepEqual(
+    after.references.map(reference => [reference.fromIdeaId, reference.toIdeaId]),
+    [["source", "second-target"]]
+  );
+  assert.notDeepEqual(after, before);
+});
+
+test("la caché separa catálogos completos de snapshots con ideas omitidas", () => {
+  const catalog = [
+    idea("source", ["external"]),
+    idea("target")
+  ];
+
+  const complete = analyze(catalog, 0);
+  const incomplete = analyze(catalog, 3);
+
+  assert.equal(complete.projectCatalogComplete, true);
+  assert.equal(incomplete.projectCatalogComplete, false);
+  assert.equal(
+    complete.references[0].resolution,
+    "missing-from-project"
+  );
+  assert.equal(
+    incomplete.references[0].resolution,
+    "not-in-snapshot"
+  );
 });

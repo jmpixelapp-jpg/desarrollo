@@ -64,7 +64,10 @@ test("conserva ciclos, reciprocidad y orden estable con índices compactos", () 
     toIdeaId: "á",
     resolution: "included-in-snapshot"
   });
-  assert.equal(graph.references.at(-1).resolution, "not-in-snapshot");
+  assert.equal(
+    graph.references.find(reference => reference.toIdeaId === "ghost").resolution,
+    "missing-from-project"
+  );
 });
 
 test("memoiza el grafo completo, aísla las respuestas e invalida cambios estructurales", () => {

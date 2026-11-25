@@ -2803,3 +2803,57 @@ test("conserva offsets UTF-16 absolutos después de caracteres Unicode suplement
   assert.ok(actualOccurrences[0].start > baseOffset + text.indexOf("😀"));
   assert.ok(actualOccurrences[2].start > baseOffset + text.indexOf("🧭"));
 });
+
+
+test("ancla eventos en offsets absolutos UTF-16 y excluye revisiones obsoletas", () => {
+  const text = "😀 🧭 La tormenta provocó el derrumbe.";
+  const baseOffset = 4_096;
+  const evidence = (eventPhrase, status, revision = 7) => {
+    const start = text.indexOf(eventPhrase);
+    return {
+      documentId: "chapter-one",
+      revision,
+      start: baseOffset + start,
+      end: baseOffset + start + eventPhrase.length,
+      excerpt: eventPhrase,
+      ...(status ? { status } : {})
+    };
+  };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 7,
+    text,
+    baseOffset,
+    knownEvents: [
+      {
+        eventId: "storm",
+        label: "La tormenta",
+        participants: ["ana"],
+        evidence: [
+          evidence("La tormenta"),
+          evidence("La tormenta", "stale"),
+          evidence("La tormenta", undefined, 6)
+        ]
+      },
+      {
+        eventId: "collapse",
+        label: "el derrumbe",
+        participants: ["ana"],
+        evidence: [evidence("el derrumbe")]
+      }
+    ]
+  });
+
+  assert.equal(result.eventDependencyAnalysis.evidenceAnchorCount, 2);
+  assert.equal(result.eventDependencyAnalysis.candidateCount, 1);
+  const candidate = result.eventDependencyAnalysis.candidates[0];
+  assert.equal(candidate.connector, "provocó");
+  assert.equal(candidate.firstEventOccurrence.start, baseOffset + text.indexOf("La tormenta"));
+  assert.equal(candidate.secondEventOccurrence.start, baseOffset + text.indexOf("el derrumbe"));
+  assert.equal(candidate.firstEventOccurrence.end,
+    baseOffset + text.indexOf("La tormenta") + "La tormenta".length);
+  assert.equal(candidate.secondEventOccurrence.end,
+    baseOffset + text.indexOf("el derrumbe") + "el derrumbe".length);
+  assert.equal(candidate.status, "candidate-needs-review");
+});

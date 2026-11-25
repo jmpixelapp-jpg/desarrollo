@@ -9827,10 +9827,24 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     originDocumentId: "chapter",
     sourceProjectName: projectName,
     evidence: [],
-    relatedIdeaIds: Array.from({ length: wideCount }, (_, index) =>
-      `wide-leaf-${String(index).padStart(4, "0")}`
+    relatedIdeaIds: Array.from({ length: 3 }, (_, index) =>
+      `wide-branch-${String(index).padStart(3, "0")}`
     )
   };
+  // Cada idea admite como máximo 500 vínculos; se distribuyen las 1.200
+  // hojas entre tres ramas para probar el recorrido completo del contexto.
+  const wideBranches = Array.from({ length: 3 }, (_, branchIndex) => ({
+    projectId,
+    id: `wide-branch-${String(branchIndex).padStart(3, "0")}`,
+    text: `Rama contextual ${branchIndex}`,
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: projectName,
+    evidence: [],
+    relatedIdeaIds: Array.from({ length: wideCount / 3 }, (_, leafIndex) =>
+      `wide-leaf-${String(branchIndex * (wideCount / 3) + leafIndex).padStart(4, "0")}`
+    )
+  }));
   const wideLeaves = Array.from({ length: wideCount }, (_, index) => ({
     projectId,
     id: `wide-leaf-${String(index).padStart(4, "0")}`,
@@ -9840,7 +9854,7 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     sourceProjectName: projectName,
     evidence: []
   }));
-  const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideLeaves];
+  const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideBranches, ...wideLeaves];
   const entries = [];
   const deleted = [];
   const transaction = {
@@ -9916,10 +9930,10 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     }
     const wideEntry = entries.find(item => item.idea.id === "pending-wide");
     assert.ok(wideEntry);
-    assert.equal(wideEntry.context.relatedIdeas.length, wideCount + 1);
+    assert.equal(wideEntry.context.relatedIdeas.length, wideCount + wideBranches.length + 1);
     assert.deepEqual(
       wideEntry.context.relatedIdeas.map(idea => idea.id),
-      [...["context-wide-root"], ...wideLeaves.map(idea => idea.id)].sort()
+      ["context-wide-root", ...wideBranches.map(idea => idea.id), ...wideLeaves.map(idea => idea.id)].sort()
     );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);

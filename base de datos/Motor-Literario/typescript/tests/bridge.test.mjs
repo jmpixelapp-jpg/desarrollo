@@ -1212,11 +1212,16 @@ test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtr
     );
     assert.equal(peerPage.items.length, 1);
     assert.equal(peerPage.items[0].idea.text, "La campana debe sonar antes del amanecer.");
+    assert.ok(Number.isSafeInteger(peerPage.libraryVersion));
+    assert.ok(peerPage.libraryVersion >= 1,
+      "la página compartida devuelve la generación durable del escritor");
 
     const privatePage = await second.client.getPersonalIdeaLibraryPage(
       "writer-sync-other", null, 50
     );
     assert.equal(privatePage.items.length, 0);
+    assert.equal(privatePage.libraryVersion, 0,
+      "otro escritor mantiene una generación independiente");
   } finally {
     if (first) {
       try {

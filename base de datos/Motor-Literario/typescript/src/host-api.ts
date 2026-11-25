@@ -7,6 +7,7 @@ import type {
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
   PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, ProjectFinalizationSummary, Diagnostic
 } from "./contracts";
+import { createPersonalIdeaArchiveChecksumBuilder, isValidPersonalIdeaArchiveChecksum } from "./persistence/personal-idea-checksum";
 import { LiteraryEngine } from "./engine";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput, DictionaryEntryEntityLink } from "./dictionaries";
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry, validateDictionaryEntryEntityLink } from "./dictionaries";
@@ -3357,6 +3358,8 @@ export class HostEngineApi {
             !Number.isSafeInteger(summary.archivedCount) || summary.archivedCount < 0 ||
             !Number.isFinite(summary.finalizedAt) || summary.finalizedAt < 0 ||
             typeof summary.archiveChecksum !== "string" || !summary.archiveChecksum.trim() ||
+            (summary.archiveContentChecksum !== undefined &&
+              !isValidPersonalIdeaArchiveChecksum(summary.archiveContentChecksum)) ||
             typeof summary.alreadyFinalized !== "boolean") {
           throw new Error("Integridad de biblioteca: el resumen de finalización es inválido.");
         }
@@ -3537,12 +3540,48 @@ export class HostEngineApi {
           !Array.isArray(ids) ||
           ids.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(ids).size !== ids.length ||
-          typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
+          typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim() ||
+          (receipt.archiveContentChecksum !== undefined &&
+            !isValidPersonalIdeaArchiveChecksum(receipt.archiveContentChecksum))) {
         throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
       }
       if (ids.some((id, index) => index > 0 && ids[index - 1]!.localeCompare(id) > 0) ||
           receipt.archiveChecksum !== checksumForPersonalIdeaIds(ids)) {
         throw new Error("Integridad de biblioteca: los IDs del recibo no están ordenados o su checksum no coincide.");
+      }
+      if (receipt.archiveContentChecksum !== undefined) {
+        const loadByKeys = this.store.loadPersonalIdeasByKeys;
+        if (!loadByKeys) {
+          throw new Error("Integridad de biblioteca: el adaptador no permite verificar el contenido del recibo.");
+        }
+        const contentChecksum = createPersonalIdeaArchiveChecksumBuilder();
+        for (let offset = 0; offset < ids.length; offset += 128) {
+          const batchIds = ids.slice(offset, offset + 128);
+          const references = batchIds.map(ideaId => ({
+            sourceProjectId: project.projectId,
+            ideaId
+          }));
+          const batch = requireUniquePersonalIdeaEntries(
+            await loadByKeys.call(this.store, writerId, references),
+            writerId,
+            project.projectId
+          );
+          const byId = new Map(batch.map(entry => [entry.idea.id, entry]));
+          if (byId.size !== batchIds.length) {
+            throw new Error("Integridad de biblioteca: el recibo referencia entradas ausentes o duplicadas.");
+          }
+          for (const ideaId of batchIds) {
+            const entry = byId.get(ideaId);
+            if (!entry || entry.sourceProjectName !== receipt.sourceProjectName ||
+                entry.category !== receipt.sourceProjectName) {
+              throw new Error("Integridad de biblioteca: una entrada no coincide con la procedencia del recibo.");
+            }
+            contentChecksum.add(entry);
+          }
+        }
+        if (contentChecksum.digest() !== receipt.archiveContentChecksum) {
+          throw new Error("Integridad de biblioteca: el contenido archivado no coincide con el checksum del recibo.");
+        }
       }
       return cloneNarrativeRecord(receipt);
     });
@@ -3934,6 +3973,9 @@ export class HostEngineApi {
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
       ),
       personalIdeaLibraryPagedQuery: Boolean(this.store.loadPersonalIdeasPage),
+      personalIdeaLibraryContentIntegrity: Boolean(
+        this.store.loadPersonalIdeasByKeys && this.store.loadProjectFinalizationReceipt
+      ),
       personalIdeaLibraryChangeNotifications: Boolean(
         this.store.subscribePersonalIdeaLibraryChanges || this.onPersonalIdeaLibraryChanged
       ),

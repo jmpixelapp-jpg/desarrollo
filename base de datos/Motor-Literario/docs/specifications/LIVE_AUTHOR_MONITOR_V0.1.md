@@ -356,3 +356,14 @@ Para completar esa conexión, el anfitrión deberá proporcionar, por documento:
 3. una función de cancelación de la suscripción y una lectura de snapshot actualizada antes de notificar la transacción.
 
 No se sustituirá esta integración por inferencias a partir de teclas, eventos `historyUndo/historyRedo` o comparaciones de texto retenidas en memoria. Mientras el anfitrión use un `HTMLTextAreaElement`, puede montar el adaptador nativo `mountLiveAuthorMonitorTextArea`; las operaciones de historial que no entreguen un delta exacto seguirán necesitando resincronización segura.
+
+## 16. Métricas visibles de pausas
+
+El snapshot del monitor ya contabiliza `idleDurationMs` y `pauseCount`; a partir de esta actualización ambos valores se muestran también en las vistas de usuario:
+
+- El panel del capítulo activo presenta el tiempo acumulado en pausa y el número de pausas detectadas.
+- Cada tarjeta del tablero multi-documento presenta esos mismos indicadores, de modo que el estado de varios capítulos se puede comparar sin abrirlos.
+- El tiempo en pausa se calcula con el umbral `idleAfterMs`; una pausa queda contabilizada cuando llega una nueva edición después de superar ese umbral. El paso a inactividad se refresca por el planificador sin exigir nuevas pulsaciones.
+- Las cifras proceden del snapshot de métricas; las vistas no leen el manuscrito ni modifican el historial de edición.
+
+Las pruebas del panel y del workspace avanzan el reloj controlado, registran una edición, dejan transcurrir el umbral y registran otra edición. Comprueban que aparece una pausa y que el tiempo acumulado se representa correctamente como duración.

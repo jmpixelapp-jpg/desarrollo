@@ -165,13 +165,13 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 2. Completar casos límite de catálogo vacío, nodos sin referencias, referencias externas y snapshots con omisiones.
 3. Auditar los presupuestos de memoria y tiempo de cada fase del análisis, no solo del grafo y del texto léxico.
 4. Revisar el comportamiento de muestras y truncamiento en cada colección pública: totales, muestras, omitidos y estado de completitud deben ser coherentes.
-5. Ampliar las pruebas de sincronización concurrente de ideas: conflictos CAS repetidos, destino eliminado entre lectura y reintento, idempotencia y aislamiento entre proyectos.
+5. Ampliar las pruebas de sincronización concurrente de ideas: agotamiento de los tres intentos CAS, intercalado de eliminaciones y escrituras de varios registros, y revalidación de catálogos cuando cambian repetidamente durante una operación.
 6. Ampliar las pruebas de regresión para offsets UTF-16 por escena y por evento en cambios de revisión, rangos parciales y límites de fragmento; recurrencias y anclajes de eventos con caracteres suplementarios ya tienen cobertura.
 7. Ejecutar y registrar `npm run typecheck`, `npm test` y `npm run bench` en un entorno de proyecto; no declarar verde una verificación sin resultados observables.
 8. Validar la experiencia desde el programa anfitrión con manuscritos reales de prueba, manteniendo datos sintéticos o autorizados y confirmando que el motor nunca edita el texto por sí solo.
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo es `main`. Para el commit de pruebas `b681a9c97b5fc425373d25badbd3cbb8fcf0eb02`, la consulta disponible no devolvió checks de estado ni ejecuciones de workflow asociadas. Por tanto, **los cambios están publicados, pero esta consulta no acredita una ejecución de CI para ese commit**. No se afirma aquí que la suite completa se haya ejecutado después de las últimas tandas.
+La rama de trabajo es `main`. Las consultas de estado y workflows para las últimas tandas (`8603f7b`, `25a1291` y sus actualizaciones documentales) no devolvieron checks ni ejecuciones asociadas. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para estas tandas**. No se afirma aquí que las pruebas se hayan ejecutado.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.

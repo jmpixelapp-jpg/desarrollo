@@ -746,6 +746,28 @@ export interface LiteraryIdeaGraphNode {
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
   readonly omittedStatusHistoryCount: number;
   readonly writerDecisionCount: number;
+  /** Cambios de estado distinguibles en el historial visible; es un mínimo si hay registros omitidos. */
+  readonly observedStatusTransitionCount: number;
+  /** Retornos a un estado ya observado anteriormente; mínimo si el historial está truncado. */
+  readonly statusReversalCount: number;
+  /** Pares adyacentes con marcas temporales conocidas que retroceden en el tiempo. */
+  readonly nonMonotonicStatusTimestampCount: number;
+  /** Pares adyacentes del historial con ambas marcas temporales conocidas. */
+  readonly comparableStatusTimestampPairCount: number;
+  /** Pares adyacentes que no pueden compararse porque falta alguna marca temporal. */
+  readonly uncomparableStatusTimestampPairCount: number;
+  /** Registros iniciales visibles; mínimo si el historial fue truncado. */
+  readonly observedInitialStatusRecordCount: number;
+  /** Cambios visibles atribuidos explícitamente al escritor. */
+  readonly observedWriterStatusChangeCount: number;
+  /** Cambios visibles atribuidos explícitamente a una revisión del texto. */
+  readonly observedTextRevisionStatusChangeCount: number;
+  /** Marca temporal conocida más antigua del historial visible; null si ninguna está disponible. */
+  readonly earliestKnownStatusChangeAt: number | null;
+  /** Marca temporal conocida más reciente del historial visible; null si ninguna está disponible. */
+  readonly latestKnownStatusChangeAt: number | null;
+  /** Amplitud entre la primera y última marca conocida, sin asumir orden cronológico. */
+  readonly knownStatusHistorySpanMs: number | null;
   /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
@@ -775,6 +797,12 @@ export interface LiteraryIdeaGraphWeakComponent {
 export interface LiteraryIdeaGraphStatusProfile {
   readonly status: NarrativeIdea["status"];
   readonly ideaCount: number;
+  /** Marca temporal conocida más antigua entre los historiales visibles del perfil. */
+  readonly earliestKnownStatusChangeAt: number | null;
+  /** Marca temporal conocida más reciente entre los historiales visibles del perfil. */
+  readonly latestKnownStatusChangeAt: number | null;
+  /** Amplitud temporal conjunta entre las fechas conocidas del perfil. */
+  readonly knownStatusHistorySpanMs: number | null;
   /** Ideas sin entradas desde otros nodos del snapshot; puede haber fuentes omitidas. */
   readonly sourceIdeaCount: number;
   readonly terminalWithinSnapshotIdeaCount: number;
@@ -788,6 +816,22 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly omittedStatusHistoryCount: number;
   /** Transiciones explícitas registradas por el escritor. */
   readonly writerDecisionCount: number;
+  /** Suma de cambios de estado distinguibles en los historiales visibles del perfil. */
+  readonly observedStatusTransitionCount: number;
+  /** Suma de retornos a estados previamente observados en los historiales visibles. */
+  readonly statusReversalCount: number;
+  /** Suma de retrocesos temporales observables en los historiales del perfil. */
+  readonly nonMonotonicStatusTimestampCount: number;
+  /** Suma de pares adyacentes con ambas marcas temporales conocidas. */
+  readonly comparableStatusTimestampPairCount: number;
+  /** Suma de pares adyacentes sin marcas temporales suficientes para compararlos. */
+  readonly uncomparableStatusTimestampPairCount: number;
+  /** Registros iniciales visibles agregados por estado actual. */
+  readonly observedInitialStatusRecordCount: number;
+  /** Cambios visibles atribuidos al escritor agregados por estado actual. */
+  readonly observedWriterStatusChangeCount: number;
+  /** Cambios visibles atribuidos a revisiones del texto agregados por estado actual. */
+  readonly observedTextRevisionStatusChangeCount: number;
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly ideasWithActiveEvidenceCount: number;
@@ -3346,6 +3390,50 @@ const IDEA_ITALIAN_STOP_WORDS = new Set([
 ]);
 
 
+
+
+
+const IDEA_NORWEGIAN_STOP_WORDS = new Set([
+  "alle","alt","alltid","andre","at","av","bak","bare","begge","ble","bli","blir","blitt","bort",
+  "bra","bruk","både","da","de","deg","dem","den","denne","der","dere","deres","det","dette",
+  "deg","din","disse","dit","du","då","ein","eit","eller","en","ene","enn","er","et","etter",
+  "etterpå","før","for","fordi","fra","fram","frem","få","gjennom","ha","hadde","han","hans",
+  "har","hennar","henne","hennes","her","hit","hva","hvem","hver","hvilke","hvilken","hvilket",
+  "hvis","hvor","hvordan","hvorfor","i","ikke","ikkje","ingen","ingenting","inn","inni","ja",
+  "jeg","meg","jo","kan","kom","kommer","kun","kunne","kva","kvar","kven","kvi","kvit","man",
+  "med","meg","meir","mellom","men","mens","mer","min","mine","mitt","mot","må","måtte","ned",
+  "nei","no","noe","noen","noko","nokon","nå","når","og","også","om","opp","oss","over","på",
+  "samme","seg","selv","si","sidan","siden","sin","sine","sitt","skal","skulle","slik","som",
+  "så","sånn","til","under","ut","uten","var","vart","ved","vere","vi","vil","ville","viss",
+  "være","vært","å"
+]);
+const IDEA_DANISH_STOP_WORDS = new Set([
+  "alle","alt","anden","andre","at","af","aldrig","alligevel","allerede","altid","blandt","blev",
+  "blive","bliver","da","dag","de","dem","den","denne","der","deres","det","dette","dig","din",
+  "dine","disse","dit","dog","du","efter","eller","en","end","ene","enhver","et","fem","fire",
+  "flere","flest","for","fordi","før","fra","få","god","gøre","gør","ham","han","hans","har",
+  "havde","have","hele","heller","her","hos","hun","hvad","hvem","hver","hvilke","hvilken",
+  "hvilket","hvis","hvor","hvordan","hvorfor","i","ikke","imellem","ind","ingen","intet","ja",
+  "jeg","jer","jeres","jo","kan","kom","kommer","kun","kunne","lad","lang","lidt","lige","lille",
+  "man","mand","mange","med","meget","men","mens","mere","mig","min","mine","mit","mod","må",
+  "måske","ned","nej","noget","nogle","nu","når","og","også","om","op","os","over","på","se",
+  "selv","sig","sin","sine","sit","skal","skulle","som","stor","store","så","sådan","thi","til",
+  "under","var","ved","vi","vil","ville","vor","vores","være","været","øvrigt"
+]);
+const IDEA_SWEDISH_STOP_WORDS = new Set([
+  "alla","allt","alltid","andra","andras","annan","annat","att","av","bakom","bara","behöva",
+  "behöver","blev","bli","blir","blivit","borde","båda","då","de","dem","den","deras","dess",
+  "det","detta","dig","din","dina","dit","du","där","efter","eller","en","er","era","ert","ett",
+  "fast","fick","finna","finns","fler","flesta","fram","från","för","före","genom","ha","hade",
+  "han","hans","har","henne","hennes","hit","hon","honom","hur","här","i","icke","idag","igår",
+  "igen","inget","ingen","inga","innan","inne","inte","jag","ju","kan","kunde","kunnat","kvar",
+  "kom","kommer","komma","kring","man","med","mellan","men","mig","min","mina","mitt","mot",
+  "mycket","många","måste","ned","ni","nog","när","någon","något","några","också","om","oss",
+  "på","runt","så","samma","sedan","sig","sin","sina","sist","sitta","ska","skall","skulle",
+  "som","stor","större","störst","till","tills","under","upp","utan","utanför","vad","var",
+  "vara","varför","varit","varje","vars","vart","vem","vi","vid","vilka","vilken","vilket",
+  "vill","vår","våra","vårt","än","ännu","är","åt","över"
+]);
 const IDEA_DUTCH_STOP_WORDS = new Set([
   "aan","aangezien","achter","af","al","alles","als","altijd","andere","anderen","ben","beneden",
   "bent","bij","bijna","binnen","boven","buiten","daar","daarom","daarna","dan","dat","de","deze",
@@ -3377,52 +3465,6 @@ const IDEA_GERMAN_STOP_WORDS = new Set([
   "welcher","welches","wenn","wer","werde","werden","werdet","weshalb","wie","wieder","will","wir",
   "wird","wirst","wo","zu","zum","zur","über","zwischen"
 ]);
-
-
-const IDEA_SWEDISH_STOP_WORDS = new Set([
-  "alla","allt","alltid","andra","andras","annan","annat","att","av","bakom","bara","behöva",
-  "behöver","blev","bli","blir","blivit","borde","båda","då","de","dem","den","deras","dess",
-  "det","detta","dig","din","dina","dit","du","där","efter","eller","en","er","era","ert","ett",
-  "fast","fick","finna","finns","fler","flesta","fram","från","för","före","genom","ha","hade",
-  "han","hans","har","henne","hennes","hit","hon","honom","hur","här","i","icke","idag","igår",
-  "igen","inget","ingen","inga","innan","inne","inte","jag","ju","kan","kunde","kunnat","kvar",
-  "kom","kommer","komma","kring","man","med","mellan","men","mig","min","mina","mitt","mot",
-  "mycket","många","måste","ned","ni","nog","när","någon","något","några","också","och","om","oss",
-  "på","runt","så","samma","sedan","sig","sin","sina","sist","sitta","ska","skall","skulle",
-  "som","stor","större","störst","till","tills","under","upp","utan","utanför","vad","var",
-  "vara","varför","varit","varje","vars","vart","vem","vi","vid","vilka","vilken","vilket",
-  "vill","vår","våra","vårt","än","ännu","är","åt","över"
-]);
-
-const IDEA_NORWEGIAN_STOP_WORDS = new Set([
-  "alle","alt","alltid","andre","at","av","bak","bare","begge","ble","bli","blir","blitt","bort",
-  "bra","bruk","både","da","de","deg","dem","den","denne","der","dere","deres","det","dette",
-  "deg","din","disse","dit","du","då","ein","eit","eller","en","ene","enn","er","et","etter",
-  "etterpå","før","for","fordi","fra","fram","frem","få","gjennom","ha","hadde","han","hans",
-  "har","hennar","henne","hennes","her","hit","hva","hvem","hver","hvilke","hvilken","hvilket",
-  "hvis","hvor","hvordan","hvorfor","i","ikke","ikkje","ingen","ingenting","inn","inni","ja",
-  "jeg","meg","jo","kan","kom","kommer","kun","kunne","kva","kvar","kven","kvi","kvit","man",
-  "med","meg","meir","mellom","men","mens","mer","min","mine","mitt","mot","må","måtte","ned",
-  "nei","no","noe","noen","noko","nokon","nå","når","og","også","om","opp","oss","over","på",
-  "samme","seg","selv","si","sidan","siden","sin","sine","sitt","skal","skulle","slik","som",
-  "så","sånn","til","under","ut","uten","var","vart","ved","vere","vi","vil","ville","viss",
-  "være","vært","å"
-]);
-
-const IDEA_DANISH_STOP_WORDS = new Set([
-  "alle","alt","anden","andre","at","af","aldrig","alligevel","allerede","altid","blandt","blev",
-  "blive","bliver","da","dag","de","dem","den","denne","der","deres","det","dette","dig","din",
-  "dine","disse","dit","dog","du","efter","eller","en","end","ene","enhver","et","fem","fire",
-  "flere","flest","for","fordi","før","fra","få","god","gøre","gør","ham","han","hans","har",
-  "havde","have","hele","heller","her","hos","hun","hvad","hvem","hver","hvilke","hvilken",
-  "hvilket","hvis","hvor","hvordan","hvorfor","i","ikke","imellem","ind","ingen","intet","ja",
-  "jeg","jer","jeres","jo","kan","kom","kommer","kun","kunne","lad","lang","lidt","lige","lille",
-  "man","mand","mange","med","meget","men","mens","mere","mig","min","mine","mit","mod","må",
-  "måske","ned","nej","noget","nogle","nu","når","og","også","om","op","os","over","på","se",
-  "selv","sig","sin","sine","sit","skal","skulle","som","stor","store","så","sådan","thi","til",
-  "uden","under","var","ved","vi","vil","ville","vor","vores","være","været","øvrigt"
-]);
-
 
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
@@ -3547,6 +3589,26 @@ function buildLiteraryIdeaGraph(
     }
   }
 
+  const countStatusReversals = (
+    history: readonly NarrativeIdeaStatusChange[]
+  ): number => {
+    const seenStatuses = new Set<NarrativeIdea["status"]>();
+    let previousStatus: NarrativeIdea["status"] | undefined;
+    let reversalCount = 0;
+    for (const change of history) {
+      if (
+        previousStatus !== undefined &&
+        change.status !== previousStatus &&
+        seenStatuses.has(change.status)
+      ) {
+        reversalCount++;
+      }
+      seenStatuses.add(change.status);
+      previousStatus = change.status;
+    }
+    return reversalCount;
+  };
+
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => ({
     ideaId: idea.ideaId,
     status: idea.status,
@@ -3556,6 +3618,68 @@ function buildLiteraryIdeaGraph(
     statusHistory: idea.statusHistory.map(change => ({ ...change })),
     omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
     writerDecisionCount: idea.writerDecisionCount,
+    observedStatusTransitionCount: idea.statusHistory.reduce(
+      (count, change, changeIndex, history) =>
+        count + (changeIndex > 0 && change.status !== history[changeIndex - 1]!.status ? 1 : 0),
+      0
+    ),
+    statusReversalCount: countStatusReversals(idea.statusHistory),
+    nonMonotonicStatusTimestampCount: idea.statusHistory.reduce(
+      (count, change, changeIndex, history) => {
+        if (changeIndex === 0) return count;
+        const previousAt = history[changeIndex - 1]!.changedAt;
+        return previousAt !== undefined && change.changedAt !== undefined &&
+          change.changedAt < previousAt ? count + 1 : count;
+      },
+      0
+    ),
+    comparableStatusTimestampPairCount: idea.statusHistory.reduce(
+      (count, change, changeIndex, history) => {
+        if (changeIndex === 0) return count;
+        return history[changeIndex - 1]!.changedAt !== undefined &&
+          change.changedAt !== undefined ? count + 1 : count;
+      },
+      0
+    ),
+    uncomparableStatusTimestampPairCount: idea.statusHistory.reduce(
+      (count, change, changeIndex, history) => {
+        if (changeIndex === 0) return count;
+        return history[changeIndex - 1]!.changedAt === undefined ||
+          change.changedAt === undefined ? count + 1 : count;
+      },
+      0
+    ),
+    observedInitialStatusRecordCount: idea.statusHistory.filter(
+      change => change.reason === "initial"
+    ).length,
+    observedWriterStatusChangeCount: idea.statusHistory.filter(
+      change => change.reason === "writer"
+    ).length,
+    observedTextRevisionStatusChangeCount: idea.statusHistory.filter(
+      change => change.reason === "text-revised"
+    ).length,
+    earliestKnownStatusChangeAt: idea.statusHistory.reduce<number | null>(
+      (earliest, change) => change.changedAt === undefined
+        ? earliest
+        : earliest === null ? change.changedAt : Math.min(earliest, change.changedAt),
+      null
+    ),
+    latestKnownStatusChangeAt: idea.statusHistory.reduce<number | null>(
+      (latest, change) => change.changedAt === undefined
+        ? latest
+        : latest === null ? change.changedAt : Math.max(latest, change.changedAt),
+      null
+    ),
+    knownStatusHistorySpanMs: (() => {
+      let earliest: number | null = null;
+      let latest: number | null = null;
+      for (const change of idea.statusHistory) {
+        if (change.changedAt === undefined) continue;
+        earliest = earliest === null ? change.changedAt : Math.min(earliest, change.changedAt);
+        latest = latest === null ? change.changedAt : Math.max(latest, change.changedAt);
+      }
+      return earliest === null || latest === null ? null : latest - earliest;
+    })(),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));
@@ -3704,6 +3828,17 @@ function buildLiteraryIdeaGraph(
     statusHistoryRecordCount: number;
     omittedStatusHistoryCount: number;
     writerDecisionCount: number;
+    observedStatusTransitionCount: number;
+    statusReversalCount: number;
+    nonMonotonicStatusTimestampCount: number;
+    comparableStatusTimestampPairCount: number;
+    uncomparableStatusTimestampPairCount: number;
+    observedInitialStatusRecordCount: number;
+    observedWriterStatusChangeCount: number;
+    observedTextRevisionStatusChangeCount: number;
+    earliestKnownStatusChangeAt: number | null;
+    latestKnownStatusChangeAt: number | null;
+    knownStatusHistorySpanMs: number | null;
     activeEvidenceCount: number;
     staleEvidenceCount: number;
     ideasWithActiveEvidenceCount: number;
@@ -3724,6 +3859,17 @@ function buildLiteraryIdeaGraph(
       statusHistoryRecordCount: 0,
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 0,
+      observedStatusTransitionCount: 0,
+      statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 0,
+      uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 0,
+      observedWriterStatusChangeCount: 0,
+      observedTextRevisionStatusChangeCount: 0,
+      earliestKnownStatusChangeAt: null,
+      latestKnownStatusChangeAt: null,
+      knownStatusHistorySpanMs: null,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 0,
@@ -3753,11 +3899,38 @@ function buildLiteraryIdeaGraph(
     totals.statusHistoryRecordCount += node.statusHistory.length;
     totals.omittedStatusHistoryCount += node.omittedStatusHistoryCount;
     totals.writerDecisionCount += node.writerDecisionCount;
+    totals.observedStatusTransitionCount += node.observedStatusTransitionCount;
+    totals.statusReversalCount += node.statusReversalCount;
+    totals.nonMonotonicStatusTimestampCount += node.nonMonotonicStatusTimestampCount;
+    totals.comparableStatusTimestampPairCount += node.comparableStatusTimestampPairCount;
+    totals.uncomparableStatusTimestampPairCount += node.uncomparableStatusTimestampPairCount;
+    totals.observedInitialStatusRecordCount += node.observedInitialStatusRecordCount;
+    totals.observedWriterStatusChangeCount += node.observedWriterStatusChangeCount;
+    totals.observedTextRevisionStatusChangeCount += node.observedTextRevisionStatusChangeCount;
+    if (node.earliestKnownStatusChangeAt !== null) {
+      totals.earliestKnownStatusChangeAt =
+        totals.earliestKnownStatusChangeAt === null
+          ? node.earliestKnownStatusChangeAt
+          : Math.min(totals.earliestKnownStatusChangeAt, node.earliestKnownStatusChangeAt);
+    }
+    if (node.latestKnownStatusChangeAt !== null) {
+      totals.latestKnownStatusChangeAt =
+        totals.latestKnownStatusChangeAt === null
+          ? node.latestKnownStatusChangeAt
+          : Math.max(totals.latestKnownStatusChangeAt, node.latestKnownStatusChangeAt);
+    }
     totals.activeEvidenceCount += node.activeEvidenceCount;
     totals.staleEvidenceCount += node.staleEvidenceCount;
     if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;
     if (node.staleEvidenceCount > 0) totals.ideasWithStaleEvidenceCount++;
     if (node.activeEvidenceCount === 0) totals.ideasWithoutActiveEvidenceCount++;
+  }
+  for (const totals of profileTotals.values()) {
+    totals.knownStatusHistorySpanMs =
+      totals.earliestKnownStatusChangeAt === null ||
+      totals.latestKnownStatusChangeAt === null
+        ? null
+        : totals.latestKnownStatusChangeAt - totals.earliestKnownStatusChangeAt;
   }
   const statusProfiles: LiteraryIdeaGraphStatusProfile[] = profileStatuses.map(
     status => profileTotals.get(status)!
@@ -3833,8 +4006,8 @@ function buildLiteraryIdeaLexicalResonances(
           break;
         }
       }
-      // La caché es de módulo, pero nunca comparte resultados entre libros:
-      // projectId forma parte de la partición incluso si IDs y textos coinciden.
+      // La caché de módulo nunca debe compartir resultados entre libros,
+      // incluso si los IDs locales y los textos coinciden.
       cacheKey += `${idea.projectId.length}:${idea.projectId}`;
       cacheKey += `${idea.ideaId.length}:${idea.ideaId}`;
       cacheKey += idea.textOmitted === "budget" ? "B" : text === undefined
@@ -3880,9 +4053,7 @@ function buildLiteraryIdeaLexicalResonances(
       if (Array.from(term).length < 2 || !/\p{L}/u.test(term) ||
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
           IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term) ||
-          IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term) ||
-          IDEA_DUTCH_STOP_WORDS.has(term) || IDEA_SWEDISH_STOP_WORDS.has(term) || IDEA_DANISH_STOP_WORDS.has(term) ||
-          IDEA_NORWEGIAN_STOP_WORDS.has(term)) continue;
+          IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term) || IDEA_DUTCH_STOP_WORDS.has(term) || IDEA_SWEDISH_STOP_WORDS.has(term) || IDEA_DANISH_STOP_WORDS.has(term) || IDEA_NORWEGIAN_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>
@@ -5768,7 +5939,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
-        idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
@@ -5798,6 +5968,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
+        idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||

@@ -184,3 +184,40 @@ test("reconcilia dos altas concurrentes del mismo vínculo como una sola asociac
   assert.equal(store.writes, 1);
   api.dispose();
 });
+
+test("mantiene el límite de 500 vínculos por categoría antes de persistir", async () => {
+  const relatedIdeaIds = Array.from({ length: 500 }, (_, index) =>
+    "idea-related-" + String(index).padStart(3, "0")
+  );
+  const ideaStore = new RacingStore([
+    idea("idea-source", { relatedIdeaIds }),
+    ...relatedIdeaIds.map(id => idea(id)),
+    idea("idea-overflow")
+  ]);
+  const ideaApi = createApi(ideaStore);
+  await ideaApi.getNarrativeIdeas();
+  await assert.rejects(
+    ideaApi.setNarrativeIdeaLink("idea-source", "idea-overflow", true),
+    /no puede conservar más de 500 vínculos por categoría/
+  );
+  assert.equal(ideaStore.writes, 0);
+  ideaApi.dispose();
+
+  const relatedEntityIds = Array.from({ length: 500 }, (_, index) =>
+    "entity-related-" + String(index).padStart(3, "0")
+  );
+  const entityStore = new RacingStore(
+    [idea("idea-source", { relatedEntityIds })],
+    [...relatedEntityIds, "entity-overflow"].map((id, index) => entity(
+      id, "Personaje " + index
+    ))
+  );
+  const entityApi = createApi(entityStore);
+  await entityApi.getNarrativeIdeas();
+  await assert.rejects(
+    entityApi.setNarrativeIdeaEntityLink("idea-source", "entity-overflow", true),
+    /no puede conservar más de 500 vínculos por categoría/
+  );
+  assert.equal(entityStore.writes, 0);
+  entityApi.dispose();
+});

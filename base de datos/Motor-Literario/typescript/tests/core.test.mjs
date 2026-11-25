@@ -10365,6 +10365,44 @@ test("resume la recurrencia de acontecimientos entre escenas aunque no declaren 
   assert.deepEqual(result.characterEventEvidenceProfiles.profiles,[]);
 });
 
+test("detecta secuencias recurrentes de acontecimientos en ventanas de escenas contiguas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","La tormenta comienza.","***",
+    "ESCENA 2","El patio quedó vacío.","***",
+    "ESCENA 3","La campana suena.","***",
+    "ESCENA 4","La tormenta comienza.","***",
+    "ESCENA 5","El patio quedó vacío.","***",
+    "ESCENA 6","La campana suena."
+  ].join("\\n");
+  const evidenceFor = excerpt => {
+    const start=text.indexOf(excerpt);
+    assert.notEqual(start,-1);
+    return {documentId:"chapter",revision:15,start,end:start+excerpt.length,excerpt};
+  };
+  const result=analyzeLiteraryFragment({
+    projectId:"event-sequence-motifs",documentId:"chapter",revision:15,text,
+    knownEvents:[
+      {
+        eventId:"storm",label:"Comienza la tormenta",participants:[],
+        evidence:[
+          evidenceFor("La tormenta comienza."),
+          evidenceFor("La tormenta comienza.",)
+        ]
+      },
+      {
+        eventId:"bell",label:"Suena la campana",participants:[],
+        evidence:[evidenceFor("La campana suena.")]
+      }
+    ]
+  });
+  assert.equal(result.sceneEventSequenceMotifs.candidateWindowCount,9);
+  assert.equal(result.sceneEventSequenceMotifs.analyzedWindowCount,9);
+  assert.equal(result.sceneEventSequenceMotifs.emptyWindowCount,0);
+  assert.equal(result.sceneEventSequenceMotifs.sourceTruncatedWindowCount,0);
+  assert.equal(result.sceneEventSequenceMotifs.motifCount,0);
+});
+
 test("la API publica comparaciones de continuidad con evidencia narrativa persistida", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({store});

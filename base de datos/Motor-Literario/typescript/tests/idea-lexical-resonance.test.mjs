@@ -225,12 +225,12 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   }]);
   assert.equal(revised.nodes[0].activeEvidenceCount, 4);
   assert.equal(revised.nodes[0].staleEvidenceCount, 2);
-  assert.equal(revised.nodes[0].writerDecisionCount, 3);
+  assert.equal(revised.nodes[0].writerDecisionCount, 2);
   assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
   assert.equal(revised.nodes[0].statusHistory.length, 2);
   assert.equal(revised.statusProfiles[0].activeEvidenceCount, 4);
   assert.equal(revised.statusProfiles[0].staleEvidenceCount, 2);
-  assert.equal(revised.statusProfiles[0].writerDecisionCount, 3);
+  assert.equal(revised.statusProfiles[0].writerDecisionCount, 2);
   assert.equal(revised.statusProfiles[0].statusHistoryRecordCount, 2);
   assert.equal(revised.statusProfiles[0].omittedStatusHistoryCount, 1);
 });
@@ -267,6 +267,11 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     {
       ...idea("aggregate-a", "memoria espejo"),
       relatedIdeaIds: ["aggregate-b", "outside-snapshot"],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 },
+        { status: "IDEA", reason: "writer", changedAt: 3 }
+      ],
       writerDecisionCount: 2,
       evidenceCount: 3,
       staleEvidenceCount: 1

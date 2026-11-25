@@ -664,3 +664,26 @@ test("las referencias externas repetidas mantienen contadores y alineación desc
   });
   assert.equal(source.directReferenceStatusAlignment, "unknown-incomplete-snapshot");
 });
+
+test("los estados conocidos mixtos no se ocultan por destinos adicionales fuera del snapshot", () => {
+  const graph = analyze([
+    idea("source", ["idea-target", "incorporated-target", "outside"]),
+    idea("idea-target"),
+    {
+      ...idea("incorporated-target"),
+      status: "incorporated"
+    }
+  ], 1);
+
+  const source = graph.nodes.find(node => node.ideaId === "source");
+  assert.equal(graph.referenceCount, 3);
+  assert.equal(graph.includedReferenceCount, 2);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.deepEqual(source.directReferenceStatusCounts, {
+    IDEA: 1,
+    incorporated: 1,
+    discarded: 0,
+    notInSnapshot: 1
+  });
+  assert.equal(source.directReferenceStatusAlignment, "mixed-status");
+});

@@ -11938,3 +11938,45 @@ test("la API rechaza páginas de biblioteca sin un cursor final explícito", asy
     /página o su cursor están malformados/
   );
 });
+
+
+test("la API rechaza vínculos a ideas ausentes aunque el almacén use lectura agrupada", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-missing-library-link";
+  const projectId = "book-missing-library-link";
+  store.loadPersonalIdeasPage = async () => ({
+    items: [{
+      writerId,
+      sourceProjectId: projectId,
+      sourceProjectName: "Libro enlazado",
+      category: "Libro enlazado",
+      idea: {
+        projectId,
+        id: "idea-present",
+        text: "Una idea archivada",
+        status: "IDEA",
+        originDocumentId: "chapter",
+        sourceProjectName: "Libro enlazado",
+        evidence: [],
+        relatedIdeaIds: ["idea-does-not-exist"]
+      },
+      context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+      archivedAt: 1
+    }],
+    nextCursor: null
+  });
+  store.loadPersonalIdeasByKeys = async (_writerId, references) => {
+    assert.deepEqual(references, [{
+      sourceProjectId: projectId,
+      ideaId: "idea-does-not-exist"
+    }]);
+    return [];
+  };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Libro enlazado", writerId });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /una idea relacionada no existe en la biblioteca del escritor/
+  );
+});

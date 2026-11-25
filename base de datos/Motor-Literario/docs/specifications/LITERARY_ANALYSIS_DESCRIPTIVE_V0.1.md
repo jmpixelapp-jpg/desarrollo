@@ -101,6 +101,12 @@ Cada patrón conserva índices de oración locales a la escena, conteos y bandas
 
 Estas mediciones se calculan exclusivamente desde las oraciones y sus longitudes. No usan pronombres ni la clasificación `voiceSignals`; por tanto, una cadencia estable o alternante no prueba estabilidad o alternancia de perspectiva, narrador o focalización. A la inversa, una variación gramatical no implica cambio de cadencia.
 
+### Comparación de cadencia entre escenas contiguas
+
+La propiedad `sceneCadenceTransitions` compara las bandas de longitud y patrones entre cada par de escenas explícitas contiguas. Los deltas de bandas y de transiciones se calculan como escena siguiente menos escena anterior. También informa el cambio de cantidad total de patrones, el delta por tipo (racha estable, alternancia, progresión ascendente y progresión descendente), los tipos que aparecen y los que dejan de detectarse. Sus índices remiten a las mismas escenas utilizadas por `sceneRhythmTransitions` y `sceneVoiceTransitions`.
+
+Los conteos por tipo se calculan sobre todos los patrones detectados, no sobre la lista de evidencias limitada a 20 por escena. Así, el límite de muestras no altera la comparación. Una transición ausente puede significar que la escena tiene menos de dos oraciones; sus deltas describen conteos observados y no se interpretan como una cadencia narrativa nula. Esta comparación sigue basada exclusivamente en longitudes oracionales, incluye diálogo reconocido y no permite deducir perspectiva, narrador ni focalización.
+
 ## Acontecimientos y continuidad entre escenas
 
 La API anfitriona aporta acontecimientos persistidos del proyecto activo. Una escena solo recibe un vínculo cuando existe evidencia no obsoleta del mismo documento y de la revisión exacta analizada cuyo rango UTF-16 se solapa con el contenido de la escena. Cada vínculo conserva el ID y etiqueta del acontecimiento, los rangos coincidentes y sus participantes declarados. Para cada participante se informa por separado si también aparece por nombre/alias en las menciones literales de esa escena. La falta de mención no se interpreta como ausencia ni contradicción. La evidencia de otras revisiones, otros documentos o marcada como obsoleta se descarta. El catálogo admite hasta 2.000 acontecimientos, 500 participantes y 200 evidencias por acontecimiento; cada escena devuelve como máximo 100 vínculos y 20 rangos por vínculo.

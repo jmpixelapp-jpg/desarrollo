@@ -10441,9 +10441,36 @@ test("detecta cadencias alternantes, progresivas y estables dentro de cada escen
   assert.equal(stable.patterns[0].sentenceCount,3);
   assert.deepEqual(stable.patterns[0].lengthBands,["short","short","short"]);
 
+  assert.deepEqual(result.explicitScenes[0].rhythmSignals.cadence.patternTypeCounts,{
+    stableLengthBandRun:0,alternatingLengthBandRun:1,ascendingLengthRun:0,descendingLengthRun:0
+  });
   assert.equal(result.explicitScenes[0].voiceSignals.classification,"undetermined");
   assert.equal(result.explicitScenes[0].rhythmSignals.cadence.sentenceCount,5);
   assert.equal(result.sceneVoiceTransitions.length,2);
+
+  assert.equal(result.sceneCadenceTransitions.length,2);
+  assert.deepEqual(result.sceneCadenceTransitions[0],{
+    fromSceneIndex:1,toSceneIndex:2,
+    sentenceBandCountDelta:{short:-2,medium:2,long:-1},
+    bandTransitionCountDelta:{
+      shortToShort:0,shortToMedium:1,shortToLong:-2,
+      mediumToShort:0,mediumToMedium:1,mediumToLong:1,
+      longToShort:-2,longToMedium:0,longToLong:0
+    },
+    patternCountDelta:0,
+    patternTypeCountDelta:{
+      stableLengthBandRun:0,alternatingLengthBandRun:-1,
+      ascendingLengthRun:1,descendingLengthRun:0
+    },
+    newlyDetectedPatternTypes:["ascending-length-run"],
+    noLongerDetectedPatternTypes:["alternating-length-band-run"]
+  });
+  assert.deepEqual(result.sceneCadenceTransitions[1].newlyDetectedPatternTypes,[
+    "stable-length-band-run"
+  ]);
+  assert.deepEqual(result.sceneCadenceTransitions[1].noLongerDetectedPatternTypes,[
+    "ascending-length-run"
+  ]);
 });
 
 test("detecta tramos estables y alternancias de señales gramaticales entre escenas", async () => {

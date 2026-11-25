@@ -149,6 +149,12 @@ export interface LiterarySceneCadenceProfile {
     readonly medium: number;
     readonly long: number;
   };
+  readonly patternTypeCounts: {
+    readonly stableLengthBandRun: number;
+    readonly alternatingLengthBandRun: number;
+    readonly ascendingLengthRun: number;
+    readonly descendingLengthRun: number;
+  };
   readonly bandTransitionCounts: {
     readonly shortToShort: number;
     readonly shortToMedium: number;
@@ -239,6 +245,20 @@ export interface LiteraryCharacterCoMentionPattern {
   readonly characterIds: readonly [string, string];
   readonly sharedSceneCount: number;
   readonly sceneIndexes: readonly number[];
+}
+export interface LiterarySceneCadenceTransition {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  readonly sentenceBandCountDelta: {
+    readonly short: number;
+    readonly medium: number;
+    readonly long: number;
+  };
+  readonly bandTransitionCountDelta: LiterarySceneCadenceProfile["bandTransitionCounts"];
+  readonly patternCountDelta: number;
+  readonly patternTypeCountDelta: LiterarySceneCadenceProfile["patternTypeCounts"];
+  readonly newlyDetectedPatternTypes: readonly LiterarySceneCadencePatternType[];
+  readonly noLongerDetectedPatternTypes: readonly LiterarySceneCadencePatternType[];
 }
 export interface LiterarySceneRhythmTransition {
   readonly fromSceneIndex: number;
@@ -347,6 +367,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneContinuity: readonly LiterarySceneContinuityTransition[];
   /** Variaciones métricas del ritmo entre escenas contiguas, independientes de las señales gramaticales. */
   readonly sceneRhythmTransitions: readonly LiterarySceneRhythmTransition[];
+  /** Comparación de bandas y patrones de cadencia entre escenas contiguas; separada de la voz gramatical. */
+  readonly sceneCadenceTransitions: readonly LiterarySceneCadenceTransition[];
   /** Variaciones de señales gramaticales entre escenas contiguas; no demuestra cambio de narrador. */
   readonly sceneVoiceTransitions: readonly LiterarySceneVoiceTransition[];
   /** Resumen cuantitativo de señales gramaticales a lo largo de las escenas explícitas. */
@@ -738,6 +760,67 @@ function analyzeExplicitScenes(
     ),
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
   });});
+}
+
+function buildSceneCadenceTransitions(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneCadenceTransition[] {
+  const transitions: LiterarySceneCadenceTransition[] = [];
+  const patternTypes: readonly LiterarySceneCadencePatternType[] = [
+    "stable-length-band-run",
+    "alternating-length-band-run",
+    "ascending-length-run",
+    "descending-length-run"
+  ];
+  for (let index=1; index<scenes.length; index++) {
+    const previous=scenes[index-1]!.rhythmSignals.cadence;
+    const next=scenes[index]!.rhythmSignals.cadence;
+    const sentenceBandCountDelta = {
+      short:next.sentenceBandCounts.short-previous.sentenceBandCounts.short,
+      medium:next.sentenceBandCounts.medium-previous.sentenceBandCounts.medium,
+      long:next.sentenceBandCounts.long-previous.sentenceBandCounts.long
+    };
+    const bandTransitionCountDelta = {
+      shortToShort:next.bandTransitionCounts.shortToShort-previous.bandTransitionCounts.shortToShort,
+      shortToMedium:next.bandTransitionCounts.shortToMedium-previous.bandTransitionCounts.shortToMedium,
+      shortToLong:next.bandTransitionCounts.shortToLong-previous.bandTransitionCounts.shortToLong,
+      mediumToShort:next.bandTransitionCounts.mediumToShort-previous.bandTransitionCounts.mediumToShort,
+      mediumToMedium:next.bandTransitionCounts.mediumToMedium-previous.bandTransitionCounts.mediumToMedium,
+      mediumToLong:next.bandTransitionCounts.mediumToLong-previous.bandTransitionCounts.mediumToLong,
+      longToShort:next.bandTransitionCounts.longToShort-previous.bandTransitionCounts.longToShort,
+      longToMedium:next.bandTransitionCounts.longToMedium-previous.bandTransitionCounts.longToMedium,
+      longToLong:next.bandTransitionCounts.longToLong-previous.bandTransitionCounts.longToLong
+    };
+    const patternTypeCountDelta = {
+      stableLengthBandRun:next.patternTypeCounts.stableLengthBandRun-previous.patternTypeCounts.stableLengthBandRun,
+      alternatingLengthBandRun:next.patternTypeCounts.alternatingLengthBandRun-previous.patternTypeCounts.alternatingLengthBandRun,
+      ascendingLengthRun:next.patternTypeCounts.ascendingLengthRun-previous.patternTypeCounts.ascendingLengthRun,
+      descendingLengthRun:next.patternTypeCounts.descendingLengthRun-previous.patternTypeCounts.descendingLengthRun
+    };
+    const typeCount = (profile: typeof previous, type: LiterarySceneCadencePatternType): number => {
+      switch (type) {
+        case "stable-length-band-run": return profile.patternTypeCounts.stableLengthBandRun;
+        case "alternating-length-band-run": return profile.patternTypeCounts.alternatingLengthBandRun;
+        case "ascending-length-run": return profile.patternTypeCounts.ascendingLengthRun;
+        case "descending-length-run": return profile.patternTypeCounts.descendingLengthRun;
+      }
+    };
+    transitions.push({
+      fromSceneIndex:scenes[index-1]!.sceneIndex,
+      toSceneIndex:scenes[index]!.sceneIndex,
+      sentenceBandCountDelta,
+      bandTransitionCountDelta,
+      patternCountDelta:next.patternCount-previous.patternCount,
+      patternTypeCountDelta,
+      newlyDetectedPatternTypes:patternTypes.filter(type =>
+        typeCount(previous,type)===0 && typeCount(next,type)>0
+      ),
+      noLongerDetectedPatternTypes:patternTypes.filter(type =>
+        typeCount(previous,type)>0 && typeCount(next,type)===0
+      )
+    });
+  }
+  return transitions;
 }
 
 function buildSceneRhythmTransitions(
@@ -1455,10 +1538,17 @@ function buildSceneCadence(
     a.toSentenceIndex-b.toSentenceIndex ||
     a.patternType.localeCompare(b.patternType,"en")
   );
+  const patternTypeCounts = {
+    stableLengthBandRun:patterns.filter(item => item.patternType === "stable-length-band-run").length,
+    alternatingLengthBandRun:patterns.filter(item => item.patternType === "alternating-length-band-run").length,
+    ascendingLengthRun:patterns.filter(item => item.patternType === "ascending-length-run").length,
+    descendingLengthRun:patterns.filter(item => item.patternType === "descending-length-run").length
+  };
   return {
     sentenceCount:sentenceWordCounts.length,
     sentenceBandCounts,
     bandTransitionCounts,
+    patternTypeCounts,
     patternCount:patterns.length,
     patterns:patterns.slice(0,20)
   };
@@ -1558,6 +1648,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
+  const sceneCadenceTransitions = buildSceneCadenceTransitions(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
   const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
@@ -1736,6 +1827,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     explicitScenes,
     sceneContinuity,
     sceneRhythmTransitions,
+    sceneCadenceTransitions,
     sceneVoiceTransitions,
     sceneVoiceProfile,
     sceneVoiceSequences,

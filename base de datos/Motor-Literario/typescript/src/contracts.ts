@@ -51,6 +51,8 @@ export interface AnalysisResult {
   readonly changeStart: number;
   readonly changeEnd: number;
   readonly replacementLength: number;
+  /** Texto exacto del reemplazo original; permite distinguir inserciones de líneas completas. */
+  readonly changeReplacement: string;
   /** Límites de las líneas afectadas en el texto anterior a la edición. */
   readonly previousAffectedStart: number;
   readonly previousAffectedEnd: number;

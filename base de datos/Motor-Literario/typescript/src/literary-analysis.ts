@@ -5000,10 +5000,12 @@ function isValidNarrativeIdeaStatusHistory(
     }
     if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
   }
+  const visibleWriterDecisionCount = value.filter(
+    (change: NarrativeIdeaStatusChange) => change.reason === "writer"
+  ).length;
   return value[value.length - 1]?.status === currentStatus &&
-    writerDecisionCount >= value.filter(
-      (change: NarrativeIdeaStatusChange) => change.reason === "writer"
-    ).length;
+    writerDecisionCount >= visibleWriterDecisionCount &&
+    writerDecisionCount - visibleWriterDecisionCount <= omittedStatusHistoryCount;
 }
 
 function validateInput(input: LiteraryAnalysisInput): number {

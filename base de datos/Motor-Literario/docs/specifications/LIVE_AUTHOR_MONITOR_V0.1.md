@@ -484,3 +484,15 @@ Los checkpoints conservan métricas agregadas y muestras recientes, no el histor
 
 
 **Validación de la implementación:** la ejecución aislada [45722890027](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45722890027), sobre el commit `8c2578174e002a7ba55447a607b5ea07b4a73c61`, terminó correctamente: build Vite y **84 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye pruebas del contrato del monitor y del ciclo de recuperación en `HostEngineApi` mediante un almacén de prueba. La CI general de ese commit solo conserva errores ajenos en `src/literary-analysis.ts`; no reporta errores de tipos en los archivos del monitor, HostEngineApi, contratos o persistencia.
+
+
+## 25. Propagación de errores de persistencia en lifecycle seguro
+
+Los guardados automáticos de checkpoint son no bloqueantes durante la escritura: un fallo se reporta a la observabilidad del anfitrión y no se lanza dentro del callback del motor. Sin embargo, el error no se elimina del estado operativo de la instancia.
+
+- Los errores de guardado quedan asociados al documento hasta que un guardado posterior se complete correctamente.
+- `closeLiveAuthorMonitorDocumentSafely` espera el trabajo automático en curso y realiza un guardado final nuevo antes de cerrar. Si el guardado final falla, rechaza el cierre y conserva la sesión en memoria.
+- `disposeSafely` espera las colas de checkpoint y rechaza el desmontaje si queda algún error de persistencia sin resolver. No elimina la sesión como si el guardado hubiera terminado bien.
+- Un commit durable posterior o un guardado final que tenga éxito limpia el error retenido.
+
+La prueba de HostEngineApi utiliza un almacén que falla al guardar y comprueba que `disposeSafely` rechaza la operación mientras el snapshot de métricas sigue disponible. Esto separa la observabilidad no bloqueante del estado real de persistencia: el autor puede seguir escribiendo, pero el anfitrión no recibe una falsa confirmación de cierre seguro.

@@ -514,3 +514,6 @@ El manifiesto histórico `storage_mapping_v0.4.1.json` se mantiene sin alterar. 
 El workflow específico del monitor ejecuta `npm run validate:schema` antes del build y las pruebas. También ejecuta `tests/storage-implementation-audit.test.mjs` contra el manifiesto activo para detectar almacenes físicos no declarados. La prueba de auditoría deja de depender de un número fijo de tablas y de una versión IndexedDB incrustada en un reemplazo de texto.
 
 **Validación de CI de esta alineación:** pendiente de la ejecución disparada por los commits del manifiesto activo y el workflow. No se considera aprobada hasta revisar los resultados de la auditoría, build y pruebas.
+
+
+El índice `by-project` también se declara mediante `ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId")` dentro de la rutina de migración `onupgradeneeded`. El manifiesto y la auditoría comparan las definiciones del almacén y de sus índices; crear el índice solo en la rama que crea el objectStore no es suficiente para satisfacer la auditoría de migraciones.

@@ -320,6 +320,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Candidatos a cambios bruscos de ritmo entre dos oraciones consecutivas, con rangos para inspección.
 - Estimación de diálogo a partir de comillas y líneas que comienzan con raya.
 - Repeticiones de palabras de contenido y aperturas de oración recurrentes, con ocurrencias acotadas para inspección.
+- Ecos léxicos entre escenas explícitas: formas de contenido repetidas en al menos tres ocasiones y dos escenas, con conteos completos y hasta doce offsets UTF-16 por escena; no se interpretan como motivos semánticos.
 - Señales de primera, segunda y tercera persona basadas en pronombres explícitos fuera de los tramos de diálogo.
 - Candidatos a anáfora en comienzos de oraciones consecutivas.
 - Vocabulario sensorial explícito clasificado por modalidad visual, auditiva, táctil, olfativa y gustativa.

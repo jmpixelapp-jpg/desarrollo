@@ -11670,6 +11670,7 @@ test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera
   await api.archiveUnincorporatedIdeas();
 
   let pageReads = 0;
+  let batchReads = 0;
   let pointReads = 0;
   store.loadPersonalIdeasPage = async (writerId, cursor, limit) => {
     assert.equal(writerId, identity.writerId);
@@ -11692,6 +11693,16 @@ test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera
       : null;
     return { items, nextCursor };
   };
+  store.loadPersonalIdeasByKeys = async (writerId, references) => {
+    batchReads++;
+    const all = await store.loadPersonalIdeas(writerId);
+    const requested = new Set(references.map(reference =>
+      JSON.stringify([reference.sourceProjectId, reference.ideaId])
+    ));
+    return all.filter(entry => requested.has(
+      JSON.stringify([entry.sourceProjectId, entry.idea.id])
+    ));
+  };
   store.loadPersonalIdea = async (writerId, sourceProjectId, ideaId) => {
     pointReads++;
     return (await store.loadPersonalIdeas(writerId)).find(entry =>
@@ -11705,7 +11716,8 @@ test("la biblioteca personal se consulta por páginas y resuelve vínculos fuera
     sourceProjectId: identity.projectId,
     ideaId: "idea-a"
   });
-  assert.equal(pointReads, 1, "resuelve una referencia a una idea situada en otra página");
+  assert.equal(batchReads, 1, "agrupa las referencias que apuntan fuera de la página");
+  assert.equal(pointReads, 0, "no abre transacciones individuales cuando existe lectura agrupada");
 
   const second = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
   assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);

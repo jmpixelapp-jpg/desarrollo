@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `16`.
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `17`.
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -26,6 +26,8 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `dictionary-entries` | `[projectId, id]` | `by-project`, `by-dictionary`, `by-dictionary-normalized` único | Entradas, atributos JSON y vínculos con entidades |
 | `style-profiles` | `[projectId, id]` | `by-project`, `by-project-name` | Perfiles de estilo por libro y preferencias editoriales JSON |
 | `timeline-tracks` | `[projectId, id]` | `by-project`, `by-project-name` | Pistas cronológicas explícitas y reglas JSON |
+| `record-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de fichas |
+| `relation-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de relaciones |
 
 Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()`. Las lecturas deben esperar a que complete su transacción readonly; las colecciones y registros se validan antes de incorporarse a la API o a sus cachés.
 
@@ -54,8 +56,8 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `project_dictionaries` | `project-dictionaries` | Implementado; unicidad por proyecto, idioma y nombre normalizado |
 | `dictionary_entries` | `dictionary-entries` | Implementado; actualización comparada y forma normalizada única |
 | `dictionary_entry_entities` | `DictionaryEntry.relatedEntityIds` embebido | Implementado; referencias verificadas transaccionalmente dentro del libro |
-| `record_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
-| `relation_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
+| `record_lifecycles` | `record-lifecycles` | Implementado; historial append-only con continuidad de revisión |
+| `relation_lifecycles` | `relation-lifecycles` | Implementado; historial append-only con continuidad de revisión |
 | `writer_library_ideas` | `personal-idea-library` | Implementado con transacción de transferencia |
 | `writer_library_finalization_receipts` | `writer-library-finalization-receipts` | Implementado; recibo idempotente con checksum y transferencia en la misma transacción |
 
@@ -63,6 +65,6 @@ El archivo `storage_mapping_v0.4.1.json` es la fuente verificable del mapeo: con
 
 ## Límites que no deben ocultarse
 
-El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. No se debe presentar la base como lista para persistir autorizaciones de importación ni ciclos de vida completos hasta añadir sus contratos TypeScript, object stores, migraciones, operaciones transaccionales y pruebas.
+El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. Las autorizaciones de importación siguen pendientes. Los historiales de ciclo de vida ya cuentan con contratos TypeScript, almacenes IndexedDB, migración 17, operaciones transaccionales y pruebas.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.

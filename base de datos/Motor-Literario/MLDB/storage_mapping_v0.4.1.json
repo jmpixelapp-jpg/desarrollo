@@ -6,7 +6,7 @@
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 16,
+    "database_version": 17,
     "object_stores": [
       {
         "name": "project-settings",
@@ -330,6 +330,68 @@
               "trackName"
             ],
             false
+          ]
+        ]
+      },
+      {
+        "name": "record-lifecycles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-subject",
+            [
+              "projectId",
+              "recordId"
+            ],
+            false
+          ],
+          [
+            "by-subject-revision",
+            [
+              "projectId",
+              "recordId",
+              "revision"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "relation-lifecycles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-subject",
+            [
+              "projectId",
+              "relationId"
+            ],
+            false
+          ],
+          [
+            "by-subject-revision",
+            [
+              "projectId",
+              "relationId",
+              "revision"
+            ],
+            true
           ]
         ]
       }
@@ -770,10 +832,18 @@
       "keyPrefixes": [
         "project/record-lifecycles/"
       ],
-      "representation": "archive",
-      "contract": "Pendiente: historial independiente de cambios de etiqueta y estado de cada ficha.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "representation": "record",
+      "contract": "RecordLifecycle append-only en record-lifecycles; revisión consecutiva, continuidad de etiqueta/estado y referencia transaccional a narrative-entities.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "record-lifecycles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
     },
     {
       "table": "relation_lifecycles",
@@ -784,10 +854,18 @@
       "keyPrefixes": [
         "project/relation-lifecycles/"
       ],
-      "representation": "archive",
-      "contract": "Pendiente: historial independiente de cambios de etiqueta y estado de cada relación.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "representation": "record",
+      "contract": "RelationLifecycle append-only en relation-lifecycles; revisión consecutiva, continuidad de etiqueta/estado y referencia transaccional a narrative-relations.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "relation-lifecycles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
     },
     {
       "table": "writer_library_ideas",

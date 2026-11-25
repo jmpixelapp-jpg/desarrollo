@@ -272,3 +272,11 @@ Las referencias de recursos conservan el ID de la base local, tipo, versión de 
 
 API: `getLanguageProfiles()`, `saveLanguageProfile()`, `getLanguageResourceRefs()` y `saveLanguageResourceRef()`.
 
+
+
+### Historiales inmutables de fichas y relaciones
+
+Cada cambio de etiqueta o estado se conserva como evento append-only, separado de la ficha o relación actual. El historial comienza en revisión 1; las revisiones posteriores deben ser consecutivas, declarar exactamente la etiqueta y el estado previos y mantener una fecha no regresiva. La ficha o relación debe existir en el mismo libro antes de aceptar el evento. Los eventos históricos no se editan ni se eliminan.
+
+La API ofrece `getRecordLifecycleHistory`, `appendRecordLifecycle`, `getRelationLifecycleHistory` y `appendRelationLifecycle`. El anfitrión entrega la autoría y el motivo cuando estén disponibles; el motor no inventa esos datos. IndexedDB serializa escrituras concurrentes y rechaza revisiones duplicadas o discontinuas.
+

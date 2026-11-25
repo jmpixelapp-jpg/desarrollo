@@ -3944,6 +3944,203 @@ test("el archivo conserva el grafo de ideas que se transfieren juntas sin duplic
   );
 });
 
+test("IndexedDB conserva referencias mutuas entre ideas archivadas en la misma transacción", async () => {
+  const projectId = "indexeddb-archive-mutual-links";
+  const writerId = "writer-indexeddb-archive-mutual-links";
+  const projectName = "Libro con vínculos mutuos";
+  const key = (project, id) => project + "\u0000" + id;
+  const projectIdeas = new Map([
+    ["idea-a", {
+      projectId, id: "idea-a", text: "Idea A", status: "IDEA",
+      originDocumentId: "chapter-a", sourceProjectName: projectName,
+      evidence: [], relatedIdeaIds: ["idea-b"]
+    }],
+    ["idea-b", {
+      projectId, id: "idea-b", text: "Idea B", status: "IDEA",
+      originDocumentId: "chapter-b", sourceProjectName: projectName,
+      evidence: [], relatedIdeaIds: ["idea-a"]
+    }]
+  ].map(([id, idea]) => [key(projectId, id), structuredClone(idea)]));
+  const personalIdeas = new Map();
+  const receipts = new Map();
+  let pendingRequests = 0;
+  let completionTimer;
+  let aborted = false;
+  let completed = false;
+  let transaction;
+
+  const scheduleCompletion = () => {
+    if (pendingRequests !== 0 || aborted || completed || completionTimer) return;
+    completionTimer = setTimeout(() => {
+      completionTimer = undefined;
+      if (pendingRequests !== 0 || aborted || completed) return;
+      completed = true;
+      transaction.oncomplete?.();
+    }, 0);
+  };
+  const createRequest = () => ({
+    result: undefined,
+    error: null,
+    onsuccess: null,
+    onerror: null
+  });
+  const queueResult = (request, read) => {
+    pendingRequests++;
+    if (completionTimer) {
+      clearTimeout(completionTimer);
+      completionTimer = undefined;
+    }
+    queueMicrotask(() => {
+      if (aborted) {
+        pendingRequests--;
+        return;
+      }
+      try {
+        request.result = read();
+        request.onsuccess?.({ target: request });
+      } catch (error) {
+        request.error = error;
+        try { request.onerror?.({ target: request }); }
+        finally { transaction.abort(); }
+      } finally {
+        pendingRequests--;
+        scheduleCompletion();
+      }
+    });
+    return request;
+  };
+
+  const ideaStore = {
+    index(indexName) {
+      assert.equal(indexName, "by-project");
+      return {
+        openCursor(requestedProjectId) {
+          assert.equal(requestedProjectId, projectId);
+          const snapshot = [...projectIdeas.values()]
+            .filter(idea => idea.projectId === projectId)
+            .sort((left, right) => left.id.localeCompare(right.id))
+            .map(idea => structuredClone(idea));
+          const request = createRequest();
+          const cursorAt = index => {
+            const value = snapshot[index];
+            if (!value) return null;
+            return {
+              value: structuredClone(value),
+              continue() {
+                queueResult(request, () => cursorAt(index + 1));
+              }
+            };
+          };
+          return queueResult(request, () => cursorAt(0));
+        }
+      };
+    },
+    get(compositeKey) {
+      return queueResult(createRequest(), () => {
+        const value = projectIdeas.get(key(compositeKey[0], compositeKey[1]));
+        return value ? structuredClone(value) : undefined;
+      });
+    },
+    delete(compositeKey) {
+      projectIdeas.delete(key(compositeKey[0], compositeKey[1]));
+    }
+  };
+  const personalStore = {
+    add(entry) {
+      const identity = key(entry.writerId + ":" + entry.sourceProjectId, entry.idea.id);
+      if (personalIdeas.has(identity)) throw new Error("Entrada archivada duplicada.");
+      personalIdeas.set(identity, structuredClone(entry));
+      return createRequest();
+    },
+    get(compositeKey) {
+      return queueResult(createRequest(), () => {
+        const value = personalIdeas.get(key(compositeKey[0] + ":" + compositeKey[1], compositeKey[2]));
+        return value ? structuredClone(value) : undefined;
+      });
+    },
+    index(indexName) {
+      assert.equal(indexName, "by-writer-source");
+      return {
+        count(compositeKey) {
+          return queueResult(createRequest(), () => [...personalIdeas.values()].filter(entry =>
+            entry.writerId === compositeKey[0] &&
+            entry.sourceProjectId === compositeKey[1]
+          ).length);
+        }
+      };
+    }
+  };
+  const receiptStore = {
+    get(compositeKey) {
+      return queueResult(createRequest(), () => receipts.get(compositeKey.join(":")));
+    },
+    add(receipt) {
+      receipts.set(
+        [receipt.writerId, receipt.sourceProjectId, receipt.receiptId].join(":"),
+        structuredClone(receipt)
+      );
+      return createRequest();
+    }
+  };
+  const entityStore = {
+    get(compositeKey) {
+      return queueResult(createRequest(), () => undefined);
+    }
+  };
+  const database = {
+    transaction(storeNames, mode) {
+      assert.equal(mode, "readwrite");
+      assert.deepEqual(new Set(storeNames), new Set([
+        "narrative-ideas",
+        "personal-idea-library",
+        "narrative-entities",
+        "writer-library-finalization-receipts"
+      ]));
+      transaction = {
+        error: null,
+        oncomplete: null,
+        onerror: null,
+        onabort: null,
+        objectStore(name) {
+          if (name === "narrative-ideas") return ideaStore;
+          if (name === "personal-idea-library") return personalStore;
+          if (name === "narrative-entities") return entityStore;
+          if (name === "writer-library-finalization-receipts") return receiptStore;
+          throw new Error("Almacén inesperado: " + name);
+        },
+        abort() {
+          if (aborted || completed) return;
+          aborted = true;
+          if (completionTimer) clearTimeout(completionTimer);
+          queueMicrotask(() => transaction.onabort?.());
+        }
+      };
+      return transaction;
+    }
+  };
+
+  const store = new IndexedDbProjectStore();
+  // Inyecta una base ya abierta para probar la secuencia transaccional sin
+  // sustituir el flujo de IndexedDB por el adaptador MemoryStore.
+  store.database = Promise.resolve(database);
+  const archived = await store.archiveUnincorporatedIdeas(
+    projectId, writerId, projectName, 100
+  );
+
+  assert.equal(archived.length, 2);
+  const byId = new Map(archived.map(entry => [entry.idea.id, entry]));
+  assert.deepEqual(byId.get("idea-a").idea.relatedIdeaIds, ["idea-b"]);
+  assert.deepEqual(byId.get("idea-b").idea.relatedIdeaIds, ["idea-a"]);
+  assert.equal(byId.get("idea-a").context.relatedIdeas.length, 0);
+  assert.equal(byId.get("idea-b").context.relatedIdeas.length, 0);
+  assert.equal(projectIdeas.size, 0);
+  assert.deepEqual(
+    new Set([...personalIdeas.values()].map(entry => entry.idea.id)),
+    new Set(["idea-a", "idea-b"])
+  );
+  assert.equal(receipts.size, 1);
+});
+
 test("exige identidad de escritor suministrada por el anfitrión para acceder a la biblioteca", async () => {
   const api = new HostEngineApi({ store: new MemoryStore() });
   api.initializeProject({ projectId: "book-without-writer", projectName: "Libro sin identidad" });

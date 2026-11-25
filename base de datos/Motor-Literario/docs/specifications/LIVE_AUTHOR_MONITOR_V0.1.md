@@ -563,3 +563,21 @@ La prueba de ciclo de vida ahora cierra explícitamente una conexión del almac�
 Esto verifica que close() libera la conexión actual, pero no vuelve inutilizable la instancia. El estado persistido permanece en IndexedDB y la siguiente operación puede crear una conexión nueva.
 
 **Validación CI:** ejecución [45724732118](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724732118), commit 1a48078743c450bb7c90e4dd78c75b1eac902fbc: MLDB 0.4.2 válido; auditoría física correcta con 25 tablas del motor y 33 almacenes IndexedDB; build Vite correcto; 100 pruebas aprobadas, 0 fallidas y 0 omitidas.
+
+
+
+## 30. Protección frente a escrituras de checkpoints atrasados
+
+El guardado del checkpoint se realiza en una transacción IndexedDB readwrite por clave de proyecto/documento. Antes de sustituir el registro existente, el adaptador valida su estructura y comprueba el orden del candidato:
+- el checkpoint entrante no puede tener un timestamp de guardado anterior al ya persistido;
+- la revisión y la secuencia entrantes no pueden retroceder respecto del checkpoint almacenado, aunque el reloj de la otra pestaña indique un timestamp posterior;
+- cuando ambos checkpoints pertenecen a la misma sessionId, tampoco pueden retroceder las duraciones acumuladas, pausas, contadores de cambios, caracteres insertados/eliminados, resincronizaciones ni latencia total acumulada;
+- una sessionId nueva puede iniciar contadores nuevos sobre el mismo snapshot durable cuando su timestamp es posterior y la revisión/secuencia no retroceden.
+
+Si el candidato está atrasado, se aborta la transacción readwrite y el checkpoint anterior permanece intacto. Los campos que pueden variar de forma no monótona dentro de una misma sesión, como la edad de última actividad, la longitud actual del documento o la última latencia individual, no se usan como contadores acumulativos.
+
+Las pruebas cubren un guardado de revisión/secuencia anterior con timestamp mayor, el retroceso de métricas de la misma sesión, la conservación del checkpoint existente y el inicio de una nueva identidad sobre el mismo snapshot.
+
+**Alcance:** esta barrera impide que checkpoints obsoletos reemplacen métricas más avanzadas; no constituye un lease ni un fencing token de edición. La coordinación de dos escritores activos sobre el mismo documento sigue dependiendo del journal/HostEngine compartido y queda fuera de este control de checkpoint.
+
+**Validación CI:** ejecución [45724891204](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724891204), commit 8a584270842aca3d65f635a5b4ec0bd98ad84038: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/33 almacenes), build Vite y **102 pruebas aprobadas, 0 fallidas y 0 omitidas**.

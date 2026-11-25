@@ -629,3 +629,38 @@ test("la convergencia a dos saltos declara el truncamiento al agotar su presupue
   assert.equal(graph.twoHopConvergentSourceCount, 1_000);
   assert.equal(graph.twoHopSharedDestinationCount, 500_000);
 });
+
+test("las referencias externas repetidas mantienen contadores y alineación desconocida en snapshots parciales", () => {
+  const graph = analyze([
+    idea("source", ["included", "outside", "outside", "outside-two"]),
+    idea("included")
+  ], 4);
+
+  const source = graph.nodes.find(node => node.ideaId === "source");
+  assert.equal(graph.projectCatalogComplete, false);
+  assert.equal(graph.ideaCount, 2);
+  assert.equal(graph.omittedIdeaCount, 4);
+  assert.equal(graph.referenceCount, 4);
+  assert.equal(graph.includedReferenceCount, 1);
+  assert.equal(graph.notIncludedReferenceCount, 3);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.deepEqual(
+    graph.references.map(reference => reference.resolution),
+    [
+      "included-in-snapshot",
+      "not-in-snapshot",
+      "not-in-snapshot",
+      "not-in-snapshot"
+    ]
+  );
+  assert.equal(source.includedOutgoingReferenceCount, 1);
+  assert.equal(source.notIncludedOutgoingReferenceCount, 3);
+  assert.equal(source.distinctOutgoingIdeaCount, 1);
+  assert.deepEqual(source.directReferenceStatusCounts, {
+    IDEA: 1,
+    incorporated: 0,
+    discarded: 0,
+    notInSnapshot: 3
+  });
+  assert.equal(source.directReferenceStatusAlignment, "unknown-incomplete-snapshot");
+});

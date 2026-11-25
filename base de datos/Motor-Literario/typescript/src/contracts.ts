@@ -100,6 +100,7 @@ export interface ProjectFinalizationSummary {
   readonly archivedCount: number;
   readonly finalizedAt: number;
   readonly archiveChecksum: string;
+  readonly alreadyFinalized: boolean;
 }
 
 /** Recibo durable e idempotente de la transferencia al cerrar un libro. */

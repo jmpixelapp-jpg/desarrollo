@@ -19,7 +19,7 @@ export interface LiveAuthorMonitorWorkspaceOptions {
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
 
-type CompactMetricKey = "wordsPerMinute" | "inserted" | "pending" | "revision" | "commitP95";
+type CompactMetricKey = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95";
 interface WorkspaceCard {
   readonly root: HTMLElement;
   readonly heading: HTMLElement;
@@ -35,6 +35,8 @@ interface WorkspaceCard {
 const WORKSPACE_METRICS: readonly { readonly key: CompactMetricKey; readonly label: string }[] = [
   { key: "wordsPerMinute", label: "Palabras/min" },
   { key: "inserted", label: "Caracteres insertados" },
+  { key: "idle", label: "Tiempo en pausa" },
+  { key: "pauses", label: "Pausas detectadas" },
   { key: "pending", label: "Pendientes" },
   { key: "revision", label: "Revisión guardada / actual" },
   { key: "commitP95", label: "Latencia p95" }
@@ -85,6 +87,15 @@ function compactStatus(state: LiveAuthorMonitorSnapshot["state"]): {
   }
 }
 
+function formatDuration(milliseconds: number): string {
+  const total = Math.max(0, Math.floor(milliseconds / 1_000));
+  const hours = Math.floor(total / 3_600);
+  const minutes = Math.floor((total % 3_600) / 60);
+  const seconds = total % 60;
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return hours > 0 ? pad(hours) + ":" + pad(minutes) + ":" + pad(seconds) : pad(minutes) + ":" + pad(seconds);
+}
+
 function metricValue(
   key: CompactMetricKey,
   snapshot: LiveAuthorMonitorSnapshot,
@@ -94,6 +105,8 @@ function metricValue(
   switch (key) {
     case "wordsPerMinute": return decimal.format(snapshot.estimatedWordsPerMinute);
     case "inserted": return integer.format(snapshot.insertedCharacters);
+    case "idle": return formatDuration(snapshot.idleDurationMs);
+    case "pauses": return integer.format(snapshot.pauseCount);
     case "pending": return integer.format(snapshot.pendingChanges);
     case "revision":
       return integer.format(snapshot.durableRevision) + " / " + integer.format(snapshot.latestRevision);

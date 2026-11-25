@@ -132,7 +132,8 @@
           "on_delete": "RESTRICT",
           "on_update": "RESTRICT"
         }
-      ]
+      ],
+      "constraints": []
     },
     {
       "name": "manuscript_documents",

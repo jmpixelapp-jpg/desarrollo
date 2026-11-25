@@ -144,7 +144,8 @@
           "on_delete": "RESTRICT",
           "on_update": "RESTRICT"
         }
-      ]
+      ],
+      "constraints": []
     },
     {
       "name": "manuscript_documents",
@@ -2123,9 +2124,7 @@
           ""
         ]
       ],
-      "constraints": [
-        "UNIQUE(project_id,entry_id,record_id)"
-      ],
+      "constraints": [],
       "foreign_keys": [
         {
           "name": "fk_dictionary_entry_entities_project",
@@ -2485,9 +2484,7 @@
           ""
         ]
       ],
-      "constraints": [
-        "UNIQUE(writer_id,source_project_id,source_idea_id)"
-      ],
+      "constraints": [],
       "foreign_keys": [
         {
           "name": "fk_writer_library_ideas_source_project",

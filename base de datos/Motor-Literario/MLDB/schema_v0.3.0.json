@@ -132,7 +132,8 @@
           "on_delete": "RESTRICT",
           "on_update": "RESTRICT"
         }
-      ]
+      ],
+      "constraints": []
     },
     {
       "name": "manuscript_documents",
@@ -2101,9 +2102,7 @@
           ""
         ]
       ],
-      "constraints": [
-        "UNIQUE(project_id,entry_id,record_id)"
-      ],
+      "constraints": [],
       "foreign_keys": [
         {
           "name": "fk_dictionary_entry_entities_project",

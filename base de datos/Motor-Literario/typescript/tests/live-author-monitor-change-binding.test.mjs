@@ -268,3 +268,63 @@ test("libera la suscripción de reintento si falla el montaje de la fuente", () 
   assert.equal(retryListeners.size, 0);
 });
 
+
+test("publica snapshots inmutables del backlog al entrar en contrapresión y al recuperarse", () => {
+  const f = sourceFixture();
+  const states = [];
+  let capacityAvailable = false;
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        return capacityAvailable
+          ? { status: "queued", ticketId: "ticket-" + value.sequence }
+          : { status: "rejected", reason: "queue_full" };
+      }
+    },
+    onAdmission: () => {},
+    onBackpressure: snapshot => states.push(snapshot),
+    onError: error => { throw error; }
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  assert.deepEqual(states.map(state => [state.status, state.pendingCount, state.reason]), [
+    ["backpressured", 1, "queue_full"],
+    ["backpressured", 2, "queue_full"]
+  ]);
+  assert.equal(states[0].firstPendingSequence, 1);
+  assert.equal(states[1].lastPendingSequence, 2);
+  assert.equal(Object.isFrozen(states[0]), true);
+
+  capacityAvailable = true;
+  stop.retryPending();
+  assert.deepEqual(states.map(state => [state.status, state.pendingCount]), [
+    ["backpressured", 1],
+    ["backpressured", 2],
+    ["backpressured", 1],
+    ["clear", 0]
+  ]);
+  assert.equal(states.at(-1).reason, undefined);
+  stop();
+});
+
+test("limpia el indicador de contrapresión solo al descartar el backlog tras resincronizar", () => {
+  const f = sourceFixture();
+  const states = [];
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: { onEditorChange: () => ({ status: "rejected", reason: "resync_required" }) },
+    onAdmission: () => {},
+    onBackpressure: snapshot => states.push(snapshot),
+    onError: error => { throw error; }
+  });
+
+  f.emit(change(4));
+  assert.equal(states.at(-1).status, "backpressured");
+  assert.equal(stop.getPendingChanges().length, 1);
+  stop.discardPendingAfterResynchronization();
+  assert.deepEqual(states.at(-1), { status: "clear", pendingCount: 0 });
+  assert.deepEqual(stop.getPendingChanges(), []);
+  stop();
+});

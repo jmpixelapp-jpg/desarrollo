@@ -2185,9 +2185,9 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("fresh-database"), []);
     assert.deepEqual(createdStores, [
+      { name: "project-settings", keyPath: ["projectId", "key"] },
       { name: "language-profiles", keyPath: ["projectId", "id"] },
       { name: "language-resource-refs", keyPath: ["projectId", "id"] },
-      { name: "project-settings", keyPath: ["projectId", "key"] },
       { name: "documents", keyPath: ["projectId", "documentId"] },
       { name: "changes", keyPath: ["projectId", "documentId", "sequence"] },
       { name: "narrative-entities", keyPath: ["projectId", "id"] },
@@ -2202,13 +2202,13 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "dictionary-entries", keyPath: ["projectId", "id"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
+      ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
       ["language-profiles", "by-project-language"],
       ["language-profiles", "by-project-active"],
       ["language-resource-refs", "by-project"],
       ["language-resource-refs", "by-profile"],
       ["language-resource-refs", "by-resource-database"],
-      ["project-settings", "by-project"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],
@@ -2341,13 +2341,13 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     assert.deepEqual(await store.loadEntities("migration-test"), []);
     assert.equal(openedVersion, 15);
     const expected = [
+      ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
       ["language-profiles", "by-project-language"],
       ["language-profiles", "by-project-active"],
       ["language-resource-refs", "by-project"],
       ["language-resource-refs", "by-profile"],
       ["language-resource-refs", "by-resource-database"],
-      ["project-settings", "by-project"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],

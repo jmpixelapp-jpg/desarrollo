@@ -3302,11 +3302,46 @@ const IDEA_ENGLISH_STOP_WORDS = new Set([
  * o se usa el catálogo heredado; solo se declaran ausentes si el catálogo del
  * proyecto se suministró completo.
  */
+// Memoización de una sola instantánea completa del grafo. La clave incluye
+// todas las propiedades serializables de cada idea, no solo sus referencias.
+let literaryIdeaGraphCacheKey: string | undefined;
+let literaryIdeaGraphCacheValue: LiteraryIdeaGraphAnalysis | undefined;
+
 function buildLiteraryIdeaGraph(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[],
   omittedIdeaCount: number,
   catalogScope: LiteraryIdeaGraphAnalysis["catalogScope"]
 ): LiteraryIdeaGraphAnalysis {
+  // La clave exacta evita invalidaciones manuales: estado, historial, evidencias,
+  // vínculos y texto léxico participan en la identidad de la instantánea.
+  let cacheable = ideas.length <= 2_000;
+  let cacheTextUnits = 0;
+  if (cacheable) {
+    for (const idea of ideas) {
+      if (typeof idea.text === "string") {
+        cacheTextUnits += idea.text.length;
+        if (cacheTextUnits > MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS) {
+          cacheable = false;
+          break;
+        }
+      }
+    }
+  }
+  const cacheKey = cacheable
+    ? JSON.stringify([
+        catalogScope,
+        omittedIdeaCount,
+        [...ideas].sort((left, right) =>
+          left.ideaId.localeCompare(right.ideaId, "en") ||
+          (left.ideaId === right.ideaId ? 0 : left.ideaId < right.ideaId ? -1 : 1)
+        )
+      ])
+    : undefined;
+  if (cacheKey !== undefined && cacheKey === literaryIdeaGraphCacheKey &&
+      literaryIdeaGraphCacheValue) {
+    return structuredClone(literaryIdeaGraphCacheValue);
+  }
+
   // El desempate exacto distingue IDs Unicode que pueden compartir colación lingüística.
   const compareIdeaIds = (left: string, right: string): number => {
     const localizedOrder = left.localeCompare(right, "en");
@@ -3559,7 +3594,7 @@ function buildLiteraryIdeaGraph(
   });
 
   const lexicalResonances = buildLiteraryIdeaLexicalResonances(orderedIdeas);
-  return {
+  const result: LiteraryIdeaGraphAnalysis = {
     lexicalResonances,
     catalogScope,
     projectCatalogComplete,
@@ -3589,6 +3624,14 @@ function buildLiteraryIdeaGraph(
     references,
     cycles: cycles.slice(0, MAX_IDEA_GRAPH_CYCLE_SAMPLES)
   };
+  if (cacheKey !== undefined) {
+    literaryIdeaGraphCacheKey = cacheKey;
+    literaryIdeaGraphCacheValue = structuredClone(result);
+  } else {
+    literaryIdeaGraphCacheKey = undefined;
+    literaryIdeaGraphCacheValue = undefined;
+  }
+  return result;
 }
 
 /**

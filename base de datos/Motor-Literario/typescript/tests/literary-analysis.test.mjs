@@ -665,11 +665,14 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
 });
 
 test("las trayectorias señalan escenas con fuente truncada sin convertirlas en ausencias", () => {
-  const text = ["Escena 1", "Ana cruzó el puente."].join("\n");
   const knownCharacters = Array.from({ length: 42 }, (_, index) => ({
     entityId: "character-" + index,
     canonicalName: "Personaje " + index
   }));
+  const text = [
+    "Escena 1",
+    ...knownCharacters.map(character => character.canonicalName + " observó el río.")
+  ].join("\n");
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -678,7 +681,7 @@ test("las trayectorias señalan escenas con fuente truncada sin convertirlas en 
     knownCharacters
   });
   const first = result.characterNarrativeTrajectories.trajectories.find(item =>
-    item.entityId === "character-0"
+    item.entityId === "character-41"
   );
   assert.ok(first);
   assert.equal(first.scenes[0].mentionStatus, "unknown-due-to-mention-truncation");

@@ -303,8 +303,10 @@ async function pollExternalNarrativeChanges() {
   }
 }
 
-function startKnowledgeSync() {
-  lastObservedDataVersion = store.getDataVersion();
+function startKnowledgeSync(preserveObservedVersion = false) {
+  if (!preserveObservedVersion || lastObservedDataVersion === undefined) {
+    lastObservedDataVersion = store.getDataVersion();
+  }
   if (knowledgeSyncInterval) clearInterval(knowledgeSyncInterval);
   knowledgeSyncInterval = setInterval(() => {
     knowledgeSyncTail = knowledgeSyncTail
@@ -515,7 +517,7 @@ async function processRequest(request) {
       // Un fallo de vaciado no debe cerrar una base que aún puede tener trabajo
       // pendiente. Reabre la admisión y el sondeo para que el anfitrión reintente.
       shuttingDown = false;
-      try { startKnowledgeSync(); } catch (restartError) { writeError(restartError); }
+      try { startKnowledgeSync(true); } catch (restartError) { writeError(restartError); }
     }
     const payload = errorPayload(error);
     if (Number.isInteger(error?.code)) payload.code = error.code;

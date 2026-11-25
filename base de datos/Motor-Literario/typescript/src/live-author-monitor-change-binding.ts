@@ -18,6 +18,12 @@ export interface LiveAuthorMonitorChangeBindingOptions {
   readonly sink: LiveAuthorMonitorChangeSink;
   /** Se llama una vez por cada intento real de admisión, incluida la contrapresión. */
   readonly onAdmission: (change: EditorChange, admission: ChangeAdmission) => void;
+  /**
+   * Fuente opcional de señales de capacidad. Puede conectarse a
+   * HostEngineApi.subscribeLiveAuthorMonitor para reintentar automáticamente
+   * cuando una admisión/commit publique nuevas métricas.
+   */
+  readonly subscribeRetrySignal?: (listener: () => void) => () => void;
   /** Recibe errores de envío o de la callback de admisión sin romper la notificación del editor. */
   readonly onError: (error: unknown, change: EditorChange) => void;
 }
@@ -44,7 +50,8 @@ export interface LiveAuthorMonitorChangeBindingControl {
  *
  * Si el motor devuelve queue_full, retiene el delta rechazado y todos los
  * eventos posteriores, sin enviarlos fuera de orden. El anfitrión llama a
- * retryPending cuando la cola del motor haya liberado capacidad.
+ * retryPending cuando la cola del motor haya liberado capacidad. Si se aporta
+ * subscribeRetrySignal, el enlace lo hace automáticamente y se desuscribe al parar.
  *
  * No sintetiza offsets ni llama manualmente a recordAdmission/recordCommit:
  * HostEngineApi ya alimenta LiveAuthorMonitor dentro del flujo normal.
@@ -124,16 +131,32 @@ export function bindLiveAuthorMonitorEditorChanges(
     }
   };
 
-  const unsubscribe = options.source.subscribeChanges(submitNewChange);
-  if (typeof unsubscribe !== "function") {
-    throw new TypeError("subscribeChanges debe devolver una función de cancelación.");
+  let unsubscribeRetrySignal: (() => void) | undefined;
+  let unsubscribeSource: (() => void) | undefined;
+
+  try {
+    if (options.subscribeRetrySignal) {
+      unsubscribeRetrySignal = options.subscribeRetrySignal(retryPending);
+      if (typeof unsubscribeRetrySignal !== "function") {
+        throw new TypeError("subscribeRetrySignal debe devolver una función de cancelación.");
+      }
+    }
+
+    unsubscribeSource = options.source.subscribeChanges(submitNewChange);
+    if (typeof unsubscribeSource !== "function") {
+      throw new TypeError("subscribeChanges debe devolver una función de cancelación.");
+    }
+  } catch (error) {
+    try { unsubscribeSource?.(); } catch { /* Conserva el error original de montaje. */ }
+    try { unsubscribeRetrySignal?.(); } catch { /* Conserva el error original de montaje. */ }
+    throw error;
   }
 
   const stop = (() => {
     if (disposed) return;
     disposed = true;
     pending.length = 0;
-    unsubscribe();
+    try { unsubscribeSource?.(); } finally { unsubscribeRetrySignal?.(); }
   }) as LiveAuthorMonitorChangeBindingControl;
 
   stop.retryPending = retryPending;

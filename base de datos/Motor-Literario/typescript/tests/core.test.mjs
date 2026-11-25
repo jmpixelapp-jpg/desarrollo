@@ -7,6 +7,7 @@ class MemoryStore {
   entities = new Map();
   relations = new Map();
   events = new Map();
+  eventLifecycles = new Map();
   ideas = new Map();
   personalIdeas = new Map();
   assertions = new Map();
@@ -41,6 +42,31 @@ class MemoryStore {
   }
   async loadEvents(projectId) {
     return [...this.events.values()].filter(event => event.projectId === projectId).map(event => structuredClone(event));
+  }
+  async loadEventLifecycles(projectId,eventId) {
+    return [...this.eventLifecycles.values()]
+      .filter(item=>item.projectId===projectId && item.eventId===eventId)
+      .sort((a,b)=>a.revision-b.revision)
+      .map(item=>structuredClone(item));
+  }
+  async saveEventAndAppendLifecycleIfUnchanged(event,expectedCurrent,lifecycle) {
+    const key=event.projectId+":"+event.id;
+    const current=this.events.get(key);
+    if(!current || JSON.stringify(current)!==JSON.stringify(expectedCurrent)) {
+      throw new Error("event_changed_concurrently");
+    }
+    const history=await this.loadEventLifecycles(event.projectId,event.id);
+    const previous=history[history.length-1];
+    if(previous && (
+      lifecycle.revision!==previous.revision+1 ||
+      lifecycle.previousLabel!==previous.newLabel ||
+      JSON.stringify(lifecycle.previousParticipants)!==JSON.stringify(previous.newParticipants) ||
+      lifecycle.changedAt<previous.changedAt
+    )) throw new Error("invalid_event_lifecycle_sequence");
+    if(!previous && lifecycle.revision!==1) throw new Error("invalid_initial_event_lifecycle");
+    if(this.eventLifecycles.has(event.projectId+":"+lifecycle.id)) throw new Error("duplicate_event_lifecycle");
+    this.events.set(key,structuredClone(event));
+    this.eventLifecycles.set(event.projectId+":"+lifecycle.id,structuredClone(lifecycle));
   }
   async saveAssertion(assertion) {
     this.assertions.set(assertion.projectId + ":" + assertion.id, structuredClone(assertion));
@@ -2172,7 +2198,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 21);
+      assert.equal(version, 22);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2192,6 +2218,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "timeline-tracks", keyPath: ["projectId", "id"] },
       { name: "record-lifecycles", keyPath: ["projectId", "id"] },
       { name: "relation-lifecycles", keyPath: ["projectId", "id"] },
+      { name: "event-lifecycles", keyPath: ["projectId", "id"] },
       { name: "documents", keyPath: ["projectId", "documentId"] },
       { name: "changes", keyPath: ["projectId", "documentId", "sequence"] },
       { name: "narrative-entities", keyPath: ["projectId", "id"] },
@@ -3093,6 +3120,102 @@ test("captura acontecimientos explícitos con participantes y evidencia", async 
   assert.equal(events[0].evidence[0].excerpt, "ACONTECIMIENTO: Ana descubre la puerta secreta.");
 });
 
+
+test("versiona cambios explícitos de etiqueta y participantes de acontecimientos", async () => {
+  const store=new MemoryStore();
+  const api=new HostEngineApi({store});
+  api.initializeProject({projectId:"event-lifecycle",projectName:"Historial de acontecimientos"});
+  await store.saveEntity({
+    projectId:"event-lifecycle",id:"ana",kind:"character",
+    canonicalName:"Ana",normalizedName:"ana",aliases:[],evidence:[],
+    firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
+  await store.saveEntity({
+    projectId:"event-lifecycle",id:"bruno",kind:"character",
+    canonicalName:"Bruno",normalizedName:"bruno",aliases:[],evidence:[],
+    firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
+  await store.saveEvent({
+    projectId:"event-lifecycle",id:"alarm",label:"Suena la alarma",
+    participants:["ana"],evidence:[]
+  });
+
+  const first=await api.updateNarrativeEvent({
+    eventId:"alarm",label:"La alarma se activa",
+    participants:["bruno","ana","bruno"],
+    changedBy:"writer-1",changeReason:"Se precisa el alcance del acontecimiento",changedAt:100
+  });
+  assert.equal(first.label,"La alarma se activa");
+  assert.deepEqual(first.participants,["ana","bruno"]);
+
+  const second=await api.updateNarrativeEvent({
+    eventId:"alarm",participants:["bruno"],
+    changedBy:"writer-1",changeReason:"Se retira la asociación anterior",changedAt:120
+  });
+  assert.deepEqual(second.participants,["bruno"]);
+
+  const history=await api.getEventLifecycleHistory("alarm");
+  assert.equal(history.length,2);
+  assert.deepEqual(history.map(item=>item.revision),[1,2]);
+  assert.deepEqual(history.map(item=>item.previousLabel),["Suena la alarma","La alarma se activa"]);
+  assert.deepEqual(history.map(item=>item.newLabel),["La alarma se activa","La alarma se activa"]);
+  assert.deepEqual(history.map(item=>item.previousParticipants),[["ana"],["ana","bruno"]]);
+  assert.deepEqual(history.map(item=>item.newParticipants),[["ana","bruno"],["bruno"]]);
+  assert.deepEqual(history.map(item=>item.changedAt),[100,120]);
+
+  history[0].newParticipants.push("mutated-copy");
+  const reread=await api.getEventLifecycleHistory("alarm");
+  assert.deepEqual(reread[0].newParticipants,["ana","bruno"]);
+});
+
+test("rechaza actualizar acontecimientos con participantes que no existen en el proyecto", async () => {
+  const store=new MemoryStore();
+  const api=new HostEngineApi({store});
+  api.initializeProject({projectId:"event-lifecycle-integrity",projectName:"Integridad"});
+  await store.saveEvent({
+    projectId:"event-lifecycle-integrity",id:"arrival",label:"La llegada",
+    participants:[],evidence:[]
+  });
+  await assert.rejects(
+    api.updateNarrativeEvent({
+      eventId:"arrival",participants:["missing-character"],
+      changedBy:"writer-1"
+    }),
+    /referencia.*inexistente|no existen|no existente/i
+  );
+  assert.deepEqual(store.events.get("event-lifecycle-integrity:arrival").participants,[]);
+  assert.equal((await store.loadEventLifecycles("event-lifecycle-integrity","arrival")).length,0);
+});
+
+test("una instancia obsoleta no puede sobrescribir un cambio versionado de acontecimiento", async () => {
+  const store=new MemoryStore();
+  const initial={
+    projectId:"event-lifecycle-race",id:"gate",label:"Se abre la puerta",
+    participants:[],evidence:[]
+  };
+  await store.saveEvent(initial);
+  const first=new HostEngineApi({store});
+  const second=new HostEngineApi({store});
+  first.initializeProject({projectId:"event-lifecycle-race",projectName:"Concurrencia"});
+  second.initializeProject({projectId:"event-lifecycle-race",projectName:"Concurrencia"});
+  await first.getNarrativeEvents();
+  await second.updateNarrativeEvent({
+    eventId:"gate",label:"La puerta queda abierta",
+    changedBy:"writer-2",changedAt:200
+  });
+  await assert.rejects(
+    first.updateNarrativeEvent({
+      eventId:"gate",label:"La puerta se cierra",
+      changedBy:"writer-1",changedAt:210
+    }),
+    /cambió en otra instancia|event_changed_concurrently/
+  );
+  const persisted=store.events.get("event-lifecycle-race:gate");
+  assert.equal(persisted.label,"La puerta queda abierta");
+  const history=await store.loadEventLifecycles("event-lifecycle-race","gate");
+  assert.equal(history.length,1);
+  assert.equal(history[0].newLabel,"La puerta queda abierta");
+});
 
 test("captura ideas marcadas por el escritor y permite cambiar su estado", async () => {
   const api = new HostEngineApi({ store: new MemoryStore() });

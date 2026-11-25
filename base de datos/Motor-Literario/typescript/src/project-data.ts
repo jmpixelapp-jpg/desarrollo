@@ -157,3 +157,74 @@ export function cloneLanguageProfile(profile: LanguageProfile): LanguageProfile 
 export function cloneLanguageResourceRef(resource: LanguageResourceRef): LanguageResourceRef {
   return structuredClone(resource);
 }
+
+export interface StyleProfile {
+  readonly projectId: string;
+  readonly id: string;
+  readonly profileName: string;
+  readonly styleData: ProjectJsonValue;
+  readonly provenanceKind: string;
+  readonly updatedAt: number;
+}
+
+export interface TimelineTrack {
+  readonly projectId: string;
+  readonly id: string;
+  readonly trackName: string;
+  readonly trackKind: string;
+  readonly rules: ProjectJsonValue;
+  readonly provenanceKind: string;
+}
+
+export function validateStyleProfile(
+  profile: StyleProfile,
+  expectedProjectId?: string
+): void {
+  if (!profile || typeof profile !== "object" ||
+      typeof profile.projectId !== "string" || !profile.projectId.trim() ||
+      (expectedProjectId !== undefined && profile.projectId !== expectedProjectId) ||
+      typeof profile.id !== "string" || !profile.id.trim() || profile.id.length > 256 ||
+      typeof profile.updatedAt !== "number" || !Number.isFinite(profile.updatedAt) || profile.updatedAt < 0) {
+    throw new Error("Perfil de estilo inválido: identidad, proyecto o fecha incorrectos.");
+  }
+  requireNonBlank(profile.profileName, "El nombre del perfil de estilo");
+  requireNonBlank(profile.provenanceKind, "La procedencia del perfil de estilo", 128);
+  if (!validateJsonValue(profile.styleData, 0, new Set()) ||
+      profile.styleData === null || typeof profile.styleData !== "object" ||
+      Array.isArray(profile.styleData)) {
+    throw new Error("Los datos del perfil de estilo deben ser un objeto JSON válido.");
+  }
+  if (JSON.stringify(profile.styleData).length > 1_048_576) {
+    throw new Error("Los datos del perfil de estilo superan el máximo de 1 MiB.");
+  }
+}
+
+export function validateTimelineTrack(
+  track: TimelineTrack,
+  expectedProjectId?: string
+): void {
+  if (!track || typeof track !== "object" ||
+      typeof track.projectId !== "string" || !track.projectId.trim() ||
+      (expectedProjectId !== undefined && track.projectId !== expectedProjectId) ||
+      typeof track.id !== "string" || !track.id.trim() || track.id.length > 256) {
+    throw new Error("Pista cronológica inválida: identidad o proyecto incorrectos.");
+  }
+  requireNonBlank(track.trackName, "El nombre de la pista cronológica");
+  requireNonBlank(track.trackKind, "El tipo de pista cronológica", 128);
+  requireNonBlank(track.provenanceKind, "La procedencia de la pista cronológica", 128);
+  if (!validateJsonValue(track.rules, 0, new Set()) ||
+      track.rules === null || typeof track.rules !== "object" || Array.isArray(track.rules)) {
+    throw new Error("Las reglas de una pista cronológica deben ser un objeto JSON válido.");
+  }
+  if (JSON.stringify(track.rules).length > 1_048_576) {
+    throw new Error("Las reglas de la pista cronológica superan el máximo de 1 MiB.");
+  }
+}
+
+export function cloneStyleProfile(profile: StyleProfile): StyleProfile {
+  return structuredClone(profile);
+}
+
+export function cloneTimelineTrack(track: TimelineTrack): TimelineTrack {
+  return structuredClone(track);
+}

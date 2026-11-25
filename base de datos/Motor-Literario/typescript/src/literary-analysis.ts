@@ -3332,6 +3332,21 @@ const IDEA_ITALIAN_STOP_WORDS = new Set([
 
 
 
+
+const IDEA_NORWEGIAN_STOP_WORDS = new Set([
+  "alle","alt","alltid","andre","at","av","bak","bare","begge","ble","bli","blir","blitt","bort",
+  "bra","bruk","både","da","de","deg","dem","den","denne","der","dere","deres","det","dette",
+  "deg","din","disse","dit","du","då","ein","eit","eller","en","ene","enn","er","et","etter",
+  "etterpå","før","for","fordi","fra","fram","frem","få","gjennom","ha","hadde","han","hans",
+  "har","hennar","henne","hennes","her","hit","hva","hvem","hver","hvilke","hvilken","hvilket",
+  "hvis","hvor","hvordan","hvorfor","i","ikke","ikkje","ingen","ingenting","inn","inni","ja",
+  "jeg","meg","jo","kan","kom","kommer","kun","kunne","kva","kvar","kven","kvi","kvit","man",
+  "med","meg","meir","mellom","men","mens","mer","min","mine","mitt","mot","må","måtte","ned",
+  "nei","no","noe","noen","noko","nokon","nå","når","og","også","om","opp","oss","over","på",
+  "samme","seg","selv","si","sidan","siden","sin","sine","sitt","skal","skulle","slik","som",
+  "så","sånn","til","under","ut","uten","var","vart","ved","vere","vi","vil","ville","viss",
+  "være","vært","å"
+]);
 const IDEA_DANISH_STOP_WORDS = new Set([
   "alle","alt","anden","andre","at","af","aldrig","alligevel","allerede","altid","blandt","blev",
   "blive","bliver","da","dag","de","dem","den","denne","der","deres","det","dette","dig","din",
@@ -3844,7 +3859,7 @@ function buildLiteraryIdeaLexicalResonances(
       if (Array.from(term).length < 2 || !/\p{L}/u.test(term) ||
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
           IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term) ||
-          IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term) || IDEA_DUTCH_STOP_WORDS.has(term) || IDEA_SWEDISH_STOP_WORDS.has(term) || IDEA_DANISH_STOP_WORDS.has(term)) continue;
+          IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term) || IDEA_DUTCH_STOP_WORDS.has(term) || IDEA_SWEDISH_STOP_WORDS.has(term) || IDEA_DANISH_STOP_WORDS.has(term) || IDEA_NORWEGIAN_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>

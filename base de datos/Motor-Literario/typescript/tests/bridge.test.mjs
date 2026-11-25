@@ -205,6 +205,14 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     });
     assert.equal(ideas.length, 2);
     assert.ok(ideas.every(idea => idea.status === "IDEA"));
+    const orderedIdeas = [...ideas].sort((first, second) =>
+      first.id < second.id ? -1 : first.id > second.id ? 1 : 0
+    );
+    await client.request("project.call", {
+      projectId: "idea-project",
+      method: "setNarrativeIdeaLink",
+      args: [orderedIdeas[0].id, orderedIdeas[1].id, true]
+    });
 
     const archived = await client.request("project.call", {
       projectId: "idea-project",

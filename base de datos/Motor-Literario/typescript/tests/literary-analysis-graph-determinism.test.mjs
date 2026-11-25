@@ -143,3 +143,70 @@ test("la caché separa catálogos completos de snapshots con ideas omitidas", ()
     "not-in-snapshot"
   );
 });
+
+
+test("el historial de estados distingue pares temporales comparables e incomparables", () => {
+  const graph = analyze([{
+    ...idea("history"),
+    status: "incorporated",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 10 },
+      { status: "incorporated", reason: "writer" },
+      { status: "discarded", reason: "writer", changedAt: 8 },
+      { status: "incorporated", reason: "text-revised", changedAt: 8 }
+    ]
+  }]);
+  const node = graph.nodes[0];
+
+  assert.equal(node.observedStatusTransitionCount, 3);
+  assert.equal(node.statusReversalCount, 1);
+  assert.equal(node.comparableStatusTimestampPairCount, 1);
+  assert.equal(node.uncomparableStatusTimestampPairCount, 2);
+  assert.equal(node.nonMonotonicStatusTimestampCount, 0);
+  assert.equal(node.earliestKnownStatusChangeAt, 8);
+  assert.equal(node.latestKnownStatusChangeAt, 10);
+  assert.equal(node.knownStatusHistorySpanMs, 2);
+  assert.equal(node.currentStatusHistoryConsistency, "consistent");
+});
+
+test("el historial acepta marcas temporales iguales y detecta retrocesos adyacentes", () => {
+  const graph = analyze([{
+    ...idea("history"),
+    status: "discarded",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 0 },
+      { status: "incorporated", reason: "writer", changedAt: 0 },
+      { status: "discarded", reason: "writer", changedAt: -1 }
+    ]
+  }]);
+  const node = graph.nodes[0];
+
+  assert.equal(node.comparableStatusTimestampPairCount, 2);
+  assert.equal(node.uncomparableStatusTimestampPairCount, 0);
+  assert.equal(node.nonMonotonicStatusTimestampCount, 1);
+  assert.equal(node.earliestKnownStatusChangeAt, -1);
+  assert.equal(node.latestKnownStatusChangeAt, 0);
+  assert.equal(node.knownStatusHistorySpanMs, 1);
+});
+
+test("un historial truncado conserva métricas observadas pero no certifica su consistencia", () => {
+  const graph = analyze([{
+    ...idea("history"),
+    status: "discarded",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 10 },
+      { status: "incorporated", reason: "writer", changedAt: 20 }
+    ],
+    omittedStatusHistoryCount: 4
+  }]);
+  const node = graph.nodes[0];
+
+  assert.equal(node.observedStatusTransitionCount, 1);
+  assert.equal(node.observedWriterStatusChangeCount, 1);
+  assert.equal(node.omittedStatusHistoryCount, 4);
+  assert.equal(node.currentStatusHistoryConsistency, "unknown");
+  assert.equal(graph.statusHistoryConsistency.consistentIdeaCount, 0);
+  assert.equal(graph.statusHistoryConsistency.mismatchIdeaCount, 0);
+  assert.equal(graph.statusHistoryConsistency.unknownIdeaCount, 1);
+  assert.equal(graph.statusHistoryConsistency.verificationCoverage, 0);
+});

@@ -208,8 +208,9 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   const initial = analyzeGraph([original]);
   assert.equal(initial.nodes[0].activeEvidenceCount, 1);
   assert.equal(initial.nodes[0].writerDecisionCount, 1);
-  assert.equal(initial.statusProfiles[0].activeEvidenceCount, 1);
-  assert.equal(initial.statusProfiles[0].statusHistoryRecordCount, 2);
+  const incorporatedProfile = initial.statusProfiles.find(profile => profile.status === "incorporated");
+  assert.equal(incorporatedProfile.activeEvidenceCount, 1);
+  assert.equal(incorporatedProfile.statusHistoryRecordCount, 2);
 
   const revised = analyzeGraph([{
     ...original,
@@ -228,11 +229,12 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   assert.equal(revised.nodes[0].writerDecisionCount, 2);
   assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
   assert.equal(revised.nodes[0].statusHistory.length, 2);
-  assert.equal(revised.statusProfiles[0].activeEvidenceCount, 4);
-  assert.equal(revised.statusProfiles[0].staleEvidenceCount, 2);
-  assert.equal(revised.statusProfiles[0].writerDecisionCount, 2);
-  assert.equal(revised.statusProfiles[0].statusHistoryRecordCount, 2);
-  assert.equal(revised.statusProfiles[0].omittedStatusHistoryCount, 1);
+  const ideaProfile = revised.statusProfiles.find(profile => profile.status === "IDEA");
+  assert.equal(ideaProfile.activeEvidenceCount, 4);
+  assert.equal(ideaProfile.staleEvidenceCount, 2);
+  assert.equal(ideaProfile.writerDecisionCount, 2);
+  assert.equal(ideaProfile.statusHistoryRecordCount, 2);
+  assert.equal(ideaProfile.omittedStatusHistoryCount, 1);
 });
 
 test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {

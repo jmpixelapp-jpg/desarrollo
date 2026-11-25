@@ -889,8 +889,10 @@ export class IndexedDbProjectStore implements ProjectStore {
             const contextIdeaIds = new Set<string>();
             const visited = new Set<string>([idea.id]);
             const queue = [...(idea.relatedIdeaIds ?? [])];
-            while (queue.length > 0) {
-              const relatedId = queue.shift()!;
+            // Un índice evita desplazar los elementos pendientes en cada iteración.
+            let queueIndex = 0;
+            while (queueIndex < queue.length) {
+              const relatedId = queue[queueIndex++]!;
               if (visited.has(relatedId)) continue;
               visited.add(relatedId);
               if (ideasToArchive.has(relatedId)) continue;
@@ -909,6 +911,18 @@ export class IndexedDbProjectStore implements ProjectStore {
             pending.push({ idea, contextIdeaIds, entityIds });
           }
 
+          const contextIdeasFor = (ids: ReadonlySet<string>): NarrativeIdea[] =>
+            [...ids]
+              .map(id => {
+                const candidate = ideasById.get(id);
+                if (!candidate) {
+                  throw new Error("No se pueden archivar ideas: falta una idea del contexto validado.");
+                }
+                return candidate;
+              })
+              .sort((first, second) => first.id.localeCompare(second.id))
+              .map(candidate => ({ ...candidate, sourceProjectName }));
+
           const loadedEntities = new Map<string, NarrativeEntity>();
           const entityIds = [...allEntityIds].sort();
           if (entityIds.length === 0) {
@@ -916,10 +930,7 @@ export class IndexedDbProjectStore implements ProjectStore {
               idea: item.idea,
               context: {
                 version: 1 as const,
-                relatedIdeas: projectIdeas
-                  .filter(candidate => item.contextIdeaIds.has(candidate.id))
-                  .sort((first, second) => first.id.localeCompare(second.id))
-                  .map(candidate => ({ ...candidate, sourceProjectName })),
+                relatedIdeas: contextIdeasFor(item.contextIdeaIds),
                 relatedEntities: []
               }
             })));
@@ -937,10 +948,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                 idea: item.idea,
                 context: {
                   version: 1 as const,
-                  relatedIdeas: projectIdeas
-                    .filter(candidate => item.contextIdeaIds.has(candidate.id))
-                    .sort((first, second) => first.id.localeCompare(second.id))
-                    .map(candidate => ({ ...candidate, sourceProjectName })),
+                  relatedIdeas: contextIdeasFor(item.contextIdeaIds),
                   relatedEntities
                 }
               };

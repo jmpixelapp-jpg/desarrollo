@@ -2801,6 +2801,167 @@ function buildCharacterEventEvidenceProfiles(
   };
 }
 
+function buildCharacterNarrativeTrajectories(
+  scenes: readonly LiteraryExplicitSceneSegment[],
+  knownCharacters: readonly LiteraryAnalysisKnownCharacter[],
+  attributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis,
+  eventEvidence: LiteraryCharacterEventEvidenceAnalysis,
+  dependencies: LiteraryEventDependencyAnalysis
+): LiteraryCharacterNarrativeTrajectoryAnalysis {
+  const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
+  for (const profile of attributeEvolution.profiles) {
+    const profiles = attributesByCharacter.get(profile.entityId) ?? [];
+    profiles.push(profile);
+    attributesByCharacter.set(profile.entityId,profiles);
+  }
+  const eventsByCharacter = new Map<string,LiteraryCharacterEventEvidenceProfile[]>();
+  for (const profile of eventEvidence.profiles) {
+    const profiles = eventsByCharacter.get(profile.entityId) ?? [];
+    profiles.push(profile);
+    eventsByCharacter.set(profile.entityId,profiles);
+  }
+  const relationsByCharacter = new Map<string,LiteraryCharacterCausalRelation[]>();
+  for (const candidate of dependencies.candidates) {
+    const firstParticipants = new Set(candidate.firstEventParticipantIds);
+    const secondParticipants = new Set(candidate.secondEventParticipantIds);
+    const causeParticipants = candidate.causeEventId === candidate.firstEventId
+      ? firstParticipants : secondParticipants;
+    const consequenceParticipants = candidate.consequenceEventId === candidate.firstEventId
+      ? firstParticipants : secondParticipants;
+    const candidateParticipants = new Set([...firstParticipants,...secondParticipants]);
+    for (const entityId of candidateParticipants) {
+      const inCause = causeParticipants.has(entityId);
+      const inConsequence = consequenceParticipants.has(entityId);
+      const characterRole: LiteraryCharacterCausalRole = inCause && inConsequence
+        ? "both-events-participant"
+        : inCause ? "cause-event-participant" : "consequence-event-participant";
+      const relations = relationsByCharacter.get(entityId) ?? [];
+      relations.push({candidateId:candidate.candidateId,characterRole,candidate});
+      relationsByCharacter.set(entityId,relations);
+    }
+  }
+
+  const sourceTruncatedSceneIndexes = scenes
+    .filter(scene => scene.characterMentionsTruncated || scene.eventLinksTruncated)
+    .map(scene => scene.sceneIndex);
+  const trajectories = knownCharacters.map(character => {
+    const attributeProfiles = [...(attributesByCharacter.get(character.entityId) ?? [])]
+      .sort((a,b) => a.attribute.localeCompare(b.attribute,"en"));
+    const eventProfiles = [...(eventsByCharacter.get(character.entityId) ?? [])]
+      .sort((a,b) =>
+        a.firstSceneIndex-b.firstSceneIndex ||
+        a.eventId.localeCompare(b.eventId,"en")
+      );
+    const causalRelations = [...(relationsByCharacter.get(character.entityId) ?? [])]
+      .sort((a,b) =>
+        (a.candidate.sceneIndex ?? Number.MAX_SAFE_INTEGER) -
+          (b.candidate.sceneIndex ?? Number.MAX_SAFE_INTEGER) ||
+        a.candidateId.localeCompare(b.candidateId,"en")
+      );
+    const scenesWithEvidence: LiteraryCharacterTrajectorySceneSnapshot[] = scenes.map(scene => {
+      const mention = scene.characterMentions.find(item => item.entityId === character.entityId);
+      const linkedEvents = scene.eventLinks
+        .filter(event => event.participants.some(participant => participant.entityId === character.entityId))
+        .sort((a,b) => a.eventId.localeCompare(b.eventId,"en"));
+      const mentionStatus: LiteraryCharacterSceneMentionStatus = mention
+        ? "mentioned-by-known-name"
+        : scene.characterMentionsTruncated
+          ? "unknown-due-to-mention-truncation"
+          : "not-mentioned-by-known-name";
+      const participationStatus: LiteraryCharacterSceneParticipationStatus = linkedEvents.length > 0
+        ? "linked-to-explicit-event-evidence"
+        : scene.eventLinksTruncated
+          ? "unknown-due-to-event-truncation"
+          : "not-linked-in-current-evidence";
+      const eventIds = linkedEvents.map(item => item.eventId);
+      const eventEvidenceRangeCount = linkedEvents.reduce(
+        (total,item) => total+item.matchingEvidenceCount,0
+      );
+      const attributeValues = attributeProfiles.flatMap(profile => {
+        const snapshot = profile.scenes.find(item => item.sceneIndex === scene.sceneIndex);
+        if (!snapshot) return [];
+        return [{
+          attribute:profile.attribute,
+          values:snapshot.values,
+          assertionCount:snapshot.assertionCount,
+          assertionIds:snapshot.assertions.map(item => item.assertionId),
+          status:snapshot.distinctValueCount > 1 ? "multiple-values" as const : "single-value" as const
+        }];
+      });
+      const causalCandidateIds = causalRelations
+        .filter(item => item.candidate.sceneIndex === scene.sceneIndex)
+        .map(item => item.candidateId);
+      const incompleteReasons: Array<"mention-truncation" | "event-truncation"> = [];
+      if (scene.characterMentionsTruncated && !mention) incompleteReasons.push("mention-truncation");
+      if (scene.eventLinksTruncated && linkedEvents.length === 0) incompleteReasons.push("event-truncation");
+      const hasDocumentedEvidence =
+        mention !== undefined ||
+        linkedEvents.length > 0 ||
+        attributeValues.length > 0 ||
+        causalCandidateIds.length > 0;
+      return {
+        sceneIndex:scene.sceneIndex,
+        evidenceStatus:hasDocumentedEvidence
+          ? "documented"
+          : incompleteReasons.length > 0
+            ? "unknown-due-to-truncation"
+            : "no-known-evidence",
+        mentionStatus,
+        participationStatus,
+        eventIds,
+        eventEvidenceRangeCount,
+        attributeValues,
+        causalCandidateIds,
+        incompleteReasons
+      };
+    });
+    const observedSceneIndexes = scenesWithEvidence
+      .filter(scene => scene.evidenceStatus === "documented")
+      .map(scene => scene.sceneIndex);
+    const incompleteSceneIndexes = scenesWithEvidence
+      .filter(scene => scene.incompleteReasons.length > 0)
+      .map(scene => scene.sceneIndex);
+    return {
+      entityId:character.entityId,
+      canonicalName:character.canonicalName,
+      mentionSceneCount:scenesWithEvidence.filter(scene =>
+        scene.mentionStatus === "mentioned-by-known-name"
+      ).length,
+      eventParticipationSceneCount:scenesWithEvidence.filter(scene =>
+        scene.participationStatus === "linked-to-explicit-event-evidence"
+      ).length,
+      attributeAssertionCount:attributeProfiles.reduce(
+        (total,profile) => total+profile.assertionCount,0
+      ),
+      causalCandidateCount:causalRelations.length,
+      observedSceneIndexes,
+      incompleteSceneIndexes,
+      attributes:attributeProfiles,
+      eventParticipation:eventProfiles,
+      causalRelations,
+      scenes:scenesWithEvidence
+    };
+  }).sort((a,b) =>
+    b.observedSceneIndexes.length-a.observedSceneIndexes.length ||
+    b.eventParticipationSceneCount-a.eventParticipationSceneCount ||
+    b.attributeAssertionCount-a.attributeAssertionCount ||
+    b.causalCandidateCount-a.causalCandidateCount ||
+    b.mentionSceneCount-a.mentionSceneCount ||
+    a.entityId.localeCompare(b.entityId,"en")
+  );
+
+  return {
+    explicitSceneCount:scenes.length,
+    catalogCharacterCount:knownCharacters.length,
+    profileCount:trajectories.length,
+    omittedCharacterCount:Math.max(0,trajectories.length-200),
+    sourceTruncatedSceneCount:sourceTruncatedSceneIndexes.length,
+    sourceTruncatedSceneIndexes,
+    causalCandidateCount:dependencies.candidateCount,
+    trajectories:trajectories.slice(0,200)
+  };
+}
+
 function buildCharacterMentionDistributions(
   scenes: readonly LiteraryExplicitSceneSegment[]
 ): LiteraryCharacterMentionDistributionAnalysis {
@@ -3009,6 +3170,7 @@ function buildExplicitEventDependencyAnalysis(
       );
       if (candidates.length < 50) {
         candidates.push({
+          candidateId:`event-dependency:${causeEventId}:${consequenceEventId}:${baseOffset+first.end+causal.index}`,
           firstEventId:first.eventId,
           firstEventLabel:first.eventLabel,
           secondEventId:second.eventId,
@@ -4102,6 +4264,10 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const characterEventEvidenceProfiles = buildCharacterEventEvidenceProfiles(
     explicitScenes,input.knownCharacters ?? []
   );
+  const characterNarrativeTrajectories = buildCharacterNarrativeTrajectories(
+    explicitScenes,input.knownCharacters ?? [],characterAttributeEvolution,
+    characterEventEvidenceProfiles,eventDependencyAnalysis
+  );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);
   const eventLifecycleAnalysis = buildEventLifecycleAnalysis(
@@ -4296,6 +4462,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterSceneEvidence,
     characterAttributeEvolution,
     eventDependencyAnalysis,
+    characterNarrativeTrajectories,
     characterEventEvidenceProfiles,
     sceneEventEvidenceProfiles,
     sceneEventSequenceMotifs,

@@ -3,15 +3,24 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { validateMldbSchema, validateMldbStorageMapping } from "../scripts/validate-mldb-schema.mjs";
 
-const schemaUrl = new URL("../../MLDB/schema_v0.4.1.json", import.meta.url);
-const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.1.json", import.meta.url);
+const schemaUrl = new URL("../../MLDB/schema_v0.4.2.json", import.meta.url);
+const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.2.json", import.meta.url);
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
 const storageMapping = JSON.parse(await readFile(mappingUrl, "utf8"));
 
-test("el esquema MLDB 0.4.1 completo supera la validación estructural", () => {
-  assert.equal(schema.format.schema_version, "0.4.1");
-  assert.equal(schema.tables.length, 25);
+test("el esquema MLDB 0.4.2 completo supera la validación estructural", () => {
+  assert.equal(schema.format.schema_version, "0.4.2");
+  assert.equal(schema.tables.length, 26);
   assert.deepEqual(validateMldbSchema(schema), []);
+  assert.deepEqual(validateMldbStorageMapping(schema, storageMapping), []);
+});
+
+test("el esquema y manifiesto MLDB 0.4.1 anteriores conservan compatibilidad", async () => {
+  const previous = JSON.parse(await readFile(new URL("../../MLDB/schema_v0.4.1.json", import.meta.url), "utf8"));
+  const previousMapping = JSON.parse(await readFile(new URL("../../MLDB/storage_mapping_v0.4.1.json", import.meta.url), "utf8"));
+  assert.equal(previous.format.schema_version, "0.4.1");
+  assert.deepEqual(validateMldbSchema(previous), []);
+  assert.deepEqual(validateMldbStorageMapping(previous, previousMapping), []);
 });
 
 test("el esquema MLDB 0.4.0 anterior conserva compatibilidad de validación", async () => {

@@ -1160,7 +1160,7 @@ test("la resonancia léxica excluye stopwords frecuentes en sueco", async () => 
   const ideas = [
     {
       projectId, id: "lexical-swedish-stopwords-a",
-      text: "en minne och en spegel med ett ljus",
+      text: "en minne och en spegel med ett natt",
       status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
       evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]

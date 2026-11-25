@@ -4395,7 +4395,8 @@ function validateInput(input: LiteraryAnalysisInput): number {
         event.participants.some((participant: string) => typeof participant !== "string" || !participant.trim()) ||
         !Array.isArray(event.evidence) || event.evidence.length > 200 ||
         (event.evidenceCount !== undefined &&
-          (!Number.isSafeInteger(event.evidenceCount) || event.evidenceCount < event.evidence.length)) ||
+          (!Number.isSafeInteger(event.evidenceCount) ||
+            event.evidenceCount < event.evidence.filter(item => item.status !== "stale").length)) ||
         (event.staleEvidenceCount !== undefined &&
           (!Number.isSafeInteger(event.staleEvidenceCount) || event.staleEvidenceCount < 0)) ||
         (event.timelineTrackId !== undefined &&

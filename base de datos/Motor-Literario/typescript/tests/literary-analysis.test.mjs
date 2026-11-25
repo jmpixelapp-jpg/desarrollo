@@ -1346,3 +1346,52 @@ test("el grafo conserva orden determinista ante permutaciones del catálogo", ()
   assert.deepEqual(ordered.nodes.map(node => node.ideaId), ["alpha", "delta", "gamma"]);
   assert.equal(ordered.catalogScope, "project");
 });
+
+test("valida identidad, enlaces, historial y contador de omisión del catálogo global", () => {
+  const projectId = "literary-analysis-test";
+  const idea = {
+    projectId,
+    ideaId: "global-idea",
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  };
+  const input = {
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nUna idea.",
+    knownProjectIdeas: [idea]
+  };
+
+  assert.equal(analyzeLiteraryFragment(input).ideaGraph.ideaCount, 1);
+  assert.throws(
+    () => analyzeLiteraryFragment({ ...input, knownProjectIdeas: [idea, { ...idea }] }),
+    /catálogo global de ideas/
+  );
+  assert.throws(
+    () => analyzeLiteraryFragment({
+      ...input,
+      knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
+    }),
+    /catálogo global de ideas/
+  );
+  assert.throws(
+    () => analyzeLiteraryFragment({ ...input, knownProjectIdeasOmittedCount: -1 }),
+    /Contexto de análisis literario inválido/
+  );
+  assert.throws(
+    () => analyzeLiteraryFragment({
+      ...input,
+      knownProjectIdeas: [{
+        ...idea,
+        statusHistory: [{ status: "unknown", reason: "initial" }]
+      }]
+    }),
+    /historial de decisiones del catálogo global/
+  );
+});

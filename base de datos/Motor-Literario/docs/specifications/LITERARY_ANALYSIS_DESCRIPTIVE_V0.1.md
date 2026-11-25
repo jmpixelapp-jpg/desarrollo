@@ -52,6 +52,14 @@ El análisis reconoce contenido entre comillas angulares, curvas o rectas, adem�
 Se reconocen encabezados de parte/libro, capítulo, acto y escena cuando aparecen al inicio de una línea, con o sin prefijo Markdown de encabezado. También se detectan líneas separadoras formadas por tres o más asteriscos, guiones, guiones bajos, signos igual o puntos decorativos. Cada marcador conserva línea y rango UTF-16. Los segmentos de escena comienzan después de un encabezado de escena o separador y terminan ante el siguiente marcador estructural explícito. No se generan escenas desde párrafos, cambios de diálogo, cambios de lugar mencionados en la prosa ni inferencias semánticas. Se devuelven hasta 100 marcadores y 100 segmentos por operación.
 
 
+## Recurrencia léxica entre escenas
+
+La propiedad `sceneLexicalEchoes` identifica palabras de contenido cuya misma forma normalizada aparece al menos tres veces y está distribuida entre dos o más escenas explícitas. Cada candidato informa la forma literal observada, su forma normalizada, el número de escenas y el total de coincidencias. El desglose por escena conserva el conteo completo y hasta doce ocurrencias UTF-16 absolutas; `evidenceTruncated` señala cuándo el número de muestras es menor que el conteo real.
+
+El análisis recorre las escenas y los tokens en orden textual y limita la salida a veinte candidatos, priorizando cobertura entre escenas y después frecuencia. Solo utiliza las escenas explícitas detectadas en el fragmento, por lo que no rellena escenas ausentes ni compara rangos fuera de la revisión analizada.
+
+La coincidencia es ortográfica tras normalización Unicode NFKC y conversión a minúsculas. No hay lematización, traducción, agrupación de sinónimos ni inferencia semántica. Una palabra que reaparece puede deberse al vocabulario habitual del texto; el resultado es una pista para inspección, no una afirmación de símbolo, tema, motivo recurrente, intención o relación causal.
+
 ## Presencia de personajes en escenas
 
 La API anfitriona entrega al analizador las fichas de personajes del proyecto activo (nombre canónico y alias). En cada escena explícita se localizan coincidencias literales completas, sin distinguir mayúsculas y minúsculas, y se devuelven los IDs de identidad, variantes de nombre y offsets UTF-16. Se exige identidad única del nombre o alias: si dos personajes reclaman la misma forma, esa coincidencia se omite en vez de asignarse por conjetura. El análisis no usa pronombres para atribuir presencia ni interpreta mención como participación, diálogo o focalización. El catálogo acepta hasta 500 fichas por análisis, hasta 40 personajes por escena y hasta 20 ocurrencias por personaje.

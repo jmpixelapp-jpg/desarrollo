@@ -2396,7 +2396,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   const createdIndexes = [];
   const names = [
     "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
-    "record-lifecycles", "relation-lifecycles", "project-settings", "documents", "changes",
+    "record-lifecycles", "relation-lifecycles", "event-lifecycles", "project-settings", "documents", "changes",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
@@ -2452,7 +2452,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 21);
+    assert.equal(openedVersion, 22);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],

@@ -13,11 +13,28 @@ export interface LiveAuthorMonitorChangeSink {
   onEditorChange(change: EditorChange): ChangeAdmission;
 }
 
+export type LiveAuthorMonitorBackpressureReason = "queue_full" | "rejected" | "sink_error";
+
+/** Estado observable del backlog FIFO; no contiene texto del manuscrito. */
+export interface LiveAuthorMonitorBackpressureSnapshot {
+  readonly status: "clear" | "backpressured";
+  readonly pendingCount: number;
+  readonly firstPendingSequence?: number | undefined;
+  readonly lastPendingSequence?: number | undefined;
+  readonly reason?: LiveAuthorMonitorBackpressureReason | undefined;
+}
+
 export interface LiveAuthorMonitorChangeBindingOptions {
   readonly source: LiveAuthorMonitorEditorChangeSource;
   readonly sink: LiveAuthorMonitorChangeSink;
   /** Se llama una vez por cada intento real de admisión, incluida la contrapresión. */
   readonly onAdmission: (change: EditorChange, admission: ChangeAdmission) => void;
+  /**
+   * Se notifica al cambiar el backlog, tanto al entrar en contrapresión como
+   * al drenar o descartar la cola tras una resincronización autoritativa.
+   * El snapshot es inmutable y nunca incluye el contenido del manuscrito.
+   */
+  readonly onBackpressure?: ((snapshot: LiveAuthorMonitorBackpressureSnapshot) => void) | undefined;
   /**
    * Fuente opcional de señales de capacidad. Puede conectarse a
    * HostEngineApi.subscribeLiveAuthorMonitor para reintentar automáticamente
@@ -53,6 +70,9 @@ export interface LiveAuthorMonitorChangeBindingControl {
  * retryPending cuando la cola del motor haya liberado capacidad. Si se aporta
  * subscribeRetrySignal, el enlace lo hace automáticamente y se desuscribe al parar.
  *
+ * onBackpressure permite reflejar el tamaño y la recuperación del backlog en
+ * la interfaz sin exponer el texto ni acoplar el monitor a un framework visual.
+ *
  * No sintetiza offsets ni llama manualmente a recordAdmission/recordCommit:
  * HostEngineApi ya alimenta LiveAuthorMonitor dentro del flujo normal.
  */
@@ -69,9 +89,14 @@ export function bindLiveAuthorMonitorEditorChanges(
   if (typeof options.onAdmission !== "function" || typeof options.onError !== "function") {
     throw new TypeError("onAdmission y onError son callbacks obligatorias.");
   }
+  if (options.onBackpressure !== undefined && typeof options.onBackpressure !== "function") {
+    throw new TypeError("onBackpressure debe ser una función cuando se proporciona.");
+  }
 
   let disposed = false;
   let retrying = false;
+  let pendingReason: LiveAuthorMonitorBackpressureReason | undefined;
+  let lastPublishedBackpressure: LiveAuthorMonitorBackpressureSnapshot | undefined;
   const pending: EditorChange[] = [];
 
   const reportError = (error: unknown, change: EditorChange): void => {
@@ -86,10 +111,43 @@ export function bindLiveAuthorMonitorEditorChanges(
     }
   };
 
+  const publishBackpressure = (): void => {
+    if (!options.onBackpressure) return;
+    const first = pending[0];
+    const last = pending[pending.length - 1];
+    const snapshot: LiveAuthorMonitorBackpressureSnapshot = pending.length === 0
+      ? Object.freeze({ status: "clear", pendingCount: 0 })
+      : Object.freeze({
+          status: "backpressured",
+          pendingCount: pending.length,
+          ...(first ? { firstPendingSequence: first.sequence } : {}),
+          ...(last ? { lastPendingSequence: last.sequence } : {}),
+          reason: pendingReason ?? "rejected"
+        });
+
+    if (lastPublishedBackpressure &&
+        lastPublishedBackpressure.status === snapshot.status &&
+        lastPublishedBackpressure.pendingCount === snapshot.pendingCount &&
+        lastPublishedBackpressure.firstPendingSequence === snapshot.firstPendingSequence &&
+        lastPublishedBackpressure.lastPendingSequence === snapshot.lastPendingSequence &&
+        lastPublishedBackpressure.reason === snapshot.reason) {
+      return;
+    }
+    lastPublishedBackpressure = snapshot;
+
+    try {
+      options.onBackpressure(snapshot);
+    } catch {
+      // La vista de contrapresión es observabilidad opcional; no debe frenar al autor.
+      // Sus errores no se reenvían a onError para evitar bucles entre callbacks.
+    }
+  };
+
   const submitNewChange = (change: EditorChange): void => {
     if (disposed) return;
     if (pending.length > 0) {
       pending.push(change);
+      publishBackpressure();
       return;
     }
 
@@ -98,11 +156,17 @@ export function bindLiveAuthorMonitorEditorChanges(
       admission = options.sink.onEditorChange(change);
     } catch (error) {
       pending.push(change);
+      pendingReason = "sink_error";
+      publishBackpressure();
       reportError(error, change);
       return;
     }
 
-    if (admission.status === "rejected") pending.push(change);
+    if (admission.status === "rejected") {
+      pending.push(change);
+      pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
+      publishBackpressure();
+    }
     reportAdmission(change, admission);
   };
 
@@ -118,11 +182,20 @@ export function bindLiveAuthorMonitorEditorChanges(
         try {
           admission = options.sink.onEditorChange(change);
         } catch (error) {
+          pendingReason = "sink_error";
+          publishBackpressure();
           reportError(error, change);
           break;
         }
 
-        if (admission.status === "queued") pending.shift();
+        if (admission.status === "queued") {
+          pending.shift();
+          if (pending.length === 0) pendingReason = undefined;
+          publishBackpressure();
+        } else {
+          pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
+          publishBackpressure();
+        }
         reportAdmission(change, admission);
         if (admission.status === "rejected") break;
       }
@@ -154,8 +227,11 @@ export function bindLiveAuthorMonitorEditorChanges(
 
   const stop = (() => {
     if (disposed) return;
+    const hadPending = pending.length > 0;
     disposed = true;
     pending.length = 0;
+    pendingReason = undefined;
+    if (hadPending) publishBackpressure();
     try { unsubscribeSource?.(); } finally { unsubscribeRetrySignal?.(); }
   }) as LiveAuthorMonitorChangeBindingControl;
 
@@ -163,7 +239,10 @@ export function bindLiveAuthorMonitorEditorChanges(
   stop.getPendingChanges = () => Object.freeze([...pending]);
   stop.discardPendingAfterResynchronization = () => {
     if (disposed) return;
+    const hadPending = pending.length > 0;
     pending.length = 0;
+    pendingReason = undefined;
+    if (hadPending) publishBackpressure();
   };
   return stop;
 }

@@ -176,6 +176,8 @@ export interface NarrativeIdea {
   readonly relatedIdeaIds?: readonly string[];
   /** Historial inmutable de transiciones de estado, separado de las revisiones del texto. */
   readonly statusHistory?: readonly NarrativeIdeaStatusChange[];
+  /** Número de transiciones anteriores omitidas al importar o compactar un historial extenso. */
+  readonly omittedStatusHistoryCount?: number;
 }
 
 /**

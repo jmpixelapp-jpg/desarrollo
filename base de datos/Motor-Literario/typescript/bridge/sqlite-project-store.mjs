@@ -64,6 +64,15 @@ function checksumForArchiveIds(ids) {
   }
   return "fnv1a64:" + hash.toString(16).padStart(16, "0");
 }
+function checksumForArchiveIdsInReceiptOrder(ids) {
+  const source = JSON.stringify(ids);
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < source.length; index++) {
+    hash ^= BigInt(source.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -1340,7 +1349,8 @@ export class SqliteProjectStore {
             ids.some((id, index) => typeof id !== "string" || !id.trim() ||
               (index > 0 && ids[index - 1].localeCompare(id) > 0)) ||
             new Set(ids).size !== ids.length ||
-            finalizationReceipt.archiveChecksum !== checksumForArchiveIds(ids) ||
+            (finalizationReceipt.archiveChecksum !== checksumForArchiveIds(ids) &&
+              finalizationReceipt.archiveChecksum !== checksumForArchiveIdsInReceiptOrder(ids)) ||
             (finalizationReceipt.archiveContentChecksum !== undefined &&
               !isValidArchiveContentChecksum(finalizationReceipt.archiveContentChecksum))) {
           throw new Error("El recibo de finalización no coincide con la biblioteca durante la consolidación.");
@@ -1687,7 +1697,8 @@ export class SqliteProjectStore {
               existingReceipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
               new Set(existingReceipt.archivedIdeaIds).size !== existingReceipt.archivedIdeaIds.length ||
               [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1].localeCompare(id)>0) ||
-              existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds) ||
+              (existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds) &&
+                existingReceipt.archiveChecksum !== checksumForArchiveIdsInReceiptOrder(existingReceipt.archivedIdeaIds)) ||
               (existingReceipt.archiveContentChecksum !== undefined &&
                 !isValidArchiveContentChecksum(existingReceipt.archiveContentChecksum))) {
             throw new Error("El recibo de finalización está malformado o no pertenece al escritor y libro activos.");

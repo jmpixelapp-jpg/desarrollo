@@ -3960,7 +3960,7 @@ export class IndexedDbProjectStore implements ProjectStore {
   ): Promise<ProjectFinalizationSummary> {
     return this.archiveUnincorporatedIdeasInternal(
       projectId, writerId, sourceProjectName, archivedAt, false
-    ) as Promise<ProjectFinalizationSummary>;
+    ) as unknown as Promise<ProjectFinalizationSummary>;
   }
 
   private async archiveUnincorporatedIdeasInternal(

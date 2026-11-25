@@ -10017,7 +10017,7 @@ test("detecta capítulos, escenas y separadores explícitos sin inferir transici
     "",
     "ESCENA 2: El andén",
     "El tren llegó al amanecer."
-  ].join("\\n");
+  ].join("\n");
   const result = analyzeLiteraryFragment({
     projectId:"literary-scenes",documentId:"chapter",revision:7,text,baseOffset:120
   });
@@ -10044,7 +10044,7 @@ test("no inventa escenas cuando el fragmento no contiene marcadores explícitos"
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const result = analyzeLiteraryFragment({
     projectId:"literary-no-scene-inference",documentId:"chapter",revision:1,
-    text:"La mañana comenzó en silencio.\\n\\nDespués, la puerta se abrió lentamente."
+    text:"La mañana comenzó en silencio.\n\nDespués, la puerta se abrió lentamente."
   });
   assert.deepEqual(result.structuralMarkers,[]);
   assert.deepEqual(result.explicitScenes,[]);

@@ -284,15 +284,15 @@ function detectLiteraryStructure(text: string): LocalLiteraryStructureMarker[] {
   let lineIndex = 0;
   while (cursor < text.length && markers.length < headingLimit) {
     const lineStart = cursor;
-    while (cursor < text.length && text[cursor] !== "\\n" && text[cursor] !== "\\r") cursor++;
+    while (cursor < text.length && text[cursor] !== "\n" && text[cursor] !== "\r") cursor++;
     const lineEnd = cursor;
     const line = text.slice(lineStart,lineEnd);
-    if (cursor < text.length && text[cursor] === "\\r") cursor++;
-    if (cursor < text.length && text[cursor] === "\\n") cursor++;
+    if (cursor < text.length && text[cursor] === "\r") cursor++;
+    if (cursor < text.length && text[cursor] === "\n") cursor++;
     lineIndex++;
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const heading = trimmed.match(/^(?:#{1,6}[ \\t]*)?(cap[ií]tulo|chapter|parte|part|libro|book|acto|act|escena|scene)\\b(.*)$/iu);
+    const heading = trimmed.match(/^(?:#{1,6}[ \t]*)?(cap[ií]tulo|chapter|parte|part|libro|book|acto|act|escena|scene)\b(.*)$/iu);
     if (heading) {
       const keyword = (heading[1] ?? "").toLocaleLowerCase("es");
       const markerType: LiteraryStructureMarkerType =
@@ -301,15 +301,15 @@ function detectLiteraryStructure(text: string): LocalLiteraryStructureMarker[] {
         /^(?:acto|act)$/u.test(keyword) ? "act-heading" : "scene-heading";
       markers.push({
         markerType,
-        label:trimmed.replace(/^#{1,6}[ \\t]*/u,""),
+        label:trimmed.replace(/^#{1,6}[ \t]*/u,""),
         lineIndex,
         start:lineStart,
         end:lineEnd
       });
       continue;
     }
-    const compact = trimmed.replace(/[ \\t]/gu,"");
-    if (/^(?:\\*{3,}|-{3,}|_{3,}|={3,}|·{3,}|•{3,})$/u.test(compact)) {
+    const compact = trimmed.replace(/[ \t]/gu,"");
+    if (/^(?:\*{3,}|-{3,}|_{3,}|={3,}|·{3,}|•{3,})$/u.test(compact)) {
       markers.push({
         markerType:"scene-divider",
         label:"Separador de escena",

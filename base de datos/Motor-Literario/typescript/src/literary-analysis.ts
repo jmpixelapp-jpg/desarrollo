@@ -3177,7 +3177,7 @@ function buildExplicitEventDependencyAnalysis(
       );
       if (candidates.length < 50) {
         candidates.push({
-          candidateId:`event-dependency:${causeEventId}:${consequenceEventId}:${baseOffset+first.end+causal.index}`,
+          candidateId:`event-dependency:${JSON.stringify([causeEventId,consequenceEventId,baseOffset+first.end+causal.index])}`,
           firstEventId:first.eventId,
           firstEventLabel:first.eventLabel,
           secondEventId:second.eventId,

@@ -3303,7 +3303,7 @@ function buildLiteraryIdeaGraph(
     incomingReferenceCount: incoming.get(idea.ideaId) ?? 0,
     includedOutgoingReferenceCount: adjacency.get(idea.ideaId)!.length,
     notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0,
-    statusHistory: idea.statusHistory,
+    statusHistory: idea.statusHistory.map(change => ({ ...change })),
     omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
     writerDecisionCount: idea.writerDecisionCount,
     activeEvidenceCount: idea.evidenceCount,

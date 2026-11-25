@@ -3342,16 +3342,20 @@ export class HostEngineApi {
       try {
         const validatedEntries = requireUniquePersonalIdeaEntries(entries, writerId, project.projectId);
         if (validatedEntries.some(entry =>
-          entry.sourceProjectName !== project.projectName || entry.context?.version !== 1
+          entry.sourceProjectName !== project.projectName ||
+          (entry.context !== undefined && entry.context.version !== 1)
         )) {
-          throw new Error("Integridad de biblioteca: la transferencia no conservó el contexto relacionado del libro.");
+          throw new Error("Integridad de biblioteca: la transferencia no conservó un contexto válido del libro.");
         }
         if (validatedEntries.length > 0) {
           try { this.onPersonalIdeaLibraryChanged?.(writerId); } catch (error) {
             this.onKnowledgeError?.(error);
           }
         }
-        return cloneNarrativeRecords(validatedEntries);
+        return cloneNarrativeRecords(validatedEntries.map(entry => entry.context
+          ? entry
+          : { ...entry, contextStatus: "missing-legacy-context" as const }
+        ));
       } finally {
         // Un adaptador pudo confirmar la transacción y devolver una respuesta inválida.
         // Invalidar igualmente la caché evita exponer ideas que ya fueron transferidas.

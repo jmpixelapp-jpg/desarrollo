@@ -3466,6 +3466,9 @@ test("la API finaliza el libro con un resumen compacto y notifica solo la primer
   store.archiveUnincorporatedIdeas = async () => {
     throw new Error("La API compacta no debe materializar la lista heredada.");
   };
+  store.loadPersonalIdeasPage = async () => ({
+    items: [], nextCursor: null, libraryVersion: 0
+  });
   store.archiveUnincorporatedIdeasSummary = async (...args) => {
     calls++;
     assert.equal(args[0], projectId);

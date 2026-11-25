@@ -34,7 +34,7 @@ El paquete TypeScript del repositorio sigue marcado como privado (`private: true
 | Aplicar cambios al manuscrito | Responsable | No escribe sobre el editor ni cambia el texto original |
 | Mostrar diagnósticos | Responsable | Devuelve diagnósticos asociados a una revisión concreta |
 | Conservar conocimiento narrativo | Puede consultarlo y presentarlo | Extrae y persiste registros aislados por proyecto |
-| Copias de seguridad y restauración del programa | Responsable | No expone aún una API pública completa de backup/restore |
+| Respaldo de SQLite local | Utilidad incluida en el puente | Crea, verifica y restaura el archivo SQLite; la integración con el ciclo de vida del anfitrión sigue a cargo de la aplicación |
 
 El anfitrión debe usar la misma identidad externa de proyecto en todas las llamadas de un libro. No debe crear un proyecto paralelo en la base del motor.
 
@@ -334,7 +334,7 @@ No interpretar `queued` como `applied`, ni un diagnóstico de una revisión ante
 - No escribir directamente en `motor-literario-local`, sus object stores, claves o índices, ni en `bridge_records`/`bridge_document_heads`. Las migraciones pertenecen a cada adaptador.
 - IndexedDB está ligado al origen y perfil local. El archivo SQLite del puente está ligado a la ruta local proporcionada al proceso compañero. Son bases físicas independientes y no se fusionan automáticamente.
 - Al copiar el archivo SQLite para una copia de seguridad, detener antes el puente con `bridge.shutdown` y esperar el cierre del proceso; no copiar solo el archivo principal mientras SQLite está activo y puede tener datos en WAL.
-- La API pública actual no incluye exportación/importación integral ni restauración asistida de toda la base. La aplicación anfitriona debe implementar y probar su mecanismo de backup/restore antes de confiar manuscritos irremplazables al entorno de producción. No copiar object stores en caliente ni asumir que el archivo del manuscrito contiene todo el conocimiento MLDB.
+- El puente Node incluye `bridge/database-snapshot.mjs` para crear, verificar y restaurar copias completas de su archivo SQLite; la restauración exige detener el puente y conserva la base anterior con sus sidecars. Esta utilidad no exporta IndexedDB del navegador. La aplicación anfitriona que use IndexedDB debe implementar y probar su propio respaldo/restauración atómicos de todos los object stores (manuscrito, journal, conocimiento MLDB, biblioteca, historiales y recibos) antes de confiar manuscritos irremplazables al entorno de producción. No copiar object stores en caliente ni asumir que el archivo del manuscrito contiene todo el conocimiento MLDB.
 
 El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar.
 

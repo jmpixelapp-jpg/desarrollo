@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { SqliteProjectStore } from "../bridge/sqlite-project-store.mjs";
@@ -233,6 +233,65 @@ test("verificar un respaldo SQLite rechaza contenido archivado distinto del reci
     );
   } finally {
     store?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("rechaza enlaces simbólicos de origen, respaldo y destino sin modificar sus archivos reales", async t => {
+  if (process.platform === "win32") {
+    t.skip("La creación de enlaces simbólicos depende de permisos adicionales en Windows.");
+    return;
+  }
+
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-snapshot-symlinks-"));
+  const sourcePath = resolve(directory, "source.sqlite");
+  const sourceLink = resolve(directory, "source-link.sqlite");
+  const backupPath = resolve(directory, "backup.sqlite");
+  const backupLink = resolve(directory, "backup-link.sqlite");
+  const destinationPath = resolve(directory, "destination.sqlite");
+  const destinationLink = resolve(directory, "destination-link.sqlite");
+  let store;
+  let previous;
+  try {
+    store = await SqliteProjectStore.open(sourcePath);
+    store.saveEntity(makeEntity("source-project", "source-character", "Origen conservado"));
+    store.close();
+    store = undefined;
+
+    await symlink(sourcePath, sourceLink);
+    await assert.rejects(
+      createDatabaseBackup(sourceLink, backupPath),
+      /archivo regular.*enlace simbólico/iu
+    );
+    assert.equal((await SqliteProjectStore.open(sourcePath)).loadEntities("source-project")[0].canonicalName,
+      "Origen conservado");
+
+    await createDatabaseBackup(sourcePath, backupPath);
+    await symlink(backupPath, backupLink);
+    await assert.rejects(
+      verifyDatabaseBackup(backupLink),
+      /archivo regular.*enlace simbólico/iu
+    );
+
+    store = await SqliteProjectStore.open(destinationPath);
+    store.saveEntity(makeEntity("destination-project", "destination-character", "Destino conservado"));
+    store.close();
+    store = undefined;
+    await symlink(destinationPath, destinationLink);
+
+    await assert.rejects(
+      restoreDatabaseBackup(backupPath, destinationLink),
+      /destino debe ser un archivo regular/iu
+    );
+
+    previous = await SqliteProjectStore.open(destinationPath);
+    assert.equal(
+      (await previous.loadEntities("destination-project"))[0].canonicalName,
+      "Destino conservado"
+    );
+  } finally {
+    store?.close();
+    previous?.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -4497,8 +4497,8 @@ function buildCharacterNarrativeTrajectories(
           .map(link => link.eventId)
       ))].sort((a,b) => a.localeCompare(b,"en"));
       const sceneEvidenceTruncated = evidencedScenes.some(scene =>
-        scene.eventLinksTruncated || scene.characterMentionsTruncated
-      );
+        scene.eventLinksTruncated
+      ) || (evidencedScenes.length === 0 && idea.evidenceCount > currentEvidence.length);
       const eventMaterializationStatus = materializedEventIds.length > 0
         ? "linked-to-event" as const
         : evidencedScenes.length === 0

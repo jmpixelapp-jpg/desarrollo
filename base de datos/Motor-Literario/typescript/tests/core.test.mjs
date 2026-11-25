@@ -13621,6 +13621,19 @@ test("la API rechaza recibos de biblioteca con checksum incorrecto o IDs desorde
   });
   const canonicalReceipt = await api.getProjectFinalizationReceipt();
   assert.deepEqual(canonicalReceipt.archivedIdeaIds, mixedCaseIds);
+
+  // Los recibos SQLite anteriores calculaban el hash sobre el orden almacenado.
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: mixedCaseIds,
+    archiveChecksum: hash(JSON.stringify(mixedCaseIds))
+  });
+  const legacyReceipt = await api.getProjectFinalizationReceipt();
+  assert.deepEqual(legacyReceipt.archivedIdeaIds, mixedCaseIds);
   api.dispose();
 });
 

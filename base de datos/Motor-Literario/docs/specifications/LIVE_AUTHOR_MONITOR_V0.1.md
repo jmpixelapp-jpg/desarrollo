@@ -84,6 +84,30 @@ Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs**: apert
 
 La suite aislada pasa 8/8 pruebas y TypeScript compila en modo estricto. La integración con una interfaz de autor real y la ejecución de la suite completa del repositorio deben validarse en el entorno anfitrión/CI; este avance no afirma que exista ya un panel visual conectado.
 
-## 6. Próximo tramo
+## 6. Refresco continuo del panel
+
+Las suscripciones directas notifican admisiones y commits, pero el estado puede cambiar de `active` a `idle` únicamente por el paso del tiempo. Para que el panel no quede mostrando actividad antigua, el módulo ofrece `subscribeLiveAuthorMonitorWithRefresh`:
+
+```ts
+import { subscribeLiveAuthorMonitorWithRefresh } from "./live-author-monitor";
+
+const stopMonitoring = subscribeLiveAuthorMonitorWithRefresh(
+  api,
+  snapshot => renderAuthorActivity(snapshot),
+  { documentId, intervalMs: 1_000 }
+);
+
+// Al ocultar o desmontar el panel:
+stopMonitoring();
+```
+
+- Entrega un snapshot inicial y conserva las notificaciones inmediatas de admisión/commit.
+- Refresca métricas temporales con el intervalo configurado; por defecto, cada segundo.
+- Puede limitarse a un documento o consultar todos los documentos observados.
+- Usa temporizadores nativos del runtime, sin dependencias. El anfitrión decide cuándo iniciar y cancelar el refresco.
+- Aísla excepciones de la interfaz y de una lectura de observabilidad para no interrumpir la escritura.
+- No recibe ni almacena texto del manuscrito; reutiliza únicamente los snapshots de métricas ya expuestos por `HostEngineApi`.
+
+## 7. Próximo tramo
 
 Conectar las suscripciones a los componentes visuales del editor anfitrión y validar el flujo en el runtime real. Añadir pruebas de extremo a extremo para escritura sostenida, saturación, recuperación y cierre.

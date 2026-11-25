@@ -11,6 +11,11 @@ const activeIds = new Set();
 let store;
 let shuttingDown = false;
 let inputBuffer = "";
+let knowledgeSyncInterval;
+let lastObservedDataVersion;
+let knowledgeSyncTail = Promise.resolve();
+const lastNarrativeVersions = new Map();
+const KNOWLEDGE_SYNC_INTERVAL_MS = 500;
 
 const PUBLIC_API_METHODS = new Set([
   "extractNarrativeKnowledge",
@@ -158,12 +163,64 @@ function openProject(params) {
     }
   });
   api.initializeProject(identity);
-  projects.set(projectId, { api, identity });
+  const record = { api, identity };
+  projects.set(projectId, record);
+  lastNarrativeVersions.set(projectId, store.getNarrativeVersion(projectId));
   return { projectId, alreadyOpen: false, capabilities: api.getCapabilities() };
 }
 
 function writeError(error) {
   process.stderr.write("[motor-literario-bridge] " + String(error?.message ?? error) + "\n");
+}
+
+async function pollExternalNarrativeChanges() {
+  if (!store || store.closed || shuttingDown) return;
+  const currentDataVersion = store.getDataVersion();
+  const externalCommit = lastObservedDataVersion !== undefined &&
+    currentDataVersion !== lastObservedDataVersion;
+  lastObservedDataVersion = currentDataVersion;
+
+  for (const [projectId, record] of projects) {
+    const currentNarrativeVersion = store.getNarrativeVersion(projectId);
+    const previousNarrativeVersion = lastNarrativeVersions.get(projectId);
+    lastNarrativeVersions.set(projectId, currentNarrativeVersion);
+    if (!externalCommit || previousNarrativeVersion === undefined ||
+        currentNarrativeVersion === previousNarrativeVersion) continue;
+
+    try {
+      await record.api.invalidateNarrativeKnowledgeFromExternalChange();
+      if (projects.get(projectId) === record) {
+        await send({
+          jsonrpc: "2.0",
+          method: "engine.knowledgeChanged",
+          params: { projectId }
+        });
+      }
+    } catch (error) {
+      writeError(error);
+    }
+  }
+}
+
+function startKnowledgeSync() {
+  lastObservedDataVersion = store.getDataVersion();
+  if (knowledgeSyncInterval) clearInterval(knowledgeSyncInterval);
+  knowledgeSyncInterval = setInterval(() => {
+    knowledgeSyncTail = knowledgeSyncTail
+      .then(() => pollExternalNarrativeChanges())
+      .catch(writeError);
+  }, KNOWLEDGE_SYNC_INTERVAL_MS);
+  knowledgeSyncInterval.unref?.();
+}
+
+function stopKnowledgeSync() {
+  if (knowledgeSyncInterval) clearInterval(knowledgeSyncInterval);
+  knowledgeSyncInterval = undefined;
+}
+
+async function drainKnowledgeSync() {
+  stopKnowledgeSync();
+  await knowledgeSyncTail;
 }
 
 async function flushAll() {
@@ -194,7 +251,7 @@ async function dispatch(method, rawParams) {
         storage: "sqlite-local",
         sqliteDatabase: store.databasePath,
         processIsolation: true,
-        notifications: ["engine.analysis", "engine.commit", "engine.knowledgeError"],
+        notifications: ["engine.analysis", "engine.commit", "engine.knowledgeError", "engine.knowledgeChanged"],
         maxMessageBytes: MAX_LINE_BYTES
       };
 
@@ -214,6 +271,7 @@ async function dispatch(method, rawParams) {
       if (!record) return { projectId, alreadyClosed: true };
       await record.api.flushPendingChanges();
       projects.delete(projectId);
+      lastNarrativeVersions.delete(projectId);
       return { projectId, closed: true };
     }
 
@@ -277,6 +335,7 @@ async function dispatch(method, rawParams) {
     }
 
     case "bridge.shutdown":
+      await drainKnowledgeSync();
       await flushAll();
       shuttingDown = true;
       for (const record of projects.values()) {
@@ -284,6 +343,7 @@ async function dispatch(method, rawParams) {
         void record;
       }
       projects.clear();
+      lastNarrativeVersions.clear();
       return { shutdown: true, storage: store.health() };
 
     default: {
@@ -337,8 +397,10 @@ async function processRequest(request) {
 
 async function closeGracefully() {
   if (!store || store.closed) return;
+  try { await drainKnowledgeSync(); } catch (error) { writeError(error); }
   try { await flushAll(); } catch (error) { writeError(error); }
   projects.clear();
+  lastNarrativeVersions.clear();
   try { store.close(); } catch (error) { writeError(error); }
 }
 
@@ -361,6 +423,7 @@ async function main() {
   const motorModule = await import(moduleUrl.href);
   globalThis.__motorLiterarioModule = motorModule;
   store = await SqliteProjectStore.open(resolve(databasePath));
+  startKnowledgeSync();
 
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", chunk => {

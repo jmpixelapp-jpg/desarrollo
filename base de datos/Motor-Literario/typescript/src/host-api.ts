@@ -3472,21 +3472,27 @@ export class HostEngineApi {
     if (!loadReceipt) {
       throw new Error("El almacenamiento no admite recibos durables de finalización.");
     }
-    const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
-    if (receipt === undefined) return undefined;
-    const ids = receipt.archivedIdeaIds;
-    if (!receipt || receipt.writerId !== writerId ||
-        receipt.sourceProjectId !== project.projectId ||
-        typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||
-        receipt.sourceProjectName !== project.projectName ||
-        !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
-        !Array.isArray(ids) ||
-        ids.some(id => typeof id !== "string" || !id.trim()) ||
-        new Set(ids).size !== ids.length ||
-        typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
-      throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
-    }
-    return cloneNarrativeRecord(receipt);
+    // La lectura ocupa la misma cola que la finalización: no debe observar
+    // un recibo inexistente mientras la transferencia del mismo libro sigue en curso.
+    const work = this.knowledgeTail.then(async () => {
+      const receipt = await loadReceipt.call(this.store, writerId, project.projectId);
+      if (receipt === undefined) return undefined;
+      const ids = receipt.archivedIdeaIds;
+      if (!receipt || receipt.writerId !== writerId ||
+          receipt.sourceProjectId !== project.projectId ||
+          typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||
+          receipt.sourceProjectName !== project.projectName ||
+          !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+          !Array.isArray(ids) ||
+          ids.some(id => typeof id !== "string" || !id.trim()) ||
+          new Set(ids).size !== ids.length ||
+          typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
+        throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
+      }
+      return cloneNarrativeRecord(receipt);
+    });
+    this.knowledgeTail = work.then(() => undefined, () => undefined);
+    return work;
   }
 
   async setNarrativeIdeaStatus(

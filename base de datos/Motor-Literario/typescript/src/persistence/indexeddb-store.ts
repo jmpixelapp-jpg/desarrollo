@@ -1058,8 +1058,11 @@ export class IndexedDbProjectStore implements ProjectStore {
             }
           }
         }
-      } catch {
-        throw new Error("Biblioteca personal inconsistente: la idea o su contexto están malformados o incompletos.");
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "validación desconocida";
+        throw new Error(
+          "Biblioteca personal inconsistente: la idea o su contexto están malformados o incompletos. " + detail
+        );
       }
       const identity = JSON.stringify([entry.sourceProjectId, entry.idea.id]);
       if (identities.has(identity)) {

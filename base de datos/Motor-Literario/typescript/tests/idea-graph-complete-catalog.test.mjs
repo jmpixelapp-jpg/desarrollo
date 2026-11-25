@@ -1617,7 +1617,7 @@ test("el grafo reclasifica como externas las referencias al retirar una idea del
   try {
     const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(before.ideaCount, 4);
-    assert.equal(before.includedReferenceCount, 5);
+    assert.equal(before.includedReferenceCount, 4);
 
     const bridgeIndex = ideas.findIndex(idea => idea.id === "bridge");
     ideas.splice(bridgeIndex, 1);

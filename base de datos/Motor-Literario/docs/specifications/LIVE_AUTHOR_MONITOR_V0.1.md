@@ -163,6 +163,36 @@ unmountWorkspace();
 - La etiqueta del documento se obtiene opcionalmente del anfitrión. El componente no consulta el texto del capítulo.
 - El desmontaje cancela el temporizador, retira la suscripción y elimina las tarjetas. No dispone `HostEngineApi`.
 
-## 9. Próximo tramo
+## 9. Integración con la selección del editor
 
-Conectar el panel individual y el espacio de trabajo al editor real del anfitrión; validar escritura sostenida, varios documentos abiertos, saturación, recuperación, navegación entre capítulos y desmontaje de vistas en los runtimes objetivo.
+Para mostrar el panel detallado del capítulo activo y mantener el tablero general visible, el anfitrión implementa un adaptador pequeño de selección:
+
+~~~ts
+import { mountLiveAuthorMonitorEditorIntegration } from "./motor-literario";
+
+const stopAuthorMonitoring = mountLiveAuthorMonitorEditorIntegration({
+  hostApi: api,
+  workspaceContainer: document.querySelector("#author-monitoring")!,
+  activeDocumentContainer: document.querySelector("#active-chapter-monitor")!,
+  editor: {
+    getActiveDocumentId: () => editorTabs.activeDocumentId,
+    subscribeActiveDocument: listener => editorTabs.subscribeActive(listener),
+    activateDocument: documentId => editorTabs.activate(documentId)
+  },
+  getDocumentLabel: documentId => chapterTitles.get(documentId) ?? documentId,
+  intervalMs: 1_000
+});
+
+// Al desmontar la ventana del editor:
+stopAuthorMonitoring();
+~~~
+
+- El tablero general mantiene todas las sesiones abiertas.
+- El panel detallado se reemplaza al cambiar de pestaña y desaparece cuando no hay documento activo.
+- El botón Abrir documento del tablero delega en activateDocument del anfitrión.
+- La conexión solo observa la selección y las métricas; el flujo de cambios sigue pasando una única vez por HostEngineApi.onEditorChange.
+- El desmontaje retira la suscripción a selección, el panel activo, el tablero y los temporizadores. No dispone HostEngineApi ni cierra capítulos.
+
+## 10. Próximo tramo
+
+Conectar este adaptador a la implementación concreta del editor anfitrión y validar escritura sostenida, varios documentos abiertos, saturación, recuperación, navegación entre capítulos y desmontaje de vistas en los runtimes objetivo.

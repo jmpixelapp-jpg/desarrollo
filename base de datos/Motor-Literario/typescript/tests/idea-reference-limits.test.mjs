@@ -17,7 +17,7 @@ function baseIdea(extra = {}) {
   };
 }
 
-test("IndexedDB rechaza más de 500 referencias explícitas totales por idea", async () => {
+test("IndexedDB rechaza más de 500 referencias explícitas por categoría", async () => {
   const store = new IndexedDbProjectStore();
   const tooManyIdeaLinks = Array.from({ length: 501 }, (_, index) => "idea-" + index);
   const tooManyEntityLinks = Array.from({ length: 501 }, (_, index) => "entity-" + index);
@@ -29,13 +29,6 @@ test("IndexedDB rechaza más de 500 referencias explícitas totales por idea", a
   await assert.rejects(
     store.saveIdea(baseIdea({ relatedEntityIds: tooManyEntityLinks })),
     /superiores al límite de 500/
-  );
-  await assert.rejects(
-    store.saveIdea(baseIdea({
-      relatedEntityIds: Array.from({ length: 300 }, (_, index) => "entity-" + index),
-      relatedIdeaIds: Array.from({ length: 201 }, (_, index) => "idea-" + index)
-    })),
-    /el total de referencias supera el límite de 500/
   );
   await assert.rejects(
     store.saveIdea(baseIdea({
@@ -184,38 +177,35 @@ test("fusionar ideas conserva evidencia histórica y deduplica solo registros id
   assert.equal(previous.evidence.length, 2);
 });
 
-test("fusiona sin perder vínculos explícitos de ideas y elimina solo duplicados", async () => {
-  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
-  const previous = baseIdea({ relatedIdeaIds: ["idea-a", "idea-b"] });
-  const incoming = baseIdea({ relatedIdeaIds: ["idea-b", "idea-c"] });
-  const originalPrevious = [...previous.relatedIdeaIds];
-  const originalIncoming = [...incoming.relatedIdeaIds];
+test("fusionar ideas combina referencias explícitas sin duplicarlas y respeta el límite", async () => {
+  const { mergeNarrativeIdea, MAX_NARRATIVE_IDEA_REFERENCES } =
+    await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    relatedIdeaIds: ["idea-a", "idea-shared"]
+  });
+  const incoming = baseIdea({
+    relatedIdeaIds: ["idea-shared", "idea-b"]
+  });
 
   const merged = mergeNarrativeIdea(previous, incoming);
+  assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-shared", "idea-b"]);
+  assert.deepEqual(previous.relatedIdeaIds, ["idea-a", "idea-shared"]);
+  assert.deepEqual(incoming.relatedIdeaIds, ["idea-shared", "idea-b"]);
 
-  assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-b", "idea-c"]);
-  assert.deepEqual(previous.relatedIdeaIds, originalPrevious);
-  assert.deepEqual(incoming.relatedIdeaIds, originalIncoming);
-});
-
-test("la fusión de ideas respeta el máximo de 500 vínculos después de unir catálogos", async () => {
-  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
-  const existingIds = Array.from({ length: 500 }, (_, index) => "idea-" + index);
-  const previous = baseIdea({ relatedIdeaIds: existingIds });
-  const duplicateOnly = baseIdea({ relatedIdeaIds: ["idea-0", "idea-499"] });
-
-  const atLimit = mergeNarrativeIdea(previous, duplicateOnly);
-  assert.equal(atLimit.relatedIdeaIds.length, 500);
-  assert.deepEqual(atLimit.relatedIdeaIds, existingIds);
-
-  const overflow = baseIdea({ relatedIdeaIds: ["idea-0", "idea-extra"] });
+  const tooMany = baseIdea({
+    relatedIdeaIds: Array.from(
+      { length: MAX_NARRATIVE_IDEA_REFERENCES },
+      (_, index) => "existing-" + index
+    )
+  });
+  const oneMore = baseIdea({ relatedIdeaIds: ["new-reference"] });
   assert.throws(
-    () => mergeNarrativeIdea(previous, overflow),
+    () => mergeNarrativeIdea(tooMany, oneMore),
     /referencias explícitas de la idea superan el límite de 500/
   );
 });
 
-test("fusionar ideas conserva referencias a entidades y aplica un límite conjunto", async () => {
+test("fusionar ideas conserva referencias a entidades y limita cada categoría por separado", async () => {
   const { mergeNarrativeIdea, MAX_NARRATIVE_IDEA_REFERENCES } =
     await import("../dist/motor-literario.js");
   const previous = baseIdea({
@@ -231,16 +221,74 @@ test("fusionar ideas conserva referencias a entidades y aplica un límite conjun
   assert.deepEqual(merged.relatedEntityIds, ["entity-a", "entity-shared", "entity-b"]);
   assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-b"]);
 
-  const atLimit = baseIdea({
+  const fullCategories = baseIdea({
     relatedEntityIds: Array.from(
-      { length: MAX_NARRATIVE_IDEA_REFERENCES - 1 },
+      { length: MAX_NARRATIVE_IDEA_REFERENCES },
       (_, index) => "entity-" + index
     ),
-    relatedIdeaIds: ["idea-last"]
+    relatedIdeaIds: Array.from(
+      { length: MAX_NARRATIVE_IDEA_REFERENCES },
+      (_, index) => "idea-" + index
+    )
   });
-  const overflow = baseIdea({ relatedIdeaIds: ["another-idea"] });
-  assert.throws(
-    () => mergeNarrativeIdea(atLimit, overflow),
-    /referencias explícitas de la idea superan el límite de 500/
+  const oneMoreEntity = baseIdea({ relatedEntityIds: ["entity-overflow"] });
+  const oneMoreIdea = baseIdea({ relatedIdeaIds: ["idea-overflow"] });
+
+  assert.equal(
+    mergeNarrativeIdea(baseIdea(), fullCategories).relatedEntityIds.length,
+    MAX_NARRATIVE_IDEA_REFERENCES
   );
+  assert.equal(
+    mergeNarrativeIdea(baseIdea(), fullCategories).relatedIdeaIds.length,
+    MAX_NARRATIVE_IDEA_REFERENCES
+  );
+  assert.throws(
+    () => mergeNarrativeIdea(fullCategories, oneMoreEntity),
+    /referencias explícitas de cada categoría superan el límite de 500/
+  );
+  assert.throws(
+    () => mergeNarrativeIdea(fullCategories, oneMoreIdea),
+    /referencias explícitas de cada categoría superan el límite de 500/
+  );
+});
+test("repetir la misma fusión de ideas es idempotente", async () => {
+  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    text: "Idea original.",
+    status: "incorporated",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 10 },
+      { status: "incorporated", reason: "writer", changedAt: 20 }
+    ],
+    relatedEntityIds: ["entity-a"],
+    relatedIdeaIds: ["idea-a"],
+    evidence: [{
+      documentId: "chapter",
+      revision: 1,
+      start: 0,
+      end: 12,
+      excerpt: "Idea original."
+    }]
+  });
+  const incoming = baseIdea({
+    text: "Idea revisada.",
+    relatedEntityIds: ["entity-b"],
+    relatedIdeaIds: ["idea-b"],
+    evidence: [{
+      documentId: "chapter",
+      revision: 2,
+      start: 0,
+      end: 14,
+      excerpt: "Idea revisada."
+    }]
+  });
+
+  const first = mergeNarrativeIdea(previous, incoming);
+  const second = mergeNarrativeIdea(first, incoming);
+
+  assert.deepEqual(second, first);
+  assert.equal(second.statusHistory.length, 3);
+  assert.deepEqual(second.relatedEntityIds, ["entity-a", "entity-b"]);
+  assert.deepEqual(second.relatedIdeaIds, ["idea-a", "idea-b"]);
+  assert.equal(second.evidence.length, 2);
 });

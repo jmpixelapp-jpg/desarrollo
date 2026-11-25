@@ -6,10 +6,10 @@ const projectId = "complete-idea-graph";
 const store = {
   documents: new Map(),
   ideas: [
-    { projectId, id:"origin", text:"Idea origin", status:"IDEA", originDocumentId:"chapter",
+    { projectId, id:"origin", text:"La luz revela la memoria del espejo", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["bridge"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
-    { projectId, id:"bridge", text:"Idea bridge", status:"IDEA", originDocumentId:"chapter",
+    { projectId, id:"bridge", text:"El espejo conserva la memoria y la luz", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
@@ -41,6 +41,12 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
     assert.equal(result.ideaGraph.catalogScope,"project");
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
+    assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount,4);
+    assert.equal(result.ideaGraph.lexicalResonances.candidatePairCount,1);
+    assert.deepEqual(
+      result.ideaGraph.lexicalResonances.resonances[0].sharedTerms,
+      ["espejo","luz","memoria"]
+    );
     assert.equal(result.ideaGraph.referenceCount,5);
     assert.equal(result.ideaGraph.includedReferenceCount,4);
     assert.equal(result.ideaGraph.notIncludedReferenceCount,1);

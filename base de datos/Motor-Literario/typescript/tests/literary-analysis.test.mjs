@@ -413,3 +413,104 @@ test("compara atributos entre capítulos solo con referencias temporales explíc
   assert.equal(result.characterAttributeEvolution.staleAssertionCount, 1);
   assert.equal(result.characterAttributeEvolution.outOfScopeAssertionCount, 2);
 });
+
+test("detecta dependencias candidatas con conectores causales explícitos y evidencia de dos eventos", () => {
+  const text = "La tormenta provocó el derrumbe. El derrumbe ocurrió porque la tormenta llegó.";
+  const evidence = (phrase, occurrence = 0) => {
+    let start = -1;
+    let cursor = 0;
+    for (let index = 0; index <= occurrence; index++) {
+      start = text.indexOf(phrase, cursor);
+      if (start < 0) throw new Error("No se encontró evidencia: " + phrase);
+      cursor = start + phrase.length;
+    }
+    return {
+      documentId: "chapter-one",
+      revision: 1,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    };
+  };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownEvents: [
+      {
+        eventId: "storm",
+        label: "La tormenta",
+        participants: [],
+        evidence: [evidence("La tormenta"), evidence("la tormenta", 1)]
+      },
+      {
+        eventId: "collapse",
+        label: "El derrumbe",
+        participants: [],
+        evidence: [evidence("el derrumbe"), evidence("El derrumbe", 1)]
+      }
+    ]
+  });
+
+  assert.equal(result.eventDependencyAnalysis.evidenceAnchorCount, 4);
+  assert.equal(result.eventDependencyAnalysis.candidateCount, 2);
+  assert.deepEqual(result.eventDependencyAnalysis.candidates.map(item => item.connector), [
+    "provocó", "porque"
+  ]);
+  assert.deepEqual(result.eventDependencyAnalysis.candidates.map(item => item.direction), [
+    "cause-before-consequence", "consequence-before-cause"
+  ]);
+  assert.deepEqual(result.eventDependencyAnalysis.candidates.map(item => [
+    item.causeEventId, item.consequenceEventId
+  ]), [
+    ["storm", "collapse"], ["storm", "collapse"]
+  ]);
+  assert.ok(result.eventDependencyAnalysis.candidates.every(item =>
+    item.status === "candidate-needs-review" &&
+    item.sentenceOccurrence.end > item.sentenceOccurrence.start &&
+    item.connectorOccurrence.end > item.connectorOccurrence.start
+  ));
+});
+
+test("no infiere dependencias cuando no hay conector causal o la evidencia está obsoleta", () => {
+  const text = "La tormenta precedió el derrumbe.";
+  const startStorm = text.indexOf("La tormenta");
+  const startCollapse = text.indexOf("el derrumbe");
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownEvents: [
+      {
+        eventId: "storm",
+        label: "La tormenta",
+        participants: [],
+        evidence: [{
+          documentId: "chapter-one",
+          revision: 1,
+          start: startStorm,
+          end: startStorm + "La tormenta".length,
+          excerpt: "La tormenta"
+        }]
+      },
+      {
+        eventId: "collapse",
+        label: "El derrumbe",
+        participants: [],
+        evidence: [{
+          documentId: "chapter-one",
+          revision: 1,
+          start: startCollapse,
+          end: startCollapse + "el derrumbe".length,
+          excerpt: "el derrumbe",
+          status: "stale"
+        }]
+      }
+    ]
+  });
+
+  assert.equal(result.eventDependencyAnalysis.candidateCount, 0);
+  assert.deepEqual(result.eventDependencyAnalysis.candidates, []);
+});

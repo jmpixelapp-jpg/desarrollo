@@ -432,19 +432,18 @@ function validatePersonalIdeaLibraryPage(
 
   const items = candidate.items as PersonalIdeaLibraryEntry[];
   const archiveKeys = new Set<string>();
+  let previousEntry: PersonalIdeaLibraryEntry | undefined;
   for (const entry of items) {
     if (!isValidPersonalIdeaEntry(entry, writerId)) {
       throw new Error("Violación de aislamiento: una página contiene ideas de otro escritor o entradas malformadas.");
     }
-    if (items.length > 0) {
-      const previous = items[items.length - 1]!;
-      if (comparePersonalIdeaLibraryCursor(
-        { sourceProjectId: previous.sourceProjectId, ideaId: previous.idea.id },
-        { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }
-      ) >= 0) {
-        throw new Error("Integridad de biblioteca: las entradas de la página no están estrictamente ordenadas.");
-      }
+    if (previousEntry && comparePersonalIdeaLibraryCursor(
+      { sourceProjectId: previousEntry.sourceProjectId, ideaId: previousEntry.idea.id },
+      { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }
+    ) >= 0) {
+      throw new Error("Integridad de biblioteca: las entradas de la página no están estrictamente ordenadas.");
     }
+    previousEntry = entry;
     const key = JSON.stringify([entry.sourceProjectId, entry.idea.id]);
     if (archiveKeys.has(key)) {
       throw new Error("Integridad de biblioteca: una página repite una idea archivada.");

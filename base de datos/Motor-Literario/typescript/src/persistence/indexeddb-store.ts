@@ -302,6 +302,13 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
       );
     }
   }
+  const totalIdeaReferences =
+    (idea.relatedEntityIds?.length ?? 0) + (idea.relatedIdeaIds?.length ?? 0);
+  if (totalIdeaReferences > MAX_NARRATIVE_IDEA_REFERENCES) {
+    throw new Error(
+      `Registro de ${label} malformado: el total de referencias supera el límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`
+    );
+  }
   if (idea.relatedIdeaIds?.includes(idea.id)) {
     throw new Error(`Registro de ${label} malformado: una idea no puede relacionarse consigo misma.`);
   }

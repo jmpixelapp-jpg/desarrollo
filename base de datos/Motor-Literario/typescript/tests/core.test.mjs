@@ -9858,13 +9858,13 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
     writerStore.publishNarrativeChange("book-a");
     await new Promise(resolve => queueMicrotask(resolve));
     assert.deepEqual(received, ["book-a"]);
-    assert.deepEqual(FakeBroadcastChannel.instances[0].sent, [{
+    assert.deepEqual(FakeBroadcastChannel.instances[1].sent, [{
       type: "motor-literario:narrative-change",
       projectId: "book-a"
     }]);
 
     unsubscribe();
-    assert.equal(FakeBroadcastChannel.instances[1].closed, true);
+    assert.equal(FakeBroadcastChannel.instances[0].closed, true);
     readerStore.publishNarrativeChange("book-b");
     await new Promise(resolve => queueMicrotask(resolve));
     assert.deepEqual(received, ["book-a"]);

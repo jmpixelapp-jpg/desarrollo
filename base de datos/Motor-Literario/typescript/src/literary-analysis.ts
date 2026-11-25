@@ -212,6 +212,18 @@ export interface LiterarySceneVoiceCategoryCoverage {
   /** Fracción entre 0 y 1 de escenas explícitas con al menos una señal de esta categoría. */
   readonly sceneShare: number;
 }
+export type LiterarySceneVoiceSequencePatternType =
+  | "stable-classification-run"
+  | "alternating-classification-run";
+export interface LiterarySceneVoiceSequencePattern {
+  readonly patternType: LiterarySceneVoiceSequencePatternType;
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  /** Clasificación explícita por escena, en orden textual. */
+  readonly classifications: readonly LiteraryVoiceSignalClassification[];
+  /** Instantáneas de las escenas que forman el patrón, incluidas sus tasas y conteos. */
+  readonly sceneSnapshots: readonly LiterarySceneVoiceSnapshot[];
+}
 export interface LiterarySceneVoiceProfile {
   readonly sceneCount: number;
   readonly totalSignals: number;
@@ -264,6 +276,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneVoiceTransitions: readonly LiterarySceneVoiceTransition[];
   /** Resumen cuantitativo de señales gramaticales a lo largo de las escenas explícitas. */
   readonly sceneVoiceProfile: LiterarySceneVoiceProfile;
+  /** Tramos estables o alternantes de clasificaciones gramaticales en escenas contiguas. */
+  readonly sceneVoiceSequences: readonly LiterarySceneVoiceSequencePattern[];
   /** Pares de personajes mencionados en las mismas escenas; no implica interacción o relación. */
   readonly characterCoMentions: readonly LiteraryCharacterCoMentionPattern[];
   readonly voiceSignals: LiteraryVoiceSignal;
@@ -827,6 +841,100 @@ function buildSceneVoiceProfile(
   };
 }
 
+function buildSceneVoiceSequences(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneVoiceSequencePattern[] {
+  const snapshots: LiterarySceneVoiceSnapshot[] = scenes.map(scene => {
+    const counts = scene.voiceSignals.counts;
+    const narrativeWordCount = scene.narrativeWordCount;
+    const ratesPer1000Words: LiteraryVoiceSignalCounts = {
+      firstPerson:narrativeWordCount > 0
+        ? roundMetric(counts.firstPerson/narrativeWordCount*1000) : 0,
+      secondPerson:narrativeWordCount > 0
+        ? roundMetric(counts.secondPerson/narrativeWordCount*1000) : 0,
+      thirdPerson:narrativeWordCount > 0
+        ? roundMetric(counts.thirdPerson/narrativeWordCount*1000) : 0
+    };
+    const totalSignals = counts.firstPerson + counts.secondPerson + counts.thirdPerson;
+    return {
+      sceneIndex:scene.sceneIndex,
+      classification:scene.voiceSignals.classification,
+      counts:{...counts},
+      totalSignals,
+      narrativeWordCount,
+      ratesPer1000Words,
+      totalRatePer1000Words:narrativeWordCount > 0
+        ? roundMetric(totalSignals/narrativeWordCount*1000) : 0
+    };
+  });
+  const isSinglePersonClassification = (
+    value: LiteraryVoiceSignalClassification
+  ): boolean => value === "first-person-signals" ||
+    value === "second-person-signals" || value === "third-person-signals";
+  const patterns: LiterarySceneVoiceSequencePattern[] = [];
+
+  // Un tramo estable requiere tres escenas consecutivas con la misma señal única.
+  let index = 0;
+  while (index < scenes.length) {
+    const classification = scenes[index]!.voiceSignals.classification;
+    if (!isSinglePersonClassification(classification)) {
+      index++;
+      continue;
+    }
+    let end = index + 1;
+    while (end < scenes.length &&
+      scenes[end]!.voiceSignals.classification === classification) end++;
+    if (end - index >= 3) {
+      patterns.push({
+        patternType:"stable-classification-run",
+        fromSceneIndex:scenes[index]!.sceneIndex,
+        toSceneIndex:scenes[end-1]!.sceneIndex,
+        classifications:scenes.slice(index,end).map(scene => scene.voiceSignals.classification),
+        sceneSnapshots:snapshots.slice(index,end)
+      });
+    }
+    index = end;
+  }
+
+  // Una alternancia exige cuatro escenas y dos clasificaciones únicas diferentes.
+  for (let start = 0; start + 3 < scenes.length;) {
+    const first = scenes[start]!.voiceSignals.classification;
+    const second = scenes[start+1]!.voiceSignals.classification;
+    if (!isSinglePersonClassification(first) ||
+        !isSinglePersonClassification(second) || first === second) {
+      start++;
+      continue;
+    }
+    // Evita publicar un subtramo si la alternancia ya comenzó en la escena previa.
+    if (start > 0 && scenes[start-1]!.voiceSignals.classification === second) {
+      start++;
+      continue;
+    }
+    let end = start + 2;
+    while (end < scenes.length) {
+      const expected = (end-start) % 2 === 0 ? first : second;
+      if (scenes[end]!.voiceSignals.classification !== expected) break;
+      end++;
+    }
+    if (end - start >= 4) {
+      patterns.push({
+        patternType:"alternating-classification-run",
+        fromSceneIndex:scenes[start]!.sceneIndex,
+        toSceneIndex:scenes[end-1]!.sceneIndex,
+        classifications:scenes.slice(start,end).map(scene => scene.voiceSignals.classification),
+        sceneSnapshots:snapshots.slice(start,end)
+      });
+      start = end;
+    } else start++;
+  }
+
+  return patterns.sort((a,b) =>
+    a.fromSceneIndex-b.fromSceneIndex ||
+    a.toSceneIndex-b.toSceneIndex ||
+    a.patternType.localeCompare(b.patternType,"en")
+  );
+}
+
 function findCharacterCoMentionPatterns(
   scenes: readonly LiteraryExplicitSceneSegment[]
 ): LiteraryCharacterCoMentionPattern[] {
@@ -1193,6 +1301,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
+  const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
@@ -1369,6 +1478,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneContinuity,
     sceneVoiceTransitions,
     sceneVoiceProfile,
+    sceneVoiceSequences,
     characterCoMentions,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
@@ -1385,6 +1495,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La continuidad compara solo escenas explícitas contiguas: las menciones literales y la evidencia por ID de acontecimiento describen cobertura textual, no presencia física, cronología ni contradicciones.",
       "Las variaciones gramaticales entre escenas comparan conteos de pronombres explícitos fuera del diálogo reconocido; no demuestran un cambio de narrador, focalización ni voz autoral.",
       "El perfil de voz agrega señales y clasificaciones por escena explícita; la cobertura indica en cuántas escenas aparece una categoría, no la identidad ni continuidad de una voz narrativa.",
+      "Los tramos estables requieren tres escenas con la misma clasificación única y las alternancias requieren cuatro escenas con dos clasificaciones únicas que se turnan; las señales mixtas o indeterminadas interrumpen los patrones y estos no identifican narradores.",
       "La co-mención agrupa nombres de personajes conocidos que aparecen en una misma escena explícita; no demuestra interacción, relación, diálogo ni presencia física compartida.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",

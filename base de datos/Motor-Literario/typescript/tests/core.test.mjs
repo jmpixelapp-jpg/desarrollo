@@ -10345,6 +10345,73 @@ test("compara variaciones de señales gramaticales entre escenas contiguas", asy
   });
 });
 
+test("detecta tramos estables y alternancias de señales gramaticales entre escenas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","Yo recuerdo.","***",
+    "ESCENA 2","Yo camino.","***",
+    "ESCENA 3","Nosotros salimos.","***",
+    "ESCENA 4","Ella mira.","***",
+    "ESCENA 5","Tú esperas.","***",
+    "ESCENA 6","Ella regresa.","***",
+    "ESCENA 7","Tú vuelves."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-voice-sequences",documentId:"chapter",revision:7,text,baseOffset:90
+  });
+
+  assert.deepEqual(
+    result.sceneVoiceSequences.map(({patternType,fromSceneIndex,toSceneIndex,classifications}) => ({
+      patternType,fromSceneIndex,toSceneIndex,classifications
+    })),
+    [
+      {
+        patternType:"stable-classification-run",fromSceneIndex:1,toSceneIndex:3,
+        classifications:["first-person-signals","first-person-signals","first-person-signals"]
+      },
+      {
+        patternType:"alternating-classification-run",fromSceneIndex:4,toSceneIndex:7,
+        classifications:[
+          "third-person-signals","second-person-signals",
+          "third-person-signals","second-person-signals"
+        ]
+      }
+    ]
+  );
+  assert.equal(result.sceneVoiceSequences[0].sceneSnapshots.length,3);
+  assert.deepEqual(
+    result.sceneVoiceSequences[1].sceneSnapshots.map(item => item.ratesPer1000Words),
+    [
+      {firstPerson:0,secondPerson:0,thirdPerson:500},
+      {firstPerson:0,secondPerson:500,thirdPerson:0},
+      {firstPerson:0,secondPerson:0,thirdPerson:500},
+      {firstPerson:0,secondPerson:500,thirdPerson:0}
+    ]
+  );
+  assert.equal(result.sceneVoiceSequences[1].sceneSnapshots[0].sceneIndex,4);
+});
+
+test("las señales mixtas e indeterminadas interrumpen patrones de voz entre escenas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","Yo vuelvo.","***",
+    "ESCENA 2","La lluvia cae.","***",
+    "ESCENA 3","Ella mira.","***",
+    "ESCENA 4","Tú esperas.","***",
+    "ESCENA 5","Ella regresa.","***",
+    "ESCENA 6","Tú vuelves."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-voice-sequence-breaks",documentId:"chapter",revision:1,text
+  });
+  assert.deepEqual(
+    result.sceneVoiceSequences.map(({patternType,fromSceneIndex,toSceneIndex}) => ({
+      patternType,fromSceneIndex,toSceneIndex
+    })),
+    [{patternType:"alternating-classification-run",fromSceneIndex:3,toSceneIndex:6}]
+  );
+});
+
 test("compara señales literales entre escenas explícitas contiguas sin inferir ausencias", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

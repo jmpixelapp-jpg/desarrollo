@@ -77,6 +77,12 @@ La propiedad `sceneVoiceTransitions` compara las señales `voiceSignals` de cada
 
 Las diferencias son descriptivas y dependen del léxico de pronombres explícitos y de la detección de diálogo disponible. Un cambio de categoría no acredita cambio de narrador, focalización, persona verbal ni voz autoral; tampoco una categoría estable acredita continuidad de narrador.
 
+### Secuencias de señales gramaticales entre escenas
+
+La propiedad `sceneVoiceSequences` busca dos patrones descriptivos entre escenas explícitas consecutivas. Un tramo estable requiere al menos tres escenas seguidas con la misma clasificación única (primera, segunda o tercera persona). Una alternancia requiere al menos cuatro escenas seguidas que alternen entre dos clasificaciones únicas distintas (A-B-A-B). Los tramos se informan de forma maximal, en orden textual, con índices inicial/final, secuencia de clasificaciones e instantáneas de conteos y tasas por escena.
+
+Las clasificaciones `mixed-signals` y `undetermined` interrumpen la detección; no se saltan para unir escenas distantes. Los patrones solo resumen los pronombres explícitos fuera del diálogo reconocido. No identifican narradores, no demuestran continuidad o cambio de focalización y no describen por sí solos alternancia de hablantes.
+
 ## Acontecimientos y continuidad entre escenas
 
 La API anfitriona aporta acontecimientos persistidos del proyecto activo. Una escena solo recibe un vínculo cuando existe evidencia no obsoleta del mismo documento y de la revisión exacta analizada cuyo rango UTF-16 se solapa con el contenido de la escena. Cada vínculo conserva el ID y etiqueta del acontecimiento, los rangos coincidentes y sus participantes declarados. Para cada participante se informa por separado si también aparece por nombre/alias en las menciones literales de esa escena. La falta de mención no se interpreta como ausencia ni contradicción. La evidencia de otras revisiones, otros documentos o marcada como obsoleta se descarta. El catálogo admite hasta 2.000 acontecimientos, 500 participantes y 200 evidencias por acontecimiento; cada escena devuelve como máximo 100 vínculos y 20 rangos por vínculo.

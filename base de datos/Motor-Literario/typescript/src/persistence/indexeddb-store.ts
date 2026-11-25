@@ -3419,6 +3419,9 @@ export class IndexedDbProjectStore implements ProjectStore {
           const cached = legacyIdeaCache.get(ideaId);
           if (cached) {
             try {
+              if (cached.projectId !== projectId || cached.id !== ideaId) {
+                throw new Error("Aislamiento de ideas inconsistente: una referencia resolvió a otro registro.");
+              }
               validateNarrativeIdeaRecord(cached, "idea relacionada");
               callback(cached);
             } catch (error) {
@@ -3433,7 +3436,12 @@ export class IndexedDbProjectStore implements ProjectStore {
         request.onsuccess = () => {
           try {
             const idea = request.result as NarrativeIdea | undefined;
-            if (idea !== undefined) validateNarrativeIdeaRecord(idea, "idea relacionada");
+            if (idea !== undefined) {
+              if (idea.projectId !== projectId || idea.id !== ideaId) {
+                throw new Error("Aislamiento de ideas inconsistente: una referencia resolvió a otro registro.");
+              }
+              validateNarrativeIdeaRecord(idea, "idea relacionada");
+            }
             callback(idea);
           } catch (error) {
             abortWith(error);

@@ -55,3 +55,31 @@ test("rechaza estados pendientes en tablas propiedad del motor", () => {
     (issue) => issue.code === "UNIMPLEMENTED_ENGINE_TABLE"
   ));
 });
+
+test("detecta una versión IndexedDB distinta entre manifiesto y adaptador", () => {
+  const copy = structuredClone(mapping);
+  copy.runtime.database_version += 1;
+  assert.ok(auditStorageImplementation(copy, runtimeSource).some(
+    (issue) => issue.code === "DATABASE_VERSION_MISMATCH"
+  ));
+});
+
+test("exige que cada almacén lógico tenga una definición física y viceversa", () => {
+  const copy = structuredClone(mapping);
+  copy.runtime.object_stores = copy.runtime.object_stores.filter(
+    (store) => store.name !== "dictionary-entry-entities"
+  );
+  assert.ok(auditStorageImplementation(copy, runtimeSource).some(
+    (issue) => issue.code === "MISSING_RUNTIME_STORE_DESCRIPTOR"
+  ));
+
+  const withOrphan = structuredClone(mapping);
+  withOrphan.runtime.object_stores.push({
+    name: "orphan-store",
+    keyPath: "id",
+    indexes: []
+  });
+  assert.ok(auditStorageImplementation(withOrphan, runtimeSource).some(
+    (issue) => issue.code === "UNMAPPED_RUNTIME_STORE_DESCRIPTOR"
+  ));
+});

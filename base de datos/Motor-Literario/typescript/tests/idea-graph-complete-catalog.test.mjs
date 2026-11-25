@@ -46,6 +46,81 @@ const store = {
   async loadEntities(project) { return this.entities.filter(item=>item.projectId===project).map(item=>structuredClone(item)); }
 };
 
+test("el grafo distingue historiales consistentes, discrepantes y desconocidos", async () => {
+  const ideas = [
+    {
+      projectId, id: "history-consistent", text: "Idea consistente",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "history-mismatch", text: "Idea con etiqueta divergente",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ]
+    },
+    {
+      projectId, id: "history-unknown", text: "Idea con historial truncado",
+      status: "incorporated", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      omittedStatusHistoryCount: 3
+    },
+    {
+      projectId, id: "history-consistent-terminal", text: "Idea descartada",
+      status: "discarded", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "writer", changedAt: 3 }
+      ]
+    }
+  ];
+  const localStore = { ...store, documents: new Map(), ideas };
+  const api = new HostEngineApi({ store: localStore });
+  api.initializeProject({
+    projectId,
+    projectName: "Book",
+    writerId: "writer-status-history-consistency"
+  });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\nEl estado actual debe concordar con el historial.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const result = await api.analyzeLiteraryDocument("chapter");
+    const byId = new Map(result.ideaGraph.nodes.map(node => [node.ideaId, node]));
+    assert.equal(byId.get("history-consistent").currentStatusHistoryConsistency, "consistent");
+    assert.equal(byId.get("history-mismatch").currentStatusHistoryConsistency, "mismatch");
+    assert.equal(byId.get("history-unknown").currentStatusHistoryConsistency, "unknown");
+    assert.equal(byId.get("history-consistent-terminal").currentStatusHistoryConsistency, "consistent");
+    assert.deepEqual(result.ideaGraph.statusHistoryConsistency, {
+      consistentIdeaCount: 2,
+      mismatchIdeaCount: 1,
+      unknownIdeaCount: 1,
+      verifiableIdeaCount: 3,
+      verificationCoverage: 0.75
+    });
+    const profileCounts = result.ideaGraph.statusProfiles.reduce((totals, profile) => ({
+      consistent: totals.consistent + profile.statusHistoryConsistentIdeaCount,
+      mismatch: totals.mismatch + profile.statusHistoryMismatchIdeaCount,
+      unknown: totals.unknown + profile.statusHistoryConsistencyUnknownIdeaCount
+    }), { consistent: 0, mismatch: 0, unknown: 0 });
+    assert.deepEqual(profileCounts, {
+      consistent: 2,
+      mismatch: 1,
+      unknown: 1
+    });
+  } finally {
+    api.dispose();
+  }
+});
+
 test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculadas", async () => {
   const api = new HostEngineApi({store});
   assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, true);

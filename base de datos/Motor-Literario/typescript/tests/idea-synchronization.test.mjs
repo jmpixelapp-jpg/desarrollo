@@ -228,7 +228,7 @@ test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS",
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-external"]
   );
-  assert.equal(store.ideaReads, 3, "la relectura confirma que el destino desapareció tras el CAS");
+  assert.equal(store.ideaReads, 2, "el reintento vuelve a leer el catálogo una sola vez tras el CAS");
   assert.equal(store.writes, 1);
   api.dispose();
 });

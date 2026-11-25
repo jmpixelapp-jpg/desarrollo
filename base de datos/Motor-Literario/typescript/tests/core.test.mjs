@@ -9814,7 +9814,7 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
 });
 
 
-test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libera suscripciones", () => {
+test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libera suscripciones", async () => {
   const originalBroadcastChannel = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
   class FakeBroadcastChannel {
     static instances = [];
@@ -9856,21 +9856,18 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
     assert.equal(FakeBroadcastChannel.instances[0].name, "motor-literario-local:narrative-changes:v1");
 
     writerStore.publishNarrativeChange("book-a");
-    return new Promise(resolve => queueMicrotask(() => {
-      assert.deepEqual(received, ["book-a"]);
-      const sender = FakeBroadcastChannel.instances.find(channel => channel !== FakeBroadcastChannel.instances[0]);
-      assert.ok(sender);
-      assert.deepEqual(sender.sent, [{
-        type: "motor-literario:narrative-change",
-        projectId: "book-a"
-      }]);
+    await new Promise(resolve => queueMicrotask(resolve));
+    assert.deepEqual(received, ["book-a"]);
+    assert.deepEqual(FakeBroadcastChannel.instances[0].sent, [{
+      type: "motor-literario:narrative-change",
+      projectId: "book-a"
+    }]);
 
-      unsubscribe();
-      assert.equal(FakeBroadcastChannel.instances[0].closed, true);
-      readerStore.publishNarrativeChange("book-b");
-      assert.deepEqual(received, ["book-a"]);
-      resolve();
-    }));
+    unsubscribe();
+    assert.equal(FakeBroadcastChannel.instances[1].closed, true);
+    readerStore.publishNarrativeChange("book-b");
+    await new Promise(resolve => queueMicrotask(resolve));
+    assert.deepEqual(received, ["book-a"]);
   } finally {
     if (originalBroadcastChannel) {
       Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);

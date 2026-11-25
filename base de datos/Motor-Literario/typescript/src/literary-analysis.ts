@@ -717,6 +717,15 @@ export interface LiteraryCharacterDocumentedDecision {
     | "no-event-in-evidenced-scene"
     | "no-current-scene-evidence"
     | "unknown-due-to-truncation";
+  /** Acontecimientos de la decisión con evidencia activa del mismo ID en otros documentos. */
+  readonly crossDocumentEventIds: readonly string[];
+  /** Evidencias activas del acontecimiento encontradas fuera del documento analizado. */
+  readonly crossDocumentEventEvidenceCount: number;
+  readonly crossDocumentContinuityStatus:
+    | "cross-document-evidence"
+    | "single-document-only"
+    | "unknown-due-to-incomplete-catalog"
+    | "not-applicable";
   /** Cambios de estado registrados explícitamente con reason=writer. */
   readonly writerDecisionCount: number;
 }
@@ -4506,6 +4515,22 @@ function buildCharacterNarrativeTrajectories(
           : sceneEvidenceTruncated
             ? "unknown-due-to-truncation" as const
             : "no-event-in-evidenced-scene" as const;
+      const crossDocumentEventEvidence = projectEvents
+        .filter(event => materializedEventIds.includes(event.eventId))
+        .flatMap(event => event.evidence.filter(item =>
+          item.status !== "stale" && item.documentId !== documentId
+        ));
+      const crossDocumentEventIds = [...new Set(crossDocumentEventEvidence.map(item =>
+        projectEvents.find(event => event.evidence.includes(item))?.eventId
+      ).filter((eventId): eventId is string => eventId !== undefined))]
+        .sort((a,b) => a.localeCompare(b,"en"));
+      const crossDocumentContinuityStatus = materializedEventIds.length === 0
+        ? "not-applicable" as const
+        : crossDocumentEventIds.length > 0
+          ? "cross-document-evidence" as const
+          : omittedProjectEventCount > 0
+            ? "unknown-due-to-incomplete-catalog" as const
+            : "single-document-only" as const;
       const decision:LiteraryCharacterDocumentedDecision = {
         ideaId:idea.ideaId,
         text:idea.text,
@@ -4547,6 +4572,9 @@ function buildCharacterNarrativeTrajectories(
         evidencedSceneIndexes,
         materializedEventIds,
         eventMaterializationStatus,
+        crossDocumentEventIds,
+        crossDocumentEventEvidenceCount:crossDocumentEventEvidence.length,
+        crossDocumentContinuityStatus,
         writerDecisionCount:idea.writerDecisionCount
       };
       const decisions=decisionsByCharacter.get(entityId) ?? [];

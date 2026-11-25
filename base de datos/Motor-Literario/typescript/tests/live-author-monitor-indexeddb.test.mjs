@@ -186,3 +186,96 @@ test("migra IndexedDB v22 a v23 creando el almacén de checkpoints sin perder do
     await store.close();
   }
 });
+
+
+test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timestamp más reciente", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-order-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+
+  try {
+    const durable = checkpoint(projectId, documentId, 1000, {
+      sessionDurationMs: 300,
+      activeDurationMs: 180,
+      idleDurationMs: 120,
+      acceptedChanges: 5,
+      committedChanges: 5,
+      insertedCharacters: 15,
+      currentDocumentLength: 20,
+      revision: 5,
+      sequence: 5,
+      totalCommitLatencyMs: 25,
+      commitLatencies: [5, 5, 5, 5, 5]
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(durable);
+
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, 5000, {
+        revision: 4,
+        sequence: 4,
+        acceptedChanges: 99,
+        committedChanges: 99
+      })),
+      /revisión o secuencia durable anterior/
+    );
+
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(checkpoint(projectId, documentId, 6000, {
+        sessionId: durable.sessionId,
+        sessionDurationMs: 200,
+        activeDurationMs: 100,
+        idleDurationMs: 100,
+        acceptedChanges: 4,
+        committedChanges: 4,
+        insertedCharacters: 10,
+        revision: 5,
+        sequence: 5,
+        totalCommitLatencyMs: 20,
+        commitLatencies: [5, 5, 5, 5]
+      })),
+      /hace retroceder la métrica/
+    );
+
+    const preserved = await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
+    assert.deepEqual(preserved, durable);
+  } finally {
+    await store.close();
+  }
+});
+
+test("permite iniciar una nueva identidad de sesión en el mismo snapshot durable", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-new-session-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+
+  try {
+    const previous = checkpoint(projectId, documentId, 1000);
+    await store.saveLiveAuthorMonitorCheckpoint(previous);
+
+    const nextSession = checkpoint(projectId, documentId, 2000, {
+      sessionId: "new-session-" + randomUUID(),
+      sessionDurationMs: 0,
+      activeDurationMs: 0,
+      idleDurationMs: 0,
+      lastActivityAgeMs: null,
+      pauseCount: 0,
+      acceptedChanges: 0,
+      rejectedChanges: 0,
+      committedChanges: 0,
+      failedChanges: 0,
+      insertedCharacters: 0,
+      deletedCharacters: 0,
+      resynchronizations: 0,
+      lastCommitLatencyMs: 0,
+      totalCommitLatencyMs: 0,
+      commitLatencies: []
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(nextSession);
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      nextSession
+    );
+  } finally {
+    await store.close();
+  }
+});

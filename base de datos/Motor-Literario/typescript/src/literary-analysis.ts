@@ -756,6 +756,12 @@ export interface LiteraryIdeaGraphNode {
   readonly comparableStatusTimestampPairCount: number;
   /** Pares adyacentes que no pueden compararse porque falta alguna marca temporal. */
   readonly uncomparableStatusTimestampPairCount: number;
+  /** Registros iniciales visibles; mínimo si el historial fue truncado. */
+  readonly observedInitialStatusRecordCount: number;
+  /** Cambios visibles atribuidos explícitamente al escritor. */
+  readonly observedWriterStatusChangeCount: number;
+  /** Cambios visibles atribuidos explícitamente a una revisión del texto. */
+  readonly observedTextRevisionStatusChangeCount: number;
   /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
@@ -808,6 +814,12 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly comparableStatusTimestampPairCount: number;
   /** Suma de pares adyacentes sin marcas temporales suficientes para compararlos. */
   readonly uncomparableStatusTimestampPairCount: number;
+  /** Registros iniciales visibles agregados por estado actual. */
+  readonly observedInitialStatusRecordCount: number;
+  /** Cambios visibles atribuidos al escritor agregados por estado actual. */
+  readonly observedWriterStatusChangeCount: number;
+  /** Cambios visibles atribuidos a revisiones del texto agregados por estado actual. */
+  readonly observedTextRevisionStatusChangeCount: number;
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly ideasWithActiveEvidenceCount: number;
@@ -3611,6 +3623,15 @@ function buildLiteraryIdeaGraph(
       },
       0
     ),
+    observedInitialStatusRecordCount: idea.statusHistory.filter(
+      change => change.reason === "initial"
+    ).length,
+    observedWriterStatusChangeCount: idea.statusHistory.filter(
+      change => change.reason === "writer"
+    ).length,
+    observedTextRevisionStatusChangeCount: idea.statusHistory.filter(
+      change => change.reason === "text-revised"
+    ).length,
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));
@@ -3762,6 +3783,11 @@ function buildLiteraryIdeaGraph(
     observedStatusTransitionCount: number;
     statusReversalCount: number;
     nonMonotonicStatusTimestampCount: number;
+    comparableStatusTimestampPairCount: number;
+    uncomparableStatusTimestampPairCount: number;
+    observedInitialStatusRecordCount: number;
+    observedWriterStatusChangeCount: number;
+    observedTextRevisionStatusChangeCount: number;
     activeEvidenceCount: number;
     staleEvidenceCount: number;
     ideasWithActiveEvidenceCount: number;
@@ -3787,6 +3813,9 @@ function buildLiteraryIdeaGraph(
       nonMonotonicStatusTimestampCount: 0,
       comparableStatusTimestampPairCount: 0,
       uncomparableStatusTimestampPairCount: 0,
+      observedInitialStatusRecordCount: 0,
+      observedWriterStatusChangeCount: 0,
+      observedTextRevisionStatusChangeCount: 0,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 0,
@@ -3821,6 +3850,9 @@ function buildLiteraryIdeaGraph(
     totals.nonMonotonicStatusTimestampCount += node.nonMonotonicStatusTimestampCount;
     totals.comparableStatusTimestampPairCount += node.comparableStatusTimestampPairCount;
     totals.uncomparableStatusTimestampPairCount += node.uncomparableStatusTimestampPairCount;
+    totals.observedInitialStatusRecordCount += node.observedInitialStatusRecordCount;
+    totals.observedWriterStatusChangeCount += node.observedWriterStatusChangeCount;
+    totals.observedTextRevisionStatusChangeCount += node.observedTextRevisionStatusChangeCount;
     totals.activeEvidenceCount += node.activeEvidenceCount;
     totals.staleEvidenceCount += node.staleEvidenceCount;
     if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;

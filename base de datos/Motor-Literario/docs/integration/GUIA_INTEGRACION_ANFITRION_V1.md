@@ -287,11 +287,12 @@ La extracción narrativa inicial se programa al abrir/recuperar el documento y c
 
 ### Biblioteca privada de ideas
 
-- `archiveUnincorporatedIdeas()`: transferir al finalizar el libro solo las ideas cuyo estado vigente siga siendo `IDEA`.
-- `getPersonalIdeaLibrary()`: consultar la biblioteca del escritor autenticado asociado a esta instancia.
-- `getProjectFinalizationReceipt()`: consultar el recibo durable de finalización.
+- `finalizeProjectToIdeaLibrary()`: ruta recomendada para finalizar un libro. Transfiere solo las ideas cuyo estado vigente siga siendo `IDEA` y devuelve un resumen compacto con recibo durable, sin devolver ni acumular los textos transferidos.
+- `getPersonalIdeaLibraryPage(cursor, limit)`: leer el contenido por páginas con cursor estable; el límite permitido es de 1 a 200 entradas.
+- `getProjectFinalizationReceipt()`: volver a comprobar el recibo y el checksum del contenido archivado antes de dar por verificada la transferencia.
+- `archiveUnincorporatedIdeas()` y `getPersonalIdeaLibrary()`: rutas de compatibilidad que devuelven colecciones completas en memoria; no se recomiendan para libros o bibliotecas grandes.
 
-La biblioteca requiere que `writerId` se haya proporcionado al inicializar. La transferencia guarda procedencia, historial y contexto relacionado en una transacción local. Las ideas incorporadas o descartadas permanecen en el conocimiento del libro. La aplicación debe llamar al archivo solo cuando el escritor haya decidido finalizar esa obra, no en cada cierre de ventana.
+La biblioteca requiere que `writerId` se haya proporcionado al inicializar. La transferencia guarda procedencia, historial y contexto relacionado en una transacción local. Las ideas incorporadas o descartadas permanecen en el conocimiento del libro. La aplicación debe llamar a la finalización solo cuando el escritor haya decidido terminar esa obra, no en cada cierre de ventana. El recibo conserva un checksum de los IDs y un checksum incremental FNV-1a de las entradas completas; este último detecta alteraciones accidentales, pero no es una firma ni sustituye el cifrado o el control de acceso.
 
 ### Datos MLDB y configuración
 

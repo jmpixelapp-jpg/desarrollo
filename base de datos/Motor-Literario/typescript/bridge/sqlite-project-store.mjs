@@ -232,17 +232,9 @@ function validateNarrativeIdeaReferenceLimit(idea) {
         (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES)) {
       throw new Error(
         "Una idea no puede conservar más de " + MAX_NARRATIVE_IDEA_REFERENCES +
-        " vínculos explícitos en total."
+        " vínculos por categoría."
       );
     }
-  }
-  const totalReferences =
-    (idea.relatedEntityIds?.length ?? 0) + (idea.relatedIdeaIds?.length ?? 0);
-  if (totalReferences > MAX_NARRATIVE_IDEA_REFERENCES) {
-    throw new Error(
-      "Una idea no puede conservar más de " + MAX_NARRATIVE_IDEA_REFERENCES +
-      " vínculos explícitos en total."
-    );
   }
 }
 
@@ -265,14 +257,6 @@ function validateNarrativeIdea(idea, projectId, label = "idea") {
         " inválidas, duplicadas o superiores al límite de " + MAX_NARRATIVE_IDEA_REFERENCES + "."
       );
     }
-  }
-  const totalReferences =
-    (idea.relatedEntityIds?.length ?? 0) + (idea.relatedIdeaIds?.length ?? 0);
-  if (totalReferences > MAX_NARRATIVE_IDEA_REFERENCES) {
-    throw new Error(
-      "Integridad narrativa: el total de referencias de " + label +
-      " supera el límite de " + MAX_NARRATIVE_IDEA_REFERENCES + "."
-    );
   }
   if (idea.relatedIdeaIds?.includes(idea.id)) throw new Error("Una idea no puede enlazarse a sí misma.");
   validateNarrativeIdeaStatusHistory(idea);

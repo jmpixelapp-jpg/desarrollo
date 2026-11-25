@@ -3272,7 +3272,7 @@ export class HostEngineApi {
         }
         if (!summary.alreadyFinalized && summary.archivedCount > 0) {
           try { this.onPersonalIdeaLibraryChanged?.(writerId); } catch (error) {
-            this.onKnowledgeError?.(error);
+            try { this.onKnowledgeError?.(error); } catch { /* La transferencia ya quedó confirmada. */ }
           }
         }
         return { ...summary };

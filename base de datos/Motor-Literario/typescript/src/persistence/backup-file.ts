@@ -1,8 +1,14 @@
-import type { IndexedDbDatabaseBackup } from "./indexeddb-store";
-
 /** Construye un Blob JSON descargable sin modificar ni filtrar el respaldo. */
-export function createIndexedDbBackupBlob(backup: IndexedDbDatabaseBackup): Blob {
-  const serialized = JSON.stringify(backup, null, 2);
+export function createIndexedDbBackupBlob(backup: unknown): Blob {
+  if (!backup || typeof backup !== "object" || Array.isArray(backup)) {
+    throw new Error("El respaldo IndexedDB debe ser un objeto JSON.");
+  }
+  let serialized: string | undefined;
+  try {
+    serialized = JSON.stringify(backup, null, 2);
+  } catch {
+    throw new Error("No se pudo serializar el respaldo IndexedDB como JSON.");
+  }
   if (typeof serialized !== "string") {
     throw new Error("No se pudo serializar el respaldo IndexedDB como JSON.");
   }
@@ -47,7 +53,7 @@ export async function readIndexedDbBackupFile(
 
 /** Descarga un respaldo completo en el navegador sin enviarlo a ningún servicio. */
 export function downloadIndexedDbBackupFile(
-  backup: IndexedDbDatabaseBackup,
+  backup: unknown,
   filename = `motor-literario-${new Date().toISOString().replace(/[:.]/gu, "-")}.json`
 ): void {
   const safeFilename = filename.trim();

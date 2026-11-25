@@ -1007,3 +1007,68 @@ test("la biblioteca personal reúne varios libros del mismo escritor sin mezclar
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("SQLite rechaza un recibo de finalización con checksum alterado", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-invalid-finalization-receipt-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const store = await SqliteProjectStore.open(databasePath);
+  const writerId = "writer-invalid-receipt";
+  const projectId = "project-invalid-receipt";
+  try {
+    store.put("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"], {
+      writerId,
+      sourceProjectId: projectId,
+      receiptId: "finalization-v1",
+      sourceProjectName: "Libro alterado",
+      finalizedAt: 10,
+      archivedIdeaIds: ["idea-1"],
+      archiveChecksum: "fnv1a64:0000000000000000"
+    });
+    assert.throws(
+      () => store.loadProjectFinalizationReceipt(writerId, projectId),
+      /checksum inválidos/
+    );
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("SQLite aplica orden determinista por unidades de código a los IDs del recibo", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-receipt-id-order-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const store = await SqliteProjectStore.open(databasePath);
+  const writerId = "writer-receipt-order";
+  const projectId = "project-receipt-order";
+  const checksum = ids => {
+    const serialized = JSON.stringify([...ids].sort());
+    let hash = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      hash ^= BigInt(serialized.charCodeAt(index));
+      hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+    }
+    return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+  };
+  try {
+    const receipt = {
+      writerId, sourceProjectId: projectId, receiptId: "finalization-v1",
+      sourceProjectName: "Libro de IDs", finalizedAt: 10,
+      archivedIdeaIds: ["A", "a"], archiveChecksum: checksum(["A", "a"])
+    };
+    store.put("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"], receipt);
+    assert.deepEqual(
+      store.loadProjectFinalizationReceipt(writerId, projectId).archivedIdeaIds,
+      ["A", "a"]
+    );
+    receipt.archivedIdeaIds = ["a", "A"];
+    store.put("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"], receipt);
+    assert.throws(
+      () => store.loadProjectFinalizationReceipt(writerId, projectId),
+      /checksum inválidos/
+    );
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

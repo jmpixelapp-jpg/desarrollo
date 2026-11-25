@@ -33,7 +33,13 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Type-check
         run: npm run typecheck
-      - name: Build and run automated tests
-        run: npm test
+      - name: Build TypeScript distribution
+        run: npm run build
+      - name: Run focused finalization and library regression tests
+        run: |
+          node --test tests/finalization-receipt-library-consistency.test.mjs
+          node --test --test-name-pattern='SQLite rechaza un recibo de finalización con checksum alterado|SQLite aplica orden determinista por unidades de código' tests/bridge.test.mjs
+      - name: Run complete automated test suite
+        run: npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs
       - name: Run live-edit benchmark
         run: npm run bench

@@ -4535,6 +4535,7 @@ function buildCharacterNarrativeTrajectories(
       // Resolver escenas contra la evidencia íntegra, no solo contra las 20 muestras públicas.
       const matchingRelationshipRecords=(relationshipRecordsByCharacter.get(character.entityId) ?? [])
         .filter(relation => relation.evidence.some(evidence =>
+          evidence.status!=="stale" &&
           evidence.documentId===documentId &&
           evidence.revision===revision &&
           evidence.end>scene.contentRange.start &&
@@ -4543,6 +4544,7 @@ function buildCharacterNarrativeTrajectories(
       const relationshipIds=matchingRelationshipRecords.map(item => item.relationId);
       const matchingDecisionRecords=(decisionRecordsByCharacter.get(character.entityId) ?? [])
         .filter(idea => idea.evidence.some(evidence =>
+          evidence.status!=="stale" &&
           evidence.documentId===documentId &&
           evidence.revision===revision &&
           evidence.end>scene.contentRange.start &&

@@ -10,7 +10,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const MAPPING_PATH = resolve(SCRIPT_DIR, "../../MLDB/storage_mapping_v0.4.1.json");
+const MAPPING_PATH = resolve(SCRIPT_DIR, "../../MLDB/storage_mapping_v0.4.2.json");
 const RUNTIME_PATH = resolve(SCRIPT_DIR, "../src/persistence/indexeddb-store.ts");
 
 export function auditStorageImplementation(mapping, runtimeSource) {

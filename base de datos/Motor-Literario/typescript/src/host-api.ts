@@ -3661,6 +3661,9 @@ export class HostEngineApi {
       evidenceBasedCharacterRelations: Boolean(this.store.saveRelation && this.store.loadRelations),
       explicitEventCapture: Boolean(this.store.saveEvent && this.store.loadEvents),
       explicitEventChronology: Boolean(this.store.saveEvent && this.store.loadEvents),
+      eventLifecycleHistory: Boolean(
+        this.store.loadEventLifecycles && this.store.saveEventAndAppendLifecycleIfUnchanged
+      ),
       authorMarkedIdeaCapture: Boolean(this.store.saveIdea && this.store.loadIdeas),
       explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.saveEntity && this.store.loadEntities),
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),

@@ -491,6 +491,7 @@ async function processRequest(request) {
   }
   const shutdownRequest = request.method === "bridge.shutdown";
   activeIds.add(idKey);
+  let shutdownDispatched = false;
 
   try {
     if (shutdownRequest) {
@@ -504,17 +505,24 @@ async function processRequest(request) {
     let result;
     try {
       result = await operation;
+      if (shutdownRequest) shutdownDispatched = true;
     } finally {
       if (!shutdownRequest) activeDispatches.delete(operation);
     }
     await send({ jsonrpc: "2.0", id: request.id, result: result === undefined ? null : result });
   } catch (error) {
+    if (shutdownRequest && !shutdownDispatched) {
+      // Un fallo de vaciado no debe cerrar una base que aún puede tener trabajo
+      // pendiente. Reabre la admisión y el sondeo para que el anfitrión reintente.
+      shuttingDown = false;
+      try { startKnowledgeSync(); } catch (restartError) { writeError(restartError); }
+    }
     const payload = errorPayload(error);
     if (Number.isInteger(error?.code)) payload.code = error.code;
     await send({ jsonrpc: "2.0", id: request.id, error: payload });
   } finally {
     activeIds.delete(idKey);
-    if (shutdownRequest) {
+    if (shutdownRequest && shutdownDispatched) {
       store.close();
       process.stdin.pause();
       process.exitCode = 0;

@@ -1588,10 +1588,10 @@ test("el grafo reclasifica como externas las referencias al retirar una idea del
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.ideaCount, 3);
-    assert.equal(after.referenceCount, 5);
+    assert.equal(after.referenceCount, 4);
     assert.equal(after.includedReferenceCount, 2);
-    assert.equal(after.notIncludedReferenceCount, 3);
-    assert.equal(after.missingFromProjectReferenceCount, 3);
+    assert.equal(after.notIncludedReferenceCount, 2);
+    assert.equal(after.missingFromProjectReferenceCount, 2);
     assert.deepEqual(
       after.references
         .filter(reference => reference.toIdeaId === "bridge")

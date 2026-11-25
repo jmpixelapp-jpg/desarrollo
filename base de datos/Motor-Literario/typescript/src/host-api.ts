@@ -559,6 +559,7 @@ export class HostEngineApi {
   private readonly engine: LiteraryEngine;
   private project?: ProjectIdentity;
   private readonly store: HostEngineOptions["store"];
+  private unsubscribeNarrativeChanges?: () => void;
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
   private knowledgeTail: Promise<void> = Promise.resolve();
@@ -3224,7 +3225,15 @@ export class HostEngineApi {
       throw new Error("La identidad del proyecto o del escritor es inválida.");
     }
     this.engine.initializeProject(identity);
+    this.unsubscribeNarrativeChanges?.();
     this.project = Object.freeze({ ...identity });
+    const subscribe = this.store.subscribeNarrativeChanges;
+    this.unsubscribeNarrativeChanges = subscribe?.call(this.store, projectId => {
+      if (this.project?.projectId !== projectId) return;
+      void this.invalidateNarrativeKnowledgeFromExternalChange().catch(error => {
+        this.onKnowledgeError?.(error);
+      });
+    });
   }
 
   /** La identidad del escritor nunca se recibe como argumento de una consulta de biblioteca. */

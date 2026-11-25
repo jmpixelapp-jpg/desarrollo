@@ -188,7 +188,9 @@ function validateNarrativeIdea(idea, projectId, label = "idea") {
       const item = idea.statusHistory[i];
       if (!item || !["IDEA", "incorporated", "discarded"].includes(item.status) ||
           !["initial", "writer", "text-revised"].includes(item.reason) ||
-          (i === 0 ? item.reason !== "initial" : item.reason === "initial") ||
+          (item.reason === "text-revised" && item.status !== "IDEA") ||
+          (i === 0 ? item.reason !== "initial" : item.reason === "initial" ||
+            item.status === idea.statusHistory[i - 1]?.status) ||
           (item.changedAt !== undefined &&
             (!Number.isFinite(item.changedAt) || item.changedAt < 0 ||
               (previousTime !== undefined && item.changedAt < previousTime)))) {

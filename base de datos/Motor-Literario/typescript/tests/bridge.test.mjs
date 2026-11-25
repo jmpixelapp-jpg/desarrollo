@@ -216,11 +216,7 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     assert.equal(archived[0].category, "Libro ideas");
     assert.equal(archived[0].context.version, 1);
 
-    const library = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "getPersonalIdeaLibrary",
-      args: []
-    });
+    const library = await client.getPersonalIdeaLibrary("idea-project");
     assert.equal(library.length, 1);
     assert.equal(library[0].idea.text, "La campana debe sonar antes del amanecer.");
 
@@ -259,7 +255,7 @@ test("BridgeClient ofrece operaciones tipadas para consultar, enlazar y cambiar 
         "El personaje Ana llegó al pueblo.",
         "IDEA: La ciudad celebra la llegada del verano.",
         "IDEA: El reloj se detiene a medianoche."
-      ].join("\\n"),
+      ].join("\n"),
       revision: 0,
       sequence: 0
     });
@@ -268,7 +264,8 @@ test("BridgeClient ofrece operaciones tipadas para consultar, enlazar y cambiar 
     const ideas = await client.getNarrativeIdeas(projectId);
     const entities = await client.getNarrativeEntities(projectId);
     assert.equal(ideas.length, 2);
-    const [first, second] = ideas;
+    const first = ideas.find(idea => idea.text.startsWith("La ciudad celebra"));
+    const second = ideas.find(idea => idea.text.startsWith("El reloj se detiene"));
     const ana = entities.find(entity => entity.canonicalName === "Ana");
     assert.ok(ana);
 

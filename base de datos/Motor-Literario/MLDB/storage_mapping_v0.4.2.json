@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 12,
+  "mapping_version": 13,
   "schema_version": "0.4.2",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 22,
+    "database_version": 23,
     "object_stores": [
       {
         "name": "project-settings",
@@ -161,6 +161,11 @@
             false
           ]
         ]
+      },
+      {
+        "name": "writer-library-versions",
+        "keyPath": "writerId",
+        "indexes": []
       },
       {
         "name": "narrative-assertions",

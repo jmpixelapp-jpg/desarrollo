@@ -3755,6 +3755,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       db, ASSERTIONS, assertion, [assertion.entityId],
       "No se pudo guardar la afirmación narrativa."
     );
+    this.publishNarrativeChange(assertion.projectId);
   }
 
   async saveAssertionIfUnchanged(
@@ -3768,6 +3769,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       db, ASSERTIONS, assertion, [assertion.entityId],
       "No se pudo guardar la afirmación narrativa.", expectedCurrent, true
     );
+    this.publishNarrativeChange(assertion.projectId);
   }
 
   async loadAssertions(projectId: string): Promise<readonly NarrativeAssertion[]> {
@@ -3787,6 +3789,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     validateNarrativeEventRecord(event, "acontecimiento");
     const db = await this.open();
     await saveNarrativeEventWithReferences(db, event);
+    this.publishNarrativeChange(event.projectId);
   }
 
   async saveEventIfUnchanged(event: NarrativeEvent, expectedCurrent?: NarrativeEvent): Promise<void> {
@@ -3794,6 +3797,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     if (expectedCurrent !== undefined) validateNarrativeEventRecord(expectedCurrent, "acontecimiento anterior");
     const db = await this.open();
     await saveNarrativeEventWithReferences(db, event, expectedCurrent, true);
+    this.publishNarrativeChange(event.projectId);
   }
 
   async loadEvents(projectId: string): Promise<readonly NarrativeEvent[]> {
@@ -3861,6 +3865,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     validateNarrativeIdeaRecord(idea, "idea narrativa");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea);
+    this.publishNarrativeChange(idea.projectId);
   }
 
   async saveIdeaIfUnchanged(idea: NarrativeIdea, expectedCurrent?: NarrativeIdea): Promise<void> {
@@ -3868,6 +3873,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     if (expectedCurrent !== undefined) validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
+    this.publishNarrativeChange(idea.projectId);
   }
 
   /**
@@ -3883,6 +3889,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
+    this.publishNarrativeChange(idea.projectId);
   }
 
   async loadIdeas(projectId: string): Promise<readonly NarrativeIdea[]> {
@@ -3903,6 +3910,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       db, RELATIONS, relation, [relation.fromEntityId, relation.toEntityId],
       "No se pudo guardar la relación narrativa."
     );
+    this.publishNarrativeChange(relation.projectId);
   }
 
   async saveRelationIfUnchanged(
@@ -3916,6 +3924,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       db, RELATIONS, relation, [relation.fromEntityId, relation.toEntityId],
       "No se pudo guardar la relación narrativa.", expectedCurrent, true
     );
+    this.publishNarrativeChange(relation.projectId);
   }
 
   async loadRelations(projectId: string): Promise<readonly NarrativeRelation[]> {
@@ -3933,6 +3942,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     validateNarrativeEntityRecord(entity, "entidad narrativa");
     const db = await this.open();
     await saveNarrativeEntityRecord(db, entity);
+    this.publishNarrativeChange(entity.projectId);
   }
 
   async saveEntityIfUnchanged(entity: NarrativeEntity, expectedCurrent?: NarrativeEntity): Promise<void> {
@@ -3940,6 +3950,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     if (expectedCurrent !== undefined) validateNarrativeEntityRecord(expectedCurrent, "entidad anterior");
     const db = await this.open();
     await saveNarrativeEntityRecord(db, entity, expectedCurrent, true);
+    this.publishNarrativeChange(entity.projectId);
   }
 
   async loadEntities(projectId: string): Promise<readonly NarrativeEntity[]> {

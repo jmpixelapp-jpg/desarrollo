@@ -255,7 +255,26 @@ test("BridgeClient ofrece operaciones tipadas para consultar, enlazar y cambiar 
     const first = ideas.find(idea => idea.text.startsWith("La ciudad celebra"));
     const second = ideas.find(idea => idea.text.startsWith("El reloj se detiene"));
     const ana = entities.find(entity => entity.canonicalName === "Ana");
+    assert.ok(first);
+    assert.ok(second);
     assert.ok(ana);
+
+    const aliasedAna = await client.addNarrativeEntityAlias(projectId, ana.id, "Anita");
+    assert.ok(aliasedAna.aliases.includes("Anita"));
+    assert.equal(await client.resolveNarrativeEntityId(projectId, ana.id), ana.id);
+    assert.deepEqual(await client.getNarrativeEntityIdentityCandidates(projectId), []);
+    assert.deepEqual(await client.getNarrativeRelations(projectId), []);
+    assert.deepEqual(await client.getNarrativeAssertions(projectId), []);
+    assert.deepEqual(await client.getNarrativeEntityHistory(projectId, ana.id), []);
+
+    const extracted = await client.extractNarrativeKnowledge(
+      projectId, "chapter-extra", 1, "El personaje Bruno llegó al puerto."
+    );
+    const bruno = extracted.find(entity => entity.canonicalName === "Bruno");
+    assert.ok(bruno);
+    const mergedAna = await client.mergeNarrativeEntities(projectId, ana.id, bruno.id);
+    assert.equal(mergedAna.id, ana.id);
+    assert.equal(await client.resolveNarrativeEntityId(projectId, bruno.id), ana.id);
 
     const entityLinked = await client.setNarrativeIdeaEntityLink(
       projectId, first.id, ana.id, true
@@ -278,6 +297,28 @@ test("BridgeClient ofrece operaciones tipadas para consultar, enlazar y cambiar 
 
     const reloaded = await client.getNarrativeIdeas(projectId);
     assert.deepEqual(reloaded.find(item => item.id === first.id), incorporated);
+
+    const eventEntities = await client.getNarrativeEntities(projectId);
+    assert.ok(eventEntities.some(entity => entity.id === ana.id));
+    await client.extractNarrativeKnowledge(
+      projectId, "chapter-event", 1, "ACONTECIMIENTO: Ana llegó viva a la ciudad."
+    );
+    const events = await client.getNarrativeEvents(projectId);
+    assert.equal(events.length, 1);
+    const updatedEvent = await client.updateNarrativeEvent(projectId, {
+      eventId: events[0].id,
+      label: "Ana llegó viva a la ciudad amurallada.",
+      changedBy: "writer-bridge-idea-client"
+    });
+    assert.equal(updatedEvent.label, "Ana llegó viva a la ciudad amurallada.");
+    assert.equal((await client.getEventLifecycleHistory(projectId, updatedEvent.id)).length, 1);
+    assert.equal((await client.getNarrativeTimeline(projectId)).length, 1);
+    assert.deepEqual(await client.getNarrativeContradictions(projectId), []);
+
+    const analysis = await client.analyzeLiteraryDocument(projectId, "chapter-1");
+    assert.equal(analysis.projectId, projectId);
+    assert.equal(analysis.documentId, "chapter-1");
+    await client.refreshNarrativeKnowledge(projectId);
 
     const exited = waitForExit(child);
     await client.shutdown();

@@ -9,10 +9,14 @@
     "build": "tsc --noEmit && vite build",
     "test": "npm run build && npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs",
     "bench": "npm run build && node bench/live-edit-benchmark.mjs",
-    "validate:schema": "node scripts/validate-mldb-schema.mjs && node scripts/audit-storage-implementation.mjs"
+    "validate:schema": "node scripts/validate-mldb-schema.mjs && node scripts/audit-storage-implementation.mjs",
+    "bridge": "npm run build && node bridge/stdio-server.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
     "vite": "^7.1.12"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

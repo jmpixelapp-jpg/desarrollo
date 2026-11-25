@@ -222,23 +222,24 @@ test("un historial truncado conserva métricas observadas pero no certifica su c
 test("el historial completo informa divergencias y contabiliza solo cambios de estado efectivos", () => {
   const graph = analyze([{
     ...idea("history"),
-    status: "incorporated",
+    status: "discarded",
     writerDecisionCount: 2,
     statusHistory: [
       { status: "IDEA", reason: "initial", changedAt: 50 },
+      { status: "IDEA", reason: "initial", changedAt: 50 },
       { status: "incorporated", reason: "writer", changedAt: 60 },
-      { status: "IDEA", reason: "text-revised", changedAt: 55 },
-      { status: "discarded", reason: "writer", changedAt: 70 }
+      { status: "discarded", reason: "text-revised", changedAt: 55 },
+      { status: "incorporated", reason: "writer", changedAt: 70 }
     ]
   }]);
   const node = graph.nodes[0];
 
   assert.equal(node.observedStatusTransitionCount, 3);
   assert.equal(node.statusReversalCount, 1);
-  assert.equal(node.observedInitialStatusRecordCount, 1);
+  assert.equal(node.observedInitialStatusRecordCount, 2);
   assert.equal(node.observedWriterStatusChangeCount, 2);
   assert.equal(node.observedTextRevisionStatusChangeCount, 1);
-  assert.equal(node.comparableStatusTimestampPairCount, 3);
+  assert.equal(node.comparableStatusTimestampPairCount, 4);
   assert.equal(node.uncomparableStatusTimestampPairCount, 0);
   assert.equal(node.nonMonotonicStatusTimestampCount, 1);
   assert.equal(node.currentStatusHistoryConsistency, "mismatch");

@@ -2,8 +2,8 @@
 
 **Estado:** contrato vigente para integración TypeScript/JavaScript  
 **Versión de API:** `0.1.0` (`MOTOR_LITERARIO_API_VERSION`)  
-**Esquema lógico:** MLDB `0.4.1`  
-**Persistencia incluida:** IndexedDB `motor-literario-local`, versión `21`  
+**Esquema lógico:** MLDB `0.4.2`  
+**Persistencia incluida:** IndexedDB `motor-literario-local`, versión `22`  
 **Punto de entrada público:** `typescript/src/index.ts`
 
 Esta guía describe cómo conectar el Motor Literario con el programa que crea los libros, administra usuarios y contiene el editor. La aplicación anfitriona conserva la propiedad de los proyectos, documentos y texto original. El motor recibe su identidad y los cambios del editor; devuelve confirmaciones, diagnósticos y conocimiento estructurado. Nunca reescribe el texto del anfitrión por iniciativa propia.

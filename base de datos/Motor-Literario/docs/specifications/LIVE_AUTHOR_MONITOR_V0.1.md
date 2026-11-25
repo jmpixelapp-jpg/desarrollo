@@ -255,3 +255,7 @@ Las pruebas `live-author-monitor-textarea-source.test.mjs`, `live-author-monitor
 ## 12. Validación CI aislada del monitor
 
 El workflow `.github/workflows/live-author-monitor.yml` construye el bundle de runtime con Vite y ejecuta exclusivamente las pruebas `tests/live-author-monitor*.test.mjs`. Esta validación separada permite verificar el monitor y su integración con el editor aunque una comprobación de tipos de otro módulo del motor interrumpa el workflow general. No reemplaza el chequeo TypeScript estricto ni la suite completa: ambos deben volver a quedar verdes antes de declarar validación global.
+
+**Ejecución aislada del 25 de noviembre de 2026:** el bundle Vite y las pruebas específicas del monitor finalizaron correctamente: **48 aprobadas, 0 fallidas y 0 omitidas**. [Ejecución CI 45715928874](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45715928874). Esta ejecución cubre el montaje directo del textarea, la cola FIFO, los reintentos automáticos y la resincronización durable.
+
+**Estado de la CI general:** sigue bloqueada antes de ejecutar la suite por un error de tipos preexistente en `typescript/src/literary-analysis.ts` relacionado con la propiedad obligatoria `temporalConsistency` de `LiteraryCharacterCausalRelation`. Ese archivo no forma parte de este componente y no se modificó. La validación aislada no sustituye el chequeo estricto ni la suite completa.

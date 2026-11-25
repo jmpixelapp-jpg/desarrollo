@@ -848,3 +848,43 @@ test("el límite léxico prioriza frecuencia antes del orden alfabético", async
     api.dispose();
   }
 });
+
+
+test("la caché de resonancia léxica no expone referencias mutables", async () => {
+  const ideas = ["memoria espejo destino", "memoria espejo destino"].map((text, index) => ({
+    projectId,
+    id: "lexical-cache-" + index,
+    text,
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds: [],
+    relatedEntityIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  }));
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-cache" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa caché debe aislar sus resultados.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const first = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.deepEqual(first.resonances[0].sharedTerms, ["destino", "espejo", "memoria"]);
+    first.resonances[0].sharedTerms.push("alteracion externa");
+    first.resonances[0].leftIdeaId = "mutated";
+    first.resonances.push({ leftIdeaId: "injected" });
+
+    const second = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(second.resonances.length, 1);
+    assert.equal(second.resonances[0].leftIdeaId, "lexical-cache-0");
+    assert.deepEqual(second.resonances[0].sharedTerms, ["destino", "espejo", "memoria"]);
+  } finally {
+    api.dispose();
+  }
+});

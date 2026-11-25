@@ -6,7 +6,7 @@
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 14,
+    "database_version": 15,
     "object_stores": [
       {
         "name": "project-settings",
@@ -226,6 +226,66 @@
               "normalizedForm"
             ],
             true
+          ]
+        ]
+      },
+      {
+        "name": "language-profiles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-language",
+            [
+              "projectId",
+              "languageIdentifier"
+            ],
+            false
+          ],
+          [
+            "by-project-active",
+            [
+              "projectId",
+              "isActive"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "language-resource-refs",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-profile",
+            [
+              "projectId",
+              "profileId"
+            ],
+            false
+          ],
+          [
+            "by-resource-database",
+            [
+              "projectId",
+              "resourceDatabaseId"
+            ],
+            false
           ]
         ]
       }
@@ -480,10 +540,18 @@
       "keyPrefixes": [
         "project/language-profiles/"
       ],
-      "representation": "archive",
-      "contract": "Pendiente: perfil lingüístico propio por proyecto.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "representation": "record",
+      "contract": "LanguageProfile; perfil REAL o ficticio, preferencias editoriales y cobertura declarada.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "language-profiles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
     },
     {
       "table": "language_resource_refs",
@@ -492,12 +560,20 @@
         "project"
       ],
       "keyPrefixes": [
-        "project/language-resources/"
+        "project/language-resource-refs/"
       ],
-      "representation": "archive",
-      "contract": "Pendiente: referencias a diccionarios y recursos lingüísticos versionados.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "representation": "record",
+      "contract": "LanguageResourceRef; referencia local a un recurso, vinculada opcionalmente a un perfil del mismo proyecto.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "language-resource-refs"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
     },
     {
       "table": "style_profiles",

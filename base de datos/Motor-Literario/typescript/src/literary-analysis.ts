@@ -3248,8 +3248,13 @@ function buildLiteraryIdeaGraph(
   omittedIdeaCount: number,
   catalogScope: LiteraryIdeaGraphAnalysis["catalogScope"]
 ): LiteraryIdeaGraphAnalysis {
+  const compareIdeaIds = (left: string, right: string): number => {
+    const localizedOrder = left.localeCompare(right, "en");
+    if (localizedOrder !== 0) return localizedOrder;
+    return left === right ? 0 : left < right ? -1 : 1;
+  };
   const orderedIdeas = [...ideas].sort((left, right) =>
-    left.ideaId.localeCompare(right.ideaId, "en")
+    compareIdeaIds(left.ideaId, right.ideaId)
   );
   const projectCatalogComplete = catalogScope === "project" && omittedIdeaCount === 0;
   const ideaIds = new Set(orderedIdeas.map(idea => idea.ideaId));
@@ -3298,9 +3303,7 @@ function buildLiteraryIdeaGraph(
   const outgoingExternal = new Map<string, number>();
 
   for (const idea of orderedIdeas) {
-    const targets = [...idea.relatedIdeaIds].sort((left, right) =>
-      left.localeCompare(right, "en")
-    );
+    const targets = [...idea.relatedIdeaIds].sort(compareIdeaIds);
     for (const targetId of targets) {
       referenceCount++;
       const included = ideaIds.has(targetId);
@@ -3379,7 +3382,7 @@ function buildLiteraryIdeaGraph(
       if (member === ideaId) break;
     }
     if (component.length > 1) {
-      component.sort((left, right) => left.localeCompare(right, "en"));
+      component.sort(compareIdeaIds);
       cycles.push({ ideaIds: component });
     }
   };
@@ -3388,7 +3391,7 @@ function buildLiteraryIdeaGraph(
     if (!indexById.has(idea.ideaId)) visit(idea.ideaId);
   }
   cycles.sort((left, right) =>
-    left.ideaIds[0]!.localeCompare(right.ideaIds[0]!, "en")
+    compareIdeaIds(left.ideaIds[0]!, right.ideaIds[0]!)
   );
 
   // Union-find agrupa los componentes débiles en O(V + E α(V)) sin duplicar
@@ -3407,7 +3410,7 @@ function buildLiteraryIdeaGraph(
     }));
   allWeakComponents.sort((left, right) =>
     right.ideaIds.length - left.ideaIds.length ||
-    left.representativeIdeaId.localeCompare(right.representativeIdeaId, "en")
+    compareIdeaIds(left.representativeIdeaId, right.representativeIdeaId)
   );
 
   // Las listas de adyacencia están ordenadas; buscar el arco inverso por
@@ -3417,7 +3420,7 @@ function buildLiteraryIdeaGraph(
     let high = sortedTargets.length - 1;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      const comparison = sortedTargets[middle]!.localeCompare(targetId, "en");
+      const comparison = compareIdeaIds(sortedTargets[middle]!, targetId);
       if (comparison === 0) return true;
       if (comparison < 0) low = middle + 1;
       else high = middle - 1;
@@ -3427,7 +3430,7 @@ function buildLiteraryIdeaGraph(
   let reciprocalReferencePairCount = 0;
   for (const idea of orderedIdeas) {
     for (const targetId of adjacency.get(idea.ideaId) ?? []) {
-      if (idea.ideaId.localeCompare(targetId, "en") < 0 &&
+      if (compareIdeaIds(idea.ideaId, targetId) < 0 &&
           hasSortedTarget(adjacency.get(targetId) ?? [], idea.ideaId)) {
         reciprocalReferencePairCount++;
       }

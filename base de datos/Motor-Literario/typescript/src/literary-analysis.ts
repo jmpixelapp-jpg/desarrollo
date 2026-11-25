@@ -5005,6 +5005,7 @@ function isValidNarrativeIdeaStatusHistory(
   const visibleWriterDecisionCount = value.filter(
     (change: NarrativeIdeaStatusChange) => change.reason === "writer"
   ).length;
+  // El prefijo omitido contiene el estado inicial, que no cuenta como decisión del escritor.
   return value[value.length - 1]?.status === currentStatus &&
     writerDecisionCount >= visibleWriterDecisionCount &&
     writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);

@@ -83,6 +83,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   private readonly onError: ((error: LiveAuthorMonitorEditorTransactionSourceError) => void) | undefined;
   private readonly duplicateWindowSize: number;
   private readonly listeners = new Set<(change: EditorChange) => void>();
+  private readonly dispatchQueue: EditorChange[] = [];
+  private dispatching = false;
   private readonly seenTransactions = new Map<string, number>();
   private revision: number;
   private sequence: number;
@@ -226,6 +228,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.disposed = true;
     this.detachProvider();
     this.listeners.clear();
+    this.dispatchQueue.length = 0;
     this.seenTransactions.clear();
   }
 
@@ -319,15 +322,34 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       if (oldest !== undefined) this.seenTransactions.delete(oldest);
     }
 
-    for (const subscriber of [...this.listeners]) {
-      if (this.disposed || this.needsResync) break;
-      try {
-        subscriber(normalized);
-      } catch (error) {
-        this.report(error instanceof Error ? error : new Error(String(error)));
-      }
-    }
+    // Serializa la notificación. Un suscriptor puede provocar otra transacción
+    // de forma síncrona; esa transacción se encola y no adelanta a la actual
+    // para los demás suscriptores.
+    this.dispatchQueue.push(normalized);
+    this.drainDispatchQueue();
   };
+
+  private drainDispatchQueue(): void {
+    if (this.dispatching || this.disposed) return;
+    this.dispatching = true;
+    try {
+      while (this.dispatchQueue.length > 0 && !this.disposed) {
+        const change = this.dispatchQueue.shift();
+        if (!change) continue;
+        for (const subscriber of [...this.listeners]) {
+          if (this.disposed) break;
+          try {
+            subscriber(change);
+          } catch (error) {
+            this.report(error instanceof Error ? error : new Error(String(error)));
+          }
+        }
+      }
+    } finally {
+      this.dispatching = false;
+      if (this.disposed) this.dispatchQueue.length = 0;
+    }
+  }
 
   private attachProvider(): void {
     if (this.unsubscribeProvider || this.disposed || this.needsResync || this.listeners.size === 0) return;

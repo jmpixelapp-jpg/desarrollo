@@ -2,7 +2,8 @@ import type {
   ChangeAdmission,
   CommitResult,
   DocumentSnapshot,
-  EditorChange
+  EditorChange,
+  StoredLiveAuthorMonitorCheckpoint
 } from "./contracts";
 
 export type LiveAuthorActivityState = "active" | "idle" | "needs-resync";
@@ -302,6 +303,163 @@ export class LiveAuthorMonitor {
     const snapshot = this.createSnapshot(session, this.readClock(session));
     this.sessions.delete(documentId);
     return snapshot;
+  }
+
+  /**
+   * Produce un checkpoint solo cuando todas las ediciones admitidas están durables.
+   * El registro contiene métricas, identidad y secuencia; nunca incluye el manuscrito.
+   */
+  createCheckpoint(
+    documentId: string,
+    savedAt = Date.now()
+  ): StoredLiveAuthorMonitorCheckpoint | undefined {
+    if (!Number.isFinite(savedAt) || savedAt < 0) {
+      throw new RangeError("savedAt debe ser un timestamp de pared finito no negativo.");
+    }
+    const session = this.requireSession(documentId);
+    if (session.pendingTickets.size > 0 || session.needsResync ||
+        session.latestRevision !== session.durableRevision ||
+        session.latestSequence !== session.durableSequence) {
+      return undefined;
+    }
+
+    const now = this.readClock(session);
+    this.advanceTimeline(session, now);
+    const checkpoint: StoredLiveAuthorMonitorCheckpoint = {
+      version: 1,
+      projectId: session.projectId,
+      documentId: session.documentId,
+      sessionId: session.sessionId,
+      savedAt,
+      sessionDurationMs: Math.max(0, now - session.openedAt),
+      activeDurationMs: session.activeDurationMs,
+      idleDurationMs: session.idleDurationMs,
+      lastActivityAgeMs: session.lastActivityAt === undefined
+        ? null
+        : Math.max(0, now - session.lastActivityAt),
+      pauseCount: session.pauseCount,
+      acceptedChanges: session.acceptedChanges,
+      rejectedChanges: session.rejectedChanges,
+      committedChanges: session.committedChanges,
+      failedChanges: session.failedChanges,
+      insertedCharacters: session.insertedCharacters,
+      deletedCharacters: session.deletedCharacters,
+      currentDocumentLength: session.currentDocumentLength,
+      revision: session.latestRevision,
+      sequence: session.latestSequence,
+      resynchronizations: session.resynchronizations,
+      lastCommitLatencyMs: session.lastCommitLatencyMs,
+      totalCommitLatencyMs: session.totalCommitLatencyMs,
+      commitLatencies: Object.freeze([...session.commitLatencies])
+    };
+    return Object.freeze(checkpoint);
+  }
+
+  /**
+   * Restaura métricas sobre un snapshot durable exacto. El tiempo transcurrido
+   * fuera del proceso se cuenta como inactividad, nunca como tiempo escribiendo.
+   */
+  restoreCheckpoint(
+    checkpoint: StoredLiveAuthorMonitorCheckpoint,
+    snapshot: DocumentSnapshot,
+    projectId: string,
+    restoredAt = Date.now()
+  ): LiveAuthorMonitorSnapshot {
+    if (!checkpoint || checkpoint.version !== 1 ||
+        typeof projectId !== "string" || !projectId.trim() ||
+        checkpoint.projectId !== projectId ||
+        typeof checkpoint.documentId !== "string" || !checkpoint.documentId.trim() ||
+        checkpoint.documentId !== snapshot.documentId ||
+        typeof checkpoint.sessionId !== "string" || !checkpoint.sessionId.trim()) {
+      throw new TypeError("El checkpoint del monitor no corresponde al proyecto/documento.");
+    }
+    if (!snapshot || typeof snapshot.text !== "string" ||
+        !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0 ||
+        !Number.isSafeInteger(snapshot.sequence) || snapshot.sequence < 0 ||
+        checkpoint.revision !== snapshot.revision ||
+        checkpoint.sequence !== snapshot.sequence ||
+        checkpoint.currentDocumentLength !== snapshot.text.length) {
+      throw new Error("El checkpoint no coincide exactamente con el snapshot durable del documento.");
+    }
+    const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
+    const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
+    if (!finiteNonNegative(restoredAt) || !finiteNonNegative(checkpoint.savedAt) ||
+        restoredAt < checkpoint.savedAt ||
+        !finiteNonNegative(checkpoint.sessionDurationMs) ||
+        !finiteNonNegative(checkpoint.activeDurationMs) ||
+        !finiteNonNegative(checkpoint.idleDurationMs) ||
+        Math.abs(checkpoint.sessionDurationMs -
+          checkpoint.activeDurationMs - checkpoint.idleDurationMs) > 1 ||
+        !(checkpoint.lastActivityAgeMs === null ||
+          (finiteNonNegative(checkpoint.lastActivityAgeMs) &&
+            checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1)) ||
+        !integerNonNegative(checkpoint.pauseCount) ||
+        !integerNonNegative(checkpoint.acceptedChanges) ||
+        !integerNonNegative(checkpoint.rejectedChanges) ||
+        !integerNonNegative(checkpoint.committedChanges) ||
+        !integerNonNegative(checkpoint.failedChanges) ||
+        checkpoint.committedChanges + checkpoint.failedChanges > checkpoint.acceptedChanges ||
+        !integerNonNegative(checkpoint.insertedCharacters) ||
+        !integerNonNegative(checkpoint.deletedCharacters) ||
+        !integerNonNegative(checkpoint.currentDocumentLength) ||
+        !integerNonNegative(checkpoint.revision) ||
+        !integerNonNegative(checkpoint.sequence) ||
+        !integerNonNegative(checkpoint.resynchronizations) ||
+        !finiteNonNegative(checkpoint.lastCommitLatencyMs) ||
+        !finiteNonNegative(checkpoint.totalCommitLatencyMs) ||
+        !Array.isArray(checkpoint.commitLatencies) ||
+        checkpoint.commitLatencies.length > this.commitSampleWindow ||
+        checkpoint.commitLatencies.some(value => !finiteNonNegative(value)) ||
+        checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
+          checkpoint.totalCommitLatencyMs + 1) {
+      throw new TypeError("El checkpoint del monitor contiene métricas o tiempos inválidos.");
+    }
+    if (this.sessions.has(snapshot.documentId)) {
+      throw new Error("Ya existe una sesión de monitoreo abierta para el documento.");
+    }
+    if (this.sessions.size >= this.maxOpenDocuments) {
+      throw new Error("Se alcanzó el límite de documentos observados simultáneamente.");
+    }
+
+    const downtime = restoredAt - checkpoint.savedAt;
+    const now = this.readClock();
+    const sessionDurationMs = checkpoint.sessionDurationMs + downtime;
+    const session: DocumentSession = {
+      sessionId: checkpoint.sessionId,
+      projectId,
+      documentId: snapshot.documentId,
+      openedAt: now - sessionDurationMs,
+      lastObservedAt: now,
+      lastActivityAt: checkpoint.lastActivityAgeMs === null
+        ? undefined
+        : now - (checkpoint.lastActivityAgeMs + downtime),
+      activeDurationMs: checkpoint.activeDurationMs,
+      idleDurationMs: checkpoint.idleDurationMs + downtime,
+      pauseCount: checkpoint.pauseCount,
+      acceptedChanges: checkpoint.acceptedChanges,
+      rejectedChanges: checkpoint.rejectedChanges,
+      committedChanges: checkpoint.committedChanges,
+      failedChanges: checkpoint.failedChanges,
+      insertedCharacters: checkpoint.insertedCharacters,
+      deletedCharacters: checkpoint.deletedCharacters,
+      currentDocumentLength: snapshot.text.length,
+      latestRevision: snapshot.revision,
+      durableRevision: snapshot.revision,
+      latestSequence: snapshot.sequence,
+      durableSequence: snapshot.sequence,
+      needsResync: false,
+      resynchronizations: checkpoint.resynchronizations,
+      lastCommitLatencyMs: checkpoint.lastCommitLatencyMs,
+      totalCommitLatencyMs: checkpoint.totalCommitLatencyMs,
+      pendingTickets: new Set<string>(),
+      commitLatencies: [...checkpoint.commitLatencies]
+    };
+    this.sessions.set(snapshot.documentId, session);
+    const counter = Number(checkpoint.sessionId.slice(checkpoint.sessionId.lastIndexOf(":") + 1));
+    if (Number.isSafeInteger(counter) && counter > this.sessionCounter) {
+      this.sessionCounter = counter;
+    }
+    return this.publish(session);
   }
 
   dispose(): void {

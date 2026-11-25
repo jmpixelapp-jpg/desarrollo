@@ -1238,3 +1238,31 @@ test("mantiene el total de decisiones de escritor cuando el historial de una ide
   assert.equal(decision.omittedStatusHistoryCount, 5);
   assert.equal(result.characterNarrativeTrajectories.trajectories[0].writerDecisionCount, 104);
 });
+
+test("el grafo no reutiliza omisiones de trayectorias cuando recibe el catálogo global", () => {
+  const projectId = "literary-analysis-test";
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nUna idea permanece.",
+    knownProjectIdeas: [{
+      projectId,
+      ideaId: "source",
+      status: "IDEA",
+      relatedIdeaIds: ["missing-target"],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 0
+    }],
+    // Este contador pertenece solo al subconjunto de ideas ligadas a personajes.
+    knownIdeasOmittedCount: 7
+  });
+
+  assert.equal(result.ideaGraph.omittedIdeaCount, 0);
+  assert.equal(result.ideaGraph.notIncludedReferenceCount, 1);
+  assert.equal(result.ideaGraph.missingFromProjectReferenceCount, 1);
+  assert.equal(result.ideaGraph.references[0].resolution, "missing-from-project");
+});

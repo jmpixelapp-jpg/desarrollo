@@ -2659,11 +2659,12 @@ function buildSceneLexicalEchoes(
   const groups = new Map<string, {
     readonly word: string;
     totalOccurrenceCount: number;
-    readonly scenes: Map<number, { occurrenceCount: number; occurrences: LocalRange[] }>;
+    sceneCount: number;
+    lastSceneIndex: number | null;
   }>();
   let tokenCursor = 0;
 
-  // Las escenas y los tokens están ordenados por posición; cada token se visita como máximo una vez.
+  // Primera pasada: solo cuenta; evita reservar listas de evidencia para palabras únicas.
   for (const scene of scenes) {
     const start = scene.contentRange.start - baseOffset;
     const end = scene.contentRange.end - baseOffset;
@@ -2676,10 +2677,52 @@ function buildSceneLexicalEchoes(
           !STOP_WORDS.has(token.normalized) && token.normalized.length >= 3) {
         let group = groups.get(token.normalized);
         if (!group) {
-          group = { word: token.text, totalOccurrenceCount: 0, scenes: new Map() };
+          group = {
+            word: token.text,
+            totalOccurrenceCount: 0,
+            sceneCount: 0,
+            lastSceneIndex: null
+          };
           groups.set(token.normalized, group);
         }
         group.totalOccurrenceCount++;
+        if (group.lastSceneIndex !== scene.sceneIndex) {
+          group.sceneCount++;
+          group.lastSceneIndex = scene.sceneIndex;
+        }
+      }
+      cursor++;
+    }
+    tokenCursor = cursor;
+  }
+
+  const candidates = [...groups.entries()]
+    .filter(([, group]) => group.totalOccurrenceCount >= 3 && group.sceneCount >= 2)
+    .sort((a, b) =>
+      b[1].sceneCount - a[1].sceneCount ||
+      b[1].totalOccurrenceCount - a[1].totalOccurrenceCount ||
+      a[0].localeCompare(b[0], "es")
+    );
+  const selected = new Map(candidates.slice(0, 20).map(([normalizedWord, group]) => [
+    normalizedWord,
+    {
+      ...group,
+      scenes: new Map<number, { occurrenceCount: number; occurrences: LocalRange[] }>()
+    }
+  ]));
+
+  // Segunda pasada: recoge offsets solo para los veinte candidatos que se mostrarán.
+  tokenCursor = 0;
+  for (const scene of scenes) {
+    const start = scene.contentRange.start - baseOffset;
+    const end = scene.contentRange.end - baseOffset;
+    while (tokenCursor < tokens.length && tokens[tokenCursor]!.end <= start) tokenCursor++;
+
+    let cursor = tokenCursor;
+    while (cursor < tokens.length && tokens[cursor]!.start < end) {
+      const token = tokens[cursor]!;
+      const group = selected.get(token.normalized);
+      if (group && token.start >= start && token.end <= end) {
         let sceneGroup = group.scenes.get(scene.sceneIndex);
         if (!sceneGroup) {
           sceneGroup = { occurrenceCount: 0, occurrences: [] };
@@ -2695,17 +2738,10 @@ function buildSceneLexicalEchoes(
     tokenCursor = cursor;
   }
 
-  const candidates = [...groups.entries()]
-    .filter(([, group]) => group.totalOccurrenceCount >= 3 && group.scenes.size >= 2)
-    .sort((a, b) =>
-      b[1].scenes.size - a[1].scenes.size ||
-      b[1].totalOccurrenceCount - a[1].totalOccurrenceCount ||
-      a[0].localeCompare(b[0], "es")
-    );
-  const echoes = candidates.slice(0, 20).map(([normalizedWord, group]) => ({
+  const echoes = [...selected.entries()].map(([normalizedWord, group]) => ({
     word: group.word,
     normalizedWord,
-    sceneCount: group.scenes.size,
+    sceneCount: group.sceneCount,
     totalOccurrenceCount: group.totalOccurrenceCount,
     scenes: [...group.scenes.entries()]
       .sort((a, b) => a[0] - b[0])

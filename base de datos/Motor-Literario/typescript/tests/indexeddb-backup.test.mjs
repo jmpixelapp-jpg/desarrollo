@@ -117,19 +117,36 @@ const archivedIdea = {
   archivedAt: 20
 };
 
+function fnv1a64(serialized) {
+  let value = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    value ^= BigInt(serialized.charCodeAt(index));
+    value = BigInt.asUintN(64, value * 0x100000001b3n);
+  }
+  return "fnv1a64:" + value.toString(16).padStart(16, "0");
+}
+
+function makeReceipt(writerId, sourceProjectId, sourceProjectName, entries, finalizedAt) {
+  const archivedIdeaIds = entries.map(entry => entry.idea.id);
+  return {
+    writerId,
+    sourceProjectId,
+    receiptId: "finalization-v1",
+    sourceProjectName,
+    finalizedAt,
+    archivedIdeaIds,
+    archiveChecksum: fnv1a64(JSON.stringify([...archivedIdeaIds].sort())),
+    archiveContentChecksum: fnv1a64(JSON.stringify(entries))
+  };
+}
+
 test("exporta todos los object stores en una instantánea JSON con checksum", async () => {
   const database = createFakeDatabase({
     documents: [documentRecord],
     "personal-idea-library": [archivedIdea],
-    "writer-library-finalization-receipts": [{
-      writerId: "backup-writer",
-      sourceProjectId: "backup-project",
-      receiptId: "finalization-v1",
-      sourceProjectName: "Libro de respaldo",
-      finalizedAt: 20,
-      archivedIdeaIds: ["idea-key"],
-      archiveChecksum: "fnv1a64:0000000000000000"
-    }]
+    "writer-library-finalization-receipts": [
+      makeReceipt("backup-writer", "backup-project", "Libro de respaldo", [archivedIdea], 20)
+    ]
   });
   const store = attach(database);
   try {
@@ -214,28 +231,16 @@ test("restaura manuscrito, biblioteca y recibos e invalida identidades anteriore
   const currentDatabase = createFakeDatabase({
     documents: [oldDocument],
     "personal-idea-library": [oldIdea],
-    "writer-library-finalization-receipts": [{
-      writerId: "old-writer",
-      sourceProjectId: "old-project",
-      receiptId: "finalization-v1",
-      sourceProjectName: "Libro anterior",
-      finalizedAt: 10,
-      archivedIdeaIds: ["old-idea"],
-      archiveChecksum: "fnv1a64:0000000000000000"
-    }]
+    "writer-library-finalization-receipts": [
+      makeReceipt("old-writer", "old-project", "Libro anterior", [oldIdea], 10)
+    ]
   });
   const backupSource = attach(createFakeDatabase({
     documents: [documentRecord],
     "personal-idea-library": [archivedIdea],
-    "writer-library-finalization-receipts": [{
-      writerId: "backup-writer",
-      sourceProjectId: "backup-project",
-      receiptId: "finalization-v1",
-      sourceProjectName: "Libro de respaldo",
-      finalizedAt: 20,
-      archivedIdeaIds: ["idea-key"],
-      archiveChecksum: "fnv1a64:0000000000000000"
-    }]
+    "writer-library-finalization-receipts": [
+      makeReceipt("backup-writer", "backup-project", "Libro de respaldo", [archivedIdea], 20)
+    ]
   }));
   const target = attach(currentDatabase);
   const changedProjects = [];

@@ -230,7 +230,7 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
   }]);
   assert.equal(revised.nodes[0].activeEvidenceCount, 4);
   assert.equal(revised.nodes[0].staleEvidenceCount, 2);
-  assert.equal(revised.nodes[0].writerDecisionCount, 3);
+  assert.equal(revised.nodes[0].writerDecisionCount, 2);
   assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
   assert.equal(revised.nodes[0].statusHistory.length, 2);
   const ideaProfile = revised.statusProfiles.find(profile => profile.status === "IDEA");

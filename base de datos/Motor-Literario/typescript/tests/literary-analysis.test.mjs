@@ -858,7 +858,7 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
         originDocumentId: "chapter-one",
         sourceProjectName: "Libro de prueba",
         relatedEntityIds: ["ana-id"],
-        relatedIdeaIds: ["idea-background"],
+        relatedIdeaIds: ["bruno-discarded", "context-not-loaded"],
         evidenceCount: 1,
         staleEvidenceCount: 0,
         evidence: [evidence("Ana habló con Bruno.")],
@@ -904,6 +904,10 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
   assert.equal(ana.relationships[0].historyStatus, "current-record-only");
   assert.equal(ana.documentedDecisions[0].status, "incorporated");
   assert.equal(ana.documentedDecisions[0].writerDecisionCount, 1);
+  assert.deepEqual(ana.documentedDecisions[0].relatedIdeaReferences, [
+    { ideaId: "bruno-discarded", resolution: "included-in-analysis-snapshot" },
+    { ideaId: "context-not-loaded", resolution: "not-in-analysis-snapshot" }
+  ]);
   assert.deepEqual(ana.scenes[0].relationshipIds, ["ana-bruno"]);
   assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, ["ana-decision"]);
   assert.equal(ana.writerDecisionCount, 1);
@@ -911,6 +915,9 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
   assert.equal(bruno.documentedDecisions[0].writerDecisionCount, 1);
   assert.equal(result.characterNarrativeTrajectories.relationshipRecordCount, 2);
   assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount, 2);
+  assert.equal(result.characterNarrativeTrajectories.ideaReferenceCount, 2);
+  assert.equal(result.characterNarrativeTrajectories.resolvedIdeaReferenceCount, 1);
+  assert.equal(result.characterNarrativeTrajectories.notIncludedIdeaReferenceCount, 1);
 });
 
 test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálogo de personajes", () => {
@@ -952,6 +959,40 @@ test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálo
       statusHistory: [{ status: "IDEA", reason: "initial" }],
       omittedStatusHistoryCount: 0
     }]
+  }), /ideas y decisiones/);
+});
+
+test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
+  const base = {
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nAna espera.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }]
+  };
+  const idea = {
+    projectId: "literary-analysis-test",
+    ideaId: "idea-a",
+    text: "Ana espera una señal.",
+    status: "IDEA",
+    originDocumentId: "chapter-one",
+    sourceProjectName: "Libro",
+    relatedEntityIds: ["ana-id"],
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: [],
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  };
+  assert.throws(() => analyzeLiteraryFragment({
+    ...base,
+    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-a"] }]
+  }), /ideas y decisiones/);
+  assert.throws(() => analyzeLiteraryFragment({
+    ...base,
+    knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-b", "idea-b"] }]
   }), /ideas y decisiones/);
 });
 

@@ -255,3 +255,25 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 
 
 **Corrección adicional del audit estático:** `audit-storage-implementation.mjs` deriva los índices esperados desde las llamadas `ensureIndex` de la rutina de migración, no solamente desde los `createIndex` que se ejecutan al crear el almacén. Se añadió `ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId")` para que el índice permanezca declarado y se valide también en las migraciones. Commit: [c83e27f — registrar índice del checkpoint en migraciones](https://github.com/jmpixelapp-jpg/desarrollo/commit/c83e27f5721c7fe774ecdd2cb119b02d88575d9a). La nueva ejecución de CI está en curso; el resultado se añadirá cuando concluya.
+
+
+## 12. Nueva entrega — prueba de persistencia contra IndexedDB nativo (25 de noviembre de 2026)
+
+**Objetivo:** verificar las operaciones reales del almacén de checkpoints, no limitar la confianza a un almacén simulado usado por las pruebas de HostEngineApi.
+
+**Implementación:** se añadió `IndexedDbProjectStore.close()`. Espera a que finalice una apertura pendiente, cierra la conexión y libera el canal de notificaciones de la instancia; las operaciones posteriores pueden abrir nuevamente la base.
+
+**Prueba de runtime:** nuevo archivo `typescript/tests/live-author-monitor-indexeddb.test.mjs`. Usa el IndexedDB nativo que proporciona Node 22.13+ y ejecuta sobre `IndexedDbProjectStore`:
+- guardar y recuperar un checkpoint;
+- comprobar aislamiento de objetos y muestras de latencia;
+- rechazar timestamps antiguos;
+- sustituir con un checkpoint más reciente;
+- aislar otro proyecto;
+- eliminar el registro y confirmar que ya no existe;
+- cerrar la conexión en el bloque `finally`.
+
+**Archivos:** `typescript/src/persistence/indexeddb-store.ts`, `typescript/tests/live-author-monitor-indexeddb.test.mjs`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
+
+**Commits:** [a552b00 — lifecycle explícito de IndexedDB](https://github.com/jmpixelapp-jpg/desarrollo/commit/a552b009902206357502bd78099baea028f6e0b2), [273e0b9 — prueba con IndexedDB nativo](https://github.com/jmpixelapp-jpg/desarrollo/commit/273e0b9ec2493b12dca2dfbf1d82bf2cd775df4c).
+
+**Validación:** la ejecución específica y la general correspondientes a esta prueba están en curso. No se declarará aprobada hasta comprobar los resultados de GitHub Actions.

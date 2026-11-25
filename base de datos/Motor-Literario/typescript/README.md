@@ -300,6 +300,10 @@ La API del anfitrión expone `getProjectRecords`/`saveProjectRecord`, `getRecord
 
 
 
+### Historial de acontecimientos (IndexedDB 22)
+
+El almacén `event-lifecycles` conserva revisiones append-only de etiqueta y participantes de acontecimientos. Sus índices aíslan proyecto, acontecimiento y revisión. La actualización versionada comprueba el snapshot esperado y escribe la ficha vigente y su transición histórica en una transacción única. Los registros anteriores no reciben baselines ni fechas reconstruidas: la primera revisión documenta el primer cambio explícito realizado después de esta ampliación.
+
 ### Vínculos de diccionario con metadatos propios (IndexedDB 21)
 
 Todos los vínculos se guardan en `dictionary-entry-entities`, con `linkKind`, `provenanceKind` y `createdAt` por cada par entrada/ficha. `setDictionaryEntryEntityLink` actualiza en una misma transacción el registro del vínculo y la proyección de IDs de la entrada; `getDictionaryEntryEntityLinks` permite recuperar y validar los metadatos. La API permite proporcionar el tipo de vínculo, la procedencia y la fecha; la acción manual usa `RELATED` y `WRITER` como valores predeterminados explícitos.
@@ -334,7 +338,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Perfil agregado de señales por escena: totales por categoría, distribución de clasificaciones, cobertura y secuencia de instantáneas en orden textual.
 - Tasas normalizadas de señales gramaticales por cada 1.000 palabras de narración fuera del diálogo reconocido, tanto por escena como en el agregado, para comparar escenas de distinta longitud.
 - Detección de secuencias estables (tres escenas o más) y alternancias (cuatro escenas o más) de clasificaciones gramaticales únicas; las señales mixtas o indeterminadas interrumpen los tramos y cada patrón conserva sus instantáneas.
-- Acontecimientos vinculados a escenas solo mediante evidencia del mismo documento y revisión; participantes declarados separados de las menciones literales. Cronología global por ID, incluso sin participantes, con cobertura, intervalos y rachas; motivos de secuencias exactas de IDs en ventanas contiguas de dos y tres escenas; y transiciones adyacentes que comparan conteos de evidencia, menciones nominales de participantes y estados de truncamiento. La cronología por participante conserva la mención nominal independiente. Estas señales describen vínculos textuales, no cambios reales de asociación, repetición material de sucesos, presencia o acción.
+- Acontecimientos vinculados a escenas solo mediante evidencia del mismo documento y revisión; participantes declarados separados de las menciones literales. Cronología global por ID, motivos de secuencias de dos y tres escenas y transiciones de conteos/menciones con estados de truncamiento. Historial append-only de cambios explícitos de etiqueta y participantes, con escritura transaccional, atribución, motivo, fecha, revisiones consecutivas y comparación entre última instantánea registrada y ficha vigente. El análisis informa adiciones y retiros de participantes sin deducirlos de menciones del manuscrito; las divergencias de historial quedan visibles y no se explican automáticamente.
 - Señales de continuidad entre escenas explícitas contiguas: personajes mencionados en ambas, solo en la anterior o solo en la siguiente; y acontecimientos con evidencia en ambas o en una sola escena.
 - Patrones de co-mención de personajes conocidos en escenas compartidas, ordenados por frecuencia y sin inferir relaciones entre ellos.
 - Distribución de menciones literales de personajes conocidos por escena: cobertura, primera y última mención, intervalos sin coincidencia, rachas consecutivas y tasas por cada 1.000 palabras para comparar escenas de distinta longitud. Cuenta todas las coincidencias detectadas y distingue esos conteos de los ejemplos UTF-16 y formas de nombre limitados por escena.

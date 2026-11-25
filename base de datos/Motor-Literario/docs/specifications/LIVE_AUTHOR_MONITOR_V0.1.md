@@ -406,3 +406,18 @@ La fuente transaccional serializa la notificación a suscriptores mediante una c
 - Al disponer la fuente se limpia la cola y no se entregan notificaciones posteriores.
 
 La prueba de regresión instala dos suscriptores. El primero genera la transacción 2 desde el callback de la transacción 1; ambos deben observar exactamente [1, 2]. Esta garantía evita que consumidores distintos del mismo stream construyan estados divergentes por una reentrada síncrona.
+
+
+## 20. Serialización del procesamiento ante reentrada
+
+La cola FIFO anterior serializaba los callbacks, pero la revisión posterior identificó una sutileza: una transacción reentrante podía actualizar el snapshot interno antes de que todos los suscriptores terminasen de observar el delta previo. Aunque el orden de los argumentos era correcto, un consumidor que consultase `getState()` dentro del callback podía observar una secuencia adelantada.
+
+La fuente ahora serializa también el procesamiento de las transacciones nativas:
+
+- `handleTransaction` incorpora cada evento a una cola de transacciones pendientes.
+- Un único bucle valida cada transacción, actualiza revisión/secuencia y completa su despacho a todos los suscriptores antes de procesar la siguiente.
+- Las emisiones síncronas provocadas desde un callback se aplazan hasta finalizar la notificación actual.
+- Durante el callback de la secuencia N, `getState().sequence` permanece en N; la secuencia N+1 solo se vuelve visible cuando empieza su propio procesamiento.
+- Una resincronización requerida o un desmontaje vacía las transacciones aplazadas para evitar procesar eventos de un stream suspendido.
+
+La prueba reentrante verifica tanto el orden como la coherencia de estado: dos suscriptores generan/observan el evento anidado y ambos deben observar `[[1, 1], [2, 2]]`, donde cada pareja contiene la secuencia del delta y la secuencia consultada al propio source durante el callback.

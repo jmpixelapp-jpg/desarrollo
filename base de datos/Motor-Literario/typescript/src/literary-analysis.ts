@@ -850,6 +850,19 @@ export interface LiteraryIdeaGraphNode {
   readonly includedOutgoingReferenceCount: number;
   /** Salidas explícitas cuyo destino no está incluido en el snapshot actual. */
   readonly notIncludedOutgoingReferenceCount: number;
+  /** Estados de los destinos directos incluidos; no presupone que el enlace sea una dependencia causal. */
+  readonly directReferenceStatusCounts: {
+    readonly IDEA: number;
+    readonly incorporated: number;
+    readonly discarded: number;
+    readonly notInSnapshot: number;
+  };
+  readonly directReferenceStatusAlignment:
+    | "no-references"
+    | "same-status"
+    | "mixed-status"
+    | "unknown-incomplete-snapshot"
+    | "targets-not-in-snapshot";
 }
 /** Referencia explícita y resultado de resolver su destino contra el alcance de catálogo declarado. */
 export interface LiteraryIdeaGraphReference {
@@ -3784,9 +3797,35 @@ function buildLiteraryIdeaGraph(
     };
   };
 
-  const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => ({
+  const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => {
+    const directReferenceStatusCounts = {
+      IDEA: 0,
+      incorporated: 0,
+      discarded: 0,
+      notInSnapshot: outgoingExternal[index]!
+    };
+    const directStatuses = new Set<NarrativeIdea["status"]>();
+    for (const targetIndex of adjacency[index]!) {
+      const targetStatus = orderedIdeas[targetIndex]!.status;
+      directReferenceStatusCounts[targetStatus]++;
+      directStatuses.add(targetStatus);
+    }
+    const hasExternalTargets = outgoingExternal[index]! > 0;
+    const directReferenceStatusAlignment = adjacency[index]!.length +
+      outgoingExternal[index]! === 0
+      ? "no-references" as const
+      : directStatuses.size > 1
+        ? "mixed-status" as const
+        : hasExternalTargets
+          ? omittedIdeaCount > 0
+            ? "unknown-incomplete-snapshot" as const
+            : "targets-not-in-snapshot" as const
+          : "same-status" as const;
+    return {
     ideaId: idea.ideaId,
     status: idea.status,
+    directReferenceStatusCounts,
+    directReferenceStatusAlignment,
     incomingReferenceCount: incoming[index]!,
     includedOutgoingReferenceCount: adjacency[index]!.length,
     notIncludedOutgoingReferenceCount: outgoingExternal[index]!,
@@ -3798,7 +3837,8 @@ function buildLiteraryIdeaGraph(
     ),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
-  }));
+    };
+  });
 
   // Tarjan usa índices compactos en arreglos tipados; detecta componentes
   // cíclicos en O(V + E) sin mapas y conjuntos de cadenas por nodo.

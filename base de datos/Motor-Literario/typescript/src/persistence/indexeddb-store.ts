@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
+import type { ProjectStore, ProjectFinalizationSummary, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
 import { createPersonalIdeaArchiveChecksumBuilder, isValidPersonalIdeaArchiveChecksum } from "./personal-idea-checksum";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
@@ -3957,26 +3957,10 @@ export class IndexedDbProjectStore implements ProjectStore {
     writerId: string,
     sourceProjectName: string,
     archivedAt: number
-  ): Promise<{
-    writerId: string;
-    sourceProjectId: string;
-    sourceProjectName: string;
-    archivedCount: number;
-    finalizedAt: number;
-    archiveChecksum: string;
-    alreadyFinalized: boolean;
-  }> {
+  ): Promise<ProjectFinalizationSummary> {
     return this.archiveUnincorporatedIdeasInternal(
       projectId, writerId, sourceProjectName, archivedAt, false
-    ) as unknown as Promise<{
-      writerId: string;
-      sourceProjectId: string;
-      sourceProjectName: string;
-      archivedCount: number;
-      finalizedAt: number;
-      archiveChecksum: string;
-      alreadyFinalized: boolean;
-    }>;
+    ) as Promise<ProjectFinalizationSummary>;
   }
 
   private async archiveUnincorporatedIdeasInternal(
@@ -3985,15 +3969,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     sourceProjectName: string,
     archivedAt: number,
     collectEntries: boolean
-  ): Promise<readonly PersonalIdeaLibraryEntry[] | {
-    writerId: string;
-    sourceProjectId: string;
-    sourceProjectName: string;
-    archivedCount: number;
-    finalizedAt: number;
-    archiveChecksum: string;
-    alreadyFinalized: boolean;
-  }> {
+  ): Promise<readonly PersonalIdeaLibraryEntry[] | ProjectFinalizationSummary> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
         typeof sourceProjectName !== "string" || !sourceProjectName.trim() ||

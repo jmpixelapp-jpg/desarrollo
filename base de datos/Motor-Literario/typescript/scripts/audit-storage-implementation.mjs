@@ -204,6 +204,11 @@ export function auditStorageImplementation(mapping, runtimeSource) {
         add("MISSING_RUNTIME_STORE_DESCRIPTOR", `El almacén "${storeName}" no tiene definición física en runtime.object_stores.`);
       }
     }
+    for (const [storeName, constantName] of constantsByStore) {
+      if (createdConstants.has(constantName) && !describedStores.has(storeName)) {
+        add("UNMAPPED_RUNTIME_STORE", `El almacén creado "${storeName}" no está declarado en runtime.object_stores.`);
+      }
+    }
   }
 
   return issues;

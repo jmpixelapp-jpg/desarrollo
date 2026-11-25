@@ -52,6 +52,12 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(result.ideaGraph.ideaCount,4);
     const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
     assert.equal(bridgeNode.observedStatusTransitionCount, 2);
+    assert.equal(bridgeNode.statusReversalCount, 1);
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .statusReversalCount,
+      1
+    );
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .observedStatusTransitionCount,

@@ -836,7 +836,15 @@ function summarizeSceneDialogueFlow(
     end:contentRange.start+range.end
   }));
   const wordCounts = countTokensPerRange(tokens,paragraphRanges);
-  const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,paragraphRanges,dialogueRanges);
+  const dialogueWordCounts = paragraphRanges.map(paragraph => {
+    const intersections = dialogueRanges
+      .filter(range => range.end > paragraph.start && range.start < paragraph.end)
+      .map(range => ({
+        start:Math.max(range.start,paragraph.start),
+        end:Math.min(range.end,paragraph.end)
+      }));
+    return countTokensInRanges(tokens,intersections);
+  });
   const paragraphSamples: LiterarySceneDialogueParagraph[] = [];
   const classificationCounts = {narrativeOnly:0,dialogueOnly:0,mixed:0};
   const classificationTransitionCounts = {
@@ -859,7 +867,7 @@ function summarizeSceneDialogueFlow(
   for (let index=0; index<paragraphRanges.length; index++) {
     const wordCount = wordCounts[index] ?? 0;
     if (wordCount === 0) continue;
-    const dialogueWordCount = Math.max(0,wordCount-(narrativeWordCounts[index] ?? 0));
+    const dialogueWordCount = Math.min(wordCount,dialogueWordCounts[index] ?? 0);
     const classification: LiterarySceneDialogueParagraphClassification =
       dialogueWordCount === 0 ? "narrative-only" :
       dialogueWordCount >= wordCount ? "dialogue-only" : "mixed";
@@ -867,8 +875,10 @@ function summarizeSceneDialogueFlow(
     paragraphCount++;
     classificationCounts[classificationKey(classification)]++;
     if (previousClassification !== undefined) {
+      const previousKey = classificationKey(previousClassification);
+      const currentKey = classificationKey(classification);
       const transitionKey =
-        `${classificationKey(previousClassification)}To${classificationKey(classification)}` as keyof typeof classificationTransitionCounts;
+        `${previousKey}To${currentKey[0]!.toUpperCase()}${currentKey.slice(1)}` as keyof typeof classificationTransitionCounts;
       classificationTransitionCounts[transitionKey]++;
       if (previousClassification !== classification) classificationChangeCount++;
     }

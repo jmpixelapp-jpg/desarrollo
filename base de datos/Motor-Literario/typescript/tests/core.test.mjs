@@ -11126,7 +11126,12 @@ test("mantiene el perfil de diálogo vacío cuando una escena no contiene segmen
     formatCounts:{quotation:0,dialogueDash:0,mixed:0},
     segments:[],
     evidenceTruncated:false
+  });  assert.equal(result.explicitScenes[0].dialogueFlowSignals.paragraphCount,1);
+  assert.deepEqual(result.explicitScenes[0].dialogueFlowSignals.classificationCounts,{
+    narrativeOnly:1,dialogueOnly:0,mixed:0
   });
+  assert.equal(result.explicitScenes[0].dialogueFlowSignals.dialogueBearingParagraphCount,0);
+
 });
 
 test("describe el flujo de diálogo por párrafos sin atribuir hablantes", async () => {
@@ -11170,12 +11175,7 @@ test("describe el flujo de diálogo por párrafos sin atribuir hablantes", async
   assert.deepEqual(flow.paragraphs[2].occurrence,{
     start:mixedStart,end:mixedStart+"«No iré», respondió Ana.".length
   });
-  assert.equal(flow.evidenceTruncated,false);  assert.equal(result.explicitScenes[0].dialogueFlowSignals.paragraphCount,1);
-  assert.deepEqual(result.explicitScenes[0].dialogueFlowSignals.classificationCounts,{
-    narrativeOnly:1,dialogueOnly:0,mixed:0
-  });
-  assert.equal(result.explicitScenes[0].dialogueFlowSignals.dialogueBearingParagraphCount,0);
-
+  assert.equal(flow.evidenceTruncated,false);
 });
 
 test("limita las muestras del flujo de diálogo sin truncar conteos ni transiciones", async () => {
@@ -11305,7 +11305,7 @@ test("recorta una cita que atraviesa un separador sin incluir encabezados en las
 
 test("describe un solapamiento entre cita y raya como un único segmento mixto por escena", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
-  const text = "ESCENA 1\\n—«No volveré», dijo Ana.";
+  const text = "ESCENA 1\n—«No volveré», dijo Ana.";
   const baseOffset = 950;
   const result = analyzeLiteraryFragment({
     projectId:"scene-dialogue-overlap",documentId:"chapter",revision:1,text,baseOffset

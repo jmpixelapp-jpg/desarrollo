@@ -430,3 +430,12 @@ La serialización de transacciones ahora tiene un límite configurable de memori
 El límite solo aplica a transacciones que se acumulan mientras otra transacción está siendo notificada. El procesamiento normal secuencial no consume esta cola de espera. Al entrar en estado de resincronización, los eventos aplazados se limpian y no vuelven a alimentar el motor; el snapshot local actualizado permite reconciliar lo que realmente aplicó el editor.
 
 La prueba fija el límite en un evento, provoca dos ediciones síncronas reentrantes y verifica que solo se admite el primer delta, la fuente queda pausada con `transaction-backlog-overflow` y la suscripción nativa se retira. La recuperación debe hacerse con el snapshot reconciliado, no reintentando eventos parciales fuera de orden.
+
+
+## 22. Validación de configuración del backlog reentrante
+
+`maxQueuedTransactions` se valida al construir la fuente antes de registrar cualquier suscripción. Solo se aceptan enteros seguros entre 1 y 65536; `undefined` utiliza el valor predeterminado 4096. Cero, negativos, fracciones, valores mayores al máximo, `NaN` e infinitos producen `RangeError`.
+
+La prueba de configuración cubre los valores inválidos y confirma que los límites 1 y 65536, además del valor predeterminado, pueden construirse. También verifica que una configuración inválida no registre listeners en el proveedor.
+
+**Validación CI:** ejecución aislada [45721703791](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703791), commit `4f74096c8ce17e70a3c88aa1519ec2be81585d38`: build Vite correcto; **78 pruebas aprobadas, 0 fallidas y 0 omitidas**.

@@ -80,11 +80,11 @@ Los tiempos se calculan con **performance.now()** cuando está disponible. El re
 
 ## 5. Validación
 
-Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs**: apertura y edición; tiempo activo y pausas; rechazos; tickets y latencias p50/p95; commit fallido y resincronización; cierre bloqueado con pendientes; aislamiento entre documentos y suscriptores; validación de secuencia, límite de sesiones y reloj monotónico; transición a inactividad sin nuevas pulsaciones; refresco global; cancelación del planificador y validación del filtro documental.
+Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs** y **typescript/tests/live-author-monitor-panel.test.mjs**: apertura y edición; tiempo activo y pausas; rechazos; tickets y latencias p50/p95; commit fallido y resincronización; cierre bloqueado con pendientes; aislamiento entre documentos y suscriptores; transición a inactividad sin nuevas pulsaciones; refresco global; cancelación del planificador; montaje del panel accesible, métricas, privacidad del manuscrito, errores de resincronización y desmontaje del DOM.
 
-**Validación específica del monitor:** las 11 pruebas del módulo (8 existentes y 3 nuevas) pasaron en GitHub Actions. El chequeo estricto de TypeScript también pasó. [Ejecución 45709063673](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45709063673).
+**Validación específica del monitor y del panel:** las 11 pruebas del núcleo de monitoreo y las 4 pruebas del panel DOM pasaron (15/15). El chequeo estricto de TypeScript, el build y la validación estructural del esquema también pasaron. [Ejecución 45710084925](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45710084925).
 
-**Validación global pendiente:** la ejecución completa terminó con 256 pruebas aprobadas, 34 fallidas, 222 canceladas y 9 omitidas (521 en total). Los fallos identificados corresponden a otras áreas: pruebas de IndexedDB y migraciones, sincronización CAS de ideas, análisis literario y auditoría del esquema de almacenamiento. Las 11 pruebas del monitor no registraron fallos. El benchmark se omitió porque el paso de pruebas terminó con error. Por tanto, este avance no se declara globalmente validado ni sustituye la integración visual en la aplicación anfitriona.
+**Validación de la suite completa:** la ejecución terminó con 264 pruebas aprobadas, 30 fallidas, 222 canceladas y 9 omitidas (525 en total). Los fallos identificados pertenecen a otras áreas del repositorio, incluidas IndexedDB/migraciones, sincronización CAS de ideas, análisis literario y auditoría del esquema de almacenamiento. Los cuatro tests nuevos del panel y los once tests del núcleo de monitoreo no registraron fallos. El benchmark se omitió porque la suite general falló. Por tanto, el módulo de monitoreo queda validado por sus pruebas focalizadas, pero la suite global y la integración visual en el editor anfitrión continúan pendientes.
 
 ## 6. Refresco continuo del panel
 

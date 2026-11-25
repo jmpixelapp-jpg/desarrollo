@@ -750,6 +750,8 @@ export interface LiteraryIdeaGraphNode {
   readonly observedStatusTransitionCount: number;
   /** Retornos a un estado ya observado anteriormente; mínimo si el historial está truncado. */
   readonly statusReversalCount: number;
+  /** Pares adyacentes con marcas temporales conocidas que retroceden en el tiempo. */
+  readonly nonMonotonicStatusTimestampCount: number;
   /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
@@ -796,6 +798,8 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly observedStatusTransitionCount: number;
   /** Suma de retornos a estados previamente observados en los historiales visibles. */
   readonly statusReversalCount: number;
+  /** Suma de retrocesos temporales observables en los historiales del perfil. */
+  readonly nonMonotonicStatusTimestampCount: number;
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly ideasWithActiveEvidenceCount: number;
@@ -3574,6 +3578,15 @@ function buildLiteraryIdeaGraph(
       }
       return count;
     }, 0),
+    nonMonotonicStatusTimestampCount: idea.statusHistory.reduce(
+      (count, change, changeIndex, history) => {
+        if (changeIndex === 0) return count;
+        const previousAt = history[changeIndex - 1]!.changedAt;
+        return previousAt !== undefined && change.changedAt !== undefined &&
+          change.changedAt < previousAt ? count + 1 : count;
+      },
+      0
+    ),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));
@@ -3724,6 +3737,7 @@ function buildLiteraryIdeaGraph(
     writerDecisionCount: number;
     observedStatusTransitionCount: number;
     statusReversalCount: number;
+    nonMonotonicStatusTimestampCount: number;
     activeEvidenceCount: number;
     staleEvidenceCount: number;
     ideasWithActiveEvidenceCount: number;
@@ -3746,6 +3760,7 @@ function buildLiteraryIdeaGraph(
       writerDecisionCount: 0,
       observedStatusTransitionCount: 0,
       statusReversalCount: 0,
+      nonMonotonicStatusTimestampCount: 0,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 0,
@@ -3777,6 +3792,7 @@ function buildLiteraryIdeaGraph(
     totals.writerDecisionCount += node.writerDecisionCount;
     totals.observedStatusTransitionCount += node.observedStatusTransitionCount;
     totals.statusReversalCount += node.statusReversalCount;
+    totals.nonMonotonicStatusTimestampCount += node.nonMonotonicStatusTimestampCount;
     totals.activeEvidenceCount += node.activeEvidenceCount;
     totals.staleEvidenceCount += node.staleEvidenceCount;
     if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;

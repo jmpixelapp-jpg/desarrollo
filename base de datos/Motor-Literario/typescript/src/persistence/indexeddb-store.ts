@@ -1942,8 +1942,33 @@ export class IndexedDbProjectStore implements ProjectStore {
           }
           for (const name of existingNames) {
             validateRecordName(name, record.projectId);
-            if (name.isPrimary && name.name !== record.primaryName) {
-              names.put(cloneRecordName({ ...name, isPrimary: false }));
+          }
+          const existingPrimary = existingNames.find(name => name.isPrimary);
+          if (record.primaryName === null) {
+            if (existingPrimary) {
+              names.put(cloneRecordName({ ...existingPrimary, isPrimary: false }));
+            }
+          } else if (!existingPrimary || existingPrimary.name !== record.primaryName) {
+            if (existingPrimary) {
+              names.put(cloneRecordName({ ...existingPrimary, isPrimary: false }));
+            }
+            const matchingName = existingNames.find(name => name.name === record.primaryName);
+            if (matchingName) {
+              names.put(cloneRecordName({
+                ...matchingName, isPrimary: true
+              }));
+            } else {
+              const newName: RecordName = {
+                projectId: record.projectId,
+                id: `primary:${checksumArchivedIdeaIds([record.projectId, record.id, record.primaryName])}`,
+                recordId: record.id,
+                name: record.primaryName,
+                nameKind: "primary",
+                isPrimary: true,
+                provenanceKind: record.provenanceKind
+              };
+              validateRecordName(newName, record.projectId);
+              names.add(cloneRecordName(newName));
             }
           }
           records.put(cloneProjectRecord(record));

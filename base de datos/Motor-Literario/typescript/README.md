@@ -4,6 +4,8 @@ Esta carpeta contiene la implementación definitiva en TypeScript. El código Ru
 
 **Integración con el programa anfitrión:** consulte la [Guía de integración TypeScript](../docs/integration/GUIA_INTEGRACION_ANFITRION_V1.md), que define el contrato público y los pasos de conexión.
 
+**Seguimiento del análisis literario:** consulte el [estado de análisis literario e inteligencia narrativa](../docs/analysis/ESTADO_ANALISIS_LITERARIO_E_INTELIGENCIA_NARRATIVA.md), que registra alcance, contratos, límites, pruebas y pendientes.
+
 ## Principios
 
 - Sin motores lingüísticos, correctores, servicios ni bibliotecas de terceros en tiempo de ejecución.

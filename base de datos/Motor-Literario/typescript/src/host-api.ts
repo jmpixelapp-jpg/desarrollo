@@ -1590,7 +1590,12 @@ export class HostEngineApi {
     const projectIdeas = projectIdeaCatalogAvailable
       ? await this.getNarrativeIdeas()
       : [];
-    const orderedProjectIdeas = [...projectIdeas].sort((a,b) => a.id.localeCompare(b.id,"en"));
+    const orderedProjectIdeas = [...projectIdeas].sort((left,right) => {
+      const localizedOrder = left.id.localeCompare(right.id,"en");
+      return localizedOrder !== 0
+        ? localizedOrder
+        : left.id === right.id ? 0 : left.id < right.id ? -1 : 1;
+    });
     const knownProjectIdeasOmittedCount = projectIdeaCatalogAvailable
       ? Math.max(0,orderedProjectIdeas.length-2_000)
       : 0;

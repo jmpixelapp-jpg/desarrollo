@@ -1746,9 +1746,19 @@ export class SqliteProjectStore {
             }
           }
           const calculatedContentChecksum = contentChecksum.digest();
-          if (existingReceipt.archiveContentChecksum !== undefined &&
-              calculatedContentChecksum !== existingReceipt.archiveContentChecksum) {
+          let archiveContentChecksum = existingReceipt.archiveContentChecksum;
+          if (archiveContentChecksum !== undefined &&
+              calculatedContentChecksum !== archiveContentChecksum) {
             throw new Error("La biblioteca personal no coincide con el checksum del contenido archivado.");
+          }
+          if (archiveContentChecksum === undefined) {
+            // Migra recibos históricos sin checksum cuando el conjunto completo
+            // sigue siendo verificable; el movimiento de ideas no se repite.
+            archiveContentChecksum = calculatedContentChecksum;
+            this.put("writer-library-finalization-receipts", receiptKey, {
+              ...existingReceipt,
+              archiveContentChecksum
+            }, { expectedCurrent: existingReceipt });
           }
           return collectEntries ? clone(restoredEntries) : {
             writerId, sourceProjectId: projectId, sourceProjectName,
@@ -1756,9 +1766,7 @@ export class SqliteProjectStore {
             finalizedAt: existingReceipt.finalizedAt,
             alreadyFinalized: true,
             archiveChecksum: existingReceipt.archiveChecksum,
-            ...(existingReceipt.archiveContentChecksum
-              ? { archiveContentChecksum: existingReceipt.archiveContentChecksum }
-              : {})
+            archiveContentChecksum
           };
         }
 

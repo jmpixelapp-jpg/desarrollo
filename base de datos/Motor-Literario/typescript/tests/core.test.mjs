@@ -13306,3 +13306,70 @@ test("el anfitrión notifica al escritor después de archivar las ideas del libr
   assert.deepEqual(notices, [writerId]);
   api.dispose();
 });
+
+test("la lectura del recibo espera a que termine la finalización en curso", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-receipt-serialization";
+  const projectId = "book-receipt-serialization";
+  let releaseFinalization;
+  let markFinalizationStarted;
+  const finalizationGate = new Promise(resolve => { releaseFinalization = resolve; });
+  const finalizationStarted = new Promise(resolve => { markFinalizationStarted = resolve; });
+  let storedReceipt;
+  let receiptReads = 0;
+
+  store.archiveUnincorporatedIdeasSummary = async (
+    sourceProjectId, authenticatedWriterId, sourceProjectName, finalizedAt
+  ) => {
+    markFinalizationStarted();
+    await finalizationGate;
+    storedReceipt = {
+      writerId: authenticatedWriterId,
+      sourceProjectId,
+      receiptId: "finalization-v1",
+      sourceProjectName,
+      finalizedAt,
+      archivedIdeaIds: [],
+      archiveChecksum: "fnv1a64:cbf29ce484222325"
+    };
+    return {
+      writerId: authenticatedWriterId,
+      sourceProjectId,
+      sourceProjectName,
+      archivedCount: 0,
+      finalizedAt,
+      archiveChecksum: storedReceipt.archiveChecksum,
+      alreadyFinalized: false
+    };
+  };
+  store.loadProjectFinalizationReceipt = async () => {
+    receiptReads++;
+    return storedReceipt;
+  };
+
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId,
+    projectName: "Libro con recibo",
+    writerId
+  });
+
+  const finalization = api.finalizeProjectToIdeaLibrary();
+  await finalizationStarted;
+  const pendingReceipt = api.getProjectFinalizationReceipt();
+
+  try {
+    assert.equal(receiptReads, 0,
+      "la consulta no debe adelantarse a una transferencia ya encolada");
+  } finally {
+    releaseFinalization();
+  }
+
+  await finalization;
+  const receipt = await pendingReceipt;
+  assert.equal(receiptReads, 1);
+  assert.equal(receipt.writerId, writerId);
+  assert.equal(receipt.sourceProjectId, projectId);
+  assert.equal(receipt.receiptId, "finalization-v1");
+  api.dispose();
+});

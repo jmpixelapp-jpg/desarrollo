@@ -82,6 +82,34 @@ function requireProjectScopedRecords<T extends { readonly projectId: string; rea
   return records;
 }
 
+function validateEventLifecycleHistory(
+  records: readonly EventLifecycle[],
+  projectId: string,
+  eventId: string
+): readonly EventLifecycle[] {
+  if(!Array.isArray(records))throw new Error("El historial de acontecimiento no es una colección.");
+  const ordered=[...records].sort((a,b)=>a.revision-b.revision);
+  let previous:EventLifecycle|undefined;
+  const revisions=new Set<number>();
+  for(const item of ordered) {
+    validateEventLifecycle(item,projectId);
+    if(item.eventId!==eventId || revisions.has(item.revision) ||
+      (!previous && item.revision!==1) ||
+      (previous && (
+        item.revision!==previous.revision+1 ||
+        item.previousLabel!==previous.newLabel ||
+        item.previousParticipants.length!==previous.newParticipants.length ||
+        !item.previousParticipants.every((id,index)=>id===previous.newParticipants[index]) ||
+        item.changedAt<previous.changedAt
+      ))) {
+      throw new Error("El historial de acontecimiento contiene revisiones duplicadas o transiciones discontinuas.");
+    }
+    revisions.add(item.revision);
+    previous=item;
+  }
+  return ordered.map(cloneEventLifecycle);
+}
+
 /** Valida la forma de los registros recibidos de cualquier adaptador, no solo IndexedDB. */
 function requireNarrativeRecordShape(record: unknown, collection: string): void {
   if (!record || typeof record !== "object") {
@@ -1271,27 +1299,9 @@ export class HostEngineApi {
       const load=this.store.loadEventLifecycles;
       if(!load) throw new Error("El adaptador no admite historial de acontecimientos.");
       const records=await load.call(this.store,projectId,eventId);
-      if(!Array.isArray(records)) throw new Error("El historial de acontecimiento no es una colección.");
-      let previous:EventLifecycle|undefined;
-      for(const item of records) {
-        validateEventLifecycle(item,projectId);
-        if(item.eventId!==eventId ||
-          (!previous && item.revision!==1) ||
-          (previous && (
-            item.revision!==previous.revision+1 ||
-            item.previousLabel!==previous.newLabel ||
-            item.previousParticipants.length!==previous.newParticipants.length ||
-            !item.previousParticipants.every((id,index)=>id===previous!.newParticipants[index]) ||
-            item.changedAt<previous.changedAt
-          ))) {
-          throw new Error("El historial de acontecimiento contiene una transición discontinua o ajena.");
-        }
-        previous=item;
-      }
-      return records.map(cloneEventLifecycle);
+      return validateEventLifecycleHistory(records,projectId,eventId);
     });
   }
-
   /**
    * Actualiza etiqueta/participantes y registra ambas instantáneas en una
    * única transacción durable. Las menciones del manuscrito no modifican estas
@@ -1345,23 +1355,8 @@ export class HostEngineApi {
         throw new Error("El adaptador no admite actualizaciones versionadas y atómicas de acontecimientos.");
       }
       const history=await load.call(this.store,projectId,current.id);
-      if(!Array.isArray(history)) throw new Error("El historial de acontecimiento no es una colección.");
-      let previous:EventLifecycle|undefined;
-      for(const item of history) {
-        validateEventLifecycle(item,projectId);
-        if(item.eventId!==current.id ||
-          (!previous && item.revision!==1) ||
-          (previous && (
-            item.revision!==previous.revision+1 ||
-            item.previousLabel!==previous.newLabel ||
-            item.previousParticipants.length!==previous.newParticipants.length ||
-            !item.previousParticipants.every((id,index)=>id===previous!.newParticipants[index]) ||
-            item.changedAt<previous.changedAt
-          ))) {
-          throw new Error("No se puede actualizar un acontecimiento con un historial discontinuo.");
-        }
-        previous=item;
-      }
+      const validatedHistory=validateEventLifecycleHistory(history,projectId,current.id);
+      const previous=validatedHistory[validatedHistory.length-1];
       const revision=(previous?.revision ?? 0)+1;
       const lifecycle:EventLifecycle={
         projectId,
@@ -1530,6 +1525,31 @@ export class HostEngineApi {
           }))
           .filter(event => event.evidence.length > 0)
       : [];
+    const knownEventLifecycles:EventLifecycle[]=[];
+    if(knownEvents.length>0) {
+      const eventIds=new Set(knownEvents.map(event=>event.eventId));
+      if(this.store.loadProjectEventLifecycles) {
+        const all=await this.store.loadProjectEventLifecycles(projectId);
+        if(!Array.isArray(all))throw new Error("Los historiales del proyecto no son una colección.");
+        const grouped=new Map<string,EventLifecycle[]>();
+        for(const item of all) {
+          validateEventLifecycle(item,projectId);
+          if(!eventIds.has(item.eventId))continue;
+          const group=grouped.get(item.eventId) ?? [];
+          group.push(item);
+          grouped.set(item.eventId,group);
+        }
+        for(const eventId of eventIds) {
+          const history=grouped.get(eventId) ?? [];
+          knownEventLifecycles.push(...validateEventLifecycleHistory(history,projectId,eventId));
+        }
+      } else if(this.store.loadEventLifecycles) {
+        for(const eventId of eventIds) {
+          const history=await this.store.loadEventLifecycles(projectId,eventId);
+          knownEventLifecycles.push(...validateEventLifecycleHistory(history,projectId,eventId));
+        }
+      }
+    }
     return analyzeLiteraryFragment({
       projectId,
       documentId,
@@ -1537,7 +1557,8 @@ export class HostEngineApi {
       text: snapshot.text.slice(start, rangeEnd),
       baseOffset: start,
       knownCharacters,
-      knownEvents
+      knownEvents,
+      knownEventLifecycles
     });
   }
 

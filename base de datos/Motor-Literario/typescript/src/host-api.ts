@@ -34,7 +34,7 @@ import {
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
-import { extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
+import { extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
 /**
@@ -3156,7 +3156,11 @@ export class HostEngineApi {
       const statusHistory = [...(current.statusHistory ?? [
         { status: current.status, reason: "initial" as const }
       ])];
-      statusHistory.push({ status, changedAt: Date.now(), reason: "writer" });
+      statusHistory.push({
+        status,
+        changedAt: nextNarrativeIdeaStatusChangeAt(statusHistory),
+        reason: "writer"
+      });
       const updated: NarrativeIdea = { ...current, status, statusHistory };
       await this.persistIdeaUpdate(store, updated, current);
       this.narrativeIdeas.set(updated.id, updated);

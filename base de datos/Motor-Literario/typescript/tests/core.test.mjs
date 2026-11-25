@@ -4028,6 +4028,41 @@ test("el archivo de ideas espera a que termine el análisis vivo antes de transf
   assert.equal((await api.getNarrativeIdeas()).length, 0);
 });
 
+test("mantiene monotónico el historial al sincronizar decisiones con una marca futura", async () => {
+  const store = new MemoryStore();
+  const projectId = "idea-clock-sync";
+  const futureAt = Date.now() + 365 * 24 * 60 * 60 * 1000;
+  const idea = {
+    projectId,
+    id: "idea:chapter:0",
+    text: "Idea original",
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: "Reloj desincronizado",
+    evidence: [],
+    statusHistory: [
+      { status: "IDEA", changedAt: 1, reason: "initial" },
+      { status: "incorporated", changedAt: futureAt, reason: "writer" }
+    ]
+  };
+  await store.saveIdea(idea);
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Reloj desincronizado" });
+
+  const discarded = await api.setNarrativeIdeaStatus(idea.id, "discarded");
+  assert.ok(discarded.statusHistory[2].changedAt >= futureAt);
+  assert.equal(discarded.statusHistory[2].reason, "writer");
+
+  await api.extractNarrativeKnowledge("chapter", 2, "IDEA: Idea revisada.");
+  const revised = (await api.getNarrativeIdeas())[0];
+  assert.equal(revised.status, "IDEA");
+  assert.equal(revised.statusHistory[3].reason, "text-revised");
+  assert.ok(revised.statusHistory[3].changedAt >= futureAt);
+  assert.deepEqual(revised.statusHistory.map(item => item.status), [
+    "IDEA", "incorporated", "discarded", "IDEA"
+  ]);
+});
+
 test("el historial de decisiones de una idea sobrevive al reinicio del motor", async () => {
   const store = new MemoryStore();
   const firstSession = new HostEngineApi({ store });

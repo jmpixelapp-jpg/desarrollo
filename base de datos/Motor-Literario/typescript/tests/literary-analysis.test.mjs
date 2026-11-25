@@ -799,3 +799,156 @@ test("la cronología de acontecimientos conserva contadores cuando recorta evide
   assert.equal(timeline.points[0].omittedEvidenceCount, 230);
   assert.equal(timeline.points[0].evidenceTruncated, true);
 });
+
+test("integra relaciones actuales y decisiones de ideas vinculadas en la trayectoria", () => {
+  const text = [
+    "Escena 1",
+    "Ana habló con Bruno. La tormenta provocó el derrumbe.",
+    "Escena 2",
+    "Bruno recordó la promesa."
+  ].join("\n");
+  const evidence = phrase => {
+    const start = text.indexOf(phrase);
+    assert.notEqual(start, -1);
+    return {
+      documentId: "chapter-one",
+      revision: 1,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    };
+  };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [
+      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "bruno-id", canonicalName: "Bruno" }
+    ],
+    knownRelations: [
+      {
+        projectId: "literary-analysis-test",
+        relationId: "ana-bruno",
+        fromEntityId: "ana-id",
+        toEntityId: "bruno-id",
+        relationType: "alliance",
+        evidenceCount: 1,
+        staleEvidenceCount: 0,
+        evidence: [evidence("Ana habló con Bruno.")]
+      },
+      {
+        projectId: "literary-analysis-test",
+        relationId: "ana-city",
+        fromEntityId: "ana-id",
+        toEntityId: "city-id",
+        relationType: "resides-in",
+        evidenceCount: 0,
+        staleEvidenceCount: 1,
+        evidence: []
+      }
+    ],
+    knownIdeas: [
+      {
+        projectId: "literary-analysis-test",
+        ideaId: "ana-decision",
+        text: "Ana decide ayudar a Bruno.",
+        status: "incorporated",
+        originDocumentId: "chapter-one",
+        sourceProjectName: "Libro de prueba",
+        relatedEntityIds: ["ana-id"],
+        relatedIdeaIds: ["idea-background"],
+        evidenceCount: 1,
+        staleEvidenceCount: 0,
+        evidence: [evidence("Ana habló con Bruno.")],
+        statusHistory: [
+          { status: "IDEA", reason: "initial", changedAt: 1 },
+          { status: "incorporated", reason: "writer", changedAt: 2 }
+        ],
+        omittedStatusHistoryCount: 0
+      },
+      {
+        projectId: "literary-analysis-test",
+        ideaId: "bruno-discarded",
+        text: "Bruno abandona la ciudad.",
+        status: "discarded",
+        originDocumentId: "chapter-two",
+        sourceProjectName: "Libro de prueba",
+        relatedEntityIds: ["bruno-id"],
+        relatedIdeaIds: [],
+        evidenceCount: 0,
+        staleEvidenceCount: 1,
+        evidence: [],
+        statusHistory: [
+          { status: "IDEA", reason: "initial" },
+          { status: "discarded", reason: "writer", changedAt: 3 }
+        ],
+        omittedStatusHistoryCount: 0
+      }
+    ]
+  });
+  const ana = result.characterNarrativeTrajectories.trajectories.find(item => item.entityId === "ana-id");
+  const bruno = result.characterNarrativeTrajectories.trajectories.find(item => item.entityId === "bruno-id");
+  assert.ok(ana && bruno);
+  assert.equal(ana.relationships.length, 2);
+  assert.deepEqual(ana.relationships.map(item => [item.relationId, item.direction]), [
+    ["ana-bruno", "outgoing"],
+    ["ana-city", "outgoing"]
+  ]);
+  assert.equal(ana.relationships[0].otherCharacterName, "Bruno");
+  assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
+  assert.equal(ana.relationships[1].evidenceStatus, "stale-only");
+  assert.equal(ana.relationships[0].historyStatus, "current-record-only");
+  assert.equal(ana.documentedDecisions[0].status, "incorporated");
+  assert.equal(ana.documentedDecisions[0].writerDecisionCount, 1);
+  assert.deepEqual(ana.scenes[0].relationshipIds, ["ana-bruno"]);
+  assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, ["ana-decision"]);
+  assert.equal(ana.writerDecisionCount, 1);
+  assert.equal(bruno.documentedDecisions[0].status, "discarded");
+  assert.equal(bruno.documentedDecisions[0].writerDecisionCount, 1);
+  assert.equal(result.characterNarrativeTrajectories.relationshipRecordCount, 2);
+  assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount, 2);
+});
+
+test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálogo de personajes", () => {
+  const text = "Escena 1\nAna observó la puerta.";
+  const base = {
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }]
+  };
+  assert.throws(() => analyzeLiteraryFragment({
+    ...base,
+    knownRelations: [{
+      projectId: "another-project",
+      relationId: "wrong-project",
+      fromEntityId: "ana-id",
+      toEntityId: "other",
+      relationType: "ally",
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      evidence: []
+    }]
+  }), /relaciones narrativas/);
+  assert.throws(() => analyzeLiteraryFragment({
+    ...base,
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "wrong-entity",
+      text: "Ana toma una decisión.",
+      status: "IDEA",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro",
+      relatedEntityIds: ["unknown-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      evidence: [],
+      statusHistory: [{ status: "IDEA", reason: "initial" }],
+      omittedStatusHistoryCount: 0
+    }]
+  }), /ideas y decisiones/);
+});

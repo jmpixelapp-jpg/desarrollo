@@ -1737,10 +1737,15 @@ export class HostEngineApi {
     });
     const linkedIdeas = orderedProjectIdeas
       .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)));
-    const knownIdeasOmittedCount=Math.max(0,linkedIdeas.length-2_000);
-    const knownLinkedIdeaIds = new Set(
-      linkedIdeas.slice(0,2_000).map(idea => idea.id)
-    );
+    // Las trayectorias requieren el texto completo y admiten hasta 100.000
+    // unidades UTF-16 por idea. Una idea mayor permanece en el grafo global,
+    // pero no se vuelve a transferir por la vista auxiliar de personajes.
+    const linkedIdeasWithSupportedText = linkedIdeas.filter(idea => idea.text.length <= 100_000);
+    const knownIdeasOmittedCount =
+      linkedIdeas.length - linkedIdeasWithSupportedText.length +
+      Math.max(0, linkedIdeasWithSupportedText.length - 2_000);
+    const knownLinkedIdeas = linkedIdeasWithSupportedText.slice(0,2_000);
+    const knownLinkedIdeaIds = new Set(knownLinkedIdeas.map(idea => idea.id));
     const projectIdeaSnapshot = orderedProjectIdeas.slice(0,2_000);
     // Las ideas enlazadas ya transfieren su texto en knownIdeas para las
     // trayectorias; no se vuelve a copiar ese texto al catálogo global.
@@ -1772,7 +1777,7 @@ export class HostEngineApi {
           omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
         };
       }) : undefined;
-    const knownIdeas=linkedIdeas.slice(0,2_000).map(idea => {
+    const knownIdeas=knownLinkedIdeas.map(idea => {
       const activeEvidence=idea.evidence.filter(evidence => evidence.status !== "stale");
       const statusHistory=idea.statusHistory ?? [{status:idea.status,reason:"initial" as const}];
       return {

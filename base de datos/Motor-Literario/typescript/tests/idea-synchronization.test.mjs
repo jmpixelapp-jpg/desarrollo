@@ -126,6 +126,26 @@ test("reconcilia adiciones y eliminaciones de vínculos de ideas tras conflictos
   api.dispose();
 });
 
+test("permite retirar una referencia a una ficha eliminada", async () => {
+  const store = new RacingStore([
+    idea("idea-source", { relatedEntityIds: ["character-deleted"] })
+  ]);
+  const api = createApi(store);
+
+  const result = await api.setNarrativeIdeaEntityLink(
+    "idea-source", "character-deleted", false
+  );
+
+  assert.deepEqual(result.relatedEntityIds, []);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedEntityIds,
+    []
+  );
+  assert.equal(store.entityReads, 1);
+  assert.equal(store.writes, 1);
+  api.dispose();
+});
+
 test("reaplica vínculos idea-ficha usando el catálogo recargado tras un conflicto CAS", async () => {
   const store = new RacingStore([idea("idea-source")], [
     entity("character-local", "Ana"), entity("character-external", "Bruno")

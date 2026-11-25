@@ -10129,10 +10129,16 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
 
   try {
     archiveStore = new IndexedDbProjectStore();
-    const firstArchive = await archiveStore.archiveUnincorporatedIdeas(
+    const firstSummary = await archiveStore.archiveUnincorporatedIdeasSummary(
       projectId, writerId, projectName, 100
     );
-    assert.equal(firstArchive.length, 1);
+    assert.equal(firstSummary.writerId, writerId);
+    assert.equal(firstSummary.sourceProjectId, projectId);
+    assert.equal(firstSummary.sourceProjectName, projectName);
+    assert.equal(firstSummary.archivedCount, 1);
+    assert.equal(firstSummary.finalizedAt, 100);
+    assert.equal(firstSummary.alreadyFinalized, false);
+    assert.match(firstSummary.archiveChecksum, /^fnv1a64:[0-9a-f]{16}$/);
     assert.equal(projectIdeas.length, 0);
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
@@ -10154,7 +10160,12 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
       projectId, writerId, projectName, 200
     );
     assert.deepEqual(retryArchive, [],
-      "el recibo valida el archivo existente sin volver a entregar las ideas al anfitrión");
+      "el contrato heredado valida el recibo sin volver a entregar las ideas al anfitrión");
+    const retrySummary = await archiveStore.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 250
+    );
+    assert.deepEqual({ ...retrySummary, alreadyFinalized: false }, firstSummary);
+    assert.equal(retrySummary.alreadyFinalized, true);
     assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
     assert.equal(writerVersions.get(writerId).version, 1,

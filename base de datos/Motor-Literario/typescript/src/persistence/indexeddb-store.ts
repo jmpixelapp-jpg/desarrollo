@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 23;
+const DATABASE_VERSION = 24;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -45,6 +45,7 @@ const FINALIZATION_RECEIPT_ID = "finalization-v1";
 const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
 const LIVE_AUTHOR_MONITOR_CHECKPOINTS = "live-author-monitor-checkpoints";
+const LIVE_AUTHOR_MONITOR_LEASES = "live-author-monitor-leases";
 const DICTIONARIES = "project-dictionaries";
 const DICTIONARY_ENTRIES = "dictionary-entries";
 const DICTIONARY_ENTRY_ENTITIES = "dictionary-entry-entities";
@@ -1729,6 +1730,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           checkpoints.createIndex("by-project", "projectId", { unique: false });
         }
+        if (!db.objectStoreNames.contains(LIVE_AUTHOR_MONITOR_LEASES)) {
+          const leases = db.createObjectStore(LIVE_AUTHOR_MONITOR_LEASES, {
+            keyPath: ["projectId", "documentId"]
+          });
+          leases.createIndex("by-project", "projectId", { unique: false });
+        }
         if (!db.objectStoreNames.contains(MANUSCRIPT_FRAGMENTS)) {
           const fragments = db.createObjectStore(MANUSCRIPT_FRAGMENTS, { keyPath: ["projectId", "id"] });
           fragments.createIndex("by-project", "projectId", { unique: false });
@@ -1897,6 +1904,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(ASSERTIONS, "by-entity", ["projectId", "entityId"]);
         ensureIndex(DIAGNOSTICS, "by-project", "projectId");
         ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId");
+        ensureIndex(LIVE_AUTHOR_MONITOR_LEASES, "by-project", "projectId");
         ensureIndex(DICTIONARIES, "by-project", "projectId");
         ensureIndex(
           DICTIONARIES, "by-project-language-name",

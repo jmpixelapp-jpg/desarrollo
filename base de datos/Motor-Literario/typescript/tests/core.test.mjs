@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HostEngineApi, IndexedDbProjectStore, PieceTable } from "../dist/motor-literario.js";
+import { HostEngineApi, IndexedDbProjectStore, PieceTable, nextNarrativeIdeaStatusChangeAt } from "../dist/motor-literario.js";
 
 class MemoryStore {
   documents = new Map();
@@ -4026,6 +4026,36 @@ test("el archivo de ideas espera a que termine el análisis vivo antes de transf
   assert.equal(archived.length, 1);
   assert.equal(archived[0].idea.text, "La puerta se abre al amanecer.");
   assert.equal((await api.getNarrativeIdeas()).length, 0);
+});
+
+test("rechaza historiales importados de decisiones narrativas malformados", () => {
+  const validIdeaChange = { status: "IDEA", reason: "initial", changedAt: 10 };
+  const invalidHistories = [
+    [{ ...validIdeaChange, status: "pending" }],
+    [{ ...validIdeaChange, reason: "imported-without-source" }],
+    [{ ...validIdeaChange, changedAt: "10" }],
+    [{ ...validIdeaChange, changedAt: Number.NaN }],
+    [{ ...validIdeaChange, changedAt: Number.POSITIVE_INFINITY }],
+    [{ ...validIdeaChange, changedAt: -1 }],
+    [null]
+  ];
+
+  for (const history of invalidHistories) {
+    assert.throws(
+      () => nextNarrativeIdeaStatusChangeAt(history, 20),
+      /decisión narrativa inválida|marca temporal inválida/
+    );
+  }
+
+  assert.equal(
+    nextNarrativeIdeaStatusChangeAt([{ status: "IDEA", reason: "initial" }], 20),
+    20,
+    "las decisiones históricas sin fecha siguen siendo compatibles"
+  );
+  assert.throws(
+    () => nextNarrativeIdeaStatusChangeAt([], "20"),
+    /Historial o reloj de decisiones narrativas inválido/
+  );
 });
 
 test("mantiene monotónico el historial al sincronizar decisiones con una marca futura", async () => {

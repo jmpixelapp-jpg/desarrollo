@@ -3561,11 +3561,12 @@ export class HostEngineApi {
             sourceProjectId: project.projectId,
             ideaId
           }));
-          const batch = requireUniquePersonalIdeaEntries(
-            await loadByKeys.call(this.store, writerId, references),
-            writerId,
-            project.projectId
-          );
+          const batch = await loadByKeys.call(this.store, writerId, references);
+          if (!Array.isArray(batch) || batch.some(entry =>
+            !isValidPersonalIdeaEntry(entry, writerId, project.projectId)
+          )) {
+            throw new Error("Integridad de biblioteca: el recibo referencia entradas ausentes o malformadas.");
+          }
           const byId = new Map(batch.map(entry => [entry.idea.id, entry]));
           if (byId.size !== batchIds.length) {
             throw new Error("Integridad de biblioteca: el recibo referencia entradas ausentes o duplicadas.");

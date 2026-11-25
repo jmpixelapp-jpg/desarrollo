@@ -2327,7 +2327,8 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["personal-idea-library", "by-writer-source"],
       ["personal-idea-library", "by-source-project"],
       ["narrative-assertions", "by-project"],
-      ["narrative-assertions", "by-entity"]
+      ["narrative-assertions", "by-entity"],
+      ["document-diagnostics", "by-project"]
     ];
     assert.deepEqual(createdIndexes.map(([storeName, indexName]) => [storeName, indexName]), expected);
     assert.equal(
@@ -2802,7 +2803,7 @@ test("extrae personajes, lugares y objetos con evidencia y offsets UTF-16", asyn
   const alvaro = extracted.find(entity => entity.canonicalName === "Álvaro");
   assert.equal(text.slice(alvaro.evidence[0].start, alvaro.evidence[0].end), "Álvaro");
   assert.equal(alvaro.evidence[0].revision, 7);
-  assert.equal(alvaro.evidence[0].excerpt, "El personaje Álvaro llegó a la ciudad de Brumaria.");
+  assert.equal(alvaro.evidence[0].excerpt, text);
   assert.equal((await api.getNarrativeEntities()).length, 3);
 });
 
@@ -3612,7 +3613,7 @@ test("el archivo de ideas espera a que termine el análisis vivo antes de transf
   await api.openDocument({ documentId: "chapter", text: "Borrador", revision: 0, sequence: 0 });
   const admission = api.onEditorChange({
     documentId: "chapter", sequence: 1, baseRevision: 0,
-    start: 7, end: 7, replacement: "\nIDEA: La puerta se abre al amanecer."
+    start: 8, end: 8, replacement: "\nIDEA: La puerta se abre al amanecer."
   });
   assert.equal(admission.status, "queued");
   const archived = await api.archiveUnincorporatedIdeas();

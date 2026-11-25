@@ -65,6 +65,12 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     const soloNode = result.ideaGraph.nodes.find(node => node.ideaId === "solo");
     assert.equal(soloNode.observedStatusTransitionCount, 5);
     assert.equal(soloNode.statusReversalCount, 3);
+    assert.equal(soloNode.comparableStatusTimestampPairCount, 6);
+    assert.equal(soloNode.uncomparableStatusTimestampPairCount, 0);
+    assert.equal(soloNode.nonMonotonicStatusTimestampCount, 0);
+    assert.equal(soloNode.earliestKnownStatusChangeAt, 1);
+    assert.equal(soloNode.latestKnownStatusChangeAt, 7);
+    assert.equal(soloNode.knownStatusHistorySpanMs, 6);
     assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
     assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
     assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);

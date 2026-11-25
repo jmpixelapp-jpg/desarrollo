@@ -1771,18 +1771,24 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
     { length: 5_003 },
     (_, index) => `external-${String(index).padStart(5, "0")}`
   );
-  const ideas = [{
-    projectId,
-    id: "reference-sample-source",
-    text: "Una única idea con muchas referencias explícitas",
-    status: "IDEA",
-    originDocumentId: "chapter",
-    sourceProjectName: "Book",
-    evidence: [],
-    relatedIdeaIds,
-    relatedEntityIds: [],
-    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
-  }];
+  // Cada idea persistida respeta el límite contractual de 500 vínculos;
+  // el catálogo completo, no una sola idea inválida, supera 5.000 aristas.
+  const ideas = Array.from({ length: 11 }, (_, sourceIndex) => {
+    const start = sourceIndex * 500;
+    const end = Math.min(5_003, start + 500);
+    return {
+      projectId,
+      id: `reference-sample-source-${String(sourceIndex).padStart(2, "0")}`,
+      text: `Idea fuente ${sourceIndex} con muchas referencias explícitas`,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: relatedIdeaIds.slice(start, end),
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    };
+  });
   const api = new HostEngineApi({
     store: { ...store, documents: new Map(), ideas }
   });
@@ -1810,8 +1816,11 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
       reference.fromIdeaId === "reference-sample-source" &&
       reference.resolution === "missing-from-project"
     ));
-    assert.equal(graph.nodes[0].notIncludedOutgoingReferenceCount, 5_003);
-    assert.equal(graph.nodes[0].incomingReferenceCount, 0);
+    assert.equal(
+      graph.nodes.reduce((total, node) => total + node.notIncludedOutgoingReferenceCount, 0),
+      5_003
+    );
+    assert.ok(graph.nodes.every(node => node.incomingReferenceCount === 0));
   } finally {
     api.dispose();
   }

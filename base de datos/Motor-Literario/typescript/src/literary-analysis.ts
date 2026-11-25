@@ -3592,8 +3592,8 @@ function buildLiteraryIdeaGraph(
 
 /**
  * Encuentra proximidad léxica entre ideas sin inferir equivalencia temática.
- * Se indexan términos normalizados compartidos por un máximo de cuarenta ideas;
- * los términos ubicuos se excluyen para reducir coincidencias poco informativas.
+ * El filtro de frecuencia usa el 40% del catálogo, con mínimo dos y máximo
+ * cuarenta ideas, para adaptarse tanto a libros pequeños como a catálogos amplios.
  */
 function buildLiteraryIdeaLexicalResonances(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[]

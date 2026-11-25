@@ -63,7 +63,7 @@ test("limita la muestra del catálogo global sin alterar los totales del grafo",
   api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph" });
   await api.openDocument({
     documentId: "chapter",
-    text: "Escena 1\\nLa tarde avanza.",
+    text: "Escena 1\nLa tarde avanza.",
     revision: 0,
     sequence: 0
   });

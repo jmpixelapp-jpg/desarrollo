@@ -1897,38 +1897,6 @@ export class IndexedDbProjectStore implements ProjectStore {
     );
   }
 
-  async saveProjectRecord(
-    record: ProjectRecord,
-    expectedCurrent?: ProjectRecord
-  ): Promise<void> {
-    validateProjectRecord(record, record.projectId);
-    if (expectedCurrent) {
-      validateProjectRecord(expectedCurrent, record.projectId);
-      if (record.currentVersion !== expectedCurrent.currentVersion + 1) {
-        throw new Error("La versión de la ficha debe avanzar exactamente una unidad.");
-      }
-      if (record.createdAt !== expectedCurrent.createdAt || record.updatedAt < expectedCurrent.updatedAt) {
-        throw new Error("Las fechas de la ficha no pueden retroceder ni cambiar su creación.");
-      }
-    } else if (record.currentVersion !== 1) {
-      throw new Error("Una ficha nueva debe comenzar en versión 1.");
-    }
-    await saveProjectRecordWithParents(
-      await this.open(), PROJECT_RECORDS, record, expectedCurrent, [],
-      "ficha MLDB", validateProjectRecord, cloneProjectRecord
-    );
-  }
-
-  async loadProjectRecords(projectId: string): Promise<readonly ProjectRecord[]> {
-    if (typeof projectId !== "string" || !projectId.trim()) {
-      throw new Error("Identificador de proyecto inválido para consultar fichas.");
-    }
-    return loadSimpleProjectRecords(
-      await this.open(), PROJECT_RECORDS, projectId, "fichas MLDB",
-      validateProjectRecord, cloneProjectRecord
-    );
-  }
-
   async saveProjectRecord(record: ProjectRecord, expectedCurrent?: ProjectRecord): Promise<void> {
     validateProjectRecord(record, record.projectId);
     if (expectedCurrent) {
@@ -1942,10 +1910,75 @@ export class IndexedDbProjectStore implements ProjectStore {
     } else if (record.currentVersion !== 1) {
       throw new Error("Una ficha nueva debe comenzar en versión 1.");
     }
-    await saveProjectRecordWithParents(
-      await this.open(), PROJECT_RECORDS, record, expectedCurrent, [],
-      "ficha MLDB", validateProjectRecord, cloneProjectRecord
-    );
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([PROJECT_RECORDS, RECORD_NAMES], "readwrite");
+      const records = transaction.objectStore(PROJECT_RECORDS);
+      const names = transaction.objectStore(RECORD_NAMES);
+      const currentRequest = records.get([record.projectId, record.id]);
+      const namesRequest = names.index("by-record").getAll([record.projectId, record.id]);
+      let current: ProjectRecord | undefined;
+      let recordReady = false;
+      let namesReady = false;
+      let existingNames: RecordName[] = [];
+      let failure: Error | undefined;
+      let finished = false;
+      const abortWith = (error: unknown): void => {
+        if (finished) return;
+        failure = error instanceof Error ? error : new Error("No se pudo guardar la ficha.");
+        finished = true;
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      const commitIfReady = (): void => {
+        if (finished || !recordReady || !namesReady) return;
+        try {
+          if (expectedCurrent) {
+            if (!current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+              throw new Error("La ficha cambió en otra instancia; vuelve a leerla antes de actualizar.");
+            }
+          } else if (current) {
+            throw new Error("La ficha ya existe; vuelve a leerla antes de actualizar.");
+          }
+          for (const name of existingNames) {
+            validateRecordName(name, record.projectId);
+            if (name.isPrimary && name.name !== record.primaryName) {
+              names.put(cloneRecordName({ ...name, isPrimary: false }));
+            }
+          }
+          records.put(cloneProjectRecord(record));
+        } catch (error) { abortWith(error); }
+      };
+      currentRequest.onsuccess = () => {
+        current = currentRequest.result as ProjectRecord | undefined;
+        try {
+          if (current) validateProjectRecord(current, record.projectId);
+          recordReady = true;
+          commitIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      namesRequest.onsuccess = () => {
+        try {
+          existingNames = namesRequest.result as RecordName[];
+          if (!Array.isArray(existingNames)) throw new Error("Los nombres vinculados a la ficha no forman una colección.");
+          for (const name of existingNames) validateRecordName(name, record.projectId);
+          namesReady = true;
+          commitIfReady();
+        } catch (error) { abortWith(error); }
+      };
+      currentRequest.onerror = () => abortWith(
+        currentRequest.error ?? new Error("No se pudo leer la ficha actual.")
+      );
+      namesRequest.onerror = () => abortWith(
+        namesRequest.error ?? new Error("No se pudieron leer los nombres asociados a la ficha.")
+      );
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(
+        failure ?? transaction.error ?? new Error("No se pudo guardar la ficha.")
+      );
+      transaction.onabort = () => reject(
+        failure ?? transaction.error ?? new Error("Se canceló el guardado de la ficha.")
+      );
+    });
   }
 
   async loadRecordNames(projectId: string, recordId?: string): Promise<readonly RecordName[]> {

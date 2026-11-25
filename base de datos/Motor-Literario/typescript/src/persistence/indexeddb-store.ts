@@ -130,6 +130,47 @@ function validateNarrativeEntityIdentityHistory(entities: readonly NarrativeEnti
   }
 }
 
+/**
+ * Valida snapshots históricos de una biblioteca personal.
+ * A diferencia de las entidades vivas, los snapshots pueden conservar una
+ * cadena legítima de fusiones (A absorbida por B, después B por C).
+ * Se rechazan propietarios duplicados y ciclos, pero no la presencia de
+ * cada eslabón histórico como snapshot independiente.
+ */
+function validateNarrativeEntitySnapshotHistory(entities: readonly NarrativeEntity[]): void {
+  const byId = new Map<string, NarrativeEntity>();
+  const historicalParents = new Map<string, string>();
+  for (const entity of entities) {
+    validateNarrativeEntityRecord(entity, "entidad contextual");
+    if (byId.has(entity.id)) {
+      throw new Error("Integridad narrativa: una instantánea de entidad está duplicada.");
+    }
+    byId.set(entity.id, entity);
+    for (const historicalId of entity.mergedFromIds ?? []) {
+      if (historicalId === entity.id) {
+        throw new Error("Integridad narrativa: una entidad reclama su propio ID histórico.");
+      }
+      const owner = historicalParents.get(historicalId);
+      if (owner !== undefined && owner !== entity.id) {
+        throw new Error("Integridad narrativa: un ID histórico pertenece a más de una entidad.");
+      }
+      historicalParents.set(historicalId, entity.id);
+    }
+  }
+
+  for (const startingId of byId.keys()) {
+    const visited = new Set<string>();
+    let currentId = startingId;
+    while (historicalParents.has(currentId)) {
+      if (visited.has(currentId)) {
+        throw new Error("Integridad narrativa: se detectó un ciclo en el historial de identidades.");
+      }
+      visited.add(currentId);
+      currentId = historicalParents.get(currentId)!;
+    }
+  }
+}
+
 function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
   validateProjectRecord(idea, label);
   if (typeof idea.text !== "string" || !idea.text.trim() ||
@@ -285,8 +326,7 @@ function validatePersonalIdeaLibraryContext(
       throw new Error("Integridad de biblioteca: una idea pendiente debe resolverse mediante su propia entrada archivada.");
     }
   }
-  for (const entity of relatedEntities) validateNarrativeEntityRecord(entity, "entidad contextual");
-  validateNarrativeEntityIdentityHistory(relatedEntities);
+  validateNarrativeEntitySnapshotHistory(relatedEntities);
   // Reutiliza el conjunto ya validado arriba; también comprueba referencias de ideas.
   for (const idea of relatedIdeas) {
     if ((idea.relatedEntityIds ?? []).some(id => !entityIds.has(id))) {

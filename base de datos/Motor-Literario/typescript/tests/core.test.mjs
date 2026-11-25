@@ -2268,9 +2268,6 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["relation-lifecycles", "by-project"],
       ["relation-lifecycles", "by-subject"],
       ["relation-lifecycles", "by-subject-revision"],
-      ["event-lifecycles", "by-project"],
-      ["event-lifecycles", "by-subject"],
-      ["event-lifecycles", "by-subject-revision"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],
@@ -2466,6 +2463,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     assert.deepEqual(await store.loadEntities("migration-test"), []);
     assert.equal(openedVersion, 22);
     const expected = [
+            ["event-lifecycles", "by-project"],
+            ["event-lifecycles", "by-subject"],
+            ["event-lifecycles", "by-subject-revision"],,
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
       ["language-profiles", "by-project-language"],
@@ -5989,7 +5989,7 @@ test("IndexedDB rechaza vínculos de idea duplicados y autorreferenciales antes 
       originDocumentId: "chapter", sourceProjectName: "Libro", evidence: [] };
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-b", "idea-b"] }),
-      /referencias inválidas o duplicadas/i
+      /referencias inválidas, duplicadas/i
     );
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-a"] }),

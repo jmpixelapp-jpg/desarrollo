@@ -27,7 +27,8 @@ export function extractNarrativeAssertions(
       !Array.isArray(entities)) {
     throw new Error("Contexto de afirmaciones narrativas inválido.");
   }
-  for (const entity of entities) {
+  const validatedEntities = entities as readonly NarrativeEntity[];
+  for (const entity of validatedEntities) {
     if (!entity || entity.projectId !== projectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
         entity.kind !== "character" && entity.kind !== "place" && entity.kind !== "object" ||
@@ -66,7 +67,7 @@ export function extractNarrativeAssertions(
   }
   if (definitions.length === 0) return [];
 
-  const characters = entities.filter((entity: NarrativeEntity) => entity.projectId === projectId && entity.kind === "character");
+  const characters = validatedEntities.filter(entity => entity.projectId === projectId && entity.kind === "character");
   const output: NarrativeAssertion[] = [];
   for (const entity of characters) {
     const names = [entity.canonicalName, ...entity.aliases];

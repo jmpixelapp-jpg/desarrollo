@@ -183,6 +183,11 @@ export function mountLiveAuthorMonitorTextArea(
 
     dispose: (): void => {
       if (disposed) return;
+      if (binding.getPendingChanges().length > 0) {
+        throw new Error(
+          "No se puede desmontar el monitor mientras existan cambios sin admitir; reintente la cola o resincronice antes de disponer la integración."
+        );
+      }
       disposed = true;
       try { binding(); } finally { source.dispose(); }
     }

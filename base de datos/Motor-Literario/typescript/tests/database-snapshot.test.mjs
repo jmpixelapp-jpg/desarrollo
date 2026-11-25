@@ -263,8 +263,10 @@ test("rechaza enlaces simbólicos de origen, respaldo y destino sin modificar su
       createDatabaseBackup(sourceLink, backupPath),
       /archivo regular.*enlace simbólico/iu
     );
-    assert.equal((await SqliteProjectStore.open(sourcePath)).loadEntities("source-project")[0].canonicalName,
-      "Origen conservado");
+    store = await SqliteProjectStore.open(sourcePath);
+    assert.equal((await store.loadEntities("source-project"))[0].canonicalName, "Origen conservado");
+    store.close();
+    store = undefined;
 
     await createDatabaseBackup(sourcePath, backupPath);
     await symlink(backupPath, backupLink);

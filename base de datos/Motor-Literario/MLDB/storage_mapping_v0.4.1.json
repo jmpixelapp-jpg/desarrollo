@@ -1,6 +1,6 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 10,
+  "mapping_version": 11,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
@@ -135,6 +135,29 @@
           [
             "by-source-project",
             "sourceProjectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "writer-library-finalization-receipts",
+        "keyPath": [
+          "writerId",
+          "sourceProjectId",
+          "receiptId"
+        ],
+        "indexes": [
+          [
+            "by-writer",
+            "writerId",
+            false
+          ],
+          [
+            "by-writer-source",
+            [
+              "writerId",
+              "sourceProjectId"
+            ],
             false
           ]
         ]

@@ -121,6 +121,47 @@ test("el grafo distingue historiales consistentes, discrepantes y desconocidos",
   }
 });
 
+test("el grafo global actualiza la consistencia al ampliarse el historial de una idea", async () => {
+  const ideas = structuredClone(store.ideas);
+  const bridge = ideas.find(idea => idea.id === "bridge");
+  bridge.status = "discarded";
+  const localStore = { ...store, documents: new Map(), ideas };
+  const api = new HostEngineApi({ store: localStore });
+  api.initializeProject({
+    projectId,
+    projectName: "Book",
+    writerId: "writer-status-refresh"
+  });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\nEl historial puede recibir una nueva decisión.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = await api.analyzeLiteraryDocument("chapter");
+    const beforeBridge = before.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(beforeBridge.currentStatusHistoryConsistency, "mismatch");
+    assert.equal(before.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 1);
+
+    bridge.statusHistory.push({
+      status: "discarded",
+      reason: "writer",
+      changedAt: 8
+    });
+
+    const after = await api.analyzeLiteraryDocument("chapter");
+    const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(afterBridge.currentStatusHistoryConsistency, "consistent");
+    assert.equal(after.ideaGraph.statusHistoryConsistency.mismatchIdeaCount, 0);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.consistentIdeaCount, 3);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.unknownIdeaCount, 1);
+    assert.equal(after.ideaGraph.statusHistoryConsistency.verificationCoverage, 0.75);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
   const api = new HostEngineApi({
     store: { ...store, documents: new Map() }

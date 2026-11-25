@@ -3378,6 +3378,36 @@ const IDEA_SWEDISH_STOP_WORDS = new Set([
   "vill","vår","våra","vårt","än","ännu","är","åt","över"
 ]);
 
+const IDEA_NORWEGIAN_STOP_WORDS = new Set([
+  "alle","alt","alltid","andre","at","av","bak","bare","begge","ble","bli","blir","blitt","bort",
+  "bra","bruk","både","da","de","deg","dem","den","denne","der","dere","deres","det","dette",
+  "deg","din","disse","dit","du","då","ein","eit","eller","en","ene","enn","er","et","etter",
+  "etterpå","før","for","fordi","fra","fram","frem","få","gjennom","ha","hadde","han","hans",
+  "har","hennar","henne","hennes","her","hit","hva","hvem","hver","hvilke","hvilken","hvilket",
+  "hvis","hvor","hvordan","hvorfor","i","ikke","ikkje","ingen","ingenting","inn","inni","ja",
+  "jeg","meg","jo","kan","kom","kommer","kun","kunne","kva","kvar","kven","kvi","kvit","man",
+  "med","meg","meir","mellom","men","mens","mer","min","mine","mitt","mot","må","måtte","ned",
+  "nei","no","noe","noen","noko","nokon","nå","når","og","også","om","opp","oss","over","på",
+  "samme","seg","selv","si","sidan","siden","sin","sine","sitt","skal","skulle","slik","som",
+  "så","sånn","til","under","ut","uten","var","vart","ved","vere","vi","vil","ville","viss",
+  "være","vært","å"
+]);
+
+const IDEA_DANISH_STOP_WORDS = new Set([
+  "alle","alt","anden","andre","at","af","aldrig","alligevel","allerede","altid","blandt","blev",
+  "blive","bliver","da","dag","de","dem","den","denne","der","deres","det","dette","dig","din",
+  "dine","disse","dit","dog","du","efter","eller","en","end","ene","enhver","et","fem","fire",
+  "flere","flest","for","fordi","før","fra","få","god","gøre","gør","ham","han","hans","har",
+  "havde","have","hele","heller","her","hos","hun","hvad","hvem","hver","hvilke","hvilken",
+  "hvilket","hvis","hvor","hvordan","hvorfor","i","ikke","imellem","ind","ingen","intet","ja",
+  "jeg","jer","jeres","jo","kan","kom","kommer","kun","kunne","lad","lang","lidt","lige","lille",
+  "man","mand","mange","med","meget","men","mens","mere","mig","min","mine","mit","mod","må",
+  "måske","ned","nej","noget","nogle","nu","når","og","også","om","op","os","over","på","se",
+  "selv","sig","sin","sine","sit","skal","skulle","som","stor","store","så","sådan","thi","til",
+  "under","var","ved","vi","vil","ville","vor","vores","være","været","øvrigt"
+]);
+
+
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
  * Los destinos no incluidos permanecen indeterminados cuando hay ideas omitidas
@@ -3835,7 +3865,8 @@ function buildLiteraryIdeaLexicalResonances(
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
           IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term) ||
           IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term) ||
-          IDEA_DUTCH_STOP_WORDS.has(term) || IDEA_SWEDISH_STOP_WORDS.has(term)) continue;
+          IDEA_DUTCH_STOP_WORDS.has(term) || IDEA_SWEDISH_STOP_WORDS.has(term) || IDEA_DANISH_STOP_WORDS.has(term) ||
+          IDEA_NORWEGIAN_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>

@@ -61,7 +61,7 @@ El módulo `narrative-knowledge.ts` incorpora la primera capa de conocimiento es
 - Captura ideas únicamente desde líneas marcadas con `IDEA:`. Cada idea conserva el documento de origen, el título del libro proporcionado por el anfitrión, evidencia e historial de revisiones. El anfitrión puede cambiar su estado a `IDEA`, `incorporated` o `discarded`; las transiciones quedan registradas por separado con fecha y motivo (`writer` o `text-revised`), sin duplicar entradas cuando se repite el mismo estado. Si el texto cambia, la versión nueva vuelve a `IDEA` y conserva el historial anterior. La transferencia final de ideas `IDEA` a una biblioteca personal aislada por escritor está implementada mediante una transacción local; requiere que el anfitrión suministre `writerId` al inicializar el proyecto.
 - Todas las colecciones se aíslan mediante el `projectId` proporcionado por la aplicación anfitriona.
 
-La base IndexedDB está en versión 11 y conserva las colecciones previas, con entidades, relaciones, acontecimientos, ideas, afirmaciones históricas y la biblioteca personal de ideas local. La migración verifica y reconstruye índices faltantes en almacenes existentes, sin reemplazar ni vaciar las colecciones.
+La base IndexedDB está en versión 21 y conserva las colecciones previas, con entidades, relaciones, acontecimientos, ideas, afirmaciones históricas y la biblioteca personal de ideas local. La migración verifica y reconstruye índices faltantes en almacenes existentes, sin reemplazar ni vaciar las colecciones.
 
 La API del anfitrión expone `extractNarrativeKnowledge(documentId, revision, text)`, `getNarrativeEntities()`, `getNarrativeRelations()`, `getNarrativeEvents()`, `getNarrativeIdeas()`, `setNarrativeIdeaStatus(ideaId, status)`, `getNarrativeAssertions()` y `getNarrativeEntityHistory(entityId)`.
 
@@ -304,3 +304,4 @@ Todos los vínculos se guardan en `dictionary-entry-entities`, con `linkKind`, `
 
 La migración DB21 materializa los vínculos heredados que solo contenían IDs: usa `RELATED` como tipo genérico, `MIGRATION` como procedencia explícita y la fecha real de migración como `createdAt`. No presenta esa fecha como si fuera la fecha histórica original. La tabla queda completamente implementada y las asociaciones anteriores no se pierden.
 
+\n\nLa auditoría física del manifiesto `MLDB/storage_mapping_v0.4.1.json` verifica las 24 tablas propiedad del motor, la tabla `projects` bajo control del anfitrión, la versión/nombre de IndexedDB y los 31 almacenes declarados, incluidos diagnósticos y recibos operativos. Se ejecuta junto con la validación del esquema mediante `npm run validate:schema`.\n

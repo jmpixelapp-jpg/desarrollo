@@ -336,6 +336,31 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
   api.dispose();
 });
 
+test("rechaza altas de vínculos entre ideas si el destino fue eliminado externamente", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-deleted")
+  ]);
+  const api = createApi(store);
+
+  const initial = await api.getNarrativeIdeas();
+  assert.equal(initial.length, 2);
+  assert.equal(store.ideaReads, 1);
+
+  store.ideas.delete(projectId + ":idea-deleted");
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-deleted", true),
+    /Ambas ideas deben existir en el proyecto activo/
+  );
+
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.writes, 0);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    []
+  );
+  api.dispose();
+});
+
 test("rechaza altas de vínculos si el destino fue eliminado tras calentar la caché", async () => {
   const store = new RacingStore(
     [idea("idea-source")],

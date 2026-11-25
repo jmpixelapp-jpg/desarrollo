@@ -441,6 +441,28 @@ test("detecta fichas eliminadas externamente aunque la caché de entidades esté
   api.dispose();
 });
 
+test("no publica ideas en caché cuando falla la validación de sus referencias", async () => {
+  const store = new RacingStore([
+    idea("idea-corrupt", { relatedEntityIds: ["character-missing"] })
+  ]);
+  const api = createApi(store);
+
+  await assert.rejects(
+    api.getNarrativeIdeas(),
+    /referencias a entidades inexistentes en el proyecto activo/
+  );
+
+  // Simula que el anfitrión repara o elimina el registro durable tras detectar
+  // la referencia rota. El siguiente intento debe volver a leer el almacén.
+  store.ideas.delete(projectId + ":idea-corrupt");
+  const recovered = await api.getNarrativeIdeas();
+
+  assert.deepEqual(recovered, []);
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.entityReads, 1);
+  api.dispose();
+});
+
 test("recupera la cola y la caché tras un fallo de persistencia", async () => {
   const store = new RacingStore([
     idea("idea-source"), idea("idea-target-a"), idea("idea-target-b")

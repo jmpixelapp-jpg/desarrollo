@@ -1726,19 +1726,22 @@ export class SqliteProjectStore {
                 entry.sourceProjectName !== sourceProjectName || entry.category !== sourceProjectName ||
                 !entry.idea || entry.idea.projectId !== projectId ||
                 entry.idea.sourceProjectName !== sourceProjectName || entry.idea.status !== "IDEA" ||
-                !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 || !entry.context) {
+                !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 ||
+                (entry.context !== undefined && (!entry.context || entry.context.version !== 1))) {
               throw new Error("La biblioteca personal contiene una entrada ajena o incompleta.");
             }
             validateNarrativeIdea(entry.idea, projectId, "idea archivada");
-            validatePersonalIdeaContext(entry.context, projectId, sourceProjectName);
             contentChecksum.add(entry);
             restoredEntries?.push(entry);
-            const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
-            const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
-            for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
-              if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
-                  (idea.relatedIdeaIds ?? []).some(ideaId => !contextIdeaIds.has(ideaId) && !archivedIds.has(ideaId))) {
-                throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
+            if (entry.context) {
+              validatePersonalIdeaContext(entry.context, projectId, sourceProjectName);
+              const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+              const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+              for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
+                if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
+                    (idea.relatedIdeaIds ?? []).some(ideaId => !contextIdeaIds.has(ideaId) && !archivedIds.has(ideaId))) {
+                  throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
+                }
               }
             }
           }

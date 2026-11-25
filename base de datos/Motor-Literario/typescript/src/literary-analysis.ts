@@ -69,6 +69,18 @@ export interface LiteraryAnalysisKnownIdea {
   readonly writerDecisionCount: number;
   readonly omittedStatusHistoryCount: number;
 }
+/** Proyección completa de ideas del libro usada exclusivamente para el grafo global. */
+export interface LiteraryAnalysisKnownProjectIdea {
+  readonly projectId: string;
+  readonly ideaId: string;
+  readonly status: NarrativeIdea["status"];
+  readonly relatedIdeaIds: readonly string[];
+  readonly evidenceCount: number;
+  readonly staleEvidenceCount: number;
+  readonly statusHistory: readonly NarrativeIdeaStatusChange[];
+  readonly writerDecisionCount: number;
+  readonly omittedStatusHistoryCount: number;
+}
 export interface LiteraryAnalysisInput {
   readonly projectId: string;
   readonly documentId: string;
@@ -91,6 +103,9 @@ export interface LiteraryAnalysisInput {
   readonly knownRelations?: readonly LiteraryAnalysisKnownRelation[];
   /** Ideas vinculadas explícitamente a personajes, con decisiones de estado registradas. */
   readonly knownIdeas?: readonly LiteraryAnalysisKnownIdea[];
+  /** Catálogo global de todas las ideas del libro; alimenta el grafo aunque no tengan personajes asociados. */
+  readonly knownProjectIdeas?: readonly LiteraryAnalysisKnownProjectIdea[];
+  readonly knownProjectIdeasOmittedCount?: number;
   readonly knownRelationsOmittedCount?: number;
   readonly knownIdeasOmittedCount?: number;
 }
@@ -3215,7 +3230,7 @@ const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
  * nunca como referencia rota ni como prueba de inexistencia.
  */
 function buildLiteraryIdeaGraph(
-  ideas: readonly LiteraryAnalysisKnownIdea[],
+  ideas: readonly LiteraryAnalysisKnownProjectIdea[],
   omittedIdeaCount: number
 ): LiteraryIdeaGraphAnalysis {
   const orderedIdeas = [...ideas].sort((left, right) =>
@@ -4928,6 +4943,10 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (!Array.isArray(input.knownRelations) || input.knownRelations.length > 2_000)) ||
       (input.knownIdeas !== undefined &&
         (!Array.isArray(input.knownIdeas) || input.knownIdeas.length > 2_000)) ||
+      (input.knownProjectIdeas !== undefined &&
+        (!Array.isArray(input.knownProjectIdeas) || input.knownProjectIdeas.length > 2_000)) ||
+      (input.knownProjectIdeasOmittedCount !== undefined &&
+        (!Number.isSafeInteger(input.knownProjectIdeasOmittedCount) || input.knownProjectIdeasOmittedCount < 0)) ||
       (input.knownRelationsOmittedCount !== undefined &&
         (!Number.isSafeInteger(input.knownRelationsOmittedCount) || input.knownRelationsOmittedCount < 0)) ||
       (input.knownIdeasOmittedCount !== undefined &&
@@ -5037,6 +5056,37 @@ function validateInput(input: LiteraryAnalysisInput): number {
           typeof evidence.excerpt !== "string" ||
           (evidence.status !== undefined && evidence.status !== "stale")) {
         throw new Error("La evidencia de una relación narrativa es inválida.");
+      }
+    }
+  }
+
+  const projectIdeaIds = new Set<string>();
+  for (const idea of input.knownProjectIdeas ?? []) {
+    if (!idea || idea.projectId !== input.projectId ||
+        typeof idea.ideaId !== "string" || !idea.ideaId.trim() ||
+        projectIdeaIds.has(idea.ideaId) ||
+        !["IDEA","incorporated","discarded"].includes(idea.status) ||
+        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
+        idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
+        new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
+        idea.relatedIdeaIds.includes(idea.ideaId) ||
+        !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
+        !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
+        !Array.isArray(idea.statusHistory) || idea.statusHistory.length > 100 ||
+        !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
+        idea.writerDecisionCount < idea.statusHistory.filter(
+          (change: NarrativeIdeaStatusChange) => change.reason === "writer"
+        ).length ||
+        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
+      throw new Error("El catálogo global de ideas del análisis literario es inválido.");
+    }
+    projectIdeaIds.add(idea.ideaId);
+    for (const change of idea.statusHistory) {
+      if (!change || !["IDEA","incorporated","discarded"].includes(change.status) ||
+          !["initial","writer","text-revised"].includes(change.reason) ||
+          (change.changedAt !== undefined &&
+            (!Number.isFinite(change.changedAt) || change.changedAt < 0))) {
+        throw new Error("El historial de decisiones del catálogo global de ideas es inválido.");
       }
     }
   }
@@ -5205,8 +5255,11 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0,
     input.knownProjectEventsOmittedCount ?? 0
   );
+  const graphIdeas = input.knownProjectIdeas ?? input.knownIdeas ?? [];
+  const graphOmittedIdeaCount = input.knownProjectIdeasOmittedCount ??
+    input.knownIdeasOmittedCount ?? 0;
   const ideaGraph = buildLiteraryIdeaGraph(
-    input.knownIdeas ?? [],input.knownIdeasOmittedCount ?? 0
+    graphIdeas,graphOmittedIdeaCount
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);

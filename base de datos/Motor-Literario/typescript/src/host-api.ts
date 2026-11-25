@@ -416,12 +416,13 @@ function validatePersonalIdeaLibraryPage(
   cursor: PersonalIdeaLibraryCursor | null,
   limit: number
 ): { readonly page: PersonalIdeaLibraryPage; readonly unresolved: readonly PersonalIdeaLibraryCursor[] } {
-  if (!value || typeof value !== "object") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Violación de aislamiento: el almacenamiento devolvió una página de biblioteca inválida.");
   }
   const candidate = value as Partial<PersonalIdeaLibraryPage>;
   if (!Array.isArray(candidate.items) || candidate.items.length > limit ||
-      (candidate.nextCursor !== null && candidate.nextCursor !== undefined &&
+      !Object.prototype.hasOwnProperty.call(candidate, "nextCursor") ||
+      (candidate.nextCursor !== null &&
         (!candidate.nextCursor ||
           typeof candidate.nextCursor.sourceProjectId !== "string" ||
           !candidate.nextCursor.sourceProjectId.trim() ||

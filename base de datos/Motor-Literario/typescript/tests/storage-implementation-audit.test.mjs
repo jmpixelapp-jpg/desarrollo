@@ -83,3 +83,23 @@ test("cada almacén lógico tiene descriptor y los almacenes operativos también
     (issue) => issue.code === "RUNTIME_DESCRIPTOR_CONSTANT_MISSING"
   ));
 });
+
+test("detecta cambios en keyPath e índices aunque el almacén exista", () => {
+  const copy = structuredClone(mapping);
+  const descriptor = copy.runtime.object_stores.find(
+    (store) => store.name === "project-records"
+  );
+  descriptor.keyPath = ["projectId", "primaryName"];
+  assert.ok(auditStorageImplementation(copy, runtimeSource).some(
+    (issue) => issue.code === "RUNTIME_STORE_KEY_PATH_MISMATCH"
+  ));
+
+  const indexCopy = structuredClone(mapping);
+  const records = indexCopy.runtime.object_stores.find(
+    (store) => store.name === "project-records"
+  );
+  records.indexes.find((index) => index[0] === "by-project-type")[2] = true;
+  assert.ok(auditStorageImplementation(indexCopy, runtimeSource).some(
+    (issue) => issue.code === "RUNTIME_INDEX_MISMATCH"
+  ));
+});

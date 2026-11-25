@@ -289,6 +289,40 @@ export interface LiterarySceneEventEvidenceAnalysis {
   /** Perfiles de acontecimientos ordenados por cobertura, racha, evidencia e ID; máximo cien. */
   readonly profiles: readonly LiterarySceneEventEvidenceProfile[];
 }
+export interface LiterarySceneEventSequenceStep {
+  /** Posición 1-based dentro de una ventana de escenas contiguas. */
+  readonly sceneOffset: number;
+  /** IDs ordenados de forma estable; una lista vacía significa que no hubo vínculo conocido. */
+  readonly eventIds: readonly string[];
+}
+export interface LiterarySceneEventSequenceInstance {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+}
+export interface LiterarySceneEventSequenceMotif {
+  readonly sceneCount: 2 | 3;
+  /** Firma exacta de IDs por posición; no atribuye orden a los acontecimientos dentro de una escena. */
+  readonly sceneSequence: readonly LiterarySceneEventSequenceStep[];
+  readonly occurrenceCount: number;
+  /** Ventanas observadas; se exponen como máximo veinte instancias. */
+  readonly instances: readonly LiterarySceneEventSequenceInstance[];
+  readonly instancesTruncated: boolean;
+}
+export interface LiterarySceneEventSequenceMotifAnalysis {
+  readonly explicitSceneCount: number;
+  /** Todas las ventanas contiguas posibles de dos o tres escenas. */
+  readonly candidateWindowCount: number;
+  /** Ventanas con evidencia visible y sin escenas fuente truncadas. */
+  readonly analyzedWindowCount: number;
+  /** Ventanas sin ningún acontecimiento enlazado entre sus escenas. */
+  readonly emptyWindowCount: number;
+  /** Ventanas descartadas porque al menos una escena superó cien vínculos. */
+  readonly sourceTruncatedWindowCount: number;
+  readonly motifCount: number;
+  readonly omittedMotifCount: number;
+  /** Firmas exactas repetidas en al menos dos ventanas; máximo cincuenta. */
+  readonly motifs: readonly LiterarySceneEventSequenceMotif[];
+}
 export type LiterarySceneCharacterContinuityStatus =
   | "mentioned-in-both-scenes"
   | "not-mentioned-in-next-scene"
@@ -725,6 +759,8 @@ export interface LiteraryAnalysisResult {
   readonly characterEventEvidenceProfiles: LiteraryCharacterEventEvidenceAnalysis;
   /** Recurrencia de acontecimientos en escenas, independiente de que tengan participantes declarados. */
   readonly sceneEventEvidenceProfiles: LiterarySceneEventEvidenceAnalysis;
+  /** Firmas recurrentes de IDs de acontecimientos en ventanas de dos y tres escenas contiguas. */
+  readonly sceneEventSequenceMotifs: LiterarySceneEventSequenceMotifAnalysis;
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -2103,6 +2139,80 @@ function buildSceneEventEvidenceProfiles(
   };
 }
 
+function buildSceneEventSequenceMotifs(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneEventSequenceMotifAnalysis {
+  const groups = new Map<string,{
+    readonly sceneCount: 2 | 3;
+    readonly sceneSequence: LiterarySceneEventSequenceStep[];
+    instances: LiterarySceneEventSequenceInstance[];
+  }>();
+  let candidateWindowCount = 0;
+  let analyzedWindowCount = 0;
+  let emptyWindowCount = 0;
+  let sourceTruncatedWindowCount = 0;
+
+  for (const sceneCount of [2,3] as const) {
+    for (let start=0; start+sceneCount<=scenes.length; start++) {
+      candidateWindowCount++;
+      const window = scenes.slice(start,start+sceneCount);
+      if (window.some(scene => scene.eventLinksTruncated)) {
+        sourceTruncatedWindowCount++;
+        continue;
+      }
+      const sceneSequence: LiterarySceneEventSequenceStep[] = window.map((scene,index) => ({
+        sceneOffset:index+1,
+        eventIds:[...new Set(scene.eventLinks.map(event => event.eventId))]
+          .sort((a,b) => a.localeCompare(b,"en"))
+      }));
+      if (sceneSequence.every(step => step.eventIds.length===0)) {
+        emptyWindowCount++;
+        continue;
+      }
+      analyzedWindowCount++;
+      const key = JSON.stringify(sceneSequence.map(step => step.eventIds));
+      const groupKey = JSON.stringify([sceneCount,key]);
+      const group = groups.get(groupKey) ?? {
+        sceneCount,
+        sceneSequence,
+        instances:[]
+      };
+      group.instances.push({
+        fromSceneIndex:window[0]!.sceneIndex,
+        toSceneIndex:window[window.length-1]!.sceneIndex
+      });
+      groups.set(groupKey,group);
+    }
+  }
+
+  const motifs = [...groups.values()]
+    .filter(group => group.instances.length>=2)
+    .sort((a,b) =>
+      b.instances.length-a.instances.length ||
+      b.sceneCount-a.sceneCount ||
+      a.instances[0]!.fromSceneIndex-b.instances[0]!.fromSceneIndex ||
+      JSON.stringify(a.sceneSequence).localeCompare(JSON.stringify(b.sceneSequence),"en")
+    )
+    .map(group => ({
+      sceneCount:group.sceneCount,
+      sceneSequence:group.sceneSequence,
+      occurrenceCount:group.instances.length,
+      instances:group.instances.slice(0,20),
+      instancesTruncated:group.instances.length>20
+    }));
+
+  return {
+    explicitSceneCount:scenes.length,
+    candidateWindowCount,
+    analyzedWindowCount,
+    emptyWindowCount,
+    sourceTruncatedWindowCount,
+    motifCount:motifs.length,
+    omittedMotifCount:Math.max(0,motifs.length-50),
+    motifs:motifs.slice(0,50)
+  };
+}
+
 function buildCharacterEventEvidenceProfiles(
   scenes: readonly LiteraryExplicitSceneSegment[],
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[]
@@ -2779,6 +2889,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     explicitScenes,input.knownCharacters ?? []
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
+  const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
@@ -2965,6 +3076,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterMentionDistributions,
     characterEventEvidenceProfiles,
     sceneEventEvidenceProfiles,
+    sceneEventSequenceMotifs,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),

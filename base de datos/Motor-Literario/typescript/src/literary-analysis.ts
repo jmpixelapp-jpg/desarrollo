@@ -802,8 +802,13 @@ export interface LiteraryExplicitSceneSegment {
 export interface LiterarySceneLexicalEchoScene {
   readonly sceneIndex: number;
   readonly occurrenceCount: number;
-  /** Muestras UTF-16 absolutas; se conservan como máximo doce por escena. */
-  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+  readonly narrativeOccurrenceCount: number;
+  readonly dialogueOccurrenceCount: number;
+  readonly contextClassification: "narrative-only" | "dialogue-only" | "mixed";
+  /** Muestras UTF-16 absolutas con contexto; se conservan como máximo doce por escena. */
+  readonly occurrences: readonly (LiteraryAnalysisOccurrence & {
+    readonly context: "narrative" | "dialogue";
+  })[];
   readonly evidenceTruncated: boolean;
 }
 export interface LiterarySceneLexicalEcho {
@@ -2654,6 +2659,7 @@ function buildCharacterMentionDistributions(
 function buildSceneLexicalEchoes(
   tokens: readonly WordToken[],
   scenes: readonly LiteraryExplicitSceneSegment[],
+  dialogueRanges: readonly LocalRange[],
   baseOffset: number
 ): LiterarySceneLexicalEchoAnalysis {
   const groups = new Map<string, {
@@ -2663,8 +2669,9 @@ function buildSceneLexicalEchoes(
     lastSceneIndex: number | null;
   }>();
   let tokenCursor = 0;
+  let dialogueCursor = 0;
 
-  // Primera pasada: solo cuenta; evita reservar listas de evidencia para palabras únicas.
+  // Primera pasada: cuenta escenas y contextos sin reservar listas de evidencia.
   for (const scene of scenes) {
     const start = scene.contentRange.start - baseOffset;
     const end = scene.contentRange.end - baseOffset;
@@ -2673,6 +2680,8 @@ function buildSceneLexicalEchoes(
     let cursor = tokenCursor;
     while (cursor < tokens.length && tokens[cursor]!.start < end) {
       const token = tokens[cursor]!;
+      while (dialogueCursor < dialogueRanges.length &&
+          dialogueRanges[dialogueCursor]!.end <= token.start) dialogueCursor++;
       if (token.start >= start && token.end <= end &&
           !STOP_WORDS.has(token.normalized) && token.normalized.length >= 3) {
         let group = groups.get(token.normalized);
@@ -2707,12 +2716,18 @@ function buildSceneLexicalEchoes(
     normalizedWord,
     {
       ...group,
-      scenes: new Map<number, { occurrenceCount: number; occurrences: LocalRange[] }>()
+      scenes: new Map<number, {
+        occurrenceCount: number;
+        narrativeOccurrenceCount: number;
+        dialogueOccurrenceCount: number;
+        occurrences: Array<LocalRange & { readonly context: "narrative" | "dialogue" }>;
+      }>()
     }
   ]));
 
-  // Segunda pasada: recoge offsets solo para los veinte candidatos que se mostrarán.
+  // Segunda pasada: recoge offsets solo para los veinte candidatos expuestos.
   tokenCursor = 0;
+  dialogueCursor = 0;
   for (const scene of scenes) {
     const start = scene.contentRange.start - baseOffset;
     const end = scene.contentRange.end - baseOffset;
@@ -2721,16 +2736,30 @@ function buildSceneLexicalEchoes(
     let cursor = tokenCursor;
     while (cursor < tokens.length && tokens[cursor]!.start < end) {
       const token = tokens[cursor]!;
+      while (dialogueCursor < dialogueRanges.length &&
+          dialogueRanges[dialogueCursor]!.end <= token.start) dialogueCursor++;
       const group = selected.get(token.normalized);
       if (group && token.start >= start && token.end <= end) {
+        const activeDialogueRange = dialogueRanges[dialogueCursor];
+        const context = activeDialogueRange &&
+          token.start < activeDialogueRange.end && token.end > activeDialogueRange.start
+          ? "dialogue" as const
+          : "narrative" as const;
         let sceneGroup = group.scenes.get(scene.sceneIndex);
         if (!sceneGroup) {
-          sceneGroup = { occurrenceCount: 0, occurrences: [] };
+          sceneGroup = {
+            occurrenceCount: 0,
+            narrativeOccurrenceCount: 0,
+            dialogueOccurrenceCount: 0,
+            occurrences: []
+          };
           group.scenes.set(scene.sceneIndex, sceneGroup);
         }
         sceneGroup.occurrenceCount++;
+        if (context === "dialogue") sceneGroup.dialogueOccurrenceCount++;
+        else sceneGroup.narrativeOccurrenceCount++;
         if (sceneGroup.occurrences.length < 12) {
-          sceneGroup.occurrences.push({ start: token.start, end: token.end });
+          sceneGroup.occurrences.push({ start: token.start, end: token.end, context });
         }
       }
       cursor++;
@@ -2748,9 +2777,18 @@ function buildSceneLexicalEchoes(
       .map(([sceneIndex, sceneGroup]) => ({
         sceneIndex,
         occurrenceCount: sceneGroup.occurrenceCount,
+        narrativeOccurrenceCount: sceneGroup.narrativeOccurrenceCount,
+        dialogueOccurrenceCount: sceneGroup.dialogueOccurrenceCount,
+        contextClassification: sceneGroup.narrativeOccurrenceCount > 0 &&
+          sceneGroup.dialogueOccurrenceCount > 0
+          ? "mixed" as const
+          : sceneGroup.dialogueOccurrenceCount > 0
+            ? "dialogue-only" as const
+            : "narrative-only" as const,
         occurrences: sceneGroup.occurrences.map(item => ({
           start: baseOffset + item.start,
-          end: baseOffset + item.end
+          end: baseOffset + item.end,
+          context: item.context
         })),
         evidenceTruncated: sceneGroup.occurrenceCount > sceneGroup.occurrences.length
       }))
@@ -3275,7 +3313,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? [],
     input.knownEvents ?? [],dialogueRanges,dialogueSegments,input.documentId,input.revision
   );
-  const sceneLexicalEchoes = buildSceneLexicalEchoes(tokens, explicitScenes, baseOffset);
+  const sceneLexicalEchoes = buildSceneLexicalEchoes(tokens, explicitScenes, dialogueRanges, baseOffset);
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneEventAssociationTransitions = buildSceneEventAssociationTransitions(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
@@ -3524,7 +3562,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos.",
       "Los tramos del flujo de diálogo agrupan párrafos consecutivos por presencia o ausencia de diálogo reconocido; los párrafos mixtos y dialogados comparten tramo y esto no identifica turnos ni hablantes.",
       "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes.",
-      "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16."
+      "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; separan ocurrencias en narración y diálogo reconocido, no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16."
     ]
   };
 }

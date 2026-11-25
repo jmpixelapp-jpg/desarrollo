@@ -68,3 +68,92 @@ export function validateProjectSetting(
 export function cloneProjectSetting(setting: ProjectSetting): ProjectSetting {
   return structuredClone(setting);
 }
+
+export interface LanguageProfile {
+  readonly projectId: string;
+  readonly id: string;
+  readonly languageIdentifier: string;
+  readonly languageName: string;
+  readonly regionalVariant?: string;
+  /** REAL, FICTIONAL_DEVELOPED, FICTIONAL_OCCASIONAL u otro tipo futuro. */
+  readonly profileKind: string;
+  readonly editorialPreferences: ProjectJsonValue;
+  /** Cobertura realmente verificada; no representa una promesa de corrección completa. */
+  readonly coverageStatus: string;
+  readonly isActive: boolean;
+}
+
+export interface LanguageResourceRef {
+  readonly projectId: string;
+  readonly id: string;
+  readonly profileId?: string;
+  readonly resourceDatabaseId: string;
+  readonly resourceKind: string;
+  readonly resourceSchemaVersion: string;
+  readonly resourceStatus: string;
+}
+
+function requireNonBlank(value: unknown, label: string, maxLength = 512): asserts value is string {
+  if (typeof value !== "string" || !value.trim() || value.length > maxLength) {
+    throw new Error(`${label} debe ser un texto no vacío de hasta ${maxLength} caracteres.`);
+  }
+}
+
+export function validateLanguageProfile(
+  profile: LanguageProfile,
+  expectedProjectId?: string
+): void {
+  if (!profile || typeof profile !== "object" ||
+      typeof profile.projectId !== "string" || !profile.projectId.trim() ||
+      (expectedProjectId !== undefined && profile.projectId !== expectedProjectId) ||
+      typeof profile.id !== "string" || !profile.id.trim() || profile.id.length > 256 ||
+      typeof profile.isActive !== "boolean") {
+    throw new Error("Perfil lingüístico inválido: identidad, proyecto o indicador activo incorrectos.");
+  }
+  requireNonBlank(profile.languageIdentifier, "El identificador del idioma", 128);
+  requireNonBlank(profile.languageName, "El nombre del idioma");
+  requireNonBlank(profile.profileKind, "El tipo de perfil", 128);
+  requireNonBlank(profile.coverageStatus, "El estado de cobertura", 256);
+  if (profile.regionalVariant !== undefined &&
+      (typeof profile.regionalVariant !== "string" || profile.regionalVariant.length > 256)) {
+    throw new Error("La variante regional del perfil lingüístico es inválida.");
+  }
+  if (!validateJsonValue(profile.editorialPreferences, 0, new Set()) ||
+      profile.editorialPreferences === null ||
+      typeof profile.editorialPreferences !== "object" ||
+      Array.isArray(profile.editorialPreferences)) {
+    throw new Error("Las preferencias editoriales deben ser un objeto JSON válido.");
+  }
+  const encoded = JSON.stringify(profile.editorialPreferences);
+  if (typeof encoded !== "string" || encoded.length > 1_048_576) {
+    throw new Error("Las preferencias editoriales superan el máximo de 1 MiB.");
+  }
+}
+
+export function validateLanguageResourceRef(
+  resource: LanguageResourceRef,
+  expectedProjectId?: string
+): void {
+  if (!resource || typeof resource !== "object" ||
+      typeof resource.projectId !== "string" || !resource.projectId.trim() ||
+      (expectedProjectId !== undefined && resource.projectId !== expectedProjectId) ||
+      typeof resource.id !== "string" || !resource.id.trim() || resource.id.length > 256) {
+    throw new Error("Referencia de recurso lingüístico inválida: identidad o proyecto incorrectos.");
+  }
+  requireNonBlank(resource.resourceDatabaseId, "El ID de base de recurso", 256);
+  requireNonBlank(resource.resourceKind, "El tipo de recurso", 128);
+  requireNonBlank(resource.resourceSchemaVersion, "La versión de esquema del recurso", 128);
+  requireNonBlank(resource.resourceStatus, "El estado del recurso", 128);
+  if (resource.profileId !== undefined &&
+      (typeof resource.profileId !== "string" || !resource.profileId.trim() || resource.profileId.length > 256)) {
+    throw new Error("El perfil asociado a la referencia de recurso es inválido.");
+  }
+}
+
+export function cloneLanguageProfile(profile: LanguageProfile): LanguageProfile {
+  return structuredClone(profile);
+}
+
+export function cloneLanguageResourceRef(resource: LanguageResourceRef): LanguageResourceRef {
+  return structuredClone(resource);
+}

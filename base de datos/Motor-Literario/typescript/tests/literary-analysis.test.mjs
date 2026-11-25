@@ -1398,3 +1398,45 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     /historial de decisiones del catálogo global/
   );
 });
+
+test("distingue IDs Unicode distintos aunque el orden lingüístico los equipare", () => {
+  const projectId = "literary-analysis-test";
+  const composedId = "é";
+  const decomposedId = "e\u0301";
+  const graph = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nUna idea.",
+    knownProjectIdeas: [
+      {
+        projectId,
+        ideaId: composedId,
+        status: "IDEA",
+        relatedIdeaIds: [decomposedId],
+        evidenceCount: 0,
+        staleEvidenceCount: 0,
+        statusHistory: [{ status: "IDEA", reason: "initial" }],
+        writerDecisionCount: 0,
+        omittedStatusHistoryCount: 0
+      },
+      {
+        projectId,
+        ideaId: decomposedId,
+        status: "IDEA",
+        relatedIdeaIds: [],
+        evidenceCount: 0,
+        staleEvidenceCount: 0,
+        statusHistory: [{ status: "IDEA", reason: "initial" }],
+        writerDecisionCount: 0,
+        omittedStatusHistoryCount: 0
+      }
+    ]
+  }).ideaGraph;
+
+  assert.deepEqual(graph.nodes.map(node => node.ideaId), [decomposedId, composedId]);
+  assert.equal(graph.referenceCount, 1);
+  assert.equal(graph.includedReferenceCount, 1);
+  assert.equal(graph.reciprocalReferencePairCount, 0);
+  assert.equal(graph.references[0].resolution, "included-in-snapshot");
+});

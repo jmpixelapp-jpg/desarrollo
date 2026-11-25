@@ -568,13 +568,14 @@ test("filtra palabras funcionales portuguesas y conserva los términos narrativo
   assert.deepEqual(result.resonances[0].sharedTerms, ["casa", "menina", "menino"]);
   assert.equal(result.resonances[0].sharedTermCount, 3);
 });
-test("rechaza una auto-referencia en el catálogo persistible de ideas", () => {
-  assert.throws(
-    () => analyzeGraph([
-      { ...idea("self-loop"), relatedIdeaIds: ["self-loop"] },
-      idea("no-loop")
-    ]),
-    /catálogo global de ideas del análisis literario es inválido/
-  );
+test("analiza auto-referencias heredadas sin clasificar nodos aislados como ciclos", () => {
+  const graph = analyzeGraph([
+    { ...idea("self-loop"), relatedIdeaIds: ["self-loop"] },
+    idea("no-loop")
+  ]);
+  assert.equal(graph.selfReferenceCount, 1);
+  assert.equal(graph.cycleCount, 1);
+  assert.equal(graph.nodes.find(node => node.ideaId === "self-loop").cycleMembership, "cyclic-component");
+  assert.equal(graph.nodes.find(node => node.ideaId === "no-loop").cycleMembership, "acyclic-within-snapshot");
 });
 

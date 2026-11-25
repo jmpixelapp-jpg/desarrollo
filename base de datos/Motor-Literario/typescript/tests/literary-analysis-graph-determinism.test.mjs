@@ -311,3 +311,59 @@ test("los totales globales de coherencia cubren exactamente todos los nodos del 
     unknown: totals.unknownIdeaCount
   });
 });
+
+
+test("el grafo distingue aristas explícitas repetidas, vecinos únicos y destinos fuera del snapshot", () => {
+  const graph = analyze([
+    {
+      ...idea("source-a", ["inside", "inside", "outside"]),
+      status: "incorporated"
+    },
+    {
+      ...idea("source-b", ["inside", "inside"]),
+      status: "discarded"
+    },
+    idea("inside")
+  ], 2);
+
+  const sourceA = graph.nodes.find(node => node.ideaId === "source-a");
+  const sourceB = graph.nodes.find(node => node.ideaId === "source-b");
+  const inside = graph.nodes.find(node => node.ideaId === "inside");
+
+  assert.equal(graph.referenceCount, 5);
+  assert.equal(graph.includedReferenceCount, 4);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.equal(graph.referencesTruncated, false);
+
+  assert.equal(sourceA.includedOutgoingReferenceCount, 2);
+  assert.equal(sourceA.notIncludedOutgoingReferenceCount, 1);
+  assert.equal(sourceA.distinctOutgoingIdeaCount, 1);
+  assert.deepEqual(sourceA.directReferenceStatusCounts, {
+    IDEA: 2,
+    incorporated: 0,
+    discarded: 0,
+    notInSnapshot: 1
+  });
+  assert.equal(sourceA.directReferenceStatusAlignment, "unknown-incomplete-snapshot");
+
+  assert.equal(sourceB.includedOutgoingReferenceCount, 2);
+  assert.equal(sourceB.distinctOutgoingIdeaCount, 1);
+  assert.equal(sourceB.directReferenceStatusCounts.IDEA, 2);
+  assert.equal(sourceB.directReferenceStatusAlignment, "same-status");
+
+  assert.equal(inside.incomingReferenceCount, 4);
+  assert.equal(inside.distinctIncomingIdeaCount, 2);
+  assert.equal(
+    graph.nodes.reduce((sum, node) => sum + node.includedOutgoingReferenceCount, 0),
+    graph.includedReferenceCount
+  );
+  assert.equal(
+    graph.nodes.reduce((sum, node) => sum + node.notIncludedOutgoingReferenceCount, 0),
+    graph.notIncludedReferenceCount
+  );
+  assert.equal(
+    graph.nodes.reduce((sum, node) => sum + node.incomingReferenceCount, 0),
+    graph.includedReferenceCount
+  );
+});

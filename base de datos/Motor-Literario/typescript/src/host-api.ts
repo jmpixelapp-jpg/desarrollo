@@ -483,6 +483,9 @@ function validatePersonalIdeaLibraryPage(
   if (items.length === 0 && nextCursor !== null) {
     throw new Error("Integridad de biblioteca: una página vacía no puede avanzar el cursor.");
   }
+  if (items.length < limit && nextCursor !== null) {
+    throw new Error("Integridad de biblioteca: una página incompleta no puede indicar que hay más resultados.");
+  }
   if (nextCursor !== null) {
     const last = items[items.length - 1];
     if (!last || nextCursor.sourceProjectId !== last.sourceProjectId ||
@@ -3003,7 +3006,15 @@ export class HostEngineApi {
             throw new Error("El almacenamiento no permite resolver los vínculos de la biblioteca personal.");
           }
         }
-        return checked.page;
+        return {
+          items: cloneNarrativeRecords(checked.page.items.map(entry => entry.context
+            ? entry
+            : { ...entry, contextStatus: "missing-legacy-context" as const }
+          )),
+          nextCursor: checked.page.nextCursor
+            ? cloneNarrativeRecord(checked.page.nextCursor)
+            : null
+        };
       }
 
       // Compatibilidad con adaptadores anteriores: conservan la API paginada,

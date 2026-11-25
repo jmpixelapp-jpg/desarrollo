@@ -3121,7 +3121,7 @@ function buildCharacterNarrativeTrajectories(
   const characterById = new Map(knownCharacters.map(character => [character.entityId, character]));
   const relationshipsByCharacter = new Map<string,LiteraryCharacterRelationshipProfile[]>();
   for (const relation of knownRelations) {
-    for (const characterId of [relation.fromEntityId, relation.toEntityId]) {
+    for (const characterId of new Set([relation.fromEntityId, relation.toEntityId])) {
       if (!characterById.has(characterId)) continue;
       const isSelf = relation.fromEntityId === characterId && relation.toEntityId === characterId;
       const direction: LiteraryCharacterRelationshipProfile["direction"] = isSelf

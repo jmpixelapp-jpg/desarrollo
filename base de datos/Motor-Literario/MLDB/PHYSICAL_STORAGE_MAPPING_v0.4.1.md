@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `19`.
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `20`.
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -32,6 +32,9 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `schema-migrations` | `migrationId` | `by-to-version`, `by-applied-at` | Historial durable de migraciones nativas |
 | `project-records` | `[projectId, id]` | `by-project`, `by-project-type`, `by-project-name`, `by-project-label-state`, `by-project-updated` | Fichas genéricas de cualquier tipo narrativo | 
 | `record-names` | `[projectId, id]` | `by-project`, `by-record`, `by-name` | Nombres principales, alias, títulos y nombres anteriores |
+| `project-relations` | `[projectId, id]` | `by-project`, `by-source`, `by-target`, `by-type` | Relaciones genéricas entre fichas del libro |
+| `project-evidences` | `[projectId, id]` | `by-project`, `by-subject-record`, `by-subject-relation`, `by-document`, `by-fragment` | Evidencias documentales independientes de fichas y relaciones |
+| `timeline-occurrences` | `[projectId, id]` | `by-project`, `by-event-record`, `by-track-order` | Ocurrencias temporales y vínculos causales explícitos |
 | `style-profiles` | `[projectId, id]` | `by-project`, `by-project-name` | Perfiles de estilo por libro y preferencias editoriales JSON |
 | `timeline-tracks` | `[projectId, id]` | `by-project`, `by-project-name` | Pistas cronológicas explícitas y reglas JSON |
 | `record-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de fichas |
@@ -50,11 +53,11 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `records` | `project-records` | Implementado; `recordType` abierto y `primaryName` nullable |
 | `record_names` | `record-names` | Implementado; separado de la ficha y vinculado por proyecto/ID |
 | `record_attributes` | `record-attributes` | Implementado; valores JSON extensibles enlazados a fichas del mismo libro |
-| `relations` | `narrative-relations` | Implementado |
+| `relations` | `project-relations` | Implementado; relación genérica independiente de la extracción automática |
 | `relation_attributes` | `relation-attributes` | Implementado; valores JSON extensibles enlazados a relaciones del mismo libro |
-| `evidences` | `TextEvidence` embebido en registros | Implementado |
+| `evidences` | `project-evidences` + evidencias narrativas embebidas | Implementado; anclajes a fichas/relaciones y documentos validados |
 | `timeline_tracks` | `timeline-tracks` | Implementado; pistas temporales explícitas sin inferencia automática |
-| `timeline_occurrences` | `timeReference` y `timelineTrackId` embebidos en `narrative-events` | Implementado; asociación explícita validada transaccionalmente contra `timeline-tracks` |
+| `timeline_occurrences` | `timeline-occurrences` | Implementado; vínculo explícito a ficha de evento y pista del mismo proyecto |
 | `language_profiles` | `language-profiles` | Implementado; perfiles reales/ficticios, preferencias JSON y cobertura declarada |
 | `language_resource_refs` | `language-resource-refs` | Implementado; referencias ligadas opcionalmente a perfiles del mismo proyecto |
 | `style_profiles` | `style-profiles` | Implementado; perfil de voz y preferencias editoriales del libro |
@@ -73,6 +76,6 @@ El archivo `storage_mapping_v0.4.1.json` es la fuente verificable del mapeo: con
 
 ## Límites que no deben ocultarse
 
-La versión IndexedDB 19 materializa las fichas genéricas en `project-records` y sus nombres en `record-names`, sin exigir `primaryName` y sin sustituir el almacén especializado `narrative-entities` usado por la extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
+La versión IndexedDB 20 materializa fichas genéricas, nombres, relaciones, evidencias y ocurrencias cronológicas en almacenes independientes (`project-records`, `record-names`, `project-relations`, `project-evidences` y `timeline-occurrences`), sin sustituir los almacenes especializados de extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.

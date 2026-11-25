@@ -10179,7 +10179,7 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.deepEqual(receivedFinalizationChanges, [writerId],
       "repetir un recibo no emite una segunda notificación");
     assert.equal(
-      (await store.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
+      (await archiveStore.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
       receipt.archiveChecksum
     );
 

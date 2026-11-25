@@ -385,6 +385,12 @@ export interface LiterarySceneDialogueTransition {
   readonly previousDialogueWordCount: number;
   readonly nextDialogueWordCount: number;
   readonly dialogueWordCountDelta: number;
+  readonly previousAverageWordsPerSegment: number;
+  readonly nextAverageWordsPerSegment: number;
+  readonly averageWordsPerSegmentDelta: number;
+  readonly previousLongestSegmentWords: number;
+  readonly nextLongestSegmentWords: number;
+  readonly longestSegmentWordsDelta: number;
   readonly formatCountDelta: LiterarySceneDialogueProfile["formatCounts"];
 }
 export interface LiterarySceneDialogueProfile {
@@ -906,6 +912,12 @@ function buildSceneDialogueTransitions(
       previousDialogueWordCount:previous.dialogueWordCount,
       nextDialogueWordCount:next.dialogueWordCount,
       dialogueWordCountDelta:next.dialogueWordCount-previous.dialogueWordCount,
+      previousAverageWordsPerSegment:previous.averageWordsPerSegment,
+      nextAverageWordsPerSegment:next.averageWordsPerSegment,
+      averageWordsPerSegmentDelta:roundMetric(next.averageWordsPerSegment-previous.averageWordsPerSegment),
+      previousLongestSegmentWords:previous.longestSegmentWords,
+      nextLongestSegmentWords:next.longestSegmentWords,
+      longestSegmentWordsDelta:next.longestSegmentWords-previous.longestSegmentWords,
       formatCountDelta:{
         quotation:next.formatCounts.quotation-previous.formatCounts.quotation,
         dialogueDash:next.formatCounts.dialogueDash-previous.formatCounts.dialogueDash,

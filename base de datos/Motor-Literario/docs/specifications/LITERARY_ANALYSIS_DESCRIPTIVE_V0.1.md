@@ -145,3 +145,6 @@ La co-mención describe únicamente una coincidencia textual en la misma escena.
 La propiedad `sceneDialogueTransitions` compara cada par de escenas explícitas contiguas. Informa densidad anterior y siguiente, si la categoría cambia, proporción de palabras dialogadas y su diferencia (siguiente menos anterior), cantidad de segmentos, palabras dialogadas y diferencias por formato reconocido (comillas, raya y mixto). Los valores de proporción se redondean a tres decimales; las diferencias de conteos son enteros con signo. Cada transición referencia los índices 1-based de `explicitScenes`.
 
 La comparación depende exclusivamente de los formatos reconocidos por el detector y de los límites explícitos de escena. Un cambio de densidad no prueba un cambio de hablante, interlocutor, intención, tensión ni función dramática. No se generan transiciones si existe menos de una pareja de escenas explícitas, y no se saltan escenas intermedias.
+
+
+La transición también expone la longitud media y la longitud máxima de los segmentos dialogados en cada escena, junto con sus deltas (siguiente menos anterior). La media se redondea a tres decimales; el máximo es un conteo entero. Cuando no hay segmentos reconocidos, ambas métricas son cero. Estas medidas describen el tamaño textual de los segmentos detectados, no la duración oral ni el turno real de una persona.

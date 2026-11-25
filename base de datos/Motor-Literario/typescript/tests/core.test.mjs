@@ -10772,6 +10772,12 @@ test("compara las métricas de diálogo entre escenas explícitas contiguas", as
   assert.equal(transition.previousDialogueWordCount,2);
   assert.equal(transition.nextDialogueWordCount,0);
   assert.equal(transition.dialogueWordCountDelta,-2);
+  assert.equal(transition.previousAverageWordsPerSegment,2);
+  assert.equal(transition.nextAverageWordsPerSegment,0);
+  assert.equal(transition.averageWordsPerSegmentDelta,-2);
+  assert.equal(transition.previousLongestSegmentWords,2);
+  assert.equal(transition.nextLongestSegmentWords,0);
+  assert.equal(transition.longestSegmentWordsDelta,-2);
   assert.deepEqual(transition.formatCountDelta,{quotation:-1,dialogueDash:0,mixed:0});
   assert.equal(transition.dialogueRatioDelta,-0.333);
 });

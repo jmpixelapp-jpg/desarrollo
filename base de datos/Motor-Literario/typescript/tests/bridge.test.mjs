@@ -1594,6 +1594,66 @@ test("sincroniza archivo y consolidación de biblioteca entre proyectos y proces
 
 
 
+
+
+test("bridge.shutdown espera una finalización de biblioteca ya aceptada antes de cerrar SQLite", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-shutdown-library-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "shutdown-library-project";
+  const writerId = "writer-shutdown-library";
+  const projectName = "Libro finalizado durante el cierre";
+  const total = 48;
+  let active;
+  let inspection;
+  try {
+    active = startBridge(databasePath);
+    await active.client.hello();
+    await active.client.openProject({ projectId, projectName, writerId });
+    const text = Array.from({ length: total }, (_, index) =>
+      "IDEA: Idea archivada durante cierre " + String(index).padStart(3, "0")
+    ).join("\n");
+    await active.client.openDocument(projectId, {
+      documentId: "chapter-shutdown",
+      text,
+      revision: 0,
+      sequence: 0
+    });
+    await active.client.flushProject(projectId);
+
+    // Ambas peticiones llegan en el mismo ciclo de transporte. El cierre
+    // debe esperar la transferencia ya aceptada, no cerrar el almacén después
+    // de vaciar únicamente el estado que existía antes de encolarla.
+    const finalization = active.client.finalizeProjectToIdeaLibrary(projectId);
+    const shutdown = active.client.shutdown();
+    const [summary] = await Promise.all([finalization, shutdown]);
+    assert.equal(summary.archivedCount, total);
+    assert.equal(summary.alreadyFinalized, false);
+
+    const exited = waitForExit(active.child);
+    assert.equal(await exited, 0);
+    active = undefined;
+
+    inspection = await SqliteProjectStore.open(databasePath);
+    assert.deepEqual(await inspection.loadIdeas(projectId), []);
+    assert.equal(inspection.loadPersonalIdeas(writerId).length, total);
+    const receipt = inspection.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.equal(receipt.archivedIdeaIds.length, total);
+    assert.equal(receipt.archiveContentChecksum, summary.archiveContentChecksum);
+  } finally {
+    if (active) {
+      try {
+        const exited = waitForExit(active.child);
+        await active.client.shutdown();
+        await exited;
+      } catch {
+        active.child.kill();
+      }
+    }
+    inspection?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("SQLite recupera una finalización tras terminar el proceso con una transferencia sin confirmar", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-process-crash-"));
   const databasePath = resolve(directory, "motor.sqlite");

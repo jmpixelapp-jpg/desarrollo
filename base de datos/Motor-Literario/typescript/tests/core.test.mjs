@@ -9889,6 +9889,26 @@ test("la API analiza el documento abierto sin modificar el manuscrito", async ()
 });
 
 
+
+test("la API relaciona personajes del proyecto con escenas por nombre y alias", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({store});
+  api.initializeProject({projectId:"scene-entity-integration",projectName:"Continuidad"});
+  await store.saveEntity({
+    projectId:"scene-entity-integration",id:"ana",kind:"character",
+    canonicalName:"Ana",normalizedName:"ana",aliases:["La viajera"],evidence:[],
+    firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
+  const text = "ESCENA: Estación\nLa viajera llegó. Ana saludó a Luis.";
+  await api.openDocument({documentId:"chapter",text,revision:0,sequence:0});
+  const result = await api.analyzeLiteraryDocument("chapter");
+  assert.equal(result.explicitScenes.length,1);
+  assert.equal(result.explicitScenes[0].characterMentions.length,1);
+  assert.equal(result.explicitScenes[0].characterMentions[0].entityId,"ana");
+  assert.deepEqual(result.explicitScenes[0].characterMentions[0].matchedNames,["La viajera","Ana"]);
+  assert.equal(api.getSnapshot("chapter").text,text);
+});
+
 test("detecta candidatos a anáfora en oraciones consecutivas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = "La noche cae sobre la plaza. La noche cubre las calles. La noche apaga las luces. Después llega el alba.";
@@ -10048,4 +10068,39 @@ test("no inventa escenas cuando el fragmento no contiene marcadores explícitos"
   });
   assert.deepEqual(result.structuralMarkers,[]);
   assert.deepEqual(result.explicitScenes,[]);
+});
+
+
+test("vincula menciones literales de personajes conocidos a escenas y aliases", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "🌌\nESCENA 1\nLa viajera Ana habló con Luis. Ana miró la puerta.\n***\nESCENA 2\nBruno esperó en silencio.";
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-character-mentions",documentId:"chapter",revision:4,text,baseOffset:250,
+    knownCharacters:[
+      {entityId:"ana-id",canonicalName:"Ana",aliases:["La viajera"]},
+      {entityId:"luis-id",canonicalName:"Luis",aliases:[]},
+      {entityId:"bruno-id",canonicalName:"Bruno",aliases:[]}
+    ]
+  });
+  assert.equal(result.explicitScenes.length,2);
+  assert.deepEqual(result.explicitScenes[0].characterMentions.map(item => item.entityId),["ana-id","luis-id"]);
+  assert.deepEqual(result.explicitScenes[0].characterMentions[0].matchedNames.sort(),["Ana","La viajera"].sort());
+  assert.deepEqual(result.explicitScenes[1].characterMentions.map(item => item.entityId),["bruno-id"]);
+  const anaMention = result.explicitScenes[0].characterMentions.find(item => item.entityId === "ana-id");
+  assert.equal(anaMention.occurrences.length,3);
+  assert.ok(anaMention.occurrences.every(item => item.start >= 250 && item.end > item.start));
+  assert.equal(result.explicitScenes[1].characterMentions.some(item => item.entityId === "ana-id"),false);
+});
+
+test("omite personajes con alias ambiguos y nombres que solo aparecen como parte de otra palabra", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-character-ambiguity",documentId:"chapter",revision:1,
+    text:"ESCENA: Patio\nLa viajera esperó junto a Anabel.",
+    knownCharacters:[
+      {entityId:"ana-1",canonicalName:"Ana",aliases:["La viajera"]},
+      {entityId:"ana-2",canonicalName:"Ariadna",aliases:["La viajera"]}
+    ]
+  });
+  assert.deepEqual(result.explicitScenes[0].characterMentions.map(item => item.entityId),[]);
 });

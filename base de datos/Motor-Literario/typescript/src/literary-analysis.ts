@@ -5,12 +5,19 @@
  */
 export const MAX_LITERARY_ANALYSIS_TEXT_UNITS = 2_000_000;
 
+export interface LiteraryAnalysisKnownCharacter {
+  readonly entityId: string;
+  readonly canonicalName: string;
+  readonly aliases?: readonly string[];
+}
 export interface LiteraryAnalysisInput {
   readonly projectId: string;
   readonly documentId: string;
   readonly revision: number;
   readonly text: string;
   readonly baseOffset?: number;
+  /** Identidades de personajes conocidas por el proyecto; nunca se infieren desde el fragmento. */
+  readonly knownCharacters?: readonly LiteraryAnalysisKnownCharacter[];
 }
 export interface LiteraryAnalysisOccurrence { readonly start: number; readonly end: number; }
 export interface LiteraryRepeatedWord {
@@ -112,6 +119,12 @@ export interface LiteraryStructureMarker {
   readonly lineIndex: number;
   readonly occurrence: LiteraryAnalysisOccurrence;
 }
+export interface LiterarySceneCharacterMention {
+  readonly entityId: string;
+  readonly canonicalName: string;
+  readonly matchedNames: readonly string[];
+  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+}
 export interface LiteraryExplicitSceneSegment {
   readonly sceneIndex: number;
   readonly markerType: "scene-heading" | "scene-divider";
@@ -119,6 +132,8 @@ export interface LiteraryExplicitSceneSegment {
   readonly markerOccurrence: LiteraryAnalysisOccurrence;
   readonly contentRange: LiteraryAnalysisOccurrence;
   readonly wordCount: number;
+  /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
+  readonly characterMentions: readonly LiterarySceneCharacterMention[];
 }
 export interface LiteraryAnalysisResult {
   readonly projectId: string;
@@ -321,11 +336,96 @@ function detectLiteraryStructure(text: string): LocalLiteraryStructureMarker[] {
   }
   return markers;
 }
+function normalizeSceneCharacterName(value: string): string {
+  return value.normalize("NFKC").trim().replace(/\s+/gu," ").toLocaleLowerCase("es");
+}
+function escapeSceneCharacterPattern(value: string): string {
+  let escaped = "";
+  for (const character of value) {
+    if ("\\^$.*+?()[]{}|".includes(character)) escaped += "\\";
+    escaped += character;
+  }
+  return escaped;
+}
+function findSceneCharacterMentions(
+  text: string,
+  contentRange: LocalRange,
+  baseOffset: number,
+  characters: readonly LiteraryAnalysisKnownCharacter[]
+): LiterarySceneCharacterMention[] {
+  const nameOwners = new Map<string, Array<{
+    readonly entityId: string;
+    readonly canonicalName: string;
+    readonly sourceName: string;
+  }>>();
+  for (const character of characters) {
+    const names = [character.canonicalName,...(character.aliases ?? [])];
+    const seenForCharacter = new Set<string>();
+    for (const sourceName of names) {
+      const normalized = normalizeSceneCharacterName(sourceName);
+      if (!normalized || seenForCharacter.has(normalized)) continue;
+      seenForCharacter.add(normalized);
+      const owners = nameOwners.get(normalized) ?? [];
+      owners.push({
+        entityId:character.entityId,
+        canonicalName:character.canonicalName,
+        sourceName
+      });
+      nameOwners.set(normalized,owners);
+    }
+  }
+  const grouped = new Map<string,{
+    readonly entityId: string;
+    readonly canonicalName: string;
+    matchedNames: Set<string>;
+    occurrences: LocalRange[];
+  }>();
+  const excerpt = text.slice(contentRange.start,contentRange.end);
+  for (const owners of nameOwners.values()) {
+    const distinctOwners = new Map(owners.map(owner => [owner.entityId,owner]));
+    // Nombres o alias en conflicto no se asignan a una identidad automáticamente.
+    if (distinctOwners.size !== 1) continue;
+    const owner = [...distinctOwners.values()][0]!;
+    const escaped = owner.sourceName.trim().replace(/\s+/gu," ").split(" ")
+      .map(escapeSceneCharacterPattern).join("\\s+");
+    const expression = new RegExp(
+      "(?<![\\p{L}\\p{N}_])"+escaped+"(?![\\p{L}\\p{N}_])","giu"
+    );
+    const group = grouped.get(owner.entityId) ?? {
+      entityId:owner.entityId,
+      canonicalName:owner.canonicalName,
+      matchedNames:new Set<string>(),
+      occurrences:[]
+    };
+    for (const match of excerpt.matchAll(expression)) {
+      const matchedName = match[0];
+      const start = contentRange.start + (match.index ?? 0);
+      group.matchedNames.add(matchedName);
+      if (group.occurrences.length < 20) {
+        group.occurrences.push({
+          start:baseOffset+start,
+          end:baseOffset+start+matchedName.length
+        });
+      }
+    }
+    if (group.occurrences.length > 0) grouped.set(owner.entityId,group);
+  }
+  return [...grouped.values()]
+    .sort((a,b) => (a.occurrences[0]?.start ?? 0)-(b.occurrences[0]?.start ?? 0))
+    .slice(0,40)
+    .map(group => ({
+      entityId:group.entityId,
+      canonicalName:group.canonicalName,
+      matchedNames:[...group.matchedNames].slice(0,10),
+      occurrences:group.occurrences
+    }));
+}
 function analyzeExplicitScenes(
   text: string,
   tokens: readonly WordToken[],
   baseOffset: number,
-  markers: readonly LocalLiteraryStructureMarker[]
+  markers: readonly LocalLiteraryStructureMarker[],
+  knownCharacters: readonly LiteraryAnalysisKnownCharacter[]
 ): LiteraryExplicitSceneSegment[] {
   const sceneMarkers = markers.filter(marker =>
     marker.markerType === "scene-heading" || marker.markerType === "scene-divider"
@@ -357,7 +457,10 @@ function analyzeExplicitScenes(
       start:baseOffset+scene.contentRange.start,
       end:baseOffset+scene.contentRange.end
     },
-    wordCount:wordCounts[index] ?? 0
+    wordCount:wordCounts[index] ?? 0,
+    characterMentions:findSceneCharacterMentions(
+      text,scene.contentRange,baseOffset,knownCharacters
+    )
   }));
 }
 
@@ -588,8 +691,24 @@ function validateInput(input: LiteraryAnalysisInput): number {
       typeof input.text !== "string" ||
       input.text.length > MAX_LITERARY_ANALYSIS_TEXT_UNITS ||
       !Number.isSafeInteger(baseOffset) || baseOffset < 0 ||
-      baseOffset > Number.MAX_SAFE_INTEGER - input.text.length) {
+      baseOffset > Number.MAX_SAFE_INTEGER - input.text.length ||
+      (input.knownCharacters !== undefined &&
+        (!Array.isArray(input.knownCharacters) || input.knownCharacters.length > 500))) {
     throw new Error("Contexto de análisis literario inválido o fragmento demasiado grande.");
+  }
+  const knownCharacterIds = new Set<string>();
+  for (const character of input.knownCharacters ?? []) {
+    if (!character || typeof character.entityId !== "string" || !character.entityId.trim() ||
+        knownCharacterIds.has(character.entityId) ||
+        typeof character.canonicalName !== "string" || !character.canonicalName.trim() ||
+        (character.aliases !== undefined &&
+          (!Array.isArray(character.aliases) || character.aliases.some(alias =>
+            typeof alias !== "string" || !alias.trim()
+          ))) ||
+        [character.canonicalName,...(character.aliases ?? [])].some(name => name.length > 120)) {
+      throw new Error("El catálogo de personajes del análisis literario es inválido.");
+    }
+    knownCharacterIds.add(character.entityId);
   }
   return baseOffset;
 }
@@ -609,7 +728,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     lineIndex:marker.lineIndex,
     occurrence:{start:baseOffset+marker.start,end:baseOffset+marker.end}
   }));
-  const explicitScenes = analyzeExplicitScenes(text,tokens,baseOffset,localStructureMarkers);
+  const explicitScenes = analyzeExplicitScenes(
+    text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? []
+  );
   const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
@@ -793,6 +914,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "El ritmo usa umbrales de longitud de oración; no mide calidad, tensión ni musicalidad.",
       "Los segmentos de diálogo son señales de formato; una línea o cita no equivale siempre a un turno completo ni permite identificar al hablante.",
       "La estructura de escenas solo se segmenta cuando hay encabezados o separadores explícitos; no infiere cambios de escena a partir del contenido.",
+      "La presencia de personajes se basa en nombres y alias literales no ambiguos del catálogo del proyecto; no implica que el personaje actúe, hable o sea el punto de vista de la escena.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",

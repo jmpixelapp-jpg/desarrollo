@@ -1400,12 +1400,23 @@ export class HostEngineApi {
     if (rangeEnd > snapshot.text.length) {
       throw new Error("El rango del análisis supera la longitud del documento.");
     }
+    const projectId = this.requireProject().projectId;
+    const knownCharacters = this.store.loadEntities
+      ? (await this.getNarrativeEntities())
+          .filter(entity => entity.projectId === projectId && entity.kind === "character")
+          .map(entity => ({
+            entityId:entity.id,
+            canonicalName:entity.canonicalName,
+            aliases:entity.aliases
+          }))
+      : [];
     return analyzeLiteraryFragment({
-      projectId: this.requireProject().projectId,
+      projectId,
       documentId,
       revision: snapshot.revision,
       text: snapshot.text.slice(start, rangeEnd),
-      baseOffset: start
+      baseOffset: start,
+      knownCharacters
     });
   }
 

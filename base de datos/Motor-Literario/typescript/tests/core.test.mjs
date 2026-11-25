@@ -10522,7 +10522,13 @@ test("la API vincula acontecimientos persistidos a escenas del documento y revis
   });
   await store.saveEvent({
     projectId:"scene-event-api",id:"alarm",label:"Suena la alarma",participants:["ana"],
+    timeReference:{basis:"calendar",precision:"year",raw:"año 2020",orderValue:100},
     evidence:[{documentId:"chapter",revision:0,start,end:start+phrase.length,excerpt:phrase}]
+  });
+  await store.saveEvent({
+    projectId:"scene-event-api",id:"other-chapter-event",label:"Se apaga la alarma",participants:["ana"],
+    timeReference:{basis:"calendar",precision:"year",raw:"año 2021",orderValue:200},
+    evidence:[{documentId:"other-chapter",revision:0,start:0,end:19,excerpt:"La alarma se apagó."}]
   });
   await store.saveEvent({
     projectId:"scene-event-api",id:"stale",label:"Evento antiguo",participants:["ana"],
@@ -10538,6 +10544,12 @@ test("la API vincula acontecimientos persistidos a escenas del documento y revis
   assert.deepEqual(anaTrajectory.eventParticipation.map(item => item.eventId),["alarm"]);
   assert.deepEqual(anaTrajectory.scenes[0].eventIds,["alarm"]);
   assert.equal(anaTrajectory.scenes[0].participationStatus,"linked-to-explicit-event-evidence");
+  assert.equal(anaTrajectory.projectEventTimeline.sourceEventCount,3);
+  assert.equal(anaTrajectory.projectEventTimeline.timedEventCount,2);
+  assert.equal(anaTrajectory.projectEventTimeline.pointCount,2);
+  assert.deepEqual(anaTrajectory.projectEventTimeline.points.map(item => item.documentIds),[
+    ["chapter"],["other-chapter"]
+  ]);
   assert.deepEqual(api.getSnapshot("chapter"),before);
 });
 

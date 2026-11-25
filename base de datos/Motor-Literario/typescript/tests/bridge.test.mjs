@@ -494,6 +494,83 @@ test("el archivo rechaza referencias desde ideas que permanecerán en el libro",
 });
 
 
+test("una instancia puede descartar sus cachés narrativas y leer cambios confirmados por otra", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-refresh-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let first;
+  let second;
+  try {
+    first = startBridge(databasePath);
+    await first.client.hello();
+    await first.client.openProject({
+      projectId: "shared-project",
+      projectName: "Libro compartido",
+      writerId: "writer-shared"
+    });
+    await first.client.openDocument("shared-project", {
+      documentId: "chapter-shared",
+      text: "IDEA: La campana debe sonar antes del amanecer.",
+      revision: 0,
+      sequence: 0
+    });
+    await first.client.flushProject("shared-project");
+    const firstIdeas = await first.client.request("project.call", {
+      projectId: "shared-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(firstIdeas.length, 1);
+    assert.equal(firstIdeas[0].status, "IDEA");
+
+    second = startBridge(databasePath);
+    await second.client.hello();
+    await second.client.openProject({
+      projectId: "shared-project",
+      projectName: "Libro compartido",
+      writerId: "writer-shared"
+    });
+    const secondIdeas = await second.client.request("project.call", {
+      projectId: "shared-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(secondIdeas.length, 1);
+    await second.client.request("project.call", {
+      projectId: "shared-project",
+      method: "setNarrativeIdeaStatus",
+      args: [secondIdeas[0].id, "incorporated"]
+    });
+
+    const stale = await first.client.request("project.call", {
+      projectId: "shared-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(stale[0].status, "IDEA");
+
+    await first.client.request("project.call", {
+      projectId: "shared-project", method: "refreshNarrativeKnowledge", args: []
+    });
+    const refreshed = await first.client.request("project.call", {
+      projectId: "shared-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(refreshed[0].status, "incorporated");
+
+    const firstExit = waitForExit(first.child);
+    await first.client.shutdown();
+    assert.equal(await firstExit, 0);
+    first = undefined;
+    const secondExit = waitForExit(second.child);
+    await second.client.shutdown();
+    assert.equal(await secondExit, 0);
+    second = undefined;
+  } finally {
+    for (const active of [first, second]) {
+      if (!active) continue;
+      try {
+        const exited = waitForExit(active.child);
+        await active.client.shutdown();
+        await exited;
+      } catch { active.child.kill(); }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin modificar las fichas", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-identity-history-"));
   const databasePath = resolve(directory, "motor.sqlite");

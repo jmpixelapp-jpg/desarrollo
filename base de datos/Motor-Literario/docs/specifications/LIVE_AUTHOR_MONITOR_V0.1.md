@@ -80,11 +80,11 @@ Los tiempos se calculan con **performance.now()** cuando está disponible. El re
 
 ## 5. Validación
 
-Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs** y **typescript/tests/live-author-monitor-panel.test.mjs**: apertura y edición; tiempo activo y pausas; rechazos; tickets y latencias p50/p95; commit fallido y resincronización; cierre bloqueado con pendientes; aislamiento entre documentos y suscriptores; transición a inactividad sin nuevas pulsaciones; refresco global; cancelación del planificador; montaje del panel accesible, métricas, privacidad del manuscrito, errores de resincronización y desmontaje del DOM.
+Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs**, **typescript/tests/live-author-monitor-panel.test.mjs** y **typescript/tests/live-author-monitor-workspace.test.mjs**: apertura y edición; tiempo activo y pausas; rechazos; tickets y latencias p50/p95; commit fallido y resincronización; cierre bloqueado con pendientes; aislamiento entre documentos y suscriptores; transición a inactividad sin nuevas pulsaciones; refresco global; montaje y desmontaje del panel accesible; privacidad del manuscrito; sesiones múltiples; aperturas y cierres dinámicos; selección de capítulo y cancelación de suscripciones.
 
-**Validación específica del monitor y del panel:** las 11 pruebas del núcleo de monitoreo y las 4 pruebas del panel DOM pasaron (15/15). El chequeo estricto de TypeScript, el build y la validación estructural del esquema también pasaron. [Ejecución 45710084925](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45710084925).
+**Validación específica del monitor, panel y espacio de trabajo:** las 11 pruebas del núcleo, las 4 del panel individual y las 4 del espacio de trabajo multi-documento pasaron (19/19 en las ejecuciones focalizadas). El chequeo estricto de TypeScript, la compilación y la validación estructural previa a la suite también pasaron. [CI del espacio multi-documento](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45710569993), [CI del panel individual](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45710084925).
 
-**Validación de la suite completa:** la ejecución terminó con 264 pruebas aprobadas, 30 fallidas, 222 canceladas y 9 omitidas (525 en total). Los fallos identificados pertenecen a otras áreas del repositorio, incluidas IndexedDB/migraciones, sincronización CAS de ideas, análisis literario y auditoría del esquema de almacenamiento. Los cuatro tests nuevos del panel y los once tests del núcleo de monitoreo no registraron fallos. El benchmark se omitió porque la suite general falló. Por tanto, el módulo de monitoreo queda validado por sus pruebas focalizadas, pero la suite global y la integración visual en el editor anfitrión continúan pendientes.
+**Validación de la suite completa:** la ejecución más reciente terminó con 268 pruebas aprobadas, 30 fallidas, 222 canceladas y 9 omitidas (529 en total). Los fallos identificados pertenecen a otras áreas del repositorio, incluidas IndexedDB/migraciones, sincronización CAS de ideas, análisis literario y auditoría del esquema de almacenamiento. Las 19 pruebas focalizadas del monitoreo no registraron fallos. El benchmark se omitió porque la suite general falló. Por tanto, el módulo de monitoreo queda validado por sus pruebas focalizadas, pero la suite global y la integración visual en el editor anfitrión continúan pendientes.
 
 ## 6. Refresco continuo del panel
 
@@ -159,10 +159,10 @@ unmountWorkspace();
 - Una tarjeta por documento observado; cada una muestra estado, ritmo, caracteres insertados, pendientes, revisión durable/actual y latencia p95.
 - Las admisiones y commits actualizan la tarjeta correspondiente inmediatamente.
 - Un refresco global reconcilia la lista autoritativa: detecta aperturas nuevas y elimina las sesiones cerradas, incluso si el cierre no emite un evento de escritura.
-- La callback opcional \`onSelectDocument\` solicita al anfitrión cambiar de capítulo; el componente no abre, cierra ni altera documentos.
+- La callback opcional `onSelectDocument` solicita al anfitrión cambiar de capítulo; el componente no abre, cierra ni altera documentos.
 - La etiqueta del documento se obtiene opcionalmente del anfitrión. El componente no consulta el texto del capítulo.
-- El desmontaje cancela el temporizador, retira la suscripción y elimina las tarjetas. No dispone \`HostEngineApi\`.
+- El desmontaje cancela el temporizador, retira la suscripción y elimina las tarjetas. No dispone `HostEngineApi`.
 
-## 8. Próximo tramo
+## 9. Próximo tramo
 
 Conectar el panel individual y el espacio de trabajo al editor real del anfitrión; validar escritura sostenida, varios documentos abiertos, saturación, recuperación, navegación entre capítulos y desmontaje de vistas en los runtimes objetivo.

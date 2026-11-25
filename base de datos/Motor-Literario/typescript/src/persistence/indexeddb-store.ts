@@ -4136,9 +4136,20 @@ export class IndexedDbProjectStore implements ProjectStore {
             const readNext = (): void => {
               if (finished) return;
               if (index >= receipt.archivedIdeaIds.length) {
+                const calculatedContentChecksum = contentChecksum.digest();
                 if (receipt.archiveContentChecksum !== undefined &&
-                    contentChecksum.digest() !== receipt.archiveContentChecksum) {
+                    calculatedContentChecksum !== receipt.archiveContentChecksum) {
                   throw new Error("La biblioteca personal no coincide con el checksum del contenido archivado.");
+                }
+                archiveContentChecksum = calculatedContentChecksum;
+                if (receipt.archiveContentChecksum === undefined &&
+                    typeof receipts.put === "function") {
+                  // Migra recibos antiguos dentro de la transacción de lectura
+                  // y validación; no repite ni vuelve a notificar la transferencia.
+                  receipts.put({
+                    ...receipt,
+                    archiveContentChecksum: calculatedContentChecksum
+                  } satisfies StoredProjectFinalizationReceipt);
                 }
                 return;
               }

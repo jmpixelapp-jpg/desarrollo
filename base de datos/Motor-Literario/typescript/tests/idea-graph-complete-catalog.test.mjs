@@ -67,6 +67,10 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(soloNode.currentStatusHistoryConsistency, "consistent");
     const finishNode = result.ideaGraph.nodes.find(node => node.ideaId === "finish");
     assert.equal(finishNode.currentStatusHistoryConsistency, "unknown");
+    const ideaProfile = result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA");
+    assert.equal(ideaProfile.statusHistoryConsistentIdeaCount, 3);
+    assert.equal(ideaProfile.statusHistoryMismatchIdeaCount, 1);
+    assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 1);
     assert.equal(soloNode.observedStatusTransitionCount, 5);
     assert.equal(soloNode.statusReversalCount, 3);
     assert.equal(soloNode.comparableStatusTimestampPairCount, 6);

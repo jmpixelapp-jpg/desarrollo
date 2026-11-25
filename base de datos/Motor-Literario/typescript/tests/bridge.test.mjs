@@ -1598,6 +1598,55 @@ test("sincroniza archivo y consolidación de biblioteca entre proyectos y proces
 
 
 
+
+
+test("EOF de STDIN espera una finalización aceptada antes de cerrar SQLite", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-eof-library-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "eof-library-project";
+  const writerId = "writer-eof-library";
+  const projectName = "Libro cerrado por EOF";
+  const total = 6;
+  let active;
+  let inspection;
+  try {
+    active = startBridge(databasePath);
+    await active.client.hello();
+    await active.client.openProject({ projectId, projectName, writerId });
+    const text = Array.from({ length: total }, (_, index) =>
+      "IDEA: Idea de EOF " + String(index).padStart(2, "0")
+    ).join("\n");
+    await active.client.openDocument(projectId, {
+      documentId: "chapter-eof",
+      text,
+      revision: 0,
+      sequence: 0
+    });
+    await active.client.flushProject(projectId);
+
+    const finalization = active.client.finalizeProjectToIdeaLibrary(projectId);
+    // Cerrar el canal de entrada inmediatamente después de enviar la petición.
+    active.child.stdin.end();
+    const summary = await finalization;
+    assert.equal(summary.archivedCount, total);
+    assert.equal(summary.alreadyFinalized, false);
+    assert.equal(await waitForExit(active.child), 0);
+    active = undefined;
+
+    inspection = await SqliteProjectStore.open(databasePath);
+    assert.deepEqual(await inspection.loadIdeas(projectId), []);
+    assert.equal(inspection.loadPersonalIdeas(writerId).length, total);
+    assert.equal(
+      inspection.loadProjectFinalizationReceipt(writerId, projectId).archiveContentChecksum,
+      summary.archiveContentChecksum
+    );
+  } finally {
+    if (active && active.child.exitCode === null) active.child.kill();
+    inspection?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("bridge.shutdown espera operaciones aceptadas que terminan con error y aun así cierra limpiamente", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-shutdown-rejected-request-"));
   const databasePath = resolve(directory, "motor.sqlite");

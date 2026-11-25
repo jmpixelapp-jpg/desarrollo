@@ -596,6 +596,28 @@ test("no reintenta cambios de estado ante errores ajenos a CAS", async () => {
   api.dispose();
 });
 
+test("limita a tres intentos los conflictos CAS persistentes al cambiar estado", async () => {
+  const store = new RacingStore([idea("idea-source")]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.saveIdeaIfUnchanged = async () => {
+    store.writes++;
+    throw new Error("La idea cambió en otra instancia; actualiza la vista antes de volver a modificarla.");
+  };
+
+  await assert.rejects(
+    api.setNarrativeIdeaStatus("idea-source", "incorporated"),
+    /La idea cambió en otra instancia/
+  );
+  assert.equal(store.writes, 3);
+  assert.equal(store.ideaReads, 4);
+  assert.equal(
+    store.ideas.get(projectId + ":idea-source").status,
+    "IDEA"
+  );
+  api.dispose();
+});
+
 test("reintenta cambios de estado tras CAS y conserva vínculos concurrentes", async () => {
   const store = new RacingStore([
     idea("idea-source"), idea("idea-concurrent-target")

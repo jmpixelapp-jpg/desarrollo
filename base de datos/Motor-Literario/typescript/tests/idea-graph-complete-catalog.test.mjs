@@ -524,3 +524,51 @@ test("contrasta los componentes de Tarjan con un oráculo de alcanzabilidad en g
     api.dispose();
   }
 });
+
+
+test("la resonancia léxica descarta términos ubicuos sin perder coincidencias específicas", async () => {
+  const ideas = Array.from({ length: 20 }, (_, index) => {
+    const isPair = index < 2;
+    return {
+      projectId,
+      id: "lexical-frequency-" + String(index).padStart(2, "0"),
+      text: isPair
+        ? "amber mirror chapter uniqueleft" + index
+        : "chapter isolatedterm" + index,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    };
+  });
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-frequency" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa frecuencia de términos se contrasta.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.analyzedIdeaCount, 20);
+    assert.equal(lexical.maxTermDocumentFrequency, 8);
+    assert.equal(lexical.ignoredHighFrequencyTermCount, 1);
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.equal(lexical.omittedCandidatePairCount, 0);
+    assert.equal(lexical.resonances.length, 1);
+    assert.deepEqual(lexical.resonances[0].sharedTerms, ["amber", "mirror"]);
+    assert.equal(lexical.resonances[0].sharedTermCount, 2);
+    assert.equal(lexical.resonances[0].leftTermCount, 4);
+    assert.equal(lexical.resonances[0].rightTermCount, 4);
+    assert.equal(lexical.resonances[0].jaccardSimilarity, 0.333);
+    assert.equal(lexical.resonances[0].overlapCoefficient, 0.5);
+  } finally {
+    api.dispose();
+  }
+});

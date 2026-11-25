@@ -336,6 +336,33 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
   api.dispose();
 });
 
+test("recupera la cola y la caché tras un fallo de persistencia", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-target-a"), idea("idea-target-b")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.nextWriteError = new Error("fallo transitorio de almacenamiento");
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-target-a", true),
+    /fallo transitorio de almacenamiento/
+  );
+  assert.equal(store.writes, 1);
+
+  const recovered = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target-b", true
+  );
+  assert.deepEqual(recovered.relatedIdeaIds, ["idea-target-b"]);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-target-b"]
+  );
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.writes, 2);
+  api.dispose();
+});
+
 test("revalida el máximo de referencias después de un conflicto CAS", async () => {
   const existingIds = Array.from({ length: 499 }, (_, index) =>
     "idea-existing-" + String(index).padStart(3, "0")

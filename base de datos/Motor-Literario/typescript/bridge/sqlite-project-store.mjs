@@ -1577,7 +1577,6 @@ export class SqliteProjectStore {
           }
 
           const archivedIds = new Set(existingReceipt.archivedIdeaIds);
-          const selected = [];
           for (const id of existingReceipt.archivedIdeaIds) {
             const entry = this.get("personal-idea-library", [writerId, projectId, id]);
             if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
@@ -1597,9 +1596,8 @@ export class SqliteProjectStore {
                 throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
               }
             }
-            selected.push(entry);
           }
-          return clone(selected);
+          return [];
         }
 
         this.database.exec(

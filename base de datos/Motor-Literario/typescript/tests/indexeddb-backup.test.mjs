@@ -277,7 +277,7 @@ test("un fallo de escritura aborta toda la restauración y conserva los stores a
     documents: [{ ...documentRecord, text: "No debe perderse." }],
     "personal-idea-library": []
   }, {
-    failOnRecord: (_name, value) => value?.id === "explode"
+    failOnRecord: (name, value) => name === "personal-idea-library" && value?.idea?.id === "explode"
   });
   const backupSource = attach(createFakeDatabase({
     documents: [{ ...documentRecord, text: "Documento del respaldo." }],

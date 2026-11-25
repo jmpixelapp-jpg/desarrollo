@@ -146,7 +146,7 @@ export function bindLiveAuthorMonitorEditorChanges(
     } catch (error) {
       pending.push(change);
       pendingReason = "sink_error";
-      publishBackpressure(change);
+      publishBackpressure();
       reportError(error, change);
       return;
     }
@@ -154,7 +154,7 @@ export function bindLiveAuthorMonitorEditorChanges(
     if (admission.status === "rejected") {
       pending.push(change);
       pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
-      publishBackpressure(change);
+      publishBackpressure();
     }
     reportAdmission(change, admission);
   };
@@ -172,7 +172,7 @@ export function bindLiveAuthorMonitorEditorChanges(
           admission = options.sink.onEditorChange(change);
         } catch (error) {
           pendingReason = "sink_error";
-          publishBackpressure(change);
+          publishBackpressure();
           reportError(error, change);
           break;
         }
@@ -180,10 +180,10 @@ export function bindLiveAuthorMonitorEditorChanges(
         if (admission.status === "queued") {
           pending.shift();
           if (pending.length === 0) pendingReason = undefined;
-          publishBackpressure(change);
+          publishBackpressure();
         } else {
           pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
-          publishBackpressure(change);
+          publishBackpressure();
         }
         reportAdmission(change, admission);
         if (admission.status === "rejected") break;

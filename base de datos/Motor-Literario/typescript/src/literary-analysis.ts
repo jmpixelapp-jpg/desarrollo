@@ -1,3 +1,5 @@
+import { validateEventLifecycle, type EventLifecycle } from "./project-data";
+
 /**
  * Análisis literario descriptivo y determinista.
  * No afirma intención autoral, identidad del narrador ni calidad estética.
@@ -34,6 +36,8 @@ export interface LiteraryAnalysisInput {
   readonly knownCharacters?: readonly LiteraryAnalysisKnownCharacter[];
   /** Acontecimientos del proyecto con evidencia versionada; solo se enlaza evidencia del documento/revisión analizados. */
   readonly knownEvents?: readonly LiteraryAnalysisKnownEvent[];
+  /** Historiales append-only validados de cambios explícitos de etiqueta y participantes. */
+  readonly knownEventLifecycles?: readonly EventLifecycle[];
 }
 export interface LiteraryAnalysisOccurrence { readonly start: number; readonly end: number; }
 export interface LiteraryRepeatedWord {
@@ -289,6 +293,39 @@ export interface LiterarySceneEventEvidenceAnalysis {
   /** Perfiles de acontecimientos ordenados por cobertura, racha, evidencia e ID; máximo cien. */
   readonly profiles: readonly LiterarySceneEventEvidenceProfile[];
 }
+export interface LiteraryEventLifecycleChangeSummary {
+  readonly revision: number;
+  readonly previousLabel: string;
+  readonly newLabel: string;
+  readonly labelChanged: boolean;
+  readonly addedParticipantIds: readonly string[];
+  readonly removedParticipantIds: readonly string[];
+  readonly participantSetChanged: boolean;
+  readonly changedBy: string;
+  readonly changeReason: string | null;
+  readonly changedAt: number;
+}
+export interface LiteraryEventLifecycleProfile {
+  readonly eventId: string;
+  readonly currentLabel: string;
+  /** Participantes de la ficha vigente; no se obtienen de las menciones del texto. */
+  readonly currentParticipantIds: readonly string[];
+  readonly latestRevision: number;
+  readonly transitionCount: number;
+  readonly labelChangeCount: number;
+  readonly participantSetChangeCount: number;
+  /** Se exponen las cien transiciones más recientes como máximo, en orden ascendente. */
+  readonly changes: readonly LiteraryEventLifecycleChangeSummary[];
+  readonly changesTruncated: boolean;
+}
+export interface LiteraryEventLifecycleAnalysis {
+  readonly eventCount: number;
+  readonly totalTransitionCount: number;
+  readonly omittedEventCount: number;
+  /** Perfiles ordenados por cantidad de transiciones e ID; máximo cien. */
+  readonly profiles: readonly LiteraryEventLifecycleProfile[];
+}
+
 export interface LiterarySceneEventSequenceStep {
   /** Posición 1-based dentro de una ventana de escenas contiguas. */
   readonly sceneOffset: number;
@@ -798,6 +835,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneEventSequenceMotifs: LiterarySceneEventSequenceMotifAnalysis;
   /** Variaciones de evidencia y menciones nominales de participantes en escenas contiguas. */
   readonly sceneEventAssociationTransitions: readonly LiterarySceneEventAssociationTransition[];
+  /** Evolución versionada de etiquetas y participantes declarados por el escritor. */
+  readonly eventLifecycleAnalysis: LiteraryEventLifecycleAnalysis;
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -2253,6 +2292,67 @@ function buildSceneEventEvidenceProfiles(
   };
 }
 
+function buildEventLifecycleAnalysis(
+  knownEvents: readonly LiteraryAnalysisKnownEvent[],
+  lifecycles: readonly EventLifecycle[]
+): LiteraryEventLifecycleAnalysis {
+  const currentEvents=new Map(knownEvents.map(event=>[event.eventId,event] as const));
+  const groups=new Map<string,EventLifecycle[]>();
+  for(const item of lifecycles) {
+    const group=groups.get(item.eventId) ?? [];
+    group.push(item);
+    groups.set(item.eventId,group);
+  }
+  const profiles=[...groups.entries()].map(([eventId,history])=>{
+    const ordered=[...history].sort((a,b)=>a.revision-b.revision);
+    const current=currentEvents.get(eventId)!;
+    let labelChangeCount=0;
+    let participantSetChangeCount=0;
+    const changes:LiteraryEventLifecycleChangeSummary[]=ordered.map(item=>{
+      const previous=new Set(item.previousParticipants);
+      const next=new Set(item.newParticipants);
+      const addedParticipantIds=item.newParticipants.filter(id=>!previous.has(id));
+      const removedParticipantIds=item.previousParticipants.filter(id=>!next.has(id));
+      const labelChanged=item.previousLabel!==item.newLabel;
+      const participantSetChanged=addedParticipantIds.length>0 || removedParticipantIds.length>0;
+      if(labelChanged)labelChangeCount++;
+      if(participantSetChanged)participantSetChangeCount++;
+      return {
+        revision:item.revision,
+        previousLabel:item.previousLabel,
+        newLabel:item.newLabel,
+        labelChanged,
+        addedParticipantIds,
+        removedParticipantIds,
+        participantSetChanged,
+        changedBy:item.changedBy,
+        changeReason:item.changeReason ?? null,
+        changedAt:item.changedAt
+      };
+    });
+    return {
+      eventId,
+      currentLabel:current.label,
+      currentParticipantIds:[...new Set(current.participants)].sort((a,b)=>a.localeCompare(b,"en")),
+      latestRevision:ordered[ordered.length-1]?.revision ?? 0,
+      transitionCount:ordered.length,
+      labelChangeCount,
+      participantSetChangeCount,
+      changes:changes.slice(-100),
+      changesTruncated:changes.length>100
+    };
+  }).sort((a,b)=>
+    b.transitionCount-a.transitionCount ||
+    a.eventId.localeCompare(b.eventId,"en")
+  );
+  return {
+    eventCount:profiles.length,
+    totalTransitionCount:profiles.reduce((sum,profile)=>sum+profile.transitionCount,0),
+    omittedEventCount:Math.max(0,profiles.length-100),
+    profiles:profiles.slice(0,100)
+  };
+}
+
 function buildSceneEventSequenceMotifs(
   scenes: readonly LiteraryExplicitSceneSegment[]
 ): LiterarySceneEventSequenceMotifAnalysis {
@@ -2925,7 +3025,9 @@ function validateInput(input: LiteraryAnalysisInput): number {
       (input.knownCharacters !== undefined &&
         (!Array.isArray(input.knownCharacters) || input.knownCharacters.length > 500)) ||
       (input.knownEvents !== undefined &&
-        (!Array.isArray(input.knownEvents) || input.knownEvents.length > 2_000))) {
+        (!Array.isArray(input.knownEvents) || input.knownEvents.length > 2_000)) ||
+      (input.knownEventLifecycles !== undefined &&
+        (!Array.isArray(input.knownEventLifecycles) || input.knownEventLifecycles.length > 20_000))) {
     throw new Error("Contexto de análisis literario inválido o fragmento demasiado grande.");
   }
   const knownCharacterIds = new Set<string>();
@@ -2962,6 +3064,37 @@ function validateInput(input: LiteraryAnalysisInput): number {
           (evidence.status !== undefined && evidence.status !== "stale")) {
         throw new Error("La evidencia de acontecimiento del análisis literario es inválida.");
       }
+    }
+  }
+
+  const lifecycleGroups=new Map<string,EventLifecycle[]>();
+  for(const item of input.knownEventLifecycles ?? []) {
+    validateEventLifecycle(item,input.projectId);
+    if(!knownEventIds.has(item.eventId)) {
+      throw new Error("El historial de acontecimiento no pertenece al catálogo analizado.");
+    }
+    const group=lifecycleGroups.get(item.eventId) ?? [];
+    group.push(item);
+    lifecycleGroups.set(item.eventId,group);
+  }
+  for(const [eventId,history] of lifecycleGroups) {
+    const ordered=[...history].sort((a,b)=>a.revision-b.revision);
+    let previous:EventLifecycle|undefined;
+    const revisions=new Set<number>();
+    for(const item of ordered) {
+      if(revisions.has(item.revision) ||
+          (!previous && item.revision!==1) ||
+          (previous && (
+            item.revision!==previous.revision+1 ||
+            item.previousLabel!==previous.newLabel ||
+            item.previousParticipants.length!==previous.newParticipants.length ||
+            !item.previousParticipants.every((id,index)=>id===previous!.newParticipants[index]) ||
+            item.changedAt<previous.changedAt
+          ))) {
+        throw new Error("El historial de acontecimiento contiene revisiones duplicadas o transiciones discontinuas.");
+      }
+      revisions.add(item.revision);
+      previous=item;
     }
   }
   return baseOffset;
@@ -3005,6 +3138,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);
+  const eventLifecycleAnalysis = buildEventLifecycleAnalysis(
+    input.knownEvents ?? [],input.knownEventLifecycles ?? []
+  );
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
@@ -3193,6 +3329,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterEventEvidenceProfiles,
     sceneEventEvidenceProfiles,
     sceneEventSequenceMotifs,
+    eventLifecycleAnalysis,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),

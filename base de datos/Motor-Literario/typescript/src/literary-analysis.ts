@@ -3618,7 +3618,7 @@ function buildLiteraryIdeaLexicalResonances(
     const frequencies = new Map<string, number>();
     for (const token of tokenize(idea.text)) {
       const term = token.normalized;
-      if (term.length < 3 || !/\\p{L}/u.test(term) ||
+      if (term.length < 3 || !Array.from(term).some(character => character.toLocaleLowerCase("es") !== character.toLocaleUpperCase("es")) ||
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
@@ -3688,11 +3688,15 @@ function buildLiteraryIdeaLexicalResonances(
       )
     });
   }
+  const compareIdeaIds = (left: string, right: string): number => {
+    const localized = left.localeCompare(right, "en");
+    return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
+  };
   allResonances.sort((left, right) =>
     right.sharedTermCount - left.sharedTermCount ||
     right.jaccardSimilarity - left.jaccardSimilarity ||
-    left.leftIdeaId.localeCompare(right.leftIdeaId, "en") ||
-    left.rightIdeaId.localeCompare(right.rightIdeaId, "en")
+    compareIdeaIds(left.leftIdeaId, right.leftIdeaId) ||
+    compareIdeaIds(left.rightIdeaId, right.rightIdeaId)
   );
 
   return {

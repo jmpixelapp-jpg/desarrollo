@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { IndexedDbProjectStore } from "../dist/motor-literario.js";
+import "fake-indexeddb/auto";
+
+const { IndexedDbProjectStore } = await import("../dist/motor-literario.js");
 
 function checkpoint(projectId, documentId, savedAt, overrides = {}) {
   return {
@@ -33,8 +35,6 @@ function checkpoint(projectId, documentId, savedAt, overrides = {}) {
 }
 
 test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del monitor", async () => {
-  assert.ok(globalThis.indexedDB, "Node 22.13+ debe proporcionar IndexedDB nativo");
-
   const store = new IndexedDbProjectStore();
   const projectId = "live-author-monitor-" + randomUUID();
   const documentId = "chapter-" + randomUUID();

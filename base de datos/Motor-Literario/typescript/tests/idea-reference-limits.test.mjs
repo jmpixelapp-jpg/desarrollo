@@ -205,7 +205,7 @@ test("fusionar ideas combina referencias explícitas sin duplicarlas y respeta e
   );
 });
 
-test("fusionar ideas conserva referencias a entidades y aplica un límite conjunto", async () => {
+test("fusionar ideas conserva referencias a entidades y limita cada categoría por separado", async () => {
   const { mergeNarrativeIdea, MAX_NARRATIVE_IDEA_REFERENCES } =
     await import("../dist/motor-literario.js");
   const previous = baseIdea({
@@ -221,20 +221,36 @@ test("fusionar ideas conserva referencias a entidades y aplica un límite conjun
   assert.deepEqual(merged.relatedEntityIds, ["entity-a", "entity-shared", "entity-b"]);
   assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-b"]);
 
-  const atLimit = baseIdea({
+  const fullCategories = baseIdea({
     relatedEntityIds: Array.from(
-      { length: MAX_NARRATIVE_IDEA_REFERENCES - 1 },
+      { length: MAX_NARRATIVE_IDEA_REFERENCES },
       (_, index) => "entity-" + index
     ),
-    relatedIdeaIds: ["idea-last"]
+    relatedIdeaIds: Array.from(
+      { length: MAX_NARRATIVE_IDEA_REFERENCES },
+      (_, index) => "idea-" + index
+    )
   });
-  const overflow = baseIdea({ relatedIdeaIds: ["another-idea"] });
+  const oneMoreEntity = baseIdea({ relatedEntityIds: ["entity-overflow"] });
+  const oneMoreIdea = baseIdea({ relatedIdeaIds: ["idea-overflow"] });
+
+  assert.equal(
+    mergeNarrativeIdea(baseIdea(), fullCategories).relatedEntityIds.length,
+    MAX_NARRATIVE_IDEA_REFERENCES
+  );
+  assert.equal(
+    mergeNarrativeIdea(baseIdea(), fullCategories).relatedIdeaIds.length,
+    MAX_NARRATIVE_IDEA_REFERENCES
+  );
   assert.throws(
-    () => mergeNarrativeIdea(atLimit, overflow),
-    /referencias explícitas de la idea superan el límite de 500/
+    () => mergeNarrativeIdea(fullCategories, oneMoreEntity),
+    /referencias explícitas de cada categoría superan el límite de 500/
+  );
+  assert.throws(
+    () => mergeNarrativeIdea(fullCategories, oneMoreIdea),
+    /referencias explícitas de cada categoría superan el límite de 500/
   );
 });
-
 test("repetir la misma fusión de ideas es idempotente", async () => {
   const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
   const previous = baseIdea({

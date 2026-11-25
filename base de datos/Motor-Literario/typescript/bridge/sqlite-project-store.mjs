@@ -203,7 +203,8 @@ function validateEntitySnapshotHistory(entities) {
 }
 function validateNarrativeIdeaStatusHistory(idea) {
   if (idea.statusHistory === undefined) return;
-  if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length === 0) {
+  if (!Array.isArray(idea.statusHistory) ||
+      (idea.statusHistory.length === 0 && (idea.omittedStatusHistoryCount ?? 0) === 0)) {
     throw new Error("Historial de estados de idea inválido.");
   }
   for (let index = 0; index < idea.statusHistory.length; index++) {
@@ -211,8 +212,12 @@ function validateNarrativeIdeaStatusHistory(idea) {
     if (!item || !["IDEA", "incorporated", "discarded"].includes(item.status) ||
         !["initial", "writer", "text-revised"].includes(item.reason) ||
         (item.reason === "text-revised" && item.status !== "IDEA") ||
-        (index === 0 ? item.reason !== "initial" : item.reason === "initial" ||
-          (item.status === idea.statusHistory[index - 1]?.status && item.reason !== "writer")) ||
+        (index === 0
+          ? (idea.omittedStatusHistoryCount ?? 0) === 0
+            ? item.reason !== "initial"
+            : item.reason === "initial"
+          : item.reason === "initial" ||
+            (item.status === idea.statusHistory[index - 1]?.status && item.reason !== "writer")) ||
         (item.changedAt !== undefined &&
           (!Number.isFinite(item.changedAt) || item.changedAt < 0))) {
       throw new Error("Historial de estados de idea inválido.");

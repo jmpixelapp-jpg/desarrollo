@@ -13330,7 +13330,7 @@ test("la lectura del recibo espera a que termine la finalización en curso", asy
       sourceProjectName,
       finalizedAt,
       archivedIdeaIds: [],
-      archiveChecksum: "fnv1a64:cbf29ce484222325"
+      archiveChecksum: "fnv1a64:09612b07b5ecb5a5"
     };
     return {
       writerId: authenticatedWriterId,

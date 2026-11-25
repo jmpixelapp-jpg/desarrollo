@@ -396,6 +396,7 @@ test("recibe cambios, confirma persistencia y analiza sin modificar el texto", a
   });
   api.initializeProject({ projectId: "book-1", projectName: "Libro de prueba" });
   await api.openDocument({ documentId: "chapter-1", text: "La casa", revision: 0, sequence: 0 });
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1")?.state, "idle");
 
   const admission = api.onEditorChange({
     documentId: "chapter-1",
@@ -406,6 +407,8 @@ test("recibe cambios, confirma persistencia y analiza sin modificar el texto", a
     replacement: " grande"
   });
   assert.equal(admission.status, "queued");
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1")?.acceptedChanges, 1);
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1")?.pendingChanges, 1);
   if (admission.status !== "queued") return;
 
   for (let i = 0; i < 20 && !api.pollCommit(admission.ticketId); i++) await tick();
@@ -414,6 +417,8 @@ test("recibe cambios, confirma persistencia y analiza sin modificar el texto", a
   assert.equal(store.documents.get("book-1:chapter-1")?.text, "La casa grande");
   assert.equal(analyses.length, 1);
   assert.equal(commits.length, 1);
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1")?.committedChanges, 1);
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1")?.pendingChanges, 0);
 });
 
 test("rechaza desbordamiento de cola sin descartar silenciosamente cambios", async () => {

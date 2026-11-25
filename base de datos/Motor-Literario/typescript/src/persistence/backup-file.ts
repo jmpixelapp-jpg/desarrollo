@@ -52,7 +52,8 @@ export function downloadIndexedDbBackupFile(
 ): void {
   const safeFilename = filename.trim();
   if (!safeFilename || safeFilename.length > 180 ||
-      /[\\/\\u0000-\\u001f]/u.test(safeFilename) ||
+      safeFilename.includes("/") || safeFilename.includes("\\") ||
+      [...safeFilename].some(character => character.charCodeAt(0) < 32) ||
       safeFilename === "." || safeFilename === "..") {
     throw new Error("El nombre del archivo de respaldo no es válido.");
   }

@@ -920,3 +920,90 @@ test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin m
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("la biblioteca personal reúne varios libros del mismo escritor sin mezclar sus categorías ni procedencias", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-multi-book-library-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  const writerId = "writer-multi-book";
+  const projects = [
+    {
+      projectId: "library-book-one",
+      projectName: "La ciudad sumergida",
+      documentId: "chapter-one",
+      text: "IDEA: La torre debe aparecer durante la marea baja."
+    },
+    {
+      projectId: "library-book-two",
+      projectName: "El mapa de ceniza",
+      documentId: "chapter-two",
+      text: "IDEA: El mapa debe revelar un camino oculto."
+    }
+  ];
+  try {
+    await client.hello();
+    for (const project of projects) {
+      await client.openProject({
+        projectId: project.projectId,
+        projectName: project.projectName,
+        writerId
+      });
+      await client.openDocument(project.projectId, {
+        documentId: project.documentId,
+        text: project.text,
+        revision: 0,
+        sequence: 0
+      });
+    }
+    for (const project of projects) {
+      await client.flushProject(project.projectId);
+      const ideas = await client.request("project.call", {
+        projectId: project.projectId,
+        method: "getNarrativeIdeas",
+        args: []
+      });
+      assert.equal(ideas.length, 1);
+      const archived = await client.request("project.call", {
+        projectId: project.projectId,
+        method: "archiveUnincorporatedIdeas",
+        args: []
+      });
+      assert.equal(archived.length, 1);
+      assert.equal(archived[0].writerId, writerId);
+      assert.equal(archived[0].sourceProjectId, project.projectId);
+      assert.equal(archived[0].category, project.projectName);
+    }
+
+    const libraries = await Promise.all(projects.map(project =>
+      client.request("project.call", {
+        projectId: project.projectId,
+        method: "getPersonalIdeaLibrary",
+        args: []
+      })
+    ));
+    for (const library of libraries) {
+      assert.equal(library.length, 2);
+      assert.deepEqual(
+        library.map(entry => [entry.sourceProjectId, entry.category, entry.idea.originDocumentId])
+          .sort((a, b) => a[0].localeCompare(b[0])),
+        [
+          ["library-book-one", "La ciudad sumergida", "chapter-one"],
+          ["library-book-two", "El mapa de ceniza", "chapter-two"]
+        ]
+      );
+      assert.equal(library.every(entry => entry.writerId === writerId), true);
+    }
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    try {
+      const exited = waitForExit(child);
+      await client.shutdown();
+      await exited;
+    } catch { child.kill(); }
+    await rm(directory, { recursive: true, force: true });
+  }
+});

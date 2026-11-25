@@ -11878,3 +11878,20 @@ test("la API paginada mantiene compatibilidad con adaptadores antiguos de biblio
   assert.deepEqual(second.items.map(entry => entry.idea.id), ["idea-b"]);
   assert.equal(second.nextCursor, null);
 });
+
+
+test("la API rechaza páginas de biblioteca sin un cursor final explícito", async () => {
+  const store = new MemoryStore();
+  store.loadPersonalIdeasPage = async () => ({ items: [] });
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId: "malformed-library-page",
+    projectName: "Libro incompleto",
+    writerId: "writer-page-validation"
+  });
+
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(null, 10),
+    /página o su cursor están malformados/
+  );
+});

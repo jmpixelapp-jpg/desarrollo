@@ -36,7 +36,7 @@ import {
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
-import { extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
+import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
 /**
@@ -159,6 +159,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
         !validEvidence(item.evidence)) invalid();
     for (const links of [item.relatedEntityIds, item.relatedIdeaIds]) {
       if (links !== undefined && (!Array.isArray(links) ||
+          links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
           links.some((value: unknown) => typeof value !== "string" || !value.trim()) ||
           new Set(links).size !== links.length)) invalid();
     }
@@ -3104,6 +3105,11 @@ export class HostEngineApi {
       if (nextIds.length === currentIds.length &&
           nextIds.every((id, index) => id === currentIds[index])) {
         return cloneNarrativeRecord(idea);
+      }
+      if (nextIds.length > MAX_NARRATIVE_IDEA_REFERENCES) {
+        throw new Error(
+          `Una idea no puede conservar más de ${MAX_NARRATIVE_IDEA_REFERENCES} vínculos por categoría.`
+        );
       }
 
       const updated: NarrativeIdea = referenceKind === "relatedEntityIds"

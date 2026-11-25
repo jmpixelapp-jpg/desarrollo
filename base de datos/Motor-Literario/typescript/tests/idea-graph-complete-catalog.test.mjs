@@ -86,6 +86,57 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
 });
 
 
+test("separa componentes cíclicos ante aristas cruzadas entre subgrafos", async () => {
+  const links = {
+    a: ["b"],
+    b: ["c", "d"],
+    c: ["a"],
+    d: ["e"],
+    e: ["d", "f"],
+    f: ["f"],
+    g: ["a"],
+    h: ["g"]
+  };
+  const ideas = Object.entries(links).map(([id, relatedIdeaIds]) => ({
+    projectId,
+    id,
+    text: "Idea " + id,
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds,
+    relatedEntityIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  }));
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-scc" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\nLa estructura se conecta.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 8);
+    assert.equal(graph.referenceCount, 10);
+    assert.equal(graph.includedReferenceCount, 10);
+    assert.equal(graph.cycleCount, 3);
+    assert.deepEqual(graph.cycles.map(cycle => cycle.ideaIds), [
+      ["a", "b", "c"],
+      ["d", "e"],
+      ["f"]
+    ]);
+    assert.equal(graph.weakComponentCount, 1);
+    assert.equal(graph.largestWeakComponentSize, 8);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("el anfitrión respeta el presupuesto de texto del catálogo global", async () => {
   const budgetStore = {
     documents: new Map(),

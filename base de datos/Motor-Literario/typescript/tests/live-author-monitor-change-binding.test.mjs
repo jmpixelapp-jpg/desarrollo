@@ -175,3 +175,96 @@ test("valida contratos y callbacks antes de registrar el stream", () => {
   }), /callbacks obligatorias/);
   assert.equal(f.listeners.size, 0);
 });
+
+test("reintenta automáticamente en FIFO cuando HostEngineApi publica una señal de commit", () => {
+  const f = sourceFixture();
+  const attempts = [];
+  const admissions = [];
+  const retryListeners = new Set();
+  let capacityAvailable = false;
+
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        return capacityAvailable
+          ? { status: "queued", ticketId: "ticket-" + value.sequence }
+          : { status: "rejected", reason: "queue_full" };
+      }
+    },
+    subscribeRetrySignal(listener) {
+      retryListeners.add(listener);
+      return () => retryListeners.delete(listener);
+    },
+    onAdmission: (value, admission) => admissions.push([value.sequence, admission.status]),
+    onError: error => { throw error; }
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  assert.deepEqual(attempts, [1]);
+  assert.equal(retryListeners.size, 1);
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1, 2]);
+
+  // Simula la publicación de métricas al confirmar un commit.
+  capacityAvailable = true;
+  for (const listener of [...retryListeners]) listener();
+
+  assert.deepEqual(attempts, [1, 1, 2]);
+  assert.deepEqual(stop.getPendingChanges(), []);
+  assert.deepEqual(admissions, [
+    [1, "rejected"],
+    [1, "queued"],
+    [2, "queued"]
+  ]);
+
+  stop();
+  assert.equal(retryListeners.size, 0);
+  assert.equal(f.listeners.size, 0);
+});
+
+test("las señales de reintento reentrantes no duplican el mismo delta", () => {
+  const f = sourceFixture();
+  const retryListeners = new Set();
+  const attempts = [];
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        for (const listener of [...retryListeners]) listener();
+        return { status: "queued", ticketId: "ticket-" + value.sequence };
+      }
+    },
+    subscribeRetrySignal(listener) {
+      retryListeners.add(listener);
+      return () => retryListeners.delete(listener);
+    },
+    onAdmission: () => {},
+    onError: error => { throw error; }
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  assert.deepEqual(attempts, [1, 2]);
+  stop();
+});
+
+test("libera la suscripción de reintento si falla el montaje de la fuente", () => {
+  const retryListeners = new Set();
+  assert.throws(() => bindLiveAuthorMonitorEditorChanges({
+    source: {
+      subscribeChanges() { throw new Error("source_unavailable"); }
+    },
+    sink: { onEditorChange: () => ({ status: "rejected", reason: "queue_full" }) },
+    subscribeRetrySignal(listener) {
+      retryListeners.add(listener);
+      return () => retryListeners.delete(listener);
+    },
+    onAdmission: () => {},
+    onError: () => {}
+  }), /source_unavailable/);
+  assert.equal(retryListeners.size, 0);
+});
+

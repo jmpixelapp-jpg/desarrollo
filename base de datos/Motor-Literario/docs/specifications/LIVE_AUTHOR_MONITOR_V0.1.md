@@ -1,8 +1,8 @@
 # Monitoreo de actividad del autor en vivo — contrato v0.1
 
-- **Estado:** núcleo, refresco temporal, panel DOM, tablero multi-documento, selección de pestaña activa, enlace tipado del stream y adaptador nativo para textarea disponibles. Los editores con historial propio pueden requerir un adaptador específico.
+- **Estado:** núcleo, refresco temporal, panel DOM, tablero multi-documento, selección de pestaña activa, enlace tipado del stream, adaptador nativo para textarea y seguimiento de composición IME disponibles. Los editores con historial propio pueden requerir un adaptador específico.
 - **Runtime:** TypeScript/JavaScript puro; sin dependencias externas ni servicios remotos.
-- **Ubicación:** **typescript/src/live-author-monitor.ts**, **live-author-monitor-panel.ts**, **live-author-monitor-workspace.ts**, **live-author-monitor-editor-integration.ts**, **live-author-monitor-change-binding.ts** y **live-author-monitor-textarea-source.ts**.
+- **Ubicación:** **typescript/src/live-author-monitor.ts**, **live-author-monitor-panel.ts**, **live-author-monitor-workspace.ts**, **live-author-monitor-editor-integration.ts**, **live-author-monitor-change-binding.ts**, **live-author-monitor-textarea-source.ts** y **live-author-monitor-textarea-integration.ts**.
 - **Alcance:** métricas por sesión y documento, eventos de admisión/commit, pausas, ritmo estimado, resincronización y suscripciones.
 
 ## 1. Responsabilidad y límites
@@ -80,11 +80,9 @@ Los tiempos se calculan con **performance.now()** cuando está disponible. El re
 
 ## 5. Validación
 
-Pruebas específicas en **typescript/tests/live-author-monitor.test.mjs**, **live-author-monitor-panel.test.mjs**, **live-author-monitor-workspace.test.mjs**, **live-author-monitor-editor-integration.test.mjs**, **live-author-monitor-change-binding.test.mjs** y **live-author-monitor-host-api.test.mjs**: métricas de admisión/commit; tiempo activo y pausas; refresco sin nuevas pulsaciones; privacidad del manuscrito; panel accesible; varios documentos; aperturas/cierres; selección de capítulo; entrega única de deltas; conservación de rechazos para contrapresión; cancelación de suscripción; reanudación idempotente desde el snapshot durable; rechazo de reanudación con cambios pendientes.
+Las pruebas específicas del monitor cubren métricas de admisión/commit, actividad y pausas, privacidad del manuscrito, panel accesible, varios documentos, selección de capítulo, deltas UTF-16, pegado y reemplazo, operaciones ambiguas, ciclo de composición IME, contrapresión FIFO, reintentos automáticos, limpieza de suscripciones y resincronización durable.
 
-**Validación específica de monitoreo e integración de editor:** las 30 pruebas de los seis archivos dedicados al monitoreo pasaron (30/30). El chequeo estricto de TypeScript, la compilación y la validación estructural del esquema también pasaron. [Ejecución CI 45712143641](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45712143641). La integración con el editor anfitrión sigue requiriendo un adaptador real que implemente la fuente de deltas y la selección de pestaña de la aplicación.
-
-**Validación de la suite completa:** la ejecución terminó con 283 pruebas aprobadas, 26 fallidas, 222 canceladas y 9 omitidas (540 en total). Los 26 fallos se concentran en los módulos de grafo y resonancia de ideas, sincronización CAS de ideas, análisis literario y auditoría de almacenamiento. Ninguno pertenece a los seis archivos de pruebas específicos del monitoreo. El benchmark se omitió porque la suite general terminó con errores; no se declara validación global completa.
+La validación automatizada más reciente, el recuento exacto de pruebas y las limitaciones pendientes del chequeo global se registran en la sección 12. La CI aislada del monitor permite verificar este componente sin interferir con módulos narrativos paralelos, pero no reemplaza el typecheck estricto ni la suite completa.
 
 ## 6. Refresco continuo del panel
 

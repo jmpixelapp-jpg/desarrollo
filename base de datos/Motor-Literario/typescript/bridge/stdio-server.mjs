@@ -195,6 +195,8 @@ async function pollExternalNarrativeChanges() {
 
     try {
       await record.api.invalidateNarrativeKnowledgeFromExternalChange();
+      lastNarrativeVersions.set(projectId, currentNarrativeVersion);
+      pendingNarrativeSyncs.delete(projectId);
       if (projects.get(projectId) === record) {
         await send({
           jsonrpc: "2.0",
@@ -202,8 +204,6 @@ async function pollExternalNarrativeChanges() {
           params: { projectId }
         });
       }
-      lastNarrativeVersions.set(projectId, currentNarrativeVersion);
-      pendingNarrativeSyncs.delete(projectId);
     } catch (error) {
       writeError(error);
     }

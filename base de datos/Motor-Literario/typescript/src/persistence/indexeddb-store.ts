@@ -1,10 +1,10 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic } from "../contracts";
 import { normalizeEntityName } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 11;
+const DATABASE_VERSION = 12;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -14,8 +14,42 @@ const EVENTS = "narrative-events";
 const IDEAS = "narrative-ideas";
 const PERSONAL_IDEAS = "personal-idea-library";
 const PERSONAL_IDEA_SOURCE_INDEX = "by-source-project";
+const FINALIZATION_RECEIPTS = "writer-library-finalization-receipts";
+const FINALIZATION_RECEIPT_ID = "finalization-v1";
 const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
+
+/** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
+function checksumArchivedIdeaIds(ids: readonly string[]): string {
+  const serialized = JSON.stringify([...ids].sort());
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
+
+function validateFinalizationReceipt(
+  receipt: StoredProjectFinalizationReceipt,
+  writerId: string,
+  projectId: string
+): void {
+  if (!receipt || receipt.writerId !== writerId ||
+      receipt.sourceProjectId !== projectId ||
+      receipt.receiptId !== FINALIZATION_RECEIPT_ID ||
+      typeof receipt.sourceProjectName !== "string" || !receipt.sourceProjectName.trim() ||
+      !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+      !Array.isArray(receipt.archivedIdeaIds) ||
+      receipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+      new Set(receipt.archivedIdeaIds).size !== receipt.archivedIdeaIds.length ||
+      [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1]!.localeCompare(id) > 0) ||
+      typeof receipt.archiveChecksum !== "string" ||
+      receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds)) {
+    throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");
+  }
+}
+
 function validateProjectRecord(
   record: { readonly projectId: string; readonly id: string } | null | undefined,
   label: string
@@ -776,6 +810,13 @@ export class IndexedDbProjectStore implements ProjectStore {
           personalIdeas.createIndex("by-writer-source", ["writerId", "sourceProjectId"], { unique: false });
           personalIdeas.createIndex(PERSONAL_IDEA_SOURCE_INDEX, "sourceProjectId", { unique: false });
         }
+        if (!db.objectStoreNames.contains(FINALIZATION_RECEIPTS)) {
+          const receipts = db.createObjectStore(FINALIZATION_RECEIPTS, {
+            keyPath: ["writerId", "sourceProjectId", "receiptId"]
+          });
+          receipts.createIndex("by-writer", "writerId", { unique: false });
+          receipts.createIndex("by-writer-source", ["writerId", "sourceProjectId"], { unique: false });
+        }
         if (!db.objectStoreNames.contains(ASSERTIONS)) {
           const assertions = db.createObjectStore(ASSERTIONS, { keyPath: ["projectId", "id"] });
           assertions.createIndex("by-project", "projectId", { unique: false });
@@ -828,6 +869,8 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(PERSONAL_IDEAS, "by-writer", "writerId");
         ensureIndex(PERSONAL_IDEAS, "by-writer-source", ["writerId", "sourceProjectId"]);
         ensureIndex(PERSONAL_IDEAS, PERSONAL_IDEA_SOURCE_INDEX, "sourceProjectId");
+        ensureIndex(FINALIZATION_RECEIPTS, "by-writer", "writerId");
+        ensureIndex(FINALIZATION_RECEIPTS, "by-writer-source", ["writerId", "sourceProjectId"]);
         ensureIndex(ASSERTIONS, "by-project", "projectId");
         ensureIndex(ASSERTIONS, "by-entity", ["projectId", "entityId"]);
         ensureIndex(DIAGNOSTICS, "by-project", "projectId");

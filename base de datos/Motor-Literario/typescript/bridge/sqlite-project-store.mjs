@@ -4,6 +4,8 @@ import { dirname } from "node:path";
 
 const TABLE = "bridge_records";
 const ARCHIVE_PAGE_SIZE = 128;
+// Debe coincidir con MAX_NARRATIVE_IDEA_REFERENCES en narrative-knowledge.ts.
+const MAX_NARRATIVE_IDEA_REFERENCES = 500;
 const WRITER_LIBRARY_COLLECTIONS = new Set([
   "personal-idea-library",
   "writer-library-finalization-receipts"
@@ -144,6 +146,18 @@ function validateEntitySnapshotHistory(entities) {
     }
   }
 }
+function validateNarrativeIdeaReferenceLimit(idea) {
+  for (const links of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
+    if (links !== undefined &&
+        (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES)) {
+      throw new Error(
+        "Una idea no puede conservar más de " + MAX_NARRATIVE_IDEA_REFERENCES +
+        " vínculos por categoría."
+      );
+    }
+  }
+}
+
 function validateNarrativeIdea(idea, projectId, label = "idea") {
   requireProjectRecord(idea, label);
   if (idea.projectId !== projectId || typeof idea.text !== "string" || !idea.text.trim() ||
@@ -155,9 +169,13 @@ function validateNarrativeIdea(idea, projectId, label = "idea") {
   validateEvidenceList(idea.evidence, label);
   for (const links of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
     if (links !== undefined &&
-        (!Array.isArray(links) || links.some(id => typeof id !== "string" || !id.trim()) ||
+        (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+          links.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(links).size !== links.length)) {
-      throw new Error("Integridad narrativa: referencias de " + label + " inválidas.");
+      throw new Error(
+        "Integridad narrativa: referencias de " + label +
+        " inválidas, duplicadas o superiores al límite de " + MAX_NARRATIVE_IDEA_REFERENCES + "."
+      );
     }
   }
   if (idea.relatedIdeaIds?.includes(idea.id)) throw new Error("Una idea no puede enlazarse a sí misma.");
@@ -1425,6 +1443,7 @@ export class SqliteProjectStore {
 
   saveIdea(idea) {
     requireProjectRecord(idea, "idea narrativa");
+    validateNarrativeIdeaReferenceLimit(idea);
     return this.transaction(() => {
       for (const id of idea.relatedEntityIds ?? []) {
         if (!this.get("narrative-entities", identityKey(idea.projectId, id))) throw new Error("La idea enlaza una ficha inexistente.");
@@ -1440,6 +1459,7 @@ export class SqliteProjectStore {
 
   saveIdeaIfUnchanged(idea, expectedCurrent) {
     requireProjectRecord(idea, "idea narrativa");
+    validateNarrativeIdeaReferenceLimit(idea);
     if (expectedCurrent !== undefined) {
       requireProjectRecord(expectedCurrent, "idea anterior");
       if (idea.projectId !== expectedCurrent.projectId || idea.id !== expectedCurrent.id) {

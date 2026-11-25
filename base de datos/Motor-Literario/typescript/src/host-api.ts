@@ -3056,6 +3056,7 @@ export class HostEngineApi {
       incrementalNarrativeExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
       evidenceBasedEntityExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
       projectIsolatedNarrativeKnowledge: true,
+      narrativeEntityConsolidation: Boolean(this.store.mergeNarrativeEntityIdentity),
       evidenceBasedCharacterRelations: Boolean(this.store.saveRelation && this.store.loadRelations),
       explicitEventCapture: Boolean(this.store.saveEvent && this.store.loadEvents),
       explicitEventChronology: Boolean(this.store.saveEvent && this.store.loadEvents),

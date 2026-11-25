@@ -237,3 +237,121 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("el puente SQLite consolida identidades y actualiza atómicamente la biblioteca personal", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-merge-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let first;
+  let second;
+  try {
+    first = startBridge(databasePath);
+    await first.client.hello();
+    await first.client.openProject({
+      projectId: "merge-library-project",
+      projectName: "Libro de identidades",
+      writerId: "writer-merge-library"
+    });
+    await first.client.openDocument("merge-library-project", {
+      documentId: "chapter-identities",
+      text: "personaje Ana\npersonaje Anita\nIDEA: La campana debe sonar antes del amanecer.",
+      revision: 0,
+      sequence: 0
+    });
+    await first.client.flushProject("merge-library-project");
+
+    const capabilities = await first.client.request("engine.capabilities", {
+      projectId: "merge-library-project"
+    });
+    assert.equal(capabilities.narrativeEntityConsolidation, true);
+
+    const entities = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "getNarrativeEntities", args: []
+    });
+    const target = entities.find(entity => entity.canonicalName === "Ana");
+    const source = entities.find(entity => entity.canonicalName === "Anita");
+    assert.ok(target, "Debe extraerse la ficha explícita de Ana.");
+    assert.ok(source, "Debe extraerse la ficha explícita de Anita.");
+
+    const ideas = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(ideas.length, 1);
+    await first.client.request("project.call", {
+      projectId: "merge-library-project",
+      method: "setNarrativeIdeaEntityLink",
+      args: [ideas[0].id, source.id, true]
+    });
+    const archived = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "archiveUnincorporatedIdeas", args: []
+    });
+    assert.equal(archived.length, 1);
+    assert.deepEqual(archived[0].idea.relatedEntityIds, [source.id]);
+    assert.equal(archived[0].context.relatedEntities[0].id, source.id);
+
+    const merged = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "mergeNarrativeEntities",
+      args: [target.id, source.id]
+    });
+    assert.equal(merged.id, target.id);
+    assert.ok(merged.aliases.includes("Anita"));
+    assert.ok(merged.mergedFromIds.includes(source.id));
+
+    const activeEntities = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "getNarrativeEntities", args: []
+    });
+    assert.equal(activeEntities.some(entity => entity.id === source.id), false);
+    assert.ok(activeEntities.some(entity => entity.id === target.id));
+
+    const library = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "getPersonalIdeaLibrary", args: []
+    });
+    assert.equal(library.length, 1);
+    assert.deepEqual(library[0].idea.relatedEntityIds, [target.id]);
+    assert.deepEqual(library[0].context.relatedEntities.map(entity => entity.id), [target.id]);
+    assert.ok(library[0].context.relatedEntities[0].mergedFromIds.includes(source.id));
+    assert.equal(library[0].idea.text, archived[0].idea.text);
+    assert.deepEqual(library[0].idea.evidence, archived[0].idea.evidence);
+    assert.deepEqual(library[0].idea.statusHistory, archived[0].idea.statusHistory);
+    assert.equal(library[0].archivedAt, archived[0].archivedAt);
+
+    const exitFirst = waitForExit(first.child);
+    await first.client.shutdown();
+    assert.equal(await exitFirst, 0);
+    first = undefined;
+
+    second = startBridge(databasePath);
+    await second.client.hello();
+    await second.client.openProject({
+      projectId: "merge-library-project",
+      projectName: "Libro de identidades",
+      writerId: "writer-merge-library"
+    });
+    const recoveredLibrary = await second.client.request("project.call", {
+      projectId: "merge-library-project", method: "getPersonalIdeaLibrary", args: []
+    });
+    const recoveredEntities = await second.client.request("project.call", {
+      projectId: "merge-library-project", method: "getNarrativeEntities", args: []
+    });
+    assert.equal(recoveredLibrary.length, 1);
+    assert.deepEqual(recoveredLibrary[0].idea.relatedEntityIds, [target.id]);
+    assert.deepEqual(recoveredLibrary[0].context.relatedEntities.map(entity => entity.id), [target.id]);
+    assert.ok(recoveredEntities.some(entity => entity.id === target.id));
+    assert.equal(recoveredEntities.some(entity => entity.id === source.id), false);
+
+    const exitSecond = waitForExit(second.child);
+    await second.client.shutdown();
+    assert.equal(await exitSecond, 0);
+    second = undefined;
+  } finally {
+    for (const active of [first, second]) {
+      if (!active) continue;
+      try {
+        const exited = waitForExit(active.child);
+        await active.client.shutdown();
+        await exited;
+      } catch { active.child.kill(); }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});

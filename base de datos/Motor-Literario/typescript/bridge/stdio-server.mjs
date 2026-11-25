@@ -16,6 +16,7 @@ const PUBLIC_API_METHODS = new Set([
   "extractNarrativeKnowledge",
   "addNarrativeEntityAlias",
   "getNarrativeEntityIdentityCandidates",
+  "mergeNarrativeEntities",
   "getNarrativeEntities",
   "getNarrativeRelations",
   "getNarrativeEvents",

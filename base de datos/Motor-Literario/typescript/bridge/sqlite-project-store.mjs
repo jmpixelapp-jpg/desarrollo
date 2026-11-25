@@ -40,6 +40,294 @@ function recordId(record) {
   return record?.id;
 }
 
+function normalizeNarrativeName(value) {
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
+}
+function evidenceKey(item) {
+  return JSON.stringify([item.documentId, item.revision, item.start, item.end, item.excerpt, item.status ?? null]);
+}
+function validateEvidenceList(evidence, label) {
+  if (!Array.isArray(evidence)) throw new Error(label + ": evidencias inválidas.");
+  for (const item of evidence) {
+    if (!item || typeof item.documentId !== "string" || !item.documentId.trim() ||
+        !Number.isSafeInteger(item.revision) || item.revision < 0 ||
+        !Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end) ||
+        item.start < 0 || item.end < item.start || typeof item.excerpt !== "string" ||
+        (item.status !== undefined && item.status !== "stale")) {
+      throw new Error(label + ": evidencia malformada.");
+    }
+  }
+}
+function validateNarrativeEntity(entity, projectId, label = "entidad") {
+  requireProjectRecord(entity, label);
+  if (entity.projectId !== projectId || typeof entity.kind !== "string" || !entity.kind.trim() ||
+      entity.kind.length > 128 || typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
+      typeof entity.normalizedName !== "string" || entity.normalizedName !== normalizeNarrativeName(entity.canonicalName) ||
+      !Array.isArray(entity.aliases) || entity.aliases.some(x => typeof x !== "string" || !x.trim()) ||
+      (entity.mergedFromIds !== undefined &&
+        (!Array.isArray(entity.mergedFromIds) || entity.mergedFromIds.some(x => typeof x !== "string" || !x.trim()))) ||
+      !Number.isFinite(entity.firstSeenAt) || entity.firstSeenAt < 0 ||
+      !Number.isFinite(entity.lastSeenAt) || entity.lastSeenAt < entity.firstSeenAt ||
+      entity.extractionVersion !== 1) {
+    throw new Error("Integridad narrativa: " + label + " malformada.");
+  }
+  validateEvidenceList(entity.evidence, label);
+}
+function validateNarrativeIdentityHistory(entities) {
+  const owners = new Map();
+  for (const entity of entities) {
+    const localIds = new Set([entity.id]);
+    for (const id of entity.mergedFromIds ?? []) {
+      if (localIds.has(id)) throw new Error("Integridad narrativa: una entidad repite o reclama su propio ID histórico.");
+      localIds.add(id);
+    }
+    for (const id of localIds) {
+      if (owners.has(id) && owners.get(id) !== entity.id) {
+        throw new Error("Integridad narrativa: un ID histórico pertenece a más de una entidad.");
+      }
+      owners.set(id, entity.id);
+    }
+  }
+}
+function validateEntitySnapshotHistory(entities) {
+  const ids = new Set();
+  const parents = new Map();
+  for (const entity of entities) {
+    validateNarrativeEntity(entity, entity.projectId, "entidad contextual");
+    if (ids.has(entity.id)) throw new Error("Biblioteca personal: instantánea de entidad duplicada.");
+    ids.add(entity.id);
+    for (const parent of entity.mergedFromIds ?? []) {
+      if (parent === entity.id || (parents.has(parent) && parents.get(parent) !== entity.id)) {
+        throw new Error("Biblioteca personal: historial de identidades inconsistente.");
+      }
+      parents.set(parent, entity.id);
+    }
+  }
+  for (const start of ids) {
+    const visited = new Set();
+    let current = start;
+    while (parents.has(current)) {
+      if (visited.has(current)) throw new Error("Biblioteca personal: ciclo en historial de identidades.");
+      visited.add(current);
+      current = parents.get(current);
+    }
+  }
+}
+function validateNarrativeIdea(idea, projectId, label = "idea") {
+  requireProjectRecord(idea, label);
+  if (idea.projectId !== projectId || typeof idea.text !== "string" || !idea.text.trim() ||
+      !["IDEA", "incorporated", "discarded"].includes(idea.status) ||
+      typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
+      typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim()) {
+    throw new Error("Integridad narrativa: " + label + " malformada.");
+  }
+  validateEvidenceList(idea.evidence, label);
+  for (const links of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
+    if (links !== undefined &&
+        (!Array.isArray(links) || links.some(id => typeof id !== "string" || !id.trim()) ||
+          new Set(links).size !== links.length)) {
+      throw new Error("Integridad narrativa: referencias de " + label + " inválidas.");
+    }
+  }
+  if (idea.relatedIdeaIds?.includes(idea.id)) throw new Error("Una idea no puede enlazarse a sí misma.");
+  if (idea.statusHistory !== undefined) {
+    if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length === 0) {
+      throw new Error("Historial de estados de idea inválido.");
+    }
+    let previousTime;
+    for (let i = 0; i < idea.statusHistory.length; i++) {
+      const item = idea.statusHistory[i];
+      if (!item || !["IDEA", "incorporated", "discarded"].includes(item.status) ||
+          !["initial", "writer", "text-revised"].includes(item.reason) ||
+          (i === 0 ? item.reason !== "initial" : item.reason === "initial") ||
+          (item.changedAt !== undefined &&
+            (!Number.isFinite(item.changedAt) || item.changedAt < 0 ||
+              (previousTime !== undefined && item.changedAt < previousTime)))) {
+        throw new Error("Historial de estados de idea inválido.");
+      }
+      if (item.changedAt !== undefined) previousTime = item.changedAt;
+    }
+    if (idea.statusHistory.at(-1).status !== idea.status) {
+      throw new Error("El historial de estados no coincide con la idea actual.");
+    }
+  }
+}
+function validateNarrativeRelation(relation, projectId) {
+  requireProjectRecord(relation, "relación narrativa");
+  if (relation.projectId !== projectId || typeof relation.fromEntityId !== "string" ||
+      !relation.fromEntityId.trim() || typeof relation.toEntityId !== "string" ||
+      !relation.toEntityId.trim() || typeof relation.relationType !== "string" ||
+      !relation.relationType.trim()) throw new Error("Relación narrativa malformada.");
+  validateEvidenceList(relation.evidence, "relación narrativa");
+}
+function validateNarrativeEvent(event, projectId) {
+  requireProjectRecord(event, "acontecimiento narrativo");
+  if (event.projectId !== projectId || typeof event.label !== "string" || !event.label.trim() ||
+      !Array.isArray(event.participants) ||
+      event.participants.some(id => typeof id !== "string" || !id.trim()) ||
+      new Set(event.participants).size !== event.participants.length) {
+    throw new Error("Acontecimiento narrativo malformado.");
+  }
+  validateEvidenceList(event.evidence, "acontecimiento narrativo");
+}
+function validateNarrativeAssertion(assertion, projectId) {
+  requireProjectRecord(assertion, "afirmación narrativa");
+  if (assertion.projectId !== projectId || typeof assertion.entityId !== "string" ||
+      !assertion.entityId.trim() || typeof assertion.entityName !== "string" ||
+      !assertion.entityName.trim() || !["age", "location", "role"].includes(assertion.attribute) ||
+      (assertion.attribute === "age"
+        ? typeof assertion.value !== "number" || !Number.isFinite(assertion.value) || assertion.value < 0
+        : typeof assertion.value !== "string" || !assertion.value.trim()) ||
+      !Number.isFinite(assertion.capturedAt) || assertion.capturedAt < 0) {
+    throw new Error("Afirmación narrativa malformada.");
+  }
+  validateEvidenceList([assertion.evidence], "afirmación narrativa");
+}
+function validatePersonalIdeaContext(context, projectId, sourceProjectName) {
+  if (!context || context.version !== 1 || !Array.isArray(context.relatedIdeas) ||
+      !Array.isArray(context.relatedEntities)) {
+    throw new Error("Contexto de biblioteca personal inválido.");
+  }
+  const ideaIds = new Set();
+  for (const idea of context.relatedIdeas) {
+    validateNarrativeIdea(idea, projectId, "idea contextual");
+    if (idea.sourceProjectName !== sourceProjectName || idea.status === "IDEA" || ideaIds.has(idea.id)) {
+      throw new Error("La biblioteca contiene una idea contextual duplicada o pendiente.");
+    }
+    ideaIds.add(idea.id);
+  }
+  for (const entity of context.relatedEntities) validateNarrativeEntity(entity, projectId, "entidad contextual");
+  validateEntitySnapshotHistory(context.relatedEntities);
+  const entityIds = new Set(context.relatedEntities.map(entity => entity.id));
+  for (const idea of context.relatedIdeas) {
+    if ((idea.relatedEntityIds ?? []).some(id => !entityIds.has(id))) {
+      throw new Error("Una idea contextual conserva una referencia a una ficha no archivada.");
+    }
+  }
+}
+function remapPersonalIdeaEntriesForEntityMerge(entries, writerId, projectId, sourceEntityId, mergedEntity) {
+  if (!Array.isArray(entries)) throw new Error("No se pudo leer la biblioteca de ideas del proyecto.");
+  const identities = new Set();
+  const archivedIdeaIds = new Set();
+  for (const entry of entries) {
+    if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
+        typeof entry.sourceProjectName !== "string" || !entry.sourceProjectName.trim() ||
+        entry.category !== entry.sourceProjectName || !entry.idea ||
+        entry.idea.sourceProjectName !== entry.sourceProjectName || entry.idea.status !== "IDEA" ||
+        !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0) {
+      throw new Error("Biblioteca personal: registro ajeno o malformado.");
+    }
+    validateNarrativeIdea(entry.idea, projectId, "idea archivada");
+    if (identities.has(entry.idea.id)) throw new Error("Biblioteca personal: ideas archivadas duplicadas.");
+    identities.add(entry.idea.id);
+    archivedIdeaIds.add(entry.idea.id);
+  }
+  const absorbedIds = new Set([sourceEntityId, ...(mergedEntity.mergedFromIds ?? [])]);
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const entry of entries) {
+      if (!entry.context) continue;
+      validatePersonalIdeaContext(entry.context, projectId, entry.sourceProjectName);
+      for (const snapshot of entry.context.relatedEntities) {
+        const belongs = absorbedIds.has(snapshot.id) ||
+          (snapshot.mergedFromIds ?? []).some(id => absorbedIds.has(id));
+        if (!belongs) continue;
+        if (!absorbedIds.has(snapshot.id)) { absorbedIds.add(snapshot.id); expanded = true; }
+        for (const id of snapshot.mergedFromIds ?? []) {
+          if (!absorbedIds.has(id)) { absorbedIds.add(id); expanded = true; }
+        }
+      }
+    }
+  }
+  const mergedIdentityIds = new Set([mergedEntity.id, ...absorbedIds]);
+  return entries.map(entry => {
+    if (!entry.context) {
+      const current = entry.idea.relatedEntityIds ?? [];
+      if (!current.some(id => absorbedIds.has(id))) return entry;
+      return {
+        ...entry,
+        idea: { ...entry.idea, relatedEntityIds: [...new Set(current.map(id => absorbedIds.has(id) ? mergedEntity.id : id))] }
+      };
+    }
+    validatePersonalIdeaContext(entry.context, projectId, entry.sourceProjectName);
+    const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+    const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+    if (contextIdeaIds.has(entry.idea.id) || [...contextIdeaIds].some(id => archivedIdeaIds.has(id))) {
+      throw new Error("La biblioteca repite una idea archivada dentro del contexto.");
+    }
+    for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
+      if ((idea.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id)) ||
+          (idea.relatedIdeaIds ?? []).some(id => !contextIdeaIds.has(id) && !archivedIdeaIds.has(id))) {
+        throw new Error("Biblioteca personal: hay referencias históricas sin destino resoluble.");
+      }
+    }
+    const identityIds = new Set(mergedIdentityIds);
+    const selected = new Map();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const snapshot of entry.context.relatedEntities) {
+        if (selected.has(snapshot.id)) continue;
+        if (!identityIds.has(snapshot.id) &&
+            !(snapshot.mergedFromIds ?? []).some(id => identityIds.has(id))) continue;
+        selected.set(snapshot.id, snapshot);
+        identityIds.add(snapshot.id);
+        for (const id of snapshot.mergedFromIds ?? []) identityIds.add(id);
+        changed = true;
+      }
+    }
+    const referencesMerged = [entry.idea, ...entry.context.relatedIdeas].some(idea =>
+      (idea.relatedEntityIds ?? []).some(id => identityIds.has(id))
+    );
+    if (referencesMerged && selected.size === 0) {
+      throw new Error("Una idea archivada referencia una identidad sin instantánea histórica.");
+    }
+    if (selected.size === 0) return entry;
+    const snapshots = [...selected.values()];
+    if (snapshots.some(snapshot => snapshot.kind !== mergedEntity.kind)) {
+      throw new Error("Una instantánea histórica pertenece a otra clase de entidad.");
+    }
+    const aliases = [...new Map(
+      [...mergedEntity.aliases, ...snapshots.flatMap(snapshot => [snapshot.canonicalName, ...snapshot.aliases])]
+        .map(alias => [normalizeNarrativeName(alias), alias])
+    ).values()].filter(alias => alias && normalizeNarrativeName(alias) !== mergedEntity.normalizedName);
+    const mergedFromIds = [...new Set([
+      ...(mergedEntity.mergedFromIds ?? []),
+      ...snapshots.flatMap(snapshot => [snapshot.id, ...(snapshot.mergedFromIds ?? [])])
+    ])].filter(id => id !== mergedEntity.id);
+    const evidence = new Map();
+    for (const item of [...mergedEntity.evidence, ...snapshots.flatMap(snapshot => snapshot.evidence)]) evidence.set(evidenceKey(item), item);
+    const contextualEntity = {
+      ...mergedEntity, aliases, mergedFromIds, evidence: [...evidence.values()],
+      firstSeenAt: Math.min(mergedEntity.firstSeenAt, ...snapshots.map(item => item.firstSeenAt)),
+      lastSeenAt: Math.max(mergedEntity.lastSeenAt, ...snapshots.map(item => item.lastSeenAt))
+    };
+    validateNarrativeEntity(contextualEntity, projectId, "entidad contextual consolidada");
+    const remapIdea = idea => ({
+      ...idea,
+      ...(idea.relatedEntityIds ? {
+        relatedEntityIds: [...new Set(idea.relatedEntityIds.map(id => identityIds.has(id) ? mergedEntity.id : id))]
+      } : {})
+    });
+    const relatedEntities = [
+      ...entry.context.relatedEntities.filter(entity => !selected.has(entity.id)),
+      contextualEntity
+    ].sort((a, b) => a.id.localeCompare(b.id));
+    validateEntitySnapshotHistory(relatedEntities);
+    return {
+      ...entry,
+      idea: remapIdea(entry.idea),
+      context: {
+        ...entry.context,
+        relatedIdeas: entry.context.relatedIdeas.map(remapIdea),
+        relatedEntities
+      }
+    };
+  });
+}
+
+
 export class SqliteProjectStore {
   constructor(database, databasePath) {
     this.database = database;
@@ -563,6 +851,138 @@ export class SqliteProjectStore {
       else for (const id of entry.relatedEntityIds ?? []) if (id !== link.recordId) ids.add(id);
       const updated = { ...entry, relatedEntityIds: [...ids] };
       this.put("dictionary-entries", identityKey(entry.projectId, entry.id), updated, { expectedCurrent });
+    });
+  }
+
+  mergeNarrativeEntityIdentity(projectId, targetEntityId, sourceEntityId, writerId) {
+    requireProject(projectId);
+    requireText(targetEntityId, "targetEntityId");
+    requireText(sourceEntityId, "sourceEntityId");
+    if (targetEntityId === sourceEntityId) throw new Error("Las entidades de origen y destino deben ser distintas.");
+    if (writerId !== undefined) requireText(writerId, "writerId");
+    return this.transaction(() => {
+      const entities = this.loadEntities(projectId);
+      const relations = this.loadRelations(projectId);
+      const events = this.loadEvents(projectId);
+      const assertions = this.loadAssertions(projectId);
+      const ideas = this.loadIdeas(projectId);
+      const libraryEntries = this.find("personal-idea-library", entry =>
+        entry.sourceProjectId === projectId && (writerId === undefined || entry.writerId === writerId)
+      );
+      for (const entity of entities) validateNarrativeEntity(entity, projectId);
+      validateNarrativeIdentityHistory(entities);
+      for (const relation of relations) validateNarrativeRelation(relation, projectId);
+      for (const event of events) validateNarrativeEvent(event, projectId);
+      for (const assertion of assertions) validateNarrativeAssertion(assertion, projectId);
+      for (const idea of ideas) validateNarrativeIdea(idea, projectId);
+      const entityIds = new Set(entities.map(entity => entity.id));
+      for (const relation of relations) {
+        if (!entityIds.has(relation.fromEntityId) || !entityIds.has(relation.toEntityId)) {
+          throw new Error("La consolidación se rechazó: una relación referencia una entidad inexistente.");
+        }
+      }
+      for (const event of events) {
+        if (event.participants.some(id => !entityIds.has(id))) {
+          throw new Error("La consolidación se rechazó: un acontecimiento referencia una entidad inexistente.");
+        }
+      }
+      for (const assertion of assertions) {
+        if (!entityIds.has(assertion.entityId)) throw new Error("La consolidación se rechazó: una afirmación referencia una entidad inexistente.");
+      }
+      const ideaIds = new Set(ideas.map(idea => idea.id));
+      for (const idea of ideas) {
+        if ((idea.relatedEntityIds ?? []).some(id => !entityIds.has(id)) ||
+            (idea.relatedIdeaIds ?? []).some(id => !ideaIds.has(id))) {
+          throw new Error("La consolidación se rechazó: el grafo de ideas contiene una referencia inexistente.");
+        }
+      }
+      const target = entities.find(entity => entity.id === targetEntityId);
+      const source = entities.find(entity => entity.id === sourceEntityId);
+      if (!target || !source) throw new Error("Una de las entidades no existe en el proyecto activo.");
+      if (target.kind !== source.kind) throw new Error("No se pueden consolidar entidades de tipos diferentes.");
+      const names = new Set(
+        [target.canonicalName, ...target.aliases, source.canonicalName, ...source.aliases]
+          .map(normalizeNarrativeName)
+      );
+      const collision = entities.find(entity =>
+        entity.id !== targetEntityId && entity.id !== sourceEntityId && entity.kind === target.kind &&
+        [entity.canonicalName, ...entity.aliases].some(name => names.has(normalizeNarrativeName(name)))
+      );
+      if (collision) throw new Error("La consolidación produciría un alias ambiguo con otra entidad del proyecto.");
+      const aliases = [...new Map(
+        [...target.aliases, source.canonicalName, ...source.aliases]
+          .map(alias => [normalizeNarrativeName(alias), alias])
+      ).values()].filter(alias => alias && normalizeNarrativeName(alias) !== target.normalizedName);
+      const mergedFromIds = [...new Set([
+        ...(target.mergedFromIds ?? []), source.id, ...(source.mergedFromIds ?? [])
+      ])];
+      const mergedEvidence = new Map();
+      for (const item of [...target.evidence, ...source.evidence]) mergedEvidence.set(evidenceKey(item), item);
+      const mergedEntity = {
+        ...target, aliases, mergedFromIds, evidence: [...mergedEvidence.values()],
+        firstSeenAt: Math.min(target.firstSeenAt, source.firstSeenAt),
+        lastSeenAt: Math.max(target.lastSeenAt, source.lastSeenAt)
+      };
+      validateNarrativeEntity(mergedEntity, projectId, "entidad consolidada");
+      if (writerId === undefined && libraryEntries.length > 0) {
+        throw new Error("Se requiere writerId para consolidar un libro con ideas ya archivadas.");
+      }
+      const remappedLibrary = writerId
+        ? remapPersonalIdeaEntriesForEntityMerge(libraryEntries, writerId, projectId, sourceEntityId, mergedEntity)
+        : [];
+      // Todas las referencias cambian bajo BEGIN IMMEDIATE: un error revierte
+      // también la ficha canónica y las instantáneas guardadas en la biblioteca.
+      this.put("narrative-entities", identityKey(projectId, targetEntityId), mergedEntity);
+      this.remove("narrative-entities", identityKey(projectId, sourceEntityId));
+      const relationGroups = new Map();
+      for (const relation of relations) {
+        const originatedAtCanonical =
+          relation.fromEntityId === targetEntityId || relation.toEntityId === targetEntityId;
+        const fromEntityId = relation.fromEntityId === sourceEntityId ? targetEntityId : relation.fromEntityId;
+        const toEntityId = relation.toEntityId === sourceEntityId ? targetEntityId : relation.toEntityId;
+        if (fromEntityId === toEntityId) {
+          this.remove("narrative-relations", identityKey(projectId, relation.id));
+          continue;
+        }
+        const key = JSON.stringify([fromEntityId, relation.relationType, toEntityId]);
+        const group = relationGroups.get(key) ?? [];
+        group.push({relation:{...relation,fromEntityId,toEntityId},originatedAtCanonical});
+        relationGroups.set(key,group);
+      }
+      for (const group of relationGroups.values()) {
+        group.sort((a,b)=>
+          Number(b.originatedAtCanonical)-Number(a.originatedAtCanonical) ||
+          a.relation.id.localeCompare(b.relation.id)
+        );
+        const primary=group[0]?.relation;
+        if(!primary) continue;
+        const evidence=new Map();
+        for(const item of group) for(const record of item.relation.evidence) evidence.set(evidenceKey(record),record);
+        this.put("narrative-relations",identityKey(projectId,primary.id),{...primary,evidence:[...evidence.values()]});
+        for(const item of group.slice(1)) {
+          if(item.relation.id!==primary.id) this.remove("narrative-relations",identityKey(projectId,item.relation.id));
+        }
+      }
+      for(const event of events) {
+        if(!event.participants.includes(sourceEntityId)) continue;
+        const participants=[...new Set(event.participants.map(id=>id===sourceEntityId?targetEntityId:id))];
+        this.put("narrative-events",identityKey(projectId,event.id),{...event,participants});
+      }
+      for(const assertion of assertions) {
+        if(assertion.entityId===sourceEntityId) {
+          this.put("narrative-assertions",identityKey(projectId,assertion.id),{...assertion,entityId:targetEntityId});
+        }
+      }
+      for(const idea of ideas) {
+        if(!idea.relatedEntityIds?.includes(sourceEntityId)) continue;
+        this.put("narrative-ideas",identityKey(projectId,idea.id),{
+          ...idea,relatedEntityIds:[...new Set(idea.relatedEntityIds.map(id=>id===sourceEntityId?targetEntityId:id))]
+        });
+      }
+      for(let index=0;index<remappedLibrary.length;index++) {
+        const before=libraryEntries[index],after=remappedLibrary[index];
+        if(!sameValue(before,after)) this.put("personal-idea-library",[writerId,projectId,after.idea.id],after);
+      }
     });
   }
 

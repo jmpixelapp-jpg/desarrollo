@@ -290,6 +290,11 @@ export interface ProjectStore {
     sourceProjectId: string,
     ideaId: string
   ): Promise<import("./narrative-knowledge").PersonalIdeaLibraryEntry | undefined>;
+  /** Resuelve varios vínculos de páginas distintas en una sola lectura del almacén. */
+  loadPersonalIdeasByKeys?(
+    writerId: string,
+    references: readonly PersonalIdeaLibraryCursor[]
+  ): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadProjectFinalizationReceipt?(
     writerId: string,
     projectId: string

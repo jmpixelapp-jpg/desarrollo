@@ -962,13 +962,31 @@ test("la caché léxica se invalida cuando cambia el texto de una idea", async (
     assert.deepEqual(before.resonances[0].sharedTerms, ["destino", "espejo", "memoria"]);
 
     ideas[1] = { ...ideas[1], text: "memoria destino" };
-    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
-    assert.equal(after.candidatePairCount, 1);
-    assert.equal(after.resonances.length, 1);
-    assert.equal(after.resonances[0].leftTermCount, 3);
-    assert.equal(after.resonances[0].rightTermCount, 2);
-    assert.equal(after.resonances[0].sharedTermCount, 2);
-    assert.deepEqual(after.resonances[0].sharedTerms, ["destino", "memoria"]);
+    // Un segundo anfitrión obtiene la nueva instantánea durable; la caché
+    // léxica compartida debe invalidarse por el cambio del texto.
+    const updatedApi = new HostEngineApi({
+      store: { ...store, documents: new Map(), ideas }
+    });
+    updatedApi.initializeProject({
+      projectId, projectName: "Book", writerId: "writer-lexical-invalidation-updated"
+    });
+    await updatedApi.openDocument({
+      documentId: "chapter",
+      text: "Escena 1\\nLa actualización debe invalidar la caché.",
+      revision: 0,
+      sequence: 0
+    });
+    try {
+      const after = (await updatedApi.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+      assert.equal(after.candidatePairCount, 1);
+      assert.equal(after.resonances.length, 1);
+      assert.equal(after.resonances[0].leftTermCount, 3);
+      assert.equal(after.resonances[0].rightTermCount, 2);
+      assert.equal(after.resonances[0].sharedTermCount, 2);
+      assert.deepEqual(after.resonances[0].sharedTerms, ["destino", "memoria"]);
+    } finally {
+      updatedApi.dispose();
+    }
   } finally {
     api.dispose();
   }

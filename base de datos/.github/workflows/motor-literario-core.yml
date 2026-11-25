@@ -1,0 +1,29 @@
+name: Archived Rust prototype (manual only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Workspace tests (no third-party dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Select stable Rust
+        run: rustup default stable
+      - name: Run all workspace tests
+        shell: bash
+        working-directory: Motor-Literario
+        run: |
+          set -o pipefail
+          cargo test --workspace --all-targets --locked 2>&1 | tee cargo-test.log
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: motor-literario-test-log
+          path: Motor-Literario/cargo-test.log
+          if-no-files-found: ignore
+          retention-days: 7

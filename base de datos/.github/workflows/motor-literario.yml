@@ -1,0 +1,28 @@
+name: Archived Rust prototype (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Workspace tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Motor-Literario
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Motor-Literario
+      - name: Run workspace tests
+        run: cargo test --workspace --all-targets
+      - name: Compile Rope benchmark without running measurements
+        run: cargo bench -p motor-literario-core --bench rope_edits --no-run

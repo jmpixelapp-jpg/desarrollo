@@ -3,6 +3,7 @@ import { chmod, mkdir, open as openFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const TABLE = "bridge_records";
+const ARCHIVE_PAGE_SIZE = 128;
 const NARRATIVE_COLLECTIONS = new Set([
   "narrative-entities",
   "narrative-relations",
@@ -362,6 +363,7 @@ export class SqliteProjectStore {
       ") WITHOUT ROWID"
     );
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_project ON " + TABLE + "(collection, project_id)");
+    database.exec("CREATE INDEX IF NOT EXISTS bridge_records_project_key ON " + TABLE + "(collection, project_id, record_key)");
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_writer ON " + TABLE + "(collection, writer_id)");
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_document ON " + TABLE + "(collection, project_id, document_id, sequence)");
     database.exec(
@@ -435,6 +437,48 @@ export class SqliteProjectStore {
 
   find(collection, predicate) {
     return this.all(collection).filter(predicate);
+  }
+
+  /**
+   * Lee una página acotada de una colección de proyecto.
+   * El cursor es la clave primaria serializada, no un OFFSET: las eliminaciones
+   * de páginas ya procesadas no desplazan las páginas que faltan.
+   */
+  loadProjectPage(collection, projectId, afterRecordKey = "", pageSize = ARCHIVE_PAGE_SIZE) {
+    requireProject(projectId);
+    if (typeof collection !== "string" || !collection.trim() ||
+        typeof afterRecordKey !== "string" ||
+        !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 512) {
+      throw new Error("Parámetros de paginación de proyecto inválidos.");
+    }
+    const rows = this.database.prepare(
+      "SELECT record_key, value_json FROM " + TABLE +
+      " WHERE collection = ? AND project_id = ? AND record_key > ? ORDER BY record_key LIMIT ?"
+    ).all(collection, projectId, afterRecordKey, pageSize + 1);
+    const hasMore = rows.length > pageSize;
+    const selected = hasMore ? rows.slice(0, pageSize) : rows;
+    return {
+      items: selected.map(row => JSON.parse(row.value_json)),
+      nextCursor: hasMore ? selected[selected.length - 1].record_key : null
+    };
+  }
+
+  /** Recorre páginas sin acumularlas; el visitante solo retiene sus propios resultados. */
+  forEachProjectPage(collection, projectId, visit, pageSize = ARCHIVE_PAGE_SIZE) {
+    if (typeof visit !== "function") throw new TypeError("El visitante de páginas debe ser una función.");
+    let cursor = "";
+    while (true) {
+      const page = this.loadProjectPage(collection, projectId, cursor, pageSize);
+      if (!page || !Array.isArray(page.items)) {
+        throw new Error("El almacenamiento devolvió una página de proyecto inválida.");
+      }
+      for (const item of page.items) visit(item);
+      if (page.nextCursor === null) return;
+      if (typeof page.nextCursor !== "string" || page.nextCursor.localeCompare(cursor) <= 0) {
+        throw new Error("El cursor de paginación no avanza de forma estricta.");
+      }
+      cursor = page.nextCursor;
+    }
   }
 
   put(collection, parts, value, options = {}) {
@@ -1238,145 +1282,216 @@ export class SqliteProjectStore {
       const receiptId = "finalization-v1";
       const receiptKey = [writerId, projectId, receiptId];
       const existingReceipt = this.get("writer-library-finalization-receipts", receiptKey);
-      const projectIdeas = this.loadIdeas(projectId);
-      const projectIdeaIds = new Set();
-      const ideasById = new Map();
-      for (const idea of projectIdeas) {
-        validateNarrativeIdea(idea, projectId);
-        if (projectIdeaIds.has(idea.id)) throw new Error("Hay identificadores de idea duplicados en el proyecto.");
-        projectIdeaIds.add(idea.id);
-        ideasById.set(idea.id, idea);
-      }
-      for (const idea of projectIdeas) {
-        for (const id of idea.relatedIdeaIds ?? []) {
-          if (!projectIdeaIds.has(id)) throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
-        }
-      }
+      const pendingTable = "ml_archive_pending_ideas";
+      const identityTable = "ml_archive_identity_owners";
+      this.database.exec("DROP TABLE IF EXISTS temp." + pendingTable);
+      this.database.exec("DROP TABLE IF EXISTS temp." + identityTable);
 
-      if (existingReceipt) {
-        if (existingReceipt.writerId !== writerId || existingReceipt.sourceProjectId !== projectId ||
-            existingReceipt.receiptId !== receiptId || existingReceipt.sourceProjectName !== sourceProjectName ||
-            !Number.isFinite(existingReceipt.finalizedAt) || existingReceipt.finalizedAt < 0 ||
-            !Array.isArray(existingReceipt.archivedIdeaIds) ||
-            existingReceipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
-            new Set(existingReceipt.archivedIdeaIds).size !== existingReceipt.archivedIdeaIds.length ||
-            [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1].localeCompare(id)>0) ||
-            existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds)) {
-          throw new Error("El recibo de finalización está malformado o no pertenece al escritor y libro activos.");
+      const loadIdea = id => {
+        const idea = this.get("narrative-ideas", identityKey(projectId, id));
+        if (!idea) {
+          throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
         }
-        if (projectIdeas.some(item => item.status === "IDEA")) {
-          throw new Error("El libro ya está finalizado; las ideas nuevas requieren reapertura explícita.");
-        }
-        const entries = this.find("personal-idea-library", item =>
-          item.writerId === writerId && item.sourceProjectId === projectId
-        );
-        if (entries.length !== existingReceipt.archivedIdeaIds.length) {
-          throw new Error("La biblioteca no coincide con el recibo de finalización del libro.");
-        }
-        const byId = new Map();
-        for (const entry of entries) {
-          if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
-              entry.sourceProjectName !== sourceProjectName || entry.category !== sourceProjectName ||
-              !entry.idea || entry.idea.projectId !== projectId ||
-              entry.idea.sourceProjectName !== sourceProjectName || entry.idea.status !== "IDEA" ||
-              !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 || !entry.context) {
-            throw new Error("La biblioteca personal contiene una entrada ajena o incompleta.");
-          }
-          validateNarrativeIdea(entry.idea, projectId, "idea archivada");
-          validatePersonalIdeaContext(entry.context, projectId, sourceProjectName);
-          if (byId.has(entry.idea.id)) throw new Error("La biblioteca personal contiene ideas duplicadas.");
-          byId.set(entry.idea.id, entry);
-        }
-        const archivedIds = new Set(existingReceipt.archivedIdeaIds);
-        const selected = existingReceipt.archivedIdeaIds.map(id => {
-          const entry = byId.get(id);
-          if (!entry) throw new Error("El recibo de finalización referencia una idea que no existe en la biblioteca.");
-          const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
-          const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
-          for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
-            if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
-                (idea.relatedIdeaIds ?? []).some(ideaId => !contextIdeaIds.has(ideaId) && !archivedIds.has(ideaId))) {
-              throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
+        validateNarrativeIdea(idea, projectId);
+        return idea;
+      };
+
+      const validateIdeaReferences = rejectPendingReferences => {
+        let hasPending = false;
+        this.forEachProjectPage("narrative-ideas", projectId, idea => {
+          validateNarrativeIdea(idea, projectId);
+          if (idea.status === "IDEA") hasPending = true;
+        });
+        this.forEachProjectPage("narrative-ideas", projectId, idea => {
+          for (const relatedId of idea.relatedIdeaIds ?? []) {
+            const related = loadIdea(relatedId);
+            if (rejectPendingReferences && idea.status !== "IDEA" && related.status === "IDEA") {
+              throw new Error("No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal.");
             }
           }
-          return entry;
         });
-        return clone(selected);
-      }
+        return hasPending;
+      };
 
-      const pending = projectIdeas.filter(item => item.status === "IDEA");
-      const pendingIds = new Set(pending.map(item => item.id));
-      for (const idea of projectIdeas) {
-        if (idea.status !== "IDEA" && (idea.relatedIdeaIds ?? []).some(id => pendingIds.has(id))) {
-          throw new Error("No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal.");
-        }
-      }
+      try {
+        if (existingReceipt) {
+          if (existingReceipt.writerId !== writerId || existingReceipt.sourceProjectId !== projectId ||
+              existingReceipt.receiptId !== receiptId || existingReceipt.sourceProjectName !== sourceProjectName ||
+              !Number.isFinite(existingReceipt.finalizedAt) || existingReceipt.finalizedAt < 0 ||
+              !Array.isArray(existingReceipt.archivedIdeaIds) ||
+              existingReceipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+              new Set(existingReceipt.archivedIdeaIds).size !== existingReceipt.archivedIdeaIds.length ||
+              [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1].localeCompare(id)>0) ||
+              existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds)) {
+            throw new Error("El recibo de finalización está malformado o no pertenece al escritor y libro activos.");
+          }
+          if (validateIdeaReferences(true)) {
+            throw new Error("El libro ya está finalizado; las ideas nuevas requieren una reapertura explícita antes de archivarse.");
+          }
 
-      const entities = this.loadEntities(projectId);
-      for (const entity of entities) validateNarrativeEntity(entity, projectId);
-      validateNarrativeIdentityHistory(entities);
-      const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
-      const archived = [];
-      for (const idea of pending) {
-        const contextIdeaIds = new Set();
-        const visited = new Set([idea.id]);
-        const queue = [...(idea.relatedIdeaIds ?? [])];
-        let queueIndex = 0;
-        while (queueIndex < queue.length) {
-          const relatedId = queue[queueIndex++];
-          if (visited.has(relatedId)) continue;
-          visited.add(relatedId);
-          // Las otras ideas pendientes tendrán su propia entrada de biblioteca;
-          // no se convierten en contexto duplicado de esta entrada.
-          if (pendingIds.has(relatedId)) continue;
-          const related = ideasById.get(relatedId);
-          if (!related) throw new Error("No se pudo resolver una idea relacionada durante la finalización.");
-          contextIdeaIds.add(relatedId);
-          queue.push(...(related.relatedIdeaIds ?? []));
+          // La verificación usa COUNT en SQLite y lecturas por clave. No materializa
+          // toda la biblioteca del escritor para comprobar un recibo ya publicado.
+          const libraryCount = this.database.prepare(
+            "SELECT COUNT(*) AS total FROM " + TABLE +
+            " WHERE collection = ? AND writer_id = ? AND json_extract(value_json, '$.sourceProjectId') = ?"
+          ).get("personal-idea-library", writerId, projectId);
+          if (Number(libraryCount?.total ?? -1) !== existingReceipt.archivedIdeaIds.length) {
+            throw new Error("La biblioteca no coincide con el recibo de finalización del libro.");
+          }
+
+          const archivedIds = new Set(existingReceipt.archivedIdeaIds);
+          const selected = [];
+          for (const id of existingReceipt.archivedIdeaIds) {
+            const entry = this.get("personal-idea-library", [writerId, projectId, id]);
+            if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
+                entry.sourceProjectName !== sourceProjectName || entry.category !== sourceProjectName ||
+                !entry.idea || entry.idea.projectId !== projectId ||
+                entry.idea.sourceProjectName !== sourceProjectName || entry.idea.status !== "IDEA" ||
+                !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 || !entry.context) {
+              throw new Error("La biblioteca personal contiene una entrada ajena o incompleta.");
+            }
+            validateNarrativeIdea(entry.idea, projectId, "idea archivada");
+            validatePersonalIdeaContext(entry.context, projectId, sourceProjectName);
+            const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+            const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+            for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
+              if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
+                  (idea.relatedIdeaIds ?? []).some(ideaId => !contextIdeaIds.has(ideaId) && !archivedIds.has(ideaId))) {
+                throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
+              }
+            }
+            selected.push(entry);
+          }
+          return clone(selected);
         }
-        const relatedIdeaSnapshots = [...contextIdeaIds]
-          .map(id => ideasById.get(id))
-          .filter(Boolean)
-          .sort((a,b)=>a.id.localeCompare(b.id))
-          .map(related => ({...related,sourceProjectName}));
-        const relatedEntityIds = new Set(idea.relatedEntityIds ?? []);
-        for (const related of relatedIdeaSnapshots) {
-          for (const entityId of related.relatedEntityIds ?? []) relatedEntityIds.add(entityId);
-        }
-        const relatedEntities = [...relatedEntityIds]
-          .sort()
-          .map(id => {
-            const entity = entitiesById.get(id);
-            if (!entity) throw new Error("No se puede archivar una idea: falta una ficha relacionada del proyecto.");
+
+        this.database.exec(
+          "CREATE TEMP TABLE " + pendingTable + " (idea_id TEXT PRIMARY KEY) WITHOUT ROWID"
+        );
+        const addPending = this.database.prepare(
+          "INSERT INTO " + pendingTable + "(idea_id) VALUES(?)"
+        );
+        this.forEachProjectPage("narrative-ideas", projectId, idea => {
+          validateNarrativeIdea(idea, projectId);
+          if (idea.status === "IDEA") addPending.run(idea.id);
+        });
+        const hasPendingIdea = this.database.prepare(
+          "SELECT 1 AS found FROM " + pendingTable + " WHERE idea_id = ?"
+        );
+        const isPendingIdea = id => Boolean(hasPendingIdea.get(id));
+
+        // Segunda pasada: valida enlaces con búsquedas por clave. La tabla temporal
+        // permite comprobar dependencias sin conservar un Map de todas las ideas.
+        this.forEachProjectPage("narrative-ideas", projectId, idea => {
+          for (const relatedId of idea.relatedIdeaIds ?? []) {
+            const related = loadIdea(relatedId);
+            if (idea.status !== "IDEA" && isPendingIdea(relatedId) && related.status === "IDEA") {
+              throw new Error("No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal.");
+            }
+          }
+        });
+
+        // Comprueba la propiedad de cada ID histórico usando una tabla temporal
+        // indexada, en vez de cargar todos los registros de entidades en memoria.
+        this.database.exec(
+          "CREATE TEMP TABLE " + identityTable +
+          " (identity_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL) WITHOUT ROWID"
+        );
+        const insertIdentity = this.database.prepare(
+          "INSERT OR IGNORE INTO " + identityTable + "(identity_id, owner_id) VALUES(?, ?)"
+        );
+        const getIdentityOwner = this.database.prepare(
+          "SELECT owner_id FROM " + identityTable + " WHERE identity_id = ?"
+        );
+        this.forEachProjectPage("narrative-entities", projectId, entity => {
+          validateNarrativeEntity(entity, projectId);
+          const localIds = new Set([entity.id]);
+          for (const historicalId of entity.mergedFromIds ?? []) {
+            if (localIds.has(historicalId)) {
+              throw new Error("Integridad narrativa: una entidad repite o reclama su propio ID histórico.");
+            }
+            localIds.add(historicalId);
+          }
+          for (const identityId of localIds) {
+            insertIdentity.run(identityId, entity.id);
+            const owner = getIdentityOwner.get(identityId);
+            if (!owner || owner.owner_id !== entity.id) {
+              throw new Error("Integridad narrativa: un ID histórico pertenece a más de una entidad.");
+            }
+          }
+        });
+
+        const archived = [];
+        const archivedIdeaIds = [];
+        // La segunda lectura también es paginada. Se elimina solo la página ya
+        // leída; el cursor por clave primaria mantiene estables las páginas siguientes.
+        this.forEachProjectPage("narrative-ideas", projectId, idea => {
+          if (idea.status !== "IDEA") return;
+
+          const contextIdeasById = new Map();
+          const visited = new Set([idea.id]);
+          const queue = [...(idea.relatedIdeaIds ?? [])];
+          let queueIndex = 0;
+          while (queueIndex < queue.length) {
+            const relatedId = queue[queueIndex++];
+            if (visited.has(relatedId)) continue;
+            visited.add(relatedId);
+            // Las ideas que se trasladarán tendrán sus propias entradas de biblioteca.
+            if (isPendingIdea(relatedId)) continue;
+            const related = loadIdea(relatedId);
+            contextIdeasById.set(relatedId, related);
+            queue.push(...(related.relatedIdeaIds ?? []));
+          }
+
+          const relatedIdeaSnapshots = [...contextIdeasById.values()]
+            .sort((first, second) => first.id.localeCompare(second.id))
+            .map(related => ({ ...related, sourceProjectName }));
+          const relatedEntityIds = new Set(idea.relatedEntityIds ?? []);
+          for (const related of relatedIdeaSnapshots) {
+            for (const entityId of related.relatedEntityIds ?? []) relatedEntityIds.add(entityId);
+          }
+          const relatedEntities = [...relatedEntityIds].sort().map(id => {
+            const entity = this.get("narrative-entities", identityKey(projectId, id));
+            if (!entity || entity.projectId !== projectId || entity.id !== id) {
+              throw new Error("No se puede archivar una idea: falta una ficha relacionada del proyecto.");
+            }
+            validateNarrativeEntity(entity, projectId, "entidad contextual");
             return entity;
           });
-        const archivedIdea = {...idea,sourceProjectName};
-        validateNarrativeIdea(archivedIdea,projectId,"idea archivada");
-        const context = {
-          version:1,
-          relatedIdeas:relatedIdeaSnapshots,
-          relatedEntities
-        };
-        validatePersonalIdeaContext(context,projectId,sourceProjectName);
-        const contextEntityIds = new Set(relatedEntities.map(entity=>entity.id));
-        if((archivedIdea.relatedEntityIds??[]).some(id=>!contextEntityIds.has(id))) {
-          throw new Error("Una idea archivada conserva una referencia a una ficha que no está en su contexto.");
-        }
-        const entry = {
-          writerId,sourceProjectId:projectId,sourceProjectName,category:sourceProjectName,
-          idea:archivedIdea,context,archivedAt
-        };
-        this.put("personal-idea-library",[writerId,projectId,idea.id],entry,{insertOnly:true});
-        this.remove("narrative-ideas",identityKey(projectId,idea.id));
-        archived.push(entry);
-      }
 
-      const archivedIdeaIds = pending.map(item=>item.id).sort();
-      this.put("writer-library-finalization-receipts",receiptKey,{
-        writerId,sourceProjectId:projectId,receiptId,sourceProjectName,
-        finalizedAt:archivedAt,archivedIdeaIds,archiveChecksum:checksumFor(archivedIdeaIds)
-      },{insertOnly:true});
-      return clone(archived);
+          const archivedIdea = { ...idea, sourceProjectName };
+          validateNarrativeIdea(archivedIdea, projectId, "idea archivada");
+          const context = {
+            version: 1,
+            relatedIdeas: relatedIdeaSnapshots,
+            relatedEntities
+          };
+          validatePersonalIdeaContext(context, projectId, sourceProjectName);
+          const contextEntityIds = new Set(relatedEntities.map(entity => entity.id));
+          if ((archivedIdea.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id))) {
+            throw new Error("Una idea archivada conserva una referencia a una ficha que no está en su contexto.");
+          }
+
+          const entry = {
+            writerId, sourceProjectId: projectId, sourceProjectName, category: sourceProjectName,
+            idea: archivedIdea, context, archivedAt
+          };
+          this.put("personal-idea-library", [writerId, projectId, idea.id], entry, { insertOnly: true });
+          this.remove("narrative-ideas", identityKey(projectId, idea.id));
+          archived.push(entry);
+          archivedIdeaIds.push(idea.id);
+        });
+
+        archivedIdeaIds.sort((first, second) => first.localeCompare(second));
+        this.put("writer-library-finalization-receipts", receiptKey, {
+          writerId, sourceProjectId: projectId, receiptId, sourceProjectName,
+          finalizedAt: archivedAt, archivedIdeaIds, archiveChecksum: checksumFor(archivedIdeaIds)
+        }, { insertOnly: true });
+        return clone(archived);
+      } finally {
+        this.database.exec("DROP TABLE IF EXISTS temp." + pendingTable);
+        this.database.exec("DROP TABLE IF EXISTS temp." + identityTable);
+      }
     });
   }
 

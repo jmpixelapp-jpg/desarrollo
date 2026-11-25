@@ -50,6 +50,26 @@ test("detecta resonancias por términos literales compartidos sin alterar el gra
   assert.deepEqual(ideas.map(item => item.relatedIdeaIds), [[], [], []]);
 });
 
+test("reutiliza una instantánea léxica exacta sin exponer el objeto interno de caché", () => {
+  const ideas = [
+    idea("cache-a", "memoria espejo luz"),
+    idea("cache-b", "memoria espejo destino")
+  ];
+  const first = analyze(ideas);
+  assert.equal(first.resonances.length, 1);
+  first.resonances[0].sharedTerms[0] = "mutación externa";
+
+  const repeated = analyze(ideas);
+  assert.deepEqual(repeated.resonances[0].sharedTerms, ["espejo", "memoria"]);
+
+  const changed = analyze([
+    ideas[0],
+    idea("cache-b", "tormenta ventanas cerradas")
+  ]);
+  assert.equal(changed.candidatePairCount, 0);
+  assert.deepEqual(changed.resonances, []);
+});
+
 test("excluye términos ubicuos para evitar coincidencias poco informativas", () => {
   const ideas = Array.from({ length: 41 }, (_, index) => idea(
     "idea-" + String(index).padStart(2, "0"),

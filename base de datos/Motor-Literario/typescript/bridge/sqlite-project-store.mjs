@@ -3,12 +3,14 @@ import { chmod, mkdir, open as openFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const TABLE = "bridge_records";
+const ARCHIVE_PAGE_SIZE = 128;
 const NARRATIVE_COLLECTIONS = new Set([
   "narrative-entities",
   "narrative-relations",
   "narrative-events",
   "narrative-ideas",
-  "narrative-assertions"
+  "narrative-assertions",
+  "event-lifecycles"
 ]);
 
 function clone(value) {
@@ -17,6 +19,22 @@ function clone(value) {
 
 function encodedKey(parts) {
   return JSON.stringify(parts);
+}
+
+/**
+ * Clave de orden estable compatible con el orden lexicográfico UTF-16
+ * usado por las claves compuestas de IndexedDB. Cada unidad se codifica
+ * en cuatro dígitos hexadecimales; "!" separa componentes y preserva prefijos.
+ */
+function personalIdeaLibrarySortKey(sourceProjectId, ideaId) {
+  const encode = value => {
+    let result = "";
+    for (let index = 0; index < value.length; index++) {
+      result += value.charCodeAt(index).toString(16).padStart(4, "0");
+    }
+    return result;
+  };
+  return encode(sourceProjectId) + "!" + encode(ideaId) + "!";
 }
 
 function sameValue(left, right) {
@@ -179,6 +197,62 @@ function validateNarrativeEvent(event, projectId) {
   }
   validateEvidenceList(event.evidence, "acontecimiento narrativo");
 }
+function validateEventLifecycle(item, projectId) {
+  if (!item || typeof item !== "object" ||
+      item.projectId !== projectId ||
+      typeof item.id !== "string" || !item.id.trim() || item.id.length > 512 ||
+      typeof item.eventId !== "string" || !item.eventId.trim() || item.eventId.length > 256 ||
+      !Number.isSafeInteger(item.revision) || item.revision < 1 ||
+      typeof item.previousLabel !== "string" || !item.previousLabel.trim() || item.previousLabel.length > 512 ||
+      typeof item.newLabel !== "string" || !item.newLabel.trim() || item.newLabel.length > 512 ||
+      typeof item.changedBy !== "string" || !item.changedBy.trim() || item.changedBy.length > 256 ||
+      (item.changeReason !== undefined && item.changeReason !== null &&
+        (typeof item.changeReason !== "string" || item.changeReason.length > 4096)) ||
+      typeof item.changedAt !== "number" || !Number.isFinite(item.changedAt) || item.changedAt < 0) {
+    throw new Error("Registro de ciclo de vida de acontecimiento inválido.");
+  }
+  for (const [participants, label] of [
+    [item.previousParticipants, "anteriores"],
+    [item.newParticipants, "nuevos"]
+  ]) {
+    if (!Array.isArray(participants) || participants.length > 500 ||
+        participants.some(id => typeof id !== "string" || !id.trim() || id.length > 256) ||
+        new Set(participants).size !== participants.length ||
+        participants.some((id, index) => index > 0 && participants[index - 1].localeCompare(id, "en") > 0)) {
+      throw new Error("Los participantes " + label + " del historial de acontecimiento son inválidos o no están normalizados.");
+    }
+  }
+  const changedParticipants = item.previousParticipants.length !== item.newParticipants.length ||
+    !item.previousParticipants.every((id, index) => id === item.newParticipants[index]);
+  if (item.previousLabel === item.newLabel && !changedParticipants) {
+    throw new Error("Una transición de acontecimiento debe cambiar la etiqueta o los participantes.");
+  }
+}
+
+function validateEventLifecycleHistory(records, projectId, eventId) {
+  if (!Array.isArray(records)) throw new Error("El historial de acontecimiento no es una colección.");
+  const ordered = [...records].sort((first, second) => first.revision - second.revision);
+  const ids = new Set();
+  let previous;
+  for (const item of ordered) {
+    validateEventLifecycle(item, projectId);
+    if (item.eventId !== eventId || ids.has(item.id) ||
+        (!previous && item.revision !== 1) ||
+        (previous && (
+          item.revision !== previous.revision + 1 ||
+          item.previousLabel !== previous.newLabel ||
+          item.previousParticipants.length !== previous.newParticipants.length ||
+          !item.previousParticipants.every((id, index) => id === previous.newParticipants[index]) ||
+          item.changedAt < previous.changedAt
+        ))) {
+      throw new Error("El historial de acontecimiento contiene revisiones duplicadas o transiciones discontinuas.");
+    }
+    ids.add(item.id);
+    previous = item;
+  }
+  return ordered;
+}
+
 function validateNarrativeAssertion(assertion, projectId) {
   requireProjectRecord(assertion, "afirmación narrativa");
   if (assertion.projectId !== projectId || typeof assertion.entityId !== "string" ||
@@ -357,11 +431,46 @@ export class SqliteProjectStore {
       "writer_id TEXT," +
       "document_id TEXT," +
       "sequence INTEGER," +
+      "sort_key TEXT," +
       "value_json TEXT NOT NULL," +
       "PRIMARY KEY (collection, record_key)" +
       ") WITHOUT ROWID"
     );
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_project ON " + TABLE + "(collection, project_id)");
+    database.exec("CREATE INDEX IF NOT EXISTS bridge_records_project_key ON " + TABLE + "(collection, project_id, record_key)");
+    // Las bases existentes se migran en lotes repetibles: si el proceso se
+    // interrumpe, la siguiente apertura continúa con los registros sin sort_key.
+    const columns = database.prepare("PRAGMA table_info(" + TABLE + ")").all();
+    if (!columns.some(column => column.name === "sort_key")) {
+      database.exec("ALTER TABLE " + TABLE + " ADD COLUMN sort_key TEXT");
+    }
+    const missingLibraryKeys = database.prepare(
+      "SELECT record_key, value_json FROM " + TABLE +
+      " WHERE collection = ? AND sort_key IS NULL ORDER BY record_key LIMIT ?"
+    );
+    const updateLibraryKey = database.prepare(
+      "UPDATE " + TABLE + " SET sort_key = ? WHERE collection = ? AND record_key = ?"
+    );
+    while (true) {
+      const batch = missingLibraryKeys.all("personal-idea-library", ARCHIVE_PAGE_SIZE);
+      if (batch.length === 0) break;
+      for (const row of batch) {
+        const entry = JSON.parse(row.value_json);
+        if (!entry || typeof entry.sourceProjectId !== "string" ||
+            typeof entry.idea?.id !== "string") {
+          throw new Error("Biblioteca SQLite inconsistente: no se puede reconstruir la clave de orden.");
+        }
+        updateLibraryKey.run(
+          personalIdeaLibrarySortKey(entry.sourceProjectId, entry.idea.id),
+          "personal-idea-library",
+          row.record_key
+        );
+      }
+    }
+    database.exec(
+      "CREATE INDEX IF NOT EXISTS bridge_records_personal_library_page ON " + TABLE +
+      "(collection, writer_id, sort_key) WHERE collection = 'personal-idea-library'"
+    );
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_writer ON " + TABLE + "(collection, writer_id)");
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_document ON " + TABLE + "(collection, project_id, document_id, sequence)");
     database.exec(
@@ -460,13 +569,22 @@ export class SqliteProjectStore {
     const writerId = typeof value?.writerId === "string" ? value.writerId : null;
     const documentId = typeof value?.documentId === "string" ? value.documentId : null;
     const sequence = Number.isSafeInteger(value?.sequence) ? value.sequence : null;
+    let sortKey = null;
+    if (collection === "personal-idea-library") {
+      if (typeof value?.writerId !== "string" || !value.writerId.trim() ||
+          typeof value?.sourceProjectId !== "string" || !value.sourceProjectId.trim() ||
+          typeof value?.idea?.id !== "string" || !value.idea.id.trim()) {
+        throw new Error("Entrada de biblioteca inválida: faltan escritor, libro o ID de idea.");
+      }
+      sortKey = personalIdeaLibrarySortKey(value.sourceProjectId, value.idea.id);
+    }
     this.database.prepare(
-      "INSERT INTO " + TABLE + "(collection, record_key, project_id, writer_id, document_id, sequence, value_json) " +
-      "VALUES(?, ?, ?, ?, ?, ?, ?) " +
+      "INSERT INTO " + TABLE + "(collection, record_key, project_id, writer_id, document_id, sequence, sort_key, value_json) " +
+      "VALUES(?, ?, ?, ?, ?, ?, ?, ?) " +
       "ON CONFLICT(collection, record_key) DO UPDATE SET " +
       "project_id=excluded.project_id, writer_id=excluded.writer_id, document_id=excluded.document_id, " +
-      "sequence=excluded.sequence, value_json=excluded.value_json"
-    ).run(collection, key, projectId, writerId, documentId, sequence, JSON.stringify(value));
+      "sequence=excluded.sequence, sort_key=excluded.sort_key, value_json=excluded.value_json"
+    ).run(collection, key, projectId, writerId, documentId, sequence, sortKey, JSON.stringify(value));
     if (projectId && NARRATIVE_COLLECTIONS.has(collection)) this.bumpNarrativeVersion(projectId);
     return clone(value);
   }
@@ -601,6 +719,98 @@ export class SqliteProjectStore {
       const expectedRevision = history.length ? history[history.length - 1].revision + 1 : 1;
       if (item.revision !== expectedRevision) throw new Error("La revisión del historial de ficha debe ser consecutiva.");
       this.put("record-lifecycles", [item.projectId, item.recordId, item.revision], item, { insertOnly: true });
+    });
+  }
+
+  loadEventLifecycles(projectId, eventId) {
+    requireProject(projectId);
+    requireText(eventId, "eventId");
+    const event = this.get("narrative-events", identityKey(projectId, eventId));
+    if (!event) throw new Error("No existe el acontecimiento solicitado en el proyecto.");
+    validateNarrativeEvent(event, projectId);
+    const history = this.find("event-lifecycles", item =>
+      item.projectId === projectId && item.eventId === eventId
+    );
+    return clone(validateEventLifecycleHistory(history, projectId, eventId));
+  }
+
+  loadProjectEventLifecycles(projectId) {
+    requireProject(projectId);
+    const events = new Map(this.loadEvents(projectId).map(event => [event.id, event]));
+    const history = this.loadProject("event-lifecycles", projectId, "historial de acontecimiento");
+    const grouped = new Map();
+    for (const item of history) {
+      validateEventLifecycle(item, projectId);
+      if (!events.has(item.eventId)) {
+        throw new Error("El historial de acontecimiento referencia un evento inexistente.");
+      }
+      const rows = grouped.get(item.eventId) ?? [];
+      rows.push(item);
+      grouped.set(item.eventId, rows);
+    }
+    const ordered = [];
+    for (const [eventId, rows] of grouped) {
+      ordered.push(...validateEventLifecycleHistory(rows, projectId, eventId));
+    }
+    return clone(ordered.sort((first, second) =>
+      first.eventId.localeCompare(second.eventId, "en") || first.revision - second.revision
+    ));
+  }
+
+  saveEventAndAppendLifecycleIfUnchanged(event, expectedCurrent, lifecycle) {
+    requireProjectRecord(event, "acontecimiento narrativo");
+    requireProjectRecord(expectedCurrent, "acontecimiento anterior");
+    validateNarrativeEvent(event, event.projectId);
+    validateNarrativeEvent(expectedCurrent, event.projectId);
+    validateEventLifecycle(lifecycle, event.projectId);
+    const normalizeParticipants = values => [...new Set(values)].sort((a, b) => a.localeCompare(b, "en"));
+    if (event.id !== expectedCurrent.id ||
+        lifecycle.eventId !== event.id ||
+        lifecycle.previousLabel !== expectedCurrent.label ||
+        lifecycle.newLabel !== event.label ||
+        JSON.stringify(lifecycle.previousParticipants) !== JSON.stringify(normalizeParticipants(expectedCurrent.participants)) ||
+        JSON.stringify(lifecycle.newParticipants) !== JSON.stringify(normalizeParticipants(event.participants))) {
+      throw new Error("La transición versionada no coincide con el cambio real del acontecimiento.");
+    }
+
+    return this.transaction(() => {
+      const current = this.get("narrative-events", identityKey(event.projectId, event.id));
+      if (!current || !sameValue(current, expectedCurrent)) {
+        throw new Error("El acontecimiento cambió en otra instancia; actualiza la vista antes de registrar su evolución.");
+      }
+      for (const id of event.participants) {
+        if (!this.get("narrative-entities", identityKey(event.projectId, id))) {
+          throw new Error("El acontecimiento contiene un participante que no existe en el proyecto.");
+        }
+      }
+      if (event.timelineTrackId &&
+          !this.get("timeline-tracks", identityKey(event.projectId, event.timelineTrackId))) {
+        throw new Error("La pista cronológica del acontecimiento no existe.");
+      }
+      const history = this.loadEventLifecycles(event.projectId, event.id);
+      const previous = history[history.length - 1];
+      if (!previous) {
+        if (lifecycle.revision !== 1) {
+          throw new Error("La primera transición de acontecimiento debe comenzar en revisión 1.");
+        }
+      } else if (lifecycle.revision !== previous.revision + 1 ||
+          lifecycle.previousLabel !== previous.newLabel ||
+          lifecycle.previousParticipants.length !== previous.newParticipants.length ||
+          !lifecycle.previousParticipants.every((id, index) => id === previous.newParticipants[index]) ||
+          lifecycle.changedAt < previous.changedAt) {
+        throw new Error("La transición de acontecimiento no continúa la última revisión durable.");
+      }
+      if (history.some(item => item.id === lifecycle.id)) {
+        throw new Error("El ID de la transición de acontecimiento ya existe.");
+      }
+      this.put("narrative-events", identityKey(event.projectId, event.id), event, {
+        expectedCurrent,
+        conflictMessage: "El acontecimiento cambió en otra instancia; actualiza la vista antes de registrar su evolución."
+      });
+      this.put("event-lifecycles", [event.projectId, event.id, lifecycle.revision], lifecycle, {
+        insertOnly: true,
+        conflictMessage: "La transición de acontecimiento ya existe y no puede reemplazarse."
+      });
     });
   }
 
@@ -1380,6 +1590,85 @@ export class SqliteProjectStore {
     });
   }
 
+  loadPersonalIdeasPage(writerId, cursor = null, limit = 50) {
+    requireText(writerId, "writerId");
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+        (cursor !== null && (!cursor || typeof cursor.sourceProjectId !== "string" ||
+          !cursor.sourceProjectId.trim() || typeof cursor.ideaId !== "string" ||
+          !cursor.ideaId.trim()))) {
+      throw new Error("Parámetros de paginación de biblioteca inválidos.");
+    }
+    const afterSortKey = cursor
+      ? personalIdeaLibrarySortKey(cursor.sourceProjectId, cursor.ideaId)
+      : "";
+    const rows = this.database.prepare(
+      "SELECT value_json FROM " + TABLE +
+      " WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
+      "ORDER BY sort_key LIMIT ?"
+    ).all(writerId, afterSortKey, limit + 1);
+    const hasMore = rows.length > limit;
+    const selected = hasMore ? rows.slice(0, limit) : rows;
+    const items = selected.map(row => JSON.parse(row.value_json));
+    if (items.some(entry => entry.writerId !== writerId)) {
+      throw new Error("Biblioteca SQLite inconsistente: se rechazó una entrada de otro escritor.");
+    }
+    const last = items[items.length - 1];
+    return {
+      items: clone(items),
+      nextCursor: hasMore && last
+        ? { sourceProjectId: last.sourceProjectId, ideaId: last.idea.id }
+        : null
+    };
+  }
+
+  loadPersonalIdea(writerId, sourceProjectId, ideaId) {
+    requireText(writerId, "writerId");
+    requireProject(sourceProjectId, "sourceProjectId");
+    requireText(ideaId, "ideaId");
+    const entry = this.get("personal-idea-library", [writerId, sourceProjectId, ideaId]);
+    if (entry && entry.writerId !== writerId) {
+      throw new Error("Biblioteca SQLite inconsistente: se rechazó una entrada de otro escritor.");
+    }
+    return clone(entry);
+  }
+
+  loadPersonalIdeasByKeys(writerId, references) {
+    requireText(writerId, "writerId");
+    if (!Array.isArray(references) || references.length > 128) {
+      throw new Error("La lectura agrupada admite un máximo de 128 referencias.");
+    }
+    const seen = new Set();
+    const statement = this.database.prepare(
+      "SELECT value_json FROM " + TABLE +
+      " WHERE collection = 'personal-idea-library' AND record_key = ? AND writer_id = ?"
+    );
+    const entries = [];
+    for (const reference of references) {
+      if (!reference || typeof reference.sourceProjectId !== "string" ||
+          !reference.sourceProjectId.trim() ||
+          typeof reference.ideaId !== "string" || !reference.ideaId.trim()) {
+        throw new Error("La lectura agrupada recibió una referencia malformada.");
+      }
+      const key = JSON.stringify([reference.sourceProjectId, reference.ideaId]);
+      if (seen.has(key)) throw new Error("La lectura agrupada recibió referencias duplicadas.");
+      seen.add(key);
+      const row = statement.get(
+        encodedKey([writerId, reference.sourceProjectId, reference.ideaId]),
+        writerId
+      );
+      if (!row) continue;
+      const entry = JSON.parse(row.value_json);
+      if (!entry || entry.writerId !== writerId ||
+          entry.sourceProjectId !== reference.sourceProjectId ||
+          entry.idea?.id !== reference.ideaId) {
+        throw new Error("Biblioteca SQLite inconsistente: la lectura agrupada devolvió una entrada ajena.");
+      }
+      entries.push(entry);
+    }
+    return clone(entries);
+  }
+
+
   loadPersonalIdeas(writerId) {
     requireText(writerId, "writerId");
     return clone(this.find("personal-idea-library", item => item.writerId === writerId));
@@ -1591,6 +1880,7 @@ function keyForCollection(collection, row) {
   if (collection === "writer-library-finalization-receipts") return [row.writerId, row.sourceProjectId, row.receiptId];
   if (collection === "record-lifecycles") return [row.projectId, row.recordId, row.revision];
   if (collection === "relation-lifecycles") return [row.projectId, row.relationId, row.revision];
+  if (collection === "event-lifecycles") return [row.projectId, row.eventId, row.revision];
   if (collection === "dictionary-entry-entities") return [row.projectId, row.entryId, row.recordId];
   return identityKey(row.projectId, row.id);
 }

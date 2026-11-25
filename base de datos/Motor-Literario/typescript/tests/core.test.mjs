@@ -9155,3 +9155,145 @@ test("IndexedDB no conserva una edición cuya transacción se aborta antes del c
   }
 });
 
+
+
+test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const projectId = "archive-large-context";
+  const projectName = "Libro de red amplia";
+  const smallCount = 256;
+  const wideCount = 1200;
+  const pendingIdeas = Array.from({ length: smallCount }, (_, index) => ({
+    projectId,
+    id: `pending-${String(index).padStart(4, "0")}`,
+    text: `Idea pendiente ${index}`,
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: projectName,
+    evidence: [],
+    relatedIdeaIds: [`context-${String(index).padStart(4, "0")}`]
+  }));
+  pendingIdeas.push({
+    projectId,
+    id: "pending-wide",
+    text: "Idea con contexto amplio",
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: projectName,
+    evidence: [],
+    relatedIdeaIds: ["context-wide-root"]
+  });
+  const smallContexts = Array.from({ length: smallCount }, (_, index) => ({
+    projectId,
+    id: `context-${String(index).padStart(4, "0")}`,
+    text: `Contexto ${index}`,
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: projectName,
+    evidence: []
+  }));
+  const wideRoot = {
+    projectId,
+    id: "context-wide-root",
+    text: "Raíz del contexto amplio",
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: projectName,
+    evidence: [],
+    relatedIdeaIds: Array.from({ length: wideCount }, (_, index) =>
+      `wide-leaf-${String(index).padStart(4, "0")}`
+    )
+  };
+  const wideLeaves = Array.from({ length: wideCount }, (_, index) => ({
+    projectId,
+    id: `wide-leaf-${String(index).padStart(4, "0")}`,
+    text: `Detalle contextual ${index}`,
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: projectName,
+    evidence: []
+  }));
+  const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideLeaves];
+  const entries = [];
+  const deleted = [];
+  const transaction = {
+    error: null,
+    objectStore(name) {
+      if (name === "narrative-ideas") {
+        return {
+          index(indexName) {
+            assert.equal(indexName, "by-project");
+            return {
+              getAll(requestedProjectId) {
+                assert.equal(requestedProjectId, projectId);
+                const request = {};
+                queueMicrotask(() => {
+                  request.result = structuredClone(projectIdeas);
+                  request.onsuccess?.();
+                  queueMicrotask(() => transaction.oncomplete?.());
+                });
+                return request;
+              }
+            };
+          },
+          delete(key) { deleted.push(key); }
+        };
+      }
+      if (name === "personal-idea-library") {
+        return { add(entry) { entries.push(structuredClone(entry)); } };
+      }
+      assert.equal(name, "narrative-entities");
+      return {};
+    }
+  };
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction(storeNames, mode) {
+      assert.equal(mode, "readwrite");
+      assert.deepEqual(new Set(storeNames), new Set([
+        "narrative-ideas", "personal-idea-library", "narrative-entities"
+      ]));
+      return transaction;
+    }
+  };
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: {
+      open() {
+        const request = { result: database };
+        queueMicrotask(() => request.onsuccess?.());
+        return request;
+      }
+    }
+  });
+
+  try {
+    const store = new IndexedDbProjectStore();
+    const archived = await store.archiveUnincorporatedIdeas(
+      projectId, "writer-large-context", projectName, 10
+    );
+    assert.equal(archived.length, smallCount + 1);
+    assert.equal(entries.length, smallCount + 1);
+    assert.equal(deleted.length, smallCount + 1);
+
+    for (let index = 0; index < smallCount; index++) {
+      const entry = entries.find(item => item.idea.id === pendingIdeas[index].id);
+      assert.ok(entry);
+      assert.deepEqual(
+        entry.context.relatedIdeas.map(idea => idea.id),
+        [`context-${String(index).padStart(4, "0")}`]
+      );
+    }
+    const wideEntry = entries.find(item => item.idea.id === "pending-wide");
+    assert.ok(wideEntry);
+    assert.equal(wideEntry.context.relatedIdeas.length, wideCount + 1);
+    assert.deepEqual(
+      wideEntry.context.relatedIdeas.map(idea => idea.id),
+      [...["context-wide-root"], ...wideLeaves.map(idea => idea.id)].sort()
+    );
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});

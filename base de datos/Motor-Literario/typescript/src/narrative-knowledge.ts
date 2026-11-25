@@ -77,7 +77,9 @@ export function findNarrativeEntityIdentityCandidates(
         }
       }
       if (!reason) continue;
-      const [firstEntityId, secondEntityId] = [first.id, second.id].sort();
+      const sortedEntityIds = [first.id, second.id].sort();
+      const firstEntityId = sortedEntityIds[0]!;
+      const secondEntityId = sortedEntityIds[1]!;
       const key = [firstEntityId, secondEntityId].join(":");
       candidates.set(key, {
         projectId, firstEntityId, secondEntityId, kind: first.kind, reason, matchedName

@@ -416,6 +416,7 @@ test("compara atributos entre capítulos solo con referencias temporales explíc
 
 test("detecta dependencias candidatas con conectores causales explícitos y evidencia de dos eventos", () => {
   const text = "La tormenta provocó el derrumbe. El derrumbe ocurrió porque la tormenta llegó.";
+  const baseOffset = 120;
   const evidence = (phrase, occurrence = 0) => {
     let start = -1;
     let cursor = 0;
@@ -427,8 +428,8 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
     return {
       documentId: "chapter-one",
       revision: 1,
-      start,
-      end: start + phrase.length,
+      start: baseOffset + start,
+      end: baseOffset + start + phrase.length,
       excerpt: phrase
     };
   };
@@ -437,17 +438,18 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
     documentId: "chapter-one",
     revision: 1,
     text,
+    baseOffset,
     knownEvents: [
       {
         eventId: "storm",
         label: "La tormenta",
-        participants: [],
+        participants: ["ana", "milo"],
         evidence: [evidence("La tormenta"), evidence("la tormenta", 1)]
       },
       {
         eventId: "collapse",
         label: "El derrumbe",
-        participants: [],
+        participants: ["ana", "luisa"],
         evidence: [evidence("el derrumbe"), evidence("El derrumbe", 1)]
       }
     ]
@@ -466,6 +468,11 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
   ]), [
     ["storm", "collapse"], ["storm", "collapse"]
   ]);
+  assert.deepEqual(result.eventDependencyAnalysis.candidates[0].sharedParticipantIds, ["ana"]);
+  assert.deepEqual(result.eventDependencyAnalysis.candidates[0].firstEventParticipantIds, ["ana", "milo"]);
+  assert.deepEqual(result.eventDependencyAnalysis.candidates[0].secondEventParticipantIds, ["ana", "luisa"]);
+  assert.equal(result.eventDependencyAnalysis.candidates[0].firstEventOccurrence.start,
+    baseOffset + text.indexOf("La tormenta"));
   assert.ok(result.eventDependencyAnalysis.candidates.every(item =>
     item.status === "candidate-needs-review" &&
     item.sentenceOccurrence.end > item.sentenceOccurrence.start &&

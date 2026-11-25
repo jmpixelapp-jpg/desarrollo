@@ -3824,6 +3824,7 @@ function buildLiteraryIdeaGraph(
     observedTextRevisionStatusChangeCount: number;
     earliestKnownStatusChangeAt: number | null;
     latestKnownStatusChangeAt: number | null;
+    knownStatusHistorySpanMs: number | null;
     activeEvidenceCount: number;
     staleEvidenceCount: number;
     ideasWithActiveEvidenceCount: number;
@@ -3854,6 +3855,7 @@ function buildLiteraryIdeaGraph(
       observedTextRevisionStatusChangeCount: 0,
       earliestKnownStatusChangeAt: null,
       latestKnownStatusChangeAt: null,
+      knownStatusHistorySpanMs: null,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 0,
@@ -3908,6 +3910,13 @@ function buildLiteraryIdeaGraph(
     if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;
     if (node.staleEvidenceCount > 0) totals.ideasWithStaleEvidenceCount++;
     if (node.activeEvidenceCount === 0) totals.ideasWithoutActiveEvidenceCount++;
+  }
+  for (const totals of profileTotals.values()) {
+    totals.knownStatusHistorySpanMs =
+      totals.earliestKnownStatusChangeAt === null ||
+      totals.latestKnownStatusChangeAt === null
+        ? null
+        : totals.latestKnownStatusChangeAt - totals.earliestKnownStatusChangeAt;
   }
   const statusProfiles: LiteraryIdeaGraphStatusProfile[] = profileStatuses.map(
     status => profileTotals.get(status)!

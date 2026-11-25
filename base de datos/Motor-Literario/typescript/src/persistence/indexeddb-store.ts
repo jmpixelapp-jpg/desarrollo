@@ -1552,7 +1552,8 @@ export class IndexedDbProjectStore implements ProjectStore {
         // v21 separa los vínculos y conserva las asociaciones existentes.
         // Su fecha registra la materialización de la migración, no una fecha
         // histórica inventada; la procedencia queda explícitamente marcada.
-        if ((event as IDBVersionChangeEvent).oldVersion < 21) {
+        const previousVersion = (event as IDBVersionChangeEvent | undefined)?.oldVersion ?? 0;
+        if (previousVersion > 0 && previousVersion < 21) {
           const legacyEntries = upgrade.objectStore(DICTIONARY_ENTRIES);
           const migratedLinks = upgrade.objectStore(DICTIONARY_ENTRY_ENTITIES);
           const entityStore = upgrade.objectStore(ENTITIES);

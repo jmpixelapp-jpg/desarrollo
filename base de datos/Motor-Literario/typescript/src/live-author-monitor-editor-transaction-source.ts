@@ -36,6 +36,7 @@ export type LiveAuthorMonitorEditorTransactionErrorCode =
   | "sequence-gap"
   | "revision-mismatch"
   | "invalid-change-range"
+  | "editor-state-mismatch"
   | "resync-required";
 
 export class LiveAuthorMonitorEditorTransactionSourceError extends Error {
@@ -257,6 +258,21 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       return;
     }
 
+    const nextDocumentLength =
+      this.documentLength + change.replacement.length - (change.end - change.start);
+    const editorSnapshot = this.provider.getSnapshot(this.documentId);
+    if (!this.isValidSnapshot(editorSnapshot) ||
+        editorSnapshot.documentId !== this.documentId ||
+        editorSnapshot.sequence !== change.sequence ||
+        editorSnapshot.revision !== this.revision + 1 ||
+        editorSnapshot.text.length !== nextDocumentLength) {
+      this.fail(
+        "editor-state-mismatch",
+        "El snapshot nativo todavía no refleja la transacción anunciada; se suspende la captura."
+      );
+      return;
+    }
+
     const normalized: EditorChange = Object.freeze({
       documentId: change.documentId,
       sequence: change.sequence,
@@ -268,7 +284,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
 
     this.sequence = normalized.sequence;
     this.revision++;
-    this.documentLength += normalized.replacement.length - (normalized.end - normalized.start);
+    this.documentLength = nextDocumentLength;
     this.lastTransactionKind = transaction.kind;
     this.seenTransactions.set(transaction.transactionId, normalized.sequence);
     if (this.seenTransactions.size > this.duplicateWindowSize) {

@@ -1205,8 +1205,8 @@
         "project/dictionary-entries/related-entities/"
       ],
       "representation": "embedded",
-      "contract": "DictionaryEntry.relatedEntityIds; vínculos confirmados y validados en la misma transacción que la entrada.",
-      "implementationStatus": "implemented",
+      "contract": "DictionaryEntry.relatedEntityIds permite crear y validar vínculos explícitos con fichas del mismo proyecto, pero no conserva aún por cada vínculo link_kind, provenance_kind y created_at exigidos por el esquema lógico. No se atribuyen esos metadatos por inferencia; la tabla queda parcial hasta incorporarlos.",
+      "implementationStatus": "partial",
       "objectStores": [
         "dictionary-entries",
         "narrative-entities"

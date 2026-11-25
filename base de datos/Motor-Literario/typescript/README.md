@@ -296,3 +296,9 @@ La base local también persiste fichas genéricas de tipo abierto, nombres princ
 
 La API del anfitrión expone `getProjectRecords`/`saveProjectRecord`, `getRecordNames`/`saveRecordName`, `getProjectRelations`/`saveProjectRelation`, `getProjectEvidences`/`saveProjectEvidence`, `getTimelineOccurrences`/`saveTimelineOccurrence`, `getManuscriptFragments`/`saveManuscriptFragment`, `getRecordAttributes`/`saveRecordAttribute`, `getRelationAttributes`/`saveRelationAttribute`, `getActiveSuggestions`/`saveActiveSuggestion`, `getImportAuthorizations`/`authorizeImportBetweenProjects` y `getSchemaMigrations`. Las importaciones no se autorizan por semejanza ni por IDs coincidentes: el anfitrión debe proporcionar ambas identidades verificadas para el mismo escritor autenticado. La migración IndexedDB 20 crea estos almacenes sin eliminar datos anteriores y registra cada upgrade posterior.
 
+
+
+### Límite conocido: metadatos de vínculos de diccionario
+
+Las entradas de diccionario conservan los IDs de fichas relacionadas y validan que pertenezcan al mismo libro. El esquema lógico exige además un `link_kind`, un `provenance_kind` y un `created_at` independientes para cada vínculo; esos tres valores aún no se guardan por vínculo. No se reconstruyen a partir de datos que no los contienen, por lo que `dictionary_entry_entities` figura como parcial en el manifiesto.
+

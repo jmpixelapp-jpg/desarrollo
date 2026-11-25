@@ -201,7 +201,7 @@ test("fusionar ideas combina referencias explícitas sin duplicarlas y respeta e
   const oneMore = baseIdea({ relatedIdeaIds: ["new-reference"] });
   assert.throws(
     () => mergeNarrativeIdea(tooMany, oneMore),
-    /referencias explícitas a ideas superan el límite de 500/
+    /referencias explícitas de la idea superan el límite de 500/
   );
 });
 

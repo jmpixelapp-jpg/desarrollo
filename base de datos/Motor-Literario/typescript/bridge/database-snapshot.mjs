@@ -244,9 +244,9 @@ export async function restoreDatabaseBackup(backupPath, destinationPath) {
     try { await chmod(destination, 0o600); } catch { /* Permisos POSIX no disponibles en todos los entornos. */ }
 
     return {
+      ...summary,
       path: destination,
-      recoveryPath: destinationMoved || movedSidecars.length > 0 ? recovery : null,
-      ...summary
+      recoveryPath: destinationMoved || movedSidecars.length > 0 ? recovery : null
     };
   } catch (error) {
     await rm(temporary, { force: true }).catch(() => undefined);

@@ -49,6 +49,12 @@ class MemoryStore {
       .sort((a,b)=>a.revision-b.revision)
       .map(item=>structuredClone(item));
   }
+  async loadProjectEventLifecycles(projectId) {
+    return [...this.eventLifecycles.values()]
+      .filter(item=>item.projectId===projectId)
+      .sort((a,b)=>a.eventId.localeCompare(b.eventId) || a.revision-b.revision)
+      .map(item=>structuredClone(item));
+  }
   async saveEventAndAppendLifecycleIfUnchanged(event,expectedCurrent,lifecycle) {
     const key=event.projectId+":"+event.id;
     const current=this.events.get(key);
@@ -3218,6 +3224,71 @@ test("una instancia obsoleta no puede sobrescribir un cambio versionado de acont
   const history=await store.loadEventLifecycles("event-lifecycle-race","gate");
   assert.equal(history.length,1);
   assert.equal(history[0].newLabel,"La puerta queda abierta");
+});
+
+test("el análisis literario expone evolución versionada de acontecimientos separada de las menciones", async () => {
+  const store=new MemoryStore();
+  const api=new HostEngineApi({store});
+  api.initializeProject({projectId:"event-lifecycle-analysis",projectName:"Evolución"});
+  await store.saveEntity({
+    projectId:"event-lifecycle-analysis",id:"ana",kind:"character",
+    canonicalName:"Ana",normalizedName:"ana",aliases:[],evidence:[],
+    firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
+  await store.saveEntity({
+    projectId:"event-lifecycle-analysis",id:"bruno",kind:"character",
+    canonicalName:"Bruno",normalizedName:"bruno",aliases:[],evidence:[],
+    firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
+  const text="ESCENA 1\nLa alarma se activa. Ana escuchó el sonido.";
+  const excerpt="La alarma se activa.";
+  const start=text.indexOf(excerpt);
+  await store.saveEvent({
+    projectId:"event-lifecycle-analysis",id:"alarm",label:"Suena la alarma",
+    participants:["ana"],evidence:[{
+      documentId:"chapter",revision:3,start,end:start+excerpt.length,excerpt
+    }]
+  });
+  await api.openDocument({documentId:"chapter",text,revision:3,sequence:0});
+  await api.updateNarrativeEvent({
+    eventId:"alarm",label:"Se activa la alarma",
+    participants:["bruno"],changedBy:"writer-1",changedAt:321
+  });
+
+  const result=await api.analyzeLiteraryDocument("chapter");
+  assert.deepEqual(result.eventLifecycleAnalysis,{
+    eventCount:1,
+    totalTransitionCount:1,
+    omittedEventCount:0,
+    profiles:[
+      {
+        eventId:"alarm",
+        currentLabel:"Se activa la alarma",
+        currentParticipantIds:["bruno"],
+        latestRevision:1,
+        transitionCount:1,
+        labelChangeCount:1,
+        participantSetChangeCount:1,
+        changes:[
+          {
+            revision:1,
+            previousLabel:"Suena la alarma",
+            newLabel:"Se activa la alarma",
+            labelChanged:true,
+            addedParticipantIds:["bruno"],
+            removedParticipantIds:["ana"],
+            participantSetChanged:true,
+            changedBy:"writer-1",
+            changeReason:null,
+            changedAt:321
+          }
+        ],
+        changesTruncated:false
+      }
+    ]
+  });
+  assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].entityId,"bruno");
+  assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,false);
 });
 
 test("captura ideas marcadas por el escritor y permite cambiar su estado", async () => {

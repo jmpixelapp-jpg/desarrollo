@@ -634,6 +634,131 @@ test("SQLite rechaza una escritura de entidad narrativa basada en una versión o
   }
 });
 
+test("SQLite protege relaciones, acontecimientos, ideas y afirmaciones frente a escrituras obsoletas", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-narrative-cas-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let first;
+  let second;
+  const projectId = "narrative-cas-project";
+  const entity = id => ({
+    id,
+    projectId,
+    kind: "character",
+    canonicalName: id === "entity-a" ? "Ana" : "Bruno",
+    normalizedName: id === "entity-a" ? "ana" : "bruno",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  });
+  const evidence = {
+    documentId: "chapter-cas",
+    revision: 0,
+    start: 0,
+    end: 3,
+    excerpt: "Ana"
+  };
+  try {
+    first = await SqliteProjectStore.open(databasePath);
+    second = await SqliteProjectStore.open(databasePath);
+    await first.saveEntityIfUnchanged(entity("entity-a"));
+    await first.saveEntityIfUnchanged(entity("entity-b"));
+
+    const relation = {
+      id: "relation-cas",
+      projectId,
+      fromEntityId: "entity-a",
+      toEntityId: "entity-b",
+      relationType: "knows",
+      evidence: []
+    };
+    const event = {
+      id: "event-cas",
+      projectId,
+      label: "Ana llega",
+      participants: ["entity-a"],
+      evidence: []
+    };
+    const idea = {
+      id: "idea-cas",
+      projectId,
+      text: "La puerta debe permanecer cerrada.",
+      status: "IDEA",
+      originDocumentId: "chapter-cas",
+      sourceProjectName: "Libro de prueba",
+      evidence: [evidence]
+    };
+    const assertion = {
+      id: "assertion-cas",
+      projectId,
+      entityId: "entity-a",
+      entityName: "Ana",
+      attribute: "role",
+      value: "guardiana",
+      evidence,
+      capturedAt: 1
+    };
+
+    const cases = [
+      {
+        name: "relación",
+        save: (record, expected) => first.saveRelationIfUnchanged(record, expected),
+        otherSave: (record, expected) => second.saveRelationIfUnchanged(record, expected),
+        original: relation,
+        updated: { ...relation, relationType: "protects" },
+        read: () => second.loadRelations(projectId),
+        changed: records => records[0].relationType
+      },
+      {
+        name: "acontecimiento",
+        save: (record, expected) => first.saveEventIfUnchanged(record, expected),
+        otherSave: (record, expected) => second.saveEventIfUnchanged(record, expected),
+        original: event,
+        updated: { ...event, label: "Ana abre la puerta" },
+        read: () => second.loadEvents(projectId),
+        changed: records => records[0].label
+      },
+      {
+        name: "idea",
+        save: (record, expected) => first.saveIdeaIfUnchanged(record, expected),
+        otherSave: (record, expected) => second.saveIdeaIfUnchanged(record, expected),
+        original: idea,
+        updated: { ...idea, text: "La puerta debe permanecer abierta." },
+        read: () => second.loadIdeas(projectId),
+        changed: records => records[0].text
+      },
+      {
+        name: "afirmación",
+        save: (record, expected) => first.saveAssertionIfUnchanged(record, expected),
+        otherSave: (record, expected) => second.saveAssertionIfUnchanged(record, expected),
+        original: assertion,
+        updated: { ...assertion, value: "capitana" },
+        read: () => second.loadAssertions(projectId),
+        changed: records => records[0].value
+      }
+    ];
+
+    for (const item of cases) {
+      await item.save(item.original);
+      const secondRead = (await item.read())[0];
+      assert.ok(secondRead, `Debe recuperarse la ${item.name} insertada.`);
+      await item.otherSave(item.updated, secondRead);
+      const stale = { ...item.original, ...(item.name === "relación" ? { relationType: "enemy" } :
+        item.name === "acontecimiento" ? { label: "Versión obsoleta" } :
+        item.name === "idea" ? { text: "Versión obsoleta" } : { value: "versión obsoleta" }) };
+      await assert.rejects(item.save(stale, item.original), /cambió en otra instancia/);
+      assert.equal(item.changed(await item.read()), item.name === "relación" ? "protects" :
+        item.name === "acontecimiento" ? "Ana abre la puerta" :
+        item.name === "idea" ? "La puerta debe permanecer abierta." : "capitana");
+    }
+  } finally {
+    first?.close();
+    second?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin modificar las fichas", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-identity-history-"));
   const databasePath = resolve(directory, "motor.sqlite");

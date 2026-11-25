@@ -355,3 +355,139 @@ test("el puente SQLite consolida identidades y actualiza atómicamente la biblio
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("el archivo de ideas conserva contexto independiente para cada entrada de biblioteca", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-idea-context-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId: "idea-context-project",
+      projectName: "Libro de contextos",
+      writerId: "writer-context"
+    });
+    await client.openDocument("idea-context-project", {
+      documentId: "chapter-context",
+      text: "personaje Ana\npersonaje Anita\nIDEA: La campana debe sonar.\nIDEA: La puerta debe permanecer cerrada.",
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject("idea-context-project");
+    const entities = await client.request("project.call", {
+      projectId: "idea-context-project", method: "getNarrativeEntities", args: []
+    });
+    const ana = entities.find(item => item.canonicalName === "Ana");
+    const anita = entities.find(item => item.canonicalName === "Anita");
+    assert.ok(ana);
+    assert.ok(anita);
+    const ideas = await client.request("project.call", {
+      projectId: "idea-context-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(ideas.length, 2);
+    const campana = ideas.find(item => item.text.includes("campana"));
+    const puerta = ideas.find(item => item.text.includes("puerta"));
+    assert.ok(campana);
+    assert.ok(puerta);
+    await client.request("project.call", {
+      projectId: "idea-context-project", method: "setNarrativeIdeaEntityLink",
+      args: [campana.id, ana.id, true]
+    });
+    await client.request("project.call", {
+      projectId: "idea-context-project", method: "setNarrativeIdeaEntityLink",
+      args: [puerta.id, anita.id, true]
+    });
+    const archived = await client.request("project.call", {
+      projectId: "idea-context-project", method: "archiveUnincorporatedIdeas", args: []
+    });
+    assert.equal(archived.length, 2);
+    const campanaEntry = archived.find(entry => entry.idea.id === campana.id);
+    const puertaEntry = archived.find(entry => entry.idea.id === puerta.id);
+    assert.deepEqual(campanaEntry.context.relatedEntities.map(entity => entity.id), [ana.id]);
+    assert.deepEqual(puertaEntry.context.relatedEntities.map(entity => entity.id), [anita.id]);
+    assert.equal(campanaEntry.context.relatedIdeas.length, 0);
+    assert.equal(puertaEntry.context.relatedIdeas.length, 0);
+
+    const repeated = await client.request("project.call", {
+      projectId: "idea-context-project", method: "archiveUnincorporatedIdeas", args: []
+    });
+    assert.equal(repeated.length, 2);
+    assert.deepEqual(repeated.map(entry => entry.idea.id).sort(), [campana.id, puerta.id].sort());
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    try {
+      const exited = waitForExit(child);
+      await client.shutdown();
+      await exited;
+    } catch { child.kill(); }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("el archivo rechaza referencias desde ideas que permanecerán en el libro", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-idea-graph-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId: "idea-graph-project",
+      projectName: "Libro de grafo",
+      writerId: "writer-graph"
+    });
+    await client.openDocument("idea-graph-project", {
+      documentId: "chapter-graph",
+      text: "IDEA: La campana debe sonar.\nIDEA: La puerta debe permanecer cerrada.",
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject("idea-graph-project");
+    const ideas = await client.request("project.call", {
+      projectId: "idea-graph-project", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(ideas.length, 2);
+    const retained = ideas.find(item => item.text.includes("campana"));
+    const pending = ideas.find(item => item.text.includes("puerta"));
+    await client.request("project.call", {
+      projectId: "idea-graph-project", method: "setNarrativeIdeaLink",
+      args: [retained.id, pending.id, true]
+    });
+    await client.request("project.call", {
+      projectId: "idea-graph-project", method: "setNarrativeIdeaStatus",
+      args: [retained.id, "incorporated"]
+    });
+    await assert.rejects(
+      client.request("project.call", {
+        projectId: "idea-graph-project", method: "archiveUnincorporatedIdeas", args: []
+      }),
+      error => error?.code === -32000 && /depende de una idea que se trasladaría/.test(error.message)
+    );
+    const library = await client.request("project.call", {
+      projectId: "idea-graph-project", method: "getPersonalIdeaLibrary", args: []
+    });
+    const remaining = await client.request("project.call", {
+      projectId: "idea-graph-project", method: "getNarrativeIdeas", args: []
+    });
+    const receipt = await client.request("project.call", {
+      projectId: "idea-graph-project", method: "getProjectFinalizationReceipt", args: []
+    });
+    assert.equal(library.length, 0);
+    assert.equal(remaining.length, 2);
+    assert.equal(receipt, undefined);
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    try {
+      const exited = waitForExit(child);
+      await client.shutdown();
+      await exited;
+    } catch { child.kill(); }
+    await rm(directory, { recursive: true, force: true });
+  }
+});

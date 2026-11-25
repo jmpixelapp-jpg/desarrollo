@@ -1071,69 +1071,159 @@ export class SqliteProjectStore {
     requireText(writerId, "writerId");
     requireText(sourceProjectName, "sourceProjectName");
     if (!Number.isFinite(archivedAt) || archivedAt < 0) throw new Error("Fecha de archivo inválida.");
+
+    const checksumFor = ids => {
+      const source = JSON.stringify(ids);
+      let hash = 0xcbf29ce484222325n;
+      for (let index = 0; index < source.length; index++) {
+        hash ^= BigInt(source.charCodeAt(index));
+        hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+      }
+      return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+    };
+
     return this.transaction(() => {
       const receiptId = "finalization-v1";
       const receiptKey = [writerId, projectId, receiptId];
       const existingReceipt = this.get("writer-library-finalization-receipts", receiptKey);
       const projectIdeas = this.loadIdeas(projectId);
+      const projectIdeaIds = new Set();
+      const ideasById = new Map();
+      for (const idea of projectIdeas) {
+        validateNarrativeIdea(idea, projectId);
+        if (projectIdeaIds.has(idea.id)) throw new Error("Hay identificadores de idea duplicados en el proyecto.");
+        projectIdeaIds.add(idea.id);
+        ideasById.set(idea.id, idea);
+      }
+      for (const idea of projectIdeas) {
+        for (const id of idea.relatedIdeaIds ?? []) {
+          if (!projectIdeaIds.has(id)) throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+        }
+      }
+
       if (existingReceipt) {
-        if (existingReceipt.sourceProjectName !== sourceProjectName) throw new Error("El título del proyecto no coincide con el recibo de finalización.");
+        if (existingReceipt.writerId !== writerId || existingReceipt.sourceProjectId !== projectId ||
+            existingReceipt.receiptId !== receiptId || existingReceipt.sourceProjectName !== sourceProjectName ||
+            !Number.isFinite(existingReceipt.finalizedAt) || existingReceipt.finalizedAt < 0 ||
+            !Array.isArray(existingReceipt.archivedIdeaIds) ||
+            existingReceipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+            new Set(existingReceipt.archivedIdeaIds).size !== existingReceipt.archivedIdeaIds.length ||
+            [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1].localeCompare(id)>0) ||
+            existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds)) {
+          throw new Error("El recibo de finalización está malformado o no pertenece al escritor y libro activos.");
+        }
         if (projectIdeas.some(item => item.status === "IDEA")) {
           throw new Error("El libro ya está finalizado; las ideas nuevas requieren reapertura explícita.");
         }
-        return this.find("personal-idea-library", item => item.writerId === writerId && item.sourceProjectId === projectId);
+        const entries = this.find("personal-idea-library", item =>
+          item.writerId === writerId && item.sourceProjectId === projectId
+        );
+        if (entries.length !== existingReceipt.archivedIdeaIds.length) {
+          throw new Error("La biblioteca no coincide con el recibo de finalización del libro.");
+        }
+        const byId = new Map();
+        for (const entry of entries) {
+          if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
+              entry.sourceProjectName !== sourceProjectName || entry.category !== sourceProjectName ||
+              !entry.idea || entry.idea.projectId !== projectId ||
+              entry.idea.sourceProjectName !== sourceProjectName || entry.idea.status !== "IDEA" ||
+              !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 || !entry.context) {
+            throw new Error("La biblioteca personal contiene una entrada ajena o incompleta.");
+          }
+          validateNarrativeIdea(entry.idea, projectId, "idea archivada");
+          validatePersonalIdeaContext(entry.context, projectId, sourceProjectName);
+          if (byId.has(entry.idea.id)) throw new Error("La biblioteca personal contiene ideas duplicadas.");
+          byId.set(entry.idea.id, entry);
+        }
+        const archivedIds = new Set(existingReceipt.archivedIdeaIds);
+        const selected = existingReceipt.archivedIdeaIds.map(id => {
+          const entry = byId.get(id);
+          if (!entry) throw new Error("El recibo de finalización referencia una idea que no existe en la biblioteca.");
+          const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+          const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+          for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
+            if ((idea.relatedEntityIds ?? []).some(entityId => !contextEntityIds.has(entityId)) ||
+                (idea.relatedIdeaIds ?? []).some(ideaId => !contextIdeaIds.has(ideaId) && !archivedIds.has(ideaId))) {
+              throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
+            }
+          }
+          return entry;
+        });
+        return clone(selected);
       }
 
       const pending = projectIdeas.filter(item => item.status === "IDEA");
       const pendingIds = new Set(pending.map(item => item.id));
-      const relatedIdeas = new Map();
-      const relatedEntityIds = new Set();
-      const visitedIdeas = new Set(pendingIds);
-      const queue = pending.flatMap(item => [...(item.relatedIdeaIds ?? [])]);
-      while (queue.length) {
-        const id = queue.shift();
-        if (!id || visitedIdeas.has(id)) continue;
-        visitedIdeas.add(id);
-        const related = projectIdeas.find(item => item.id === id);
-        if (!related) throw new Error("No se pudo resolver una idea relacionada durante la finalización.");
-        if (!pendingIds.has(id)) relatedIdeas.set(id, related);
-        for (const entityId of related.relatedEntityIds ?? []) relatedEntityIds.add(entityId);
-        for (const nextId of related.relatedIdeaIds ?? []) queue.push(nextId);
+      for (const idea of projectIdeas) {
+        if (idea.status !== "IDEA" && (idea.relatedIdeaIds ?? []).some(id => pendingIds.has(id))) {
+          throw new Error("No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal.");
+        }
       }
-      for (const idea of pending) for (const entityId of idea.relatedEntityIds ?? []) relatedEntityIds.add(entityId);
-      const relatedEntities = this.loadEntities(projectId).filter(entity => relatedEntityIds.has(entity.id));
-      if (relatedEntities.length !== relatedEntityIds.size) throw new Error("Falta una ficha vinculada a ideas que se van a archivar.");
+
+      const entities = this.loadEntities(projectId);
+      for (const entity of entities) validateNarrativeEntity(entity, projectId);
+      validateNarrativeIdentityHistory(entities);
+      const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
       const archived = [];
       for (const idea of pending) {
-        const entry = {
-          writerId,
-          sourceProjectId: projectId,
-          sourceProjectName,
-          category: sourceProjectName,
-          idea,
-          context: {
-            version: 1,
-            relatedIdeas: [...relatedIdeas.values()],
-            relatedEntities
-          },
-          archivedAt
+        const contextIdeaIds = new Set();
+        const visited = new Set([idea.id]);
+        const queue = [...(idea.relatedIdeaIds ?? [])];
+        let queueIndex = 0;
+        while (queueIndex < queue.length) {
+          const relatedId = queue[queueIndex++];
+          if (visited.has(relatedId)) continue;
+          visited.add(relatedId);
+          // Las otras ideas pendientes tendrán su propia entrada de biblioteca;
+          // no se convierten en contexto duplicado de esta entrada.
+          if (pendingIds.has(relatedId)) continue;
+          const related = ideasById.get(relatedId);
+          if (!related) throw new Error("No se pudo resolver una idea relacionada durante la finalización.");
+          contextIdeaIds.add(relatedId);
+          queue.push(...(related.relatedIdeaIds ?? []));
+        }
+        const relatedIdeaSnapshots = [...contextIdeaIds]
+          .map(id => ideasById.get(id))
+          .filter(Boolean)
+          .sort((a,b)=>a.id.localeCompare(b.id))
+          .map(related => ({...related,sourceProjectName}));
+        const relatedEntityIds = new Set(idea.relatedEntityIds ?? []);
+        for (const related of relatedIdeaSnapshots) {
+          for (const entityId of related.relatedEntityIds ?? []) relatedEntityIds.add(entityId);
+        }
+        const relatedEntities = [...relatedEntityIds]
+          .sort()
+          .map(id => {
+            const entity = entitiesById.get(id);
+            if (!entity) throw new Error("No se puede archivar una idea: falta una ficha relacionada del proyecto.");
+            return entity;
+          });
+        const archivedIdea = {...idea,sourceProjectName};
+        validateNarrativeIdea(archivedIdea,projectId,"idea archivada");
+        const context = {
+          version:1,
+          relatedIdeas:relatedIdeaSnapshots,
+          relatedEntities
         };
-        this.put("personal-idea-library", [writerId, projectId, idea.id], entry, { insertOnly: true });
-        this.remove("narrative-ideas", identityKey(projectId, idea.id));
+        validatePersonalIdeaContext(context,projectId,sourceProjectName);
+        const contextEntityIds = new Set(relatedEntities.map(entity=>entity.id));
+        if((archivedIdea.relatedEntityIds??[]).some(id=>!contextEntityIds.has(id))) {
+          throw new Error("Una idea archivada conserva una referencia a una ficha que no está en su contexto.");
+        }
+        const entry = {
+          writerId,sourceProjectId:projectId,sourceProjectName,category:sourceProjectName,
+          idea:archivedIdea,context,archivedAt
+        };
+        this.put("personal-idea-library",[writerId,projectId,idea.id],entry,{insertOnly:true});
+        this.remove("narrative-ideas",identityKey(projectId,idea.id));
         archived.push(entry);
       }
-      const archivedIdeaIds = pending.map(item => item.id).sort();
-      const checksumSource = JSON.stringify(archivedIdeaIds);
-      let hash = 0xcbf29ce484222325n;
-      for (let i = 0; i < checksumSource.length; i++) {
-        hash ^= BigInt(checksumSource.charCodeAt(i));
-        hash = BigInt.asUintN(64, hash * 0x100000001b3n);
-      }
-      const archiveChecksum = "fnv1a64:" + hash.toString(16).padStart(16, "0");
-      this.put("writer-library-finalization-receipts", receiptKey, {
-        writerId, sourceProjectId: projectId, receiptId, sourceProjectName,
-        finalizedAt: archivedAt, archivedIdeaIds, archiveChecksum
-      }, { insertOnly: true });
+
+      const archivedIdeaIds = pending.map(item=>item.id).sort();
+      this.put("writer-library-finalization-receipts",receiptKey,{
+        writerId,sourceProjectId:projectId,receiptId,sourceProjectName,
+        finalizedAt:archivedAt,archivedIdeaIds,archiveChecksum:checksumFor(archivedIdeaIds)
+      },{insertOnly:true});
       return clone(archived);
     });
   }

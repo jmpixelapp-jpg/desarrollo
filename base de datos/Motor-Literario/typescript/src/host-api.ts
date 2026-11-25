@@ -2584,7 +2584,21 @@ export class HostEngineApi {
       const relatedEntityIds = new Set(current.relatedEntityIds);
       if (linked) relatedEntityIds.add(entityId);
       else relatedEntityIds.delete(entityId);
-      if (linked && relatedEntityIds.size === current.relatedEntityIds.length && existingLink) {
+      const link: DictionaryEntryEntityLink = {
+        projectId,
+        entryId,
+        recordId: entityId,
+        linkKind: details?.linkKind ?? existingLink?.linkKind ?? "RELATED",
+        provenanceKind: details?.provenanceKind ?? existingLink?.provenanceKind ?? "WRITER",
+        createdAt: details?.createdAt ?? existingLink?.createdAt ?? Date.now()
+      };
+      validateDictionaryEntryEntityLink(link, projectId, entryId);
+      const metadataChanged = !existingLink ||
+        existingLink.linkKind !== link.linkKind ||
+        existingLink.provenanceKind !== link.provenanceKind ||
+        existingLink.createdAt !== link.createdAt;
+      if (linked && relatedEntityIds.size === current.relatedEntityIds.length &&
+          existingLink && (!details || !metadataChanged)) {
         return cloneNarrativeRecord(current);
       }
       if (!linked && !current.relatedEntityIds.includes(entityId) && !existingLink) {
@@ -2596,15 +2610,6 @@ export class HostEngineApi {
         updatedAt: Math.max(Date.now(), current.updatedAt)
       };
       validateDictionaryEntry(updated);
-      const link: DictionaryEntryEntityLink = {
-        projectId,
-        entryId,
-        recordId: entityId,
-        linkKind: details?.linkKind ?? existingLink?.linkKind ?? "RELATED",
-        provenanceKind: details?.provenanceKind ?? existingLink?.provenanceKind ?? "WRITER",
-        createdAt: details?.createdAt ?? existingLink?.createdAt ?? Date.now()
-      };
-      validateDictionaryEntryEntityLink(link, projectId, entryId);
       const setLink = store.setDictionaryEntryEntityLink;
       if (setLink) {
         await setLink.call(store, updated, current, link, linked);

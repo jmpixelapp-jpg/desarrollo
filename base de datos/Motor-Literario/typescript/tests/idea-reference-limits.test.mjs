@@ -39,4 +39,14 @@ test("IndexedDB rechaza más de 500 referencias explícitas por categoría", asy
     })),
     /transición de estado inválida/
   );
+  await assert.rejects(
+    store.saveIdea(baseIdea({
+      status: "discarded",
+      statusHistory: [
+        { status: "incorporated", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "text-revised", changedAt: 2 }
+      ]
+    })),
+    /transición de estado inválida/
+  );
 });

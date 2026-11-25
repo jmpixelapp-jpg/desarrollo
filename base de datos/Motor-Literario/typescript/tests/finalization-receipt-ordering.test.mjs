@@ -6,6 +6,17 @@ const projectId = "archive-receipt-read-order";
 const writerId = "writer-receipt-order";
 const projectName = "Libro con recibo";
 
+function checksum(ids) {
+  const serialized = JSON.stringify([...ids].sort());
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
+
+
 class ArchiveGateStore {
   constructor() {
     this.receipt = undefined;
@@ -43,7 +54,7 @@ class ArchiveGateStore {
       sourceProjectName,
       finalizedAt: archivedAt,
       archivedIdeaIds: [entry.idea.id],
-      archiveChecksum: "test-checksum"
+      archiveChecksum: checksum([entry.idea.id])
     };
     return [entry];
   }
@@ -84,5 +95,27 @@ test("la lectura del recibo de finalización espera a que termine la transferenc
   assert.equal(receipt?.receiptId, "project-finalization-v1");
   assert.deepEqual(receipt?.archivedIdeaIds, ["idea-1"]);
   assert.equal(store.receiptRead, true);
+  api.dispose();
+});
+
+test("la API rechaza un recibo de finalización con checksum alterado", async () => {
+  const invalidReceipt = {
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: projectName,
+    finalizedAt: 100,
+    archivedIdeaIds: ["idea-1"],
+    archiveChecksum: "fnv1a64:0000000000000000"
+  };
+  const store = {
+    async loadProjectFinalizationReceipt() { return structuredClone(invalidReceipt); }
+  };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName, writerId });
+  await assert.rejects(
+    () => api.getProjectFinalizationReceipt(),
+    /checksum es inválido/
+  );
   api.dispose();
 });

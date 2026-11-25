@@ -33,7 +33,11 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Type-check
         run: npm run typecheck
-      - name: Build and run automated tests
-        run: npm test
+      - name: Build TypeScript distribution
+        run: npm run build
+      - name: Run focused narrative graph and analysis regressions
+        run: node --test tests/idea-graph-complete-catalog.test.mjs tests/idea-lexical-resonance.test.mjs tests/literary-analysis.test.mjs tests/idea-reference-limits.test.mjs tests/storage-implementation-audit.test.mjs
+      - name: Run complete automated test suite
+        run: npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs
       - name: Run live-edit benchmark
         run: npm run bench

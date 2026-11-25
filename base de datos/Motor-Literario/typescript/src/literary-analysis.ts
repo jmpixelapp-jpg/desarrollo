@@ -3434,7 +3434,7 @@ const IDEA_DANISH_STOP_WORDS = new Set([
   "man","mand","mange","med","meget","men","mens","mere","mig","min","mine","mit","mod","må",
   "måske","ned","nej","noget","nogle","nu","når","og","også","om","op","os","over","på","se",
   "selv","sig","sin","sine","sit","skal","skulle","som","stor","store","så","sådan","thi","til",
-  "under","var","ved","vi","vil","ville","vor","vores","være","været","øvrigt"
+  "uden","under","var","ved","vi","vil","ville","vor","vores","være","været","øvrigt"
 ]);
 const IDEA_SWEDISH_STOP_WORDS = new Set([
   "alla","allt","alltid","andra","andras","annan","annat","att","av","bakom","bara","behöva",
@@ -3444,7 +3444,7 @@ const IDEA_SWEDISH_STOP_WORDS = new Set([
   "han","hans","har","henne","hennes","hit","hon","honom","hur","här","i","icke","idag","igår",
   "igen","inget","ingen","inga","innan","inne","inte","jag","ju","kan","kunde","kunnat","kvar",
   "kom","kommer","komma","kring","man","med","mellan","men","mig","min","mina","mitt","mot",
-  "mycket","många","måste","ned","ni","nog","när","någon","något","några","också","om","oss",
+  "mycket","många","måste","ned","ni","nog","när","någon","något","några","och","också","om","oss",
   "på","runt","så","samma","sedan","sig","sin","sina","sist","sitta","ska","skall","skulle",
   "som","stor","större","störst","till","tills","under","upp","utan","utanför","vad","var",
   "vara","varför","varit","varje","vars","vart","vem","vi","vid","vilka","vilken","vilket",

@@ -58,9 +58,22 @@ test("excluye términos ubicuos para evitar coincidencias poco informativas", ()
   const result = analyze(ideas);
 
   assert.equal(result.inputIdeaCount, 41);
+  assert.equal(result.maxTermDocumentFrequency, 17);
   assert.equal(result.ignoredHighFrequencyTermCount, 2);
   assert.equal(result.candidatePairCount, 0);
   assert.deepEqual(result.resonances, []);
+});
+
+test("adapta el filtro de términos ubicuos a catálogos pequeños", () => {
+  const ideas = Array.from({ length: 10 }, (_, index) => idea(
+    "small-" + String(index).padStart(2, "0"),
+    "memoria concepto" + String(index).padStart(2, "0")
+  ));
+  const result = analyze(ideas);
+
+  assert.equal(result.maxTermDocumentFrequency, 4);
+  assert.equal(result.ignoredHighFrequencyTermCount, 1);
+  assert.equal(result.candidatePairCount, 0);
 });
 
 test("conserva términos de alfabetos Unicode sin distinción de mayúsculas", () => {
@@ -107,10 +120,10 @@ test("limita la muestra de términos sin alterar las métricas completas", () =>
 
 test("ordena los candidatos de forma determinista aunque cambie el orden de entrada", () => {
   const ideas = [
-    idea("idea-c", "La memoria y la luz permanecen"),
-    idea("idea-a", "La luz revela la memoria"),
-    idea("idea-b", "La memoria guarda la luz"),
-    idea("idea-d", "La memoria y la sombra regresan")
+    idea("idea-c", "alborada bruma horizonte"),
+    idea("idea-a", "memoria espejo luz"),
+    idea("idea-b", "ceniza viento destino"),
+    idea("idea-d", "memoria espejo destino")
   ];
 
   assert.deepEqual(analyze(ideas), analyze([...ideas].reverse()));

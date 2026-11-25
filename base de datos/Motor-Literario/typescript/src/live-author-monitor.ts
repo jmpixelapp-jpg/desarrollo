@@ -145,8 +145,11 @@ export class LiveAuthorMonitor {
     }
 
     const openedAt = this.readClock();
+    const sessionNonce = globalThis.crypto?.randomUUID?.() ??
+      Math.random().toString(36).slice(2);
     const session: DocumentSession = {
-      sessionId: projectId + ":" + snapshot.documentId + ":" + (++this.sessionCounter),
+      sessionId: projectId + ":" + snapshot.documentId + ":" + Date.now() +
+        ":" + sessionNonce + ":" + (++this.sessionCounter),
       projectId,
       documentId: snapshot.documentId,
       openedAt,

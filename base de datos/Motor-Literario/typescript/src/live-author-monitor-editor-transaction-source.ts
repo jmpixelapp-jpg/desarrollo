@@ -166,8 +166,15 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     });
   }
 
-  /** Reanuda únicamente cuando el snapshot local actual coincide con el del motor. */
-  resynchronize(snapshot: DocumentSnapshot): LiveAuthorMonitorEditorTransactionSourceState {
+  /**
+   * Reanuda únicamente cuando el snapshot local actual coincide con el del motor.
+   * beforeResume se ejecuta tras aceptar el snapshot y antes de volver a suscribirse,
+   * para retirar el backlog antiguo antes de que el proveedor reproduzca cambios nuevos.
+   */
+  resynchronize(
+    snapshot: DocumentSnapshot,
+    beforeResume?: () => void
+  ): LiveAuthorMonitorEditorTransactionSourceState {
     if (this.disposed) throw new Error("No se puede resincronizar un adaptador transaccional ya dispuesto.");
     if (!this.isValidSnapshot(snapshot) || snapshot.documentId !== this.documentId) {
       throw new LiveAuthorMonitorEditorTransactionSourceError(
@@ -188,6 +195,15 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.lastTransactionKind = null;
     this.seenTransactions.clear();
     this.needsResync = false;
+    try {
+      beforeResume?.();
+    } catch (error) {
+      this.fail(
+        "resync-required",
+        "No se pudo preparar el stream antes de reanudar las transacciones del editor."
+      );
+      throw error;
+    }
     if (this.listeners.size > 0) {
       try {
         this.attachProvider();

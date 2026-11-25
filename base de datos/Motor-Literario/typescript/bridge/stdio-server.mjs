@@ -15,6 +15,7 @@ let knowledgeSyncInterval;
 let lastObservedDataVersion;
 let knowledgeSyncTail = Promise.resolve();
 const lastNarrativeVersions = new Map();
+const pendingNarrativeSyncs = new Set();
 const KNOWLEDGE_SYNC_INTERVAL_MS = 500;
 
 const PUBLIC_API_METHODS = new Set([
@@ -183,9 +184,14 @@ async function pollExternalNarrativeChanges() {
   for (const [projectId, record] of projects) {
     const currentNarrativeVersion = store.getNarrativeVersion(projectId);
     const previousNarrativeVersion = lastNarrativeVersions.get(projectId);
-    lastNarrativeVersions.set(projectId, currentNarrativeVersion);
-    if (!externalCommit || previousNarrativeVersion === undefined ||
-        currentNarrativeVersion === previousNarrativeVersion) continue;
+    if (externalCommit && previousNarrativeVersion !== undefined &&
+        currentNarrativeVersion !== previousNarrativeVersion) {
+      pendingNarrativeSyncs.add(projectId);
+    }
+    if (!pendingNarrativeSyncs.has(projectId)) {
+      lastNarrativeVersions.set(projectId, currentNarrativeVersion);
+      continue;
+    }
 
     try {
       await record.api.invalidateNarrativeKnowledgeFromExternalChange();
@@ -196,6 +202,8 @@ async function pollExternalNarrativeChanges() {
           params: { projectId }
         });
       }
+      lastNarrativeVersions.set(projectId, currentNarrativeVersion);
+      pendingNarrativeSyncs.delete(projectId);
     } catch (error) {
       writeError(error);
     }
@@ -272,6 +280,7 @@ async function dispatch(method, rawParams) {
       await record.api.flushPendingChanges();
       projects.delete(projectId);
       lastNarrativeVersions.delete(projectId);
+      pendingNarrativeSyncs.delete(projectId);
       return { projectId, closed: true };
     }
 
@@ -344,6 +353,7 @@ async function dispatch(method, rawParams) {
       }
       projects.clear();
       lastNarrativeVersions.clear();
+      pendingNarrativeSyncs.clear();
       return { shutdown: true, storage: store.health() };
 
     default: {
@@ -401,6 +411,7 @@ async function closeGracefully() {
   try { await flushAll(); } catch (error) { writeError(error); }
   projects.clear();
   lastNarrativeVersions.clear();
+  pendingNarrativeSyncs.clear();
   try { store.close(); } catch (error) { writeError(error); }
 }
 

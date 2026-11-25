@@ -171,6 +171,9 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
         const change = item.statusHistory[index];
         if (!change || !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
+            (change.reason === "text-revised" && change.status !== "IDEA") ||
+            (change.reason === "text-revised" && change.status !== "IDEA") ||
+            (change.reason === "text-revised" && change.status !== "IDEA") ||
             (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
               change.status === item.statusHistory[index - 1]?.status) ||
             (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||

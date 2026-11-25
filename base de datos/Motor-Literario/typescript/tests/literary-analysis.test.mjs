@@ -521,3 +521,32 @@ test("no infiere dependencias cuando no hay conector causal o la evidencia está
   assert.equal(result.eventDependencyAnalysis.candidateCount, 0);
   assert.deepEqual(result.eventDependencyAnalysis.candidates, []);
 });
+
+test("acota las anclas de evidencia causal y cuenta las omitidas por el límite", () => {
+  const text = "La tormenta provocó el derrumbe.";
+  const start = text.indexOf("La tormenta");
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + "La tormenta".length,
+    excerpt: "La tormenta"
+  };
+  const knownEvents = Array.from({ length: 11 }, (_, index) => ({
+    eventId: "event-" + index,
+    label: "Evento " + index,
+    participants: [],
+    evidence: Array.from({ length: index === 10 ? 1 : 200 }, () => ({ ...evidence }))
+  }));
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownEvents
+  });
+
+  assert.equal(result.eventDependencyAnalysis.evidenceAnchorCount, 2001);
+  assert.equal(result.eventDependencyAnalysis.omittedEvidenceAnchorCount, 1);
+  assert.equal(result.eventDependencyAnalysis.candidateCount, 0);
+});

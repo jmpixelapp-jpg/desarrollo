@@ -63,7 +63,7 @@ class RacingStore {
     }
     for (const id of next.relatedIdeaIds ?? []) {
       if (id === next.id || !this.ideas.has(next.projectId + ":" + id)) {
-        throw new Error("La idea enlaza una idea inexistente o se enlaza a sí misma.");
+        throw new Error("Ambas ideas deben existir en el proyecto activo.");
       }
     }
     for (const id of next.relatedEntityIds ?? []) {

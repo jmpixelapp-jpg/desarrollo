@@ -12673,3 +12673,78 @@ test("la API incorpora afirmaciones almacenadas a la evolución de atributos ent
     .map(item => item.values),[[20],[21]]);
   assert.deepEqual(trajectory.scenes.map(item => item.attributeValues[0].values),[[20],[21]]);
 });
+
+test("la API integra relaciones y decisiones persistidas en la trayectoria del personaje", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "character-arc-api", projectName: "Arcos" });
+  const text = [
+    "Escena 1",
+    "Ana habló con Bruno. La promesa quedó registrada.",
+    "Escena 2",
+    "Ana regresó al refugio."
+  ].join("\n");
+  const phrase = "Ana habló con Bruno.";
+  const start = text.indexOf(phrase);
+  for (const [id,name] of [["ana","Ana"],["bruno","Bruno"]]) {
+    await store.saveEntity({
+      projectId: "character-arc-api",
+      id,
+      kind: "character",
+      canonicalName: name,
+      normalizedName: name.toLocaleLowerCase("es"),
+      aliases: [],
+      evidence: [],
+      firstSeenAt: 1,
+      lastSeenAt: 1,
+      extractionVersion: 1
+    });
+  }
+  await store.saveRelation({
+    projectId: "character-arc-api",
+    id: "ana-bruno",
+    fromEntityId: "ana",
+    toEntityId: "bruno",
+    relationType: "alliance",
+    evidence: [{
+      documentId: "chapter",
+      revision: 0,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    }]
+  });
+  await store.saveIdea({
+    projectId: "character-arc-api",
+    id: "ana-promise-decision",
+    text: "Ana decide cumplir la promesa.",
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: "Arcos",
+    evidence: [{
+      documentId: "chapter",
+      revision: 0,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    }],
+    relatedEntityIds: ["ana"],
+    relatedIdeaIds: [],
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "incorporated", reason: "writer", changedAt: 2 }
+    ]
+  });
+  await api.openDocument({ documentId: "chapter", text, revision: 0, sequence: 0 });
+  const result = await api.analyzeLiteraryDocument("chapter");
+  const ana = result.characterNarrativeTrajectories.trajectories.find(item => item.entityId === "ana");
+  assert.ok(ana);
+  assert.equal(ana.relationships[0].relationId, "ana-bruno");
+  assert.equal(ana.relationships[0].otherCharacterName, "Bruno");
+  assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
+  assert.equal(ana.documentedDecisions[0].ideaId, "ana-promise-decision");
+  assert.equal(ana.documentedDecisions[0].status, "incorporated");
+  assert.equal(ana.writerDecisionCount, 1);
+  assert.deepEqual(ana.scenes[0].relationshipIds, ["ana-bruno"]);
+  assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, ["ana-promise-decision"]);
+});

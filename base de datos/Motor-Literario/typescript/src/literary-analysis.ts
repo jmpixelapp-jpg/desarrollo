@@ -344,6 +344,41 @@ export interface LiterarySceneEventContinuitySignal {
   readonly previousEvidence: readonly LiteraryAnalysisOccurrence[];
   readonly nextEvidence: readonly LiteraryAnalysisOccurrence[];
 }
+export type LiterarySceneEventParticipantMentionStatus =
+  | "mentioned-in-both-scenes"
+  | "mentioned-only-in-previous-scene"
+  | "mentioned-only-in-next-scene"
+  | "not-mentioned-in-either-linked-scene"
+  | "no-event-evidence-in-previous-scene"
+  | "no-event-evidence-in-next-scene"
+  | "source-truncated-in-previous-scene"
+  | "source-truncated-in-next-scene";
+export interface LiterarySceneEventParticipantMentionTransition {
+  readonly entityId: string;
+  /** null indica que el acontecimiento no tiene vínculo verificable en esa escena. */
+  readonly previousMentionedByName: boolean | null;
+  readonly nextMentionedByName: boolean | null;
+  readonly status: LiterarySceneEventParticipantMentionStatus;
+}
+export type LiterarySceneEventAssociationStatus =
+  | "evidence-in-both-scenes"
+  | "evidence-only-in-previous-scene"
+  | "evidence-only-in-next-scene"
+  | "source-truncated-in-previous-scene"
+  | "source-truncated-in-next-scene";
+export interface LiterarySceneEventAssociationTransition {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  readonly eventId: string;
+  readonly label: string;
+  readonly status: LiterarySceneEventAssociationStatus;
+  /** null indica que la ausencia de vínculo no puede determinarse por truncamiento fuente. */
+  readonly previousEvidenceRangeCount: number | null;
+  readonly nextEvidenceRangeCount: number | null;
+  /** Delta siguiente menos anterior; null si alguna de las dos cantidades es desconocida. */
+  readonly evidenceRangeCountDelta: number | null;
+  readonly participants: readonly LiterarySceneEventParticipantMentionTransition[];
+}
 export interface LiterarySceneContinuityTransition {
   readonly fromSceneIndex: number;
   readonly toSceneIndex: number;
@@ -761,6 +796,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneEventEvidenceProfiles: LiterarySceneEventEvidenceAnalysis;
   /** Firmas recurrentes de IDs de acontecimientos en ventanas de dos y tres escenas contiguas. */
   readonly sceneEventSequenceMotifs: LiterarySceneEventSequenceMotifAnalysis;
+  /** Variaciones de evidencia y menciones nominales de participantes en escenas contiguas. */
+  readonly sceneEventAssociationTransitions: readonly LiterarySceneEventAssociationTransition[];
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -1733,6 +1770,83 @@ function buildSceneRhythmTransitions(
       nextTransitionCount:next.rhythmSignals.transitions.length,
       transitionCountDelta:next.rhythmSignals.transitions.length-previous.rhythmSignals.transitions.length
     });
+  }
+  return transitions;
+}
+
+function buildSceneEventAssociationTransitions(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneEventAssociationTransition[] {
+  const transitions: LiterarySceneEventAssociationTransition[] = [];
+  for (let index=1; index<scenes.length; index++) {
+    const previous=scenes[index-1]!;
+    const next=scenes[index]!;
+    const previousEvents=new Map(previous.eventLinks.map(event=>[event.eventId,event] as const));
+    const nextEvents=new Map(next.eventLinks.map(event=>[event.eventId,event] as const));
+    const eventIds=[...new Set([...previousEvents.keys(),...nextEvents.keys()])]
+      .sort((a,b)=>a.localeCompare(b,"en"));
+
+    for(const eventId of eventIds) {
+      const previousEvent=previousEvents.get(eventId);
+      const nextEvent=nextEvents.get(eventId);
+      let status: LiterarySceneEventAssociationStatus;
+      if(previousEvent && nextEvent) status="evidence-in-both-scenes";
+      else if(previousEvent) status=next.eventLinksTruncated
+        ? "source-truncated-in-next-scene" : "evidence-only-in-previous-scene";
+      else status=previous.eventLinksTruncated
+        ? "source-truncated-in-previous-scene" : "evidence-only-in-next-scene";
+
+      const previousEvidenceRangeCount=previousEvent?.matchingEvidenceCount ??
+        (previous.eventLinksTruncated ? null : 0);
+      const nextEvidenceRangeCount=nextEvent?.matchingEvidenceCount ??
+        (next.eventLinksTruncated ? null : 0);
+      const participantIds=[...new Set([
+        ...(previousEvent?.participants.map(participant=>participant.entityId) ?? []),
+        ...(nextEvent?.participants.map(participant=>participant.entityId) ?? [])
+      ])].sort((a,b)=>a.localeCompare(b,"en"));
+      const participants=participantIds.map(entityId=>{
+        const previousParticipant=previousEvent?.participants.find(item=>item.entityId===entityId);
+        const nextParticipant=nextEvent?.participants.find(item=>item.entityId===entityId);
+        const previousMentionedByName=previousParticipant?.mentionedByName ?? null;
+        const nextMentionedByName=nextParticipant?.mentionedByName ?? null;
+        let participantStatus: LiterarySceneEventParticipantMentionStatus;
+        if(previousMentionedByName===null) {
+          participantStatus=previous.eventLinksTruncated
+            ? "source-truncated-in-previous-scene"
+            : "no-event-evidence-in-previous-scene";
+        } else if(nextMentionedByName===null) {
+          participantStatus=next.eventLinksTruncated
+            ? "source-truncated-in-next-scene"
+            : "no-event-evidence-in-next-scene";
+        } else if(previousMentionedByName && nextMentionedByName) {
+          participantStatus="mentioned-in-both-scenes";
+        } else if(previousMentionedByName) {
+          participantStatus="mentioned-only-in-previous-scene";
+        } else if(nextMentionedByName) {
+          participantStatus="mentioned-only-in-next-scene";
+        } else {
+          participantStatus="not-mentioned-in-either-linked-scene";
+        }
+        return {
+          entityId,
+          previousMentionedByName,
+          nextMentionedByName,
+          status:participantStatus
+        };
+      });
+      transitions.push({
+        fromSceneIndex:previous.sceneIndex,
+        toSceneIndex:next.sceneIndex,
+        eventId,
+        label:previousEvent?.label ?? nextEvent!.label,
+        status,
+        previousEvidenceRangeCount,
+        nextEvidenceRangeCount,
+        evidenceRangeCountDelta:previousEvidenceRangeCount===null || nextEvidenceRangeCount===null
+          ? null : nextEvidenceRangeCount-previousEvidenceRangeCount,
+        participants
+      });
+    }
   }
   return transitions;
 }
@@ -2874,6 +2988,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.knownEvents ?? [],dialogueRanges,dialogueSegments,input.documentId,input.revision
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
+  const sceneEventAssociationTransitions = buildSceneEventAssociationTransitions(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
   const sceneCadenceTransitions = buildSceneCadenceTransitions(explicitScenes);
   const sceneDialogueTransitions = buildSceneDialogueTransitions(explicitScenes);
@@ -3063,6 +3178,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     structuralMarkers,
     explicitScenes,
     sceneContinuity,
+    sceneEventAssociationTransitions,
     sceneRhythmTransitions,
     sceneCadenceTransitions,
     sceneDialogueTransitions,

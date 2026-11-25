@@ -503,7 +503,7 @@ test("una restauración abortada no notifica cambios ni invalida otras instancia
     documents: [preservedDocument],
     "personal-idea-library": []
   }, {
-    failOnRecord: (_name, value) => value?.id === "explode"
+    failOnRecord: (_name, value) => value?.id === "explode" || value?.idea?.id === "explode"
   });
   const source = attach(createFakeDatabase({
     documents: [{ ...documentRecord, text: "No debe reemplazar la versión confirmada." }],
@@ -622,17 +622,18 @@ test("mantiene compatibilidad de respaldo y restauración con ideas archivadas l
     "personal-idea-library": [legacyEntry],
     "writer-library-finalization-receipts": [legacyReceipt]
   }));
-  const destination = attach(createFakeDatabase({
+  const destinationDatabase = createFakeDatabase({
     documents: [{ ...documentRecord, text: "Estado local previo." }],
     "personal-idea-library": [],
     "writer-library-finalization-receipts": []
-  }));
+  });
+  const destination = attach(destinationDatabase);
   try {
     const backup = await source.exportDatabaseBackup();
     await destination.restoreDatabaseBackup(backup);
-    assert.deepEqual(destination.database.state.get("personal-idea-library"), [legacyEntry]);
+    assert.deepEqual(destinationDatabase.state.get("personal-idea-library"), [legacyEntry]);
     assert.deepEqual(
-      destination.database.state.get("writer-library-finalization-receipts"),
+      destinationDatabase.state.get("writer-library-finalization-receipts"),
       [legacyReceipt]
     );
   } finally {

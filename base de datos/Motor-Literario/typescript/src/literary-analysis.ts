@@ -4315,6 +4315,8 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (!Array.isArray(input.knownCharacters) || input.knownCharacters.length > 500)) ||
       (input.knownEvents !== undefined &&
         (!Array.isArray(input.knownEvents) || input.knownEvents.length > 2_000)) ||
+      (input.knownProjectEvents !== undefined &&
+        (!Array.isArray(input.knownProjectEvents) || input.knownProjectEvents.length > 2_000)) ||
       (input.knownEventLifecycles !== undefined &&
         (!Array.isArray(input.knownEventLifecycles) || input.knownEventLifecycles.length > 20_000)) ||
       (input.knownAssertions !== undefined &&
@@ -4354,6 +4356,38 @@ function validateInput(input: LiteraryAnalysisInput): number {
           typeof evidence.excerpt !== "string" ||
           (evidence.status !== undefined && evidence.status !== "stale")) {
         throw new Error("La evidencia de acontecimiento del análisis literario es inválida.");
+      }
+    }
+  }
+
+  const projectEventIds = new Set<string>();
+  for (const event of input.knownProjectEvents ?? []) {
+    if (!event || event.projectId !== input.projectId ||
+        typeof event.eventId !== "string" || !event.eventId.trim() ||
+        projectEventIds.has(event.eventId) ||
+        typeof event.label !== "string" || !event.label.trim() ||
+        !Array.isArray(event.participants) || event.participants.length > 500 ||
+        event.participants.some((participant: string) => typeof participant !== "string" || !participant.trim()) ||
+        !Array.isArray(event.evidence) || event.evidence.length > 200 ||
+        (event.timelineTrackId !== undefined &&
+          (typeof event.timelineTrackId !== "string" || !event.timelineTrackId.trim() || event.timelineTrackId.length > 256)) ||
+        (event.timeReference !== undefined &&
+          (!event.timeReference ||
+            !["calendar","story-day"].includes(event.timeReference.basis) ||
+            !["date","year","day-index"].includes(event.timeReference.precision) ||
+            typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim() ||
+            !Number.isFinite(event.timeReference.orderValue)))) {
+      throw new Error("El catálogo global de acontecimientos del análisis literario es inválido.");
+    }
+    projectEventIds.add(event.eventId);
+    for (const evidence of event.evidence) {
+      if (!evidence || typeof evidence.documentId !== "string" || !evidence.documentId.trim() ||
+          !Number.isSafeInteger(evidence.revision) || evidence.revision < 0 ||
+          !Number.isSafeInteger(evidence.start) || evidence.start < 0 ||
+          !Number.isSafeInteger(evidence.end) || evidence.end <= evidence.start ||
+          typeof evidence.excerpt !== "string" ||
+          (evidence.status !== undefined && evidence.status !== "stale")) {
+        throw new Error("La evidencia del catálogo global de acontecimientos es inválida.");
       }
     }
   }

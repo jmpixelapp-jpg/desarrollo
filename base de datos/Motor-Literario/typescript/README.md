@@ -324,6 +324,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Segmentos de escena únicamente cuando el texto incorpora un encabezado o separador explícito; no se deducen transiciones por contenido.
 - Presencia literal de personajes conocidos del proyecto en cada escena, usando nombres y alias no ambiguos con evidencias UTF-16.
 - Señales gramaticales de primera, segunda y tercera persona por escena explícita, excluyendo los tramos de diálogo reconocidos y conservando muestras UTF-16.
+- Comparación de variaciones entre escenas contiguas: cambio de clasificación, diferencias de conteos por persona y categorías modificadas, sin diagnosticar cambios de narrador.
 - Acontecimientos vinculados a escenas solo mediante evidencia del mismo documento y revisión; participantes declarados separados de las menciones literales.
 - Señales de continuidad entre escenas explícitas contiguas: personajes mencionados en ambas, solo en la anterior o solo en la siguiente; y acontecimientos con evidencia en ambas o en una sola escena.
 - Patrones de co-mención de personajes conocidos en escenas compartidas, ordenados por frecuencia y sin inferir relaciones entre ellos.

@@ -63,6 +63,12 @@ Cada escena explícita incluye `voiceSignals`, calculado sobre sus tokens y fuer
 
 Estas señales no identifican al narrador ni la focalización: pueden corresponder a narración citada, estilo indirecto u otros usos gramaticales. La exclusión del diálogo depende de los formatos que reconoce el detector y no garantiza separar todas las voces de un texto.
 
+### Variaciones de señales gramaticales entre escenas
+
+La propiedad `sceneVoiceTransitions` compara las señales `voiceSignals` de cada par de escenas explícitas contiguas. Informa la clasificación anterior y siguiente, si la clasificación cambió, la diferencia de conteos por categoría (siguiente menos anterior) y las categorías cuyo conteo varió. Los índices se corresponden con los de `explicitScenes`; no se comparan escenas no contiguas ni se inventan transiciones implícitas.
+
+Las diferencias son descriptivas y dependen del léxico de pronombres explícitos y de la detección de diálogo disponible. Un cambio de categoría no acredita cambio de narrador, focalización, persona verbal ni voz autoral; tampoco una categoría estable acredita continuidad de narrador.
+
 ## Acontecimientos y continuidad entre escenas
 
 La API anfitriona aporta acontecimientos persistidos del proyecto activo. Una escena solo recibe un vínculo cuando existe evidencia no obsoleta del mismo documento y de la revisión exacta analizada cuyo rango UTF-16 se solapa con el contenido de la escena. Cada vínculo conserva el ID y etiqueta del acontecimiento, los rangos coincidentes y sus participantes declarados. Para cada participante se informa por separado si también aparece por nombre/alias en las menciones literales de esa escena. La falta de mención no se interpreta como ausencia ni contradicción. La evidencia de otras revisiones, otros documentos o marcada como obsoleta se descarta. El catálogo admite hasta 2.000 acontecimientos, 500 participantes y 200 evidencias por acontecimiento; cada escena devuelve como máximo 100 vínculos y 20 rangos por vínculo.

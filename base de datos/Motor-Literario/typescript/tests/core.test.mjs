@@ -10270,6 +10270,46 @@ test("clasifica señales gramaticales por escena y excluye el diálogo", async (
   assert.equal(result.explicitScenes[0].voiceSignals.samples.some(sample => sample.term === "Él"),false);
 });
 
+test("compara variaciones de señales gramaticales entre escenas contiguas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "Yo recuerdo el camino. «Él conoce la salida», dijo Ana.",
+    "***",
+    "ESCENA 2",
+    "Ella caminaba hacia el río. Tú observabas desde lejos.",
+    "***",
+    "ESCENA 3",
+    "La tormenta cubrió el valle."
+  ].join("\\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-voice-transitions",documentId:"chapter",revision:6,text,baseOffset:250
+  });
+
+  assert.equal(result.sceneVoiceTransitions.length,2);
+  assert.deepEqual(result.sceneVoiceTransitions[0],{
+    fromSceneIndex:1,
+    toSceneIndex:2,
+    previousClassification:"first-person-signals",
+    nextClassification:"mixed-signals",
+    classificationChanged:true,
+    countDelta:{firstPerson:-1,secondPerson:1,thirdPerson:1},
+    changedCategories:["firstPerson","secondPerson","thirdPerson"]
+  });
+  assert.deepEqual(result.sceneVoiceTransitions[1],{
+    fromSceneIndex:2,
+    toSceneIndex:3,
+    previousClassification:"mixed-signals",
+    nextClassification:"undetermined",
+    classificationChanged:true,
+    countDelta:{firstPerson:0,secondPerson:-1,thirdPerson:-1},
+    changedCategories:["secondPerson","thirdPerson"]
+  });
+  assert.equal(result.sceneVoiceTransitions[0].fromSceneIndex+1,
+    result.sceneVoiceTransitions[0].toSceneIndex);
+  assert.equal(result.explicitScenes[0].voiceSignals.samples.some(sample => sample.term === "Él"),false);
+});
+
 test("compara señales literales entre escenas explícitas contiguas sin inferir ausencias", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

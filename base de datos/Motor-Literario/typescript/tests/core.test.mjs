@@ -10804,6 +10804,30 @@ test("describe el flujo de diálogo por párrafos sin atribuir hablantes", async
 
 });
 
+test("limita las muestras del flujo de diálogo sin truncar conteos ni transiciones", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const paragraphs = Array.from({length:45},(_,index) =>
+    index%2===0 ? `La puerta ${index} permaneció abierta.` : `«Vuelve ${index} pronto».`
+  );
+  const text = ["ESCENA 1",...paragraphs].join("\n\n");
+  const baseOffset = 8800;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow-truncation",documentId:"chapter",revision:1,text,baseOffset
+  });
+  const flow = result.explicitScenes[0].dialogueFlowSignals;
+  assert.equal(flow.paragraphCount,45);
+  assert.deepEqual(flow.classificationCounts,{narrativeOnly:23,dialogueOnly:22,mixed:0});
+  assert.equal(flow.dialogueBearingParagraphCount,22);
+  assert.equal(flow.dialogueBearingParagraphRatio,0.489);
+  assert.equal(flow.classificationChangeCount,44);
+  assert.equal(flow.classificationTransitionCounts.narrativeOnlyToDialogueOnly,22);
+  assert.equal(flow.classificationTransitionCounts.dialogueOnlyToNarrativeOnly,22);
+  assert.equal(flow.paragraphs.length,40);
+  assert.equal(flow.paragraphs[39].paragraphIndex,40);
+  assert.equal(flow.paragraphs[39].occurrence.start,baseOffset+text.indexOf(paragraphs[39]));
+  assert.equal(flow.evidenceTruncated,true);
+});
+
 test("compara las métricas de diálogo entre escenas explícitas contiguas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = "ESCENA 1\nLa tarde cayó lentamente. “Hola, Ana.”\n***\nESCENA 2\nEl viento cruzó la plaza.";

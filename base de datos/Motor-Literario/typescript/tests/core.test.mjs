@@ -10242,6 +10242,11 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
                 const key = makeKey([receipt.writerId, receipt.sourceProjectId, receipt.receiptId]);
                 if (receipts.has(key)) throw new Error("ConstraintError: receipt already exists");
                 receipts.set(key, structuredClone(receipt));
+              },
+              put(receipt) {
+                const key = makeKey([receipt.writerId, receipt.sourceProjectId, receipt.receiptId]);
+                receipts.set(key, structuredClone(receipt));
+                return {};
               }
             };
           }
@@ -10294,6 +10299,21 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
       (await store.archiveUnincorporatedIdeasSummary(projectId, writerId, projectName, 150))
         .archiveContentChecksum
     );
+
+    // Un recibo previo al checksum de contenido se migra al repetir la
+    // operación idempotente, sin transferir de nuevo la entrada.
+    const receiptKey = makeKey([writerId, projectId, "finalization-v1"]);
+    const legacyReceipt = { ...receipts.get(receiptKey) };
+    delete legacyReceipt.archiveContentChecksum;
+    receipts.set(receiptKey, legacyReceipt);
+    const migratedSummary = await store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 160
+    );
+    assert.equal(migratedSummary.alreadyFinalized, true);
+    assert.equal(migratedSummary.archiveContentChecksum, receipt.archiveContentChecksum);
+    assert.equal(receipts.get(receiptKey).archiveContentChecksum, receipt.archiveContentChecksum);
+    assert.equal(library.size, 1);
+    assert.equal(projectIdeas.length, 0);
 
     const archivedKey = makeKey([writerId, projectId, "idea-to-archive"]);
     const originalEntry = library.get(archivedKey);

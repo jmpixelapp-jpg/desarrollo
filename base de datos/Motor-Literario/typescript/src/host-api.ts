@@ -3273,10 +3273,10 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-      } else if (referenceKind === "relatedIdeaIds" && linked &&
-          !store.saveIdeaIfUnchanged && !store.updateIdeaIfUnchanged) {
-        // Los adaptadores sin CAS no pueden comprobar el destino en la misma
-        // transacción de escritura: revalidan el catálogo durable antes de guardar.
+      } else if (referenceKind === "relatedIdeaIds" && linked) {
+        // El CAS protege la versión de la idea origen, no la existencia del
+        // destino. Recarga el catálogo durable incluso con CAS para no crear
+        // una arista hacia una idea que otra instancia ya eliminó.
         const ideas = requireProjectScopedRecords(
           await store.loadIdeas(projectId), projectId, "ideas"
         );

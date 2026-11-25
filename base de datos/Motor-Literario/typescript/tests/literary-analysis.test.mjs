@@ -2617,3 +2617,42 @@ test("las decisiones mantienen desconocido el estado relacionado si el catálogo
   assert.equal(decision.relatedIdeaStateDivergenceCount, 0);
   assert.deepEqual(decision.relatedIdeaStateProfiles, []);
 });
+
+
+test("el grafo resume estados de referencias directas sin tratarlas como dependencias causales", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, status, relatedIdeaIds = []) => ({
+    projectId,
+    ideaId,
+    text: "Idea " + ideaId,
+    status,
+    relatedIdeaIds,
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status, reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
+  const graph = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nUna idea permanece.",
+    knownProjectIdeas: [
+      makeIdea("source", "IDEA", ["accepted", "rejected", "outside"]),
+      makeIdea("accepted", "incorporated"),
+      makeIdea("rejected", "discarded")
+    ],
+    knownProjectIdeasOmittedCount: 2
+  }).ideaGraph;
+  const source = graph.nodes.find(node => node.ideaId === "source");
+  assert.deepEqual(source.directReferenceStatusCounts, {
+    IDEA: 0,
+    incorporated: 1,
+    discarded: 1,
+    notInSnapshot: 1
+  });
+  assert.equal(source.directReferenceStatusAlignment, "mixed-status");
+  const accepted = graph.nodes.find(node => node.ideaId === "accepted");
+  assert.equal(accepted.directReferenceStatusAlignment, "no-references");
+});

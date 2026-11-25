@@ -790,11 +790,12 @@ export interface LiteraryIdeaGraphStatusProfile {
 export interface LiteraryIdeaGraphAnalysis {
   /** Catálogo de entrada completo del proyecto o compatibilidad con el subconjunto ligado a personajes. */
   readonly catalogScope: "project" | "character-linked-fallback";
+  /** true solo con catálogo de proyecto y sin ideas omitidas; el modo heredado nunca es exhaustivo. */
+  readonly projectCatalogComplete: boolean;
   /** Nodos del snapshot recibido; el catálogo no transferido se informa aparte. */
   readonly ideaCount: number;
   /** Distribución estructural de los nodos por estado editorial explícito. */
   readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
-  /** Ideas del catálogo global que el anfitrión no incluyó en este snapshot. */
   /** Ideas omitidas del alcance indicado por catalogScope. */
   readonly omittedIdeaCount: number;
   readonly referenceCount: number;
@@ -3250,6 +3251,7 @@ function buildLiteraryIdeaGraph(
   const orderedIdeas = [...ideas].sort((left, right) =>
     left.ideaId.localeCompare(right.ideaId, "en")
   );
+  const projectCatalogComplete = catalogScope === "project" && omittedIdeaCount === 0;
   const ideaIds = new Set(orderedIdeas.map(idea => idea.ideaId));
   const adjacency = new Map<string, string[]>();
   const incoming = new Map<string, number>();
@@ -3278,9 +3280,7 @@ function buildLiteraryIdeaGraph(
         incoming.set(targetId, (incoming.get(targetId) ?? 0) + 1);
       } else {
         notIncludedReferenceCount++;
-        if (catalogScope === "project" && omittedIdeaCount === 0) {
-          missingFromProjectReferenceCount++;
-        }
+        if (projectCatalogComplete) missingFromProjectReferenceCount++;
         outgoingExternal.set(idea.ideaId, (outgoingExternal.get(idea.ideaId) ?? 0) + 1);
       }
       if (references.length < MAX_IDEA_GRAPH_REFERENCE_SAMPLES) {
@@ -3289,9 +3289,7 @@ function buildLiteraryIdeaGraph(
           toIdeaId: targetId,
           resolution: included
             ? "included-in-snapshot"
-            : catalogScope === "project" && omittedIdeaCount === 0
-              ? "missing-from-project"
-              : "not-in-snapshot"
+            : projectCatalogComplete ? "missing-from-project" : "not-in-snapshot"
         });
       }
     }
@@ -3478,6 +3476,7 @@ function buildLiteraryIdeaGraph(
 
   return {
     catalogScope,
+    projectCatalogComplete,
     ideaCount: orderedIdeas.length,
     statusProfiles,
     omittedIdeaCount,

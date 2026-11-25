@@ -738,8 +738,20 @@ export interface LiteraryIdeaGraphCycle {
   /** Componente fuertemente conexo; cada idea puede alcanzar a las demás. */
   readonly ideaIds: readonly string[];
 }
+export interface LiteraryIdeaGraphStatusProfile {
+  readonly status: NarrativeIdea["status"];
+  readonly ideaCount: number;
+  readonly sourceIdeaCount: number;
+  readonly terminalWithinSnapshotIdeaCount: number;
+  readonly isolatedWithinSnapshotIdeaCount: number;
+  readonly incomingReferenceCount: number;
+  readonly includedOutgoingReferenceCount: number;
+  readonly notIncludedOutgoingReferenceCount: number;
+}
 export interface LiteraryIdeaGraphAnalysis {
   readonly ideaCount: number;
+  /** Distribución estructural de los nodos por estado editorial explícito. */
+  readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
   readonly omittedIdeaCount: number;
   readonly referenceCount: number;
   readonly includedReferenceCount: number;
@@ -3280,9 +3292,38 @@ function buildLiteraryIdeaGraph(
     node => node.incomingReferenceCount === 0 &&
       node.includedOutgoingReferenceCount === 0
   ).length;
+  const statusProfiles: LiteraryIdeaGraphStatusProfile[] = (
+    ["IDEA", "incorporated", "discarded"] as const
+  ).map(status => {
+    const matchingNodes = nodes.filter(node => node.status === status);
+    return {
+      status,
+      ideaCount: matchingNodes.length,
+      sourceIdeaCount: matchingNodes.filter(node =>
+        node.incomingReferenceCount === 0
+      ).length,
+      terminalWithinSnapshotIdeaCount: matchingNodes.filter(node =>
+        node.includedOutgoingReferenceCount === 0
+      ).length,
+      isolatedWithinSnapshotIdeaCount: matchingNodes.filter(node =>
+        node.incomingReferenceCount === 0 &&
+        node.includedOutgoingReferenceCount === 0
+      ).length,
+      incomingReferenceCount: matchingNodes.reduce(
+        (total, node) => total + node.incomingReferenceCount, 0
+      ),
+      includedOutgoingReferenceCount: matchingNodes.reduce(
+        (total, node) => total + node.includedOutgoingReferenceCount, 0
+      ),
+      notIncludedOutgoingReferenceCount: matchingNodes.reduce(
+        (total, node) => total + node.notIncludedOutgoingReferenceCount, 0
+      )
+    };
+  });
 
   return {
     ideaCount: orderedIdeas.length,
+    statusProfiles,
     omittedIdeaCount,
     referenceCount,
     includedReferenceCount,

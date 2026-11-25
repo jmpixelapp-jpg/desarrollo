@@ -952,6 +952,38 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   });
   const graph = result.ideaGraph;
   assert.equal(graph.ideaCount, 4);
+  assert.deepEqual(graph.statusProfiles, [
+    {
+      status: "IDEA",
+      ideaCount: 2,
+      sourceIdeaCount: 0,
+      terminalWithinSnapshotIdeaCount: 1,
+      isolatedWithinSnapshotIdeaCount: 0,
+      incomingReferenceCount: 2,
+      includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0
+    },
+    {
+      status: "incorporated",
+      ideaCount: 1,
+      sourceIdeaCount: 0,
+      terminalWithinSnapshotIdeaCount: 0,
+      isolatedWithinSnapshotIdeaCount: 0,
+      incomingReferenceCount: 1,
+      includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 1
+    },
+    {
+      status: "discarded",
+      ideaCount: 1,
+      sourceIdeaCount: 1,
+      terminalWithinSnapshotIdeaCount: 0,
+      isolatedWithinSnapshotIdeaCount: 0,
+      incomingReferenceCount: 0,
+      includedOutgoingReferenceCount: 1,
+      notIncludedOutgoingReferenceCount: 0
+    }
+  ]);
   assert.equal(graph.omittedIdeaCount, 3);
   assert.equal(graph.referenceCount, 4);
   assert.equal(graph.includedReferenceCount, 3);

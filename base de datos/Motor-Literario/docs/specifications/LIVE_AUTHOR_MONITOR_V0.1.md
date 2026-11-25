@@ -2,7 +2,7 @@
 
 - **Estado:** núcleo, refresco temporal, panel DOM, tablero multi-documento, selección de pestaña activa, enlace tipado del stream y adaptador nativo para textarea disponibles. Los editores con historial propio pueden requerir un adaptador específico.
 - **Runtime:** TypeScript/JavaScript puro; sin dependencias externas ni servicios remotos.
-- **Ubicación:** **typescript/src/live-author-monitor.ts**, **live-author-monitor-panel.ts**, **live-author-monitor-workspace.ts**, **live-author-monitor-editor-integration.ts** y **live-author-monitor-change-binding.ts**.
+- **Ubicación:** **typescript/src/live-author-monitor.ts**, **live-author-monitor-panel.ts**, **live-author-monitor-workspace.ts**, **live-author-monitor-editor-integration.ts**, **live-author-monitor-change-binding.ts** y **live-author-monitor-textarea-source.ts**.
 - **Alcance:** métricas por sesión y documento, eventos de admisión/commit, pausas, ritmo estimado, resincronización y suscripciones.
 
 ## 1. Responsabilidad y límites
@@ -251,7 +251,7 @@ Reglas del adaptador:
 - Comprueba que el texto visible coincida con el snapshot autoritativo al iniciarse y al resincronizarse.
 - Usa `selectionStart`, `selectionEnd`, longitud anterior y `inputType`; no mantiene una segunda copia del manuscrito.
 - Admite inserción, pegado, reemplazo de selección y borrado hacia atrás/adelante. Los offsets y las longitudes son unidades UTF-16, incluidos los pares sustitutos.
-- No inventa rangos si falta `beforeinput`, cambia el valor por código sin una operación equivalente o no puede determinar la dirección de borrado: suspende el stream y notifica `onError`.
+- No inventa rangos si falta `beforeinput`, el `inputType` está vacío/no es una inserción o eliminación, cambia el valor por código sin una operación equivalente o no puede determinar la dirección de borrado: suspende el stream y notifica `onError`.
 - `historyUndo` y `historyRedo` requieren el contrato de historial del editor anfitrión. Tras reconciliar el contenido visible con un snapshot del motor, llamar a `source.resynchronize(snapshot)`.
 - El enlace retiene en FIFO cualquier delta rechazado o cuyo envío arroje un error; mientras exista backlog, no envía eventos posteriores.
 - `subscribeRetrySignal` permite enlazar los eventos de métricas del anfitrión. Cada commit/admisión genera una señal que intenta vaciar el backlog; si el motor continúa lleno, el delta permanece retenido para la próxima señal.

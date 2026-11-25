@@ -3111,6 +3111,17 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
+      } else if (referenceKind === "relatedIdeaIds" && linked) {
+        // Las ideas también pueden ser eliminadas por otra instancia. Validar
+        // un alta contra el snapshot caliente permitiría crear un vínculo colgante.
+        const ideas = requireProjectScopedRecords(
+          await store.loadIdeas(projectId), projectId, "ideas"
+        );
+        this.narrativeIdeas.clear();
+        for (const item of ideas) this.narrativeIdeas.set(item.id, item);
+        this.ideasLoaded = true;
+        this.ideaEvidenceIndex = undefined;
+        this.ideaLineIndex = undefined;
       }
 
       const idea = this.narrativeIdeas.get(ideaId);

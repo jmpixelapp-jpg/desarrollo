@@ -1590,6 +1590,7 @@ export class HostEngineApi {
     const projectIdeas = projectIdeaCatalogAvailable
       ? await this.getNarrativeIdeas()
       : [];
+    // Mantiene el mismo desempate Unicode que el analizador antes de aplicar el límite de 2.000.
     const orderedProjectIdeas = [...projectIdeas].sort((left,right) => {
       const localizedOrder = left.id.localeCompare(right.id,"en");
       return localizedOrder !== 0

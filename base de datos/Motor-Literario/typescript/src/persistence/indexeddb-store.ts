@@ -326,6 +326,26 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
   }
 }
 
+function validateNarrativeIdeaWriteRecord(idea: NarrativeIdea, label: string): void {
+  validateNarrativeIdeaRecord(idea, label);
+  if (idea.relatedIdeaIds?.includes(idea.id)) {
+    throw new Error("Una idea no puede relacionarse consigo misma.");
+  }
+  const history = idea.statusHistory;
+  if (!history || history.length === 0) return;
+  if (history[history.length - 1]!.status !== idea.status) {
+    throw new Error("El historial de estados no coincide con la idea que se va a guardar.");
+  }
+  let previousChangedAt: number | undefined;
+  for (const change of history) {
+    if (change.changedAt === undefined) continue;
+    if (previousChangedAt !== undefined && change.changedAt < previousChangedAt) {
+      throw new Error("Las marcas temporales de nuevas decisiones no pueden retroceder.");
+    }
+    previousChangedAt = change.changedAt;
+  }
+}
+
 function validateNarrativeAssertionRecord(
   assertion: NarrativeAssertion,
   label: string
@@ -5072,14 +5092,14 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   async saveIdea(idea: NarrativeIdea): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea);
     this.publishNarrativeChange(idea.projectId);
   }
 
   async saveIdeaIfUnchanged(idea: NarrativeIdea, expectedCurrent?: NarrativeIdea): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
     if (expectedCurrent !== undefined) validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
@@ -5095,7 +5115,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     idea: NarrativeIdea,
     expectedCurrent: NarrativeIdea
   ): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
     validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);

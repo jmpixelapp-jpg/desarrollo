@@ -1569,9 +1569,9 @@ export class SqliteProjectStore {
       : "";
     const rows = this.database.prepare(
       "SELECT value_json FROM " + TABLE +
-      " WHERE collection = ? AND writer_id = ? AND sort_key > ? " +
+      " WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
       "ORDER BY sort_key LIMIT ?"
-    ).all("personal-idea-library", writerId, afterSortKey, limit + 1);
+    ).all(writerId, afterSortKey, limit + 1);
     const hasMore = rows.length > limit;
     const selected = hasMore ? rows.slice(0, limit) : rows;
     const items = selected.map(row => JSON.parse(row.value_json));

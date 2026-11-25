@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -5,7 +6,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
+import { HostEngineApi, MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
 import { SqliteProjectStore } from "../bridge/sqlite-project-store.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -230,6 +231,65 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     });
     assert.equal(receipt.sourceProjectId, "idea-project");
     assert.equal(receipt.writerId, "writer-private");
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("la finalización compacta devuelve un recibo resumido y permite leer las ideas por páginas", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-compact-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId: "compact-finalization-project",
+      projectName: "Libro compacto",
+      writerId: "writer-compact"
+    });
+    await client.openDocument("compact-finalization-project", {
+      documentId: "chapter-compact",
+      text: "IDEA: Una ciudad conserva la memoria de sus habitantes.",
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject("compact-finalization-project");
+
+    const summary = await client.request("project.call", {
+      projectId: "compact-finalization-project",
+      method: "finalizeProjectToIdeaLibrary",
+      args: []
+    });
+    assert.equal(summary.writerId, "writer-compact");
+    assert.equal(summary.sourceProjectId, "compact-finalization-project");
+    assert.equal(summary.sourceProjectName, "Libro compacto");
+    assert.equal(summary.archivedCount, 1);
+    assert.equal(summary.alreadyFinalized, false);
+    assert.equal(typeof summary.archiveChecksum, "string");
+    assert.equal(Array.isArray(summary), false);
+    assert.equal(Object.hasOwn(summary, "items"), false);
+
+    const page = await client.request("project.call", {
+      projectId: "compact-finalization-project",
+      method: "getPersonalIdeaLibraryPage",
+      args: [null, 1]
+    });
+    assert.equal(page.items.length, 1);
+    assert.equal(page.items[0].idea.text, "Una ciudad conserva la memoria de sus habitantes.");
+    assert.equal(page.nextCursor, null);
+
+    const retry = await client.request("project.call", {
+      projectId: "compact-finalization-project",
+      method: "finalizeProjectToIdeaLibrary",
+      args: []
+    });
+    assert.equal(retry.alreadyFinalized, true);
+    assert.deepEqual({ ...retry, alreadyFinalized: false }, summary);
 
     const exited = waitForExit(child);
     await client.shutdown();
@@ -920,3 +980,375 @@ test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin m
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-sqlite-library-page-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const writerId = "writer-sqlite-page";
+  const projectId = "book-sqlite-page";
+  const database = new DatabaseSync(databasePath);
+  const entry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro SQLite",
+    category: "Libro SQLite",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro SQLite",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  try {
+    // Simula una base anterior a la columna sort_key.
+    database.exec(
+      "CREATE TABLE bridge_records (" +
+      "collection TEXT NOT NULL, record_key TEXT NOT NULL, project_id TEXT, " +
+      "writer_id TEXT, document_id TEXT, sequence INTEGER, value_json TEXT NOT NULL, " +
+      "PRIMARY KEY (collection, record_key)) WITHOUT ROWID"
+    );
+    database.exec("CREATE INDEX bridge_records_writer ON bridge_records(collection, writer_id)");
+    const insert = database.prepare(
+      "INSERT INTO bridge_records(collection, record_key, project_id, writer_id, value_json) VALUES(?, ?, ?, ?, ?)"
+    );
+    for (const id of ["idea-c", "idea-a", "idea-b"]) {
+      const value = entry(id);
+      insert.run(
+        "personal-idea-library",
+        JSON.stringify([writerId, projectId, id]),
+        null,
+        writerId,
+        JSON.stringify(value)
+      );
+    }
+
+    const store = new SqliteProjectStore(database, databasePath);
+    const first = store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
+    assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-b" });
+
+    const second = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
+    assert.equal(second.nextCursor, null);
+    assert.equal(
+      store.loadPersonalIdea(writerId, projectId, "idea-b").idea.id,
+      "idea-b"
+    );
+    assert.deepEqual(
+      store.loadPersonalIdeasByKeys(writerId, [
+        { sourceProjectId: projectId, ideaId: "idea-a" },
+        { sourceProjectId: projectId, ideaId: "missing-idea" },
+        { sourceProjectId: projectId, ideaId: "idea-c" }
+      ]).map(item => item.idea.id),
+      ["idea-a", "idea-c"]
+    );
+
+    const schema = database.prepare("PRAGMA table_info(bridge_records)").all();
+    assert.ok(schema.some(column => column.name === "sort_key"));
+    const plan = database.prepare(
+      "EXPLAIN QUERY PLAN SELECT value_json FROM bridge_records " +
+      "WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
+      "ORDER BY sort_key LIMIT ?"
+    ).all(writerId, "", 3);
+    assert.ok(
+      plan.some(row => row.detail.includes("bridge_records_personal_library_page")),
+      "la consulta keyset debe usar el índice parcial de biblioteca"
+    );
+    store.close();
+  } finally {
+    try { database.close(); } catch { /* El almacenamiento puede haber cerrado la conexión. */ }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+
+test("SQLite guarda cada cambio de acontecimiento junto con su historial append-only", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-event-lifecycle-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "sqlite-event-history-project";
+  const store = await SqliteProjectStore.open(databasePath);
+  const original = {
+    projectId,
+    id: "event-guard-arrives",
+    label: "La guardia llega a la puerta",
+    participants: [],
+    evidence: []
+  };
+  const api = new HostEngineApi({ store });
+  try {
+    store.saveEvent(original);
+    api.initializeProject({
+      projectId,
+      projectName: "Libro de acontecimientos",
+      writerId: "writer-event-history"
+    });
+
+    const loaded = await api.getNarrativeEvents();
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].label, original.label);
+
+    const firstUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia abre la puerta",
+      changedBy: "writer-event-history",
+      changeReason: "El escritor ajustó el acontecimiento",
+      changedAt: 100
+    });
+    assert.equal(firstUpdate.label, "La guardia abre la puerta");
+
+    const firstHistory = await api.getEventLifecycleHistory(original.id);
+    assert.equal(firstHistory.length, 1);
+    assert.equal(firstHistory[0].revision, 1);
+    assert.equal(firstHistory[0].previousLabel, original.label);
+    assert.equal(firstHistory[0].newLabel, firstUpdate.label);
+    assert.equal(firstHistory[0].changedBy, "writer-event-history");
+
+    const secondUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia protege la entrada",
+      changedBy: "writer-event-history",
+      changedAt: 200
+    });
+    const completeHistory = await store.loadProjectEventLifecycles(projectId);
+    assert.deepEqual(completeHistory.map(item => item.revision), [1, 2]);
+    assert.equal(completeHistory[1].previousLabel, firstUpdate.label);
+    assert.equal(completeHistory[1].newLabel, secondUpdate.label);
+
+    const invalidEvent = { ...secondUpdate, label: "Una versión que no debe publicarse" };
+    const invalidLifecycle = {
+      projectId,
+      id: original.id + ":v3",
+      eventId: original.id,
+      revision: 3,
+      previousLabel: secondUpdate.label,
+      newLabel: invalidEvent.label,
+      previousParticipants: [],
+      newParticipants: [],
+      changedBy: "writer-event-history",
+      changedAt: 150
+    };
+    assert.throws(
+      () => store.saveEventAndAppendLifecycleIfUnchanged(
+        invalidEvent, secondUpdate, invalidLifecycle
+      ),
+      /no continúa la última revisión durable/
+    );
+
+    const persisted = (await store.loadEvents(projectId))[0];
+    const afterRejectedWrite = await store.loadEventLifecycles(projectId, original.id);
+    assert.equal(persisted.label, secondUpdate.label);
+    assert.equal(afterRejectedWrite.length, 2);
+    assert.deepEqual(afterRejectedWrite.map(item => item.revision), [1, 2]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+
+test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtrar a otros escritores", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-writer-library-sync-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let first;
+  let second;
+  try {
+    first = startBridge(databasePath);
+    second = startBridge(databasePath);
+    await Promise.all([first.client.hello(), second.client.hello()]);
+
+    await first.client.openProject({
+      projectId: "writer-sync-source",
+      projectName: "Libro de origen",
+      writerId: "writer-shared"
+    });
+    await first.client.openProject({
+      projectId: "writer-sync-sibling",
+      projectName: "Otro libro del mismo escritor",
+      writerId: "writer-shared"
+    });
+    await first.client.openProject({
+      projectId: "writer-sync-private",
+      projectName: "Libro de otro escritor",
+      writerId: "writer-private"
+    });
+    await second.client.openProject({
+      projectId: "writer-sync-peer",
+      projectName: "Libro abierto en otro proceso",
+      writerId: "writer-shared"
+    });
+    await second.client.openProject({
+      projectId: "writer-sync-other",
+      projectName: "Otro escritor en otro proceso",
+      writerId: "writer-other"
+    });
+
+    const waitForProjects = (client, expectedCount) => new Promise((resolveNotice, rejectNotice) => {
+      const received = [];
+      const timer = setTimeout(() => {
+        unsubscribe();
+        rejectNotice(new Error("No llegaron todas las notificaciones de biblioteca esperadas: " +
+          received.map(item => item.projectId).join(", ")));
+      }, 15_000);
+      const unsubscribe = client.onNotification("engine.personalIdeaLibraryChanged", params => {
+        received.push(params);
+        if (received.length >= expectedCount) {
+          clearTimeout(timer);
+          unsubscribe();
+          resolveNotice(received);
+        }
+      });
+    });
+
+    const firstNotices = waitForProjects(first.client, 2);
+    const secondNotices = waitForProjects(second.client, 1);
+
+    await first.client.openDocument("writer-sync-source", {
+      documentId: "chapter-ideas",
+      text: "IDEA: La campana debe sonar antes del amanecer.",
+      revision: 0,
+      sequence: 0
+    });
+    await first.client.flushProject("writer-sync-source");
+
+    const archived = await first.client.request("project.call", {
+      projectId: "writer-sync-source",
+      method: "archiveUnincorporatedIdeas",
+      args: []
+    });
+    assert.equal(archived.length, 1);
+    assert.equal(archived[0].writerId, "writer-shared");
+
+    const [sameProcess, otherProcess] = await Promise.all([firstNotices, secondNotices]);
+    assert.deepEqual(
+      sameProcess.map(item => item.projectId).sort(),
+      ["writer-sync-sibling", "writer-sync-source"]
+    );
+    assert.deepEqual(otherProcess.map(item => item.projectId), ["writer-sync-peer"]);
+    assert.ok([...sameProcess, ...otherProcess].every(item => item.writerId === "writer-shared"));
+    assert.ok(![...sameProcess, ...otherProcess].some(item =>
+      item.projectId === "writer-sync-private" || item.projectId === "writer-sync-other"
+    ));
+
+    const peerPage = await second.client.getPersonalIdeaLibraryPage(
+      "writer-sync-peer", null, 50
+    );
+    assert.equal(peerPage.items.length, 1);
+    assert.equal(peerPage.items[0].idea.text, "La campana debe sonar antes del amanecer.");
+
+    const privatePage = await second.client.getPersonalIdeaLibraryPage(
+      "writer-sync-other", null, 50
+    );
+    assert.equal(privatePage.items.length, 0);
+  } finally {
+    if (first) {
+      try {
+        const exited = waitForExit(first.child);
+        await first.client.shutdown();
+        await exited;
+      } catch {
+        first.child.kill();
+      }
+    }
+    if (second) {
+      try {
+        const exited = waitForExit(second.child);
+        await second.client.shutdown();
+        await exited;
+      } catch {
+        second.child.kill();
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite finaliza libros grandes por páginas sin materializar todas las ideas ni entidades", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-paged-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const store = await SqliteProjectStore.open(databasePath);
+  const projectId = "paged-library-project";
+  const writerId = "writer-paged-library";
+  const sourceProjectName = "Libro paginado";
+  const total = 300;
+
+  try {
+    for (let index = 0; index < total; index++) {
+      const suffix = String(index).padStart(4, "0");
+      const entityId = "entity:" + suffix;
+      const canonicalName = "Personaje " + suffix;
+      store.saveEntity({
+        id: entityId,
+        projectId,
+        kind: "character",
+        canonicalName,
+        normalizedName: canonicalName.toLocaleLowerCase("es"),
+        aliases: [],
+        evidence: [],
+        firstSeenAt: index,
+        lastSeenAt: index,
+        extractionVersion: 1
+      });
+      store.saveIdea({
+        id: "idea:" + suffix,
+        projectId,
+        text: "Idea narrativa " + suffix,
+        status: "IDEA",
+        originDocumentId: "chapter-paged",
+        sourceProjectName,
+        evidence: [],
+        relatedEntityIds: [entityId],
+        relatedIdeaIds: [],
+        statusHistory: [{ status: "IDEA", changedAt: index, reason: "initial" }]
+      });
+    }
+
+    const aggregateIdeaLoader = store.loadIdeas;
+    const aggregateEntityLoader = store.loadEntities;
+    store.loadIdeas = () => { throw new Error("No debe materializar la colección completa de ideas."); };
+    store.loadEntities = () => { throw new Error("No debe materializar la colección completa de entidades."); };
+
+    let summary;
+    try {
+      summary = store.archiveUnincorporatedIdeasSummary(projectId, writerId, sourceProjectName, 500);
+    } finally {
+      store.loadIdeas = aggregateIdeaLoader;
+      store.loadEntities = aggregateEntityLoader;
+    }
+
+    assert.equal(summary.archivedCount, total);
+    assert.equal(summary.alreadyFinalized, false);
+    assert.equal(typeof summary.archiveChecksum, "string");
+    assert.equal(Array.isArray(summary), false);
+    assert.equal(store.loadIdeas(projectId).length, 0);
+
+    const receipt = store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.equal(receipt.archivedIdeaIds.length, total);
+    assert.equal(receipt.archivedIdeaIds[0], "idea:0000");
+    assert.equal(receipt.archivedIdeaIds[total - 1], "idea:0299");
+    assert.equal(store.loadPersonalIdeas(writerId).length, total);
+    const firstPage = store.loadPersonalIdeasPage(writerId, null, 120);
+    assert.equal(firstPage.items.length, 120);
+    assert.ok(firstPage.nextCursor);
+    const secondPage = store.loadPersonalIdeasPage(writerId, firstPage.nextCursor, 120);
+    assert.equal(secondPage.items.length, 120);
+    const thirdPage = store.loadPersonalIdeasPage(writerId, secondPage.nextCursor, 120);
+    assert.equal(thirdPage.items.length, 60);
+    assert.equal(thirdPage.nextCursor, null);
+    const retry = store.archiveUnincorporatedIdeasSummary(projectId, writerId, sourceProjectName, 600);
+    assert.equal(retry.alreadyFinalized, true);
+    assert.equal(retry.archivedCount, summary.archivedCount);
+    assert.equal(retry.archiveChecksum, summary.archiveChecksum);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+

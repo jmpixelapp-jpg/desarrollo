@@ -374,6 +374,37 @@ function remapPersonalIdeaEntriesForEntityMerge(
     archivedIdeaIds.add(identity);
   }
 
+  // Reúne la cadena de ancestros desde todas las instantáneas del mismo
+  // libro antes de actualizar entradas legacy que no conservan su propio contexto.
+  // Así, un ID antiguo presente únicamente en otra entrada contextual tampoco
+  // queda huérfano después de consolidar la identidad canónica.
+  let expandedHistory = true;
+  while (expandedHistory) {
+    expandedHistory = false;
+    for (const entry of typedEntries) {
+      if (!entry.context) continue;
+      validatePersonalIdeaLibraryContext(
+        entry.context, projectId, entry.sourceProjectName, "contexto archivado"
+      );
+      for (const snapshot of entry.context.relatedEntities) {
+        const belongsToMergedIdentity = absorbedIdentityIds.has(snapshot.id) ||
+          (snapshot.mergedFromIds ?? []).some(id => absorbedIdentityIds.has(id));
+        if (!belongsToMergedIdentity) continue;
+        if (!absorbedIdentityIds.has(snapshot.id)) {
+          absorbedIdentityIds.add(snapshot.id);
+          expandedHistory = true;
+        }
+        for (const historicalId of snapshot.mergedFromIds ?? []) {
+          if (!absorbedIdentityIds.has(historicalId)) {
+            absorbedIdentityIds.add(historicalId);
+            expandedHistory = true;
+          }
+        }
+      }
+    }
+  }
+  for (const historicalId of absorbedIdentityIds) mergedIdentityIds.add(historicalId);
+
   return typedEntries.map(entry => {
     if (!entry.context) {
       // Las entradas antiguas carecen de instantáneas. No inventamos contexto,

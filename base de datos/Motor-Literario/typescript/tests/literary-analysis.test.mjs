@@ -1463,7 +1463,7 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
           { status: "discarded", reason: "writer", changedAt: 10 },
           { status: "incorporated", reason: "writer", changedAt: 20 }
         ],
-        writerDecisionCount: 6,
+        writerDecisionCount: 5,
         omittedStatusHistoryCount: 3
       }]
     }),

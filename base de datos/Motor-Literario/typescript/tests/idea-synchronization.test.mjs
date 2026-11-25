@@ -390,6 +390,14 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   assert.deepEqual(persisted.relatedIdeaIds, concurrentIds);
   assert.equal(persisted.relatedIdeaIds.includes("idea-local"), false);
   assert.equal(store.writes, 3);
+
+  // El tercer conflicto también debe dejar invalidada la caché local:
+  // la siguiente lectura tiene que reflejar las tres escrituras externas.
+  const reloaded = await api.getNarrativeIdeas();
+  const reloadedSource = reloaded.find(item => item.id === "idea-source");
+  assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.writes, 3);
   api.dispose();
 });
 

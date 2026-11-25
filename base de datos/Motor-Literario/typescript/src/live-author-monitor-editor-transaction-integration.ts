@@ -36,7 +36,10 @@ export interface LiveAuthorMonitorEditorTransactionIntegration {
   retryPending(): void;
   /** Resincroniza editor, motor y monitor desde un snapshot durable compartido. */
   resynchronize(): LiveAuthorMonitorEditorTransactionSourceState;
-  /** Retira las suscripciones sin cerrar el documento ni disponer HostEngineApi. */
+  /**
+   * Retira las suscripciones sin cerrar el documento ni disponer HostEngineApi.
+   * Lanza un error y mantiene la integración activa mientras haya deltas sin admitir.
+   */
   dispose(): void;
 }
 

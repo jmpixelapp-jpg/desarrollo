@@ -1512,22 +1512,27 @@ export class HostEngineApi {
     const narrativeEvents = this.store.loadEvents
       ? await this.getNarrativeEvents()
       : [];
-    const knownProjectEvents = narrativeEvents.map(event => ({
-      projectId:event.projectId,
-      eventId:event.id,
-      label:event.label,
-      participants:event.participants,
-      ...(event.timelineTrackId ? {timelineTrackId:event.timelineTrackId} : {}),
-      ...(event.timeReference ? {timeReference:event.timeReference} : {}),
-      evidence:event.evidence.map(evidence => ({
-        documentId:evidence.documentId,
-        revision:evidence.revision,
-        start:evidence.start,
-        end:evidence.end,
-        excerpt:evidence.excerpt,
-        ...(evidence.status ? {status:evidence.status} : {})
-      }))
-    }));
+    const knownProjectEvents = narrativeEvents.map(event => {
+      const activeEvidence=event.evidence.filter(evidence => evidence.status !== "stale");
+      const staleEvidenceCount=event.evidence.length-activeEvidence.length;
+      return {
+        projectId:event.projectId,
+        eventId:event.id,
+        label:event.label,
+        participants:event.participants,
+        ...(event.timelineTrackId ? {timelineTrackId:event.timelineTrackId} : {}),
+        ...(event.timeReference ? {timeReference:event.timeReference} : {}),
+        evidenceCount:activeEvidence.length,
+        staleEvidenceCount,
+        evidence:activeEvidence.slice(0,200).map(evidence => ({
+          documentId:evidence.documentId,
+          revision:evidence.revision,
+          start:evidence.start,
+          end:evidence.end,
+          excerpt:evidence.excerpt
+        }))
+      };
+    });
     const knownEvents = narrativeEvents
       .map(event => ({
         eventId:event.id,

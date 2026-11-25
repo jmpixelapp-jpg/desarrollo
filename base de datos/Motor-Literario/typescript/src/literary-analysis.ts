@@ -3809,7 +3809,12 @@ function buildLiteraryIdeaGraph(
   };
 
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => {
-    const directReferenceStatusCounts = {
+    const directReferenceStatusCounts: {
+      IDEA: number;
+      incorporated: number;
+      discarded: number;
+      notInSnapshot: number;
+    } = {
       IDEA: 0,
       incorporated: 0,
       discarded: 0,
@@ -4609,6 +4614,7 @@ function buildCharacterNarrativeTrajectories(
   knownIdeas: readonly LiteraryAnalysisKnownIdea[],
   omittedRelationCount: number,
   omittedIdeaCount: number,
+  omittedProjectIdeaCount: number,
   omittedProjectEventCount: number
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
@@ -4766,16 +4772,15 @@ function buildCharacterNarrativeTrajectories(
             : omittedProjectEventCount > 0
               ? "unknown-due-to-incomplete-catalog" as const
               : "no-later-event-in-snapshot" as const;
-      const relatedIdeaStateProfiles = idea.relatedIdeaIds
-        .map(ideaId => {
+      const relatedIdeaStateProfiles: LiteraryCharacterRelatedIdeaState[] = idea.relatedIdeaIds
+        .flatMap(ideaId => {
           const relatedIdea = knownIdeaById.get(ideaId);
-          return relatedIdea ? {
+          return relatedIdea ? [{
             ideaId,
             status:relatedIdea.status,
             resolution:"included-in-analysis-snapshot" as const
-          } : null;
+          }] : [];
         })
-        .filter((profile): profile is LiteraryCharacterRelatedIdeaState => profile !== null)
         .sort((left,right) => left.ideaId.localeCompare(right.ideaId,"en"));
       const relatedIdeaStatuses = new Set(relatedIdeaStateProfiles.map(profile => profile.status));
       const relatedIdeaStateDivergenceCount = Math.max(0,relatedIdeaStatuses.size-1);
@@ -4785,7 +4790,7 @@ function buildCharacterNarrativeTrajectories(
         : relatedIdeaStateDivergenceCount > 0
           ? "mixed-status" as const
           : hasUnresolvedRelatedIdeas
-            ? omittedIdeaCount > 0
+            ? omittedIdeaCount > 0 || omittedProjectIdeaCount > 0
               ? "unknown-due-to-incomplete-snapshot" as const
               : "targets-not-in-snapshot" as const
             : "same-status" as const;
@@ -4874,7 +4879,10 @@ function buildCharacterNarrativeTrajectories(
       decisionsByCharacter.set(entityId,decisions);
     }
   }
-  const relationsByCharacter = new Map<string,LiteraryCharacterCausalRelation[]>();
+  const relationsByCharacter = new Map<
+    string,
+    Omit<LiteraryCharacterCausalRelation, "temporalConsistency">[]
+  >();
   for (const candidate of dependencies.candidates) {
     const firstParticipants = new Set(candidate.firstEventParticipantIds);
     const secondParticipants = new Set(candidate.secondEventParticipantIds);
@@ -5201,7 +5209,8 @@ function buildCharacterMentionDistributions(
 function findExplicitEventDependencyConnector(
   textBetweenEvents: string
 ): { readonly connector: string; readonly index: number; readonly direction: LiteraryEventDependencyCandidate["direction"] } | undefined {
-  const expression = /\b(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)\b/giu;
+  // \b relies on ASCII \w boundaries and fails after accented Spanish letters.
+  const expression = /(?<![\p{L}\p{N}_])(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)(?![\p{L}\p{N}_])/giu;
   const matches = [...textBetweenEvents.matchAll(expression)];
   if (matches.length === 0) return undefined;
   const match = matches[0]!;
@@ -6367,7 +6376,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
   for (const event of input.knownProjectEvents ?? []) {
     if (!event || event.projectId !== input.projectId ||
         typeof event.eventId !== "string" || !event.eventId.trim() ||
-        projectEventIds.has(event.eventId) ||
         typeof event.label !== "string" || !event.label.trim() ||
         !Array.isArray(event.participants) || event.participants.length > 500 ||
         event.participants.some((participant: string) => typeof participant !== "string" || !participant.trim()) ||
@@ -6385,8 +6393,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
           (!event.timeReference ||
             !["calendar","story-day"].includes(event.timeReference.basis) ||
             !["date","year","day-index"].includes(event.timeReference.precision) ||
-            typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim() ||
-            !Number.isFinite(event.timeReference.orderValue)))) {
+            typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim()))) {
       throw new Error("El catálogo global de acontecimientos del análisis literario es inválido.");
     }
     projectEventIds.add(event.eventId);
@@ -6611,7 +6618,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
     input.documentId,input.revision,input.knownRelations ?? [],input.knownIdeas ?? [],
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0,
-    input.knownProjectEventsOmittedCount ?? 0
+    input.knownProjectIdeasOmittedCount ?? 0,input.knownProjectEventsOmittedCount ?? 0
   );
   const knownIdeaTextById = new Map(
     (input.knownIdeas ?? []).map(idea => [idea.ideaId, idea.text] as const)

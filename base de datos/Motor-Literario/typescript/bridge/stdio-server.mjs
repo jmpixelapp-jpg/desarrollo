@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { SqliteProjectStore } from "./sqlite-project-store.mjs";
 
@@ -358,7 +357,7 @@ async function main() {
   }
 
   const moduleUrl = new URL("../dist/motor-literario.js", import.meta.url);
-  const motorModule = await import(pathToFileURL(resolve(moduleUrl.pathname)).href);
+  const motorModule = await import(moduleUrl.href);
   globalThis.__motorLiterarioModule = motorModule;
   store = await SqliteProjectStore.open(resolve(databasePath));
 

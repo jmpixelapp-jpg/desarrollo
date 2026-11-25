@@ -10518,6 +10518,60 @@ test("no inventa escenas cuando el fragmento no contiene marcadores explícitos"
 });
 
 
+test("separa el conteo completo de menciones de las muestras limitadas por escena", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const aliases = [
+    "La viajera","La exploradora","La guardiana","La cartógrafa",
+    "La forastera","La testigo","La mensajera","La astrónoma",
+    "La médica","La comandante","La navegante"
+  ];
+  const firstSceneNames = [...Array.from({length:25},() => "Ana"),...aliases];
+  const text = [
+    "ESCENA 1",firstSceneNames.join(". ")+".",
+    "***",
+    "ESCENA 2","Ana. La viajera."
+  ].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-character-mention-counts",documentId:"chapter",revision:2,text,baseOffset:500,
+    knownCharacters:[{entityId:"ana",canonicalName:"Ana",aliases}]
+  });
+
+  const [firstScene,secondScene] = result.explicitScenes;
+  const firstMention = firstScene.characterMentions[0];
+  const secondMention = secondScene.characterMentions[0];
+  assert.equal(firstMention.mentionCount,36);
+  assert.equal(firstMention.occurrences.length,20);
+  assert.equal(firstMention.occurrencesTruncated,true);
+  assert.equal(firstMention.matchedNameCount,12);
+  assert.equal(firstMention.matchedNames.length,10);
+  assert.equal(firstMention.matchedNamesTruncated,true);
+  assert.equal(firstMention.occurrences[0].start,500+text.indexOf("Ana"));
+  assert.ok(firstMention.occurrences.every(item => item.start >= 500 && item.end > item.start));
+
+  assert.equal(secondMention.mentionCount,2);
+  assert.equal(secondMention.occurrences.length,2);
+  assert.equal(secondMention.occurrencesTruncated,false);
+  assert.equal(secondMention.matchedNameCount,2);
+  assert.equal(secondMention.matchedNamesTruncated,false);
+
+  assert.deepEqual(result.characterMentionDistributions.characters[0],{
+    entityId:"ana",
+    canonicalName:"Ana",
+    totalMentionCount:38,
+    mentionCountByScene:[
+      {sceneIndex:1,mentionCount:36},
+      {sceneIndex:2,mentionCount:2}
+    ],
+    sceneIndexes:[1,2],
+    sceneCount:2,
+    firstSceneIndex:1,
+    lastSceneIndex:2,
+    interveningSceneCount:0,
+    longestConsecutiveSceneRun:2,
+    sceneCoverageRatio:1
+  });
+});
+
 test("vincula menciones literales de personajes conocidos a escenas y aliases", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = "🌌\nESCENA 1\nLa viajera Ana habló con Luis. Ana miró la puerta.\n***\nESCENA 2\nBruno esperó en silencio.";

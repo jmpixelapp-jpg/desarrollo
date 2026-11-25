@@ -10007,7 +10007,7 @@ test("fusiona citas solapadas con una línea de diálogo para evitar doble conte
 
 test("detecta capítulos, escenas y separadores explícitos sin inferir transiciones", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
-  const prefix = "🌙 ";
+  const prefix = "🌙\n";
   const text = prefix + [
     "# CAPÍTULO I: Llegada",
     "ESCENA 1 — La estación",
@@ -10037,7 +10037,7 @@ test("detecta capítulos, escenas y separadores explícitos sin inferir transici
     result.structuralMarkers[0].occurrence.start,
     120 + prefix.length
   );
-  assert.equal(result.structuralMarkers[1].lineIndex,2);
+  assert.equal(result.structuralMarkers[1].lineIndex,3);
 });
 
 test("no inventa escenas cuando el fragmento no contiene marcadores explícitos", async () => {

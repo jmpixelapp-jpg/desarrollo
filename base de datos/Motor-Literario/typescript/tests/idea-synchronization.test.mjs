@@ -88,18 +88,37 @@ test("reconcilia adiciones y eliminaciones de vínculos de ideas tras conflictos
   await api.getNarrativeIdeas();
 
   store.onNextConflict = current => ({
-    ...current, relatedIdeaIds: [...current.relatedIdeaIds, "idea-external"]
+    ...current,
+    status: "incorporated",
+    statusHistory: [
+      ...current.statusHistory,
+      { status: "incorporated", reason: "writer", changedAt: 2 }
+    ],
+    relatedIdeaIds: [...current.relatedIdeaIds, "idea-external"]
   });
   const added = await api.setNarrativeIdeaLink("idea-source", "idea-local", true);
   assert.deepEqual(added.relatedIdeaIds, ["idea-remove", "idea-external", "idea-local"]);
   assert.equal(added.text, initial.text);
-  assert.equal(added.status, initial.status);
+  assert.equal(added.status, "incorporated");
+  assert.deepEqual(added.statusHistory.at(-1), {
+    status: "incorporated", reason: "writer", changedAt: 2
+  });
 
   store.onNextConflict = current => ({
-    ...current, relatedIdeaIds: [...current.relatedIdeaIds, "idea-concurrent"]
+    ...current,
+    status: "discarded",
+    statusHistory: [
+      ...current.statusHistory,
+      { status: "discarded", reason: "writer", changedAt: 3 }
+    ],
+    relatedIdeaIds: [...current.relatedIdeaIds, "idea-concurrent"]
   });
   const removed = await api.setNarrativeIdeaLink("idea-source", "idea-remove", false);
   assert.deepEqual(removed.relatedIdeaIds, ["idea-external", "idea-local", "idea-concurrent"]);
+  assert.equal(removed.status, "discarded");
+  assert.deepEqual(removed.statusHistory.at(-1), {
+    status: "discarded", reason: "writer", changedAt: 3
+  });
   assert.deepEqual(store.ideas.get(projectId + ":idea-source").relatedIdeaIds, removed.relatedIdeaIds);
   assert.equal(store.writes, 4);
   api.dispose();

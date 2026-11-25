@@ -38,6 +38,7 @@ export type LiveAuthorMonitorEditorTransactionErrorCode =
   | "invalid-change-range"
   | "editor-state-mismatch"
   | "editor-state-unavailable"
+  | "transaction-backlog-overflow"
   | "resync-required";
 
 export class LiveAuthorMonitorEditorTransactionSourceError extends Error {
@@ -57,6 +58,8 @@ export interface LiveAuthorMonitorEditorTransactionSourceOptions {
   readonly onError?: (error: LiveAuthorMonitorEditorTransactionSourceError) => void;
   /** Ventana acotada de IDs recientes para descartar notificaciones duplicadas. */
   readonly duplicateWindowSize?: number;
+  /** Máximo de eventos reentrantes en espera; predeterminado: 4096. */
+  readonly maxQueuedTransactions?: number;
 }
 
 export interface LiveAuthorMonitorEditorTransactionSourceState {
@@ -82,6 +85,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   private readonly provider: LiveAuthorMonitorEditorTransactionProvider;
   private readonly onError: ((error: LiveAuthorMonitorEditorTransactionSourceError) => void) | undefined;
   private readonly duplicateWindowSize: number;
+  private readonly maxQueuedTransactions: number;
   private readonly listeners = new Set<(change: EditorChange) => void>();
   private readonly dispatchQueue: EditorChange[] = [];
   private readonly pendingTransactions: LiveAuthorMonitorEditorTransaction[] = [];
@@ -126,10 +130,16 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       throw new RangeError("duplicateWindowSize debe ser un entero entre 1 y 4096.");
     }
 
+    const queueLimit = options.maxQueuedTransactions ?? 4096;
+    if (!Number.isSafeInteger(queueLimit) || queueLimit < 1 || queueLimit > 65536) {
+      throw new RangeError("maxQueuedTransactions debe ser un entero entre 1 y 65536.");
+    }
+
     this.documentId = options.documentId;
     this.provider = options.provider;
     this.onError = options.onError;
     this.duplicateWindowSize = windowSize;
+    this.maxQueuedTransactions = queueLimit;
     this.revision = snapshot.revision;
     this.sequence = snapshot.sequence;
     this.documentLength = snapshot.text.length;
@@ -237,6 +247,13 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
 
   private readonly handleTransaction = (transaction: LiveAuthorMonitorEditorTransaction): void => {
     if (this.disposed || this.needsResync) return;
+    if (this.pendingTransactions.length >= this.maxQueuedTransactions) {
+      this.fail(
+        "transaction-backlog-overflow",
+        "El proveedor produjo más transacciones reentrantes de las que admite la cola segura; se requiere resincronización."
+      );
+      return;
+    }
     this.pendingTransactions.push(transaction);
     this.drainTransactionQueue();
   };

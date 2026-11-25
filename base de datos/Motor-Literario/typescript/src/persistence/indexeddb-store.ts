@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, ProjectFinalizationSummary, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
 import { normalizeEntityName } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -3599,6 +3599,29 @@ export class IndexedDbProjectStore implements ProjectStore {
     sourceProjectName: string,
     archivedAt: number
   ): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    return this.archiveUnincorporatedIdeasInternal(
+      projectId, writerId, sourceProjectName, archivedAt, true
+    ) as Promise<readonly PersonalIdeaLibraryEntry[]>;
+  }
+
+  async archiveUnincorporatedIdeasSummary(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number
+  ): Promise<ProjectFinalizationSummary> {
+    return this.archiveUnincorporatedIdeasInternal(
+      projectId, writerId, sourceProjectName, archivedAt, false
+    ) as Promise<ProjectFinalizationSummary>;
+  }
+
+  private async archiveUnincorporatedIdeasInternal(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number,
+    collectEntries: boolean
+  ): Promise<readonly PersonalIdeaLibraryEntry[] | ProjectFinalizationSummary> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
         typeof sourceProjectName !== "string" || !sourceProjectName.trim() ||
@@ -3618,6 +3641,11 @@ export class IndexedDbProjectStore implements ProjectStore {
       const receipts = transaction.objectStore(FINALIZATION_RECEIPTS);
       const supportsReceipts = typeof receipts.get === "function" &&
         typeof receipts.add === "function";
+      if (!collectEntries && !supportsReceipts) {
+        try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+        reject(new Error("La finalización compacta requiere recibos durables."));
+        return;
+      }
       const receiptRequest = supportsReceipts
         ? receipts.get([writerId, projectId, FINALIZATION_RECEIPT_ID])
         : undefined;
@@ -3626,6 +3654,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       let didChange = false;
       let libraryVersionAdvanced = false;
       const archived: PersonalIdeaLibraryEntry[] = [];
+      const archivedIdeaIds: string[] = [];
       const identityOwners = new Map<string, string>();
       const legacyIdeaCache = new Map<string, NarrativeIdea>();
 
@@ -3876,7 +3905,8 @@ export class IndexedDbProjectStore implements ProjectStore {
                   advanceWriterLibraryVersion(transaction, writerId);
                 }
                 ideas.delete([projectId, idea.id]);
-                archived.push(entry);
+                archivedIdeaIds.push(idea.id);
+                if (collectEntries) archived.push(entry);
                 didChange = true;
                 callback();
               } catch (error) {
@@ -4106,9 +4136,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             const cursor = cursorRequest.result;
             if (!cursor) {
               if (supportsReceipts) {
-                const archivedIdeaIds = archived
-                  .map(entry => entry.idea.id)
-                  .sort((first, second) => first.localeCompare(second));
+                archivedIdeaIds.sort((first, second) => first.localeCompare(second));
                 receipts.add({
                   writerId,
                   sourceProjectId: projectId,
@@ -4198,7 +4226,19 @@ export class IndexedDbProjectStore implements ProjectStore {
             this.publishNarrativeChange(projectId);
             this.publishPersonalIdeaLibraryChange(writerId);
           }
-          resolve(archived);
+          if (collectEntries) {
+            resolve(archived);
+          } else {
+            resolve({
+              writerId,
+              sourceProjectId: projectId,
+              sourceProjectName,
+              archivedCount: existingReceipt?.archivedIdeaIds.length ?? archivedIdeaIds.length,
+              finalizedAt: existingReceipt?.finalizedAt ?? archivedAt,
+              archiveChecksum: existingReceipt?.archiveChecksum ?? checksumArchivedIdeaIds(archivedIdeaIds),
+              alreadyFinalized: existingReceipt !== undefined
+            });
+          }
         }
       };
       transaction.onerror = () => {

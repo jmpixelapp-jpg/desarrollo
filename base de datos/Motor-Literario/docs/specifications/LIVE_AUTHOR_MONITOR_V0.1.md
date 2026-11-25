@@ -135,6 +135,34 @@ El panel muestra actividad, pausa o necesidad de resincronización; duración de
 - La función de desmontaje cancela el refresco, retira la suscripción y el elemento DOM. No cierra el documento ni dispone la API anfitriona.
 - El intervalo y el planificador se pueden configurar desde el anfitrión y se pueden probar con un reloj y temporizador deterministas.
 
+## 8. Espacio de trabajo para varios documentos
+
+El panel individual observa un solo documento. Para un editor que mantiene varios capítulos abiertos, se incorpora un espacio de trabajo que concilia todas las sesiones activas y elimina tarjetas cuando una sesión se cierra:
+
+~~~ts
+import { mountLiveAuthorMonitorWorkspace } from "./motor-literario";
+
+const unmountWorkspace = mountLiveAuthorMonitorWorkspace(
+  document.querySelector("#author-monitoring")!,
+  api,
+  {
+    intervalMs: 1_000,
+    getDocumentLabel: documentId => chapterTitles.get(documentId) ?? documentId,
+    onSelectDocument: documentId => editorTabs.activate(documentId)
+  }
+);
+
+// Al cerrar el editor:
+unmountWorkspace();
+~~~
+
+- Una tarjeta por documento observado; cada una muestra estado, ritmo, caracteres insertados, pendientes, revisión durable/actual y latencia p95.
+- Las admisiones y commits actualizan la tarjeta correspondiente inmediatamente.
+- Un refresco global reconcilia la lista autoritativa: detecta aperturas nuevas y elimina las sesiones cerradas, incluso si el cierre no emite un evento de escritura.
+- La callback opcional \`onSelectDocument\` solicita al anfitrión cambiar de capítulo; el componente no abre, cierra ni altera documentos.
+- La etiqueta del documento se obtiene opcionalmente del anfitrión. El componente no consulta el texto del capítulo.
+- El desmontaje cancela el temporizador, retira la suscripción y elimina las tarjetas. No dispone \`HostEngineApi\`.
+
 ## 8. Próximo tramo
 
-Conectar el panel al editor real del anfitrión y validar escritura sostenida, varios documentos abiertos, saturación, recuperación, navegación entre capítulos y desmontaje de vistas en los runtimes objetivo.
+Conectar el panel individual y el espacio de trabajo al editor real del anfitrión; validar escritura sostenida, varios documentos abiertos, saturación, recuperación, navegación entre capítulos y desmontaje de vistas en los runtimes objetivo.

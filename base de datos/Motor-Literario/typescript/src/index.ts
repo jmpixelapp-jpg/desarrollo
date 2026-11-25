@@ -15,3 +15,4 @@ export * from "./literary-analysis";
 export * from "./bridge-client";
 export * from "./live-author-monitor";
 export * from "./live-author-monitor-panel";
+export * from "./live-author-monitor-workspace";

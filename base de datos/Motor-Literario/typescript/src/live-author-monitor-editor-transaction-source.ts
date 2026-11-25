@@ -37,6 +37,7 @@ export type LiveAuthorMonitorEditorTransactionErrorCode =
   | "revision-mismatch"
   | "invalid-change-range"
   | "editor-state-mismatch"
+  | "editor-state-unavailable"
   | "resync-required";
 
 export class LiveAuthorMonitorEditorTransactionSourceError extends Error {
@@ -260,7 +261,17 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
 
     const nextDocumentLength =
       this.documentLength + change.replacement.length - (change.end - change.start);
-    const editorSnapshot = this.provider.getSnapshot(this.documentId);
+    let editorSnapshot: DocumentSnapshot | undefined;
+    try {
+      editorSnapshot = this.provider.getSnapshot(this.documentId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.fail(
+        "editor-state-unavailable",
+        "No se pudo verificar el snapshot nativo tras la transacción: " + detail
+      );
+      return;
+    }
     if (!this.isValidSnapshot(editorSnapshot) ||
         editorSnapshot.documentId !== this.documentId ||
         editorSnapshot.sequence !== change.sequence ||
@@ -293,6 +304,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     }
 
     for (const subscriber of [...this.listeners]) {
+      if (this.disposed || this.needsResync) break;
       try {
         subscriber(normalized);
       } catch (error) {
@@ -302,7 +314,11 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   };
 
   private attachProvider(): void {
-    if (this.unsubscribeProvider) return;
+    if (this.unsubscribeProvider || this.disposed || this.needsResync || this.listeners.size === 0) return;
+
+    // Algunos editores reproducen eventos pendientes de forma síncrona al
+    // suscribirse. Guardamos primero el disposer devuelto y después comprobamos
+    // si esa reproducción provocó un fallo o un desmontaje reentrante.
     const unsubscribe = this.provider.subscribeTransactions(
       this.documentId,
       this.handleTransaction
@@ -311,6 +327,9 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       throw new TypeError("subscribeTransactions debe devolver una función de cancelación.");
     }
     this.unsubscribeProvider = unsubscribe;
+    if (this.disposed || this.needsResync || this.listeners.size === 0) {
+      this.detachProvider();
+    }
   }
 
   private detachProvider(): void {

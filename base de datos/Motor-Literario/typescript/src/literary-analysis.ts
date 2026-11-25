@@ -3565,7 +3565,7 @@ function buildLiteraryIdeaGraph(
       ideasWithActiveEvidenceCount: 0,
       ideasWithStaleEvidenceCount: 0,
       ideasWithoutActiveEvidenceCount: 0
-    }])
+    }] as const)
   );
   let sourceNodeCount = 0;
   let terminalWithinSnapshotNodeCount = 0;

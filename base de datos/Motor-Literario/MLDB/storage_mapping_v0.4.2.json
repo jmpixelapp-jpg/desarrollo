@@ -1,0 +1,1443 @@
+{
+  "format": "MLDB_STORAGE_MAPPING",
+  "mapping_version": 12,
+  "schema_version": "0.4.2",
+  "storage_model": "journal-first-key-value",
+  "runtime": {
+    "technology": "IndexedDB nativo",
+    "database_name": "motor-literario-local",
+    "database_version": 22,
+    "object_stores": [
+      {
+        "name": "project-settings",
+        "keyPath": [
+          "projectId",
+          "key"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "documents",
+        "keyPath": [
+          "projectId",
+          "documentId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "changes",
+        "keyPath": [
+          "projectId",
+          "documentId",
+          "sequence"
+        ],
+        "indexes": [
+          [
+            "by-document-sequence",
+            [
+              "projectId",
+              "documentId",
+              "sequence"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "narrative-entities",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-relations",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-events",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-ideas",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "personal-idea-library",
+        "keyPath": [
+          "writerId",
+          "sourceProjectId",
+          "idea.id"
+        ],
+        "indexes": [
+          [
+            "by-writer",
+            "writerId",
+            false
+          ],
+          [
+            "by-writer-source",
+            [
+              "writerId",
+              "sourceProjectId"
+            ],
+            false
+          ],
+          [
+            "by-source-project",
+            "sourceProjectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "writer-library-finalization-receipts",
+        "keyPath": [
+          "writerId",
+          "sourceProjectId",
+          "receiptId"
+        ],
+        "indexes": [
+          [
+            "by-writer",
+            "writerId",
+            false
+          ],
+          [
+            "by-writer-source",
+            [
+              "writerId",
+              "sourceProjectId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "narrative-assertions",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-entity",
+            [
+              "projectId",
+              "entityId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "document-diagnostics",
+        "keyPath": [
+          "projectId",
+          "documentId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "project-records",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-type",
+            [
+              "projectId",
+              "recordType"
+            ],
+            false
+          ],
+          [
+            "by-project-name",
+            [
+              "projectId",
+              "primaryName"
+            ],
+            false
+          ],
+          [
+            "by-project-label-state",
+            [
+              "projectId",
+              "label",
+              "state"
+            ],
+            false
+          ],
+          [
+            "by-project-updated",
+            [
+              "projectId",
+              "updatedAt"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "record-names",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-record",
+            [
+              "projectId",
+              "recordId"
+            ],
+            false
+          ],
+          [
+            "by-name",
+            [
+              "projectId",
+              "name"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "project-relations",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-source",
+            [
+              "projectId",
+              "sourceRecordId"
+            ],
+            false
+          ],
+          [
+            "by-target",
+            [
+              "projectId",
+              "targetRecordId"
+            ],
+            false
+          ],
+          [
+            "by-type",
+            [
+              "projectId",
+              "relationType"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "project-evidences",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-subject-record",
+            [
+              "projectId",
+              "subjectRecordId"
+            ],
+            false
+          ],
+          [
+            "by-subject-relation",
+            [
+              "projectId",
+              "subjectRelationId"
+            ],
+            false
+          ],
+          [
+            "by-document",
+            [
+              "projectId",
+              "documentId"
+            ],
+            false
+          ],
+          [
+            "by-fragment",
+            [
+              "projectId",
+              "fragmentId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "timeline-occurrences",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-event-record",
+            [
+              "projectId",
+              "eventRecordId"
+            ],
+            false
+          ],
+          [
+            "by-track-order",
+            [
+              "projectId",
+              "trackId",
+              "narrativeOrder"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "project-dictionaries",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-language-name",
+            [
+              "projectId",
+              "languageIdentifier",
+              "normalizedName"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "dictionary-entries",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-dictionary",
+            [
+              "projectId",
+              "dictionaryId"
+            ],
+            false
+          ],
+          [
+            "by-dictionary-normalized",
+            [
+              "projectId",
+              "dictionaryId",
+              "normalizedForm"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "language-profiles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-language",
+            [
+              "projectId",
+              "languageIdentifier"
+            ],
+            false
+          ],
+          [
+            "by-project-active",
+            [
+              "projectId",
+              "isActive"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "language-resource-refs",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-profile",
+            [
+              "projectId",
+              "profileId"
+            ],
+            false
+          ],
+          [
+            "by-resource-database",
+            [
+              "projectId",
+              "resourceDatabaseId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "style-profiles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-name",
+            [
+              "projectId",
+              "profileName"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "timeline-tracks",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-project-name",
+            [
+              "projectId",
+              "trackName"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "record-lifecycles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-subject",
+            [
+              "projectId",
+              "recordId"
+            ],
+            false
+          ],
+          [
+            "by-subject-revision",
+            [
+              "projectId",
+              "recordId",
+              "revision"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "relation-lifecycles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-subject",
+            [
+              "projectId",
+              "relationId"
+            ],
+            false
+          ],
+          [
+            "by-subject-revision",
+            [
+              "projectId",
+              "relationId",
+              "revision"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "manuscript-fragments",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-document-revision",
+            [
+              "projectId",
+              "documentId",
+              "revision"
+            ],
+            false
+          ],
+          [
+            "by-parent",
+            [
+              "projectId",
+              "parentFragmentId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "record-attributes",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-record-key",
+            [
+              "projectId",
+              "recordId",
+              "attributeKey"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "relation-attributes",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-relation-key",
+            [
+              "projectId",
+              "relationId",
+              "attributeKey"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "active-suggestions",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-document-revision",
+            [
+              "projectId",
+              "documentId",
+              "documentRevision"
+            ],
+            false
+          ],
+          [
+            "by-status-priority",
+            [
+              "projectId",
+              "status",
+              "priority"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "import-authorizations",
+        "keyPath": [
+          "writerId",
+          "sourceProjectId",
+          "targetProjectId",
+          "authorizationId"
+        ],
+        "indexes": [
+          [
+            "by-writer",
+            "writerId",
+            false
+          ],
+          [
+            "by-source-target",
+            [
+              "writerId",
+              "sourceProjectId",
+              "targetProjectId"
+            ],
+            false
+          ],
+          [
+            "by-target",
+            [
+              "writerId",
+              "targetProjectId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "schema-migrations",
+        "keyPath": "migrationId",
+        "indexes": [
+          [
+            "by-to-version",
+            "toVersion",
+            false
+          ],
+          [
+            "by-applied-at",
+            "appliedAt",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "dictionary-entry-entities",
+        "keyPath": [
+          "projectId",
+          "entryId",
+          "recordId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-entry",
+            [
+              "projectId",
+              "entryId"
+            ],
+            false
+          ],
+          [
+            "by-record",
+            [
+              "projectId",
+              "recordId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "event-lifecycles",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-subject",
+            [
+              "projectId",
+              "eventId"
+            ],
+            false
+          ],
+          [
+            "by-subject-revision",
+            [
+              "projectId",
+              "eventId",
+              "revision"
+            ],
+            true
+          ]
+        ]
+      }
+    ]
+  },
+  "entries": [
+    {
+      "table": "projects",
+      "logicalScope": "global",
+      "storageScopes": [
+        "system"
+      ],
+      "keyPrefixes": [
+        "host/project-identities/"
+      ],
+      "representation": "archive",
+      "contract": "ProjectIdentity proporcionada por el anfitrión; identidad recibida, no generada por el motor.",
+      "implementationStatus": "host-owned",
+      "objectStores": []
+    },
+    {
+      "table": "project_settings",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/settings/"
+      ],
+      "representation": "record",
+      "contract": "ProjectSetting en project-settings; valor JSON validado, origen WRITER/HOST y actualización optimista.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "project-settings"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "key"
+        ]
+      ]
+    },
+    {
+      "table": "manuscript_documents",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/documents/",
+        "project/change-journal/"
+      ],
+      "representation": "split-record",
+      "contract": "StoredDocument en documents + StoredChange ordenados en changes; checkpoint atómico.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "documents",
+        "changes"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "documentId"
+        ],
+        [
+          "projectId",
+          "documentId",
+          "sequence"
+        ]
+      ]
+    },
+    {
+      "table": "manuscript_fragments",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/documents/text/"
+      ],
+      "representation": "record",
+      "contract": "ManuscriptFragment persistido por proyecto; offsets UTF-16 opcionales, revisión, documento y jerarquía padre con validación transaccional.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "manuscript-fragments"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "records",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/records/"
+      ],
+      "representation": "record",
+      "contract": "ProjectRecord genérico con recordType abierto, primaryName opcional y control optimista de currentVersion; nombres separados en record-names.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "project-records"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "record_names",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/record-names/"
+      ],
+      "representation": "embedded",
+      "contract": "RecordName separado, ligado a una ficha del mismo proyecto; admite nombre principal, alias, títulos y nombres anteriores.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "record-names"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "record_attributes",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-assertions/"
+      ],
+      "representation": "record",
+      "contract": "RecordAttribute JSON extensible enlazado en la misma transacción a una ficha del mismo proyecto; procedencia, estado y confianza explícitos.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "record-attributes"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "relations",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/relations/"
+      ],
+      "representation": "record",
+      "contract": "ProjectRelation genérica con extremos opcionales a fichas del mismo proyecto, tipo abierto y control optimista de versión; separada de las relaciones automáticas de extracción narrativa.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "project-relations"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "relation_attributes",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-relations/attributes/"
+      ],
+      "representation": "record",
+      "contract": "RelationAttribute JSON extensible enlazado en la misma transacción a una relación del mismo proyecto; procedencia y confianza explícitas.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "relation-attributes",
+        "project-relations"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "evidences",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/evidences/",
+        "project/narrative-evidence/"
+      ],
+      "representation": "embedded",
+      "contract": "ProjectEvidence independiente, ligada a una ficha o relación del mismo proyecto y con anclajes documentales opcionales; la evidencia de extracción automática se conserva además en sus registros narrativos.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "project-evidences",
+        "narrative-entities",
+        "narrative-relations",
+        "narrative-events",
+        "narrative-ideas",
+        "narrative-assertions"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "timeline_tracks",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/timeline-tracks/"
+      ],
+      "representation": "record",
+      "contract": "TimelineTrack; pistas temporales explícitas y reglas JSON configurables por proyecto, sin inferencia automática.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "timeline-tracks"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "timeline_occurrences",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/timeline-occurrences/"
+      ],
+      "representation": "embedded",
+      "contract": "TimelineOccurrence independiente ligada opcionalmente a una ficha de evento y una pista cronológica del mismo proyecto; orden y causalidad explícitos.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "timeline-occurrences"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "language_profiles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/language-profiles/"
+      ],
+      "representation": "record",
+      "contract": "LanguageProfile; perfil REAL o ficticio, preferencias editoriales y cobertura declarada.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "language-profiles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "language_resource_refs",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/language-resource-refs/"
+      ],
+      "representation": "record",
+      "contract": "LanguageResourceRef; referencia local a un recurso, vinculada opcionalmente a un perfil del mismo proyecto.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "language-resource-refs"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "style_profiles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/style-profiles/"
+      ],
+      "representation": "record",
+      "contract": "StyleProfile; perfil del libro con rasgos y preferencias editoriales JSON, procedencia y actualización optimista.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "style-profiles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "active_suggestions",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/document-diagnostics/"
+      ],
+      "representation": "record",
+      "contract": "ActiveSuggestion estructurada con módulo, prioridad, confianza, payload JSON, estado y vínculos transaccionales a documento/fragmento/revisión.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "active-suggestions"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "import_authorizations",
+      "logicalScope": "global",
+      "storageScopes": [
+        "system"
+      ],
+      "keyPrefixes": [
+        "system/import-authorizations/"
+      ],
+      "representation": "record",
+      "contract": "ImportAuthorization append-only; el anfitrión verifica ambos ProjectIdentity.writerId frente a la sesión autenticada antes de aceptar la autorización.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "import-authorizations"
+      ],
+      "keyPath": [
+        [
+          "writerId",
+          "sourceProjectId",
+          "targetProjectId",
+          "authorizationId"
+        ]
+      ]
+    },
+    {
+      "table": "schema_migrations",
+      "logicalScope": "global",
+      "storageScopes": [
+        "system"
+      ],
+      "keyPrefixes": [
+        "system/indexeddb-version/"
+      ],
+      "representation": "record",
+      "contract": "SchemaMigration registrado dentro de cada transacción onupgradeneeded, con versiones, fecha de aplicación, resultado y checksum declarativo.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "schema-migrations"
+      ],
+      "keyPath": [
+        [
+          "migrationId"
+        ]
+      ]
+    },
+    {
+      "table": "project_dictionaries",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/dictionaries/"
+      ],
+      "representation": "record",
+      "contract": "ProjectDictionary en project-dictionaries; índice único por proyecto, idioma y nombre normalizado.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "project-dictionaries"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "dictionary_entries",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/dictionary-entries/"
+      ],
+      "representation": "record",
+      "contract": "DictionaryEntry en dictionary-entries; comparación optimista y unicidad de forma normalizada.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "dictionary-entries"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "dictionary_entry_entities",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/dictionary-entries/related-entities/"
+      ],
+      "representation": "record",
+      "contract": "DictionaryEntryEntityLink independiente con linkKind, provenanceKind y createdAt por vínculo; setDictionaryEntryEntityLink actualiza atómicamente el vínculo y la proyección relatedEntityIds. La migración DB21 materializa asociaciones heredadas con linkKind RELATED, provenanceKind MIGRATION y createdAt igual al instante real de migración, sin fingir una fecha histórica.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "dictionary-entry-entities",
+        "dictionary-entries",
+        "narrative-entities"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "entryId",
+          "recordId"
+        ]
+      ]
+    },
+    {
+      "table": "record_lifecycles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/record-lifecycles/"
+      ],
+      "representation": "record",
+      "contract": "Historial append-only de cambios de etiqueta y estado de fichas, con revisión consecutiva y autor derivado del escritor autenticado.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "record-lifecycles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "relation_lifecycles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/relation-lifecycles/"
+      ],
+      "representation": "record",
+      "contract": "Historial append-only de cambios de etiqueta y estado de relaciones, con revisión consecutiva y autor derivado del escritor autenticado.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "relation-lifecycles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    },
+    {
+      "table": "writer_library_ideas",
+      "logicalScope": "writer",
+      "storageScopes": [
+        "writer"
+      ],
+      "keyPrefixes": [
+        "writer/personal-idea-library/"
+      ],
+      "representation": "record",
+      "contract": "PersonalIdeaLibraryEntry en personal-idea-library; keyPath writerId/sourceProjectId/idea.id.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "personal-idea-library"
+      ],
+      "keyPath": [
+        [
+          "writerId",
+          "sourceProjectId",
+          "idea.id"
+        ]
+      ]
+    },
+    {
+      "table": "writer_library_finalization_receipts",
+      "logicalScope": "writer",
+      "storageScopes": [
+        "writer"
+      ],
+      "keyPrefixes": [
+        "writer/finalization-receipts/"
+      ],
+      "representation": "record",
+      "contract": "StoredProjectFinalizationReceipt; recibo idempotente con checksum, archivadoIdeaIds y escritura atómica junto a la transferencia.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "writer-library-finalization-receipts"
+      ],
+      "keyPath": [
+        [
+          "writerId",
+          "sourceProjectId",
+          "receiptId"
+        ]
+      ]
+    },
+    {
+      "table": "event_lifecycles",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/event-lifecycles/"
+      ],
+      "representation": "record",
+      "contract": "Historial append-only de cambios explícitos de etiqueta y participantes de acontecimientos, con instantáneas anterior/nueva, revisión consecutiva y escritura atómica junto al registro vigente.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "event-lifecycles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
+      ]
+    }
+  ],
+  "projectSettings": {
+    "table": "project_settings",
+    "logicalScope": "project",
+    "storageScopes": [
+      "project"
+    ],
+    "keyPrefixes": [
+      "project/settings/"
+    ],
+    "representation": "record",
+    "contract": "ProjectSetting en project-settings; valor JSON validado, origen WRITER/HOST y actualización optimista.",
+    "implementationStatus": "implemented",
+    "objectStores": [
+      "project-settings"
+    ],
+    "keyPath": [
+      [
+        "projectId",
+        "key"
+      ]
+    ]
+  }
+}

@@ -2191,9 +2191,20 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
 
     const transaction = db.transaction(currentNames, "readwrite");
+    const previousStores: Record<string, readonly unknown[]> = Object.create(null);
     try {
       for (const name of currentNames) {
         const objectStore = transaction.objectStore(name);
+        // Lee las identidades anteriores dentro de la misma transacción que
+        // reemplaza la base: también hay que invalidar cachés de proyectos o
+        // escritores que desaparezcan por completo en la copia restaurada.
+        const previousRequest = objectStore.getAll();
+        previousRequest.onsuccess = () => {
+          previousStores[name] = previousRequest.result as readonly unknown[];
+        };
+        previousRequest.onerror = () => {
+          try { transaction.abort(); } catch { /* La transacción ya pudo abortarse. */ }
+        };
         objectStore.clear();
         for (const record of normalizedStores[name]!) {
           objectStore.add(record);
@@ -2214,14 +2225,23 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.oncomplete = () => {
         if (finished) return;
         finished = true;
-        const identities = backupProjectAndWriterIdentities(normalizedStores);
-        for (const projectId of identities.projectIds) {
+        const previousIdentities = backupProjectAndWriterIdentities(previousStores);
+        const restoredIdentities = backupProjectAndWriterIdentities(normalizedStores);
+        const projectIds = new Set([
+          ...previousIdentities.projectIds,
+          ...restoredIdentities.projectIds
+        ]);
+        const writerIds = new Set([
+          ...previousIdentities.writerIds,
+          ...restoredIdentities.writerIds
+        ]);
+        for (const projectId of projectIds) {
           this.publishNarrativeChange(projectId);
           for (const listener of this.narrativeChangeListeners) {
             try { listener(projectId); } catch { /* Un suscriptor no bloquea a los demás. */ }
           }
         }
-        for (const writerId of identities.writerIds) {
+        for (const writerId of writerIds) {
           this.publishPersonalIdeaLibraryChange(writerId);
           for (const listener of this.personalIdeaLibraryChangeListeners) {
             try { listener(writerId); } catch { /* Un suscriptor no bloquea a los demás. */ }

@@ -234,3 +234,45 @@ test("fusionar ideas conserva referencias a entidades y aplica un límite conjun
     /referencias explícitas de la idea superan el límite de 500/
   );
 });
+
+test("repetir la misma fusión de ideas es idempotente", async () => {
+  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    text: "Idea original.",
+    status: "incorporated",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 10 },
+      { status: "incorporated", reason: "writer", changedAt: 20 }
+    ],
+    relatedEntityIds: ["entity-a"],
+    relatedIdeaIds: ["idea-a"],
+    evidence: [{
+      documentId: "chapter",
+      revision: 1,
+      start: 0,
+      end: 12,
+      excerpt: "Idea original."
+    }]
+  });
+  const incoming = baseIdea({
+    text: "Idea revisada.",
+    relatedEntityIds: ["entity-b"],
+    relatedIdeaIds: ["idea-b"],
+    evidence: [{
+      documentId: "chapter",
+      revision: 2,
+      start: 0,
+      end: 14,
+      excerpt: "Idea revisada."
+    }]
+  });
+
+  const first = mergeNarrativeIdea(previous, incoming);
+  const second = mergeNarrativeIdea(first, incoming);
+
+  assert.deepEqual(second, first);
+  assert.equal(second.statusHistory.length, 3);
+  assert.deepEqual(second.relatedEntityIds, ["entity-a", "entity-b"]);
+  assert.deepEqual(second.relatedIdeaIds, ["idea-a", "idea-b"]);
+  assert.equal(second.evidence.length, 2);
+});

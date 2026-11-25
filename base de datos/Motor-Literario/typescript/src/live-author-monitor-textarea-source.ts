@@ -75,6 +75,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     }
 
     const inputType = typeof input.inputType === "string" ? input.inputType : "";
+    if (input.isComposing === true) this.compositionActive = true;
     const isComposing = this.compositionActive || input.isComposing === true;
     if (inputType === "insertCompositionText" && !isComposing) {
       this.fail(
@@ -119,7 +120,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
   private readonly handleCompositionEnd = (): void => {
     if (this.disposed) return;
-    if (this.pendingInput && !this.needsResync) {
+    if (this.pendingInput?.isComposing && !this.needsResync) {
       this.fail(
         "composition-state-mismatch",
         "La composición terminó antes de recibir el input asociado a beforeinput."

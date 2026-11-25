@@ -20,6 +20,7 @@ const sampleBackup = {
 test("serializa un respaldo en Blob JSON y permite leerlo sin alterar datos", async () => {
   const blob = createIndexedDbBackupBlob(sampleBackup);
   assert.equal(blob.type, "application/json;charset=utf-8");
+  assert.equal(await blob.text(), JSON.stringify(sampleBackup));
   const restored = await readIndexedDbBackupFile(blob);
   assert.deepEqual(restored, sampleBackup);
 });

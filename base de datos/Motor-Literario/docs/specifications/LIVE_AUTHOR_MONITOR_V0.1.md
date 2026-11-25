@@ -503,14 +503,14 @@ La prueba de HostEngineApi utiliza un almacén que falla al guardar y comprueba 
 
 ## 26. Correspondencia del almacén IndexedDB con el manifiesto físico
 
-El checkpoint del monitor forma parte del esquema físico y debe figurar tanto en el adaptador IndexedDB como en `MLDB/storage_mapping_v0.4.1.json`. La base de datos local se encuentra en versión **23**. El manifiesto declara ahora la misma versión y el almacén adicional:
+El checkpoint del monitor forma parte del esquema físico y debe figurar tanto en el adaptador IndexedDB como en el manifiesto activo `MLDB/storage_mapping_v0.4.2.json`. La base de datos local se encuentra en versión **23**. El manifiesto activo declara la misma versión, aumenta `mapping_version` a 13 y registra el almacén adicional:
 
 - nombre: `live-author-monitor-checkpoints`;
 - keyPath: `[projectId, documentId]`;
 - índice: `by-project` sobre `projectId`.
 
-La tabla funcional de documentos y el journal de cambios no se modifican. Este almacén operativo conserva exclusivamente el checkpoint de métricas descrito en la sección 24.
+El manifiesto histórico `storage_mapping_v0.4.1.json` se mantiene sin alterar. La tabla funcional de documentos y el journal de cambios no se modifican. Este almacén operativo conserva exclusivamente el checkpoint de métricas descrito en la sección 24.
 
-El workflow específico del monitor ejecuta `npm run validate:schema` antes del build y las pruebas. También ejecuta `tests/storage-implementation-audit.test.mjs` para detectar almacenes físicos no declarados. Se corrigió la prueba que introducía un almacén ficticio: ahora inyecta el constante y la creación del almacén en el punto de apertura, sin depender de un número fijo de versión de IndexedDB.
+El workflow específico del monitor ejecuta `npm run validate:schema` antes del build y las pruebas. También ejecuta `tests/storage-implementation-audit.test.mjs` contra el manifiesto activo para detectar almacenes físicos no declarados. La prueba de auditoría deja de depender de un número fijo de tablas y de una versión IndexedDB incrustada en un reemplazo de texto.
 
-**Validación de CI de esta alineación:** pendiente de la ejecución disparada por los commits del manifiesto y el workflow. No se considera aprobada hasta revisar los resultados de la auditoría, build y pruebas.
+**Validación de CI de esta alineación:** pendiente de la ejecución disparada por los commits del manifiesto activo y el workflow. No se considera aprobada hasta revisar los resultados de la auditoría, build y pruebas.

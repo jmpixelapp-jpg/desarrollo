@@ -35,8 +35,12 @@ function analyzeGraph(ideas, options = {}) {
     documentId: "chapter-1",
     revision: 1,
     text: "Fragmento narrativo de prueba.",
-    knownProjectIdeas: ideas,
-    knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0
+    ...(options.projectCatalog
+      ? { knownProjectIdeas: ideas }
+      : { knownIdeas: ideas }),
+    ...(options.projectCatalog
+      ? { knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0 }
+      : { knownIdeasOmittedCount: options.omittedIdeaCount ?? 0 })
   }).ideaGraph;
 }
 
@@ -93,6 +97,33 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
   assert.equal(changed.referenceCount, 1);
   assert.equal(changed.nodes.find(node => node.ideaId === "graph-b").status, "incorporated");
   assert.equal(changed.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 1);
+});
+
+test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {
+  const ideas = [
+    { ...idea("scope-a", "memoria espejo luz"), relatedIdeaIds: ["outside"] }
+  ];
+
+  const fallback = analyzeGraph(ideas);
+  assert.equal(fallback.catalogScope, "character-linked-fallback");
+  assert.equal(fallback.projectCatalogComplete, false);
+  assert.equal(fallback.missingFromProjectReferenceCount, 0);
+
+  const complete = analyzeGraph(ideas, { projectCatalog: true });
+  assert.equal(complete.catalogScope, "project");
+  assert.equal(complete.projectCatalogComplete, true);
+  assert.equal(complete.missingFromProjectReferenceCount, 1);
+  assert.equal(complete.references[0].resolution, "missing-from-project");
+
+  const incomplete = analyzeGraph(ideas, {
+    projectCatalog: true,
+    omittedIdeaCount: 1
+  });
+  assert.equal(incomplete.catalogScope, "project");
+  assert.equal(incomplete.projectCatalogComplete, false);
+  assert.equal(incomplete.omittedIdeaCount, 1);
+  assert.equal(incomplete.missingFromProjectReferenceCount, 0);
+  assert.equal(incomplete.references[0].resolution, "not-in-snapshot");
 });
 
 test("agrega métricas globales y por estado de forma coherente", () => {

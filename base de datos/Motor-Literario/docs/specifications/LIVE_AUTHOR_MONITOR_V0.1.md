@@ -393,3 +393,16 @@ La integración conecta ese callback con `binding.discardPendingAfterResynchroni
 Una prueba de regresión configura un editor que, en la segunda suscripción, aplica y emite una nueva transacción antes de devolver el callback de cancelación. La secuencia comprobada es: rechazo no recuperable de la transacción 1, reconciliación durable que ya incluye la transacción 1, resincronización, replay síncrono de la transacción 2 y confirmación de que el motor termina en secuencia/revisión 2 con el texto actualizado. El backlog termina vacío y el desmontaje retira las suscripciones normalmente.
 
 **Validación de replay síncrono:** el caso de regresión descrito en la sección 18 se ejecutó en la CI aislada [45720849538](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45720849538), sobre el commit `87b60c1`: build Vite correcto y **75 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+
+## 19. Despacho FIFO ante transacciones reentrantes
+
+La fuente transaccional serializa la notificación a suscriptores mediante una cola de despacho interna. Esto cubre un caso de reentrancia posible en editores anfitriones: un suscriptor puede ejecutar código que provoque otra transacción síncrona mientras todavía se está notificando la anterior.
+
+- Cada delta validado se añade a la cola de despacho en orden de secuencia.
+- Si ya existe un despacho en curso, una transacción reentrante se encola y espera a que todos los suscriptores reciban el delta actual.
+- Los suscriptores observan así la misma secuencia FIFO; ninguno recibe la transacción 2 antes que la transacción 1.
+- Las excepciones de un suscriptor siguen aisladas y no interrumpen la notificación a los demás.
+- Al disponer la fuente se limpia la cola y no se entregan notificaciones posteriores.
+
+La prueba de regresión instala dos suscriptores. El primero genera la transacción 2 desde el callback de la transacción 1; ambos deben observar exactamente [1, 2]. Esta garantía evita que consumidores distintos del mismo stream construyan estados divergentes por una reentrada síncrona.

@@ -282,7 +282,7 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     assert.equal(summary.sourceProjectName, "Libro compacto");
     assert.equal(summary.archivedCount, 1);
     assert.equal(summary.alreadyFinalized, false);
-    assert.equal(typeof summary.archiveChecksum, "string");
+    assert.match(summary.archiveChecksum, /^fnv1a64:[0-9a-f]{16}$/);
     assert.equal(Array.isArray(summary), false);
     assert.equal(Object.hasOwn(summary, "items"), false);
     assert.deepEqual(await libraryChanged, {

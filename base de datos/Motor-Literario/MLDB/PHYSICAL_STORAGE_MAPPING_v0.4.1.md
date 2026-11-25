@@ -12,10 +12,8 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 |---|---|---|---|
 | `language-profiles` | `[projectId, id]` | `by-project`, `by-project-language`, `by-project-active` | Perfiles lingüísticos reales o ficticios y preferencias editoriales |
 | `language-resource-refs` | `[projectId, id]` | `by-project`, `by-profile`, `by-resource-database` | Referencias locales a recursos lingüísticos declarados |
-| `style-profiles` | `[projectId, id]` | `by-project`, `by-project-name` | Perfiles de estilo estructurados en JSON |
-| `timeline-tracks` | `[projectId, id]` | `by-project`, `by-project-name` | Pistas cronológicas y reglas temporales declarativas |
 | `project-settings` | `[projectId, key]` | `by-project` | Preferencias del libro y valores JSON |
-|`documents` | `[projectId, documentId]` | `by-project` | Snapshot UTF-16 por documento |
+| `documents` | `[projectId, documentId]` | `by-project` | Snapshot UTF-16 por documento |
 | `changes` | `[projectId, documentId, sequence]` | `by-document-sequence` único | Journal durable de ediciones |
 | `narrative-entities` | `[projectId, id]` | `by-project` | Fichas de entidades y evidencias |
 | `narrative-relations` | `[projectId, id]` | `by-project` | Relaciones y evidencias |
@@ -26,6 +24,8 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
 | `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |
 | `dictionary-entries` | `[projectId, id]` | `by-project`, `by-dictionary`, `by-dictionary-normalized` único | Entradas, atributos JSON y vínculos con entidades |
+| `style-profiles` | `[projectId, id]` | `by-project`, `by-project-name` | Perfiles de estilo por libro y preferencias editoriales JSON |
+| `timeline-tracks` | `[projectId, id]` | `by-project`, `by-project-name` | Pistas cronológicas explícitas y reglas JSON |
 
 Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()`. Las lecturas deben esperar a que complete su transacción readonly; las colecciones y registros se validan antes de incorporarse a la API o a sus cachés.
 
@@ -43,11 +43,11 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `relations` | `narrative-relations` | Implementado |
 | `relation_attributes` | Tipo/evidencia embebidos en relación | Parcial; sin atributos genéricos |
 | `evidences` | `TextEvidence` embebido en registros | Implementado |
-| `timeline_tracks` | `timeline-tracks` | Implementado; pista y reglas JSON aisladas por proyecto |
+| `timeline_tracks` | `timeline-tracks` | Implementado; pistas temporales explícitas sin inferencia automática |
 | `timeline_occurrences` | `timeReference` embebida en `narrative-events` | Parcial; sin tracks configurables |
 | `language_profiles` | `language-profiles` | Implementado; perfiles reales/ficticios, preferencias JSON y cobertura declarada |
 | `language_resource_refs` | `language-resource-refs` | Implementado; referencias ligadas opcionalmente a perfiles del mismo proyecto |
-| `style_profiles` | `style-profiles` | Implementado; perfil JSON y procedencia aislados por proyecto |
+| `style_profiles` | `style-profiles` | Implementado; perfil de voz y preferencias editoriales del libro |
 | `active_suggestions` | `document-diagnostics` | Parcial; diagnósticos, no todos los módulos |
 | `import_authorizations` | Prefijo reservado | Pendiente |
 | `schema_migrations` | Versión nativa de IndexedDB y migraciones `onupgradeneeded` | Parcial; sin tabla de historial separada |
@@ -63,6 +63,6 @@ El archivo `storage_mapping_v0.4.1.json` es la fuente verificable del mapeo: con
 
 ## Límites que no deben ocultarse
 
-El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. Los perfiles lingüísticos, las referencias de recursos, los perfiles de estilo y las pistas cronológicas ya cuentan con contratos, almacenes, migraciones y operaciones TypeScript. Permanecen pendientes las autorizaciones de importación y los historiales completos de ciclos de vida.
+El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. No se debe presentar la base como lista para persistir autorizaciones de importación ni ciclos de vida completos hasta añadir sus contratos TypeScript, object stores, migraciones, operaciones transaccionales y pruebas.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.

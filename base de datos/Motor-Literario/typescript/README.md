@@ -254,6 +254,14 @@ Las consultas públicas y las operaciones que devuelven entidades, ideas o entra
 Cada apertura reserva sincrónicamente el identificador del documento antes de iniciar lecturas o escrituras asíncronas. Mientras la reserva está activa, otra apertura/resincronización del mismo documento se rechaza y el editor no puede admitir deltas para una sesión que todavía no está publicada. La reserva se libera tanto al completar la apertura como ante cualquier error; un fallo de persistencia inicial no deja una sesión parcial ni impide reintentar. Documentos distintos conservan su independencia y pueden abrirse en paralelo.
 
 
+### Perfiles de estilo y pistas cronológicas
+
+Los perfiles de estilo guardan observaciones y preferencias de voz, punto de vista, diálogos y otros rasgos mediante JSON extensible y procedencia. No reescriben el manuscrito ni uniforman automáticamente la voz del escritor.
+
+Las pistas cronológicas permiten definir calendarios, contadores y reglas propias de universos ficticios. Su existencia organiza fechas y acontecimientos explícitos; no autoriza al motor a inventar fechas ni a deducir cronologías sin evidencia. Ambos almacenes se aíslan por proyecto y sus actualizaciones usan comparación optimista.
+
+API: `getStyleProfiles()`, `saveStyleProfile()`, `getTimelineTracks()` y `saveTimelineTrack()`.
+
 ### Perfiles lingüísticos y referencias de recursos
 
 Cada libro puede mantener perfiles de idioma con identificador flexible (BCP-47 cuando corresponde, y también códigos propios para lenguas ficticias), nombre visible, variante regional, tipo, preferencias editoriales JSON, estado de cobertura verificada e indicador activo. El estado de cobertura describe las reglas realmente probadas; no representa una promesa de corrección profesional completa.
@@ -261,12 +269,4 @@ Cada libro puede mantener perfiles de idioma con identificador flexible (BCP-47 
 Las referencias de recursos conservan el ID de la base local, tipo, versión de esquema y estado. Pueden asociarse a un perfil del mismo proyecto o quedar generales para el libro. Registrar una referencia no descarga ni incorpora recursos externos. La persistencia valida el vínculo de perfil y conserva el aislamiento por `projectId`.
 
 API: `getLanguageProfiles()`, `saveLanguageProfile()`, `getLanguageResourceRefs()` y `saveLanguageResourceRef()`.
-
-
-
-### Perfiles de estilo y pistas cronológicas
-
-Los perfiles de estilo se guardan por proyecto con nombre, procedencia y datos JSON estructurados. Las pistas cronológicas guardan nombre, tipo, procedencia y reglas JSON declarativas. Ambos almacenes usan la clave compuesta `projectId` + ID, índices por proyecto y nombre, validación del contenido y actualización optimista para impedir que una instancia antigua sobrescriba silenciosamente datos modificados por otra.
-
-La API del anfitrión ofrece `getStyleProfiles`, `saveStyleProfile`, `getTimelineTracks` y `saveTimelineTrack`. Los datos permanecen locales en IndexedDB y aislados entre libros. La base local se encuentra en la versión 16.
 

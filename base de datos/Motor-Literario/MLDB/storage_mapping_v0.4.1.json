@@ -1,6 +1,6 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 3,
+  "mapping_version": 4,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
@@ -549,10 +549,16 @@
         "project/timeline-tracks/"
       ],
       "representation": "record",
-      "contract": "TimelineTrack almacenado en timeline-tracks; reglas temporales JSON validadas y control de actualización optimista.",
+      "contract": "TimelineTrack; pistas temporales explícitas y reglas JSON configurables por proyecto, sin inferencia automática.",
       "implementationStatus": "implemented",
       "objectStores": [
         "timeline-tracks"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
       ]
     },
     {
@@ -631,10 +637,16 @@
         "project/style-profiles/"
       ],
       "representation": "record",
-      "contract": "StyleProfile almacenado en style-profiles; datos JSON de estilo validados, procedencia y control de actualización optimista.",
+      "contract": "StyleProfile; perfil del libro con rasgos y preferencias editoriales JSON, procedencia y actualización optimista.",
       "implementationStatus": "implemented",
       "objectStores": [
         "style-profiles"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
       ]
     },
     {
@@ -683,7 +695,7 @@
         "system/indexeddb-version/"
       ],
       "representation": "embedded",
-      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=15); sin tabla de historial separada.",
+      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=16); sin tabla de historial separada.",
       "implementationStatus": "partial",
       "objectStores": []
     },

@@ -1,4 +1,8 @@
-import type { ProjectRecord, RecordName, ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion, ImportAuthorization, SchemaMigration } from "./mldb-records";
+import type {
+  ProjectRecord, RecordName, ProjectRelation, ProjectEvidence, TimelineOccurrence, EvidenceSubjectKind,
+  ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
+  ImportAuthorization, SchemaMigration
+} from "./mldb-records";
 import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
 import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle } from "./project-data";
 
@@ -101,6 +105,19 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Relaciones genéricas enlazadas a fichas del mismo libro. */
+  loadProjectRelations(projectId: string): Promise<readonly ProjectRelation[]>;
+  saveProjectRelation(relation: ProjectRelation, expectedCurrent?: ProjectRelation): Promise<void>;
+
+  /** Evidencias con sujeto XOR y anclajes documentales verificables. */
+  loadProjectEvidences(projectId: string, subjectKind?: EvidenceSubjectKind, subjectId?: string): Promise<readonly ProjectEvidence[]>;
+  saveProjectEvidence(evidence: ProjectEvidence, expectedCurrent?: ProjectEvidence): Promise<void>;
+
+  /** Ocurrencias temporales independientes del orden del manuscrito. */
+  loadTimelineOccurrences(projectId: string, eventRecordId?: string, trackId?: string): Promise<readonly TimelineOccurrence[]>;
+  saveTimelineOccurrence(occurrence: TimelineOccurrence, expectedCurrent?: TimelineOccurrence): Promise<void>;
+
+
   /** Fichas genéricas MLDB; el nombre principal puede quedar vacío. */
   loadProjectRecords(projectId: string): Promise<readonly ProjectRecord[]>;
   saveProjectRecord(record: ProjectRecord, expectedCurrent?: ProjectRecord): Promise<void>;

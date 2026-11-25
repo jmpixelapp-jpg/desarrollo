@@ -2061,3 +2061,46 @@ test("la cronología de proyecto excluye posiciones temporales no finitas", () =
   assert.deepEqual(timeline.points[0].eventIds, ["valid"]);
   assert.equal(timeline.transitionCount, 0);
 });
+
+
+test("la cronología excluye IDs de acontecimiento con posiciones incompatibles", () => {
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start: 0,
+    end: 5,
+    excerpt: "Ana."
+  };
+  const makeEvent = (orderValue, label) => ({
+    projectId: "literary-analysis-test",
+    eventId: "same-event",
+    label,
+    participants: ["ana-id"],
+    timelineTrackId: "main",
+    timeReference: {
+      basis: "calendar",
+      precision: "year",
+      raw: String(orderValue),
+      orderValue
+    },
+    evidence: [evidence]
+  });
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nAna.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownProjectEvents: [
+      makeEvent(2020, "La tormenta"),
+      makeEvent(2021, "La tormenta")
+    ]
+  });
+  const timeline = result.characterNarrativeTrajectories.trajectories[0].projectEventTimeline;
+
+  assert.equal(timeline.sourceEventCount, 2);
+  assert.equal(timeline.timedEventCount, 0);
+  assert.equal(timeline.unverifiedEventCount, 2);
+  assert.equal(timeline.pointCount, 0);
+  assert.equal(timeline.transitionCount, 0);
+});

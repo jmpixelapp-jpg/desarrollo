@@ -2089,7 +2089,7 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
   assert.ok(ana);
   assert.deepEqual(ana.scenes[0].relationshipIds, []);
   assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, []);
-  assert.equal(ana.scenes[0].evidenceStatus, "no-known-evidence");
+  assert.equal(ana.scenes[0].evidenceStatus, "documented"); // La mención del nombre está en el texto actual, aunque la evidencia de fichas sea externa.
   assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
   assert.equal(ana.documentedDecisions[0].evidenceCount, 2);
 });

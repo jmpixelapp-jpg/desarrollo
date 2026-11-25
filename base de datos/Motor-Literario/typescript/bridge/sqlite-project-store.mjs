@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 
 const TABLE = "bridge_records";
 
@@ -81,12 +83,13 @@ export class SqliteProjectStore {
 
   static async open(databasePath) {
     requireText(databasePath, "MOTOR_LITERARIO_DB");
+    await mkdir(dirname(databasePath), { recursive: true });
     const database = new DatabaseSync(databasePath, { timeout: 5000 });
     return new SqliteProjectStore(database, databasePath);
   }
 
   ensureOpen() {
-    if (this.closed || !this.database?.isOpen) throw new Error("El almacenamiento SQLite del puente está cerrado.");
+    if (this.closed) throw new Error("El almacenamiento SQLite del puente está cerrado.");
   }
 
   transaction(work) {
@@ -499,6 +502,7 @@ export class SqliteProjectStore {
         if (existingNormalized === normalized) throw new Error("La forma normalizada ya existe en el diccionario.");
       }
       const relatedIds = new Set(entry.relatedEntityIds ?? []);
+      for (const link of this.loadDictionaryEntryEntityLinks(entry.projectId, entry.id)) relatedIds.add(link.recordId);
       for (const link of suppliedLinks ?? []) {
         if (link.projectId !== entry.projectId || link.entryId !== entry.id) {
           throw new Error("El vínculo de diccionario no pertenece a la entrada que se está guardando.");
@@ -541,7 +545,8 @@ export class SqliteProjectStore {
       }
       const links = this.loadDictionaryEntryEntityLinks(entry.projectId, entry.id);
       const ids = new Set(links.map(x => x.recordId));
-      for (const id of entry.relatedEntityIds ?? []) ids.add(id);
+      if (linked) for (const id of entry.relatedEntityIds ?? []) ids.add(id);
+      else for (const id of entry.relatedEntityIds ?? []) if (id !== link.recordId) ids.add(id);
       const updated = { ...entry, relatedEntityIds: [...ids] };
       this.put("dictionary-entries", identityKey(entry.projectId, entry.id), updated, { expectedCurrent });
     });

@@ -44,8 +44,8 @@ function analyzeGraph(ideas, options = {}) {
   }).ideaGraph;
 }
 
-test("analiza el límite de 2.000 ideas conectadas sin perder la topología", () => {
-  const count = 2_000;
+test("analiza 12.000 ideas conectadas sin desbordar la pila de llamadas", () => {
+  const count = 12_000;
   const ideas = Array.from({ length: count }, (_, index) => ({
     ...idea("stress-" + String(index).padStart(4, "0")),
     relatedIdeaIds: [

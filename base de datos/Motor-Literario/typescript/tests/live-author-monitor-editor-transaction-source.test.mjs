@@ -238,3 +238,99 @@ test("no acepta una transacción antes de que el snapshot nativo refleje el camb
   f.stop();
   f.source.dispose();
 });
+
+test("retira una suscripción cuando el editor emite un evento inválido de forma síncrona al suscribirse", () => {
+  const snapshot = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(snapshot);
+  const provider = {
+    getSnapshot: documentId => editor.getSnapshot(documentId),
+    subscribeTransactions(documentId, listener) {
+      const unsubscribe = editor.subscribeTransactions(documentId, listener);
+      listener({
+        transactionId: "tx-wrong-document",
+        kind: "edit",
+        change: {
+          documentId: "another-document",
+          sequence: 1,
+          baseRevision: 0,
+          start: 0,
+          end: 0,
+          replacement: "x"
+        }
+      });
+      return unsubscribe;
+    }
+  };
+  const errors = [];
+  const source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: snapshot.documentId,
+    initialSnapshot: snapshot,
+    provider,
+    onError: error => errors.push(error)
+  });
+
+  source.subscribeChanges(() => {});
+  assert.equal(source.getState().needsResync, true);
+  assert.equal(errors.at(-1).code, "document-mismatch");
+  assert.equal(editor.listeners.size, 0);
+  assert.equal(editor.unsubscribeCount, 1);
+  source.dispose();
+});
+
+test("retira la suscripción si un listener dispone el source durante una emisión síncrona de montaje", () => {
+  const snapshot = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(snapshot);
+  let source;
+  const provider = {
+    getSnapshot: documentId => editor.getSnapshot(documentId),
+    subscribeTransactions(documentId, listener) {
+      const unsubscribe = editor.subscribeTransactions(documentId, listener);
+      editor.apply("edit", "tx-during-subscribe", {
+        start: 3, end: 3, replacement: "!"
+      });
+      return unsubscribe;
+    }
+  };
+  source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: snapshot.documentId,
+    initialSnapshot: snapshot,
+    provider
+  });
+
+  source.subscribeChanges(() => source.dispose());
+  assert.equal(source.getState().sequence, 1);
+  assert.equal(editor.listeners.size, 0);
+  assert.equal(editor.unsubscribeCount, 1);
+});
+
+test("convierte un error al leer el snapshot en pausa segura sin propagarlo al editor", () => {
+  const snapshot = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(snapshot);
+  let snapshotUnavailable = false;
+  const provider = {
+    getSnapshot(documentId) {
+      if (snapshotUnavailable) throw new Error("snapshot_temporarily_unavailable");
+      return editor.getSnapshot(documentId);
+    },
+    subscribeTransactions(documentId, listener) {
+      return editor.subscribeTransactions(documentId, listener);
+    }
+  };
+  const errors = [];
+  const source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: snapshot.documentId,
+    initialSnapshot: snapshot,
+    provider,
+    onError: error => errors.push(error)
+  });
+  source.subscribeChanges(() => {});
+
+  snapshotUnavailable = true;
+  assert.doesNotThrow(() => editor.apply("edit", "tx-snapshot-error", {
+    start: 3, end: 3, replacement: "!"
+  }));
+  assert.equal(source.getState().needsResync, true);
+  assert.equal(errors.at(-1).code, "editor-state-unavailable");
+  assert.equal(editor.listeners.size, 0);
+  source.dispose();
+});

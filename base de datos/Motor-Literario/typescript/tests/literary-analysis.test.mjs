@@ -2525,3 +2525,95 @@ test("las trayectorias no concluyen la evolución cuando el historial de decisio
   assert.equal(decision.reopeningCount, 0);
   assert.equal(decision.currentStatusHistoryConsistency, "unknown");
 });
+
+
+test("las decisiones muestran divergencia de estados entre ideas relacionadas sin inferir contradicción", () => {
+  const text = "Escena 1\nAna espera una respuesta.";
+  const phrase = "Ana espera una respuesta.";
+  const start = text.indexOf(phrase);
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase
+  };
+  const makeIdea = (ideaId, status, relatedIdeaIds = []) => ({
+    projectId: "literary-analysis-test",
+    ideaId,
+    text: ideaId,
+    status,
+    originDocumentId: "chapter-one",
+    sourceProjectName: "Libro de prueba",
+    relatedEntityIds: ["ana-id"],
+    relatedIdeaIds,
+    evidenceCount: 1,
+    staleEvidenceCount: 0,
+    evidence: [evidence],
+    statusHistory: [{ status, reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownIdeas: [
+      makeIdea("idea-a", "incorporated", ["idea-b", "idea-c"]),
+      makeIdea("idea-b", "discarded"),
+      makeIdea("idea-c", "incorporated")
+    ]
+  });
+  const decision = result.characterNarrativeTrajectories.trajectories[0]
+    .documentedDecisions.find(item => item.ideaId === "idea-a");
+  assert.equal(decision.relatedIdeaStateStatus, "mixed-status");
+  assert.equal(decision.relatedIdeaStateDivergenceCount, 1);
+  assert.deepEqual(decision.relatedIdeaStateProfiles, [
+    { ideaId: "idea-b", status: "discarded", resolution: "included-in-analysis-snapshot" },
+    { ideaId: "idea-c", status: "incorporated", resolution: "included-in-analysis-snapshot" }
+  ]);
+});
+
+
+test("las decisiones mantienen desconocido el estado relacionado si el catálogo está incompleto", () => {
+  const text = "Escena 1\nAna espera.";
+  const phrase = "Ana espera.";
+  const start = text.indexOf(phrase);
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase
+  };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "idea-a",
+      text: phrase,
+      status: "incorporated",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: ["idea-b"],
+      evidenceCount: 1,
+      staleEvidenceCount: 0,
+      evidence: [evidence],
+      statusHistory: [{ status: "incorporated", reason: "initial" }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 0
+    }],
+    knownProjectIdeasOmittedCount: 3
+  });
+  const decision = result.characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.equal(decision.relatedIdeaStateStatus, "unknown-due-to-incomplete-snapshot");
+  assert.equal(decision.relatedIdeaStateDivergenceCount, 0);
+  assert.deepEqual(decision.relatedIdeaStateProfiles, []);
+});

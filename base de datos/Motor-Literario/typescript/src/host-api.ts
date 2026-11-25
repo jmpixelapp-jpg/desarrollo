@@ -622,11 +622,17 @@ export class HostEngineApi {
       const delta = result.replacementLength - (result.changeEnd - result.changeStart);
       const retained = previous.diagnostics
         .filter(diagnostic => {
-          const lineWasAffected =
+          const insertedWholeLinesBeforeDiagnostic =
+            result.changeStart === result.changeEnd &&
+            result.changeStart === result.previousAffectedStart &&
+            result.changeReplacement.length > 0 &&
+            /(?:\\r\\n|\\n|\\r)$/.test(result.changeReplacement);
+          const lineWasAffected = !insertedWholeLinesBeforeDiagnostic && (
             (diagnostic.start < result.previousAffectedEnd &&
               diagnostic.end > result.previousAffectedStart) ||
             (diagnostic.start >= result.previousAffectedStart &&
-              diagnostic.start <= result.previousAffectedEnd);
+              diagnostic.start <= result.previousAffectedEnd)
+          );
           return !lineWasAffected;
         })
         .map(diagnostic => {
@@ -733,7 +739,8 @@ export class HostEngineApi {
           result.changeStart === result.changeEnd &&
           result.changeStart === result.previousAffectedStart &&
           evidence.start >= result.changeStart &&
-          result.affectedEnd <= result.changeStart + result.replacementLength;
+          result.changeReplacement.length > 0 &&
+          /(?:\\r\\n|\\n|\\r)$/.test(result.changeReplacement);
         const lineWasAffected = !insertedWholeLinesBeforeEvidence && (
           (evidence.start < result.previousAffectedEnd && evidence.end > result.previousAffectedStart) ||
           (evidence.start >= result.previousAffectedStart && evidence.start <= result.previousAffectedEnd)

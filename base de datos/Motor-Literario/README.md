@@ -63,6 +63,8 @@ La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema
 El benchmark de CI usa escenarios sintéticos y un adaptador en memoria. Sus latencias no representan mediciones de disco ni sustituyen pruebas en los equipos y adaptadores del programa anfitrión.
 ## Análisis literario e inteligencia de ideas
 
+El avance detallado, los contratos del grafo, los límites de procesamiento, las garantías y el registro de tandas se mantienen en el [documento de estado del análisis literario e inteligencia narrativa](docs/analysis/ESTADO_ANALISIS_LITERARIO_E_INTELIGENCIA_NARRATIVA.md). Ese documento distingue implementación, cobertura escrita y ejecución confirmada de pruebas.
+
 El núcleo TypeScript incorpora un análisis determinista del catálogo de ideas del proyecto:
 
 - El grafo global conserva ideas independientes y vínculos explícitos, y distingue referencias internas, externas al snapshot y ausentes.

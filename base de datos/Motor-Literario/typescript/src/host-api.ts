@@ -4406,6 +4406,16 @@ export class HostEngineApi {
     return this.liveAuthorMonitor.subscribe(listener, documentId);
   }
 
+  /** Resincroniza las métricas con un snapshot autoritativo tras resolver un conflicto externo. */
+  resynchronizeLiveAuthorMonitor(snapshot: DocumentSnapshot): LiveAuthorMonitorSnapshot {
+    return this.liveAuthorMonitor.resynchronizeDocument(snapshot);
+  }
+
+  /** Cierra la sesión de métricas después de vaciar la cola durable del documento. */
+  closeLiveAuthorMonitorDocument(documentId: string): LiveAuthorMonitorSnapshot {
+    return this.liveAuthorMonitor.closeDocument(documentId);
+  }
+
   /** Permite al anfitrión esperar la persistencia de todos los cambios admitidos. */
   async flushPendingChanges(): Promise<void> {
     await this.engine.waitForIdle();

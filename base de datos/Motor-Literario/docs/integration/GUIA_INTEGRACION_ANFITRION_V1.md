@@ -281,7 +281,7 @@ let page = await bridge.getPersonalIdeaLibraryPage(projectId, null, 100);
 - `getNarrativeEntityHistory(entityId)`, `resolveNarrativeEntityId(entityId)` y `getNarrativeEntityIdentityCandidates()`.
 - `setNarrativeIdeaStatus(ideaId, status)`, `setNarrativeIdeaEntityLink(...)` y `setNarrativeIdeaLink(...)`.
 
-Cada idea admite hasta 500 vínculos explícitos por categoría: 500 a fichas y 500 a otras ideas. El anfitrión y los adaptadores de almacenamiento usan `MAX_NARRATIVE_IDEA_REFERENCES` y rechazan el vínculo 501 antes de escribir.
+Cada idea admite hasta 500 vínculos explícitos en total, sumando referencias a fichas y a otras ideas. El anfitrión y los adaptadores IndexedDB/SQLite usan `MAX_NARRATIVE_IDEA_REFERENCES` y rechazan cualquier escritura cuyo total supere ese límite.
 
 La extracción narrativa inicial se programa al abrir/recuperar el documento y continúa de manera incremental con las ediciones. Su alcance es deliberadamente conservador: usa indicadores textuales explícitos; los acontecimientos requieren `ACONTECIMIENTO:` o `EVENTO:`, y las ideas requieren `IDEA:`. No atribuir al motor inferencias semánticas que todavía no realiza.
 

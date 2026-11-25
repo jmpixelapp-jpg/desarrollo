@@ -643,8 +643,9 @@ export function mergeNarrativeIdea(
     ...(previous.relatedIdeaIds ?? []),
     ...(incoming.relatedIdeaIds ?? [])
   ])];
-  if (relatedEntityIds.length + relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES) {
-    throw new Error(`Las referencias explícitas de la idea superan el límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`);
+  if (relatedEntityIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+      relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES) {
+    throw new Error(`Las referencias explícitas de cada categoría superan el límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`);
   }
   const textChanged = previous.text !== incoming.text;
   const nextStatus = textChanged ? "IDEA" : previous.status;

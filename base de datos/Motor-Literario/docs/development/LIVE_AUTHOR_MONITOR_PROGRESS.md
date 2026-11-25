@@ -232,3 +232,21 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **Commits:** [5db2c51 — propagar fallos de checkpoint](https://github.com/jmpixelapp-jpg/desarrollo/commit/5db2c51a7e8981b0f24e300c8e931beb2d27852f), [a260ca4 — retener error hasta escritura correcta](https://github.com/jmpixelapp-jpg/desarrollo/commit/a260ca486c835a8f06b616a3709a269c564df3d0), [dde974d — prueba de no desmontaje](https://github.com/jmpixelapp-jpg/desarrollo/commit/dde974d98cd5b0c9b9dacc9c86a35ab26e4b0d95), [e4011c1 — especificación del lifecycle](https://github.com/jmpixelapp-jpg/desarrollo/commit/e4011c1686fd6c91006bea93d1dc2f1154341af8).
 
 **Resultado verificado:** CI aislada [45723191692](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723191692): build Vite correcto; **85/85 pruebas aprobadas, 0 fallidas y 0 omitidas**. La CI general [45723191936](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723191936) sigue fallando solo por errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`; no reporta errores del módulo del monitor ni de IndexedDB.
+
+
+## 11. Nueva entrega — manifiesto físico y auditoría del checkpoint IndexedDB (25 de noviembre de 2026)
+
+**Hallazgo:** el adaptador IndexedDB ya creaba `live-author-monitor-checkpoints` y usaba la base versión 23, pero el manifiesto `MLDB/storage_mapping_v0.4.1.json` conservaba versión 21 y no describía este almacén operativo. Esa divergencia podía dejar sin correspondencia documental la persistencia de sesiones y hacer que la auditoría de almacenamiento informara un almacén huérfano.
+
+**Cambios:**
+- Se actualizó `runtime.database_version` de 21 a 23 en el manifiesto físico.
+- Se agregó el descriptor `live-author-monitor-checkpoints`, keyPath compuesto `[projectId, documentId]` e índice `by-project`.
+- Se corrigió una prueba de auditoría que inyectaba un almacén ficticio al reemplazar el literal antiguo `DATABASE_VERSION = 21`. Ahora inyecta el identificador y la creación del almacén en el punto de apertura, sin depender del número de versión vigente.
+- El workflow aislado ejecuta `npm run validate:schema` antes de build y pruebas, y ejecuta además `tests/storage-implementation-audit.test.mjs`.
+- Los filtros de push y pull request incluyen el manifiesto físico, el adaptador IndexedDB y la prueba de auditoría.
+
+**Archivos:** `MLDB/storage_mapping_v0.4.1.json`, `typescript/tests/storage-implementation-audit.test.mjs`, `.github/workflows/live-author-monitor.yml`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
+
+**Commits:** [782b2e4 — registrar almacén y versión en el manifiesto](https://github.com/jmpixelapp-jpg/desarrollo/commit/782b2e416fba03a239c705ff4e08e32ab1b192a4), [9dc7e32 — desacoplar la auditoría de una versión fija](https://github.com/jmpixelapp-jpg/desarrollo/commit/9dc7e32c6884e3e65076f23e61fb1e906b451b4e), [6bb03fc — validar esquema y mapeo en CI](https://github.com/jmpixelapp-jpg/desarrollo/commit/6bb03fc5d266cb445708a3995f9eade85cdbebc2), [62626f9 — activar filtros de pull request](https://github.com/jmpixelapp-jpg/desarrollo/commit/62626f9f183de83c32be80b1208285bb1b2e4115), [4de43bd — incluir auditoría física en el workflow](https://github.com/jmpixelapp-jpg/desarrollo/commit/4de43bd69e5f6dd07c4e31a53810bb9acc40317b), [4ce291a — documentar correspondencia técnica](https://github.com/jmpixelapp-jpg/desarrollo/commit/4ce291ac8f8ec216de93b244fd84069f727bc2bd).
+
+**Resultado CI:** se registrará la ejecución que incluya todos los cambios de esta entrega. Hasta entonces el estado se mantiene como pendiente de validación; no se infiere que la auditoría haya pasado solo por haber actualizado el manifiesto.

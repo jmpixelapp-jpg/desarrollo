@@ -3563,6 +3563,50 @@ export class IndexedDbProjectStore implements ProjectStore {
     sourceProjectName: string,
     archivedAt: number
   ): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    return this.archiveUnincorporatedIdeasInternal(
+      projectId, writerId, sourceProjectName, archivedAt, true
+    ) as Promise<readonly PersonalIdeaLibraryEntry[]>;
+  }
+
+  async archiveUnincorporatedIdeasSummary(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number
+  ): Promise<{
+    writerId: string;
+    sourceProjectId: string;
+    sourceProjectName: string;
+    archivedCount: number;
+    finalizedAt: number;
+    archiveChecksum: string;
+  }> {
+    return this.archiveUnincorporatedIdeasInternal(
+      projectId, writerId, sourceProjectName, archivedAt, false
+    ) as Promise<{
+      writerId: string;
+      sourceProjectId: string;
+      sourceProjectName: string;
+      archivedCount: number;
+      finalizedAt: number;
+      archiveChecksum: string;
+    }>;
+  }
+
+  private async archiveUnincorporatedIdeasInternal(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number,
+    collectEntries: boolean
+  ): Promise<readonly PersonalIdeaLibraryEntry[] | {
+    writerId: string;
+    sourceProjectId: string;
+    sourceProjectName: string;
+    archivedCount: number;
+    finalizedAt: number;
+    archiveChecksum: string;
+  }> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
         typeof sourceProjectName !== "string" || !sourceProjectName.trim() ||
@@ -3587,6 +3631,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       let finished = false;
       let didChange = false;
       const archived: PersonalIdeaLibraryEntry[] = [];
+      const archivedIdeaIds: string[] = [];
       const identityOwners = new Map<string, string>();
       const legacyIdeaCache = new Map<string, NarrativeIdea>();
 
@@ -3831,7 +3876,8 @@ export class IndexedDbProjectStore implements ProjectStore {
                 };
                 personal.add(entry);
                 ideas.delete([projectId, idea.id]);
-                archived.push(entry);
+                if (collectEntries) archived.push(entry);
+                archivedIdeaIds.push(idea.id);
                 didChange = true;
                 callback();
               } catch (error) {
@@ -4061,9 +4107,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             const cursor = cursorRequest.result;
             if (!cursor) {
               if (supportsReceipts) {
-                const archivedIdeaIds = archived
-                  .map(entry => entry.idea.id)
-                  .sort((first, second) => first.localeCompare(second));
+                archivedIdeaIds.sort((first, second) => first.localeCompare(second));
                 receipts.add({
                   writerId,
                   sourceProjectId: projectId,
@@ -4153,7 +4197,21 @@ export class IndexedDbProjectStore implements ProjectStore {
             this.publishNarrativeChange(projectId);
             this.publishPersonalIdeaLibraryChange(writerId);
           }
-          resolve(archived);
+          if (collectEntries) {
+            resolve(archived);
+          } else {
+            const receipt = existingReceipt;
+            resolve({
+              writerId,
+              sourceProjectId: projectId,
+              sourceProjectName,
+              archivedCount: receipt?.archivedIdeaIds.length ?? archivedIdeaIds.length,
+              finalizedAt: receipt?.finalizedAt ?? archivedAt,
+              archiveChecksum: receipt?.archiveChecksum ?? checksumArchivedIdeaIds(
+                [...archivedIdeaIds].sort((first, second) => first.localeCompare(second))
+              )
+            });
+          }
         }
       };
       transaction.onerror = () => {

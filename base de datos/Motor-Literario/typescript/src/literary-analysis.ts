@@ -707,7 +707,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         knownCharacterIds.has(character.entityId) ||
         typeof character.canonicalName !== "string" || !character.canonicalName.trim() ||
         (character.aliases !== undefined &&
-          (!Array.isArray(character.aliases) || character.aliases.some(alias =>
+          (!Array.isArray(character.aliases) || character.aliases.some((alias: string) =>
             typeof alias !== "string" || !alias.trim()
           ))) ||
         [character.canonicalName,...(character.aliases ?? [])].some(name => name.length > 120)) {

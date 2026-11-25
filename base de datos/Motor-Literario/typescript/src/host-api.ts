@@ -3239,9 +3239,13 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-      } else if (referenceKind === "relatedIdeaIds" && linked) {
-        // Las ideas también pueden ser eliminadas por otra instancia. Validar
-        // un alta contra el snapshot caliente permitiría crear un vínculo colgante.
+      } else if (
+        referenceKind === "relatedIdeaIds" && linked &&
+        !store.saveIdeaIfUnchanged && !store.updateIdeaIfUnchanged
+      ) {
+        // Los adaptadores sin CAS necesitan refrescar el catálogo antes del alta.
+        // Con CAS, el adaptador valida el destino dentro de la misma escritura
+        // atómica y el refresco adicional duplicaría una lectura por operación.
         const ideas = requireProjectScopedRecords(
           await store.loadIdeas(projectId), projectId, "ideas"
         );
@@ -3431,7 +3435,7 @@ export class HostEngineApi {
           return cloneNarrativeRecord(updated);
         } catch (error) {
           const isVersionConflict = error instanceof Error &&
-            /\\bidea\\b.*\\bcambió en otra instancia\\b/iu.test(error.message);
+            /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
           if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
           // La siguiente iteración relee la idea completa y conserva las
           // referencias concurrentes y las decisiones editoriales añadidas.

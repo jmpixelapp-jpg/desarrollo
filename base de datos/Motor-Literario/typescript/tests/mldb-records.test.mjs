@@ -99,6 +99,14 @@ class MldbRecordsMemoryStore {
       .map(item => structuredClone(item));
   }
   async saveProjectRelation(relation, expectedCurrent) {
+    if (relation.sourceRecordId &&
+        !this.projectRecords.has(this.key(relation.projectId, relation.sourceRecordId))) {
+      throw new Error("No existe la ficha de origen de la relación.");
+    }
+    if (relation.targetRecordId &&
+        !this.projectRecords.has(this.key(relation.projectId, relation.targetRecordId))) {
+      throw new Error("No existe la ficha de destino de la relación.");
+    }
     const key = this.key(relation.projectId, relation.id);
     const current = this.projectRelations.get(key);
     if (expectedCurrent === undefined ? current !== undefined

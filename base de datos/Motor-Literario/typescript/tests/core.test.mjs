@@ -7537,6 +7537,46 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
     /Violación de aislamiento/
   );
 
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    idea: {
+      ...structuredClone(entry.idea),
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "IDEA", reason: "writer", changedAt: 2 }
+      ]
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
+
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    context: {
+      version: 1,
+      relatedIdeas: [{
+        projectId: "library-api-validation",
+        id: "invalid-text-revision",
+        text: "Idea incorporada",
+        status: "discarded",
+        originDocumentId: "chapter",
+        sourceProjectName: "Libro validado",
+        evidence: [],
+        statusHistory: [
+          { status: "incorporated", reason: "initial", changedAt: 1 },
+          { status: "discarded", reason: "text-revised", changedAt: 2 }
+        ]
+      }],
+      relatedEntities: []
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
+
   const contextTargets = Array.from({ length: 501 }, (_, index) => ({
     projectId: "library-api-validation",
     id: "context-target-" + index,

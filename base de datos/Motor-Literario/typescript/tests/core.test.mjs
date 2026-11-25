@@ -10628,7 +10628,7 @@ test("no interpreta como discontinuidad una escena con vínculos de eventos trun
   const text = [
     "ESCENA 1","La alarma sonó.","***",
     "ESCENA 2","Ana escuchó la señal."
-  ].join("\\n");
+  ].join("\n");
   const firstStart=text.indexOf("La alarma sonó.");
   const secondStart=text.indexOf("Ana escuchó la señal.");
   const knownEvents=Array.from({length:101},(_,index)=>({

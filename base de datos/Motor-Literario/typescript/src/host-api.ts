@@ -218,6 +218,11 @@ function requireNarrativeEntityReferences<T extends { readonly projectId: string
 }
 
 
+function isNarrativeIdeaVersionConflict(error: unknown): boolean {
+  return error instanceof Error &&
+    /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
+}
+
 function requireUniquePersonalIdeaEntries(
   entries: unknown,
   writerId: string,
@@ -3026,10 +3031,20 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
+        try {
+          requireNarrativeEntityReferences(
+            ideas, projectId, entities,
+            idea => idea.relatedEntityIds ?? [], "ideas"
+          );
+        } catch (error) {
+          this.narrativeIdeas.clear();
+          this.ideasLoaded = false;
+          this.narrativeEntities.clear();
+          this.entitiesLoaded = false;
+          this.entityEvidenceIndex = undefined;
+          this.entityNameIndex = undefined;
+          throw error;
+        }
       }
       return cloneNarrativeRecords(ideas);
     });
@@ -3218,12 +3233,15 @@ export class HostEngineApi {
     const maxAttempts = 3;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let loadedIdeasThisAttempt = false;
       if (!this.ideasLoaded) {
         const ideas = requireProjectScopedRecords(
           await store.loadIdeas(projectId), projectId, "ideas"
         );
+        this.narrativeIdeas.clear();
         for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
         this.ideasLoaded = true;
+        loadedIdeasThisAttempt = true;
       }
 
       if (referenceKind === "relatedEntityIds" && (linked || !this.entitiesLoaded)) {
@@ -3239,7 +3257,7 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-      } else if (referenceKind === "relatedIdeaIds" && linked) {
+      } else if (referenceKind === "relatedIdeaIds" && linked && !loadedIdeasThisAttempt) {
         // Las ideas también pueden ser eliminadas por otra instancia. Validar
         // un alta contra el snapshot caliente permitiría crear un vínculo colgante.
         const ideas = requireProjectScopedRecords(
@@ -3292,8 +3310,7 @@ export class HostEngineApi {
         this.narrativeIdeas.set(ideaId, updated);
         return cloneNarrativeRecord(updated);
       } catch (error) {
-        const isVersionConflict = error instanceof Error &&
-          /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
+        const isVersionConflict = isNarrativeIdeaVersionConflict(error);
         if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
 
         // persistIdeaUpdate ya invalida la caché de ideas al fallar el CAS.
@@ -3430,8 +3447,7 @@ export class HostEngineApi {
           this.narrativeIdeas.set(updated.id, updated);
           return cloneNarrativeRecord(updated);
         } catch (error) {
-          const isVersionConflict = error instanceof Error &&
-            /\\bidea\\b.*\\bcambió en otra instancia\\b/iu.test(error.message);
+          const isVersionConflict = isNarrativeIdeaVersionConflict(error);
           if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
           // La siguiente iteración relee la idea completa y conserva las
           // referencias concurrentes y las decisiones editoriales añadidas.

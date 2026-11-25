@@ -269,6 +269,7 @@ test("los totales globales de coherencia cubren exactamente todos los nodos del 
     {
       ...idea("consistent"),
       status: "incorporated",
+      writerDecisionCount: 1,
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 10 },
         { status: "incorporated", reason: "writer", changedAt: 20 }
@@ -277,6 +278,7 @@ test("los totales globales de coherencia cubren exactamente todos los nodos del 
     {
       ...idea("mismatch"),
       status: "discarded",
+      writerDecisionCount: 1,
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 10 },
         { status: "incorporated", reason: "writer", changedAt: 20 }

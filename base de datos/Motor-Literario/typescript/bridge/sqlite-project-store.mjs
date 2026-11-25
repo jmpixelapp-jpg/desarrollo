@@ -65,7 +65,9 @@ function validateNarrativeEntity(entity, projectId, label = "entidad") {
       typeof entity.normalizedName !== "string" || entity.normalizedName !== normalizeNarrativeName(entity.canonicalName) ||
       !Array.isArray(entity.aliases) || entity.aliases.some(x => typeof x !== "string" || !x.trim()) ||
       (entity.mergedFromIds !== undefined &&
-        (!Array.isArray(entity.mergedFromIds) || entity.mergedFromIds.some(x => typeof x !== "string" || !x.trim()))) ||
+        (!Array.isArray(entity.mergedFromIds) ||
+          entity.mergedFromIds.some(x => typeof x !== "string" || !x.trim()) ||
+          new Set(entity.mergedFromIds).size !== entity.mergedFromIds.length)) ||
       !Number.isFinite(entity.firstSeenAt) || entity.firstSeenAt < 0 ||
       !Number.isFinite(entity.lastSeenAt) || entity.lastSeenAt < entity.firstSeenAt ||
       entity.extractionVersion !== 1) {

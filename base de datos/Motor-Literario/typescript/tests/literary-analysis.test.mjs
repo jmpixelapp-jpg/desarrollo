@@ -866,6 +866,7 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
           { status: "IDEA", reason: "initial", changedAt: 1 },
           { status: "incorporated", reason: "writer", changedAt: 2 }
         ],
+        writerDecisionCount: 1,
         omittedStatusHistoryCount: 0
       },
       {
@@ -884,6 +885,7 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
           { status: "IDEA", reason: "initial" },
           { status: "discarded", reason: "writer", changedAt: 3 }
         ],
+        writerDecisionCount: 1,
         omittedStatusHistoryCount: 0
       }
     ]

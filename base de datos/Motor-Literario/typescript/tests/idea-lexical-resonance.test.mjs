@@ -65,6 +65,68 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
   assert.equal(changed.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 1);
 });
 
+test("agrega métricas globales y por estado de forma coherente", () => {
+  const ideas = [
+    {
+      ...idea("aggregate-a", "memoria espejo"),
+      relatedIdeaIds: ["aggregate-b", "outside-snapshot"],
+      writerDecisionCount: 2,
+      evidenceCount: 3,
+      staleEvidenceCount: 1
+    },
+    {
+      ...idea("aggregate-b", "destino horizonte"),
+      status: "incorporated",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "accepted", changedAt: 2 }
+      ],
+      writerDecisionCount: 1,
+      staleEvidenceCount: 2
+    },
+    {
+      ...idea("aggregate-c", "ceniza bruma"),
+      status: "discarded",
+      evidenceCount: 1
+    }
+  ];
+  const graph = analyzeGraph(ideas);
+  const profile = status => graph.statusProfiles.find(item => item.status === status);
+
+  assert.equal(graph.referenceCount, 2);
+  assert.equal(graph.includedReferenceCount, 1);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.sourceNodeCount, 2);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 2);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 1);
+  assert.deepEqual(profile("IDEA"), {
+    status: "IDEA",
+    ideaCount: 1,
+    sourceIdeaCount: 1,
+    terminalWithinSnapshotIdeaCount: 0,
+    isolatedWithinSnapshotIdeaCount: 0,
+    incomingReferenceCount: 0,
+    includedOutgoingReferenceCount: 1,
+    notIncludedOutgoingReferenceCount: 1,
+    statusHistoryRecordCount: 1,
+    omittedStatusHistoryCount: 0,
+    writerDecisionCount: 2,
+    activeEvidenceCount: 3,
+    staleEvidenceCount: 1,
+    ideasWithActiveEvidenceCount: 1,
+    ideasWithStaleEvidenceCount: 1,
+    ideasWithoutActiveEvidenceCount: 0
+  });
+  assert.equal(profile("incorporated").ideaCount, 1);
+  assert.equal(profile("incorporated").incomingReferenceCount, 1);
+  assert.equal(profile("incorporated").terminalWithinSnapshotIdeaCount, 1);
+  assert.equal(profile("incorporated").statusHistoryRecordCount, 2);
+  assert.equal(profile("incorporated").activeEvidenceCount, 0);
+  assert.equal(profile("incorporated").ideasWithoutActiveEvidenceCount, 1);
+  assert.equal(profile("discarded").isolatedWithinSnapshotIdeaCount, 1);
+  assert.equal(profile("discarded").activeEvidenceCount, 1);
+});
+
 test("detecta resonancias por términos literales compartidos sin alterar el grafo", () => {
   const ideas = [
     idea("idea-a", "La luz revela la memoria del espejo"),

@@ -1306,7 +1306,7 @@ test("el cliente TypeScript del puente lee y añade historiales versionados de r
 });
 
 
-test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtrar a otros escritores", async () => {
+test("sincroniza archivo y consolidación de biblioteca entre proyectos y procesos sin filtrar a otros escritores", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-writer-library-sync-"));
   const databasePath = resolve(directory, "motor.sqlite");
   let first;
@@ -1358,18 +1358,50 @@ test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtr
         }
       });
     });
-
-    const firstNotices = waitForProjects(first.client, 2);
-    const secondNotices = waitForProjects(second.client, 1);
+    const assertSharedWriterNotifications = async (sameProcessPromise, otherProcessPromise) => {
+      const [sameProcess, otherProcess] = await Promise.all([
+        sameProcessPromise,
+        otherProcessPromise
+      ]);
+      assert.deepEqual(
+        sameProcess.map(item => item.projectId).sort(),
+        ["writer-sync-sibling", "writer-sync-source"]
+      );
+      assert.deepEqual(otherProcess.map(item => item.projectId), ["writer-sync-peer"]);
+      assert.ok([...sameProcess, ...otherProcess].every(item => item.writerId === "writer-shared"));
+      assert.ok(![...sameProcess, ...otherProcess].some(item =>
+        item.projectId === "writer-sync-private" || item.projectId === "writer-sync-other"
+      ));
+    };
 
     await first.client.openDocument("writer-sync-source", {
       documentId: "chapter-ideas",
-      text: "IDEA: La campana debe sonar antes del amanecer.",
+      text: "personaje Ana\npersonaje Anita\nIDEA: La campana debe sonar antes del amanecer.",
       revision: 0,
       sequence: 0
     });
     await first.client.flushProject("writer-sync-source");
 
+    const entities = await first.client.request("project.call", {
+      projectId: "writer-sync-source", method: "getNarrativeEntities", args: []
+    });
+    const target = entities.find(entity => entity.canonicalName === "Ana");
+    const source = entities.find(entity => entity.canonicalName === "Anita");
+    assert.ok(target, "Debe existir la ficha canónica de Ana.");
+    assert.ok(source, "Debe existir la ficha que se consolidará.");
+
+    const ideas = await first.client.request("project.call", {
+      projectId: "writer-sync-source", method: "getNarrativeIdeas", args: []
+    });
+    assert.equal(ideas.length, 1);
+    await first.client.request("project.call", {
+      projectId: "writer-sync-source",
+      method: "setNarrativeIdeaEntityLink",
+      args: [ideas[0].id, source.id, true]
+    });
+
+    const archiveSameProcess = waitForProjects(first.client, 2);
+    const archiveOtherProcess = waitForProjects(second.client, 1);
     const archived = await first.client.request("project.call", {
       projectId: "writer-sync-source",
       method: "archiveUnincorporatedIdeas",
@@ -1377,23 +1409,33 @@ test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtr
     });
     assert.equal(archived.length, 1);
     assert.equal(archived[0].writerId, "writer-shared");
+    assert.deepEqual(archived[0].idea.relatedEntityIds, [source.id]);
+    await assertSharedWriterNotifications(archiveSameProcess, archiveOtherProcess);
 
-    const [sameProcess, otherProcess] = await Promise.all([firstNotices, secondNotices]);
-    assert.deepEqual(
-      sameProcess.map(item => item.projectId).sort(),
-      ["writer-sync-sibling", "writer-sync-source"]
-    );
-    assert.deepEqual(otherProcess.map(item => item.projectId), ["writer-sync-peer"]);
-    assert.ok([...sameProcess, ...otherProcess].every(item => item.writerId === "writer-shared"));
-    assert.ok(![...sameProcess, ...otherProcess].some(item =>
-      item.projectId === "writer-sync-private" || item.projectId === "writer-sync-other"
-    ));
+    // La consolidación también modifica instantáneas archivadas. Debe invalidar
+    // la biblioteca en las demás sesiones, igual que la transferencia inicial.
+    const mergeSameProcess = waitForProjects(first.client, 2);
+    const mergeOtherProcess = waitForProjects(second.client, 1);
+    const merged = await first.client.request("project.call", {
+      projectId: "writer-sync-source",
+      method: "mergeNarrativeEntities",
+      args: [target.id, source.id]
+    });
+    assert.equal(merged.id, target.id);
+    assert.ok(merged.mergedFromIds.includes(source.id));
+    await assertSharedWriterNotifications(mergeSameProcess, mergeOtherProcess);
 
     const peerPage = await second.client.getPersonalIdeaLibraryPage(
       "writer-sync-peer", null, 50
     );
     assert.equal(peerPage.items.length, 1);
     assert.equal(peerPage.items[0].idea.text, "La campana debe sonar antes del amanecer.");
+    assert.deepEqual(peerPage.items[0].idea.relatedEntityIds, [target.id]);
+    assert.deepEqual(
+      peerPage.items[0].context.relatedEntities.map(entity => entity.id),
+      [target.id]
+    );
+    assert.ok(peerPage.items[0].context.relatedEntities[0].mergedFromIds.includes(source.id));
 
     const privatePage = await second.client.getPersonalIdeaLibraryPage(
       "writer-sync-other", null, 50
@@ -1421,7 +1463,6 @@ test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtr
     await rm(directory, { recursive: true, force: true });
   }
 });
-
 
 test("SQLite finaliza libros grandes por páginas sin materializar todas las ideas ni entidades", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-paged-finalization-"));

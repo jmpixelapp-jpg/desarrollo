@@ -7,11 +7,12 @@ import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, Dictio
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
 import type {
   ProjectSetting, ProjectSettingSource, ProjectJsonValue,
-  LanguageProfile, LanguageResourceRef
+  LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack
 } from "./project-data";
 import {
   cloneProjectSetting, validateProjectSetting, cloneLanguageProfile,
-  cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef
+  cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef,
+  cloneStyleProfile, cloneTimelineTrack, validateStyleProfile, validateTimelineTrack
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
@@ -1557,6 +1558,90 @@ export class HostEngineApi {
     });
   }
 
+  async getStyleProfiles(): Promise<readonly StyleProfile[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadStyleProfiles;
+      if (!load) throw new Error("El adaptador de almacenamiento no admite perfiles de estilo.");
+      const profiles = await load.call(this.store, projectId);
+      if (!Array.isArray(profiles)) throw new Error("El almacenamiento devolvió perfiles de estilo inválidos.");
+      const ids = new Set<string>();
+      for (const profile of profiles) {
+        validateStyleProfile(profile, projectId);
+        if (ids.has(profile.id)) throw new Error("Hay IDs duplicados de perfiles de estilo.");
+        ids.add(profile.id);
+      }
+      return profiles.map(cloneStyleProfile);
+    });
+  }
+
+  async saveStyleProfile(
+    input: Omit<StyleProfile, "projectId">
+  ): Promise<StyleProfile> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadStyleProfiles;
+      const save = this.store.saveStyleProfile;
+      if (!load || !save) throw new Error("El adaptador de almacenamiento no admite perfiles de estilo.");
+      const profiles = await load.call(this.store, projectId);
+      let current: StyleProfile | undefined;
+      const ids = new Set<string>();
+      for (const profile of profiles) {
+        validateStyleProfile(profile, projectId);
+        if (ids.has(profile.id)) throw new Error("Hay IDs duplicados de perfiles de estilo.");
+        ids.add(profile.id);
+        if (profile.id === input.id) current = profile;
+      }
+      const candidate: StyleProfile = { ...input, projectId };
+      validateStyleProfile(candidate, projectId);
+      const safeCandidate = cloneStyleProfile(candidate);
+      await save.call(this.store, safeCandidate, current);
+      return cloneStyleProfile(safeCandidate);
+    });
+  }
+
+  async getTimelineTracks(): Promise<readonly TimelineTrack[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadTimelineTracks;
+      if (!load) throw new Error("El adaptador de almacenamiento no admite pistas cronológicas.");
+      const tracks = await load.call(this.store, projectId);
+      if (!Array.isArray(tracks)) throw new Error("El almacenamiento devolvió pistas cronológicas inválidas.");
+      const ids = new Set<string>();
+      for (const track of tracks) {
+        validateTimelineTrack(track, projectId);
+        if (ids.has(track.id)) throw new Error("Hay IDs duplicados de pistas cronológicas.");
+        ids.add(track.id);
+      }
+      return tracks.map(cloneTimelineTrack);
+    });
+  }
+
+  async saveTimelineTrack(
+    input: Omit<TimelineTrack, "projectId">
+  ): Promise<TimelineTrack> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadTimelineTracks;
+      const save = this.store.saveTimelineTrack;
+      if (!load || !save) throw new Error("El adaptador de almacenamiento no admite pistas cronológicas.");
+      const tracks = await load.call(this.store, projectId);
+      let current: TimelineTrack | undefined;
+      const ids = new Set<string>();
+      for (const track of tracks) {
+        validateTimelineTrack(track, projectId);
+        if (ids.has(track.id)) throw new Error("Hay IDs duplicados de pistas cronológicas.");
+        ids.add(track.id);
+        if (track.id === input.id) current = track;
+      }
+      const candidate: TimelineTrack = { ...input, projectId };
+      validateTimelineTrack(candidate, projectId);
+      const safeCandidate = cloneTimelineTrack(candidate);
+      await save.call(this.store, safeCandidate, current);
+      return cloneTimelineTrack(safeCandidate);
+    });
+  }
+
   /** Devuelve los diccionarios pertenecientes únicamente al libro activo. */
   async getProjectDictionaries(): Promise<readonly ProjectDictionary[]> {
     return this.enqueueKnowledgeOperation(async () => {
@@ -2105,6 +2190,8 @@ export class HostEngineApi {
       projectSettings: Boolean(this.store.saveProjectSetting && this.store.loadProjectSettings),
       languageProfiles: Boolean(this.store.saveLanguageProfile && this.store.loadLanguageProfiles),
       languageResourceRefs: Boolean(this.store.saveLanguageResourceRef && this.store.loadLanguageResourceRefs),
+      styleProfiles: Boolean(this.store.saveStyleProfile && this.store.loadStyleProfiles),
+      timelineTracks: Boolean(this.store.saveTimelineTrack && this.store.loadTimelineTracks),
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),

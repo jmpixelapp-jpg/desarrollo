@@ -1,4 +1,6 @@
-import { analyzeLiteraryFragment, type LiteraryAnalysisResult } from "./literary-analysis";
+import {
+  analyzeLiteraryFragment, type LiteraryAnalysisResult, type LiteraryAnalysisKnownProjectIdea
+} from "./literary-analysis";
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
@@ -1587,6 +1589,26 @@ export class HostEngineApi {
     const projectIdeas = this.store.loadIdeas
       ? await this.getNarrativeIdeas()
       : [];
+    const orderedProjectIdeas = [...projectIdeas].sort((a,b) => a.id.localeCompare(b.id,"en"));
+    const knownProjectIdeasOmittedCount = Math.max(0,orderedProjectIdeas.length-2_000);
+    const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] = orderedProjectIdeas
+      .slice(0,2_000).map(idea => {
+        const activeEvidence = idea.evidence.filter(evidence => evidence.status !== "stale");
+        const statusHistory = idea.statusHistory ?? [
+          {status:idea.status,reason:"initial" as const}
+        ];
+        return {
+          projectId:idea.projectId,
+          ideaId:idea.id,
+          status:idea.status,
+          relatedIdeaIds:idea.relatedIdeaIds ?? [],
+          evidenceCount:activeEvidence.length,
+          staleEvidenceCount:idea.evidence.length-activeEvidence.length,
+          statusHistory:statusHistory.slice(-100),
+          writerDecisionCount:statusHistory.filter(change => change.reason==="writer").length,
+          omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
+        };
+      });
     const linkedIdeas = projectIdeas
       .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)))
       .sort((a,b) => a.id.localeCompare(b.id,"en"));
@@ -1660,6 +1682,8 @@ export class HostEngineApi {
       knownAssertions,
       knownRelations,
       knownIdeas,
+      knownProjectIdeas,
+      knownProjectIdeasOmittedCount,
       knownRelationsOmittedCount,
       knownIdeasOmittedCount
     });

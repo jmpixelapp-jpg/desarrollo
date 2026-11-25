@@ -711,6 +711,31 @@ test("mantiene el límite de 500 vínculos por categoría antes de persistir", a
   entityApi.dispose();
 });
 
+test("rechaza historiales editoriales cuya secuencia temporal o estado final es incoherente", async () => {
+  const invalidHistories = [
+    [
+      { status: "IDEA", reason: "initial", changedAt: 10 },
+      { status: "incorporated", reason: "writer", changedAt: 9 }
+    ],
+    [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "discarded", reason: "writer", changedAt: 2 }
+    ]
+  ];
+
+  for (const statusHistory of invalidHistories) {
+    const store = new RacingStore([
+      idea("idea-source", { status: "incorporated", statusHistory })
+    ]);
+    const api = createApi(store);
+    await assert.rejects(
+      api.getNarrativeIdeas(),
+      /registro malformado en ideas/
+    );
+    api.dispose();
+  }
+});
+
 test("rechaza catálogos de adaptadores con más de 500 vínculos por idea", async () => {
   const oversized = Array.from({ length: 501 }, (_, index) =>
     "idea-related-" + String(index).padStart(3, "0")

@@ -59,7 +59,7 @@ export interface AnalysisResult {
 
 export type ChangeAdmission =
   | { readonly status: "queued"; readonly ticketId: string }
-  | { readonly status: "rejected"; readonly reason: "queue_full" | "unknown_document" | "invalid_change" | "resync_required" };
+  | { readonly status: "rejected"; readonly reason: "queue_full" | "change_too_large" | "unknown_document" | "invalid_change" | "resync_required" };
 
 export interface CommitResult {
   readonly ticketId: string;

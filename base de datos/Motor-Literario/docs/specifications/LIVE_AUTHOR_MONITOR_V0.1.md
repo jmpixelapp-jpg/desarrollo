@@ -521,15 +521,16 @@ El índice `by-project` también se declara mediante `ensureIndex(LIVE_AUTHOR_MO
 
 ## 27. Prueba de runtime de IndexedDB para checkpoints
 
-La persistencia ya no se valida solo por la interfaz `ProjectStore` en memoria y la auditoría estática. Se añadió `tests/live-author-monitor-indexeddb.test.mjs`, que utiliza el IndexedDB nativo disponible en Node 22.13 o posterior y ejecuta las operaciones contra `IndexedDbProjectStore` real:
+La persistencia ya no se valida solo por la interfaz `ProjectStore` en memoria y la auditoría estática. Se añadió `tests/live-author-monitor-indexeddb.test.mjs`, que ejecuta `IndexedDbProjectStore` contra `fake-indexeddb` (polyfill de desarrollo, versión 6.2.8). El polyfill implementa la API IndexedDB en memoria para Node; no escribe en disco ni persiste entre procesos.
 
+La prueba verifica:
 - guardar y leer un checkpoint por proyecto/documento;
-- verificar que la lectura devuelve copias independientes del objeto y de las muestras de latencia;
-- rechazar una escritura con `savedAt` anterior al registro persistido;
-- aceptar una escritura más nueva y comprobar que sustituye el checkpoint;
-- aislar claves de otros proyectos y borrar el checkpoint;
-- cerrar la conexión desde `IndexedDbProjectStore.close()` al finalizar la prueba.
+- que la lectura devuelve copias independientes del objeto y de las muestras de latencia;
+- rechazo de una escritura con `savedAt` anterior al registro persistido;
+- aceptación de una escritura más nueva y sustitución del checkpoint;
+- aislamiento de claves de otros proyectos y eliminación del registro;
+- cierre de conexión mediante `IndexedDbProjectStore.close()` al finalizar.
 
-`close()` espera una apertura pendiente, cierra la conexión IndexedDB y cierra el canal de notificaciones de la instancia. Una operación posterior puede abrir una nueva conexión.
+`close()` espera una apertura pendiente, cierra la conexión IndexedDB y cierra el canal de notificaciones de la instancia. Una operación posterior puede abrir una nueva conexión. `fake-indexeddb` es dependencia de desarrollo; la implementación de producción sigue usando el IndexedDB nativo del navegador.
 
-**Validación CI:** pendiente de la ejecución que incluye la nueva prueba de runtime y el método de cierre. La auditoría estática del manifiesto activo y la suite previa ya pasaron en la ejecución [45723969106](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723969106): esquema 0.4.2 válido, 25 tablas y 33 almacenes, build Vite y 98 pruebas aprobadas.
+**Límite de validación:** esta prueba ejercita las transacciones y operaciones del adaptador contra el polyfill en memoria. No sustituye una prueba de navegador real ni demuestra persistencia física entre cierres y reinicios del navegador. Esa prueba E2E de navegador queda pendiente.

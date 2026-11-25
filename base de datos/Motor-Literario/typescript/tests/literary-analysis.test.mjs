@@ -1384,6 +1384,16 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     /catálogo global de ideas/
   );
   assert.throws(
+    () => analyzeLiteraryFragment({
+      ...input,
+      knownProjectIdeas: [{
+        ...idea,
+        relatedIdeaIds: Array.from({ length: 501 }, (_, index) => "linked-" + index)
+      }]
+    }),
+    /catálogo global de ideas/
+  );
+  assert.throws(
     () => analyzeLiteraryFragment({ ...input, knownProjectIdeasOmittedCount: -1 }),
     /Contexto de análisis literario inválido/
   );

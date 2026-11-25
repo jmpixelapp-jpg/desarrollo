@@ -1,4 +1,7 @@
-import type { PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage } from "./contracts";
+import type {
+  PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage,
+  ProjectFinalizationSummary, StoredProjectFinalizationReceipt
+} from "./contracts";
 import type { RecordLifecycle, RelationLifecycle } from "./project-data";
 
 export interface BridgeReadable {
@@ -295,6 +298,24 @@ export class MotorLiterarioBridgeClient {
     replacement: string;
   }): Promise<unknown> {
     return this.request("document.change", { projectId, change });
+  }
+
+  finalizeProjectToIdeaLibrary(projectId: string): Promise<ProjectFinalizationSummary> {
+    return this.request("project.call", {
+      projectId,
+      method: "finalizeProjectToIdeaLibrary",
+      args: []
+    });
+  }
+
+  getProjectFinalizationReceipt(
+    projectId: string
+  ): Promise<StoredProjectFinalizationReceipt | null> {
+    return this.request("project.call", {
+      projectId,
+      method: "getProjectFinalizationReceipt",
+      args: []
+    });
   }
 
   getPersonalIdeaLibraryPage(

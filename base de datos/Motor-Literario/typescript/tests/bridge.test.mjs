@@ -260,11 +260,7 @@ test("la finalización compacta devuelve un recibo resumido y permite leer las i
     });
     await client.flushProject("compact-finalization-project");
 
-    const summary = await client.request("project.call", {
-      projectId: "compact-finalization-project",
-      method: "finalizeProjectToIdeaLibrary",
-      args: []
-    });
+    const summary = await client.finalizeProjectToIdeaLibrary("compact-finalization-project");
     assert.equal(summary.writerId, "writer-compact");
     assert.equal(summary.sourceProjectId, "compact-finalization-project");
     assert.equal(summary.sourceProjectName, "Libro compacto");
@@ -274,20 +270,17 @@ test("la finalización compacta devuelve un recibo resumido y permite leer las i
     assert.equal(Array.isArray(summary), false);
     assert.equal(Object.hasOwn(summary, "items"), false);
 
-    const page = await client.request("project.call", {
-      projectId: "compact-finalization-project",
-      method: "getPersonalIdeaLibraryPage",
-      args: [null, 1]
-    });
+    const page = await client.getPersonalIdeaLibraryPage(
+      "compact-finalization-project", null, 1
+    );
     assert.equal(page.items.length, 1);
     assert.equal(page.items[0].idea.text, "Una ciudad conserva la memoria de sus habitantes.");
     assert.equal(page.nextCursor, null);
 
-    const retry = await client.request("project.call", {
-      projectId: "compact-finalization-project",
-      method: "finalizeProjectToIdeaLibrary",
-      args: []
-    });
+    const receipt = await client.getProjectFinalizationReceipt("compact-finalization-project");
+    assert.equal(receipt?.writerId, "writer-compact");
+    assert.deepEqual(receipt?.archivedIdeaIds, [page.items[0].idea.id]);
+    const retry = await client.finalizeProjectToIdeaLibrary("compact-finalization-project");
     assert.equal(retry.alreadyFinalized, true);
     assert.deepEqual({ ...retry, alreadyFinalized: false }, summary);
 

@@ -651,9 +651,10 @@ export function mergeNarrativeIdea(
   }
   const textChanged = previous.text !== incoming.text;
   const nextStatus = textChanged ? "IDEA" : previous.status;
-  const statusHistory = [...(previous.statusHistory ?? [
-    { status: previous.status, reason: "initial" as const }
-  ])];
+  const statusHistory = [...(previous.statusHistory ??
+    (previous.omittedStatusHistoryCount
+      ? []
+      : [{ status: previous.status, reason: "initial" as const }]))];
   if (textChanged && previous.status !== "IDEA") {
     statusHistory.push({
       status: "IDEA",

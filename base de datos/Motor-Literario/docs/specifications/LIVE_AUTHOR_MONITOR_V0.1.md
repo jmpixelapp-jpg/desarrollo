@@ -110,6 +110,31 @@ stopMonitoring();
 - Aísla excepciones de la interfaz y de una lectura de observabilidad para no interrumpir la escritura.
 - No recibe ni almacena texto del manuscrito; reutiliza únicamente los snapshots de métricas ya expuestos por `HostEngineApi`.
 
-## 7. Próximo tramo
+## 7. Panel DOM del autor
 
-Conectar el adaptador a los componentes visuales del editor anfitrión y validar el flujo en el runtime real. Añadir pruebas de extremo a extremo para escritura sostenida, saturación, recuperación y cierre.
+El núcleo incluye un panel visual independiente de React, Vue y otros frameworks. Se monta dentro de un contenedor proporcionado por la aplicación anfitriona:
+
+~~~ts
+import { mountLiveAuthorMonitorPanel } from "./motor-literario";
+
+const unmount = mountLiveAuthorMonitorPanel(
+  document.querySelector("#author-activity")!,
+  api,
+  { documentId, intervalMs: 1_000 }
+);
+
+// Al desmontar el editor:
+unmount();
+~~~
+
+El panel muestra actividad, pausa o necesidad de resincronización; duración de sesión y tiempo activo; ritmo estimado; caracteres insertados/eliminados; ediciones aceptadas, guardadas, pendientes y fallidas; revisión durable/actual y latencia p95. Una barra resume el avance de la secuencia durable.
+
+- Construye nodos mediante APIs DOM y asigna valores con textContent; no interpola contenido del manuscrito en HTML.
+- Incluye estructura semántica, estado accesible y estilos autocontenidos con adaptación a tema oscuro.
+- Solo recibe LiveAuthorMonitorSnapshot; nunca recibe ni muestra el manuscrito.
+- La función de desmontaje cancela el refresco, retira la suscripción y el elemento DOM. No cierra el documento ni dispone la API anfitriona.
+- El intervalo y el planificador se pueden configurar desde el anfitrión y se pueden probar con un reloj y temporizador deterministas.
+
+## 8. Próximo tramo
+
+Conectar el panel al editor real del anfitrión y validar escritura sostenida, varios documentos abiertos, saturación, recuperación, navegación entre capítulos y desmontaje de vistas en los runtimes objetivo.

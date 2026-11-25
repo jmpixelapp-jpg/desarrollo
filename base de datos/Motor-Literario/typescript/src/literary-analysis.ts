@@ -3308,6 +3308,14 @@ const IDEA_ENGLISH_STOP_WORDS = new Set([
   "has","had","having","was","were","been","being","are","am","is","be","do","of","to","in","on","by",
   "as","at","an","a","or","if","it","i","he","she","we","me","my","mine","us"
 ]);
+const IDEA_FRENCH_STOP_WORDS = new Set([
+  "a","à","au","aux","avec","ce","ces","cette","chez","comme","dans","de","des","du","elle","elles",
+  "en","entre","et","eux","il","ils","je","la","le","les","leur","leurs","lui","ma","mais","me","même",
+  "mes","moi","moins","mon","ne","ni","nos","notre","nous","on","ou","où","par","pas","plus","pour",
+  "quand","que","quel","quelle","quelles","quels","qui","sa","sans","se","ses","son","sont","sous",
+  "sur","ta","te","tes","toi","ton","tous","tout","toute","toutes","tu","un","une","vos","votre","vous",
+  "y","être","été","était","étaient","est","es","sommes","êtes","ont","avoir","avait","avaient"
+]);
 
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
@@ -3761,7 +3769,7 @@ function buildLiteraryIdeaLexicalResonances(
       const term = token.normalized;
       if (Array.from(term).length < 2 || !/\p{L}/u.test(term) ||
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
-          IDEA_PORTUGUESE_STOP_WORDS.has(term)) continue;
+          IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>

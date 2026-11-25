@@ -1560,7 +1560,7 @@ export class SqliteProjectStore {
       }
       for (const id of idea.relatedIdeaIds ?? []) {
         if (id === idea.id || !this.get("narrative-ideas", identityKey(idea.projectId, id))) {
-          throw new Error("La idea enlaza una idea inexistente o se enlaza a sí misma.");
+          throw new Error("Ambas ideas deben existir en el proyecto activo.");
         }
       }
       this.put("narrative-ideas", identityKey(idea.projectId, idea.id), idea);
@@ -1583,7 +1583,7 @@ export class SqliteProjectStore {
       }
       for (const id of idea.relatedIdeaIds ?? []) {
         if (id === idea.id || !this.get("narrative-ideas", identityKey(idea.projectId, id))) {
-          throw new Error("La idea enlaza una idea inexistente o se enlaza a sí misma.");
+          throw new Error("Ambas ideas deben existir en el proyecto activo.");
         }
       }
       this.put("narrative-ideas", identityKey(idea.projectId, idea.id), idea,

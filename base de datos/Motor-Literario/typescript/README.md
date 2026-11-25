@@ -10,6 +10,7 @@ Esta carpeta contiene la implementación definitiva en TypeScript. El código Ru
 - El anfitrión proporciona la identidad del proyecto y los snapshots del editor.
 - La admisión de cambios es síncrona, breve y acotada; el guardado y el análisis ocurren en segundo plano. El texto activo usa una tabla de piezas para evitar reconstruir el manuscrito completo en cada edición.
 - El texto original nunca se modifica automáticamente.
+- El monitor de actividad del autor registra admisiones, commits, pausas y resincronizaciones por documento sin almacenar texto del manuscrito. El anfitrión controla sus suscripciones y el refresco temporal del panel; la API no transmite telemetría.
 - La persistencia utiliza IndexedDB nativo del entorno y no transmite datos. Los cambios se registran incrementalmente y se consolidan en snapshots periódicos.
 - La apertura de IndexedDB se recupera ante errores o bloqueos: un intento fallido no queda cacheado como conexión permanente, las conexiones cerradas por cambios de versión se descartan y una apertura que se desbloquea tarde se cierra para no dejar conexiones huérfanas.
 

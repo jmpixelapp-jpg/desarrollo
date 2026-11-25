@@ -7,11 +7,14 @@ import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, Dictio
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry } from "./dictionaries";
 import type {
   ProjectRecord, ProjectRecordInput, RecordName,
+  ProjectRelation, ProjectEvidence, TimelineOccurrence, EvidenceSubjectKind,
   ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
   ImportAuthorization, SchemaMigration
 } from "./mldb-records";
 import {
   validateProjectRecord, validateRecordName, cloneProjectRecord, cloneRecordName,
+  validateProjectRelation, validateProjectEvidence, validateTimelineOccurrence,
+  cloneProjectRelation, cloneProjectEvidence, cloneTimelineOccurrence,
   validateManuscriptFragment, validateRecordAttribute, validateRelationAttribute,
   validateActiveSuggestion, validateImportAuthorization, validateSchemaMigration,
   cloneManuscriptFragment, cloneRecordAttribute, cloneRelationAttribute,
@@ -1705,12 +1708,17 @@ export class HostEngineApi {
       const projectId = this.requireProject().projectId;
       const load = this.store.loadRelationLifecycles;
       if (!load) throw new Error("El adaptador no admite historial de relaciones.");
-      const relations = requireProjectScopedRecords(
-        await this.requireRelationStore().loadRelations(projectId), projectId, "relaciones"
-      );
-      if (!relations.some(relation => relation.id === relationId)) {
-        throw new Error("La relación no existe en el proyecto activo.");
+      const loadRelations = this.store.loadProjectRelations;
+      if (!loadRelations) throw new Error("El adaptador no admite relaciones MLDB genéricas.");
+      const relations = await loadRelations.call(this.store, projectId);
+      if (!Array.isArray(relations)) throw new Error("La colección de relaciones MLDB es inválida.");
+      const ids = new Set<string>();
+      for (const relation of relations) {
+        validateProjectRelation(relation, projectId);
+        if (ids.has(relation.id)) throw new Error("Hay IDs duplicados de relaciones MLDB.");
+        ids.add(relation.id);
       }
+      if (!ids.has(relationId)) throw new Error("La relación no existe en el proyecto activo.");
       const records = await load.call(this.store, projectId, relationId);
       if (!Array.isArray(records)) throw new Error("El historial de relación no es una colección.");
       let previous: RelationLifecycle | undefined;
@@ -1739,12 +1747,17 @@ export class HostEngineApi {
       if (!load || !append) throw new Error("El adaptador no admite historial de relaciones.");
       const record: RelationLifecycle = { ...input, projectId };
       validateRelationLifecycle(record, projectId);
-      const relations = requireProjectScopedRecords(
-        await this.requireRelationStore().loadRelations(projectId), projectId, "relaciones"
-      );
-      if (!relations.some(relation => relation.id === record.relationId)) {
-        throw new Error("La relación no existe en el proyecto activo.");
+      const loadRelations = this.store.loadProjectRelations;
+      if (!loadRelations) throw new Error("El adaptador no admite relaciones MLDB genéricas.");
+      const relations = await loadRelations.call(this.store, projectId);
+      if (!Array.isArray(relations)) throw new Error("La colección de relaciones MLDB es inválida.");
+      const ids = new Set<string>();
+      for (const relation of relations) {
+        validateProjectRelation(relation, projectId);
+        if (ids.has(relation.id)) throw new Error("Hay IDs duplicados de relaciones MLDB.");
+        ids.add(relation.id);
       }
+      if (!ids.has(record.relationId)) throw new Error("La relación no existe en el proyecto activo.");
       const history = await load.call(this.store, projectId, record.relationId);
       if (!Array.isArray(history)) throw new Error("El historial de relación no es una colección.");
       const previous = history[history.length - 1];
@@ -1877,7 +1890,11 @@ export class HostEngineApi {
         throw new Error("Identificador de ficha inválido.");
       }
       if (recordId !== undefined) {
-        const records = await this.getProjectRecords();
+        const loadRecords = this.store.loadProjectRecords;
+        if (!loadRecords) throw new Error("El adaptador no admite fichas MLDB genéricas.");
+        const records = await loadRecords.call(this.store, projectId);
+        if (!Array.isArray(records)) throw new Error("La colección de fichas MLDB es inválida.");
+        for (const record of records) validateProjectRecord(record, projectId);
         if (!records.some(record => record.id === recordId)) {
           throw new Error("La ficha no existe en el proyecto activo.");
         }
@@ -1922,6 +1939,121 @@ export class HostEngineApi {
       }
       await save.call(this.store, cloneRecordName(candidate), current);
       return cloneRecordName(candidate);
+    });
+  }
+
+  async getProjectRelations(): Promise<readonly ProjectRelation[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadProjectRelations;
+      if (!load) throw new Error("El adaptador no admite relaciones MLDB genéricas.");
+      const relations = await load.call(this.store, projectId);
+      if (!Array.isArray(relations)) throw new Error("La colección de relaciones MLDB es inválida.");
+      const ids = new Set<string>();
+      for (const relation of relations) {
+        validateProjectRelation(relation, projectId);
+        if (ids.has(relation.id)) throw new Error("Hay IDs duplicados de relaciones MLDB.");
+        ids.add(relation.id);
+      }
+      return relations.map(cloneProjectRelation);
+    });
+  }
+
+  async saveProjectRelation(
+    input: Omit<ProjectRelation, "projectId" | "currentVersion">
+  ): Promise<ProjectRelation> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadProjectRelations;
+      const save = this.store.saveProjectRelation;
+      if (!load || !save) throw new Error("El adaptador no admite relaciones MLDB genéricas.");
+      const relations = await load.call(this.store, projectId);
+      if (!Array.isArray(relations)) throw new Error("La colección de relaciones MLDB es inválida.");
+      const ids = new Set<string>();
+      for (const relation of relations) {
+        validateProjectRelation(relation, projectId);
+        if (ids.has(relation.id)) throw new Error("Hay IDs duplicados de relaciones MLDB.");
+        ids.add(relation.id);
+      }
+      const current = relations.find(relation => relation.id === input.id);
+      const candidate: ProjectRelation = {
+        ...input,
+        projectId,
+        createdAt: current?.createdAt ?? input.createdAt,
+        currentVersion: current ? current.currentVersion + 1 : 1
+      };
+      validateProjectRelation(candidate, projectId);
+      if (current && candidate.updatedAt < current.updatedAt) {
+        throw new Error("La fecha de actualización de la relación no puede retroceder.");
+      }
+      await save.call(this.store, cloneProjectRelation(candidate), current);
+      return cloneProjectRelation(candidate);
+    });
+  }
+
+  async getProjectEvidences(subjectKind?: EvidenceSubjectKind, subjectId?: string): Promise<readonly ProjectEvidence[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadProjectEvidences;
+      if (!load) throw new Error("El adaptador no admite evidencias MLDB.");
+      const records = await load.call(this.store, projectId, subjectKind, subjectId);
+      if (!Array.isArray(records)) throw new Error("La colección de evidencias es inválida.");
+      const ids = new Set<string>();
+      for (const item of records) {
+        validateProjectEvidence(item, projectId);
+        if (ids.has(item.id)) throw new Error("Hay IDs duplicados de evidencias.");
+        ids.add(item.id);
+      }
+      return records.map(cloneProjectEvidence);
+    });
+  }
+
+  async saveProjectEvidence(input: Omit<ProjectEvidence, "projectId">): Promise<ProjectEvidence> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadProjectEvidences;
+      const save = this.store.saveProjectEvidence;
+      if (!load || !save) throw new Error("El adaptador no admite evidencias MLDB.");
+      const candidate: ProjectEvidence = { ...input, projectId };
+      validateProjectEvidence(candidate, projectId);
+      const records = await load.call(this.store, projectId);
+      if (!Array.isArray(records)) throw new Error("La colección de evidencias es inválida.");
+      const current = records.find(item => item.id === candidate.id);
+      await save.call(this.store, cloneProjectEvidence(candidate), current);
+      return cloneProjectEvidence(candidate);
+    });
+  }
+
+  async getTimelineOccurrences(eventRecordId?: string, trackId?: string): Promise<readonly TimelineOccurrence[]> {
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      const load = this.store.loadTimelineOccurrences;
+      if (!load) throw new Error("El adaptador no admite ocurrencias cronológicas.");
+      const records = await load.call(this.store, projectId, eventRecordId, trackId);
+      if (!Array.isArray(records)) throw new Error("La colección de ocurrencias cronológicas es inválida.");
+      const ids = new Set<string>();
+      for (const occurrence of records) {
+        validateTimelineOccurrence(occurrence, projectId);
+        if (ids.has(occurrence.id)) throw new Error("Hay IDs duplicados de ocurrencias cronológicas.");
+        ids.add(occurrence.id);
+      }
+      return records.map(cloneTimelineOccurrence);
+    });
+  }
+
+  async saveTimelineOccurrence(input: Omit<TimelineOccurrence, "projectId">): Promise<TimelineOccurrence> {
+    const projectId = this.requireProject().projectId;
+    return this.enqueueKnowledgeOperation(async () => {
+      const load = this.store.loadTimelineOccurrences;
+      const save = this.store.saveTimelineOccurrence;
+      if (!load || !save) throw new Error("El adaptador no admite ocurrencias cronológicas.");
+      const records = await load.call(this.store, projectId);
+      if (!Array.isArray(records)) throw new Error("La colección de ocurrencias cronológicas es inválida.");
+      const current = records.find(item => item.id === input.id);
+      const candidate: TimelineOccurrence = { ...input, projectId };
+      validateTimelineOccurrence(candidate, projectId);
+      await save.call(this.store, cloneTimelineOccurrence(candidate), current);
+      return cloneTimelineOccurrence(candidate);
     });
   }
 
@@ -2791,7 +2923,10 @@ export class HostEngineApi {
       importAuthorizations: Boolean(this.store.appendImportAuthorization && this.store.loadImportAuthorizations),
       schemaMigrationHistory: Boolean(this.store.loadSchemaMigrations),
       projectRecords: true,
-      recordNames: true,
+      recordNames: Boolean(this.store.loadRecordNames && this.store.saveRecordName),
+      projectRelations: Boolean(this.store.loadProjectRelations && this.store.saveProjectRelation),
+      projectEvidences: Boolean(this.store.loadProjectEvidences && this.store.saveProjectEvidence),
+      timelineOccurrences: Boolean(this.store.loadTimelineOccurrences && this.store.saveTimelineOccurrence),
       projectDictionaries: Boolean(this.store.saveDictionary && this.store.loadDictionaries),
       dictionaryEntries: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries),
       explicitDictionaryEntityLinks: Boolean(this.store.saveDictionaryEntry && this.store.loadDictionaryEntries && this.store.saveEntity && this.store.loadEntities),

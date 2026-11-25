@@ -918,6 +918,9 @@ test("integra relaciones actuales y decisiones de ideas vinculadas en la trayect
   assert.equal(ana.documentedDecisions[0].writerDecisionCount, 1);
   assert.equal(bruno.documentedDecisions[0].currentStatusHistoryConsistency, "consistent");
   assert.equal(bruno.documentedDecisions[0].comparableStatusTimestampPairCount, 0);
+  assert.deepEqual(bruno.documentedDecisions[0].evidencedSceneIndexes, []);
+  assert.deepEqual(bruno.documentedDecisions[0].materializedEventIds, []);
+  assert.equal(bruno.documentedDecisions[0].eventMaterializationStatus, "no-current-scene-evidence");
   assert.deepEqual(ana.documentedDecisions[0].relatedIdeaReferences, [
     { ideaId: "bruno-discarded", resolution: "included-in-analysis-snapshot" },
     { ideaId: "context-not-loaded", resolution: "not-in-analysis-snapshot" }

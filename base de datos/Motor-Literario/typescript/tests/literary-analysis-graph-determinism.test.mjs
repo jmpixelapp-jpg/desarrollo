@@ -254,3 +254,60 @@ test("una idea sin historial no se clasifica como coherente ni divergente", () =
   assert.equal(graph.statusHistoryConsistency.verifiableIdeaCount, 0);
   assert.equal(graph.statusHistoryConsistency.verificationCoverage, 0);
 });
+
+
+test("los totales globales de coherencia cubren exactamente todos los nodos del catálogo", () => {
+  const graph = analyze([
+    {
+      ...idea("consistent"),
+      status: "incorporated",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 10 },
+        { status: "incorporated", reason: "writer", changedAt: 20 }
+      ]
+    },
+    {
+      ...idea("mismatch"),
+      status: "discarded",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 10 },
+        { status: "incorporated", reason: "writer", changedAt: 20 }
+      ]
+    },
+    {
+      ...idea("truncated"),
+      status: "discarded",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 10 }
+      ],
+      omittedStatusHistoryCount: 1
+    },
+    {
+      ...idea("empty-history"),
+      statusHistory: []
+    }
+  ]);
+
+  const totals = graph.statusHistoryConsistency;
+  assert.equal(graph.ideaCount, 4);
+  assert.equal(totals.consistentIdeaCount, 1);
+  assert.equal(totals.mismatchIdeaCount, 1);
+  assert.equal(totals.unknownIdeaCount, 2);
+  assert.equal(
+    totals.consistentIdeaCount + totals.mismatchIdeaCount + totals.unknownIdeaCount,
+    graph.ideaCount
+  );
+  assert.equal(totals.verifiableIdeaCount, 2);
+  assert.equal(totals.verificationCoverage, 0.5);
+
+  const profileTotals = graph.statusProfiles.reduce((sum, profile) => ({
+    consistent: sum.consistent + profile.statusHistoryConsistentIdeaCount,
+    mismatch: sum.mismatch + profile.statusHistoryMismatchIdeaCount,
+    unknown: sum.unknown + profile.statusHistoryConsistencyUnknownIdeaCount
+  }), { consistent: 0, mismatch: 0, unknown: 0 });
+  assert.deepEqual(profileTotals, {
+    consistent: totals.consistentIdeaCount,
+    mismatch: totals.mismatchIdeaCount,
+    unknown: totals.unknownIdeaCount
+  });
+});

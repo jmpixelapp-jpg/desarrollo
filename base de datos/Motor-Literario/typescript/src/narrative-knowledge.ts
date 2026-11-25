@@ -166,9 +166,9 @@ export interface NarrativeIdea {
   readonly originDocumentId: string;
   readonly sourceProjectName: string;
   readonly evidence: readonly TextEvidence[];
-  /** Referencias explícitas a fichas narrativas del mismo libro. */
+  /** Referencias explícitas a fichas narrativas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES. */
   readonly relatedEntityIds?: readonly string[];
-  /** Enlaces explícitos a otras ideas del mismo libro. */
+  /** Enlaces explícitos a otras ideas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES. */
   readonly relatedIdeaIds?: readonly string[];
   /** Historial inmutable de transiciones de estado, separado de las revisiones del texto. */
   readonly statusHistory?: readonly NarrativeIdeaStatusChange[];

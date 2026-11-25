@@ -21,6 +21,10 @@ Las carpetas `engine/` y `storage/` contienen un prototipo histórico en Rust. N
 - El motor analiza y sugiere; nunca modifica el manuscrito por iniciativa propia.
 - El monitoreo continuo del escritor es la prioridad arquitectónica número uno.
 
+## Integración con la aplicación anfitriona
+
+La guía de integración vigente define el módulo TypeScript, el ciclo de vida del documento, el contrato de cambios UTF-16, la recuperación, las consultas narrativas, los errores y las pruebas de aceptación: [Guía de integración del anfitrión](docs/integration/GUIA_INTEGRACION_ANFITRION_V1.md). La antigua especificación JSON-RPC pertenece al prototipo Rust y no es el protocolo de integración actual.
+
 ## Base de datos MLDB
 
 La versión lógica vigente es **MLDB 0.4.1**. Define 25 tablas: 24 pertenecen al motor y están implementadas; `projects` pertenece a la aplicación anfitriona y no se duplica en la base narrativa. La correspondencia física declara **31 almacenes IndexedDB**, con versión de base **21**.
@@ -41,9 +45,9 @@ npm test
 npm run bench
 ```
 
-La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. En la ejecución registrada el **25 de noviembre de 2026**, commit `c0f1e011baab6666f06dc9549fcd53a037465440`, todos los pasos terminaron correctamente: **293 pruebas, 284 aprobadas, 0 fallidas y 9 omitidas**.
+La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. En la ejecución registrada el **25 de noviembre de 2026**, commit `701e7be238a48ee52579d24de8e5f680fd310aab`, todos los pasos terminaron correctamente: **296 pruebas, 287 aprobadas, 0 fallidas y 9 omitidas**.
 
-[Consultar la ejecución de CI](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45563427372).
+[Consultar la ejecución de CI](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45563638259).
 
 El benchmark de CI usa escenarios sintéticos y un adaptador en memoria. Sus latencias no representan mediciones de disco ni sustituyen pruebas en los equipos y adaptadores del programa anfitrión.
 

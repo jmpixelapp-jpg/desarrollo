@@ -1,6 +1,8 @@
-# Contrato JSON-RPC del anfitrión — v0.1.0
+# [LEGACY] Contrato JSON-RPC del prototipo Rust — v0.1.0
 
-**Estado:** implementado en el crate Rust; pendiente de compilación y ejecución verificadas.  
+> **AVISO PARA INTEGRADORES:** no conecte la aplicación anfitriona actual a este protocolo. Describe el prototipo Rust histórico, que usa un modelo de almacenamiento y offsets diferente. La integración oficial actual es la API TypeScript `HostEngineApi` + `IndexedDbProjectStore`. Consulte [Guía de integración](../integration/GUIA_INTEGRACION_ANFITRION_V1.md).
+
+**Estado:** archivo histórico del prototipo Rust; no es parte del runtime TypeScript vigente ni está soportado como contrato de integración actual.  
 **Transporte:** proceso local stdio_json_lines por stdin/stdout, una solicitud JSON por línea y una respuesta JSON por línea.  
 **Identidad:** el anfitrión proporciona siempre project_id y document_id.  
 **Privacidad:** las rutas MLPG/MLPJ son locales. El proceso no abre sockets, no envía manuscritos a servicios externos y no modifica el documento del anfitrión.

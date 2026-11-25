@@ -3749,6 +3749,8 @@ export class HostEngineApi {
       ),
       explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
       evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
+      characterRelationshipTrajectories: Boolean(this.store.loadRelations && this.store.loadEntities),
+      characterDocumentedIdeaDecisions: Boolean(this.store.loadIdeas && this.store.loadEntities),
       optimisticNarrativeConcurrency: Boolean(
         this.store.saveEntityIfUnchanged && this.store.saveRelationIfUnchanged &&
         this.store.saveEventIfUnchanged && this.store.saveIdeaIfUnchanged &&

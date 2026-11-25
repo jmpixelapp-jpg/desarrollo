@@ -1518,3 +1518,87 @@ test("el grafo conserva su orden canónico ante catálogos recibidos en distinto
   assert.deepEqual(reversed, forward);
   assert.deepEqual(forward.nodeIds, ["bridge", "finish", "origin", "solo"]);
 });
+
+
+test("el grafo resuelve referencias externas cuando el catálogo incorpora el destino", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-catalog-expansion" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl catálogo puede incorporar ideas nuevas.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    const ghostReferenceBefore = before.references.find(reference => reference.toIdeaId === "ghost");
+    assert.equal(before.ideaCount, 4);
+    assert.equal(before.notIncludedReferenceCount, 1);
+    assert.equal(before.missingFromProjectReferenceCount, 1);
+    assert.equal(ghostReferenceBefore.resolution, "missing-from-project");
+
+    ideas.push({
+      projectId,
+      id: "ghost",
+      text: "Una idea incorporada posteriormente",
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 8 }]
+    });
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    const ghostReferenceAfter = after.references.find(reference => reference.toIdeaId === "ghost");
+    assert.equal(after.ideaCount, 5);
+    assert.equal(after.referenceCount, 6);
+    assert.equal(after.includedReferenceCount, 6);
+    assert.equal(after.notIncludedReferenceCount, 0);
+    assert.equal(after.missingFromProjectReferenceCount, 0);
+    assert.equal(ghostReferenceAfter.resolution, "included-in-snapshot");
+  } finally {
+    api.dispose();
+  }
+});
+
+test("el grafo reclasifica como externas las referencias al retirar una idea del catálogo", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-catalog-removal" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nUna idea puede salir del catálogo.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.ideaCount, 4);
+    assert.equal(before.includedReferenceCount, 5);
+
+    const bridgeIndex = ideas.findIndex(idea => idea.id === "bridge");
+    ideas.splice(bridgeIndex, 1);
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(after.ideaCount, 3);
+    assert.equal(after.referenceCount, 5);
+    assert.equal(after.includedReferenceCount, 2);
+    assert.equal(after.notIncludedReferenceCount, 3);
+    assert.equal(after.missingFromProjectReferenceCount, 3);
+    assert.deepEqual(
+      after.references
+        .filter(reference => reference.toIdeaId === "bridge")
+        .map(reference => reference.resolution),
+      ["missing-from-project"]
+    );
+  } finally {
+    api.dispose();
+  }
+});

@@ -1,6 +1,6 @@
 # Monitoreo de actividad del autor en vivo — contrato v0.1
 
-- **Estado:** primera implementación aislada, lista para integración en el anfitrión.
+- **Estado:** núcleo implementado e integrado en `HostEngineApi`; panel visual del editor anfitrión pendiente.
 - **Runtime:** TypeScript/JavaScript puro; sin dependencias externas ni servicios remotos.
 - **Ubicación:** **typescript/src/live-author-monitor.ts**.
 - **Alcance:** métricas por sesión y documento, eventos de admisión/commit, pausas, ritmo estimado, resincronización y suscripciones.
@@ -11,48 +11,51 @@
 
 El monitor no conserva el texto del manuscrito ni las cadenas de reemplazo. En la apertura solo lee **text.length**; en cada edición utiliza longitudes y referencias de revisión/secuencia. Las métricas son contadores temporales por sesión en memoria y desaparecen al cerrar la sesión o disponer la instancia. Este módulo no envía telemetría a Internet.
 
-## 2. Integración con HostEngineApi
+## 2. Integración automática con HostEngineApi
+
+El monitor ya forma parte del flujo de **HostEngineApi**. No se debe crear otra instancia ni registrar manualmente los mismos eventos:
 
 ~~~ts
-import {
-  HostEngineApi,
-  LiveAuthorMonitor
-} from "./motor-literario";
-
-const authorMonitor = new LiveAuthorMonitor({ idleAfterMs: 10_000 });
+import { HostEngineApi } from "./motor-literario";
 
 const api = new HostEngineApi({
   store,
+  liveAuthorMonitor: { idleAfterMs: 10_000 },
   callbacks: {
     onCommit(result) {
-      authorMonitor.recordCommit(result);
+      // Callback opcional del anfitrión; el monitor ya recibió el commit.
+      console.info("Commit:", result.status);
     }
   }
 });
 
 api.initializeProject({ projectId, projectName, writerId });
 await api.openDocument(snapshot);
-authorMonitor.openDocument(snapshot, projectId);
 
-// En el mismo manejador que envía el delta desde el editor:
+// El evento normal del editor alimenta también el monitor.
 const admission = api.onEditorChange(change);
-authorMonitor.recordAdmission(change, admission);
 
-// El panel consulta una instantánea sin detener ni esperar al motor:
-const liveStatus = authorMonitor.getSnapshot(change.documentId);
+// Panel de observabilidad: snapshot actual y actualizaciones.
+const current = api.getLiveAuthorMonitorSnapshot(change.documentId);
+const unsubscribe = api.subscribeLiveAuthorMonitor(snapshot => {
+  renderAuthorActivity(snapshot);
+}, change.documentId);
 
-// Tras una resincronización autoritativa del anfitrión:
-await api.openDocument(authoritativeSnapshot);
-authorMonitor.resynchronizeDocument(authoritativeSnapshot);
-
-// Antes de cerrar la vista/documento:
+// Antes de cerrar el documento:
 await api.flushPendingChanges();
-authorMonitor.closeDocument(documentId);
+unsubscribe();
+api.dispose();
 ~~~
 
-El callback **onCommit** puede ejecutarse en una microtarea posterior a **onEditorChange**; por eso el anfitrión registra primero la admisión devuelta y deja que el callback confirme después el ticket. Cada admisión debe registrarse una sola vez.
+La integración automática realiza lo siguiente:
 
-**subscribe(listener, documentId?)** permite que un panel reciba nuevas instantáneas cuando se abre un documento, se registra un delta o se resuelve un commit. Los errores de un suscriptor se aíslan para que no interrumpan la ruta de escritura.
+1. **openDocument/recoverDocument:** abre la sesión con el snapshot efectivamente recuperado y el `projectId` activo.
+2. **onEditorChange:** registra exactamente una vez la admisión devuelta por el motor; los rechazos se cuentan sin alterar la longitud proyectada.
+3. **onCommit:** correlaciona automáticamente los tickets aplicados o rechazados, sin reemplazar el callback original del anfitrión.
+4. **consultas:** expone `getLiveAuthorMonitorSnapshot(documentId)`, `getLiveAuthorMonitorSnapshots()` y `subscribeLiveAuthorMonitor(listener, documentId?)`.
+5. **aislamiento:** los errores internos del monitor no interrumpen la admisión, la persistencia ni los callbacks del anfitrión.
+
+No llamar manualmente a `recordAdmission` ni a `recordCommit` cuando se usa `HostEngineApi`: hacerlo duplicaría las métricas.
 
 ## 3. Métricas expuestas
 
@@ -82,4 +85,4 @@ La suite aislada pasa 8/8 pruebas y TypeScript compila en modo estricto. La inte
 
 ## 6. Próximo tramo
 
-Conectar esta API al ciclo de vida real del editor anfitrión y presentar el estado en un panel de observabilidad, sin duplicar el texto ni bloquear el hilo de edición. Añadir pruebas de integración de extremo a extremo para apertura, escritura sostenida, saturación, recuperación y cierre.
+Conectar las suscripciones a los componentes visuales del editor anfitrión y validar el flujo en el runtime real. Añadir pruebas de extremo a extremo para escritura sostenida, saturación, recuperación y cierre.

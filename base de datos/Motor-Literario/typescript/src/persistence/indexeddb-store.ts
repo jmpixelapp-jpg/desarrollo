@@ -3580,6 +3580,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     archivedCount: number;
     finalizedAt: number;
     archiveChecksum: string;
+    alreadyFinalized: boolean;
   }> {
     return this.archiveUnincorporatedIdeasInternal(
       projectId, writerId, sourceProjectName, archivedAt, false
@@ -3606,6 +3607,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     archivedCount: number;
     finalizedAt: number;
     archiveChecksum: string;
+    alreadyFinalized: boolean;
   }> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
@@ -4207,6 +4209,7 @@ export class IndexedDbProjectStore implements ProjectStore {
               sourceProjectName,
               archivedCount: receipt?.archivedIdeaIds.length ?? archivedIdeaIds.length,
               finalizedAt: receipt?.finalizedAt ?? archivedAt,
+              alreadyFinalized: Boolean(receipt),
               archiveChecksum: receipt?.archiveChecksum ?? checksumArchivedIdeaIds(
                 [...archivedIdeaIds].sort((first, second) => first.localeCompare(second))
               )

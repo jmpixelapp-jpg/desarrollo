@@ -1408,11 +1408,11 @@ test("IndexedDB impide que un guardado atrasado reemplace un snapshot más recie
 
     await assert.rejects(
       store.saveDocument(initial),
-      /se conserva el documento más reciente/
+      /Guardado rechazado/
     );
     await assert.rejects(
       store.saveDocument({ ...latest, text: "rama divergente" }),
-      /se conserva el documento más reciente/
+      /Guardado rechazado/
     );
     await store.saveDocument({ ...latest, updatedAt: 3 });
 
@@ -1714,7 +1714,7 @@ test("IndexedDB impide anexar una rama basada en una revisión antigua", async (
       replacement: "B", committedAt: 3
     };
     await assert.rejects(
-      store.appendChange({ ...next, baseRevision: 5 }),
+      store.appendChange({ ...next, baseRevision: 5, committedRevision: 6 }),
       /requiere resincronización/
     );
     assert.equal(changes.length, 1);
@@ -1999,7 +1999,18 @@ test("IndexedDB rechaza un journal con saltos de secuencia al leerlo", async () 
 test("IndexedDB espera el cierre de transacción para lecturas de conocimiento narrativo", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   let transaction;
-  const records = [{ projectId: "narrative-read", id: "entity-1", canonicalName: "Ada" }];
+  const records = [{
+    projectId: "narrative-read",
+    id: "entity-1",
+    kind: "character",
+    canonicalName: "Ada",
+    normalizedName: "ada",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  }];
   const database = {
     onversionchange: null,
     close() {},
@@ -2107,25 +2118,33 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   const createdStores = [];
   const createdIndexes = [];
   const makeStore = (name, options) => {
-    const indexes = new Set();
+    const indexes = new Map();
     const store = {
       keyPath: options.keyPath,
       indexNames: { contains: indexName => indexes.has(indexName) },
       createIndex(indexName, keyPath, indexOptions) {
-        indexes.add(indexName);
+        indexes.set(indexName, {
+          keyPath,
+          unique: indexOptions?.unique ?? false
+        });
         createdIndexes.push({ store: name, name: indexName, keyPath, unique: indexOptions?.unique ?? false });
       },
+      deleteIndex(indexName) { indexes.delete(indexName); },
       index(indexName) {
-        assert.ok(indexes.has(indexName), `índice inexistente: ${name}.${indexName}`);
-        return { getAll() {
-          const request = {};
-          queueMicrotask(() => {
-            request.result = [];
-            request.onsuccess?.();
-            queueMicrotask(() => transaction.oncomplete?.());
-          });
-          return request;
-        } };
+        const metadata = indexes.get(indexName);
+        assert.ok(metadata, `índice inexistente: ${name}.${indexName}`);
+        return {
+          ...metadata,
+          getAll() {
+            const request = {};
+            queueMicrotask(() => {
+              request.result = [];
+              request.onsuccess?.();
+              queueMicrotask(() => transaction.oncomplete?.());
+            });
+            return request;
+          }
+        };
       }
     };
     stores.set(name, store);

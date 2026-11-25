@@ -449,3 +449,33 @@ test("los perfiles por estado conservan los totales de nodos y referencias dirig
     ]
   );
 });
+
+
+test("las auto-referencias forman ciclos unitarios sin inflar pares recíprocos", () => {
+  const graph = analyze([
+    idea("self", ["self"]),
+    idea("pair-a", ["pair-b"]),
+    idea("pair-b", ["pair-a"]),
+    idea("terminal")
+  ]);
+
+  assert.equal(graph.selfReferenceCount, 1);
+  assert.equal(graph.reciprocalReferencePairCount, 1);
+  assert.equal(graph.cycleCount, 2);
+  assert.deepEqual(
+    graph.cycles.map(cycle => cycle.ideaIds),
+    [["pair-a", "pair-b"], ["self"]]
+  );
+
+  const self = graph.nodes.find(node => node.ideaId === "self");
+  const pairA = graph.nodes.find(node => node.ideaId === "pair-a");
+  const terminal = graph.nodes.find(node => node.ideaId === "terminal");
+  assert.equal(self.cycleMembership, "cyclic-component");
+  assert.equal(self.cycleComponentSize, 1);
+  assert.equal(self.minimumDirectedHopsToTerminal, null);
+  assert.equal(pairA.cycleMembership, "cyclic-component");
+  assert.equal(pairA.cycleComponentSize, 2);
+  assert.equal(terminal.terminalReachabilityStatus, "reaches-terminal-within-snapshot");
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
+  assert.equal(graph.terminalReachableNodeCount, 1);
+});

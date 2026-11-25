@@ -1,5 +1,6 @@
 import {
-  analyzeLiteraryFragment, type LiteraryAnalysisResult, type LiteraryAnalysisKnownProjectIdea
+  analyzeLiteraryFragment, MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS,
+  type LiteraryAnalysisResult, type LiteraryAnalysisKnownProjectIdea
 } from "./literary-analysis";
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
@@ -1624,7 +1625,7 @@ export class HostEngineApi {
         const statusHistory = idea.statusHistory ?? [
           {status:idea.status,reason:"initial" as const}
         ];
-        const textFitsBudget = lexicalTextUnitCount + idea.text.length <= 2_000_000;
+        const textFitsBudget = lexicalTextUnitCount + idea.text.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;
         if (textFitsBudget) lexicalTextUnitCount += idea.text.length;
         const includeLexicalText = !knownLinkedIdeaIds.has(idea.id) && textFitsBudget;
         return {

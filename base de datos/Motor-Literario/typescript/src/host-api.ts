@@ -626,7 +626,7 @@ export class HostEngineApi {
             result.changeStart === result.changeEnd &&
             result.changeStart === result.previousAffectedStart &&
             result.changeReplacement.length > 0 &&
-            (result.changeReplacement.endsWith("\n") || result.changeReplacement.endsWith("\\r"));
+            (result.changeReplacement.endsWith("\n") || result.changeReplacement.endsWith("\r"));
           const lineWasAffected = !insertedWholeLinesBeforeDiagnostic && (
             (diagnostic.start < result.previousAffectedEnd &&
               diagnostic.end > result.previousAffectedStart) ||
@@ -740,7 +740,7 @@ export class HostEngineApi {
           result.changeStart === result.previousAffectedStart &&
           evidence.start >= result.changeStart &&
           result.changeReplacement.length > 0 &&
-          (result.changeReplacement.endsWith("\n") || result.changeReplacement.endsWith("\\r"));
+          (result.changeReplacement.endsWith("\n") || result.changeReplacement.endsWith("\r"));
         const lineWasAffected = !insertedWholeLinesBeforeEvidence && (
           (evidence.start < result.previousAffectedEnd && evidence.end > result.previousAffectedStart) ||
           (evidence.start >= result.previousAffectedStart && evidence.start <= result.previousAffectedEnd)

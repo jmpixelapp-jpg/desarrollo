@@ -619,7 +619,7 @@ export class HostEngineApi {
       onAnalysis: result => {
         try { options.callbacks?.onAnalysis?.(result); } catch { /* La UI no debe detener el análisis. */ }
         void this.persistLiveDiagnostics(result).catch(error => this.reportKnowledgeError(error));
-        if (this.store.saveEntity && this.store.loadEntities) {
+        if (this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities) {
           void this.processLiveAnalysis(result).catch(error => {
             this.reportKnowledgeError(error);
           });
@@ -786,7 +786,7 @@ export class HostEngineApi {
       };
       const mapEvidence = (items: readonly TextEvidence[]) => items.map(rebase);
 
-      if (this.store.saveEntity && this.store.loadEntities) {
+      if (this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities) {
         if (!this.entitiesLoaded) {
           const records = requireProjectScopedRecords(await this.store.loadEntities(project.projectId), project.projectId, "entidades");
           for (const item of records) this.narrativeEntities.set(item.id, item);
@@ -799,12 +799,12 @@ export class HostEngineApi {
           const evidence = mapEvidence(item.evidence);
           if (evidence.some((entry, index) => entry !== item.evidence[index])) {
             const updated = { ...item, evidence };
-            await this.store.saveEntity(updated);
+            await this.persistEntityUpdate(updated, item);
             this.narrativeEntities.set(id, updated);
           }
         }
       }
-      if (this.store.saveRelation && this.store.loadRelations) {
+      if (this.store.saveRelation && this.store.saveRelationIfUnchanged && this.store.loadRelations) {
         const store = this.requireRelationStore();
         if (!this.relationsLoaded) {
           const records = requireProjectScopedRecords(await store.loadRelations(project.projectId), project.projectId, "relaciones");
@@ -818,12 +818,12 @@ export class HostEngineApi {
           const evidence = mapEvidence(item.evidence);
           if (evidence.some((entry, index) => entry !== item.evidence[index])) {
             const updated = { ...item, evidence };
-            await store.saveRelation(updated);
+            await this.persistRelationUpdate(updated, item);
             this.narrativeRelations.set(id, updated);
           }
         }
       }
-      if (this.store.saveEvent && this.store.loadEvents) {
+      if (this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents) {
         const store = this.requireEventStore();
         if (!this.eventsLoaded) {
           const records = requireProjectScopedRecords(await store.loadEvents(project.projectId), project.projectId, "acontecimientos");
@@ -837,7 +837,7 @@ export class HostEngineApi {
           const evidence = mapEvidence(item.evidence);
           if (evidence.some((entry, index) => entry !== item.evidence[index])) {
             const updated = { ...item, evidence };
-            await store.saveEvent(updated);
+            await this.persistEventUpdate(updated, item);
             this.narrativeEvents.set(id, updated);
             updateDocumentLineIndex(this.eventLineIndex, id, item.label, item.evidence, evidence);
           }
@@ -863,7 +863,7 @@ export class HostEngineApi {
           }
         }
       }
-      if (this.store.saveAssertion && this.store.loadAssertions) {
+      if (this.store.saveAssertion && this.store.saveAssertionIfUnchanged && this.store.loadAssertions) {
         if (!this.assertionsLoaded) {
           const records = requireProjectScopedRecords(await this.store.loadAssertions(project.projectId), project.projectId, "afirmaciones");
           for (const item of records) this.narrativeAssertions.set(item.id, item);
@@ -876,7 +876,7 @@ export class HostEngineApi {
           const evidence = rebase(item.evidence);
           if (evidence !== item.evidence) {
             const updated = { ...item, evidence };
-            await this.store.saveAssertion(updated);
+            await this.persistAssertionUpdate(updated, item);
             this.narrativeAssertions.set(id, updated);
           }
         }
@@ -930,13 +930,13 @@ export class HostEngineApi {
           aliases: matched.aliases
         } : entity;
         const next = mergeNarrativeEntity(byId.get(incoming.id), incoming);
-        await store.saveEntity(next);
+        await this.persistEntityUpdate(next, byId.get(next.id));
         byId.set(next.id, next);
         addEntityNameIndex(this.entityNameIndex, next);
         addDocumentEvidenceIndex(this.entityEvidenceIndex, next.id, next.evidence);
         merged.push(next);
       }
-      if (this.store.saveRelation && this.store.loadRelations) {
+      if (this.store.saveRelation && this.store.saveRelationIfUnchanged && this.store.loadRelations) {
         const relationStore = this.requireRelationStore();
         if (!this.relationsLoaded) {
           const existingRelations = requireProjectScopedRecords(await relationStore.loadRelations(project.projectId), project.projectId, "relaciones");
@@ -949,13 +949,13 @@ export class HostEngineApi {
         );
         for (const relation of detectedRelations) {
           const next = mergeNarrativeRelation(relationById.get(relation.id), relation);
-          await relationStore.saveRelation(next);
+          await this.persistRelationUpdate(next, relationById.get(next.id));
           relationById.set(next.id, next);
           addDocumentEvidenceIndex(this.relationEvidenceIndex, next.id, next.evidence);
         }
       }
 
-      if (this.store.saveEvent && this.store.loadEvents) {
+      if (this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents) {
         const eventStore = this.requireEventStore();
         if (!this.eventsLoaded) {
           const existingEvents = requireProjectScopedRecords(await eventStore.loadEvents(project.projectId), project.projectId, "acontecimientos");
@@ -987,7 +987,7 @@ export class HostEngineApi {
           if (previousAtLine) matchedEventIds.add(previousAtLine.id);
           const candidate = previousAtLine ? { ...event, id: previousAtLine.id } : event;
           const next = mergeNarrativeEvent(eventById.get(candidate.id), candidate);
-          await eventStore.saveEvent(next);
+          await this.persistEventUpdate(next, eventById.get(next.id));
           eventById.set(next.id, next);
           addDocumentEvidenceIndex(this.eventEvidenceIndex, next.id, next.evidence);
           const key = `${documentId}\u0000${incomingLineStart}`;
@@ -1028,8 +1028,7 @@ export class HostEngineApi {
           const candidate = previousAtLine ? { ...idea, id: previousAtLine.id } : idea;
           const next = mergeNarrativeIdea(ideaById.get(candidate.id), candidate);
           const currentIdea = ideaById.get(candidate.id);
-          if (currentIdea) await this.persistIdeaUpdate(ideaStore, next, currentIdea);
-          else await ideaStore.saveIdea(next);
+          await this.persistIdeaUpdate(ideaStore, next, currentIdea);
           ideaById.set(next.id, next);
           addDocumentEvidenceIndex(this.ideaEvidenceIndex, next.id, next.evidence);
           const key = `${documentId}\u0000${incomingLineStart}`;
@@ -1038,7 +1037,7 @@ export class HostEngineApi {
           this.ideaLineIndex.set(key, ids);
         }
       }
-      if (this.store.saveAssertion && this.store.loadAssertions) {
+      if (this.store.saveAssertion && this.store.saveAssertionIfUnchanged && this.store.loadAssertions) {
         if (!this.assertionsLoaded) {
           const existingAssertions = requireProjectScopedRecords(await this.store.loadAssertions(project.projectId), project.projectId, "afirmaciones");
           for (const assertion of existingAssertions) this.narrativeAssertions.set(assertion.id, assertion);
@@ -1068,7 +1067,7 @@ export class HostEngineApi {
             ? { ...assertion, id: previous.id }
             : assertion;
           if (previous) matchedAssertionIds.add(previous.id);
-          await this.store.saveAssertion(nextAssertion);
+          await this.persistAssertionUpdate(nextAssertion, this.narrativeAssertions.get(nextAssertion.id));
           this.narrativeAssertions.set(nextAssertion.id, nextAssertion);
           addDocumentEvidenceIndex(this.assertionEvidenceIndex, nextAssertion.id, [nextAssertion.evidence]);
         }
@@ -1112,7 +1111,7 @@ export class HostEngineApi {
       if (normalized === entity.normalizedName ||
           entity.aliases.some(value => normalizeEntityName(value) === normalized)) return cloneNarrativeRecord(entity);
       const updated: NarrativeEntity = { ...entity, aliases: [...entity.aliases, cleanAlias] };
-      await store.saveEntity(updated);
+      await this.persistEntityUpdate(updated, entity);
       this.narrativeEntities.set(updated.id, updated);
       addEntityNameIndex(this.entityNameIndex, updated);
       return cloneNarrativeRecord(updated);
@@ -1335,7 +1334,7 @@ export class HostEngineApi {
       const updated: NarrativeEvent = timelineTrackId === undefined
         ? base
         : { ...base, timelineTrackId };
-      await this.requireEventStore().saveEvent(updated);
+      await this.persistEventUpdate(updated, current);
       this.narrativeEvents.set(eventId, updated);
       return cloneNarrativeRecords([updated])[0]!;
     });
@@ -2692,24 +2691,7 @@ export class HostEngineApi {
     await this.liveAnalysisTail;
     await this.flushPendingChanges();
     await this.enqueueKnowledgeOperation(async () => {
-      this.narrativeEntities.clear();
-      this.narrativeRelations.clear();
-      this.narrativeEvents.clear();
-      this.narrativeIdeas.clear();
-      this.narrativeAssertions.clear();
-      this.entitiesLoaded = false;
-      this.relationsLoaded = false;
-      this.eventsLoaded = false;
-      this.ideasLoaded = false;
-      this.assertionsLoaded = false;
-      this.entityEvidenceIndex = undefined;
-      this.relationEvidenceIndex = undefined;
-      this.eventEvidenceIndex = undefined;
-      this.ideaEvidenceIndex = undefined;
-      this.assertionEvidenceIndex = undefined;
-      this.eventLineIndex = undefined;
-      this.ideaLineIndex = undefined;
-      this.entityNameIndex = undefined;
+      this.invalidateNarrativeKnowledgeCaches();
     });
   }
 
@@ -3001,40 +2983,47 @@ export class HostEngineApi {
     }
   }
 
-  private requireEventStore(): Required<Pick<import("./contracts").ProjectStore, "saveEvent" | "loadEvents">> {
+  private requireEventStore(): Required<Pick<
+    import("./contracts").ProjectStore,
+    "saveEvent" | "saveEventIfUnchanged" | "loadEvents"
+  >> {
     const store = this.store;
-    if (!store.saveEvent || !store.loadEvents) throw new Error("El almacenamiento no admite acontecimientos.");
-    return { saveEvent: store.saveEvent.bind(store), loadEvents: store.loadEvents.bind(store) };
+    if (!store.saveEvent || !store.saveEventIfUnchanged || !store.loadEvents) {
+      throw new Error("El almacenamiento no admite actualizaciones seguras de acontecimientos entre instancias.");
+    }
+    return {
+      saveEvent: store.saveEvent.bind(store),
+      saveEventIfUnchanged: store.saveEventIfUnchanged.bind(store),
+      loadEvents: store.loadEvents.bind(store)
+    };
   }
 
   private requireIdeaStore(): Required<Pick<
     import("./contracts").ProjectStore,
-    "saveIdea" | "loadIdeas" | "updateIdeaIfUnchanged"
+    "saveIdea" | "saveIdeaIfUnchanged" | "loadIdeas"
   >> {
     const store = this.store;
-    if (!store.saveIdea || !store.loadIdeas || !store.updateIdeaIfUnchanged) {
-      throw new Error("El almacenamiento no admite actualizaciones de ideas seguras entre instancias.");
+    if (!store.saveIdea || !store.saveIdeaIfUnchanged || !store.loadIdeas) {
+      throw new Error("El almacenamiento no admite escrituras seguras de ideas entre instancias.");
     }
     return {
       saveIdea: store.saveIdea.bind(store),
-      loadIdeas: store.loadIdeas.bind(store),
-      updateIdeaIfUnchanged: store.updateIdeaIfUnchanged.bind(store)
+      saveIdeaIfUnchanged: store.saveIdeaIfUnchanged.bind(store),
+      loadIdeas: store.loadIdeas.bind(store)
     };
   }
 
   private async persistIdeaUpdate(
     store: Required<Pick<
       import("./contracts").ProjectStore,
-      "saveIdea" | "loadIdeas" | "updateIdeaIfUnchanged"
+      "saveIdea" | "saveIdeaIfUnchanged" | "loadIdeas"
     >>,
     updated: NarrativeIdea,
-    expectedCurrent: NarrativeIdea
+    expectedCurrent?: NarrativeIdea
   ): Promise<void> {
     try {
-      await store.updateIdeaIfUnchanged(updated, expectedCurrent);
+      await store.saveIdeaIfUnchanged(updated, expectedCurrent);
     } catch (error) {
-      // Otra instancia pudo archivar o modificar la idea. Descarta la caché
-      // obsoleta para que la siguiente lectura consulte el estado persistido.
       this.narrativeIdeas.clear();
       this.ideasLoaded = false;
       this.ideaEvidenceIndex = undefined;
@@ -3043,12 +3032,103 @@ export class HostEngineApi {
     }
   }
 
-  private requireRelationStore(): Required<Pick<import("./contracts").ProjectStore, "saveRelation" | "loadRelations">> {
-    const store = this.store;
-    if (!store.saveRelation || !store.loadRelations) {
-      throw new Error("El adaptador de almacenamiento no admite relaciones narrativas.");
+  private async persistEntityUpdate(
+    updated: NarrativeEntity,
+    expectedCurrent?: NarrativeEntity
+  ): Promise<void> {
+    const save = this.store.saveEntityIfUnchanged;
+    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de entidades narrativas.");
+    try {
+      await save.call(this.store, updated, expectedCurrent);
+    } catch (error) {
+      this.invalidateNarrativeKnowledgeCaches();
+      throw error;
     }
-    return { saveRelation: store.saveRelation.bind(store), loadRelations: store.loadRelations.bind(store) };
+  }
+
+  private async persistRelationUpdate(
+    updated: NarrativeRelation,
+    expectedCurrent?: NarrativeRelation
+  ): Promise<void> {
+    const save = this.store.saveRelationIfUnchanged;
+    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de relaciones narrativas.");
+    try {
+      await save.call(this.store, updated, expectedCurrent);
+    } catch (error) {
+      this.narrativeRelations.clear();
+      this.relationsLoaded = false;
+      this.relationEvidenceIndex = undefined;
+      throw error;
+    }
+  }
+
+  private async persistEventUpdate(
+    updated: NarrativeEvent,
+    expectedCurrent?: NarrativeEvent
+  ): Promise<void> {
+    const save = this.store.saveEventIfUnchanged;
+    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de acontecimientos.");
+    try {
+      await save.call(this.store, updated, expectedCurrent);
+    } catch (error) {
+      this.narrativeEvents.clear();
+      this.eventsLoaded = false;
+      this.eventEvidenceIndex = undefined;
+      this.eventLineIndex = undefined;
+      throw error;
+    }
+  }
+
+  private async persistAssertionUpdate(
+    updated: NarrativeAssertion,
+    expectedCurrent?: NarrativeAssertion
+  ): Promise<void> {
+    const save = this.store.saveAssertionIfUnchanged;
+    if (!save) throw new Error("El almacenamiento no admite escrituras seguras de afirmaciones.");
+    try {
+      await save.call(this.store, updated, expectedCurrent);
+    } catch (error) {
+      this.narrativeAssertions.clear();
+      this.assertionsLoaded = false;
+      this.assertionEvidenceIndex = undefined;
+      throw error;
+    }
+  }
+
+  private invalidateNarrativeKnowledgeCaches(): void {
+    this.narrativeEntities.clear();
+    this.narrativeRelations.clear();
+    this.narrativeEvents.clear();
+    this.narrativeIdeas.clear();
+    this.narrativeAssertions.clear();
+    this.entitiesLoaded = false;
+    this.relationsLoaded = false;
+    this.eventsLoaded = false;
+    this.ideasLoaded = false;
+    this.assertionsLoaded = false;
+    this.entityEvidenceIndex = undefined;
+    this.relationEvidenceIndex = undefined;
+    this.eventEvidenceIndex = undefined;
+    this.ideaEvidenceIndex = undefined;
+    this.assertionEvidenceIndex = undefined;
+    this.eventLineIndex = undefined;
+    this.ideaLineIndex = undefined;
+    this.entityNameIndex = undefined;
+  }
+
+  private requireRelationStore(): Required<Pick<
+    import("./contracts").ProjectStore,
+    "saveRelation" | "saveRelationIfUnchanged" | "loadRelations"
+  >> {
+    const store = this.store;
+    if (!store.saveRelation || !store.saveRelationIfUnchanged || !store.loadRelations) {
+      throw new Error("El adaptador de almacenamiento no admite escrituras seguras de relaciones narrativas.");
+    }
+    return {
+      saveRelation: store.saveRelation.bind(store),
+      saveRelationIfUnchanged: store.saveRelationIfUnchanged.bind(store),
+      loadRelations: store.loadRelations.bind(store)
+    };
   }
 
   private requireProject(): ProjectIdentity {
@@ -3057,13 +3137,13 @@ export class HostEngineApi {
   }
 
   private requireKnowledgeStore(): import("./contracts").ProjectStore &
-    Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "loadEntities">> {
+    Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "saveEntityIfUnchanged" | "loadEntities">> {
     const store = this.store;
-    if (!store.saveEntity || !store.loadEntities) {
-      throw new Error("El adaptador de almacenamiento no admite conocimiento narrativo.");
+    if (!store.saveEntity || !store.saveEntityIfUnchanged || !store.loadEntities) {
+      throw new Error("El adaptador de almacenamiento no admite escrituras seguras de conocimiento narrativo.");
     }
     return store as import("./contracts").ProjectStore &
-      Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "loadEntities">>;
+      Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "saveEntityIfUnchanged" | "loadEntities">>;
   }
 
   getCapabilities(): Readonly<Record<string, unknown>> {
@@ -3083,23 +3163,23 @@ export class HostEngineApi {
       diagnosticRecoveryOnOpen: true,
       multilineAffectedLineAnalysis: true,
       explicitHostResynchronization: true,
-      automaticNarrativeExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
-      incrementalNarrativeExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
-      evidenceBasedEntityExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
+      automaticNarrativeExtraction: Boolean(this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
+      incrementalNarrativeExtraction: Boolean(this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
+      evidenceBasedEntityExtraction: Boolean(this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
       projectIsolatedNarrativeKnowledge: true,
       narrativeEntityConsolidation: Boolean(this.store.mergeNarrativeEntityIdentity),
-      evidenceBasedCharacterRelations: Boolean(this.store.saveRelation && this.store.loadRelations),
-      explicitEventCapture: Boolean(this.store.saveEvent && this.store.loadEvents),
-      explicitEventChronology: Boolean(this.store.saveEvent && this.store.loadEvents),
-      authorMarkedIdeaCapture: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.updateIdeaIfUnchanged),
-      explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.updateIdeaIfUnchanged && this.store.saveEntity && this.store.loadEntities),
-      explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.updateIdeaIfUnchanged),
+      evidenceBasedCharacterRelations: Boolean(this.store.saveRelation && this.store.saveRelationIfUnchanged && this.store.loadRelations),
+      explicitEventCapture: Boolean(this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents),
+      explicitEventChronology: Boolean(this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents),
+      authorMarkedIdeaCapture: Boolean(this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas),
+      explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas && this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
+      explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
       ),
-      explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
-      evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
+      explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents && this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
+      evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.saveAssertionIfUnchanged && this.store.loadAssertions),
       semanticContradictionAnalysis: false,
       projectSettings: Boolean(this.store.saveProjectSetting && this.store.loadProjectSettings),
       languageProfiles: Boolean(this.store.saveLanguageProfile && this.store.loadLanguageProfiles),

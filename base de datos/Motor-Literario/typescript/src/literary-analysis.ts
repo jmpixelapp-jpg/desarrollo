@@ -3312,12 +3312,23 @@ function buildLiteraryIdeaGraph(
   omittedIdeaCount: number,
   catalogScope: LiteraryIdeaGraphAnalysis["catalogScope"]
 ): LiteraryIdeaGraphAnalysis {
+  // Ordena una sola vez y reutiliza la instantánea canónica para clave y cálculo.
+  // El desempate exacto distingue IDs Unicode que comparten colación lingüística.
+  const compareIdeaIds = (left: string, right: string): number => {
+    const localizedOrder = left.localeCompare(right, "en");
+    if (localizedOrder !== 0) return localizedOrder;
+    return left === right ? 0 : left < right ? -1 : 1;
+  };
+  const orderedIdeas = [...ideas].sort((left, right) =>
+    compareIdeaIds(left.ideaId, right.ideaId)
+  );
+
   // La clave exacta evita invalidaciones manuales: estado, historial, evidencias,
   // vínculos y texto léxico participan en la identidad de la instantánea.
-  let cacheable = ideas.length <= 2_000;
+  let cacheable = orderedIdeas.length <= 2_000;
   let cacheTextUnits = 0;
   if (cacheable) {
-    for (const idea of ideas) {
+    for (const idea of orderedIdeas) {
       if (typeof idea.text === "string") {
         cacheTextUnits += idea.text.length;
         if (cacheTextUnits > MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS) {
@@ -3328,29 +3339,12 @@ function buildLiteraryIdeaGraph(
     }
   }
   const cacheKey = cacheable
-    ? JSON.stringify([
-        catalogScope,
-        omittedIdeaCount,
-        [...ideas].sort((left, right) =>
-          left.ideaId.localeCompare(right.ideaId, "en") ||
-          (left.ideaId === right.ideaId ? 0 : left.ideaId < right.ideaId ? -1 : 1)
-        )
-      ])
+    ? JSON.stringify([catalogScope, omittedIdeaCount, orderedIdeas])
     : undefined;
   if (cacheKey !== undefined && cacheKey === literaryIdeaGraphCacheKey &&
       literaryIdeaGraphCacheValue) {
     return structuredClone(literaryIdeaGraphCacheValue);
   }
-
-  // El desempate exacto distingue IDs Unicode que pueden compartir colación lingüística.
-  const compareIdeaIds = (left: string, right: string): number => {
-    const localizedOrder = left.localeCompare(right, "en");
-    if (localizedOrder !== 0) return localizedOrder;
-    return left === right ? 0 : left < right ? -1 : 1;
-  };
-  const orderedIdeas = [...ideas].sort((left, right) =>
-    compareIdeaIds(left.ideaId, right.ideaId)
-  );
   const projectCatalogComplete = catalogScope === "project" && omittedIdeaCount === 0;
   const ideaIds = new Set(orderedIdeas.map(idea => idea.ideaId));
   const ideaIndexById = new Map(
@@ -3532,66 +3526,78 @@ function buildLiteraryIdeaGraph(
     }
   }
 
-  const sourceNodeCount = nodes.filter(node => node.incomingReferenceCount === 0).length;
-  const terminalWithinSnapshotNodeCount = nodes.filter(
-    node => node.includedOutgoingReferenceCount === 0
-  ).length;
-  const isolatedWithinSnapshotNodeCount = nodes.filter(
-    node => node.incomingReferenceCount === 0 &&
-      node.includedOutgoingReferenceCount === 0
-  ).length;
-  const statusProfiles: LiteraryIdeaGraphStatusProfile[] = (
-    ["IDEA", "incorporated", "discarded"] as const
-  ).map(status => {
-    const matchingNodes = nodes.filter(node => node.status === status);
-    return {
+  // Agrega métricas globales y por estado en una sola pasada sobre los nodos.
+  // Evita múltiples filter/map/reduce y arreglos temporales proporcionales al catálogo.
+  type MutableStatusProfile = {
+    status: LiteraryIdeaGraphStatusProfile["status"];
+    ideaCount: number;
+    sourceIdeaCount: number;
+    terminalWithinSnapshotIdeaCount: number;
+    isolatedWithinSnapshotIdeaCount: number;
+    incomingReferenceCount: number;
+    includedOutgoingReferenceCount: number;
+    notIncludedOutgoingReferenceCount: number;
+    statusHistoryRecordCount: number;
+    omittedStatusHistoryCount: number;
+    writerDecisionCount: number;
+    activeEvidenceCount: number;
+    staleEvidenceCount: number;
+    ideasWithActiveEvidenceCount: number;
+    ideasWithStaleEvidenceCount: number;
+    ideasWithoutActiveEvidenceCount: number;
+  };
+  const profileStatuses = ["IDEA", "incorporated", "discarded"] as const;
+  const profileTotals = new Map<MutableStatusProfile["status"], MutableStatusProfile>(
+    profileStatuses.map(status => [status, {
       status,
-      ideaCount: matchingNodes.length,
-      sourceIdeaCount: matchingNodes.filter(node =>
-        node.incomingReferenceCount === 0
-      ).length,
-      terminalWithinSnapshotIdeaCount: matchingNodes.filter(node =>
-        node.includedOutgoingReferenceCount === 0
-      ).length,
-      isolatedWithinSnapshotIdeaCount: matchingNodes.filter(node =>
-        node.incomingReferenceCount === 0 &&
-        node.includedOutgoingReferenceCount === 0
-      ).length,
-      incomingReferenceCount: matchingNodes.reduce(
-        (total, node) => total + node.incomingReferenceCount, 0
-      ),
-      includedOutgoingReferenceCount: matchingNodes.reduce(
-        (total, node) => total + node.includedOutgoingReferenceCount, 0
-      ),
-      notIncludedOutgoingReferenceCount: matchingNodes.reduce(
-        (total, node) => total + node.notIncludedOutgoingReferenceCount, 0
-      ),
-      statusHistoryRecordCount: matchingNodes.reduce(
-        (total, node) => total + node.statusHistory.length, 0
-      ),
-      omittedStatusHistoryCount: matchingNodes.reduce(
-        (total, node) => total + node.omittedStatusHistoryCount, 0
-      ),
-      writerDecisionCount: matchingNodes.reduce(
-        (total, node) => total + node.writerDecisionCount, 0
-      ),
-      activeEvidenceCount: matchingNodes.reduce(
-        (total, node) => total + node.activeEvidenceCount, 0
-      ),
-      staleEvidenceCount: matchingNodes.reduce(
-        (total, node) => total + node.staleEvidenceCount, 0
-      ),
-      ideasWithActiveEvidenceCount: matchingNodes.filter(
-        node => node.activeEvidenceCount > 0
-      ).length,
-      ideasWithStaleEvidenceCount: matchingNodes.filter(
-        node => node.staleEvidenceCount > 0
-      ).length,
-      ideasWithoutActiveEvidenceCount: matchingNodes.filter(
-        node => node.activeEvidenceCount === 0
-      ).length
-    };
-  });
+      ideaCount: 0,
+      sourceIdeaCount: 0,
+      terminalWithinSnapshotIdeaCount: 0,
+      isolatedWithinSnapshotIdeaCount: 0,
+      incomingReferenceCount: 0,
+      includedOutgoingReferenceCount: 0,
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistoryRecordCount: 0,
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 0,
+      activeEvidenceCount: 0,
+      staleEvidenceCount: 0,
+      ideasWithActiveEvidenceCount: 0,
+      ideasWithStaleEvidenceCount: 0,
+      ideasWithoutActiveEvidenceCount: 0
+    }])
+  );
+  let sourceNodeCount = 0;
+  let terminalWithinSnapshotNodeCount = 0;
+  let isolatedWithinSnapshotNodeCount = 0;
+  for (const node of nodes) {
+    const isSource = node.incomingReferenceCount === 0;
+    const isTerminal = node.includedOutgoingReferenceCount === 0;
+    if (isSource) sourceNodeCount++;
+    if (isTerminal) terminalWithinSnapshotNodeCount++;
+    if (isSource && isTerminal) isolatedWithinSnapshotNodeCount++;
+
+    const totals = profileTotals.get(node.status);
+    if (!totals) continue;
+    totals.ideaCount++;
+    if (isSource) totals.sourceIdeaCount++;
+    if (isTerminal) totals.terminalWithinSnapshotIdeaCount++;
+    if (isSource && isTerminal) totals.isolatedWithinSnapshotIdeaCount++;
+    totals.incomingReferenceCount += node.incomingReferenceCount;
+    totals.includedOutgoingReferenceCount += node.includedOutgoingReferenceCount;
+    totals.notIncludedOutgoingReferenceCount += node.notIncludedOutgoingReferenceCount;
+    totals.statusHistoryRecordCount += node.statusHistory.length;
+    totals.omittedStatusHistoryCount += node.omittedStatusHistoryCount;
+    totals.writerDecisionCount += node.writerDecisionCount;
+    totals.activeEvidenceCount += node.activeEvidenceCount;
+    totals.staleEvidenceCount += node.staleEvidenceCount;
+    if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;
+    if (node.staleEvidenceCount > 0) totals.ideasWithStaleEvidenceCount++;
+    if (node.activeEvidenceCount === 0) totals.ideasWithoutActiveEvidenceCount++;
+  }
+  const statusProfiles: LiteraryIdeaGraphStatusProfile[] = profileStatuses.map(
+    status => profileTotals.get(status)!
+  );
 
   const lexicalResonances = buildLiteraryIdeaLexicalResonances(orderedIdeas);
   const result: LiteraryIdeaGraphAnalysis = {

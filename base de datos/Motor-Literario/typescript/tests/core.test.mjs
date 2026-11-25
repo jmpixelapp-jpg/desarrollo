@@ -10507,6 +10507,50 @@ test("excluye ventanas con escenas truncadas y cuenta las ventanas vacías", asy
 });
 
 
+test("limita las instancias expuestas de cada motivo de secuencia", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const lines=[];
+  for(let index=1;index<=25;index++) {
+    lines.push("ESCENA "+index,"La señal persiste.");
+    if(index<25) lines.push("***");
+  }
+  const text=lines.join("\\n");
+  const evidence=[];
+  let cursor=0;
+  while(true) {
+    const start=text.indexOf("La señal persiste.",cursor);
+    if(start<0) break;
+    evidence.push({
+      documentId:"chapter",revision:17,
+      start,end:start+"La señal persiste.".length,excerpt:"La señal persiste."
+    });
+    cursor=start+"La señal persiste.".length;
+  }
+  const result=analyzeLiteraryFragment({
+    projectId:"event-sequence-instance-limit",documentId:"chapter",revision:17,text,
+    knownEvents:[{
+      eventId:"signal",label:"La señal",participants:[],evidence
+    }]
+  });
+
+  assert.equal(result.sceneEventSequenceMotifs.candidateWindowCount,47);
+  assert.equal(result.sceneEventSequenceMotifs.analyzedWindowCount,47);
+  assert.equal(result.sceneEventSequenceMotifs.motifCount,2);
+  assert.equal(result.sceneEventSequenceMotifs.motifs.length,2);
+  assert.deepEqual(
+    result.sceneEventSequenceMotifs.motifs.map(motif=>({
+      sceneCount:motif.sceneCount,
+      occurrenceCount:motif.occurrenceCount,
+      instanceCount:motif.instances.length,
+      instancesTruncated:motif.instancesTruncated
+    })),
+    [
+      {sceneCount:2,occurrenceCount:24,instanceCount:20,instancesTruncated:true},
+      {sceneCount:3,occurrenceCount:23,instanceCount:20,instancesTruncated:true}
+    ]
+  );
+});
+
 test("la API publica comparaciones de continuidad con evidencia narrativa persistida", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({store});

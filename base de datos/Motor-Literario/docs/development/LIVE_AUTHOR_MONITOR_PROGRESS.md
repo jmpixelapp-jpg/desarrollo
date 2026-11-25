@@ -257,13 +257,13 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **Corrección adicional del audit estático:** `audit-storage-implementation.mjs` deriva los índices esperados desde las llamadas `ensureIndex` de la rutina de migración, no solamente desde los `createIndex` que se ejecutan al crear el almacén. Se añadió `ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId")` para que el índice permanezca declarado y se valide también en las migraciones. Commit: [c83e27f — registrar índice del checkpoint en migraciones](https://github.com/jmpixelapp-jpg/desarrollo/commit/c83e27f5721c7fe774ecdd2cb119b02d88575d9a). La nueva ejecución de CI está en curso; el resultado se añadirá cuando concluya.
 
 
-## 12. Nueva entrega — prueba de persistencia contra IndexedDB nativo (25 de noviembre de 2026)
+## 12. Nueva entrega — prueba de persistencia del adaptador IndexedDB (25 de noviembre de 2026)
 
-**Objetivo:** verificar las operaciones reales del almacén de checkpoints, no limitar la confianza a un almacén simulado usado por las pruebas de HostEngineApi.
+**Objetivo:** verificar las operaciones reales del adaptador de checkpoints, no limitar la confianza a un almacén simulado usado por las pruebas de HostEngineApi.
 
 **Implementación:** se añadió `IndexedDbProjectStore.close()`. Espera a que finalice una apertura pendiente, cierra la conexión y libera el canal de notificaciones de la instancia; las operaciones posteriores pueden abrir nuevamente la base.
 
-**Prueba de runtime:** nuevo archivo `typescript/tests/live-author-monitor-indexeddb.test.mjs`. Usa el IndexedDB nativo que proporciona Node 22.13+ y ejecuta sobre `IndexedDbProjectStore`:
+**Prueba de runtime:** nuevo archivo `typescript/tests/live-author-monitor-indexeddb.test.mjs`. Usa `fake-indexeddb@6.2.8`, dependencia solo de desarrollo, para instalar la API IndexedDB en memoria en Node. La prueba ejercita:
 - guardar y recuperar un checkpoint;
 - comprobar aislamiento de objetos y muestras de latencia;
 - rechazar timestamps antiguos;
@@ -272,8 +272,10 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 - eliminar el registro y confirmar que ya no existe;
 - cerrar la conexión en el bloque `finally`.
 
-**Archivos:** `typescript/src/persistence/indexeddb-store.ts`, `typescript/tests/live-author-monitor-indexeddb.test.mjs`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
+**Transparencia de alcance:** `fake-indexeddb` replica la API en memoria; no es IndexedDB nativo de un navegador y no conserva datos entre procesos. Esta prueba valida el comportamiento del adaptador y sus transacciones, pero queda pendiente una prueba E2E en navegador para confirmar persistencia física entre reinicios.
 
-**Commits:** [a552b00 — lifecycle explícito de IndexedDB](https://github.com/jmpixelapp-jpg/desarrollo/commit/a552b009902206357502bd78099baea028f6e0b2), [273e0b9 — prueba con IndexedDB nativo](https://github.com/jmpixelapp-jpg/desarrollo/commit/273e0b9ec2493b12dca2dfbf1d82bf2cd775df4c).
+**Archivos:** `typescript/src/persistence/indexeddb-store.ts`, `typescript/tests/live-author-monitor-indexeddb.test.mjs`, `typescript/package.json`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
 
-**Validación:** la ejecución específica y la general correspondientes a esta prueba están en curso. No se declarará aprobada hasta comprobar los resultados de GitHub Actions.
+**Commits:** [a552b00 — lifecycle explícito de IndexedDB](https://github.com/jmpixelapp-jpg/desarrollo/commit/a552b009902206357502bd78099baea028f6e0b2), [273e0b9 — prueba de operaciones de checkpoint](https://github.com/jmpixelapp-jpg/desarrollo/commit/273e0b9ec2493b12dca2dfbf1d82bf2cd775df4c), [64bbebe — dependencia de prueba](https://github.com/jmpixelapp-jpg/desarrollo/commit/64bbebeab6bee38d1910932b877d2d9f79d332fe), [2dca17b — polyfill en el test](https://github.com/jmpixelapp-jpg/desarrollo/commit/2dca17b54eb2454026a298a6409f325e6dd1035e).
+
+**Validación:** la primera ejecución falló porque Node 22 de GitHub Actions no proporciona IndexedDB global. La prueba se ajustó para instalar el polyfill de desarrollo antes de importar el adaptador. El resultado de la ejecución que incluya esta corrección se registra cuando termine.

@@ -90,7 +90,9 @@ test("limita la muestra y clasifica referencias a ideas fuera del snapshot", asy
           : Array.from({ length: 500 }, (_, targetIndex) =>
               "idea-" + String(targetIndex + index + 20).padStart(4, "0")
             )
-        : [],
+        : index >= 539 && index < 749
+          ? ["idea-" + String(index % 2 === 1 ? index + 1 : index - 1).padStart(4, "0")]
+          : [],
       relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
     }))
@@ -108,17 +110,21 @@ test("limita la muestra y clasifica referencias a ideas fuera del snapshot", asy
     assert.equal(graph.catalogScope, "project");
     assert.equal(graph.ideaCount, 2_000);
     assert.equal(graph.omittedIdeaCount, 5);
-    assert.equal(graph.weakComponentCount, 1_462);
-    assert.equal(graph.omittedWeakComponentCount, 1_362);
+    assert.equal(graph.weakComponentCount, 1_357);
+    assert.equal(graph.omittedWeakComponentCount, 1_257);
     assert.equal(graph.weakComponents.length, 100);
     assert.equal(graph.largestWeakComponentSize, 539);
-    assert.equal(graph.isolatedWithinSnapshotNodeCount, 1_461);
-    assert.equal(graph.referenceCount, 10_000);
-    assert.equal(graph.includedReferenceCount, 9_999);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 1_251);
+    assert.equal(graph.referenceCount, 10_210);
+    assert.equal(graph.includedReferenceCount, 10_209);
     assert.equal(graph.notIncludedReferenceCount, 1);
     assert.equal(graph.missingFromProjectReferenceCount, 0);
     assert.equal(graph.referenceSampleCount, 5_000);
-    assert.equal(graph.omittedReferenceSampleCount, 5_000);
+    assert.equal(graph.omittedReferenceSampleCount, 5_210);
+    assert.equal(graph.cycleCount, 105);
+    assert.equal(graph.omittedCycleCount, 5);
+    assert.equal(graph.cycles.length, 100);
+    assert.deepEqual(graph.cycles[99].ideaIds, ["idea-0737", "idea-0738"]);
     assert.equal(graph.referencesTruncated, true);
     assert.deepEqual(graph.references[499], {
       fromIdeaId: "idea-0000",

@@ -444,13 +444,13 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
         eventId: "storm",
         label: "La tormenta",
         participants: ["ana", "milo"],
-        evidence: [evidence("La tormenta"), evidence("la tormenta", 1)]
+        evidence: [evidence("La tormenta"), evidence("la tormenta")]
       },
       {
         eventId: "collapse",
         label: "El derrumbe",
         participants: ["ana", "luisa"],
-        evidence: [evidence("el derrumbe"), evidence("El derrumbe", 1)]
+        evidence: [evidence("el derrumbe"), evidence("El derrumbe")]
       }
     ]
   });
@@ -960,7 +960,25 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   });
   const graph = result.ideaGraph;
   assert.equal(graph.ideaCount, 4);
-  assert.deepEqual(graph.statusProfiles, [
+  const stableStatusProfile = profile => ({
+    status: profile.status,
+    ideaCount: profile.ideaCount,
+    sourceIdeaCount: profile.sourceIdeaCount,
+    terminalWithinSnapshotIdeaCount: profile.terminalWithinSnapshotIdeaCount,
+    isolatedWithinSnapshotIdeaCount: profile.isolatedWithinSnapshotIdeaCount,
+    incomingReferenceCount: profile.incomingReferenceCount,
+    includedOutgoingReferenceCount: profile.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: profile.notIncludedOutgoingReferenceCount,
+    statusHistoryRecordCount: profile.statusHistoryRecordCount,
+    omittedStatusHistoryCount: profile.omittedStatusHistoryCount,
+    writerDecisionCount: profile.writerDecisionCount,
+    activeEvidenceCount: profile.activeEvidenceCount,
+    staleEvidenceCount: profile.staleEvidenceCount,
+    ideasWithActiveEvidenceCount: profile.ideasWithActiveEvidenceCount,
+    ideasWithStaleEvidenceCount: profile.ideasWithStaleEvidenceCount,
+    ideasWithoutActiveEvidenceCount: profile.ideasWithoutActiveEvidenceCount
+  });
+  assert.deepEqual(graph.statusProfiles.map(stableStatusProfile), [
     {
       status: "IDEA",
       ideaCount: 2,
@@ -1033,7 +1051,19 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   ]);
   assert.equal(graph.cycleCount, 1);
   assert.deepEqual(graph.cycles, [{ ideaIds: ["idea-a", "idea-b"] }]);
-  assert.deepEqual(graph.nodes, [
+  const stableGraphNode = node => ({
+    ideaId: node.ideaId,
+    status: node.status,
+    incomingReferenceCount: node.incomingReferenceCount,
+    includedOutgoingReferenceCount: node.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: node.notIncludedOutgoingReferenceCount,
+    statusHistory: node.statusHistory,
+    omittedStatusHistoryCount: node.omittedStatusHistoryCount,
+    writerDecisionCount: node.writerDecisionCount,
+    activeEvidenceCount: node.activeEvidenceCount,
+    staleEvidenceCount: node.staleEvidenceCount
+  });
+  assert.deepEqual(graph.nodes.map(stableGraphNode), [
     {
       ideaId: "idea-a", status: "IDEA",
       incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,

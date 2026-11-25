@@ -10292,6 +10292,79 @@ test("la API vincula acontecimientos persistidos a escenas del documento y revis
   assert.deepEqual(api.getSnapshot("chapter"),before);
 });
 
+test("resume la recurrencia de acontecimientos entre escenas aunque no declaren participantes", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","La tormenta comenzó.","***",
+    "ESCENA 2","El patio quedó en silencio.","***",
+    "ESCENA 3","La tormenta regresó.","***",
+    "ESCENA 4","La campana repicó."
+  ].join("\\n");
+  const evidenceFor = excerpt => {
+    const start = text.indexOf(excerpt);
+    assert.notEqual(start,-1);
+    return {
+      documentId:"chapter",revision:12,
+      start,end:start+excerpt.length,excerpt
+    };
+  };
+  const result = analyzeLiteraryFragment({
+    projectId:"event-scene-recurrence",documentId:"chapter",revision:12,text,
+    knownEvents:[
+      {
+        eventId:"storm",label:"La tormenta",
+        participants:[],
+        evidence:[
+          evidenceFor("La tormenta comenzó."),
+          evidenceFor("La tormenta regresó.")
+        ]
+      },
+      {
+        eventId:"bell",label:"La campana",
+        participants:[],
+        evidence:[evidenceFor("La campana repicó.")]
+      }
+    ]
+  });
+
+  assert.deepEqual(result.sceneEventEvidenceProfiles,{
+    explicitSceneCount:4,
+    sourceTruncatedSceneCount:0,
+    sourceTruncatedSceneIndexes:[],
+    eventCount:2,
+    omittedEventCount:0,
+    profiles:[
+      {
+        eventId:"storm",eventLabel:"La tormenta",
+        sceneIndexes:[1,3],sceneCount:2,
+        firstSceneIndex:1,lastSceneIndex:3,
+        interveningSceneCount:1,longestConsecutiveSceneRun:1,
+        totalEvidenceRangeCount:2,
+        scenes:[
+          {sceneIndex:1,evidenceRangeCount:1,evidenceSamplesTruncated:false},
+          {sceneIndex:2,evidenceRangeCount:null,evidenceSamplesTruncated:null},
+          {sceneIndex:3,evidenceRangeCount:1,evidenceSamplesTruncated:false},
+          {sceneIndex:4,evidenceRangeCount:null,evidenceSamplesTruncated:null}
+        ]
+      },
+      {
+        eventId:"bell",eventLabel:"La campana",
+        sceneIndexes:[4],sceneCount:1,
+        firstSceneIndex:4,lastSceneIndex:4,
+        interveningSceneCount:0,longestConsecutiveSceneRun:1,
+        totalEvidenceRangeCount:1,
+        scenes:[
+          {sceneIndex:1,evidenceRangeCount:null,evidenceSamplesTruncated:null},
+          {sceneIndex:2,evidenceRangeCount:null,evidenceSamplesTruncated:null},
+          {sceneIndex:3,evidenceRangeCount:null,evidenceSamplesTruncated:null},
+          {sceneIndex:4,evidenceRangeCount:1,evidenceSamplesTruncated:false}
+        ]
+      }
+    ]
+  });
+  assert.deepEqual(result.characterEventEvidenceProfiles.profiles,[]);
+});
+
 test("la API publica comparaciones de continuidad con evidencia narrativa persistida", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({store});

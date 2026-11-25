@@ -159,6 +159,10 @@ test("descarta un checkpoint obsoleto cuando el documento recuperado avanzó a o
   assert.equal(restored.latestRevision, 1);
   assert.equal(restored.latestSequence, 1);
   assert.notEqual(restored.sessionId, stale.sessionId);
-  assert.equal(store.monitorCheckpoints.has("monitor-stale-checkpoint:chapter-1"), false);
+  const refreshed = store.monitorCheckpoints.get("monitor-stale-checkpoint:chapter-1");
+  assert.ok(refreshed);
+  assert.equal(refreshed.revision, 1);
+  assert.equal(refreshed.sequence, 1);
+  assert.notEqual(refreshed.sessionId, stale.sessionId);
   await second.disposeSafely();
 });

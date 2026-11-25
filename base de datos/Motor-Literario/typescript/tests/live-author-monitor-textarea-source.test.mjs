@@ -202,8 +202,15 @@ test("desmonta listeners al retirar la última suscripción y al disponer el ada
   f.stop();
   assert.equal(f.element.listeners.get("beforeinput").size, 0);
   assert.equal(f.element.listeners.get("input").size, 0);
-  assert.throws(() => f.source.subscribeChanges(() => {}), /ya dispuesto/);
+
+  // Retirar la última suscripción no dispone el adaptador; permite remontarlo.
+  const stopAgain = f.source.subscribeChanges(() => {});
+  assert.equal(f.element.listeners.get("beforeinput").size, 1);
+  stopAgain();
+  assert.equal(f.element.listeners.get("input").size, 0);
+
   f.source.dispose();
+  assert.throws(() => f.source.subscribeChanges(() => {}), /ya dispuesto/);
 });
 
 test("aísla errores lanzados por consumidores del stream", () => {

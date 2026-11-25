@@ -237,3 +237,100 @@ test("valida el intervalo y el filtro documental antes de suscribirse", () => {
     schedule: () => () => {}
   }), /documentId/);
 });
+
+
+test("crea y restaura checkpoint durable conservando métricas y contando la interrupción como inactividad", () => {
+  const first = fixture({ idleAfterMs: 10, commitSampleWindow: 4 });
+  first.open("chapter-1", "hello");
+  first.setTime(5);
+  first.monitor.recordAdmission(
+    first.change(1, 0, 5, 5, "!"),
+    first.queued("checkpoint-ticket")
+  );
+  assert.equal(first.monitor.createCheckpoint("chapter-1", 1000), undefined);
+
+  first.setTime(12);
+  first.monitor.recordCommit({
+    ticketId: "checkpoint-ticket",
+    status: "applied",
+    revision: 1
+  });
+  first.setTime(20);
+  const checkpoint = first.monitor.createCheckpoint("chapter-1", 2000);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.version, 1);
+  assert.equal(checkpoint.sessionDurationMs, 20);
+  assert.equal(checkpoint.activeDurationMs, 15);
+  assert.equal(checkpoint.idleDurationMs, 5);
+  assert.equal(checkpoint.lastActivityAgeMs, 15);
+  assert.equal(checkpoint.committedChanges, 1);
+  assert.equal(checkpoint.sequence, 1);
+  assert.equal(Object.hasOwn(checkpoint, "text"), false);
+
+  const second = fixture({ idleAfterMs: 10, commitSampleWindow: 4 });
+  const restored = second.monitor.restoreCheckpoint(
+    checkpoint,
+    { documentId: "chapter-1", text: "hello!", revision: 1, sequence: 1 },
+    "book-1",
+    3000
+  );
+  assert.equal(restored.sessionId, checkpoint.sessionId);
+  assert.equal(restored.sessionDurationMs, 1020);
+  assert.equal(restored.activeDurationMs, 15);
+  assert.equal(restored.idleDurationMs, 1005);
+  assert.equal(restored.state, "idle");
+  assert.equal(restored.currentIdleMs, 1005);
+  assert.equal(restored.committedChanges, 1);
+  assert.equal(restored.pendingChanges, 0);
+
+  second.setTime(5);
+  const next = second.monitor.recordAdmission(
+    second.change(2, 1, 6, 6, "?"),
+    second.queued("after-restore")
+  );
+  assert.equal(next.pauseCount, checkpoint.pauseCount + 1);
+  assert.equal(next.latestSequence, 2);
+});
+
+test("rechaza checkpoints que no coinciden con el snapshot durable o contienen métricas inválidas", () => {
+  const first = fixture();
+  first.open("chapter-1", "hello");
+  const checkpoint = first.monitor.createCheckpoint("chapter-1", 100);
+  assert.ok(checkpoint);
+
+  const second = fixture();
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    checkpoint,
+    { documentId: "chapter-1", text: "changed", revision: 0, sequence: 0 },
+    "book-1",
+    101
+  ), /no coincide exactamente/);
+
+  const malformed = { ...checkpoint, activeDurationMs: -1 };
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    malformed,
+    { documentId: "chapter-1", text: "hello", revision: 0, sequence: 0 },
+    "book-1",
+    101
+  ), /métricas o tiempos inválidos/);
+
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    checkpoint,
+    { documentId: "chapter-1", text: "hello", revision: 0, sequence: 0 },
+    "another-project",
+    101
+  ), /no corresponde/);
+});
+
+test("rechaza timestamps de restauración anteriores al checkpoint", () => {
+  const first = fixture();
+  first.open();
+  const checkpoint = first.monitor.createCheckpoint("chapter-1", 500);
+  const second = fixture();
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    checkpoint,
+    { documentId: "chapter-1", text: "hello", revision: 0, sequence: 0 },
+    "book-1",
+    499
+  ), /métricas o tiempos inválidos/);
+});

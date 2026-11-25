@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
+import { HostEngineApi, MotorLiterarioBridgeClient } from "../dist/motor-literario.js";
 import { SqliteProjectStore } from "../bridge/sqlite-project-store.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1002,6 +1002,90 @@ test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async ()
     store.close();
   } finally {
     try { database.close(); } catch { /* El almacenamiento puede haber cerrado la conexión. */ }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite guarda cada cambio de acontecimiento junto con su historial append-only", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-event-lifecycle-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "sqlite-event-history-project";
+  const store = await SqliteProjectStore.open(databasePath);
+  const original = {
+    projectId,
+    id: "event-guard-arrives",
+    label: "La guardia llega a la puerta",
+    participants: [],
+    evidence: []
+  };
+  const api = new HostEngineApi({ store });
+  try {
+    store.saveEvent(original);
+    api.initializeProject({
+      projectId,
+      projectName: "Libro de acontecimientos",
+      writerId: "writer-event-history"
+    });
+
+    const loaded = await api.getNarrativeEvents();
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].label, original.label);
+
+    const firstUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia abre la puerta",
+      changedBy: "writer-event-history",
+      changeReason: "El escritor ajustó el acontecimiento",
+      changedAt: 100
+    });
+    assert.equal(firstUpdate.label, "La guardia abre la puerta");
+
+    const firstHistory = await api.getEventLifecycleHistory(original.id);
+    assert.equal(firstHistory.length, 1);
+    assert.equal(firstHistory[0].revision, 1);
+    assert.equal(firstHistory[0].previousLabel, original.label);
+    assert.equal(firstHistory[0].newLabel, firstUpdate.label);
+    assert.equal(firstHistory[0].changedBy, "writer-event-history");
+
+    const secondUpdate = await api.updateNarrativeEvent({
+      eventId: original.id,
+      label: "La guardia protege la entrada",
+      changedBy: "writer-event-history",
+      changedAt: 200
+    });
+    const completeHistory = await store.loadProjectEventLifecycles(projectId);
+    assert.deepEqual(completeHistory.map(item => item.revision), [1, 2]);
+    assert.equal(completeHistory[1].previousLabel, firstUpdate.label);
+    assert.equal(completeHistory[1].newLabel, secondUpdate.label);
+
+    const invalidEvent = { ...secondUpdate, label: "Una versión que no debe publicarse" };
+    const invalidLifecycle = {
+      projectId,
+      id: original.id + ":v3",
+      eventId: original.id,
+      revision: 3,
+      previousLabel: "Etiqueta anterior incorrecta",
+      newLabel: invalidEvent.label,
+      previousParticipants: [],
+      newParticipants: [],
+      changedBy: "writer-event-history",
+      changedAt: 300
+    };
+    assert.throws(
+      () => store.saveEventAndAppendLifecycleIfUnchanged(
+        invalidEvent, secondUpdate, invalidLifecycle
+      ),
+      /no continúa la última revisión durable/
+    );
+
+    const persisted = (await store.loadEvents(projectId))[0];
+    const afterRejectedWrite = await store.loadEventLifecycles(projectId, original.id);
+    assert.equal(persisted.label, secondUpdate.label);
+    assert.equal(afterRejectedWrite.length, 2);
+    assert.deepEqual(afterRejectedWrite.map(item => item.revision), [1, 2]);
+  } finally {
+    store.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

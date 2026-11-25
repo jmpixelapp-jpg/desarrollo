@@ -68,6 +68,13 @@ export class SqliteProjectStore {
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_writer ON " + TABLE + "(collection, writer_id)");
     database.exec("CREATE INDEX IF NOT EXISTS bridge_records_document ON " + TABLE + "(collection, project_id, document_id, sequence)");
     database.exec(
+      "CREATE TABLE IF NOT EXISTS bridge_document_heads (" +
+      "project_id TEXT NOT NULL, document_id TEXT NOT NULL, sequence INTEGER NOT NULL, " +
+      "revision INTEGER NOT NULL, text_length INTEGER NOT NULL, " +
+      "PRIMARY KEY(project_id, document_id)" +
+      ") WITHOUT ROWID"
+    );
+    database.exec(
       "CREATE TABLE IF NOT EXISTS bridge_metadata (" +
       "key TEXT PRIMARY KEY NOT NULL," +
       "value TEXT NOT NULL" +
@@ -187,7 +194,9 @@ export class SqliteProjectStore {
 
   loadProject(collection, projectId, label = collection) {
     requireProject(projectId);
-    const values = this.find(collection, item => item.projectId === projectId);
+    const values = this.database.prepare(
+      "SELECT value_json FROM " + TABLE + " WHERE collection = ? AND project_id = ? ORDER BY record_key"
+    ).all(collection, projectId).map(row => JSON.parse(row.value_json));
     const ids = new Set();
     for (const item of values) {
       requireProjectRecord(item, label);
@@ -742,6 +751,16 @@ export class SqliteProjectStore {
         }
       }
       this.put("documents", key, document);
+      const head = this.database.prepare(
+        "SELECT sequence FROM bridge_document_heads WHERE project_id = ? AND document_id = ?"
+      ).get(document.projectId, document.documentId);
+      if (!head || head.sequence <= document.sequence) {
+        this.database.prepare(
+          "INSERT INTO bridge_document_heads(project_id, document_id, sequence, revision, text_length) " +
+          "VALUES(?, ?, ?, ?, ?) ON CONFLICT(project_id, document_id) DO UPDATE SET " +
+          "sequence=excluded.sequence, revision=excluded.revision, text_length=excluded.text_length"
+        ).run(document.projectId, document.documentId, document.sequence, document.revision, document.text.length);
+      }
     });
   }
 
@@ -772,16 +791,27 @@ export class SqliteProjectStore {
     return this.transaction(() => {
       const snapshot = this.get("documents", identityKey(change.projectId, change.documentId));
       if (!snapshot) throw new Error("No existe snapshot durable base para el journal.");
-      const existing = this.loadChanges(change.projectId, change.documentId, snapshot.sequence);
-      const lastSequence = existing.length ? existing[existing.length - 1].sequence : snapshot.sequence;
-      const lastRevision = existing.length ? existing[existing.length - 1].committedRevision : snapshot.revision;
-      if (change.sequence !== lastSequence + 1 || change.baseRevision !== lastRevision) {
+      let head = this.database.prepare(
+        "SELECT sequence, revision, text_length FROM bridge_document_heads WHERE project_id = ? AND document_id = ?"
+      ).get(change.projectId, change.documentId);
+      if (!head || head.sequence < snapshot.sequence) {
+        head = { sequence: snapshot.sequence, revision: snapshot.revision, text_length: snapshot.text.length };
+        this.database.prepare(
+          "INSERT INTO bridge_document_heads(project_id, document_id, sequence, revision, text_length) " +
+          "VALUES(?, ?, ?, ?, ?) ON CONFLICT(project_id, document_id) DO UPDATE SET " +
+          "sequence=excluded.sequence, revision=excluded.revision, text_length=excluded.text_length"
+        ).run(change.projectId, change.documentId, head.sequence, head.revision, head.text_length);
+      }
+      if (change.sequence !== head.sequence + 1 || change.baseRevision !== head.revision) {
         throw new Error("Secuencia o revisión del journal no consecutiva.");
       }
-      const projectedLength = existing.reduce((length, item) =>
-        length - (item.end - item.start) + item.replacement.length, snapshot.text.length);
-      if (change.end > projectedLength) throw new Error("El delta supera la longitud proyectada del documento.");
+      if (change.end > head.text_length) throw new Error("El delta supera la longitud proyectada del documento.");
+      const nextLength = head.text_length - (change.end - change.start) + change.replacement.length;
       this.put("changes", [change.projectId, change.documentId, change.sequence], change, { insertOnly: true });
+      this.database.prepare(
+        "UPDATE bridge_document_heads SET sequence = ?, revision = ?, text_length = ? " +
+        "WHERE project_id = ? AND document_id = ?"
+      ).run(change.sequence, change.committedRevision, nextLength, change.projectId, change.documentId);
     });
   }
 
@@ -789,9 +819,10 @@ export class SqliteProjectStore {
     requireProject(projectId);
     requireText(documentId, "documentId");
     if (!Number.isSafeInteger(afterSequence) || afterSequence < 0) throw new Error("afterSequence inválido.");
-    return clone(this.find("changes", item => item.projectId === projectId &&
-      item.documentId === documentId && item.sequence > afterSequence)
-      .sort((a, b) => a.sequence - b.sequence));
+    return this.database.prepare(
+      "SELECT value_json FROM " + TABLE +
+      " WHERE collection = ? AND project_id = ? AND document_id = ? AND sequence > ? ORDER BY sequence"
+    ).all("changes", projectId, documentId, afterSequence).map(row => JSON.parse(row.value_json));
   }
 
   compactChanges(projectId, documentId, throughSequence) {
@@ -800,8 +831,9 @@ export class SqliteProjectStore {
       if (!snapshot || snapshot.sequence !== throughSequence) {
         throw new Error("La compactación exige un snapshot durable con la misma secuencia.");
       }
-      this.removeWhere("changes", item => item.projectId === projectId &&
-        item.documentId === documentId && item.sequence <= throughSequence);
+      this.database.prepare(
+        "DELETE FROM " + TABLE + " WHERE collection = ? AND project_id = ? AND document_id = ? AND sequence <= ?"
+      ).run("changes", projectId, documentId, throughSequence);
     });
   }
 
@@ -838,8 +870,19 @@ export class SqliteProjectStore {
         }
       }
       this.put("documents", key, document);
-      this.removeWhere("changes", item => item.projectId === document.projectId &&
-        item.documentId === document.documentId && item.sequence <= throughSequence);
+      this.database.prepare(
+        "DELETE FROM " + TABLE + " WHERE collection = ? AND project_id = ? AND document_id = ? AND sequence <= ?"
+      ).run("changes", document.projectId, document.documentId, throughSequence);
+      const head = this.database.prepare(
+        "SELECT sequence FROM bridge_document_heads WHERE project_id = ? AND document_id = ?"
+      ).get(document.projectId, document.documentId);
+      if (!head || head.sequence <= throughSequence) {
+        this.database.prepare(
+          "INSERT INTO bridge_document_heads(project_id, document_id, sequence, revision, text_length) " +
+          "VALUES(?, ?, ?, ?, ?) ON CONFLICT(project_id, document_id) DO UPDATE SET " +
+          "sequence=excluded.sequence, revision=excluded.revision, text_length=excluded.text_length"
+        ).run(document.projectId, document.documentId, document.sequence, document.revision, document.text.length);
+      }
     });
   }
 

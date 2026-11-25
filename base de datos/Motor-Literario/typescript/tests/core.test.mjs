@@ -13598,6 +13598,29 @@ test("la API rechaza recibos de biblioteca con checksum incorrecto o IDs desorde
     api.getProjectFinalizationReceipt(),
     /IDs del recibo no están ordenados o su checksum no coincide/
   );
+
+  // El orden visible del recibo usa localeCompare; el checksum de IDs debe
+  // ser independiente de las diferencias entre ese orden y Array.sort().
+  const mixedCaseIds = ["idea-a", "idea-A"];
+  const hash = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  store.loadProjectFinalizationReceipt = async () => ({
+    writerId,
+    sourceProjectId: projectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: "Libro con recibo alterado",
+    finalizedAt: 10,
+    archivedIdeaIds: mixedCaseIds,
+    archiveChecksum: hash(JSON.stringify([...mixedCaseIds].sort()))
+  });
+  const canonicalReceipt = await api.getProjectFinalizationReceipt();
+  assert.deepEqual(canonicalReceipt.archivedIdeaIds, mixedCaseIds);
   api.dispose();
 });
 

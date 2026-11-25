@@ -742,6 +742,8 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
 export interface LiteraryIdeaGraphNode {
   readonly ideaId: string;
   readonly status: NarrativeIdea["status"];
+  /** Consistencia entre el estado actual y el último registro visible; unknown si falta historial o está truncado. */
+  readonly currentStatusHistoryConsistency: "consistent" | "mismatch" | "unknown";
   /** Historial visible de estados; puede estar acotado por omittedStatusHistoryCount. */
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
   readonly omittedStatusHistoryCount: number;
@@ -3590,7 +3592,9 @@ function buildLiteraryIdeaGraph(
   }
 
   const summarizeStatusHistory = (
-    history: readonly NarrativeIdeaStatusChange[]
+    history: readonly NarrativeIdeaStatusChange[],
+    currentStatus: NarrativeIdea["status"],
+    omittedCount: number
   ) => {
     const seenStatuses = new Set<NarrativeIdea["status"]>();
     let previousStatus: NarrativeIdea["status"] | undefined;
@@ -3640,6 +3644,11 @@ function buildLiteraryIdeaGraph(
     }
 
     return {
+      currentStatusHistoryConsistency: history.length === 0 || omittedCount > 0
+        ? "unknown" as const
+        : history[history.length - 1]!.status === currentStatus
+          ? "consistent" as const
+          : "mismatch" as const,
       observedStatusTransitionCount,
       statusReversalCount,
       nonMonotonicStatusTimestampCount,
@@ -3666,7 +3675,9 @@ function buildLiteraryIdeaGraph(
     statusHistory: idea.statusHistory.map(change => ({ ...change })),
     omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
     writerDecisionCount: idea.writerDecisionCount,
-    ...summarizeStatusHistory(idea.statusHistory),
+    ...summarizeStatusHistory(
+      idea.statusHistory, idea.status, idea.omittedStatusHistoryCount
+    ),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));

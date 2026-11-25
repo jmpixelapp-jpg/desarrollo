@@ -264,7 +264,7 @@ export function validateEventLifecycle(
   if (!item || typeof item !== "object" ||
       typeof item.projectId !== "string" || !item.projectId.trim() ||
       (expectedProjectId !== undefined && item.projectId !== expectedProjectId) ||
-      typeof item.id !== "string" || !item.id.trim() || item.id.length > 256 ||
+      typeof item.id !== "string" || !item.id.trim() || item.id.length > 512 ||
       typeof item.eventId !== "string" || !item.eventId.trim() || item.eventId.length > 256 ||
       !Number.isSafeInteger(item.revision) || item.revision < 1 ||
       typeof item.previousLabel !== "string" || !item.previousLabel.trim() || item.previousLabel.length > 512 ||

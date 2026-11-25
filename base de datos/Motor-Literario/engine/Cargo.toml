@@ -1,0 +1,21 @@
+[package]
+name = "motor-literario-core"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+description = "Núcleo local inicial del Motor Literario"
+
+[lib]
+name = "motor_literario_core"
+path = "src/lib.rs"
+
+[dependencies]
+mldb-storage = { path = "../storage" }
+
+[[bench]]
+name = "rope_edits"
+harness = false
+
+[[bench]]
+name = "durable_change_batches"
+harness = false

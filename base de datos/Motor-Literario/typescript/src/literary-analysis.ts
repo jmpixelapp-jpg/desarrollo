@@ -260,6 +260,33 @@ export interface LiterarySceneCadenceTransition {
   readonly newlyDetectedPatternTypes: readonly LiterarySceneCadencePatternType[];
   readonly noLongerDetectedPatternTypes: readonly LiterarySceneCadencePatternType[];
 }
+export interface LiterarySceneCadenceMotifInstance {
+  readonly sceneIndex: number;
+  readonly fromSentenceIndex: number;
+  readonly toSentenceIndex: number;
+  readonly sentenceWordCounts: readonly number[];
+  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+  readonly evidenceTruncated: boolean;
+}
+export interface LiterarySceneCadenceMotif {
+  readonly patternType: LiterarySceneCadencePatternType;
+  readonly lengthBands: readonly LiterarySentenceLengthBand[];
+  readonly sceneIndexes: readonly number[];
+  readonly sceneCount: number;
+  readonly occurrenceCount: number;
+  readonly instances: readonly LiterarySceneCadenceMotifInstance[];
+  readonly instancesTruncated: boolean;
+}
+export interface LiterarySceneCadenceMotifAnalysis {
+  /** Patrones detectados antes de aplicar el límite de 20 muestras por escena. */
+  readonly candidatePatternCount: number;
+  readonly sampledPatternCount: number;
+  readonly omittedPatternCount: number;
+  /** Firmas idénticas presentes en al menos dos escenas explícitas distintas. */
+  readonly motifCount: number;
+  /** Motivos ordenados por cobertura de escenas y frecuencia; se devuelven como máximo 20. */
+  readonly motifs: readonly LiterarySceneCadenceMotif[];
+}
 export interface LiterarySceneRhythmTransition {
   readonly fromSceneIndex: number;
   readonly toSceneIndex: number;
@@ -369,6 +396,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneRhythmTransitions: readonly LiterarySceneRhythmTransition[];
   /** Comparación de bandas y patrones de cadencia entre escenas contiguas; separada de la voz gramatical. */
   readonly sceneCadenceTransitions: readonly LiterarySceneCadenceTransition[];
+  /** Firmas de cadencia recurrentes entre escenas explícitas del fragmento analizado. */
+  readonly sceneCadenceMotifs: LiterarySceneCadenceMotifAnalysis;
   /** Variaciones de señales gramaticales entre escenas contiguas; no demuestra cambio de narrador. */
   readonly sceneVoiceTransitions: readonly LiterarySceneVoiceTransition[];
   /** Resumen cuantitativo de señales gramaticales a lo largo de las escenas explícitas. */
@@ -821,6 +850,72 @@ function buildSceneCadenceTransitions(
     });
   }
   return transitions;
+}
+
+function buildSceneCadenceMotifs(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneCadenceMotifAnalysis {
+  interface MotifGroup {
+    patternType: LiterarySceneCadencePatternType;
+    lengthBands: readonly LiterarySentenceLengthBand[];
+    instances: LiterarySceneCadenceMotifInstance[];
+    sceneIndexes: Set<number>;
+  }
+  const groups = new Map<string,MotifGroup>();
+  let candidatePatternCount = 0;
+  let sampledPatternCount = 0;
+  for (const scene of scenes) {
+    const cadence = scene.rhythmSignals.cadence;
+    candidatePatternCount += cadence.patternCount;
+    sampledPatternCount += cadence.patterns.length;
+    for (const pattern of cadence.patterns) {
+      const signature = `${pattern.patternType}:${pattern.lengthBands.join(",")}`;
+      let group = groups.get(signature);
+      if (!group) {
+        group = {
+          patternType:pattern.patternType,
+          lengthBands:[...pattern.lengthBands],
+          instances:[],
+          sceneIndexes:new Set<number>()
+        };
+        groups.set(signature,group);
+      }
+      group.sceneIndexes.add(scene.sceneIndex);
+      group.instances.push({
+        sceneIndex:scene.sceneIndex,
+        fromSentenceIndex:pattern.fromSentenceIndex,
+        toSentenceIndex:pattern.toSentenceIndex,
+        sentenceWordCounts:[...pattern.sentenceWordCounts],
+        occurrences:pattern.occurrences.map(item => ({start:item.start,end:item.end})),
+        evidenceTruncated:pattern.evidenceTruncated
+      });
+    }
+  }
+
+  const motifs = [...groups.values()]
+    .filter(group => group.sceneIndexes.size >= 2)
+    .map(group => ({
+      patternType:group.patternType,
+      lengthBands:group.lengthBands,
+      sceneIndexes:[...group.sceneIndexes].sort((a,b) => a-b),
+      sceneCount:group.sceneIndexes.size,
+      occurrenceCount:group.instances.length,
+      instances:group.instances.slice(0,40),
+      instancesTruncated:group.instances.length>40
+    }))
+    .sort((a,b) =>
+      b.sceneCount-a.sceneCount ||
+      b.occurrenceCount-a.occurrenceCount ||
+      a.patternType.localeCompare(b.patternType,"en") ||
+      a.lengthBands.join(",").localeCompare(b.lengthBands.join(","),"en")
+    );
+  return {
+    candidatePatternCount,
+    sampledPatternCount,
+    omittedPatternCount:Math.max(0,candidatePatternCount-sampledPatternCount),
+    motifCount:motifs.length,
+    motifs:motifs.slice(0,20)
+  };
 }
 
 function buildSceneRhythmTransitions(
@@ -1649,6 +1744,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
   const sceneCadenceTransitions = buildSceneCadenceTransitions(explicitScenes);
+  const sceneCadenceMotifs = buildSceneCadenceMotifs(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
   const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
@@ -1828,6 +1924,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneContinuity,
     sceneRhythmTransitions,
     sceneCadenceTransitions,
+    sceneCadenceMotifs,
     sceneVoiceTransitions,
     sceneVoiceProfile,
     sceneVoiceSequences,
@@ -1845,6 +1942,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La presencia de personajes se basa en nombres y alias literales no ambiguos del catálogo del proyecto; no implica que el personaje actúe, hable o sea el punto de vista de la escena.",
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",
       "La continuidad compara solo escenas explícitas contiguas: las menciones literales y la evidencia por ID de acontecimiento describen cobertura textual, no presencia física, cronología ni contradicciones.",
+      "Los motivos de cadencia agrupan firmas idénticas de bandas y tipo de patrón entre escenas explícitas del fragmento; usan las muestras de patrones expuestas por escena y no implican recurrencia temática ni intención autoral.",
       "Las variaciones métricas del ritmo comparan longitud y cambios entre oraciones completas de escenas explícitas; incluyen diálogo y no implican por sí solas tensión, intención ni calidad narrativa.",
       "Las variaciones gramaticales entre escenas comparan conteos de pronombres explícitos fuera del diálogo reconocido; no demuestran un cambio de narrador, focalización ni voz autoral.",
       "El perfil de voz agrega señales y clasificaciones por escena explícita; la cobertura indica en cuántas escenas aparece una categoría, no la identidad ni continuidad de una voz narrativa.",

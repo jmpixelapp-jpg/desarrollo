@@ -107,6 +107,14 @@ La propiedad `sceneCadenceTransitions` compara las bandas de longitud y patrones
 
 Los conteos por tipo se calculan sobre todos los patrones detectados, no sobre la lista de evidencias limitada a 20 por escena. Así, el límite de muestras no altera la comparación. Una transición ausente puede significar que la escena tiene menos de dos oraciones; sus deltas describen conteos observados y no se interpretan como una cadencia narrativa nula. Esta comparación sigue basada exclusivamente en longitudes oracionales, incluye diálogo reconocido y no permite deducir perspectiva, narrador ni focalización.
 
+### Firmas de cadencia recurrentes entre escenas
+
+La propiedad `sceneCadenceMotifs` agrupa patrones locales de cadencia con la misma clase y la misma secuencia ordenada de bandas cuando aparecen en al menos dos escenas explícitas distintas. Cada motivo registra las escenas cubiertas, la cantidad de instancias y hasta 40 evidencias de ocurrencia con conteos de palabras, índices locales a la escena y rangos UTF-16 absolutos. `instancesTruncated` informa si hay más instancias que las expuestas.
+
+El resumen diferencia los patrones candidatos totales de las muestras inspeccionadas por escena: `candidatePatternCount` cuenta todos los patrones locales, `sampledPatternCount` cuenta los que entran en la lista limitada a 20 por escena y `omittedPatternCount` señala los candidatos fuera de esa muestra. Por ello, la detección de motivos recurrentes se realiza sobre las muestras visibles; el recuento de omitidos hace explícito que el resultado no es exhaustivo cuando se alcanza el límite. Se devuelven como máximo 20 motivos, ordenados por escenas cubiertas y frecuencia.
+
+Una firma recurrente significa únicamente que una secuencia idéntica de bandas y tipo de patrón aparece en varias escenas del fragmento analizado. No acredita repetición de tema, emoción, estructura dramática, intención estilística ni autoría; tampoco se combina con señales gramaticales o de diálogo.
+
 ## Acontecimientos y continuidad entre escenas
 
 La API anfitriona aporta acontecimientos persistidos del proyecto activo. Una escena solo recibe un vínculo cuando existe evidencia no obsoleta del mismo documento y de la revisión exacta analizada cuyo rango UTF-16 se solapa con el contenido de la escena. Cada vínculo conserva el ID y etiqueta del acontecimiento, los rangos coincidentes y sus participantes declarados. Para cada participante se informa por separado si también aparece por nombre/alias en las menciones literales de esa escena. La falta de mención no se interpreta como ausencia ni contradicción. La evidencia de otras revisiones, otros documentos o marcada como obsoleta se descarta. El catálogo admite hasta 2.000 acontecimientos, 500 participantes y 200 evidencias por acontecimiento; cada escena devuelve como máximo 100 vínculos y 20 rangos por vínculo.

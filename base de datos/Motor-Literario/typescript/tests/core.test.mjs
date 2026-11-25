@@ -10473,6 +10473,72 @@ test("detecta cadencias alternantes, progresivas y estables dentro de cada escen
   ]);
 });
 
+test("agrupa firmas de cadencia recurrentes entre escenas con evidencias separadas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const sentence = count => Array.from({length:count},() => "palabra").join(" ") + ".";
+  const alternating = [3,25,4,26,5].map(sentence);
+  const text = [
+    "ESCENA 1",...alternating,
+    "***",
+    "ESCENA 2",...alternating,
+    "***",
+    "ESCENA 3",sentence(3),sentence(4),sentence(7)
+  ].join("\n");
+  const baseOffset = 1200;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-cadence-motifs",documentId:"chapter",revision:4,text,baseOffset
+  });
+  const analysis = result.sceneCadenceMotifs;
+
+  assert.equal(analysis.candidatePatternCount,3);
+  assert.equal(analysis.sampledPatternCount,3);
+  assert.equal(analysis.omittedPatternCount,0);
+  assert.equal(analysis.motifCount,1);
+  assert.deepEqual(analysis.motifs[0],{
+    patternType:"alternating-length-band-run",
+    lengthBands:["short","long","short","long","short"],
+    sceneIndexes:[1,2],
+    sceneCount:2,
+    occurrenceCount:2,
+    instances:[
+      {
+        sceneIndex:1,fromSentenceIndex:1,toSentenceIndex:5,
+        sentenceWordCounts:[3,25,4,26,5],
+        occurrences:result.explicitScenes[0].rhythmSignals.cadence.patterns[0].occurrences,
+        evidenceTruncated:false
+      },
+      {
+        sceneIndex:2,fromSentenceIndex:1,toSentenceIndex:5,
+        sentenceWordCounts:[3,25,4,26,5],
+        occurrences:result.explicitScenes[1].rhythmSignals.cadence.patterns[0].occurrences,
+        evidenceTruncated:false
+      }
+    ],
+    instancesTruncated:false
+  });
+  assert.equal(analysis.motifs[0].instances[0].occurrences[0].start,
+    baseOffset+text.indexOf(sentence(3)));
+  assert.notEqual(
+    analysis.motifs[0].instances[0].occurrences[0].start,
+    analysis.motifs[0].instances[1].occurrences[0].start
+  );
+});
+
+test("el análisis de motivos de cadencia permanece vacío sin patrones en dos escenas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-cadence-motifs-empty",documentId:"chapter",revision:1,
+    text:"ESCENA 1\nUna frase.\n***\nESCENA 2\nOtra frase."
+  });
+  assert.deepEqual(result.sceneCadenceMotifs,{
+    candidatePatternCount:0,
+    sampledPatternCount:0,
+    omittedPatternCount:0,
+    motifCount:0,
+    motifs:[]
+  });
+});
+
 test("detecta tramos estables y alternancias de señales gramaticales entre escenas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

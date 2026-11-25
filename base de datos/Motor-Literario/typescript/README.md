@@ -327,6 +327,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Perfil de ritmo para cada escena: media, mediana, dispersión, distribución de longitudes y contrastes entre oraciones consecutivas con offsets UTF-16.
 - Indicadores de cadencia por escena: bandas de longitud, transiciones entre bandas y patrones estables, alternantes o progresivos, con muestras de oraciones y ocurrencias UTF-16.
 - Comparación de cadencia entre escenas contiguas: deltas de distribución, transiciones de bandas, cantidades por tipo de patrón y tipos que aparecen o dejan de detectarse.
+- Detección de firmas de cadencia que reaparecen en distintas escenas, agrupadas por secuencia exacta de bandas y tipo de patrón, con evidencias independientes por escena.
 - Comparación de variaciones métricas de ritmo entre escenas contiguas, separada de las comparaciones gramaticales y sin inferir por sí sola tensión o cambio de voz.
 - Comparación de variaciones entre escenas contiguas: cambio de clasificación, diferencias de conteos por persona y categorías modificadas, sin diagnosticar cambios de narrador.
 - Perfil agregado de señales por escena: totales por categoría, distribución de clasificaciones, cobertura y secuencia de instantáneas en orden textual.

@@ -300,7 +300,7 @@ const stopAuthorMonitor = mountLiveAuthorMonitorEditorTransactions({
 });
 
 // Indicadores de historial y del stream, sin leer el manuscrito desde el monitor.
-const state = authorMonitorState();
+const state = stopAuthorMonitor.getState();
 const pending = stopAuthorMonitor.getPendingChanges();
 
 // Antes de desmontar la pestaña:

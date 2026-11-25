@@ -736,8 +736,8 @@ test("mantiene el límite de 500 vínculos por categoría antes de persistir", a
   entityApi.dispose();
 });
 
-test("rechaza historiales editoriales cuya secuencia temporal o estado final es incoherente", async () => {
-  const invalidHistories = [
+test("preserva historiales editoriales importados aunque sus fechas retrocedan o difieran del estado actual", async () => {
+  const historicalCases = [
     [
       { status: "IDEA", reason: "initial", changedAt: 10 },
       { status: "incorporated", reason: "writer", changedAt: 9 }
@@ -748,15 +748,15 @@ test("rechaza historiales editoriales cuya secuencia temporal o estado final es 
     ]
   ];
 
-  for (const statusHistory of invalidHistories) {
+  for (const statusHistory of historicalCases) {
     const store = new RacingStore([
       idea("idea-source", { status: "incorporated", statusHistory })
     ]);
     const api = createApi(store);
-    await assert.rejects(
-      api.getNarrativeIdeas(),
-      /registro malformado en ideas/
-    );
+    const loaded = await api.getNarrativeIdeas();
+    assert.equal(loaded.length, 1);
+    assert.deepEqual(loaded[0].statusHistory, statusHistory);
+    assert.equal(loaded[0].status, "incorporated");
     api.dispose();
   }
 });

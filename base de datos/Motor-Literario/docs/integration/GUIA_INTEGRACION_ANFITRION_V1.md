@@ -265,6 +265,8 @@ La API expone consultas y operaciones tipadas para que el anfitrión construya s
 - `getNarrativeEntityHistory(entityId)`, `resolveNarrativeEntityId(entityId)` y `getNarrativeEntityIdentityCandidates()`.
 - `setNarrativeIdeaStatus(ideaId, status)`, `setNarrativeIdeaEntityLink(...)` y `setNarrativeIdeaLink(...)`.
 
+Cada idea admite hasta 500 vínculos explícitos por categoría: 500 a fichas y 500 a otras ideas. El anfitrión y los adaptadores de almacenamiento aplican el límite compartido y rechazan el vínculo 501 antes de escribir.
+
 La extracción narrativa inicial se programa al abrir/recuperar el documento y continúa de manera incremental con las ediciones. Su alcance es deliberadamente conservador: usa indicadores textuales explícitos; los acontecimientos requieren `ACONTECIMIENTO:` o `EVENTO:`, y las ideas requieren `IDEA:`. No atribuir al motor inferencias semánticas que todavía no realiza.
 
 ### Biblioteca privada de ideas
@@ -291,7 +293,9 @@ Antes de mostrar una pestaña o habilitar una función opcional, consultar `moto
 
 Para presentar el grafo de ideas como una vista del libro completo, comprobar `projectWideNarrativeIdeaGraph`. Solo se anuncia cuando el adaptador puede leer tanto `loadIdeas` como `loadEntities`, para validar los vínculos explícitos. El análisis sigue devolviendo `ideaGraph` en modo de compatibilidad cuando esa capacidad no está disponible, pero `catalogScope: "character-linked-fallback"` indica que su catálogo procede únicamente del subconjunto ligado a personajes; la interfaz no debe llamarlo grafo global.
 
-`projectCatalogComplete` es el indicador directo de exhaustividad: solo es `true` cuando `catalogScope` es `project` y `omittedIdeaCount` es cero. Cuando es `false`, los conteos de entrada y conectividad solo describen las aristas que parten de nodos incluidos.\n\nCuando `catalogScope: "project"`, `omittedIdeaCount` indica cuántas ideas quedaron fuera del snapshot de hasta 2.000. Las referencias `not-in-snapshot` no deben mostrarse como vínculos rotos porque su destino podría estar entre las ideas omitidas. Solo `missingFromProjectReferenceCount`, con catálogo global completo y cero ideas omitidas, confirma referencias sin destino en el proyecto. Las muestras visibles están limitadas: hasta 5.000 referencias y 100 ciclos o componentes conexos; presentar sus contadores de omisión para no sugerir exhaustividad. El grafo refleja únicamente vínculos declarados por el escritor, no inferencias semánticas.
+`projectCatalogComplete` es el indicador directo de exhaustividad: solo es `true` cuando `catalogScope` es `project` y `omittedIdeaCount` es cero. Cuando es `false`, los conteos de entrada y conectividad solo describen las aristas que parten de nodos incluidos.
+
+Cuando `catalogScope: "project"`, `omittedIdeaCount` indica cuántas ideas quedaron fuera del snapshot de hasta 2.000. Las referencias `not-in-snapshot` no deben mostrarse como vínculos rotos porque su destino podría estar entre las ideas omitidas. Solo `missingFromProjectReferenceCount`, con catálogo global completo y cero ideas omitidas, confirma referencias sin destino en el proyecto. Las muestras visibles están limitadas: hasta 5.000 referencias y 100 ciclos o componentes conexos; presentar sus contadores de omisión para no sugerir exhaustividad. El grafo refleja únicamente vínculos declarados por el escritor, no inferencias semánticas.
 
 Análisis descriptivo de un rango abierto:
 

@@ -802,6 +802,8 @@ export interface LiteraryIdeaLexicalResonance {
   readonly sharedTermCount: number;
   /** Intersección dividida por la unión de términos literales normalizados. */
   readonly jaccardSimilarity: number;
+  /** Jaccard ponderado por frecuencias: suma de mínimos dividida por suma de máximos. */
+  readonly frequencyWeightedJaccardSimilarity: number;
   /** Intersección dividida por el tamaño del vocabulario menor. */
   readonly overlapCoefficient: number;
   /** Muestra ordenada de términos compartidos; no implica equivalencia semántica. */
@@ -4020,6 +4022,18 @@ function buildLiteraryIdeaLexicalResonances(
 
   const resonances: LiteraryIdeaLexicalResonance[] = topPairs.map(pair => {
     const orderedSharedTerms = (selectedTerms.get(pair.key) ?? []).sort(compareTerms);
+    const leftFrequencies = prepared[pair.leftIndex]!.frequencies;
+    const rightFrequencies = prepared[pair.rightIndex]!.frequencies;
+    let weightedIntersection = 0;
+    let weightedUnion = 0;
+    for (const [term, leftFrequency] of leftFrequencies) {
+      const rightFrequency = rightFrequencies.get(term) ?? 0;
+      weightedIntersection += Math.min(leftFrequency, rightFrequency);
+      weightedUnion += Math.max(leftFrequency, rightFrequency);
+    }
+    for (const [term, rightFrequency] of rightFrequencies) {
+      if (!leftFrequencies.has(term)) weightedUnion += rightFrequency;
+    }
     return {
       leftIdeaId: pair.leftIdeaId,
       rightIdeaId: pair.rightIdeaId,
@@ -4027,6 +4041,9 @@ function buildLiteraryIdeaLexicalResonances(
       rightTermCount: pair.rightTermCount,
       sharedTermCount: pair.sharedTermCount,
       jaccardSimilarity: pair.jaccardSimilarity,
+      frequencyWeightedJaccardSimilarity: roundMetric(
+        weightedUnion > 0 ? weightedIntersection / weightedUnion : 0
+      ),
       overlapCoefficient: pair.overlapCoefficient,
       sharedTerms: orderedSharedTerms.slice(0, MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES),
       sharedTermFrequencies: orderedSharedTerms

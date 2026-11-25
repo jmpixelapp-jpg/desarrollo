@@ -1,6 +1,6 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 9,
+  "mapping_version": 10,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
@@ -1236,8 +1236,8 @@
         "project/dictionary-entries/related-entities/"
       ],
       "representation": "record",
-      "contract": "Los vínculos creados o confirmados desde DB21 se persisten como DictionaryEntryEntityLink con linkKind, provenanceKind y createdAt propios; la operación setDictionaryEntryEntityLink actualiza en una transacción el vínculo y DictionaryEntry.relatedEntityIds. Los vínculos anteriores que solo conservan IDs se mantienen como legado sin reconstruir metadatos históricos inexistentes; la tabla queda partial hasta su revisión o re-confirmación.",
-      "implementationStatus": "partial",
+      "contract": "DictionaryEntryEntityLink independiente con linkKind, provenanceKind y createdAt por vínculo; setDictionaryEntryEntityLink actualiza atómicamente el vínculo y la proyección relatedEntityIds. La migración DB21 materializa asociaciones heredadas con linkKind RELATED, provenanceKind MIGRATION y createdAt igual al instante real de migración, sin fingir una fecha histórica.",
+      "implementationStatus": "implemented",
       "objectStores": [
         "dictionary-entry-entities",
         "dictionary-entries",

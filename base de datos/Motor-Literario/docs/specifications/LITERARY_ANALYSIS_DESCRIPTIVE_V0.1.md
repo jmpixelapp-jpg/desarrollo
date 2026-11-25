@@ -94,7 +94,7 @@ Las afirmaciones de otros capítulos sin referencia temporal comparable se conta
 
 ## Grafo global de ideas del proyecto
 
-La propiedad `ideaGraph` resume el catálogo global de ideas del libro a partir de sus referencias dirigidas `relatedIdeaIds`. El anfitrión entrega el conjunto completo mediante `knownProjectIdeas`, independientemente de que cada idea tenga o no un vínculo a un personaje. El subconjunto `knownIdeas` sigue reservado para integrar decisiones en las trayectorias de personajes; esta separación evita que una idea independiente desaparezca del grafo por no estar asociada a una ficha de personaje.
+La propiedad `ideaGraph` resume el catálogo global de ideas del libro a partir de sus referencias dirigidas `relatedIdeaIds`. El anfitrión proyecta el catálogo en `knownProjectIdeas`, con un máximo de 2.000 entradas e informando el excedente mediante `knownProjectIdeasOmittedCount`, independientemente de que cada idea tenga o no un vínculo a un personaje. El subconjunto `knownIdeas` sigue reservado para integrar decisiones en las trayectorias de personajes; esta separación evita que una idea independiente desaparezca del grafo por no estar asociada a una ficha de personaje.
 
 Cada nodo informa su estado editorial, referencias entrantes y salientes dentro de la muestra, referencias salientes cuyo destino no está incluido, historial visible de estados, decisiones del escritor y recuentos de evidencias activas y obsoletas. Las referencias externas al conjunto cargado se marcan como `not-in-snapshot`: no se presentan como rotas ni como inexistentes, porque pueden apuntar a ideas válidas que quedaron fuera del límite de entrada. `knownProjectIdeasOmittedCount` declara cuántas ideas del catálogo global no se transfirieron.
 

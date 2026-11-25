@@ -12673,3 +12673,94 @@ test("la API incorpora afirmaciones almacenadas a la evolución de atributos ent
     .map(item => item.values),[[20],[21]]);
   assert.deepEqual(trajectory.scenes.map(item => item.attributeValues[0].values),[[20],[21]]);
 });
+
+
+test("la API integra relaciones persistidas y decisiones de ideas en trayectorias por personaje", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId: "character-relations-decisions",
+    projectName: "El mapa compartido"
+  });
+  const text = "ESCENA 1\nAna confió el mapa a Bruno.";
+  const excerpt = "Ana confió el mapa a Bruno.";
+  const start = text.indexOf(excerpt);
+  await store.saveEntity({
+    projectId: "character-relations-decisions",
+    id: "ana",
+    kind: "character",
+    canonicalName: "Ana",
+    normalizedName: "ana",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  });
+  await store.saveEntity({
+    projectId: "character-relations-decisions",
+    id: "bruno",
+    kind: "character",
+    canonicalName: "Bruno",
+    normalizedName: "bruno",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  });
+  await store.saveRelation({
+    projectId: "character-relations-decisions",
+    id: "ana-trusts-bruno",
+    fromEntityId: "ana",
+    toEntityId: "bruno",
+    relationType: "trusts",
+    evidence: [
+      { documentId: "chapter", revision: 0, start, end: start + excerpt.length, excerpt },
+      { documentId: "chapter-old", revision: 1, start: 0, end: 4, excerpt: "Ana", status: "stale" }
+    ]
+  });
+  await store.saveIdea({
+    projectId: "character-relations-decisions",
+    id: "idea-map",
+    text: "Ana entregará el mapa a Bruno.",
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: "El mapa compartido",
+    evidence: [
+      { documentId: "chapter", revision: 0, start, end: start + excerpt.length, excerpt },
+      { documentId: "chapter-old", revision: 1, start: 0, end: 4, excerpt: "Ana", status: "stale" }
+    ],
+    relatedEntityIds: ["ana", "bruno"],
+    relatedIdeaIds: ["idea-origin"],
+    statusHistory: [
+      { status: "IDEA", changedAt: 10, reason: "initial" },
+      { status: "incorporated", changedAt: 20, reason: "writer" }
+    ]
+  });
+  await api.openDocument({
+    documentId: "chapter", text, revision: 0, sequence: 0
+  });
+
+  const result = await api.analyzeLiteraryDocument("chapter");
+  const trajectories = result.characterNarrativeTrajectories;
+  const ana = trajectories.trajectories.find(item => item.entityId === "ana");
+  const bruno = trajectories.trajectories.find(item => item.entityId === "bruno");
+  assert.ok(ana && bruno);
+
+  assert.deepEqual(ana.relationships.map(item => [
+    item.relationId, item.direction, item.otherCharacterName, item.relationType
+  ]), [["ana-trusts-bruno", "outgoing", "Bruno", "trusts"]]);
+  assert.equal(ana.relationships[0].evidenceCount, 1);
+  assert.equal(ana.relationships[0].staleEvidenceCount, 1);
+  assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
+  assert.deepEqual(bruno.relationships.map(item => item.direction), ["incoming"]);
+
+  assert.deepEqual(ana.documentedDecisions.map(item => item.ideaId), ["idea-map"]);
+  assert.equal(ana.documentedDecisions[0].status, "incorporated");
+  assert.equal(ana.documentedDecisions[0].writerDecisionCount, 1);
+  assert.deepEqual(ana.documentedDecisions[0].relatedIdeaIds, ["idea-origin"]);
+  assert.deepEqual(bruno.documentedDecisions.map(item => item.ideaId), ["idea-map"]);
+  assert.equal(trajectories.relationshipRecordCount, 1);
+  assert.equal(trajectories.linkedIdeaCount, 1);
+});

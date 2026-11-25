@@ -111,13 +111,21 @@ test("descarga el paquete JSON con nombre controlado y libera la URL temporal", 
   }
 });
 
-test("rechaza nombres de respaldo con rutas o controles", () => {
-  assert.throws(
-    () => downloadIndexedDbBackupFile(sampleBackup, "../shared.json"),
-    /nombre del archivo.*no es válido/u
-  );
-  assert.throws(
-    () => downloadIndexedDbBackupFile(sampleBackup, "carpeta\\respaldo.json"),
-    /nombre del archivo.*no es válido/u
-  );
+test("rechaza nombres de respaldo con rutas, controles y nombres reservados del sistema", () => {
+  for (const filename of [
+    "../shared.json",
+    "carpeta\\\\respaldo.json",
+    "backup:private.json",
+    "backup?.json",
+    "CON.json",
+    "nul.backup.json",
+    "final-backup.",
+    "final-backup "
+  ]) {
+    assert.throws(
+      () => downloadIndexedDbBackupFile(sampleBackup, filename),
+      /nombre del archivo.*no es válido/u,
+      filename
+    );
+  }
 });

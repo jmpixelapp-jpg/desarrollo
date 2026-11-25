@@ -261,3 +261,49 @@ test("agrupa referencias densas sin perder la cobertura ni duplicar ciclos", asy
     api.dispose();
   }
 });
+
+test("el anfitrión recorta IDs Unicode colacionados de forma determinista", async () => {
+  const makeIdea = id => ({
+    projectId,
+    id,
+    text: "Idea " + id,
+    status: "IDEA",
+    originDocumentId: "chapter",
+    sourceProjectName: "Book",
+    evidence: [],
+    relatedIdeaIds: [],
+    relatedEntityIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  });
+  const prefixIdeas = Array.from({ length: 1_999 }, (_, index) =>
+    makeIdea("0-" + String(index).padStart(4, "0"))
+  );
+  const composedIdea = makeIdea("á");
+  const decomposedIdea = makeIdea("a\u0301");
+
+  const analyzeIdeas = async ideas => {
+    const api = new HostEngineApi({
+      store: { ...store, documents: new Map(), ideas }
+    });
+    api.initializeProject({ projectId, projectName: "Book", writerId: "writer-unicode" });
+    await api.openDocument({
+      documentId: "chapter",
+      text: "Escena 1\nEl catálogo se ordena.",
+      revision: 0,
+      sequence: 0
+    });
+    try {
+      return (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    } finally {
+      api.dispose();
+    }
+  };
+
+  const first = await analyzeIdeas([...prefixIdeas, composedIdea, decomposedIdea]);
+  const second = await analyzeIdeas([...prefixIdeas, decomposedIdea, composedIdea]);
+  assert.deepEqual(second, first);
+  assert.equal(first.ideaCount, 2_000);
+  assert.equal(first.omittedIdeaCount, 1);
+  assert.ok(first.nodes.some(node => node.ideaId === decomposedIdea.id));
+  assert.equal(first.nodes.some(node => node.ideaId === composedIdea.id), false);
+});

@@ -504,7 +504,7 @@ function analyzeExplicitScenes(
   knownEvents: readonly LiteraryAnalysisKnownEvent[],
   documentId: string,
   revision: number
-): LiteraryExplicitSceneSegment {
+): LiteraryExplicitSceneSegment[] {
   const sceneMarkers = markers.filter(marker =>
     marker.markerType === "scene-heading" || marker.markerType === "scene-divider"
   );

@@ -138,3 +138,10 @@ Estas etiquetas describen exclusivamente la cobertura textual disponible. «No m
 La propiedad `characterCoMentions` agrupa pares de identidades del catálogo cuyos nombres o alias no ambiguos aparecen literalmente dentro de una misma escena explícita. Cada patrón contiene los dos IDs en orden estable, la cantidad de escenas compartidas y sus índices. Los resultados se ordenan por frecuencia descendente y después por IDs, y se limitan a los 100 pares más frecuentes.
 
 La co-mención describe únicamente una coincidencia textual en la misma escena. No acredita que los personajes se encuentren físicamente, interactúen, conversen, mantengan una relación ni compartan el punto de vista narrativo. La evidencia de cada mención permanece disponible en `explicitScenes` para inspección.
+
+
+### Variaciones de diálogo entre escenas
+
+La propiedad `sceneDialogueTransitions` compara cada par de escenas explícitas contiguas. Informa densidad anterior y siguiente, si la categoría cambia, proporción de palabras dialogadas y su diferencia (siguiente menos anterior), cantidad de segmentos, palabras dialogadas y diferencias por formato reconocido (comillas, raya y mixto). Los valores de proporción se redondean a tres decimales; las diferencias de conteos son enteros con signo. Cada transición referencia los índices 1-based de `explicitScenes`.
+
+La comparación depende exclusivamente de los formatos reconocidos por el detector y de los límites explícitos de escena. Un cambio de densidad no prueba un cambio de hablante, interlocutor, intención, tensión ni función dramática. No se generan transiciones si existe menos de una pareja de escenas explícitas, y no se saltan escenas intermedias.

@@ -369,6 +369,24 @@ export interface LiterarySceneDialogueSegment {
   /** Evidencia recortada al contenido de la escena y expresada en offsets UTF-16 absolutos. */
   readonly occurrence: LiteraryAnalysisOccurrence;
 }
+export interface LiterarySceneDialogueTransition {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  readonly previousDensity: LiteraryDialogueDensity;
+  readonly nextDensity: LiteraryDialogueDensity;
+  readonly densityChanged: boolean;
+  readonly previousDialogueRatio: number;
+  readonly nextDialogueRatio: number;
+  /** Diferencia next - previous de la proporción de palabras dialogadas. */
+  readonly dialogueRatioDelta: number;
+  readonly previousSegmentCount: number;
+  readonly nextSegmentCount: number;
+  readonly segmentCountDelta: number;
+  readonly previousDialogueWordCount: number;
+  readonly nextDialogueWordCount: number;
+  readonly dialogueWordCountDelta: number;
+  readonly formatCountDelta: LiterarySceneDialogueProfile["formatCounts"];
+}
 export interface LiterarySceneDialogueProfile {
   readonly segmentCount: number;
   readonly dialogueWordCount: number;
@@ -423,6 +441,8 @@ export interface LiteraryAnalysisResult {
   readonly sceneRhythmTransitions: readonly LiterarySceneRhythmTransition[];
   /** Comparación de bandas y patrones de cadencia entre escenas contiguas; separada de la voz gramatical. */
   readonly sceneCadenceTransitions: readonly LiterarySceneCadenceTransition[];
+  /** Variaciones cuantitativas de diálogo entre escenas explícitas contiguas; no atribuye hablantes. */
+  readonly sceneDialogueTransitions: readonly LiterarySceneDialogueTransition[];
   /** Firmas de cadencia recurrentes entre escenas explícitas del fragmento analizado. */
   readonly sceneCadenceMotifs: LiterarySceneCadenceMotifAnalysis;
   /** Variaciones de señales gramaticales entre escenas contiguas; no demuestra cambio de narrador. */
@@ -862,6 +882,38 @@ function analyzeExplicitScenes(
     ),
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset,scene.contentRange)
   });});
+}
+
+function buildSceneDialogueTransitions(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneDialogueTransition[] {
+  const transitions: LiterarySceneDialogueTransition[] = [];
+  for (let index=1; index<scenes.length; index++) {
+    const previous = scenes[index-1]!.dialogueSignals;
+    const next = scenes[index]!.dialogueSignals;
+    transitions.push({
+      fromSceneIndex:index,
+      toSceneIndex:index+1,
+      previousDensity:previous.density,
+      nextDensity:next.density,
+      densityChanged:previous.density !== next.density,
+      previousDialogueRatio:previous.dialogueRatio,
+      nextDialogueRatio:next.dialogueRatio,
+      dialogueRatioDelta:roundMetric(next.dialogueRatio-previous.dialogueRatio),
+      previousSegmentCount:previous.segmentCount,
+      nextSegmentCount:next.segmentCount,
+      segmentCountDelta:next.segmentCount-previous.segmentCount,
+      previousDialogueWordCount:previous.dialogueWordCount,
+      nextDialogueWordCount:next.dialogueWordCount,
+      dialogueWordCountDelta:next.dialogueWordCount-previous.dialogueWordCount,
+      formatCountDelta:{
+        quotation:next.formatCounts.quotation-previous.formatCounts.quotation,
+        dialogueDash:next.formatCounts.dialogueDash-previous.formatCounts.dialogueDash,
+        mixed:next.formatCounts.mixed-previous.formatCounts.mixed
+      }
+    });
+  }
+  return transitions;
 }
 
 function buildSceneCadenceTransitions(
@@ -1817,6 +1869,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
   const sceneCadenceTransitions = buildSceneCadenceTransitions(explicitScenes);
+  const sceneDialogueTransitions = buildSceneDialogueTransitions(explicitScenes);
   const sceneCadenceMotifs = buildSceneCadenceMotifs(explicitScenes);
   const sceneVoiceTransitions = compareSceneVoiceSignals(explicitScenes);
   const sceneVoiceProfile = buildSceneVoiceProfile(explicitScenes);
@@ -1997,6 +2050,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneContinuity,
     sceneRhythmTransitions,
     sceneCadenceTransitions,
+    sceneDialogueTransitions,
     sceneCadenceMotifs,
     sceneVoiceTransitions,
     sceneVoiceProfile,
@@ -2026,7 +2080,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",
       "Las frases recurrentes requieren coincidencia literal de 2 a 4 palabras dentro de una oración y no prueban un motivo temático.",
-      "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos."
+      "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos.",
+      "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes."
     ]
   };
 }

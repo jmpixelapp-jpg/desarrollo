@@ -10752,3 +10752,35 @@ test("mantiene el perfil de diálogo vacío cuando una escena no contiene segmen
     evidenceTruncated:false
   });
 });
+
+test("compara las métricas de diálogo entre escenas explícitas contiguas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "ESCENA 1\\nLa tarde cayó lentamente. “Hola, Ana.”\\n***\\nESCENA 2\\nEl viento cruzó la plaza.";
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-transitions",documentId:"chapter",revision:1,text
+  });
+  assert.equal(result.sceneDialogueTransitions.length,1);
+  const transition = result.sceneDialogueTransitions[0];
+  assert.equal(transition.fromSceneIndex,1);
+  assert.equal(transition.toSceneIndex,2);
+  assert.equal(transition.previousDensity,"moderate");
+  assert.equal(transition.nextDensity,"none");
+  assert.equal(transition.densityChanged,true);
+  assert.equal(transition.previousSegmentCount,1);
+  assert.equal(transition.nextSegmentCount,0);
+  assert.equal(transition.segmentCountDelta,-1);
+  assert.equal(transition.previousDialogueWordCount,2);
+  assert.equal(transition.nextDialogueWordCount,0);
+  assert.equal(transition.dialogueWordCountDelta,-2);
+  assert.deepEqual(transition.formatCountDelta,{quotation:-1,dialogueDash:0,mixed:0});
+  assert.equal(transition.dialogueRatioDelta,-0.286);
+});
+
+test("no crea transiciones de diálogo cuando hay menos de dos escenas explícitas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-single",documentId:"chapter",revision:1,
+    text:"ESCENA 1\\n“Una frase.”"
+  });
+  assert.deepEqual(result.sceneDialogueTransitions,[]);
+});

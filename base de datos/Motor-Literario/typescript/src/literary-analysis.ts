@@ -3618,7 +3618,7 @@ function buildLiteraryIdeaLexicalResonances(
     const frequencies = new Map<string, number>();
     for (const token of tokenize(idea.text)) {
       const term = token.normalized;
-      if (term.length < 3 || !Array.from(term).some(character => character.toLocaleLowerCase("es") !== character.toLocaleUpperCase("es")) ||
+      if (Array.from(term).length < 2 || !/\p{L}/u.test(term) ||
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }

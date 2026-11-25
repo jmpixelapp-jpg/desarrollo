@@ -9918,6 +9918,39 @@ test("la API vincula acontecimientos persistidos a escenas del documento y revis
   assert.deepEqual(api.getSnapshot("chapter"),before);
 });
 
+test("la API publica comparaciones de continuidad con evidencia narrativa persistida", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({store});
+  api.initializeProject({projectId:"scene-continuity-api",projectName:"Continuidad"});
+  const text = [
+    "ESCENA: Umbral",
+    "Ana abrió la puerta. La alarma sonó.",
+    "***",
+    "ESCENA: Pasillo",
+    "Ana cerró la ventana. La alarma volvió a sonar."
+  ].join("\n");
+  const passages = ["La alarma sonó.","La alarma volvió a sonar."];
+  await store.saveEntity({
+    projectId:"scene-continuity-api",id:"ana",kind:"character",canonicalName:"Ana",
+    normalizedName:"ana",aliases:[],evidence:[],firstSeenAt:1,lastSeenAt:1,extractionVersion:1
+  });
+  await store.saveEvent({
+    projectId:"scene-continuity-api",id:"alarm",label:"Alarma",participants:["ana"],
+    evidence:passages.map(excerpt => {
+      const start = text.indexOf(excerpt);
+      return {documentId:"chapter",revision:2,start,end:start+excerpt.length,excerpt};
+    })
+  });
+  await api.openDocument({documentId:"chapter",text,revision:2,sequence:0});
+  const before = api.getSnapshot("chapter");
+  const result = await api.analyzeLiteraryDocument("chapter");
+
+  assert.equal(result.sceneContinuity.length,1);
+  assert.equal(result.sceneContinuity[0].characterSignals[0].status,"mentioned-in-both-scenes");
+  assert.equal(result.sceneContinuity[0].eventSignals[0].status,"evidence-in-both-scenes");
+  assert.deepEqual(api.getSnapshot("chapter"),before);
+});
+
 test("la API relaciona personajes del proyecto con escenas por nombre y alias", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({store});
@@ -10165,6 +10198,64 @@ test("vincula acontecimientos a escenas solo con evidencia de la misma revisión
   ]);
   assert.deepEqual(result.explicitScenes[1].eventLinks,[]);
   assert.ok(result.explicitScenes[0].eventLinks[0].matchingEvidence[0].start >= 400);
+});
+
+test("compara señales literales entre escenas explícitas contiguas sin inferir ausencias", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "Ana encontró la llave. La alarma sonó.",
+    "***",
+    "ESCENA 2",
+    "Ana y Bruno cruzaron el patio. La alarma volvió a sonar.",
+    "***",
+    "ESCENA 3",
+    "Bruno esperó junto al muro."
+  ].join("\n");
+  const firstEvidence = "La alarma sonó.";
+  const secondEvidence = "La alarma volvió a sonar.";
+  const baseOffset = 700;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-continuity",documentId:"chapter",revision:5,text,baseOffset,
+    knownCharacters:[
+      {entityId:"ana",canonicalName:"Ana"},
+      {entityId:"bruno",canonicalName:"Bruno"}
+    ],
+    knownEvents:[{
+      eventId:"alarm",label:"Alarma",participants:[],
+      evidence:[firstEvidence,secondEvidence].map(excerpt => {
+        const start = text.indexOf(excerpt);
+        return {
+          documentId:"chapter",revision:5,start:baseOffset+start,
+          end:baseOffset+start+excerpt.length,excerpt
+        };
+      })
+    }]
+  });
+
+  assert.equal(result.sceneContinuity.length,2);
+  assert.deepEqual(
+    result.sceneContinuity[0].characterSignals.map(({entityId,status}) => ({entityId,status})),
+    [
+      {entityId:"ana",status:"mentioned-in-both-scenes"},
+      {entityId:"bruno",status:"mentioned-only-in-next-scene"}
+    ]
+  );
+  assert.equal(result.sceneContinuity[0].characterSignals[0].previousMentions[0].start,
+    baseOffset+text.indexOf("Ana encontró"));
+  assert.equal(result.sceneContinuity[0].eventSignals[0].status,"evidence-in-both-scenes");
+  assert.equal(result.sceneContinuity[0].eventSignals[0].previousEvidence[0].start,
+    baseOffset+text.indexOf(firstEvidence));
+
+  assert.deepEqual(
+    result.sceneContinuity[1].characterSignals.map(({entityId,status}) => ({entityId,status})),
+    [
+      {entityId:"ana",status:"not-mentioned-in-next-scene"},
+      {entityId:"bruno",status:"mentioned-in-both-scenes"}
+    ]
+  );
+  assert.equal(result.sceneContinuity[1].eventSignals[0].status,"evidence-only-in-previous-scene");
+  assert.equal(result.sceneContinuity[1].eventSignals[0].nextEvidence.length,0);
 });
 
 test("no convierte ausencia de mención literal en contradicción", async () => {

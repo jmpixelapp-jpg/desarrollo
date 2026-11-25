@@ -152,6 +152,33 @@ export interface LiterarySceneEventLink {
   readonly matchingEvidence: readonly LiteraryAnalysisOccurrence[];
   readonly participants: readonly LiterarySceneEventParticipant[];
 }
+export type LiterarySceneCharacterContinuityStatus =
+  | "mentioned-in-both-scenes"
+  | "not-mentioned-in-next-scene"
+  | "mentioned-only-in-next-scene";
+export interface LiterarySceneCharacterContinuitySignal {
+  readonly entityId: string;
+  readonly status: LiterarySceneCharacterContinuityStatus;
+  readonly previousMentions: readonly LiteraryAnalysisOccurrence[];
+  readonly nextMentions: readonly LiteraryAnalysisOccurrence[];
+}
+export type LiterarySceneEventContinuityStatus =
+  | "evidence-in-both-scenes"
+  | "evidence-only-in-previous-scene"
+  | "evidence-only-in-next-scene";
+export interface LiterarySceneEventContinuitySignal {
+  readonly eventId: string;
+  readonly label: string;
+  readonly status: LiterarySceneEventContinuityStatus;
+  readonly previousEvidence: readonly LiteraryAnalysisOccurrence[];
+  readonly nextEvidence: readonly LiteraryAnalysisOccurrence[];
+}
+export interface LiterarySceneContinuityTransition {
+  readonly fromSceneIndex: number;
+  readonly toSceneIndex: number;
+  readonly characterSignals: readonly LiterarySceneCharacterContinuitySignal[];
+  readonly eventSignals: readonly LiterarySceneEventContinuitySignal[];
+}
 export interface LiteraryExplicitSceneSegment {
   readonly sceneIndex: number;
   readonly markerType: "scene-heading" | "scene-divider";
@@ -175,6 +202,8 @@ export interface LiteraryAnalysisResult {
   readonly dialogueSegments: readonly LiteraryDialogueSegment[];
   readonly structuralMarkers: readonly LiteraryStructureMarker[];
   readonly explicitScenes: readonly LiteraryExplicitSceneSegment[];
+  /** Comparaciones descriptivas entre escenas explícitas contiguas, nunca diagnósticos de contradicción. */
+  readonly sceneContinuity: readonly LiterarySceneContinuityTransition[];
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -547,6 +576,75 @@ function analyzeExplicitScenes(
   });});
 }
 
+function buildSceneContinuity(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiterarySceneContinuityTransition[] {
+  const transitions: LiterarySceneContinuityTransition[] = [];
+  for (let index = 1; index < scenes.length; index++) {
+    const previous = scenes[index - 1]!;
+    const next = scenes[index]!;
+
+    const previousCharacters = new Map(
+      previous.characterMentions.map(mention => [mention.entityId, mention.occurrences] as const)
+    );
+    const nextCharacters = new Map(
+      next.characterMentions.map(mention => [mention.entityId, mention.occurrences] as const)
+    );
+    const characterIds = [...new Set([
+      ...previousCharacters.keys(), ...nextCharacters.keys()
+    ])].sort((a,b) => a.localeCompare(b,"en"));
+    const characterSignals: LiterarySceneCharacterContinuitySignal[] = characterIds.map(entityId => {
+      const previousMentions = previousCharacters.get(entityId) ?? [];
+      const nextMentions = nextCharacters.get(entityId) ?? [];
+      const status: LiterarySceneCharacterContinuityStatus =
+        previousMentions.length > 0 && nextMentions.length > 0
+          ? "mentioned-in-both-scenes"
+          : previousMentions.length > 0
+            ? "not-mentioned-in-next-scene"
+            : "mentioned-only-in-next-scene";
+      return {
+        entityId,
+        status,
+        previousMentions: previousMentions.map(item => ({start:item.start,end:item.end})),
+        nextMentions: nextMentions.map(item => ({start:item.start,end:item.end}))
+      };
+    });
+
+    const previousEvents = new Map(previous.eventLinks.map(event => [event.eventId,event] as const));
+    const nextEvents = new Map(next.eventLinks.map(event => [event.eventId,event] as const));
+    const eventIds = [...new Set([
+      ...previousEvents.keys(), ...nextEvents.keys()
+    ])].sort((a,b) => a.localeCompare(b,"en"));
+    const eventSignals: LiterarySceneEventContinuitySignal[] = eventIds.map(eventId => {
+      const previousEvent = previousEvents.get(eventId);
+      const nextEvent = nextEvents.get(eventId);
+      const previousEvidence = previousEvent?.matchingEvidence ?? [];
+      const nextEvidence = nextEvent?.matchingEvidence ?? [];
+      const status: LiterarySceneEventContinuityStatus =
+        previousEvidence.length > 0 && nextEvidence.length > 0
+          ? "evidence-in-both-scenes"
+          : previousEvidence.length > 0
+            ? "evidence-only-in-previous-scene"
+            : "evidence-only-in-next-scene";
+      return {
+        eventId,
+        label: previousEvent?.label ?? nextEvent!.label,
+        status,
+        previousEvidence: previousEvidence.map(item => ({start:item.start,end:item.end})),
+        nextEvidence: nextEvidence.map(item => ({start:item.start,end:item.end}))
+      };
+    });
+
+    transitions.push({
+      fromSceneIndex:previous.sceneIndex,
+      toSceneIndex:next.sceneIndex,
+      characterSignals,
+      eventSignals
+    });
+  }
+  return transitions;
+}
+
 function mergeRanges(ranges: readonly LocalRange[]): LocalRange[] {
   const ordered = [...ranges].filter(range => range.end > range.start)
     .sort((a,b) => a.start - b.start || a.end - b.end);
@@ -839,6 +937,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? [],
     input.knownEvents ?? [],input.documentId,input.revision
   );
+  const sceneContinuity = buildSceneContinuity(explicitScenes);
   const dialogueRanges = dialogueSegments.map(({start,end}) => ({start,end}));
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
@@ -1012,6 +1111,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     })),
     structuralMarkers,
     explicitScenes,
+    sceneContinuity,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),
@@ -1024,6 +1124,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La estructura de escenas solo se segmenta cuando hay encabezados o separadores explícitos; no infiere cambios de escena a partir del contenido.",
       "La presencia de personajes se basa en nombres y alias literales no ambiguos del catálogo del proyecto; no implica que el personaje actúe, hable o sea el punto de vista de la escena.",
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",
+      "La continuidad compara solo escenas explícitas contiguas: las menciones literales y la evidencia por ID de acontecimiento describen cobertura textual, no presencia física, cronología ni contradicciones.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
       "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",

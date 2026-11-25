@@ -2994,29 +2994,33 @@ export class HostEngineApi {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
       if (!this.ideasLoaded) {
-        const ideas = requireProjectScopedRecords(
+        const loaded = requireProjectScopedRecords(
           await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
         );
-        const hasEntityLinks = ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0);
-        if (hasEntityLinks) {
-          if (!this.store.loadEntities) {
-            throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
-          }
-          requireNarrativeEntityReferences(
-            ideas, projectId, await this.loadNarrativeEntitiesFromStore(),
-            idea => idea.relatedEntityIds ?? [], "ideas"
-          );
-        }
-        for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
+        for (const idea of loaded) this.narrativeIdeas.set(idea.id, idea);
         this.ideasLoaded = true;
       }
+
       const ideas = [...this.narrativeIdeas.values()];
       if (ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
         if (!this.store.loadEntities) {
           throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
         }
+        // La lectura de ideas es también un límite de reconciliación: el catálogo
+        // de entidades puede haber cambiado desde otra instancia del anfitrión.
+        // No validar contra una caché caliente que oculte destinos eliminados.
+        const entities = requireProjectScopedRecords(
+          await this.requireKnowledgeReaderStore().loadEntities(projectId),
+          projectId,
+          "entidades"
+        );
+        this.narrativeEntities.clear();
+        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
+        this.entitiesLoaded = true;
+        this.entityEvidenceIndex = undefined;
+        this.entityNameIndex = undefined;
         requireNarrativeEntityReferences(
-          ideas, projectId, await this.loadNarrativeEntitiesFromStore(),
+          ideas, projectId, entities,
           idea => idea.relatedEntityIds ?? [], "ideas"
         );
       }

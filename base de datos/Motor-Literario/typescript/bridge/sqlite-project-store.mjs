@@ -1051,7 +1051,10 @@ export class SqliteProjectStore {
     requireProjectRecord(idea, "idea narrativa");
     requireProjectRecord(expectedCurrent, "idea anterior");
     if (idea.projectId !== expectedCurrent.projectId || idea.id !== expectedCurrent.id) throw new Error("La identidad de la idea no puede cambiar.");
-    return this.transaction(() => this.put("narrative-ideas", identityKey(idea.projectId, idea.id), idea, { expectedCurrent }));
+    return this.transaction(() => this.put("narrative-ideas", identityKey(idea.projectId, idea.id), idea, {
+      expectedCurrent,
+      conflictMessage: "La idea cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarla."
+    }));
   }
 
   loadIdeas(projectId) { return this.loadProject("narrative-ideas", projectId, "idea narrativa"); }

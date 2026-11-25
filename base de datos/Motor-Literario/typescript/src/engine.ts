@@ -165,6 +165,11 @@ export class LiteraryEngine {
       throw new Error("No existe un snapshot durable para recuperar este documento; el anfitrión debe proporcionar el snapshot autoritativo.");
     }
     const atomicJournal: readonly StoredChange[] = recovery.changes;
+    if (!stored && atomicJournal.length > 0) {
+      throw new Error(
+        "Journal sin snapshot base durable: se conserva intacto y se requiere una copia autoritativa para resolverlo."
+      );
+    }
     if (stored && (snapshot.revision < stored.revision ||
         snapshot.sequence < stored.sequence ||
         snapshot.revision - stored.revision !== snapshot.sequence - stored.sequence ||
@@ -225,7 +230,11 @@ export class LiteraryEngine {
         sequence: recoveredSequence,
         updatedAt: Date.now()
       };
-      if (this.options.store.saveDocumentAndCompactChanges) {
+      if (!stored) {
+        // La primera base durable no es un checkpoint: no hay deltas previos
+        // que compactar y el journal huérfano ya fue rechazado arriba.
+        await this.options.store.saveDocument(recoveredSnapshot);
+      } else if (this.options.store.saveDocumentAndCompactChanges) {
         await this.options.store.saveDocumentAndCompactChanges(
           recoveredSnapshot,
           recoveredSequence

@@ -1639,3 +1639,52 @@ test("excluye términos ubicuos y limita el catálogo léxico a dos millones de 
   assert.equal(budget.omittedTextBudgetIdeaCount, 1);
   assert.equal(budget.tokenizedTextUnitCount, 2_000_000);
 });
+
+test("acota el índice de pares de resonancia cuando el catálogo genera demasiadas combinaciones", () => {
+  const projectId = "literary-analysis-test";
+  const termsByIdea = Array.from({ length: 2_000 }, () => []);
+  let seed = 0x5eed;
+  const nextIndex = () => {
+    seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+    return seed % termsByIdea.length;
+  };
+
+  // 150 términos con 40 documentos cada uno generan más de cien mil parejas
+  // potenciales sin superar el límite de 100 términos por idea.
+  for (let termIndex = 0; termIndex < 150; termIndex++) {
+    const selected = new Set();
+    while (selected.size < 40) selected.add(nextIndex());
+    for (const ideaIndex of selected) {
+      termsByIdea[ideaIndex].push("resonanceword" + String(termIndex).padStart(3, "0"));
+    }
+  }
+
+  const knownProjectIdeas = termsByIdea.map((terms, index) => ({
+    projectId,
+    ideaId: "idea-" + String(index).padStart(4, "0"),
+    text: terms.join(" "),
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  }));
+  const input = {
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nEl catálogo contiene muchas ideas.",
+    knownProjectIdeas
+  };
+  const first = analyzeLiteraryFragment(input).ideaGraph.lexicalResonances;
+  const second = analyzeLiteraryFragment(input).ideaGraph.lexicalResonances;
+
+  assert.equal(first.maxIndexedPairCount, 100_000);
+  assert.ok(first.omittedPairTermContributionCount > 0);
+  assert.ok(first.candidatePairCount <= first.maxIndexedPairCount);
+  assert.ok(first.omittedCandidatePairCount >= 0);
+  assert.ok(first.resonances.length <= 100);
+  assert.deepEqual(second, first, "la truncación del índice debe ser determinista");
+});

@@ -336,6 +336,32 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
   api.dispose();
 });
 
+test("rechaza altas de vínculos si el destino fue eliminado tras calentar la caché", async () => {
+  const store = new RacingStore(
+    [idea("idea-source")],
+    [entity("character-external", "Luz")]
+  );
+  const api = createApi(store);
+
+  const cachedEntities = await api.getNarrativeEntities();
+  assert.equal(cachedEntities.length, 1);
+  assert.equal(store.entityReads, 1);
+
+  store.entities.delete(projectId + ":character-external");
+  await assert.rejects(
+    api.setNarrativeIdeaEntityLink("idea-source", "character-external", true),
+    /La idea y la entidad deben existir en el proyecto activo/
+  );
+
+  assert.equal(store.entityReads, 2);
+  assert.equal(store.writes, 0);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedEntityIds,
+    []
+  );
+  api.dispose();
+});
+
 test("detecta fichas eliminadas externamente aunque la caché de entidades esté caliente", async () => {
   const store = new RacingStore(
     [idea("idea-source", { relatedEntityIds: ["character-external"] })],

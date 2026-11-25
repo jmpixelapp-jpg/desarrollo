@@ -2729,6 +2729,9 @@ test("el grafo identifica puntos de articulación en cadenas de referencias", ()
   assert.equal(node("isolated").minimumDirectedHopsToTerminal, 0);
   assert.equal(graph.terminalReachableNodeCount, 4);
   assert.equal(graph.terminalReachabilityCoverage, 1);
+  assert.deepEqual(graph.statusTransitionProfiles, [
+    { fromStatus: "IDEA", toStatus: "IDEA", referenceCount: 2 }
+  ]);
   assert.equal(graph.articulationPointCount, 1);
   assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);
 });

@@ -1602,3 +1602,70 @@ test("el grafo reclasifica como externas las referencias al retirar una idea del
     api.dispose();
   }
 });
+
+
+test("la caché del grafo incorpora cambios de texto en el análisis de resonancia", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-text-invalidation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl vocabulario de las ideas puede revisarse.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.lexicalResonances.candidatePairCount, 1);
+    assert.equal(before.lexicalResonances.resonances.length, 1);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.text = "nube azul horizonte distante";
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(after.lexicalResonances.analyzedIdeaCount, 4);
+    assert.equal(after.lexicalResonances.candidatePairCount, 0);
+    assert.equal(after.lexicalResonances.resonances.length, 0);
+    assert.equal(after.ideaCount, before.ideaCount);
+    assert.equal(after.referenceCount, before.referenceCount);
+  } finally {
+    api.dispose();
+  }
+});
+
+test("la caché del grafo actualiza perfiles al cambiar el estado editorial actual", async () => {
+  const ideas = structuredClone(store.ideas);
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-status-invalidation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl estado editorial puede cambiar.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(before.statusProfiles.find(profile => profile.status === "IDEA").ideaCount, 4);
+    assert.equal(before.statusProfiles.some(profile => profile.status === "incorporated"), false);
+
+    const bridge = ideas.find(idea => idea.id === "bridge");
+    bridge.status = "incorporated";
+
+    const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    const incorporatedProfile = after.statusProfiles.find(profile => profile.status === "incorporated");
+    const ideaProfile = after.statusProfiles.find(profile => profile.status === "IDEA");
+    const bridgeNode = after.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(incorporatedProfile.ideaCount, 1);
+    assert.equal(ideaProfile.ideaCount, 3);
+    assert.equal(bridgeNode.status, "incorporated");
+    assert.equal(bridgeNode.currentStatusHistoryConsistency, "mismatch");
+    assert.equal(after.statusHistoryConsistency.mismatchIdeaCount, 2);
+    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 1);
+  } finally {
+    api.dispose();
+  }
+});

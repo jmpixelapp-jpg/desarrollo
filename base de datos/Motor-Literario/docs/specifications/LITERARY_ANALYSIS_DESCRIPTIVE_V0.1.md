@@ -92,6 +92,16 @@ Además, `projectTimeline` reúne afirmaciones no obsoletas de todos los capítu
 
 Las afirmaciones de otros capítulos sin referencia temporal comparable se contabilizan como fuera de alcance y no se ordenan por nombre de archivo, revisión, fecha de captura o posición de guardado. Los años no se mezclan con fechas completas y los contadores de día del mundo narrativo no se mezclan con fechas de calendario. Una referencia temporal explícita organiza la comparación, pero no demuestra por sí sola causalidad ni resuelve contradicciones.
 
+## Grafo global de ideas del proyecto
+
+La propiedad `ideaGraph` resume el catálogo global de ideas del libro a partir de sus referencias dirigidas `relatedIdeaIds`. El anfitrión entrega el conjunto completo mediante `knownProjectIdeas`, independientemente de que cada idea tenga o no un vínculo a un personaje. El subconjunto `knownIdeas` sigue reservado para integrar decisiones en las trayectorias de personajes; esta separación evita que una idea independiente desaparezca del grafo por no estar asociada a una ficha de personaje.
+
+Cada nodo informa su estado editorial, referencias entrantes y salientes dentro de la muestra, referencias salientes cuyo destino no está incluido, historial visible de estados, decisiones del escritor y recuentos de evidencias activas y obsoletas. Las referencias externas al conjunto cargado se marcan como `not-in-snapshot`: no se presentan como rotas ni como inexistentes, porque pueden apuntar a ideas válidas que quedaron fuera del límite de entrada. `knownProjectIdeasOmittedCount` declara cuántas ideas del catálogo global no se transfirieron.
+
+El resumen distingue referencias incluidas y no incluidas, pares recíprocos, nodos de origen, terminales y aislados dentro de la muestra. También identifica ciclos dirigidos (componentes fuertemente conexos) y componentes débilmente conexos, que ignoran la dirección de los vínculos para mostrar grupos de ideas conectadas. Los listados de referencias, ciclos y componentes tienen límites de muestra deterministas; sus contadores globales y contadores de omisión permiten reconocer cuándo una salida visible está recortada.
+
+El grafo describe únicamente relaciones declaradas por el escritor. Un ciclo no demuestra contradicción, dependencia causal, secuencia de escritura ni calidad literaria; una idea aislada tampoco implica que carezca de valor. El motor no crea vínculos semánticos ni modifica estados automáticamente.
+
 ## Trayectorias narrativas integradas por personaje
 
 La propiedad `characterNarrativeTrajectories` reúne en una sola ficha las señales documentales conocidas de cada personaje del catálogo suministrado al análisis. La integración se realiza por ID estable de entidad, nunca por coincidencia aproximada de nombres. Para cada personaje combina los perfiles de atributos explícitos, las asociaciones participante/acontecimiento con evidencia vigente y los candidatos causales encontrados en el fragmento.

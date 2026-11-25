@@ -5,7 +5,7 @@ export function createIndexedDbBackupBlob(backup: unknown): Blob {
   }
   let serialized: string | undefined;
   try {
-    serialized = JSON.stringify(backup, null, 2);
+    serialized = JSON.stringify(backup);
   } catch {
     throw new Error("No se pudo serializar el respaldo IndexedDB como JSON.");
   }

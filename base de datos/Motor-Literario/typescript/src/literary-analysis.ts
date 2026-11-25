@@ -752,6 +752,10 @@ export interface LiteraryIdeaGraphNode {
   readonly statusReversalCount: number;
   /** Pares adyacentes con marcas temporales conocidas que retroceden en el tiempo. */
   readonly nonMonotonicStatusTimestampCount: number;
+  /** Pares adyacentes del historial con ambas marcas temporales conocidas. */
+  readonly comparableStatusTimestampPairCount: number;
+  /** Pares adyacentes que no pueden compararse porque falta alguna marca temporal. */
+  readonly uncomparableStatusTimestampPairCount: number;
   /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
@@ -800,6 +804,10 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly statusReversalCount: number;
   /** Suma de retrocesos temporales observables en los historiales del perfil. */
   readonly nonMonotonicStatusTimestampCount: number;
+  /** Suma de pares adyacentes con ambas marcas temporales conocidas. */
+  readonly comparableStatusTimestampPairCount: number;
+  /** Suma de pares adyacentes sin marcas temporales suficientes para compararlos. */
+  readonly uncomparableStatusTimestampPairCount: number;
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly ideasWithActiveEvidenceCount: number;
@@ -3587,6 +3595,22 @@ function buildLiteraryIdeaGraph(
       },
       0
     ),
+    comparableStatusTimestampPairCount: idea.statusHistory.reduce(
+      (count, change, changeIndex, history) => {
+        if (changeIndex === 0) return count;
+        return history[changeIndex - 1]!.changedAt !== undefined &&
+          change.changedAt !== undefined ? count + 1 : count;
+      },
+      0
+    ),
+    uncomparableStatusTimestampPairCount: idea.statusHistory.reduce(
+      (count, change, changeIndex, history) => {
+        if (changeIndex === 0) return count;
+        return history[changeIndex - 1]!.changedAt === undefined ||
+          change.changedAt === undefined ? count + 1 : count;
+      },
+      0
+    ),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));
@@ -3761,6 +3785,8 @@ function buildLiteraryIdeaGraph(
       observedStatusTransitionCount: 0,
       statusReversalCount: 0,
       nonMonotonicStatusTimestampCount: 0,
+      comparableStatusTimestampPairCount: 0,
+      uncomparableStatusTimestampPairCount: 0,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 0,
@@ -3793,6 +3819,8 @@ function buildLiteraryIdeaGraph(
     totals.observedStatusTransitionCount += node.observedStatusTransitionCount;
     totals.statusReversalCount += node.statusReversalCount;
     totals.nonMonotonicStatusTimestampCount += node.nonMonotonicStatusTimestampCount;
+    totals.comparableStatusTimestampPairCount += node.comparableStatusTimestampPairCount;
+    totals.uncomparableStatusTimestampPairCount += node.uncomparableStatusTimestampPairCount;
     totals.activeEvidenceCount += node.activeEvidenceCount;
     totals.staleEvidenceCount += node.staleEvidenceCount;
     if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;

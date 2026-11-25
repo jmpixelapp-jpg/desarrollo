@@ -2445,3 +2445,83 @@ test("la cronología de decisiones conserva incertidumbre ante referencias ausen
   }).characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
   assert.equal(partialCatalog.laterEventChronologyStatus, "unknown-due-to-incomplete-catalog");
 });
+
+
+test("las trayectorias detectan reaperturas explícitas en el historial de decisiones", () => {
+  const text = "Escena 1\nAna decide volver a estudiar.";
+  const phrase = "Ana decide volver a estudiar.";
+  const start = text.indexOf(phrase);
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase
+  };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "ana-decision",
+      text: phrase,
+      status: "IDEA",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 1,
+      staleEvidenceCount: 0,
+      evidence: [evidence],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 10 },
+        { status: "incorporated", reason: "writer", changedAt: 20 },
+        { status: "IDEA", reason: "text-revised", changedAt: 30 }
+      ],
+      writerDecisionCount: 1,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+  const decision = result.characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.equal(decision.statusEvolutionStatus, "reopened");
+  assert.equal(decision.reopeningCount, 1);
+  assert.deepEqual(decision.statusTransitions, [
+    { fromStatus: "IDEA", toStatus: "incorporated", changedAt: 20, reason: "writer" },
+    { fromStatus: "incorporated", toStatus: "IDEA", changedAt: 30, reason: "text-revised" }
+  ]);
+  assert.equal(decision.currentStatusHistoryConsistency, "consistent");
+});
+
+
+test("las trayectorias no concluyen la evolución cuando el historial de decisiones está truncado", () => {
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nAna espera.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "ana-decision",
+      text: "Ana espera.",
+      status: "IDEA",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro de prueba",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      evidence: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 10 }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 2
+    }]
+  });
+  const decision = result.characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.equal(decision.statusEvolutionStatus, "unknown-incomplete-history");
+  assert.equal(decision.reopeningCount, 0);
+  assert.equal(decision.currentStatusHistoryConsistency, "unknown");
+});

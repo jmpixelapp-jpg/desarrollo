@@ -4240,14 +4240,14 @@ export class IndexedDbProjectStore implements ProjectStore {
           }
           const relatedId = queue[queueIndex++]!;
           if (visited.has(relatedId)) {
-            collectContextIdeas();
+            queueMicrotask(collectContextIdeas);
             return;
           }
           visited.add(relatedId);
           // Una idea ya transferida tiene su propia entrada de biblioteca;
           // no debe reaparecer como contexto ni tratarse como referencia rota.
           if (archivedIdeaIdSet.has(relatedId)) {
-            collectContextIdeas();
+            queueMicrotask(collectContextIdeas);
             return;
           }
           readIdea(relatedId, relatedIdea => {
@@ -4256,12 +4256,12 @@ export class IndexedDbProjectStore implements ProjectStore {
             }
             // Las ideas que también se trasladan tendrán su propia entrada.
             if (relatedIdea.status === "IDEA") {
-              collectContextIdeas();
+              queueMicrotask(collectContextIdeas);
               return;
             }
             contextIdeas.set(relatedId, relatedIdea);
             queue.push(...(relatedIdea.relatedIdeaIds ?? []));
-            collectContextIdeas();
+            queueMicrotask(collectContextIdeas);
           });
         };
 
@@ -4321,7 +4321,7 @@ export class IndexedDbProjectStore implements ProjectStore {
               if (!entity) return;
               try {
                 relatedEntities.push(entity);
-                readNextEntity();
+                queueMicrotask(readNextEntity);
               } catch (error) {
                 abortWith(error);
               }
@@ -4338,37 +4338,38 @@ export class IndexedDbProjectStore implements ProjectStore {
         relatedIndex: number,
         continueCursor: () => void
       ): void => {
-        if (finished) return;
         const relatedIds = idea.relatedIdeaIds ?? [];
-        if (relatedIndex >= relatedIds.length) {
-          if (idea.status === "IDEA") {
-            buildAndStoreEntry(idea, continueCursor);
-          } else {
-            continueCursor();
+        let index = relatedIndex;
+        const advance = (): void => {
+          if (finished) return;
+          if (index >= relatedIds.length) {
+            if (idea.status === "IDEA") buildAndStoreEntry(idea, continueCursor);
+            else continueCursor();
+            return;
           }
-          return;
-        }
-        const relatedId = relatedIds[relatedIndex]!;
-        if (archivedIdeaIdSet.has(relatedId)) {
-          if (idea.status !== "IDEA") {
-            throw new Error(
-              "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
-            );
+          const relatedId = relatedIds[index++]!;
+          if (archivedIdeaIdSet.has(relatedId)) {
+            if (idea.status !== "IDEA") {
+              throw new Error(
+                "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+              );
+            }
+            queueMicrotask(advance);
+            return;
           }
-          validateLinksAndMaybeArchive(idea, relatedIndex + 1, continueCursor);
-          return;
-        }
-        readIdea(relatedId, relatedIdea => {
-          if (!relatedIdea) {
-            throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
-          }
-          if (idea.status !== "IDEA" && relatedIdea.status === "IDEA") {
-            throw new Error(
-              "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
-            );
-          }
-          validateLinksAndMaybeArchive(idea, relatedIndex + 1, continueCursor);
-        });
+          readIdea(relatedId, relatedIdea => {
+            if (!relatedIdea) {
+              throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+            }
+            if (idea.status !== "IDEA" && relatedIdea.status === "IDEA") {
+              throw new Error(
+                "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+              );
+            }
+            queueMicrotask(advance);
+          });
+        };
+        advance();
       };
 
       const openProjectIdeaCursor = (): IDBRequest<IDBCursorWithValue | null> => {
@@ -4447,7 +4448,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             }
             const relatedId = queue[queueIndex++]!;
             if (visited.has(relatedId)) {
-              next();
+              queueMicrotask(next);
               return;
             }
             visited.add(relatedId);
@@ -4455,13 +4456,11 @@ export class IndexedDbProjectStore implements ProjectStore {
               if (!related) {
                 throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
               }
-              if (related.status === "IDEA") {
-                next();
-                return;
+              if (related.status !== "IDEA") {
+                for (const entityId of related.relatedEntityIds ?? []) referencedEntityIds.add(entityId);
+                queue.push(...(related.relatedIdeaIds ?? []));
               }
-              for (const entityId of related.relatedEntityIds ?? []) referencedEntityIds.add(entityId);
-              queue.push(...(related.relatedIdeaIds ?? []));
-              next();
+              queueMicrotask(next);
             });
           };
           next();
@@ -4488,7 +4487,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                 "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
               );
             }
-            validateIdeaLinks(idea, relatedIndex + 1, callback);
+            queueMicrotask(() => validateIdeaLinks(idea, relatedIndex + 1, callback));
           });
         };
 
@@ -4512,10 +4511,13 @@ export class IndexedDbProjectStore implements ProjectStore {
                 }
                 const entityId = orderedEntityIds[entityIndex++]!;
                 readEntity(entityId, entity => {
-                  if (!entity) return;
+                  if (!entity) {
+                    queueMicrotask(validateNextEntity);
+                    return;
+                  }
                   try {
                     claimEntityIdentities(entity);
-                    validateNextEntity();
+                    queueMicrotask(validateNextEntity);
                   } catch (error) {
                     abortWith(error);
                   }

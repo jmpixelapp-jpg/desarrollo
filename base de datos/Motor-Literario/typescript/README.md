@@ -108,6 +108,24 @@ Las actualizaciones se comparan con la versión leída para rechazar escrituras 
 
 Métodos del anfitrión: `saveProjectDictionary`, `getProjectDictionaries`, `saveDictionaryEntry`, `getDictionaryEntries` y `setDictionaryEntryEntityLink`.
 
+## Respaldo y restauración local del puente SQLite
+
+El puente SQLite incluye una utilidad JavaScript de respaldo y restauración. La copia se crea con `VACUUM INTO`, por lo que es un archivo SQLite autónomo e incluye el estado confirmado del WAL: manuscritos, journal, conocimiento narrativo, biblioteca personal, historiales y recibos de finalización. Antes de publicar o restaurar una copia se ejecutan `PRAGMA integrity_check`, comprobación de esquema y validación de que los registros almacenados contienen JSON válido.
+
+Ejecutar desde esta carpeta:
+
+```sh
+node bridge/database-snapshot.mjs create --source ./datos/motor.sqlite --destination ./respaldos/motor-2026-11-25.sqlite
+node bridge/database-snapshot.mjs verify --backup ./respaldos/motor-2026-11-25.sqlite
+node bridge/database-snapshot.mjs restore --backup ./respaldos/motor-2026-11-25.sqlite --destination ./datos/motor.sqlite
+```
+
+La creación nunca sobrescribe una copia existente. La restauración exige detener el puente y cerrar todas las conexiones a la base de destino. Cuando ya existe una base, se conserva con el sufijo `.pre-restore-...` junto con sus archivos auxiliares WAL/journal, para permitir una recuperación manual. La utilidad rechaza enlaces simbólicos y copias con integridad o esquema incompatibles. Los permisos restrictivos del archivo se aplican cuando el sistema operativo los admite.
+
+El respaldo contiene el manuscrito y los datos privados de la biblioteca en claro; debe guardarse en una carpeta protegida y cifrarse mediante los mecanismos del sistema operativo o del anfitrión cuando se necesite protección en reposo. El checksum estructural no es una firma ni demuestra quién creó el archivo.
+
+**Alcance:** esta utilidad respalda la base SQLite del puente Node. No respalda IndexedDB del navegador. La aplicación anfitriona que utilice IndexedDB debe implementar su propio flujo de exportación/importación y probarlo en el navegador de destino; no debe presentar una copia SQLite como respaldo de IndexedDB.
+
 ## Límites deliberados
 
 La implementación del producto se desarrolla exclusivamente en TypeScript/JavaScript. Las carpetas Rust del repositorio son material histórico y no forman parte del runtime ni deben ampliarse.

@@ -263,13 +263,15 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     await client.flushProject("compact-finalization-project");
 
     const libraryNotifications = [];
-    let resolveLibraryNotification;
-    const libraryChanged = new Promise(resolveNotice => {
-      resolveLibraryNotification = resolveNotice;
-    });
-    client.onNotification("engine.personalIdeaLibraryChanged", params => {
-      libraryNotifications.push(params);
-      resolveLibraryNotification(params);
+    const libraryChanged = new Promise((resolveNotice, rejectNotice) => {
+      const timeout = setTimeout(() => {
+        rejectNotice(new Error("No llegó engine.personalIdeaLibraryChanged después de la finalización."));
+      }, 5_000);
+      client.onNotification("engine.personalIdeaLibraryChanged", params => {
+        libraryNotifications.push(params);
+        clearTimeout(timeout);
+        resolveNotice(params);
+      });
     });
 
     const summary = await client.finalizeProjectToIdeaLibrary(

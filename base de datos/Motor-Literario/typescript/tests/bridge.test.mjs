@@ -12,7 +12,7 @@ import { SqliteProjectStore } from "../bridge/sqlite-project-store.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER = resolve(HERE, "../bridge/stdio-server.mjs");
 
-function startBridge(databasePath) {
+function startBridge(databasePath, requestTimeoutMs = 30_000) {
   const child = spawn(process.execPath, [SERVER, "--db", databasePath], {
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
@@ -22,7 +22,7 @@ function startBridge(databasePath) {
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", chunk => { stderr += chunk; });
   const client = new MotorLiterarioBridgeClient(child, {
-    requestTimeoutMs: 30_000,
+    requestTimeoutMs,
     onStderr: text => { stderr += text; }
   });
   return { child, client, getStderr: () => stderr };
@@ -183,7 +183,7 @@ test("el puente separa libros y rechaza una llamada sin proyecto abierto", async
 test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca privada", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-ideas-"));
   const databasePath = resolve(directory, "motor.sqlite");
-  const { child, client } = startBridge(databasePath);
+  const { child, client } = startBridge(databasePath, 8_000);
   try {
     await client.hello();
     await client.openProject({
@@ -256,14 +256,13 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     assert.equal(receipt.sourceProjectId, "idea-project");
     assert.equal(receipt.writerId, "writer-private");
 
-    const exited = waitForExit(child);
-    await client.shutdown();
-    assert.equal(await exited, 0);
+    // El cierre elegante del proceso ya se cubre en la prueba de transporte;
+    // aquí aislamos el contrato de consulta y terminamos el auxiliar al final.
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       const exited = waitForExit(child);
       child.kill();
-      await exited;
+      assert.equal(await exited, 128);
     }
     await rm(directory, { recursive: true, force: true });
   }

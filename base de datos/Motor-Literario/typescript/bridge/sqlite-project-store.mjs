@@ -474,7 +474,7 @@ export class SqliteProjectStore {
       }
       for (const item of page.items) visit(item);
       if (page.nextCursor === null) return;
-      if (typeof page.nextCursor !== "string" || page.nextCursor.localeCompare(cursor) <= 0) {
+      if (typeof page.nextCursor !== "string" || !page.nextCursor || page.nextCursor === cursor) {
         throw new Error("El cursor de paginación no avanza de forma estricta.");
       }
       cursor = page.nextCursor;

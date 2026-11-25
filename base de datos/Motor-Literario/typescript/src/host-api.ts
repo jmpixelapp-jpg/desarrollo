@@ -997,7 +997,7 @@ export class HostEngineApi {
         }
       }
 
-      if (this.store.saveIdea && this.store.loadIdeas) {
+      if (this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas) {
         const ideaStore = this.requireIdeaStore();
         if (!this.ideasLoaded) {
           const existingIdeas = requireProjectScopedRecords(await ideaStore.loadIdeas(project.projectId), project.projectId, "ideas");
@@ -2690,6 +2690,18 @@ export class HostEngineApi {
     this.requireProject();
     await this.liveAnalysisTail;
     await this.flushPendingChanges();
+    await this.enqueueKnowledgeOperation(async () => {
+      this.invalidateNarrativeKnowledgeCaches();
+    });
+  }
+
+  /**
+   * Invalida únicamente las cachés de esta instancia cuando el puente detecta
+   * una confirmación externa en SQLite. No vacía ni vuelve a guardar colas.
+   */
+  async invalidateNarrativeKnowledgeFromExternalChange(): Promise<void> {
+    this.requireProject();
+    await this.liveAnalysisTail;
     await this.enqueueKnowledgeOperation(async () => {
       this.invalidateNarrativeKnowledgeCaches();
     });

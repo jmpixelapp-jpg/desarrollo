@@ -206,7 +206,6 @@ function validateNarrativeIdeaStatusHistory(idea) {
   if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length === 0) {
     throw new Error("Historial de estados de idea inválido.");
   }
-  let previousTime;
   for (let index = 0; index < idea.statusHistory.length; index++) {
     const item = idea.statusHistory[index];
     if (!item || !["IDEA", "incorporated", "discarded"].includes(item.status) ||
@@ -215,14 +214,24 @@ function validateNarrativeIdeaStatusHistory(idea) {
         (index === 0 ? item.reason !== "initial" : item.reason === "initial" ||
           item.status === idea.statusHistory[index - 1]?.status) ||
         (item.changedAt !== undefined &&
-          (!Number.isFinite(item.changedAt) || item.changedAt < 0 ||
-            (previousTime !== undefined && item.changedAt < previousTime)))) {
+          (!Number.isFinite(item.changedAt) || item.changedAt < 0))) {
       throw new Error("Historial de estados de idea inválido.");
     }
-    if (item.changedAt !== undefined) previousTime = item.changedAt;
   }
   if (idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
     throw new Error("El historial de estados no coincide con la idea actual.");
+  }
+}
+
+function validateMonotonicNarrativeIdeaStatusTimestamps(idea) {
+  let previousTime;
+  for (const change of idea.statusHistory ?? []) {
+    if (change.changedAt !== undefined) {
+      if (previousTime !== undefined && change.changedAt < previousTime) {
+        throw new Error("Las marcas temporales de nuevas decisiones no pueden retroceder.");
+      }
+      previousTime = change.changedAt;
+    }
   }
 }
 
@@ -1551,6 +1560,7 @@ export class SqliteProjectStore {
   loadEvents(projectId) { return this.loadProject("narrative-events", projectId, "acontecimiento narrativo"); }
 
   saveIdea(idea) {
+    validateMonotonicNarrativeIdeaStatusTimestamps(idea);
     requireProjectRecord(idea, "idea narrativa");
     validateNarrativeIdeaReferenceLimit(idea);
     validateNarrativeIdeaStatusHistory(idea);
@@ -1568,6 +1578,7 @@ export class SqliteProjectStore {
   }
 
   saveIdeaIfUnchanged(idea, expectedCurrent) {
+    validateMonotonicNarrativeIdeaStatusTimestamps(idea);
     requireProjectRecord(idea, "idea narrativa");
     validateNarrativeIdeaReferenceLimit(idea);
     validateNarrativeIdeaStatusHistory(idea);

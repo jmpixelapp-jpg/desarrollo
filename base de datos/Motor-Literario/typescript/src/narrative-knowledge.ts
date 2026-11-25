@@ -635,6 +635,13 @@ export function mergeNarrativeIdea(
   for (const item of [...previous.evidence, ...incoming.evidence]) {
     evidence.set(evidenceIdentityKey(item), item);
   }
+  const relatedIdeaIds = [...new Set([
+    ...(previous.relatedIdeaIds ?? []),
+    ...(incoming.relatedIdeaIds ?? [])
+  ])];
+  if (relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES) {
+    throw new Error(`Las referencias explícitas a ideas superan el límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`);
+  }
   const textChanged = previous.text !== incoming.text;
   const nextStatus = textChanged ? "IDEA" : previous.status;
   const statusHistory = [...(previous.statusHistory ?? [
@@ -653,6 +660,7 @@ export function mergeNarrativeIdea(
     text: textChanged ? incoming.text : previous.text,
     status: nextStatus,
     statusHistory,
+    ...(relatedIdeaIds.length > 0 ? { relatedIdeaIds } : {}),
     evidence: [...evidence.values()]
   };
 }

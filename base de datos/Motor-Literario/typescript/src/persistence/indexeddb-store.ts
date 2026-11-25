@@ -5219,7 +5219,9 @@ export class IndexedDbProjectStore implements ProjectStore {
                   previousChecksum !== finalizationReceipt.archiveContentChecksum) {
                 throw new Error("La biblioteca no coincide con el checksum del contenido archivado.");
               }
-              const remappedById = new Map(personalEntries.map(entry => [entry.idea.id, entry]));
+              const remappedById = new Map<string, PersonalIdeaLibraryEntry>(
+                personalEntries.map(entry => [entry.idea.id, entry] as const)
+              );
               const nextContent = createPersonalIdeaArchiveChecksumBuilder();
               for (const ideaId of finalizationReceipt.archivedIdeaIds) {
                 const entry = remappedById.get(ideaId);

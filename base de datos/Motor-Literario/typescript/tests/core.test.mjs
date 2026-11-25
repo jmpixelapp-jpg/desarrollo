@@ -10312,6 +10312,8 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     );
     assert.equal(retryArchive.length, 1);
     assert.equal(retryArchive[0].idea.id, "idea-to-archive");
+    assert.deepEqual(retryArchive, firstArchive,
+      "el reintento debe devolver la entrada y su contexto originales ya confirmados");
     assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
     await new Promise(resolve => setTimeout(resolve, 0));

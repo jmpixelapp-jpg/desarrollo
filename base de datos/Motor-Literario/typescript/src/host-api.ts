@@ -3000,15 +3000,16 @@ export class HostEngineApi {
   async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
-      if (!this.ideasLoaded) {
-        const loaded = requireProjectScopedRecords(
-          await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
-        );
-        for (const idea of loaded) this.narrativeIdeas.set(idea.id, idea);
-        this.ideasLoaded = true;
-      }
-
-      const ideas = [...this.narrativeIdeas.values()];
+      // Mantiene la lectura provisional hasta haber validado también sus
+      // referencias. Un catálogo corrupto no debe contaminar la caché: el
+      // anfitrión puede corregir el almacenamiento y reintentar la lectura.
+      const loadedIdeas = this.ideasLoaded
+        ? undefined
+        : requireProjectScopedRecords(
+            await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
+          );
+      const ideas = loadedIdeas ?? [...this.narrativeIdeas.values()];
+      let validatedEntities: readonly NarrativeEntity[] | undefined;
       if (ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
         if (!this.store.loadEntities) {
           throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
@@ -3016,20 +3017,30 @@ export class HostEngineApi {
         // La lectura de ideas es también un límite de reconciliación: el catálogo
         // de entidades puede haber cambiado desde otra instancia del anfitrión.
         // No validar contra una caché caliente que oculte destinos eliminados.
-        const entities = requireProjectScopedRecords(
+        validatedEntities = requireProjectScopedRecords(
           await this.requireKnowledgeReaderStore().loadEntities(projectId),
           projectId,
           "entidades"
         );
+        requireNarrativeEntityReferences(
+          ideas, projectId, validatedEntities,
+          idea => idea.relatedEntityIds ?? [], "ideas"
+        );
+      }
+
+      // Publica ambas instantáneas únicamente después de completar todas las
+      // validaciones de forma, aislamiento y referencias cruzadas.
+      if (loadedIdeas) {
+        this.narrativeIdeas.clear();
+        for (const idea of loadedIdeas) this.narrativeIdeas.set(idea.id, idea);
+        this.ideasLoaded = true;
+      }
+      if (validatedEntities) {
         this.narrativeEntities.clear();
-        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
+        for (const entity of validatedEntities) this.narrativeEntities.set(entity.id, entity);
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
       }
       return cloneNarrativeRecords(ideas);
     });

@@ -1586,6 +1586,10 @@ export class IndexedDbProjectStore implements ProjectStore {
       channel.postMessage({ type: "motor-literario:narrative-change", projectId });
     } catch {
       // La sincronización es complementaria: nunca debe invalidar una escritura ya confirmada.
+    } finally {
+      // Si este almacén solo publica, el canal es efímero. Evita retener un
+      // BroadcastChannel por cada instancia que nunca se suscribe a cambios.
+      this.closeNarrativeChangeChannelWhenUnused();
     }
   }
 
@@ -1596,6 +1600,8 @@ export class IndexedDbProjectStore implements ProjectStore {
       channel.postMessage({ type: "motor-literario:personal-idea-library-change", writerId });
     } catch {
       // La notificación es complementaria y no debe invalidar una transferencia ya confirmada.
+    } finally {
+      this.closeNarrativeChangeChannelWhenUnused();
     }
   }
 

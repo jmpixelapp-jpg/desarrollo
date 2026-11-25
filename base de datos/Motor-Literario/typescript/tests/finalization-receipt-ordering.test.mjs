@@ -50,7 +50,7 @@ class ArchiveGateStore {
     this.receipt = {
       writerId: archivedWriterId,
       sourceProjectId,
-      receiptId: "project-finalization-v1",
+      receiptId: "finalization-v1",
       sourceProjectName,
       finalizedAt: archivedAt,
       archivedIdeaIds: [entry.idea.id],
@@ -92,7 +92,7 @@ test("la lectura del recibo de finalización espera a que termine la transferenc
   assert.equal(archived.length, 1);
 
   const receipt = await readingReceipt;
-  assert.equal(receipt?.receiptId, "project-finalization-v1");
+  assert.equal(receipt?.receiptId, "finalization-v1");
   assert.deepEqual(receipt?.archivedIdeaIds, ["idea-1"]);
   assert.equal(store.receiptRead, true);
   api.dispose();

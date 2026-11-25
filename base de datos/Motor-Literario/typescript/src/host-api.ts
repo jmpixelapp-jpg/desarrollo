@@ -1746,6 +1746,9 @@ export class HostEngineApi {
         return {
           projectId:idea.projectId,
           ideaId:idea.id,
+          // El análisis léxico es deliberadamente acotado: los textos mayores
+          // a 100.000 unidades UTF-16 se omiten del índice, no del grafo.
+          ...(idea.text.length <= 100_000 ? { text: idea.text } : {}),
           status:idea.status,
           relatedIdeaIds:idea.relatedIdeaIds ?? [],
           evidenceCount:activeEvidence.length,

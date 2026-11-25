@@ -4232,37 +4232,42 @@ export class IndexedDbProjectStore implements ProjectStore {
         const queue = [...(idea.relatedIdeaIds ?? [])];
         let queueIndex = 0;
 
+        let collectingContextIdeas = false;
         const collectContextIdeas = (): void => {
-          if (finished) return;
-          if (queueIndex >= queue.length) {
-            collectContextEntities();
-            return;
-          }
-          const relatedId = queue[queueIndex++]!;
-          if (visited.has(relatedId)) {
-            queueMicrotask(collectContextIdeas);
-            return;
-          }
-          visited.add(relatedId);
-          // Una idea ya transferida tiene su propia entrada de biblioteca;
-          // no debe reaparecer como contexto ni tratarse como referencia rota.
-          if (archivedIdeaIdSet.has(relatedId)) {
-            queueMicrotask(collectContextIdeas);
-            return;
-          }
-          readIdea(relatedId, relatedIdea => {
-            if (!relatedIdea) {
-              throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+          if (finished || collectingContextIdeas) return;
+          collectingContextIdeas = true;
+          try {
+            while (!finished && queueIndex < queue.length) {
+              const relatedId = queue[queueIndex++]!;
+              if (visited.has(relatedId)) continue;
+              visited.add(relatedId);
+              // Una idea ya transferida tiene su propia entrada de biblioteca;
+              // no debe reaparecer como contexto ni tratarse como referencia rota.
+              if (archivedIdeaIdSet.has(relatedId)) continue;
+
+              let readCompletedSynchronously = false;
+              readIdea(relatedId, relatedIdea => {
+                readCompletedSynchronously = true;
+                if (!relatedIdea) {
+                  throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+                }
+                // Las ideas que también se trasladan tendrán su propia entrada.
+                if (relatedIdea.status !== "IDEA") {
+                  contextIdeas.set(relatedId, relatedIdea);
+                  queue.push(...(relatedIdea.relatedIdeaIds ?? []));
+                }
+                // Si la lectura fue asíncrona, reanuda el bucle cuando llegue
+                // su callback. Si fue síncrona, el while continúa sin recursión.
+                if (!collectingContextIdeas && !finished) collectContextIdeas();
+              });
+              if (!readCompletedSynchronously) return;
             }
-            // Las ideas que también se trasladan tendrán su propia entrada.
-            if (relatedIdea.status === "IDEA") {
-              queueMicrotask(collectContextIdeas);
-              return;
-            }
-            contextIdeas.set(relatedId, relatedIdea);
-            queue.push(...(relatedIdea.relatedIdeaIds ?? []));
-            queueMicrotask(collectContextIdeas);
-          });
+            if (!finished) collectContextEntities();
+          } catch (error) {
+            abortWith(error);
+          } finally {
+            collectingContextIdeas = false;
+          }
         };
 
         const collectContextEntities = (): void => {
@@ -4274,58 +4279,60 @@ export class IndexedDbProjectStore implements ProjectStore {
           const orderedIds = [...entityIds].sort((first, second) => first.localeCompare(second));
           const relatedEntities: NarrativeEntity[] = [];
           let entityIndex = 0;
+          let collectingEntities = false;
           const readNextEntity = (): void => {
-            if (finished) return;
-            if (entityIndex >= orderedIds.length) {
-              try {
-                const relatedIdeas = [...contextIdeas.values()]
-                  .sort((first, second) => first.id.localeCompare(second.id))
-                  .map(related => ({ ...related, sourceProjectName }));
-                const context: PersonalIdeaLibraryContext = {
-                  version: 1,
-                  relatedIdeas,
-                  relatedEntities
-                };
-                validatePersonalIdeaLibraryContext(
-                  context, projectId, sourceProjectName, "contexto archivado"
-                );
-                const archivedIdea: NarrativeIdea = { ...idea, sourceProjectName };
-                validateNarrativeIdeaRecord(archivedIdea, "idea archivada");
-                const contextEntityIds = new Set(relatedEntities.map(entity => entity.id));
-                if ((archivedIdea.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id))) {
-                  throw new Error("Una idea archivada conserva una referencia a una ficha que no está en su contexto.");
-                }
-                const entry: PersonalIdeaLibraryEntry = {
-                  writerId,
-                  sourceProjectId: projectId,
-                  sourceProjectName,
-                  category: sourceProjectName,
-                  idea: archivedIdea,
-                  context,
-                  archivedAt
-                };
-                personal.add(entry);
-                ideas.delete([projectId, idea.id]);
-                if (collectEntries) archived.push(entry);
-                archivedIdeaIds.push(idea.id);
-                archivedIdeaIdSet.add(idea.id);
-                didChange = true;
-                callback();
-              } catch (error) {
-                abortWith(error);
+            if (finished || collectingEntities) return;
+            collectingEntities = true;
+            try {
+              while (!finished && entityIndex < orderedIds.length) {
+                const entityId = orderedIds[entityIndex++]!;
+                let readCompletedSynchronously = false;
+                readEntity(entityId, entity => {
+                  readCompletedSynchronously = true;
+                  if (entity) relatedEntities.push(entity);
+                  if (!collectingEntities && !finished) readNextEntity();
+                });
+                if (!readCompletedSynchronously) return;
               }
-              return;
+              if (finished) return;
+              const relatedIdeas = [...contextIdeas.values()]
+                .sort((first, second) => first.id.localeCompare(second.id))
+                .map(related => ({ ...related, sourceProjectName }));
+              const context: PersonalIdeaLibraryContext = {
+                version: 1,
+                relatedIdeas,
+                relatedEntities
+              };
+              validatePersonalIdeaLibraryContext(
+                context, projectId, sourceProjectName, "contexto archivado"
+              );
+              const archivedIdea: NarrativeIdea = { ...idea, sourceProjectName };
+              validateNarrativeIdeaRecord(archivedIdea, "idea archivada");
+              const contextEntityIds = new Set(relatedEntities.map(entity => entity.id));
+              if ((archivedIdea.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id))) {
+                throw new Error("Una idea archivada conserva una referencia a una ficha que no está en su contexto.");
+              }
+              const entry: PersonalIdeaLibraryEntry = {
+                writerId,
+                sourceProjectId: projectId,
+                sourceProjectName,
+                category: sourceProjectName,
+                idea: archivedIdea,
+                context,
+                archivedAt
+              };
+              personal.add(entry);
+              ideas.delete([projectId, idea.id]);
+              if (collectEntries) archived.push(entry);
+              archivedIdeaIds.push(idea.id);
+              archivedIdeaIdSet.add(idea.id);
+              didChange = true;
+              callback();
+            } catch (error) {
+              abortWith(error);
+            } finally {
+              collectingEntities = false;
             }
-            const entityId = orderedIds[entityIndex++]!;
-            readEntity(entityId, entity => {
-              if (!entity) return;
-              try {
-                relatedEntities.push(entity);
-                queueMicrotask(readNextEntity);
-              } catch (error) {
-                abortWith(error);
-              }
-            });
           };
           readNextEntity();
         };
@@ -4340,34 +4347,44 @@ export class IndexedDbProjectStore implements ProjectStore {
       ): void => {
         const relatedIds = idea.relatedIdeaIds ?? [];
         let index = relatedIndex;
+        let validatingLinks = false;
         const advance = (): void => {
-          if (finished) return;
-          if (index >= relatedIds.length) {
+          if (finished || validatingLinks) return;
+          validatingLinks = true;
+          try {
+            while (!finished && index < relatedIds.length) {
+              const relatedId = relatedIds[index++]!;
+              if (archivedIdeaIdSet.has(relatedId)) {
+                if (idea.status !== "IDEA") {
+                  throw new Error(
+                    "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+                  );
+                }
+                continue;
+              }
+              let readCompletedSynchronously = false;
+              readIdea(relatedId, relatedIdea => {
+                readCompletedSynchronously = true;
+                if (!relatedIdea) {
+                  throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
+                }
+                if (idea.status !== "IDEA" && relatedIdea.status === "IDEA") {
+                  throw new Error(
+                    "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
+                  );
+                }
+                if (!validatingLinks && !finished) advance();
+              });
+              if (!readCompletedSynchronously) return;
+            }
+            if (finished) return;
             if (idea.status === "IDEA") buildAndStoreEntry(idea, continueCursor);
             else continueCursor();
-            return;
+          } catch (error) {
+            abortWith(error);
+          } finally {
+            validatingLinks = false;
           }
-          const relatedId = relatedIds[index++]!;
-          if (archivedIdeaIdSet.has(relatedId)) {
-            if (idea.status !== "IDEA") {
-              throw new Error(
-                "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
-              );
-            }
-            queueMicrotask(advance);
-            return;
-          }
-          readIdea(relatedId, relatedIdea => {
-            if (!relatedIdea) {
-              throw new Error("No se pueden archivar ideas: existe una referencia a otra idea inexistente.");
-            }
-            if (idea.status !== "IDEA" && relatedIdea.status === "IDEA") {
-              throw new Error(
-                "No se pueden archivar ideas: una idea que permanecerá en el libro depende de una idea que se trasladaría a la biblioteca personal."
-              );
-            }
-            queueMicrotask(advance);
-          });
         };
         advance();
       };

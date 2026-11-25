@@ -53,7 +53,7 @@ test("declara la capacidad de grafo global solo con lectura del catálogo", () =
   api.dispose();
 });
 
-test("limita la muestra del catálogo global sin alterar los totales del grafo", async () => {
+test("limita la muestra y clasifica referencias a ideas fuera del snapshot", async () => {
   const largeStore = {
     ...store,
     documents: new Map(),

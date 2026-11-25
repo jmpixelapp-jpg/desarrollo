@@ -1836,21 +1836,6 @@ export class HostEngineApi {
     };
     await this.store.saveDiagnostics?.(record);
     this.documentDiagnostics.set(snapshot.documentId, record);
-    const result: AnalysisResult = {
-      ticketId: `recovery:${snapshot.documentId}:${snapshot.revision}`,
-      projectId,
-      documentId: snapshot.documentId,
-      revision: snapshot.revision,
-      affectedText: snapshot.text,
-      affectedStart: 0,
-      affectedEnd: snapshot.text.length,
-      changeStart: 0,
-      changeEnd: 0,
-      replacementLength: 0,
-      previousAffectedStart: 0,
-      previousAffectedEnd: snapshot.text.length,
-      diagnostics
-    };
-    try { this.onAnalysis?.(result); } catch { /* La interfaz no debe interrumpir la recuperación. */ }
+
   }
 }

@@ -4016,6 +4016,8 @@ export class HostEngineApi {
     if (!snapshot || !sync || sync.needsResync || sync.pendingSequence !== sync.sequence) {
       throw new Error("No se puede cerrar el monitor mientras el documento no sea durable y esté sincronizado.");
     }
+    const queuedCheckpoint = this.liveMonitorCheckpointTails.get(documentId);
+    if (queuedCheckpoint) await queuedCheckpoint;
     const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
     if (!checkpoint) {
       throw new Error("No se puede cerrar el monitor con cambios pendientes o métricas que requieren resincronización.");

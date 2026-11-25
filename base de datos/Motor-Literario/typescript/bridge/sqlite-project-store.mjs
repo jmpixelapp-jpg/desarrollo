@@ -55,6 +55,15 @@ function createArchiveContentChecksumBuilder() {
 function isValidArchiveContentChecksum(value) {
   return typeof value === "string" && /^fnv1a64:[0-9a-f]{16}$/u.test(value);
 }
+function checksumForArchiveIds(ids) {
+  const source = JSON.stringify(ids);
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < source.length; index++) {
+    hash ^= BigInt(source.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -1257,6 +1266,9 @@ export class SqliteProjectStore {
       const libraryEntries = this.find("personal-idea-library", entry =>
         entry.sourceProjectId === projectId && (writerId === undefined || entry.writerId === writerId)
       );
+      const finalizationReceipt = writerId
+        ? this.get("writer-library-finalization-receipts", [writerId, projectId, "finalization-v1"])
+        : undefined;
       for (const entity of entities) validateNarrativeEntity(entity, projectId);
       validateNarrativeIdentityHistory(entities);
       for (const relation of relations) validateNarrativeRelation(relation, projectId);
@@ -1318,8 +1330,48 @@ export class SqliteProjectStore {
       const remappedLibrary = writerId
         ? remapPersonalIdeaEntriesForEntityMerge(libraryEntries, writerId, projectId, sourceEntityId, mergedEntity)
         : [];
+      let updatedFinalizationReceipt;
+      if (finalizationReceipt) {
+        const ids = finalizationReceipt.archivedIdeaIds;
+        if (finalizationReceipt.writerId !== writerId ||
+            finalizationReceipt.sourceProjectId !== projectId ||
+            finalizationReceipt.receiptId !== "finalization-v1" ||
+            !Array.isArray(ids) ||
+            ids.some((id, index) => typeof id !== "string" || !id.trim() ||
+              (index > 0 && ids[index - 1].localeCompare(id) > 0)) ||
+            new Set(ids).size !== ids.length ||
+            finalizationReceipt.archiveChecksum !== checksumForArchiveIds(ids) ||
+            (finalizationReceipt.archiveContentChecksum !== undefined &&
+              !isValidArchiveContentChecksum(finalizationReceipt.archiveContentChecksum))) {
+          throw new Error("El recibo de finalización no coincide con la biblioteca durante la consolidación.");
+        }
+        const orderedOriginal = [...libraryEntries].sort((a, b) =>
+          a.idea.id.localeCompare(b.idea.id)
+        );
+        if (JSON.stringify(orderedOriginal.map(entry => entry.idea.id)) !== JSON.stringify(ids)) {
+          throw new Error("La biblioteca no coincide con los IDs del recibo durante la consolidación.");
+        }
+        const previousContent = createArchiveContentChecksumBuilder();
+        for (const entry of orderedOriginal) previousContent.add(entry);
+        const previousChecksum = previousContent.digest();
+        if (finalizationReceipt.archiveContentChecksum !== undefined &&
+            previousChecksum !== finalizationReceipt.archiveContentChecksum) {
+          throw new Error("La biblioteca no coincide con el checksum del contenido archivado.");
+        }
+        const remappedById = new Map(remappedLibrary.map(entry => [entry.idea.id, entry]));
+        const nextContent = createArchiveContentChecksumBuilder();
+        for (const id of ids) {
+          const entry = remappedById.get(id);
+          if (!entry) throw new Error("La consolidación perdió una entrada de la biblioteca personal.");
+          nextContent.add(entry);
+        }
+        updatedFinalizationReceipt = {
+          ...finalizationReceipt,
+          archiveContentChecksum: nextContent.digest()
+        };
+      }
       // Todas las referencias cambian bajo BEGIN IMMEDIATE: un error revierte
-      // también la ficha canónica y las instantáneas guardadas en la biblioteca.
+      // también la ficha canónica, las instantáneas de biblioteca y su recibo.
       this.put("narrative-entities", identityKey(projectId, targetEntityId), mergedEntity);
       this.remove("narrative-entities", identityKey(projectId, sourceEntityId));
       const relationGroups = new Map();
@@ -1370,6 +1422,10 @@ export class SqliteProjectStore {
       for(let index=0;index<remappedLibrary.length;index++) {
         const before=libraryEntries[index],after=remappedLibrary[index];
         if(!sameValue(before,after)) this.put("personal-idea-library",[writerId,projectId,after.idea.id],after);
+      }
+      if (updatedFinalizationReceipt) {
+        this.put("writer-library-finalization-receipts",
+          [writerId, projectId, "finalization-v1"], updatedFinalizationReceipt);
       }
     });
   }

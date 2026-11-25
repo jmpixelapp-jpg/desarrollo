@@ -3275,26 +3275,41 @@ export class HostEngineApi {
     }
     const store = this.requireIdeaStore();
     const work = this.knowledgeTail.then(async () => {
-      if (!this.ideasLoaded) {
-        const ideas = requireProjectScopedRecords(await store.loadIdeas(project.projectId), project.projectId, "ideas");
-        for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
-        this.ideasLoaded = true;
+      const maxAttempts = 3;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (!this.ideasLoaded) {
+          const ideas = requireProjectScopedRecords(
+            await store.loadIdeas(project.projectId), project.projectId, "ideas"
+          );
+          this.narrativeIdeas.clear();
+          for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
+          this.ideasLoaded = true;
+        }
+        const current = this.narrativeIdeas.get(ideaId);
+        if (!current) throw new Error("La idea no pertenece al proyecto activo o no existe.");
+        if (current.status === status) return cloneNarrativeRecord(current);
+        const statusHistory = [...(current.statusHistory ?? [
+          { status: current.status, reason: "initial" as const }
+        ])];
+        statusHistory.push({
+          status,
+          changedAt: nextNarrativeIdeaStatusChangeAt(statusHistory),
+          reason: "writer"
+        });
+        const updated: NarrativeIdea = { ...current, status, statusHistory };
+        try {
+          await this.persistIdeaUpdate(store, updated, current);
+          this.narrativeIdeas.set(updated.id, updated);
+          return cloneNarrativeRecord(updated);
+        } catch (error) {
+          const isVersionConflict = error instanceof Error &&
+            /\\bidea\\b.*\\bcambió en otra instancia\\b/iu.test(error.message);
+          if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
+          // La siguiente iteración relee la idea completa y conserva las
+          // referencias concurrentes y las decisiones editoriales añadidas.
+        }
       }
-      const current = this.narrativeIdeas.get(ideaId);
-      if (!current) throw new Error("La idea no pertenece al proyecto activo o no existe.");
-      if (current.status === status) return cloneNarrativeRecord(current);
-      const statusHistory = [...(current.statusHistory ?? [
-        { status: current.status, reason: "initial" as const }
-      ])];
-      statusHistory.push({
-        status,
-        changedAt: nextNarrativeIdeaStatusChangeAt(statusHistory),
-        reason: "writer"
-      });
-      const updated: NarrativeIdea = { ...current, status, statusHistory };
-      await this.persistIdeaUpdate(store, updated, current);
-      this.narrativeIdeas.set(updated.id, updated);
-      return cloneNarrativeRecord(updated);
+      throw new Error("No se pudo sincronizar el estado de la idea tras varios conflictos concurrentes.");
     });
     this.knowledgeTail = work.then(() => undefined, () => undefined);
     return work;

@@ -148,7 +148,8 @@ Registro de commits de la línea de trabajo del análisis de ideas en `main`:
 - `b681a9c`: deduplicación de caminos de dos saltos y preservación de ciclos en el fixture de prueba.
 - `0974302`: invariantes del catálogo vacío y métricas de cobertura.
 - `492753b`: prueba de estrés que fuerza el presupuesto de un millón de expansiones de convergencia a dos saltos.
-- `997b810`: regresión de offsets UTF-16 absolutos tras caracteres Unicode suplementarios en evidencias de recurrencia entre escenas.
+- `997b810`: incorpora la regresión de offsets UTF-16 absolutos tras caracteres Unicode suplementarios en evidencias entre escenas.
+- `39d73c9`: corrige el fixture Unicode para separar escenas con saltos de línea reales, de modo que el test ejercite efectivamente la segmentación explícita.
 
 Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en su commit de GitHub para conocer su diff exacto. El trabajo concurrente de otros colaboradores puede intercalar commits en `main`; no atribuir esos cambios a esta línea de trabajo.
 

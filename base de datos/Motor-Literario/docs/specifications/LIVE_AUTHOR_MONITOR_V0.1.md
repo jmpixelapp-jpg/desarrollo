@@ -481,3 +481,6 @@ Solo se puede crear cuando:
 Los checkpoints conservan métricas agregadas y muestras recientes, no el historial completo del escritor. Los almacenes anfitriones que no implementen los métodos opcionales pueden seguir usando el monitor en memoria; el cierre seguro con persistencia exige `saveLiveAuthorMonitorCheckpoint`.
 
 **Límite de concurrencia:** la persistencia por clave evita mezclar documentos, pero todavía no implementa un lease/fencing token entre dos instancias de la aplicación que editen simultáneamente el mismo documento. La coordinación multi-pestaña de sesiones de monitoreo queda como trabajo separado; el checkpoint no debe considerarse un bloqueo de edición ni un mecanismo de sincronización del manuscrito.
+
+
+**Validación de la implementación:** la ejecución aislada [45722890027](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45722890027), sobre el commit `8c2578174e002a7ba55447a607b5ea07b4a73c61`, terminó correctamente: build Vite y **84 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye pruebas del contrato del monitor y del ciclo de recuperación en `HostEngineApi` mediante un almacén de prueba. La CI general de ese commit solo conserva errores ajenos en `src/literary-analysis.ts`; no reporta errores de tipos en los archivos del monitor, HostEngineApi, contratos o persistencia.

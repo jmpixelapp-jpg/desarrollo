@@ -78,6 +78,15 @@ function checksumArchivedIdeaIds(ids: readonly string[]): string {
   }
   return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
 }
+function checksumArchivedIdeaIdsInReceiptOrder(ids: readonly string[]): string {
+  const serialized = JSON.stringify(ids);
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
 
 function validateFinalizationReceipt(
   receipt: StoredProjectFinalizationReceipt,
@@ -94,7 +103,8 @@ function validateFinalizationReceipt(
       new Set(receipt.archivedIdeaIds).size !== receipt.archivedIdeaIds.length ||
       [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1]!.localeCompare(id) > 0) ||
       typeof receipt.archiveChecksum !== "string" ||
-      receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds) ||
+      (receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds) &&
+        receipt.archiveChecksum !== checksumArchivedIdeaIdsInReceiptOrder(receipt.archivedIdeaIds)) ||
       (receipt.archiveContentChecksum !== undefined &&
         !isValidPersonalIdeaArchiveChecksum(receipt.archiveContentChecksum))) {
     throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");

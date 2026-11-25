@@ -3360,6 +3360,9 @@ function buildCharacterNarrativeTrajectories(
     b.eventParticipationSceneCount-a.eventParticipationSceneCount ||
     b.attributeAssertionCount-a.attributeAssertionCount ||
     b.causalCandidateCount-a.causalCandidateCount ||
+    b.relationships.length-a.relationships.length ||
+    b.writerDecisionCount-a.writerDecisionCount ||
+    b.documentedDecisions.length-a.documentedDecisions.length ||
     b.mentionSceneCount-a.mentionSceneCount ||
     a.entityId.localeCompare(b.entityId,"en")
   );

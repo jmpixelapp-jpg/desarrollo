@@ -10906,7 +10906,7 @@ test("limita a cien perfiles globales sin confundirlos con el tope por escena", 
   const text = [
     "ESCENA 1","La señal inicial quedó registrada.","***",
     "ESCENA 2","La señal final apareció."
-  ].join("\\n");
+  ].join("\n");
   const evidenceFor = excerpt => {
     const start = text.indexOf(excerpt);
     assert.notEqual(start,-1);

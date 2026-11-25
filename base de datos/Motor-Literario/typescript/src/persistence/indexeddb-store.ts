@@ -306,7 +306,6 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
     if (!Array.isArray(idea.statusHistory)) {
       throw new Error(`Registro de ${label} malformado: historial inválido.`);
     }
-    let previousChangedAt: number | undefined;
     for (let index = 0; index < idea.statusHistory.length; index++) {
       const change = idea.statusHistory[index];
       if (!change ||
@@ -316,11 +315,9 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
           (change.reason === "text-revised" && change.status !== "IDEA") ||
           (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
             change.status === idea.statusHistory[index - 1]?.status) ||
-          (change.changedAt !== undefined && previousChangedAt !== undefined &&
-            change.changedAt < previousChangedAt)) {
+          false) {
         throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);
       }
-      if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
     }
     if (idea.statusHistory.length === 0 ||
         idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {

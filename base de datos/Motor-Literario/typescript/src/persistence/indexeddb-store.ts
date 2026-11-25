@@ -3391,7 +3391,6 @@ export class IndexedDbProjectStore implements ProjectStore {
       const receiptRequest = supportsReceipts
         ? receipts.get([writerId, projectId, FINALIZATION_RECEIPT_ID])
         : undefined;
-      let receiptRead = !supportsReceipts;
       let existingReceipt: StoredProjectFinalizationReceipt | undefined;
       let finished = false;
       let didChange = false;
@@ -3406,10 +3405,6 @@ export class IndexedDbProjectStore implements ProjectStore {
       };
 
       if (receiptRequest) {
-        receiptRequest.onsuccess = () => {
-          existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
-          receiptRead = true;
-        };
         receiptRequest.onerror = () => abortWith(
           receiptRequest.error ?? new Error("No se pudo recuperar el recibo de finalización.")
         );
@@ -3701,11 +3696,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         );
       };
 
-      const cursorRequest = ideas.index("by-project").openCursor(projectId);
-      let scannedForExistingReceipt = false;
       const scanExistingReceiptIdeas = (): void => {
-        if (scannedForExistingReceipt) return;
-        scannedForExistingReceipt = true;
         const request = ideas.index("by-project").openCursor(projectId);
         request.onsuccess = () => {
           try {
@@ -3753,7 +3744,6 @@ export class IndexedDbProjectStore implements ProjectStore {
       if (receiptRequest) {
         receiptRequest.onsuccess = () => {
           existingReceipt = receiptRequest.result as StoredProjectFinalizationReceipt | undefined;
-          receiptRead = true;
           if (existingReceipt) scanExistingReceiptIdeas();
           else scanProjectIdeas();
         };

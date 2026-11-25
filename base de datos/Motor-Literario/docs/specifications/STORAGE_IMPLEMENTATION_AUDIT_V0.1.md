@@ -32,15 +32,15 @@ npm run bench
 
 ## Resultado de CI comprobado
 
-La ejecución de GitHub Actions del **25 de noviembre de 2026** para el commit `0544e368f4513bfff5326bfdf656155cebcfb147` finalizó con conclusión **success**.
+La ejecución de GitHub Actions del **25 de noviembre de 2026** para el commit `e7181ba25e1e79c9acbcf4df4a7269001b2b4ad3` finalizó con conclusión **success**.
 
 - Typecheck: correcto.
 - Build: correcto.
 - Validación de esquema y auditoría de almacenamiento: correcto.
-- Suite Node: **300 pruebas, 291 aprobadas, 0 fallidas y 9 omitidas**.
+- Suite Node: **312 pruebas, 303 aprobadas, 0 fallidas y 9 omitidas**.
 - Benchmark de edición en vivo: correcto.
 
-[Ver ejecución, pasos y logs](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45565599266).
+[Ver ejecución, pasos y logs](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45567766129).
 
 ## Benchmark registrado en CI
 
@@ -48,10 +48,10 @@ Resultados del runner de GitHub Actions, con adaptador de persistencia en memori
 
 | Escenario | p50 integral | p95 integral |
 |---|---:|---:|
-| 10.000 palabras, 40 ediciones | 7,19 ms | 7,23 ms |
-| 100.000 palabras, 40 ediciones | 5,28 ms | 5,42 ms |
-| 500.000 palabras, 40 ediciones | 4,10 ms | 4,32 ms |
-| Línea única, 20.000 palabras, 5 ediciones | 40,30 ms | 64,15 ms |
+| 10.000 palabras, 40 ediciones | 6,45 ms | 6,50 ms |
+| 100.000 palabras, 40 ediciones | 4,01 ms | 4,15 ms |
+| 500.000 palabras, 40 ediciones | 3,13 ms | 3,30 ms |
+| Línea única, 20.000 palabras, 5 ediciones | 39,63 ms | 66,01 ms |
 
 El escenario concurrente procesó cuatro documentos en paralelo, con 40 ediciones totales y máximo de cuatro documentos activos. Estas cifras caracterizan ese runner y el adaptador en memoria; no son mediciones de disco ni compromisos de latencia para el equipo del escritor.
 

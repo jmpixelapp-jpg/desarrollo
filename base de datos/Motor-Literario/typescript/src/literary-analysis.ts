@@ -3362,6 +3362,22 @@ const IDEA_GERMAN_STOP_WORDS = new Set([
   "wird","wirst","wo","zu","zum","zur","über","zwischen"
 ]);
 
+
+const IDEA_SWEDISH_STOP_WORDS = new Set([
+  "alla","allt","alltid","andra","andras","annan","annat","att","av","bakom","bara","behöva",
+  "behöver","blev","bli","blir","blivit","borde","båda","då","de","dem","den","deras","dess",
+  "det","detta","dig","din","dina","dit","du","där","efter","eller","en","er","era","ert","ett",
+  "fast","fick","finna","finns","fler","flesta","fram","från","för","före","genom","ha","hade",
+  "han","hans","har","henne","hennes","hit","hon","honom","hur","här","i","icke","idag","igår",
+  "igen","inget","ingen","inga","innan","inne","inte","jag","ju","kan","kunde","kunnat","kvar",
+  "kom","kommer","komma","kring","man","med","mellan","men","mig","min","mina","mitt","mot",
+  "mycket","många","måste","ned","ni","nog","när","någon","något","några","också","om","oss",
+  "på","runt","så","samma","sedan","sig","sin","sina","sist","sitta","ska","skall","skulle",
+  "som","stor","större","störst","till","tills","under","upp","utan","utanför","vad","var",
+  "vara","varför","varit","varje","vars","vart","vem","vi","vid","vilka","vilken","vilket",
+  "vill","vår","våra","vårt","än","ännu","är","åt","över"
+]);
+
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
  * Los destinos no incluidos permanecen indeterminados cuando hay ideas omitidas
@@ -3819,7 +3835,7 @@ function buildLiteraryIdeaLexicalResonances(
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
           IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term) ||
           IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term) ||
-          IDEA_DUTCH_STOP_WORDS.has(term)) continue;
+          IDEA_DUTCH_STOP_WORDS.has(term) || IDEA_SWEDISH_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>

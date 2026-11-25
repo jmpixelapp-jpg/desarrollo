@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HostEngineApi } from "../dist/motor-literario.js";
+import { HostEngineApi, analyzeLiteraryFragment } from "../dist/motor-literario.js";
 
 const projectId = "complete-idea-graph";
 const store = {
@@ -1823,4 +1823,83 @@ test("los límites de muestras de ciclos y componentes no alteran los conteos co
   } finally {
     api.dispose();
   }
+});
+
+
+test("un catálogo de proyecto truncado no clasifica referencias externas como ausencias", () => {
+  const idea = {
+    ...structuredClone(store.ideas[0]),
+    relatedIdeaIds: ["ghost"]
+  };
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 0,
+    text: "Escena 1\\nEl catálogo transferido está truncado.",
+    knownProjectIdeas: [idea],
+    knownProjectIdeasOmittedCount: 2
+  });
+  const graph = result.ideaGraph;
+  assert.equal(graph.catalogScope, "project");
+  assert.equal(graph.projectCatalogComplete, false);
+  assert.equal(graph.ideaCount, 1);
+  assert.equal(graph.omittedIdeaCount, 2);
+  assert.equal(graph.referenceCount, 1);
+  assert.equal(graph.includedReferenceCount, 0);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.equal(graph.references[0].resolution, "not-in-snapshot");
+});
+
+test("el catálogo heredado de ideas vinculadas nunca se presenta como exhaustivo", () => {
+  const idea = {
+    ...structuredClone(store.ideas[0]),
+    relatedIdeaIds: ["ghost"]
+  };
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 0,
+    text: "Escena 1\\nSolo se dispone de ideas vinculadas a personajes.",
+    knownIdeas: [idea]
+  });
+  const graph = result.ideaGraph;
+  assert.equal(graph.catalogScope, "character-linked-fallback");
+  assert.equal(graph.projectCatalogComplete, false);
+  assert.equal(graph.omittedIdeaCount, 0);
+  assert.equal(graph.referenceCount, 1);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.equal(graph.references[0].resolution, "not-in-snapshot");
+});
+
+test("el desempate de IDs Unicode mantiene un orden canónico estable", () => {
+  const ideas = [
+    {
+      ...structuredClone(store.ideas[0]),
+      id: "é",
+      text: "motivo unicode compuesto",
+      relatedIdeaIds: []
+    },
+    {
+      ...structuredClone(store.ideas[0]),
+      id: "e\\u0301",
+      text: "motivo unicode descompuesto",
+      relatedIdeaIds: []
+    }
+  ];
+  const analyze = (knownProjectIdeas) => analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 0,
+    text: "Escena 1\\nLos identificadores Unicode deben ordenarse de forma determinista.",
+    knownProjectIdeas
+  }).ideaGraph;
+  const forward = analyze(ideas);
+  const reversed = analyze([...ideas].reverse());
+  assert.deepEqual(reversed.nodes.map(node => node.ideaId), forward.nodes.map(node => node.ideaId));
+  assert.deepEqual(forward.nodes.map(node => node.ideaId), ["e\\u0301", "é"]);
+  assert.equal(forward.ideaCount, 2);
+  assert.equal(forward.weakComponentCount, 2);
+  assert.equal(forward.isolatedWithinSnapshotNodeCount, 2);
 });

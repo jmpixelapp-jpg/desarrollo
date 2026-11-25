@@ -2980,7 +2980,35 @@ export class HostEngineApi {
         const rawPage = await this.store.loadPersonalIdeasPage(writerId, cursor, limit);
         const checked = validatePersonalIdeaLibraryPage(rawPage, writerId, cursor, limit);
         if (checked.unresolved.length > 0) {
-          if (this.store.loadPersonalIdea) {
+          if (this.store.loadPersonalIdeasByKeys) {
+            const requested = new Map(checked.unresolved.map(reference => [
+              JSON.stringify([reference.sourceProjectId, reference.ideaId]), reference
+            ]));
+            const resolved = new Set<string>();
+            // Mantiene cada transacción corta incluso si una página contiene
+            // contextos con muchos enlaces históricos.
+            for (let offset = 0; offset < checked.unresolved.length; offset += 128) {
+              const batch = checked.unresolved.slice(offset, offset + 128);
+              const targets = await this.store.loadPersonalIdeasByKeys(writerId, batch);
+              if (!Array.isArray(targets)) {
+                throw new Error("Integridad de biblioteca: la lectura agrupada devolvió una colección inválida.");
+              }
+              for (const target of targets) {
+                if (!target || typeof target !== "object" ||
+                    !isValidPersonalIdeaEntry(target, writerId, target.sourceProjectId)) {
+                  throw new Error("Integridad de biblioteca: una idea relacionada está malformada o pertenece a otro escritor.");
+                }
+                const key = JSON.stringify([target.sourceProjectId, target.idea.id]);
+                if (!requested.has(key) || resolved.has(key)) {
+                  throw new Error("Integridad de biblioteca: la lectura agrupada devolvió un destino ajeno o duplicado.");
+                }
+                resolved.add(key);
+              }
+            }
+            if (resolved.size !== requested.size) {
+              throw new Error("Integridad de biblioteca: una idea relacionada no existe en la biblioteca del escritor.");
+            }
+          } else if (this.store.loadPersonalIdea) {
             for (const reference of checked.unresolved) {
               const target = await this.store.loadPersonalIdea(
                 writerId, reference.sourceProjectId, reference.ideaId

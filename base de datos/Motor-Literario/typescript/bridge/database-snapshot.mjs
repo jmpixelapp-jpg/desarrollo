@@ -52,16 +52,35 @@ function checksumForArchiveIds(ids) {
   return fnv1a64(JSON.stringify([...ids].sort()));
 }
 
-function checksumForArchiveContent(entries) {
-  let serialized = "[";
-  for (let index = 0; index < entries.length; index++) {
-    const item = JSON.stringify(entries[index]);
-    if (typeof item !== "string") throw new Error("Una entrada archivada no se puede serializar.");
-    if (index > 0) serialized += ",";
-    serialized += item;
-  }
-  serialized += "]";
-  return fnv1a64(serialized);
+function createArchiveContentChecksumBuilder() {
+  let hash = 0xcbf29ce484222325n;
+  let count = 0;
+  let finished = false;
+  const update = value => {
+    for (let index = 0; index < value.length; index++) {
+      hash ^= BigInt(value.charCodeAt(index));
+      hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+    }
+  };
+  update("[");
+  return {
+    add(entry) {
+      if (finished) throw new Error("El checksum del contenido archivado ya fue cerrado.");
+      const serialized = JSON.stringify(entry);
+      if (typeof serialized !== "string") {
+        throw new Error("Una entrada archivada no se puede serializar.");
+      }
+      if (count > 0) update(",");
+      update(serialized);
+      count++;
+    },
+    digest() {
+      if (finished) throw new Error("El checksum del contenido archivado ya fue cerrado.");
+      finished = true;
+      update("]");
+      return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+    }
+  };
 }
 
 /**
@@ -111,7 +130,7 @@ function validatePersonalIdeaFinalizationIntegrity(database) {
     }
 
     if (receipt.archiveContentChecksum === undefined) continue;
-    const entries = [];
+    const contentChecksum = createArchiveContentChecksumBuilder();
     for (const ideaId of ids) {
       const key = JSON.stringify([receipt.writerId, receipt.sourceProjectId, ideaId]);
       const stored = loadEntry.get("personal-idea-library", key, receipt.writerId);
@@ -129,9 +148,9 @@ function validatePersonalIdeaFinalizationIntegrity(database) {
           !entry.context || entry.context.version !== 1) {
         throw new Error("El respaldo SQLite contiene una entrada de biblioteca incompatible con su recibo.");
       }
-      entries.push(entry);
+      contentChecksum.add(entry);
     }
-    if (checksumForArchiveContent(entries) !== receipt.archiveContentChecksum) {
+    if (contentChecksum.digest() !== receipt.archiveContentChecksum) {
       throw new Error("El respaldo SQLite no coincide con el checksum del contenido archivado.");
     }
   }

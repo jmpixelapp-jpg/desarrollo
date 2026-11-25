@@ -452,6 +452,8 @@ async function dispatch(method, rawParams) {
       projects.clear();
       lastNarrativeVersions.clear();
       pendingNarrativeSyncs.clear();
+      lastWriterLibraryVersions.clear();
+      pendingWriterLibrarySyncs.clear();
       return { shutdown: true, storage: store.health() };
 
     default: {

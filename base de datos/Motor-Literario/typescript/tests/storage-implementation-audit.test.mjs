@@ -109,8 +109,8 @@ test("detecta almacenes IndexedDB creados que no figuran en el manifiesto", () =
     "const DATABASE_VERSION = 21;",
     'const DATABASE_VERSION = 21;\nconst UNDECLARED_STORE = "undeclared-store";'
   ).replace(
-    "request.onupgradeneeded = (event) => {",
-    'request.onupgradeneeded = (event) => {\n        if (!db.objectStoreNames.contains(UNDECLARED_STORE)) db.createObjectStore(UNDECLARED_STORE, { keyPath: "id" });'
+    "const db = request.result;",
+    'const db = request.result;\n        if (!db.objectStoreNames.contains(UNDECLARED_STORE)) db.createObjectStore(UNDECLARED_STORE, { keyPath: "id" });'
   );
   assert.ok(auditStorageImplementation(mapping, sourceWithExtraStore).some(
     (issue) => issue.code === "UNMAPPED_RUNTIME_STORE"

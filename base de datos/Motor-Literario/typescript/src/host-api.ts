@@ -3041,8 +3041,7 @@ export class HostEngineApi {
         await store.updateIdeaIfUnchanged(updated, expectedCurrent);
       } else {
         await this.persistNarrativeRecord(
-          updated, expectedCurrent, "idea",
-          projectId => store.loadIdeas(projectId),
+          updated, expectedCurrent,
           record => store.saveIdea(record)
         );
       }
@@ -3056,36 +3055,24 @@ export class HostEngineApi {
   }
 
   /**
-   * Compatibilidad para adaptadores externos anteriores al contrato CAS.
-   * SQLite e IndexedDB siempre usan sus operaciones atómicas; el camino
-   * de lectura-comprobación-escritura solo se utiliza en adaptadores legacy.
+   * SQLite e IndexedDB usan operaciones CAS atómicas. Los adaptadores legacy
+   * conservan el comportamiento de escritura que ofrecían originalmente;
+   * no se anuncia concurrencia atómica cuando no implementan este contrato.
    */
   private async persistNarrativeRecord<T extends { readonly projectId: string; readonly id: string }>(
     updated: T,
     expectedCurrent: T | undefined,
-    label: string,
-    load: (projectId: string) => Promise<readonly T[]>,
     save: (record: T) => Promise<void>,
     saveIfUnchanged?: (record: T, expected?: T) => Promise<void>
   ): Promise<void> {
-    if (saveIfUnchanged) {
-      await saveIfUnchanged(updated, expectedCurrent);
-      return;
-    }
     if (expectedCurrent && (
       expectedCurrent.projectId !== updated.projectId || expectedCurrent.id !== updated.id
     )) {
       throw new Error("La actualización debe conservar la identidad del registro narrativo.");
     }
-    const records = requireProjectScopedRecords(await load(updated.projectId), updated.projectId, label);
-    const current = records.find(record => record.id === updated.id);
-    const unchanged = expectedCurrent === undefined
-      ? current === undefined
-      : current !== undefined && JSON.stringify(current) === JSON.stringify(expectedCurrent);
-    if (!unchanged) {
-      throw new Error(
-        `El registro de ${label} cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarlo.`
-      );
+    if (saveIfUnchanged) {
+      await saveIfUnchanged(updated, expectedCurrent);
+      return;
     }
     await save(updated);
   }
@@ -3100,8 +3087,7 @@ export class HostEngineApi {
     }
     try {
       await this.persistNarrativeRecord(
-        updated, expectedCurrent, "entidad",
-        projectId => store.loadEntities!(projectId),
+        updated, expectedCurrent,
         record => store.saveEntity!(record),
         store.saveEntityIfUnchanged
           ? (record, expected) => store.saveEntityIfUnchanged!(record, expected)
@@ -3123,8 +3109,7 @@ export class HostEngineApi {
     }
     try {
       await this.persistNarrativeRecord(
-        updated, expectedCurrent, "relación",
-        projectId => store.loadRelations!(projectId),
+        updated, expectedCurrent,
         record => store.saveRelation!(record),
         store.saveRelationIfUnchanged
           ? (record, expected) => store.saveRelationIfUnchanged!(record, expected)
@@ -3148,8 +3133,7 @@ export class HostEngineApi {
     }
     try {
       await this.persistNarrativeRecord(
-        updated, expectedCurrent, "acontecimiento",
-        projectId => store.loadEvents!(projectId),
+        updated, expectedCurrent,
         record => store.saveEvent!(record),
         store.saveEventIfUnchanged
           ? (record, expected) => store.saveEventIfUnchanged!(record, expected)
@@ -3174,8 +3158,7 @@ export class HostEngineApi {
     }
     try {
       await this.persistNarrativeRecord(
-        updated, expectedCurrent, "afirmación",
-        projectId => store.loadAssertions!(projectId),
+        updated, expectedCurrent,
         record => store.saveAssertion!(record),
         store.saveAssertionIfUnchanged
           ? (record, expected) => store.saveAssertionIfUnchanged!(record, expected)

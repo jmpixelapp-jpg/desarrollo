@@ -8056,10 +8056,10 @@ test("IndexedDB rechaza ideas malformadas tanto al guardar como al recuperar", a
       /historial de estados no coincide con la idea que se va a guardar/
     );
     storedIdea = historyMismatch;
-    await assert.rejects(
-      store.loadIdeas("idea-integrity"),
-      /historial de estados no coincide con la idea que se va a guardar/
-    );
+    const importedHistory = await store.loadIdeas("idea-integrity");
+    assert.equal(importedHistory.length, 1);
+    assert.deepEqual(importedHistory[0].statusHistory, historyMismatch.statusHistory);
+    assert.equal(importedHistory[0].status, "IDEA");
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;

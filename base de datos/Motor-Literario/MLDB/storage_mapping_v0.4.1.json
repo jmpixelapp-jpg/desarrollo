@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 12,
+  "mapping_version": 11,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 22,
+    "database_version": 21,
     "object_stores": [
       {
         "name": "project-settings",
@@ -604,37 +604,6 @@
             [
               "projectId",
               "relationId",
-              "revision"
-            ],
-            true
-          ]
-        ]
-      },
-      {
-        "name": "event-lifecycles",
-        "keyPath": [
-          "projectId",
-          "id"
-        ],
-        "indexes": [
-          [
-            "by-project",
-            "projectId",
-            false
-          ],
-          [
-            "by-subject",
-            [
-              "projectId",
-              "eventId"
-            ],
-            false
-          ],
-          [
-            "by-subject-revision",
-            [
-              "projectId",
-              "eventId",
               "revision"
             ],
             true
@@ -1341,28 +1310,6 @@
       "implementationStatus": "implemented",
       "objectStores": [
         "relation-lifecycles"
-      ],
-      "keyPath": [
-        [
-          "projectId",
-          "id"
-        ]
-      ]
-    },
-    {
-      "table": "event_lifecycles",
-      "logicalScope": "project",
-      "storageScopes": [
-        "project"
-      ],
-      "keyPrefixes": [
-        "project/event-lifecycles/"
-      ],
-      "representation": "record",
-      "contract": "Historial append-only de cambios explícitos de etiqueta y participantes de acontecimientos, con instantáneas anterior/nueva, revisión consecutiva y escritura atómica junto al registro vigente.",
-      "implementationStatus": "implemented",
-      "objectStores": [
-        "event-lifecycles"
       ],
       "keyPath": [
         [

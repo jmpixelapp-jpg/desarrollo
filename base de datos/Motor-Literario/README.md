@@ -2,29 +2,34 @@
 
 ## Implementación oficial
 
-La implementación definitiva del producto se desarrolla en `typescript/` con TypeScript y JavaScript. Esta es la única línea de implementación que debe ampliarse para el producto.
+La implementación vigente del producto está en `typescript/`, desarrollada en TypeScript y JavaScript. Esta es la única línea que debe ampliarse para el runtime del producto.
 
-- `typescript/src/`: núcleo propio, contratos de integración, monitoreo y análisis.
-- `typescript/src/persistence/`: persistencia local mediante API nativa de la plataforma.
-- `typescript/package.json`: herramientas de compilación y desarrollo.
-- `docs/specifications/`: decisiones y contratos históricos que deben adaptarse a TypeScript antes de considerarse vigentes.
-- `database/legacy/`: formatos y paquetes históricos preservados como referencia.
+- `typescript/src/`: núcleo, contratos de integración, monitoreo, análisis y conocimiento narrativo.
+- `typescript/src/persistence/`: persistencia local mediante IndexedDB nativo.
+- `MLDB/`: esquema lógico versionado y correspondencia del almacenamiento físico.
+- `docs/specifications/`: contratos y decisiones técnicas.
+- `database/legacy/`: formatos históricos preservados como referencia.
 
-## Estado del código Rust anterior
-
-Las carpetas `engine/` y `storage/` contienen un prototipo histórico desarrollado en Rust. No forman parte del runtime definitivo, no deben recibir nuevas funcionalidades del producto y no deben presentarse como implementación final. Sus decisiones de diseño solo pueden utilizarse como referencia para implementaciones propias en TypeScript.
+Las carpetas `engine/` y `storage/` contienen un prototipo histórico en Rust. No forman parte del runtime definitivo y no deben ampliarse como implementación del producto.
 
 ## Principios no negociables
 
 - El motor lingüístico, la corrección, la extracción y el análisis literario son desarrollo propio.
-- No se incorporan motores, bibliotecas especializadas ni servicios externos en tiempo de ejecución.
-- TypeScript/Vite, Capacitor y Electron son herramientas de construcción y empaquetado, no dependencias intelectuales del motor.
+- No se incorporan motores lingüísticos especializados ni servicios externos en tiempo de ejecución.
 - Los manuscritos y el conocimiento de cada obra permanecen localmente y aislados por proyecto.
-- La identidad del proyecto la proporciona la aplicación anfitriona.
+- La aplicación anfitriona proporciona la identidad del proyecto, el título del libro y la identidad autenticada del escritor.
 - El motor analiza y sugiere; nunca modifica el manuscrito por iniciativa propia.
 - El monitoreo continuo del escritor es la prioridad arquitectónica número uno.
 
-## Núcleo TypeScript inicial
+## Base de datos MLDB
+
+La versión lógica vigente es **MLDB 0.4.1**. Define 25 tablas: 24 pertenecen al motor y están implementadas; `projects` pertenece a la aplicación anfitriona y no se duplica en la base narrativa. La correspondencia física declara **31 almacenes IndexedDB**, con versión de base **21**.
+
+La persistencia incluye documentos y journal incremental, diagnósticos por revisión, fragmentos, fichas, nombres y alias, atributos extensibles, relaciones, evidencias, acontecimientos, ocurrencias cronológicas, perfiles de idioma y estilo, diccionarios, sugerencias, autorizaciones de importación, historiales append-only, migraciones y biblioteca personal de ideas por escritor. Las ideas no incorporadas se transfieren con su historial, procedencia y contexto; las incorporadas o descartadas permanecen en el proyecto de origen.
+
+El aislamiento por proyecto y escritor se aplica en claves, índices, validaciones y transacciones. La identidad del proyecto no se inventa en el motor. La especificación de almacenamiento documenta qué datos pertenecen al anfitrión y cuáles al motor.
+
+## Ejecutar y verificar
 
 Desde `typescript/`:
 
@@ -32,10 +37,18 @@ Desde `typescript/`:
 npm install
 npm run typecheck
 npm run build
+npm test
+npm run bench
 ```
 
-La primera entrega TypeScript incluye contratos tipados, admisión de cambios mediante cola acotada, sesiones de documentos con revisión/secuencia, persistencia local IndexedDB y reglas deterministas iniciales de corrección.
+La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. En la ejecución registrada el **25 de noviembre de 2026**, commit `c0f1e011baab6666f06dc9549fcd53a037465440`, todos los pasos terminaron correctamente: **293 pruebas, 284 aprobadas, 0 fallidas y 9 omitidas**.
 
-## Límites actuales
+[Consultar la ejecución de CI](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45562960002).
 
-El núcleo inicial todavía no equivale al producto completo. Faltan pruebas automatizadas amplias, mediciones reales de latencia, recuperación transaccional avanzada, adaptadores nativos específicos, extracción narrativa automática, resolución de entidades, cronología, contradicciones, historial de conocimiento y biblioteca personal de ideas. No utilizar todavía con manuscritos importantes sin copias de seguridad y validación de recuperación.
+El benchmark de CI usa escenarios sintéticos y un adaptador en memoria. Sus latencias no representan mediciones de disco ni sustituyen pruebas en los equipos y adaptadores del programa anfitrión.
+
+## Límites que permanecen
+
+La base de datos y su persistencia están implementadas, pero eso no significa que el motor literario completo esté terminado. Siguen fuera del alcance de la base de datos la comprensión semántica general, la inferencia fiable de acontecimientos y cronologías no explícitos, la resolución literaria completa de contradicciones y la clasificación semántica de afirmaciones que quedaron obsoletas al reescribirse el texto.
+
+También falta validar en el programa anfitrión un ciclo real de copia de seguridad y restauración y medir el comportamiento de IndexedDB en los sistemas objetivo. Hasta completar esa validación externa, se deben mantener copias de seguridad independientes de los manuscritos importantes.

@@ -218,6 +218,11 @@ function requireNarrativeEntityReferences<T extends { readonly projectId: string
 }
 
 
+function isNarrativeIdeaVersionConflict(error: unknown): boolean {
+  return error instanceof Error &&
+    /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
+}
+
 function requireUniquePersonalIdeaEntries(
   entries: unknown,
   writerId: string,
@@ -3026,10 +3031,23 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
+        try {
+          requireNarrativeEntityReferences(
+            ideas, projectId, entities,
+            idea => idea.relatedEntityIds ?? [], "ideas"
+          );
+        } catch (error) {
+          // Un catálogo con vínculos huérfanos no debe convertirse en una caché
+          // aparentemente válida; la siguiente lectura debe consultar el almacén
+          // de nuevo, por si el anfitrión ya corrigió el registro.
+          this.narrativeIdeas.clear();
+          this.ideasLoaded = false;
+          this.narrativeEntities.clear();
+          this.entitiesLoaded = false;
+          this.entityEvidenceIndex = undefined;
+          this.entityNameIndex = undefined;
+          throw error;
+        }
       }
       return cloneNarrativeRecords(ideas);
     });
@@ -3218,12 +3236,15 @@ export class HostEngineApi {
     const maxAttempts = 3;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let loadedIdeasThisAttempt = false;
       if (!this.ideasLoaded) {
         const ideas = requireProjectScopedRecords(
           await store.loadIdeas(projectId), projectId, "ideas"
         );
+        this.narrativeIdeas.clear();
         for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
         this.ideasLoaded = true;
+        loadedIdeasThisAttempt = true;
       }
 
       if (referenceKind === "relatedEntityIds" && (linked || !this.entitiesLoaded)) {
@@ -3239,7 +3260,7 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-      } else if (referenceKind === "relatedIdeaIds" && linked) {
+      } else if (referenceKind === "relatedIdeaIds" && linked && !loadedIdeasThisAttempt) {
         // Las ideas también pueden ser eliminadas por otra instancia. Validar
         // un alta contra el snapshot caliente permitiría crear un vínculo colgante.
         const ideas = requireProjectScopedRecords(
@@ -3292,8 +3313,7 @@ export class HostEngineApi {
         this.narrativeIdeas.set(ideaId, updated);
         return cloneNarrativeRecord(updated);
       } catch (error) {
-        const isVersionConflict = error instanceof Error &&
-          /\bidea\b.*\bcambió en otra instancia\b/iu.test(error.message);
+        const isVersionConflict = isNarrativeIdeaVersionConflict(error);
         if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
 
         // persistIdeaUpdate ya invalida la caché de ideas al fallar el CAS.
@@ -3430,8 +3450,7 @@ export class HostEngineApi {
           this.narrativeIdeas.set(updated.id, updated);
           return cloneNarrativeRecord(updated);
         } catch (error) {
-          const isVersionConflict = error instanceof Error &&
-            /\\bidea\\b.*\\bcambió en otra instancia\\b/iu.test(error.message);
+          const isVersionConflict = isNarrativeIdeaVersionConflict(error);
           if (!isVersionConflict || attempt === maxAttempts - 1) throw error;
           // La siguiente iteración relee la idea completa y conserva las
           // referencias concurrentes y las decisiones editoriales añadidas.
@@ -3926,31 +3945,6 @@ export class HostEngineApi {
 
   getDocumentSyncState(documentId: string) {
     return this.engine.getSyncState(documentId);
-  }
-
-  /**
-   * Asegura una sesión de métricas para un documento ya abierto en el motor.
-   * Es idempotente y permite reanudar el monitoreo después de desmontar/cerrar
-   * una vista sin reabrir el documento ni duplicar su sesión de edición.
-   */
-  ensureLiveAuthorMonitorDocument(documentId: string): LiveAuthorMonitorSnapshot {
-    if (typeof documentId !== "string" || !documentId.trim()) {
-      throw new TypeError("documentId es obligatorio para iniciar el monitoreo.");
-    }
-
-    const existing = this.liveAuthorMonitor.getSnapshot(documentId);
-    if (existing) return existing;
-
-    const snapshot = this.engine.getSnapshot(documentId);
-    const sync = this.engine.getSyncState(documentId);
-    if (!snapshot || !sync) {
-      throw new Error("El documento no está abierto en HostEngineApi: " + documentId + ".");
-    }
-    if (sync.needsResync || sync.pendingSequence !== sync.sequence) {
-      throw new Error("Espera a que el documento quede durable y sincronizado antes de reanudar su monitoreo.");
-    }
-
-    return this.liveAuthorMonitor.openDocument(snapshot, this.requireProject().projectId);
   }
 
   /** Snapshot de actividad en vivo; no incluye texto del manuscrito. */

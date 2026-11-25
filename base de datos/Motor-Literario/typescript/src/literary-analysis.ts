@@ -3302,11 +3302,46 @@ const IDEA_ENGLISH_STOP_WORDS = new Set([
  * o se usa el catálogo heredado; solo se declaran ausentes si el catálogo del
  * proyecto se suministró completo.
  */
+// Memoización de una sola instantánea completa del grafo. La clave incluye
+// todas las propiedades serializables de cada idea, no solo sus referencias.
+let literaryIdeaGraphCacheKey: string | undefined;
+let literaryIdeaGraphCacheValue: LiteraryIdeaGraphAnalysis | undefined;
+
 function buildLiteraryIdeaGraph(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[],
   omittedIdeaCount: number,
   catalogScope: LiteraryIdeaGraphAnalysis["catalogScope"]
 ): LiteraryIdeaGraphAnalysis {
+  // La clave exacta evita invalidaciones manuales: estado, historial, evidencias,
+  // vínculos y texto léxico participan en la identidad de la instantánea.
+  let cacheable = ideas.length <= 2_000;
+  let cacheTextUnits = 0;
+  if (cacheable) {
+    for (const idea of ideas) {
+      if (typeof idea.text === "string") {
+        cacheTextUnits += idea.text.length;
+        if (cacheTextUnits > MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS) {
+          cacheable = false;
+          break;
+        }
+      }
+    }
+  }
+  const cacheKey = cacheable
+    ? JSON.stringify([
+        catalogScope,
+        omittedIdeaCount,
+        [...ideas].sort((left, right) =>
+          left.ideaId.localeCompare(right.ideaId, "en") ||
+          (left.ideaId === right.ideaId ? 0 : left.ideaId < right.ideaId ? -1 : 1)
+        )
+      ])
+    : undefined;
+  if (cacheKey !== undefined && cacheKey === literaryIdeaGraphCacheKey &&
+      literaryIdeaGraphCacheValue) {
+    return structuredClone(literaryIdeaGraphCacheValue);
+  }
+
   // El desempate exacto distingue IDs Unicode que pueden compartir colación lingüística.
   const compareIdeaIds = (left: string, right: string): number => {
     const localizedOrder = left.localeCompare(right, "en");
@@ -3559,7 +3594,7 @@ function buildLiteraryIdeaGraph(
   });
 
   const lexicalResonances = buildLiteraryIdeaLexicalResonances(orderedIdeas);
-  return {
+  const result: LiteraryIdeaGraphAnalysis = {
     lexicalResonances,
     catalogScope,
     projectCatalogComplete,
@@ -3589,6 +3624,14 @@ function buildLiteraryIdeaGraph(
     references,
     cycles: cycles.slice(0, MAX_IDEA_GRAPH_CYCLE_SAMPLES)
   };
+  if (cacheKey !== undefined) {
+    literaryIdeaGraphCacheKey = cacheKey;
+    literaryIdeaGraphCacheValue = structuredClone(result);
+  } else {
+    literaryIdeaGraphCacheKey = undefined;
+    literaryIdeaGraphCacheValue = undefined;
+  }
+  return result;
 }
 
 /**
@@ -3596,9 +3639,39 @@ function buildLiteraryIdeaGraph(
  * El filtro de frecuencia usa el 40% del catálogo, con mínimo dos y máximo
  * cuarenta ideas, para adaptarse tanto a libros pequeños como a catálogos amplios.
  */
+// Caché de una sola instantánea: la clave conserva exactamente los campos léxicos
+// relevantes y el resultado almacenado nunca se expone directamente al consumidor.
+let literaryIdeaLexicalResonanceCacheKey: string | undefined;
+let literaryIdeaLexicalResonanceCacheValue: LiteraryIdeaLexicalResonanceAnalysis | undefined;
+
 function buildLiteraryIdeaLexicalResonances(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[]
 ): LiteraryIdeaLexicalResonanceAnalysis {
+  // La clave es exacta (no un hash): un cambio de texto, ID, orden o estado
+  // de omisión invalida la entrada sin depender de probabilidades de colisión.
+  let cacheable = ideas.length <= 2_000;
+  let cacheKey = "";
+  let cacheTextUnits = 0;
+  if (cacheable) {
+    for (const idea of ideas) {
+      const text = typeof idea.text === "string" ? idea.text : undefined;
+      if (text !== undefined) {
+        cacheTextUnits += text.length;
+        if (cacheTextUnits > MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS) {
+          cacheable = false;
+          break;
+        }
+      }
+      cacheKey += `${idea.ideaId.length}:${idea.ideaId}`;
+      cacheKey += idea.textOmitted === "budget" ? "B" : text === undefined
+        ? "N" : `T${text.length}:${text}`;
+    }
+  }
+  if (cacheable && cacheKey === literaryIdeaLexicalResonanceCacheKey &&
+      literaryIdeaLexicalResonanceCacheValue) {
+    return structuredClone(literaryIdeaLexicalResonanceCacheValue);
+  }
+
   const compareTerms = (left: string, right: string): number => {
     const localized = left.localeCompare(right, "es");
     return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
@@ -3800,7 +3873,7 @@ function buildLiteraryIdeaLexicalResonances(
     };
   });
 
-  return {
+  const result: LiteraryIdeaLexicalResonanceAnalysis = {
     inputIdeaCount: ideas.length,
     analyzedIdeaCount: prepared.length,
     ideasWithoutTextCount,
@@ -3817,6 +3890,14 @@ function buildLiteraryIdeaLexicalResonances(
     ),
     resonances
   };
+  if (cacheable) {
+    literaryIdeaLexicalResonanceCacheKey = cacheKey;
+    literaryIdeaLexicalResonanceCacheValue = structuredClone(result);
+  } else {
+    literaryIdeaLexicalResonanceCacheKey = undefined;
+    literaryIdeaLexicalResonanceCacheValue = undefined;
+  }
+  return result;
 }
 
 function buildCharacterNarrativeTrajectories(

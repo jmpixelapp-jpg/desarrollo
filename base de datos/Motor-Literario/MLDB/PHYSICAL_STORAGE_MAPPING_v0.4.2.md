@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `22` (manifiesto físico, mapping version `12`).
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `23` (manifiesto físico, mapping version `13`).
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -20,6 +20,7 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `narrative-events` | `[projectId, id]` | `by-project` | Acontecimientos y referencias temporales explícitas |
 | `narrative-ideas` | `[projectId, id]` | `by-project` | Ideas del libro, estado e historial |
 | `personal-idea-library` | `[writerId, sourceProjectId, idea.id]` | `by-writer`, `by-writer-source`, `by-source-project` | Ideas no incorporadas archivadas con contexto |\n| `writer-library-finalization-receipts` | `[writerId, sourceProjectId, receiptId]` | `by-writer`, `by-writer-source` | Recibos idempotentes de transferencia final de ideas |
+| `writer-library-versions` | `writerId` | — | Contador durable monotónico por escritor para invalidar cursores obsoletos de biblioteca |
 | `narrative-assertions` | `[projectId, id]` | `by-project`, `by-entity` | Afirmaciones históricas explícitas |
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
 | `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |
@@ -41,6 +42,8 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `record-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de fichas |
 | `relation-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de relaciones |
 | `event-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de etiqueta y participantes de acontecimientos |
+
+`writer-library-versions` es un almacén técnico auxiliar, no una tabla narrativa adicional: conserva una versión creciente por escritor y se actualiza en la misma transacción que archiva ideas o cambia sus snapshots por consolidación de entidades. Los cursores de la biblioteca incluyen esa versión; si cambia entre páginas, la API devuelve `restartRequired` para que el anfitrión comience de nuevo desde la primera página.
 
 Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()`. Las lecturas deben esperar a que complete su transacción readonly; las colecciones y registros se validan antes de incorporarse a la API o a sus cachés.
 

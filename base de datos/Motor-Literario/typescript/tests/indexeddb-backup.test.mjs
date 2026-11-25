@@ -530,3 +530,68 @@ test("una restauración abortada no notifica cambios ni invalida otras instancia
     else delete globalThis.BroadcastChannel;
   }
 });
+
+test("rechaza restaurar IndexedDB si una idea archivada cambió aunque se recalcule el checksum exterior", async () => {
+  const hash = serialized => {
+    let value = 0xcbf29ce484222325n;
+    for (let index = 0; index < serialized.length; index++) {
+      value ^= BigInt(serialized.charCodeAt(index));
+      value = BigInt.asUintN(64, value * 0x100000001b3n);
+    }
+    return "fnv1a64:" + value.toString(16).padStart(16, "0");
+  };
+  const ids = [archivedIdea.idea.id];
+  const receipt = {
+    writerId: archivedIdea.writerId,
+    sourceProjectId: archivedIdea.sourceProjectId,
+    receiptId: "finalization-v1",
+    sourceProjectName: archivedIdea.sourceProjectName,
+    finalizedAt: 20,
+    archivedIdeaIds: ids,
+    archiveChecksum: hash(JSON.stringify([...ids].sort())),
+    archiveContentChecksum: hash(JSON.stringify([archivedIdea]))
+  };
+  const oldDocument = {
+    ...documentRecord,
+    projectId: "preserved-before-corrupt-restore",
+    text: "El contenido local que debe conservarse."
+  };
+  const source = attach(createFakeDatabase({
+    documents: [documentRecord],
+    "personal-idea-library": [archivedIdea],
+    "writer-library-finalization-receipts": [receipt]
+  }));
+  const currentDatabase = createFakeDatabase({
+    documents: [oldDocument],
+    "personal-idea-library": [],
+    "writer-library-finalization-receipts": []
+  });
+  const target = attach(currentDatabase);
+  try {
+    const valid = await source.exportDatabaseBackup();
+    const tampered = clone(valid);
+    tampered.stores["personal-idea-library"][0].idea.text =
+      "Contenido cambiado manteniendo los identificadores originales.";
+    const payload = {
+      format: tampered.format,
+      formatVersion: tampered.formatVersion,
+      databaseVersion: tampered.databaseVersion,
+      createdAt: tampered.createdAt,
+      stores: tampered.stores
+    };
+    // El checksum exterior es correcto: el rechazo debe provenir del recibo
+    // que detecta la alteración de la entrada de biblioteca.
+    tampered.checksum = hash(JSON.stringify(payload));
+
+    await assert.rejects(
+      target.restoreDatabaseBackup(tampered),
+      /checksum del contenido archivado/u
+    );
+    assert.deepEqual(currentDatabase.state.get("documents"), [oldDocument]);
+    assert.deepEqual(currentDatabase.state.get("personal-idea-library"), []);
+    assert.deepEqual(currentDatabase.state.get("writer-library-finalization-receipts"), []);
+  } finally {
+    source.database = undefined;
+    target.database = undefined;
+  }
+});

@@ -5,7 +5,12 @@ import { HostEngineApi, IndexedDbProjectStore } from "../dist/motor-literario.js
 const clone = value => structuredClone(value);
 
 function createFakeDatabase(initialStores, options = {}) {
-  const state = new Map(Object.entries(initialStores).map(([name, records]) => [name, clone(records)]));
+  const schemaStores = {
+    "personal-idea-library": [],
+    "writer-library-finalization-receipts": [],
+    ...initialStores
+  };
+  const state = new Map(Object.entries(schemaStores).map(([name, records]) => [name, clone(records)]));
   return {
     version: 22,
     objectStoreNames: [...state.keys()],

@@ -584,6 +584,7 @@ export interface LiteraryCharacterProjectEventTimeline {
   readonly sourceEventCount: number;
   readonly timedEventCount: number;
   readonly untimedEventCount: number;
+  readonly unverifiedEventCount: number;
   readonly staleEventCount: number;
   readonly staleEvidenceCount: number;
   readonly pointCount: number;
@@ -2887,6 +2888,7 @@ function buildCharacterProjectEventTimeline(
   let sourceEventCount = 0;
   let timedEventCount = 0;
   let untimedEventCount = 0;
+  let unverifiedEventCount = 0;
   let staleEventCount = 0;
   let staleEvidenceCount = 0;
 
@@ -2900,6 +2902,7 @@ function buildCharacterProjectEventTimeline(
     staleEvidenceCount += eventStaleEvidenceCount;
     if (totalActiveEvidenceCount === 0) {
       if (eventStaleEvidenceCount > 0) staleEventCount++;
+      else unverifiedEventCount++;
       continue;
     }
     if (!event.timeReference) {
@@ -3002,6 +3005,7 @@ function buildCharacterProjectEventTimeline(
     sourceEventCount,
     timedEventCount,
     untimedEventCount,
+    unverifiedEventCount,
     staleEventCount,
     staleEvidenceCount,
     pointCount:allPoints.length,
@@ -4764,7 +4768,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La evolución de atributos compara afirmaciones explícitas de edad, ubicación y rol en escenas de la misma revisión del documento analizado. Solo los cambios entre valores únicos se clasifican como changed-value; varios valores en una escena o la falta de afirmación no se resuelven como contradicción ni como continuidad.",
       "La cronología de atributos entre capítulos compara únicamente referencias temporales explícitas con la misma base y precisión; las afirmaciones sin fecha comparable no se ordenan. Varios valores asociados al mismo punto temporal se conservan como multiple-values-at-same-time, y una fecha explícita no demuestra causalidad ni resuelve contradicciones.",
       "Las dependencias entre acontecimientos son candidatos basados en dos evidencias vigentes de la misma oración y en conectores causales literales reconocidos. La dirección se orienta según el patrón del conector, pero no demuestra causalidad, suficiencia explicativa ni una secuencia completa; requiere revisión editorial.",
-      "Las trayectorias narrativas consolidan por ID atributos, asociaciones de participante y candidatos causales expuestos; los límites de perfiles y escenas se informan por separado. Una trayectoria sin evidencia en una escena no prueba ausencia en la ficción ni describe por sí sola un arco psicológico. Las relaciones causales conservan el estado candidate-needs-review."
+      "Las trayectorias narrativas consolidan por ID atributos, asociaciones de participante y candidatos causales expuestos; los límites de perfiles y escenas se informan por separado. Una trayectoria sin evidencia en una escena no prueba ausencia en la ficción ni describe por sí sola un arco psicológico. Las relaciones causales conservan el estado candidate-needs-review.",
+      "La cronología global de acontecimientos usa la lista actual de participantes y fechas explícitas de las fichas del proyecto. No reconstruye listas históricas de participantes a partir de menciones, no ordena eventos sin tiempo comparable y no cruza transiciones entre pistas temporales no declaradas."
     ]
   };
 }

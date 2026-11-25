@@ -277,6 +277,11 @@ export function validateEventLifecycle(
   }
   validateEventLifecycleParticipants(item.previousParticipants,"participantes anteriores");
   validateEventLifecycleParticipants(item.newParticipants,"participantes nuevos");
+  const participantsChanged=item.previousParticipants.length!==item.newParticipants.length ||
+    !item.previousParticipants.every((id,index)=>id===item.newParticipants[index]);
+  if(item.previousLabel===item.newLabel && !participantsChanged) {
+    throw new Error("Una transición de acontecimiento debe cambiar la etiqueta o el conjunto de participantes.");
+  }
 }
 
 export function cloneEventLifecycle(item: EventLifecycle): EventLifecycle {

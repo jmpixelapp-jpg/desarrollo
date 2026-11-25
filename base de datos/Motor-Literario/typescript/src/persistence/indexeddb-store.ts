@@ -4,9 +4,11 @@ import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea,
 import type { NarrativeAssertion } from "../narrative-history";
 import type { ProjectDictionary, DictionaryEntry } from "../dictionaries";
 import { validateProjectDictionary, validateDictionaryEntry } from "../dictionaries";
+import type { ProjectSetting } from "../project-data";
+import { cloneProjectSetting, validateProjectSetting } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 13;
+const DATABASE_VERSION = 14;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -22,6 +24,7 @@ const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
 const DICTIONARIES = "project-dictionaries";
 const DICTIONARY_ENTRIES = "dictionary-entries";
+const PROJECT_SETTINGS = "project-settings";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -780,6 +783,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           return;
         }
         const db = request.result;
+        if (!db.objectStoreNames.contains(PROJECT_SETTINGS)) {
+          const settings = db.createObjectStore(PROJECT_SETTINGS, {
+            keyPath: ["projectId", "key"]
+          });
+          settings.createIndex("by-project", "projectId", { unique: false });
+        }
         if (!db.objectStoreNames.contains(DOCUMENTS)) {
           const store = db.createObjectStore(DOCUMENTS, { keyPath: ["projectId", "documentId"] });
           store.createIndex("by-project", "projectId", { unique: false });
@@ -887,6 +896,7 @@ export class IndexedDbProjectStore implements ProjectStore {
           }
           store.createIndex(indexName, keyPath, { unique });
         };
+        ensureIndex(PROJECT_SETTINGS, "by-project", "projectId");
         ensureIndex(DOCUMENTS, "by-project", "projectId");
         ensureIndex(CHANGES, CHANGE_INDEX, ["projectId", "documentId", "sequence"], true);
         ensureIndex(ENTITIES, "by-project", "projectId");
@@ -947,6 +957,80 @@ export class IndexedDbProjectStore implements ProjectStore {
 
 
   /** Crea o actualiza un diccionario. Las actualizaciones usan comparación optimista. */
+  async loadProjectSettings(projectId: string): Promise<readonly ProjectSetting[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para cargar configuraciones.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(PROJECT_SETTINGS, "readonly");
+    const request = transaction.objectStore(PROJECT_SETTINGS).index("by-project").getAll(projectId);
+    const settings = await readAfterTransaction(
+      transaction, request, "No se pudieron recuperar las configuraciones del proyecto."
+    ) as ProjectSetting[];
+    if (!Array.isArray(settings)) {
+      throw new Error("La colección de configuraciones del proyecto no es válida.");
+    }
+    const keys = new Set<string>();
+    for (const setting of settings) {
+      validateProjectSetting(setting, projectId);
+      if (keys.has(setting.key)) {
+        throw new Error("Integridad de configuraciones: hay claves duplicadas dentro del proyecto.");
+      }
+      keys.add(setting.key);
+    }
+    return settings.map(cloneProjectSetting);
+  }
+
+  async saveProjectSetting(
+    setting: ProjectSetting,
+    expectedCurrent?: ProjectSetting
+  ): Promise<void> {
+    validateProjectSetting(setting);
+    if (expectedCurrent) {
+      validateProjectSetting(expectedCurrent, setting.projectId);
+      if (expectedCurrent.key !== setting.key) {
+        throw new Error("La actualización de configuración debe conservar la clave original.");
+      }
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(PROJECT_SETTINGS, "readwrite");
+      const store = transaction.objectStore(PROJECT_SETTINGS);
+      const request = store.get([setting.projectId, setting.key]);
+      let conflict = false;
+      let failure: unknown;
+      request.onsuccess = () => {
+        try {
+          const current = request.result as ProjectSetting | undefined;
+          if (expectedCurrent) {
+            if (!current || current.projectId !== setting.projectId ||
+                current.key !== setting.key ||
+                JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+              conflict = true;
+              throw new Error("La configuración cambió en otra instancia; vuelve a leerla antes de actualizar.");
+            }
+          } else if (current) {
+            conflict = true;
+            throw new Error("La configuración ya existe; vuelve a leerla antes de actualizar.");
+          }
+          store.put(cloneProjectSetting(setting));
+        } catch (error) {
+          failure = error;
+          try { transaction.abort(); } catch { /* la transacción ya está abortada */ }
+        }
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo verificar la configuración actual.");
+        try { transaction.abort(); } catch { /* la transacción ya está abortada */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar la configuración."));
+      transaction.onabort = () => reject(failure ?? (conflict
+        ? new Error("Conflicto al guardar la configuración del proyecto.")
+        : transaction.error ?? new Error("Se canceló el guardado de la configuración.")));
+    });
+  }
+
   async saveDictionary(
     dictionary: ProjectDictionary,
     expectedCurrent?: ProjectDictionary

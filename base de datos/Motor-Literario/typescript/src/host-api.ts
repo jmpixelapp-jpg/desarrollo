@@ -1586,13 +1586,16 @@ export class HostEngineApi {
           }))
       };
     });
-    const projectIdeas = this.store.loadIdeas
+    const projectIdeaCatalogAvailable = Boolean(this.store.loadIdeas);
+    const projectIdeas = projectIdeaCatalogAvailable
       ? await this.getNarrativeIdeas()
       : [];
     const orderedProjectIdeas = [...projectIdeas].sort((a,b) => a.id.localeCompare(b.id,"en"));
-    const knownProjectIdeasOmittedCount = Math.max(0,orderedProjectIdeas.length-2_000);
-    const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] = orderedProjectIdeas
-      .slice(0,2_000).map(idea => {
+    const knownProjectIdeasOmittedCount = projectIdeaCatalogAvailable
+      ? Math.max(0,orderedProjectIdeas.length-2_000)
+      : 0;
+    const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] | undefined =
+      projectIdeaCatalogAvailable ? orderedProjectIdeas.slice(0,2_000).map(idea => {
         const activeEvidence = idea.evidence.filter(evidence => evidence.status !== "stale");
         const statusHistory = idea.statusHistory ?? [
           {status:idea.status,reason:"initial" as const}
@@ -1608,7 +1611,7 @@ export class HostEngineApi {
           writerDecisionCount:statusHistory.filter(change => change.reason==="writer").length,
           omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
         };
-      });
+      }) : undefined;
     const linkedIdeas = orderedProjectIdeas
       .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)));
     const knownIdeasOmittedCount=Math.max(0,linkedIdeas.length-2_000);

@@ -10863,6 +10863,10 @@ test("conserva el conteo total de evidencia cuando sus rangos se limitan a veint
   assert.equal(result.characterEventEvidenceProfiles.sourceTruncatedSceneCount,0);
   assert.equal(result.characterEventEvidenceProfiles.profiles[0].canonicalName,null);
   assert.equal(result.characterEventEvidenceProfiles.profiles[0].totalEvidenceRangeCount,25);
+  assert.equal(result.sceneEventEvidenceProfiles.profiles[0].totalEvidenceRangeCount,25);
+  assert.deepEqual(result.sceneEventEvidenceProfiles.profiles[0].scenes,[
+    {sceneIndex:1,evidenceRangeCount:25,evidenceSamplesTruncated:true}
+  ]);
 });
 
 test("informa escenas con más de cien acontecimientos enlazados y perfiles omitidos", async () => {
@@ -10891,6 +10895,50 @@ test("informa escenas con más de cien acontecimientos enlazados y perfiles omit
   assert.equal(result.characterEventEvidenceProfiles.characterCount,3);
   assert.equal(result.characterEventEvidenceProfiles.eventCount,100);
   assert.equal(result.characterEventEvidenceProfiles.profiles.length,200);
+  assert.equal(result.sceneEventEvidenceProfiles.sourceTruncatedSceneCount,1);
+  assert.deepEqual(result.sceneEventEvidenceProfiles.sourceTruncatedSceneIndexes,[1]);
+  assert.equal(result.sceneEventEvidenceProfiles.eventCount,100);
+  assert.equal(result.sceneEventEvidenceProfiles.profiles.length,100);
+});
+
+test("limita a cien perfiles globales sin confundirlos con el tope por escena", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","La señal inicial quedó registrada.","***",
+    "ESCENA 2","La señal final apareció."
+  ].join("\\n");
+  const evidenceFor = excerpt => {
+    const start = text.indexOf(excerpt);
+    assert.notEqual(start,-1);
+    return {documentId:"chapter",revision:4,start,end:start+excerpt.length,excerpt};
+  };
+  const knownEvents = [
+    ...Array.from({length:100},(_,index) => ({
+      eventId:"event-"+String(index).padStart(3,"0"),
+      label:"Evento "+index,
+      participants:[],
+      evidence:[evidenceFor("La señal inicial quedó registrada.")]
+    })),
+    {
+      eventId:"event-100",label:"Evento 100",participants:[],
+      evidence:[evidenceFor("La señal final apareció.")]
+    }
+  ];
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-event-profile-limit",documentId:"chapter",revision:4,text,knownEvents
+  });
+
+  assert.equal(result.explicitScenes[0].eventLinks.length,100);
+  assert.equal(result.explicitScenes[0].eventLinksTruncated,false);
+  assert.equal(result.explicitScenes[1].eventLinks.length,1);
+  assert.equal(result.explicitScenes[1].eventLinksTruncated,false);
+  assert.equal(result.sceneEventEvidenceProfiles.eventCount,101);
+  assert.equal(result.sceneEventEvidenceProfiles.omittedEventCount,1);
+  assert.equal(result.sceneEventEvidenceProfiles.profiles.length,100);
+  assert.deepEqual(
+    result.sceneEventEvidenceProfiles.profiles.map(profile => profile.eventId),
+    Array.from({length:100},(_,index) => "event-"+String(index).padStart(3,"0"))
+  );
 });
 
 test("agrega patrones de co-mención de personajes por escena sin inferir relaciones", async () => {

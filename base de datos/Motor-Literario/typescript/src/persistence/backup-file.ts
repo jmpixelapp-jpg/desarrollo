@@ -85,7 +85,7 @@ export function downloadIndexedDbBackupFile(
   try {
     link = document.createElement("a");
     link.href = objectUrl;
-    link.download = /\\.json$/iu.test(safeFilename) ? safeFilename : `${safeFilename}.json`;
+    link.download = /\.json$/iu.test(safeFilename) ? safeFilename : `${safeFilename}.json`;
     link.hidden = true;
 
     const parent = document.body ?? document.documentElement;

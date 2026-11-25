@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `11`.
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `13`.
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -48,16 +48,16 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `schema_migrations` | Versión nativa de IndexedDB y migraciones `onupgradeneeded` | Parcial; sin tabla de historial separada |
 | `project_dictionaries` | `project-dictionaries` | Implementado; unicidad por proyecto, idioma y nombre normalizado |
 | `dictionary_entries` | `dictionary-entries` | Implementado; actualización comparada y forma normalizada única |
-| `dictionary_entry_entities` | `DictionaryEntry.relatedEntityIds` embebido | Implementado; referencias verificadas transaccionalmente dentro del libro |
+| `dictionary_entry_entities` | `DictionaryEntryRecord.relatedEntityIds` / `DictionaryEntry.relatedEntityIds` embebido | Implementado; referencias verificadas transaccionalmente dentro del libro |
 | `record_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
 | `relation_lifecycles` | Prefijo reservado | Pendiente de historial de estado/etiqueta |
 | `writer_library_ideas` | `personal-idea-library` | Implementado con transacción de transferencia |
-| `writer_library_finalization_receipts` | Prefijo reservado | Parcial; transferencia transaccional, recibo separado pendiente |
+| `writer_library_finalization_receipts` | `writer-library-finalization-receipts` | Implementado; recibo idempotente con checksum y transferencia en la misma transacción |
 
 El archivo `storage_mapping_v0.4.1.json` es la fuente verificable del mapeo: contiene todas las tablas, el ámbito lógico, el ámbito físico, prefijos, representación, contrato TypeScript y estado de implementación. El validador falla cuando falta una tabla, hay una tabla extra, se repite una entrada o el ámbito/contrato/representación es inválido.
 
 ## Límites que no deben ocultarse
 
-El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. No se debe presentar la base como lista para persistir diccionarios, perfiles lingüísticos, perfiles de estilo, autorizaciones de importación ni ciclos de vida completos hasta añadir sus contratos TypeScript, object stores, migraciones, operaciones transaccionales y pruebas.
+El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. No se debe presentar la base como lista para persistir perfiles lingüísticos, perfiles de estilo, autorizaciones de importación ni ciclos de vida completos hasta añadir sus contratos TypeScript, object stores, migraciones, operaciones transaccionales y pruebas.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.

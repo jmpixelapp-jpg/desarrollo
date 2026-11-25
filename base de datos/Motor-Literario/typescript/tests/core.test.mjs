@@ -12582,3 +12582,72 @@ test("limita las muestras de tramos del flujo sin truncar sus métricas", async 
   assert.equal(flow.runs[39].runIndex,40);
   assert.equal(flow.runs[39].fromParagraphIndex,40);
 });
+
+test("la API incorpora afirmaciones almacenadas a la evolución de atributos entre escenas", async () => {
+  const store = new MemoryStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "literary-attribute-api", projectName: "Atributos" });
+  const text = [
+    "Escena 1",
+    "Ana cruzó el patio al amanecer.",
+    "Escena 2",
+    "Ana regresó por la puerta norte."
+  ].join("\n");
+  await store.saveEntity({
+    projectId: "literary-attribute-api",
+    id: "ana",
+    kind: "character",
+    canonicalName: "Ana",
+    normalizedName: "ana",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  });
+  const first = "Ana cruzó el patio al amanecer.";
+  const second = "Ana regresó por la puerta norte.";
+  const firstStart = text.indexOf(first);
+  const secondStart = text.indexOf(second);
+  await store.saveAssertion({
+    projectId: "literary-attribute-api",
+    id: "ana-age-20",
+    entityId: "ana",
+    entityName: "Ana",
+    attribute: "age",
+    value: 20,
+    evidence: {
+      documentId: "chapter",
+      revision: 0,
+      start: firstStart,
+      end: firstStart + first.length,
+      excerpt: first
+    },
+    capturedAt: 1
+  });
+  await store.saveAssertion({
+    projectId: "literary-attribute-api",
+    id: "ana-age-21",
+    entityId: "ana",
+    entityName: "Ana",
+    attribute: "age",
+    value: 21,
+    evidence: {
+      documentId: "chapter",
+      revision: 0,
+      start: secondStart,
+      end: secondStart + second.length,
+      excerpt: second
+    },
+    capturedAt: 2
+  });
+  await api.openDocument({ documentId: "chapter", text, revision: 0, sequence: 0 });
+  const result = await api.analyzeLiteraryDocument("chapter");
+  const profile = result.characterAttributeEvolution.profiles.find(item =>
+    item.entityId === "ana" && item.attribute === "age"
+  );
+
+  assert.ok(profile);
+  assert.deepEqual(profile.scenes.map(item => item.values), [[20], [21]]);
+  assert.equal(profile.transitions[0].status, "changed-value");
+});

@@ -5613,8 +5613,11 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     if (idea.text !== undefined) return idea;
     const knownText = knownIdeaTextById.get(idea.ideaId);
     if (knownText === undefined) return idea;
-    const { textOmitted: _textOmitted, ...ideaWithoutTextOmission } = idea;
-    return { ...ideaWithoutTextOmission, text: knownText };
+    if ("textOmitted" in idea) {
+      const { textOmitted: _textOmitted, ...ideaWithoutTextOmission } = idea;
+      return { ...ideaWithoutTextOmission, text: knownText };
+    }
+    return { ...idea, text: knownText };
   });
   const usesProjectIdeaCatalog = input.knownProjectIdeas !== undefined;
   const graphOmittedIdeaCount = usesProjectIdeaCatalog

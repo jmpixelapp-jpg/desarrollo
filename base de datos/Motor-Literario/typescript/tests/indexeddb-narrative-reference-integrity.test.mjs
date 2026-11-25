@@ -18,6 +18,13 @@ const entity = {
   extractionVersion: 1
 };
 
+const targetEntity = {
+  ...entity,
+  id: "entity-target",
+  canonicalName: "Mateo",
+  normalizedName: "mateo"
+};
+
 const relation = (extra = {}) => ({
   projectId,
   id: "relation-origin-target",
@@ -71,18 +78,21 @@ test("IndexedDB valida referencias de relaciones, acontecimientos y afirmaciones
   const store = new IndexedDbProjectStore();
 
   try {
+    await store.saveEntity(entity);
+
     await assert.rejects(store.saveRelation(relation()), /Referencia narrativa inválida/);
     await assert.rejects(store.saveEvent(event()), /Referencia narrativa inválida/);
     await assert.rejects(store.saveAssertion(assertion()), /Referencia narrativa inválida/);
 
+    assert.deepEqual(await store.loadEntities(projectId), [entity]);
     assert.deepEqual(await store.loadRelations(projectId), []);
     assert.deepEqual(await store.loadEvents(projectId), []);
     assert.deepEqual(await store.loadAssertions(projectId), []);
 
-    await store.saveEntity(entity);
+    await store.saveEntity(targetEntity);
 
-    const validRelation = relation({ toEntityId: entity.id });
-    const validEvent = event({ participants: [entity.id] });
+    const validRelation = relation({ toEntityId: targetEntity.id });
+    const validEvent = event({ participants: [entity.id, targetEntity.id] });
     const validAssertion = assertion({ entityId: entity.id });
 
     await store.saveRelation(validRelation);

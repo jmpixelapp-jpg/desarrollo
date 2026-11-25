@@ -3234,10 +3234,11 @@ export class HostEngineApi {
             summary.sourceProjectName !== project.projectName ||
             !Number.isSafeInteger(summary.archivedCount) || summary.archivedCount < 0 ||
             !Number.isFinite(summary.finalizedAt) || summary.finalizedAt < 0 ||
-            typeof summary.archiveChecksum !== "string" || !summary.archiveChecksum.trim()) {
+            typeof summary.archiveChecksum !== "string" || !summary.archiveChecksum.trim() ||
+            typeof summary.alreadyFinalized !== "boolean") {
           throw new Error("Integridad de biblioteca: el resumen de finalización es inválido.");
         }
-        if (summary.archivedCount > 0) {
+        if (!summary.alreadyFinalized && summary.archivedCount > 0) {
           try { this.onPersonalIdeaLibraryChanged?.(writerId); } catch (error) {
             this.onKnowledgeError?.(error);
           }

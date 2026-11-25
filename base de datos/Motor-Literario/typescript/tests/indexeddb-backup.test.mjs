@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { IndexedDbProjectStore } from "../dist/motor-literario.js";
+import { HostEngineApi, IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 const clone = value => structuredClone(value);
 
@@ -247,5 +247,31 @@ test("rechaza restaurar un respaldo de una versión de esquema diferente", async
     assert.deepEqual(database.state.get("documents"), [documentRecord]);
   } finally {
     store.database = undefined;
+  }
+});
+
+test("la capacidad de backup integral solo se anuncia cuando ambos métodos están disponibles", () => {
+  const store = attach(createFakeDatabase({
+    documents: [],
+    "personal-idea-library": []
+  }));
+  const api = new HostEngineApi({ store });
+  try {
+    assert.equal(api.getCapabilities().fullDatabaseBackupRestore, true);
+  } finally {
+    api.dispose();
+    store.database = undefined;
+  }
+
+  const legacyStore = {
+    async saveDocument() {},
+    async loadDocument() { return undefined; },
+    async loadDocumentWithChanges() { return { document: undefined, changes: [] }; }
+  };
+  const legacyApi = new HostEngineApi({ store: legacyStore });
+  try {
+    assert.equal(legacyApi.getCapabilities().fullDatabaseBackupRestore, false);
+  } finally {
+    legacyApi.dispose();
   }
 });

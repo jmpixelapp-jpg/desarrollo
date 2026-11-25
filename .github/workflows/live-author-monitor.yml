@@ -1,0 +1,45 @@
+name: Live Author Monitor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "base de datos/Motor-Literario/typescript/src/live-author-monitor*.ts"
+      - "base de datos/Motor-Literario/typescript/src/host-api.ts"
+      - "base de datos/Motor-Literario/typescript/src/contracts.ts"
+      - "base de datos/Motor-Literario/typescript/src/engine.ts"
+      - "base de datos/Motor-Literario/typescript/tests/live-author-monitor*.test.mjs"
+      - ".github/workflows/live-author-monitor.yml"
+  pull_request:
+    paths:
+      - "base de datos/Motor-Literario/typescript/src/live-author-monitor*.ts"
+      - "base de datos/Motor-Literario/typescript/src/host-api.ts"
+      - "base de datos/Motor-Literario/typescript/src/contracts.ts"
+      - "base de datos/Motor-Literario/typescript/src/engine.ts"
+      - "base de datos/Motor-Literario/typescript/tests/live-author-monitor*.test.mjs"
+      - ".github/workflows/live-author-monitor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-author-monitor:
+    name: Build and test live author monitor
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "base de datos/Motor-Literario/typescript"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install development tools
+        run: npm install --no-audit --no-fund
+      - name: Build runtime bundle
+        run: npx vite build
+      - name: Run monitor-specific tests
+        run: node --test tests/live-author-monitor*.test.mjs

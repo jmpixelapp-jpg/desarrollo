@@ -134,3 +134,33 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
   assert.equal(store.writes, 1);
   api.dispose();
 });
+
+test("limita a tres intentos los conflictos CAS consecutivos y conserva las escrituras externas", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-local"),
+    idea("idea-concurrent-1"), idea("idea-concurrent-2"), idea("idea-concurrent-3")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  const concurrentIds = ["idea-concurrent-1", "idea-concurrent-2", "idea-concurrent-3"];
+  let conflictIndex = 0;
+  const queueConflict = () => {
+    store.onNextConflict = current => {
+      const targetId = concurrentIds[conflictIndex++];
+      if (conflictIndex < concurrentIds.length) queueConflict();
+      return { ...current, relatedIdeaIds: [...current.relatedIdeaIds, targetId] };
+    };
+  };
+  queueConflict();
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-local", true),
+    /La idea cambió en otra instancia/
+  );
+  const persisted = store.ideas.get(projectId + ":idea-source");
+  assert.deepEqual(persisted.relatedIdeaIds, concurrentIds);
+  assert.equal(persisted.relatedIdeaIds.includes("idea-local"), false);
+  assert.equal(store.writes, 3);
+  api.dispose();
+});

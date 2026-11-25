@@ -5,12 +5,15 @@ import type { NarrativeAssertion } from "../narrative-history";
 import type { ProjectDictionary, DictionaryEntry } from "../dictionaries";
 import { validateProjectDictionary, validateDictionaryEntry } from "../dictionaries";
 import type {
-  ProjectRecord, RecordName, ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
+  ProjectRecord, RecordName, ProjectRelation, ProjectEvidence, TimelineOccurrence, EvidenceSubjectKind,
+  ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
   ImportAuthorization, SchemaMigration
 } from "../mldb-records";
 import {
   validateProjectRecord as validateProjectRecordContract,
-  validateRecordName, validateManuscriptFragment,
+  validateRecordName, validateProjectRelation, validateProjectEvidence, validateTimelineOccurrence,
+  cloneProjectRelation, cloneProjectEvidence, cloneTimelineOccurrence,
+  validateManuscriptFragment,
   validateRecordAttribute, validateRelationAttribute, validateActiveSuggestion,
   validateImportAuthorization, validateSchemaMigration,
   cloneProjectRecord, cloneRecordName, cloneManuscriptFragment, cloneRecordAttribute,
@@ -57,6 +60,9 @@ const IMPORT_AUTHORIZATIONS = "import-authorizations";
 const SCHEMA_MIGRATIONS = "schema-migrations";
 const PROJECT_RECORDS = "project-records";
 const RECORD_NAMES = "record-names";
+const PROJECT_RELATIONS = "project-relations";
+const PROJECT_EVIDENCES = "project-evidences";
+const TIMELINE_OCCURRENCES = "timeline-occurrences";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -1410,6 +1416,27 @@ export class IndexedDbProjectStore implements ProjectStore {
           names.createIndex("by-record", ["projectId", "recordId"], { unique: false });
           names.createIndex("by-name", ["projectId", "name"], { unique: false });
         }
+        if (!db.objectStoreNames.contains(PROJECT_RELATIONS)) {
+          const relations = db.createObjectStore(PROJECT_RELATIONS, { keyPath: ["projectId", "id"] });
+          relations.createIndex("by-project", "projectId", { unique: false });
+          relations.createIndex("by-source", ["projectId", "sourceRecordId"], { unique: false });
+          relations.createIndex("by-target", ["projectId", "targetRecordId"], { unique: false });
+          relations.createIndex("by-type", ["projectId", "relationType"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(PROJECT_EVIDENCES)) {
+          const evidences = db.createObjectStore(PROJECT_EVIDENCES, { keyPath: ["projectId", "id"] });
+          evidences.createIndex("by-project", "projectId", { unique: false });
+          evidences.createIndex("by-subject-record", ["projectId", "subjectRecordId"], { unique: false });
+          evidences.createIndex("by-subject-relation", ["projectId", "subjectRelationId"], { unique: false });
+          evidences.createIndex("by-document", ["projectId", "documentId"], { unique: false });
+          evidences.createIndex("by-fragment", ["projectId", "fragmentId"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(TIMELINE_OCCURRENCES)) {
+          const occurrences = db.createObjectStore(TIMELINE_OCCURRENCES, { keyPath: ["projectId", "id"] });
+          occurrences.createIndex("by-project", "projectId", { unique: false });
+          occurrences.createIndex("by-event-record", ["projectId", "eventRecordId"], { unique: false });
+          occurrences.createIndex("by-track-order", ["projectId", "trackId", "narrativeOrder"], { unique: false });
+        }
         if (!db.objectStoreNames.contains(DICTIONARIES)) {
           const dictionaries = db.createObjectStore(DICTIONARIES, {
             keyPath: ["projectId", "id"]
@@ -1532,6 +1559,18 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(RECORD_NAMES, "by-project", "projectId");
         ensureIndex(RECORD_NAMES, "by-record", ["projectId", "recordId"]);
         ensureIndex(RECORD_NAMES, "by-name", ["projectId", "name"]);
+        ensureIndex(PROJECT_RELATIONS, "by-project", "projectId");
+        ensureIndex(PROJECT_RELATIONS, "by-source", ["projectId", "sourceRecordId"]);
+        ensureIndex(PROJECT_RELATIONS, "by-target", ["projectId", "targetRecordId"]);
+        ensureIndex(PROJECT_RELATIONS, "by-type", ["projectId", "relationType"]);
+        ensureIndex(PROJECT_EVIDENCES, "by-project", "projectId");
+        ensureIndex(PROJECT_EVIDENCES, "by-subject-record", ["projectId", "subjectRecordId"]);
+        ensureIndex(PROJECT_EVIDENCES, "by-subject-relation", ["projectId", "subjectRelationId"]);
+        ensureIndex(PROJECT_EVIDENCES, "by-document", ["projectId", "documentId"]);
+        ensureIndex(PROJECT_EVIDENCES, "by-fragment", ["projectId", "fragmentId"]);
+        ensureIndex(TIMELINE_OCCURRENCES, "by-project", "projectId");
+        ensureIndex(TIMELINE_OCCURRENCES, "by-event-record", ["projectId", "eventRecordId"]);
+        ensureIndex(TIMELINE_OCCURRENCES, "by-track-order", ["projectId", "trackId", "narrativeOrder"]);
         const nextVersion = event?.newVersion ?? DATABASE_VERSION;
         const migration: SchemaMigration = {
           migrationId: `indexeddb-v${nextVersion}`,
@@ -1876,15 +1915,162 @@ export class IndexedDbProjectStore implements ProjectStore {
       throw new Error("Identidad de proyecto o relación inválida.");
     }
     return loadLifecycleHistory(
-      await this.open(), RELATION_LIFECYCLES, RELATIONS,
+      await this.open(), RELATION_LIFECYCLES, PROJECT_RELATIONS,
       projectId, relationId, "relación", validateRelationLifecycle, cloneRelationLifecycle
     );
   }
 
   async appendRelationLifecycle(item: RelationLifecycle): Promise<void> {
     return appendLifecycleRecord(
-      await this.open(), RELATION_LIFECYCLES, RELATIONS,
+      await this.open(), RELATION_LIFECYCLES, PROJECT_RELATIONS,
       item, item.relationId, "relación", validateRelationLifecycle
+    );
+  }
+
+  async loadProjectRelations(projectId: string): Promise<readonly ProjectRelation[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para consultar relaciones.");
+    }
+    return loadSimpleProjectRecords(
+      await this.open(), PROJECT_RELATIONS, projectId, "relaciones MLDB",
+      validateProjectRelation, cloneProjectRelation
+    );
+  }
+
+  async saveProjectRelation(
+    relation: ProjectRelation,
+    expectedCurrent?: ProjectRelation
+  ): Promise<void> {
+    validateProjectRelation(relation, relation.projectId);
+    if (expectedCurrent) {
+      validateProjectRelation(expectedCurrent, relation.projectId);
+      if (relation.currentVersion !== expectedCurrent.currentVersion + 1) {
+        throw new Error("La versión de la relación debe avanzar exactamente una unidad.");
+      }
+      if (relation.createdAt !== expectedCurrent.createdAt || relation.updatedAt < expectedCurrent.updatedAt) {
+        throw new Error("Las fechas de relación no pueden retroceder ni cambiar su creación.");
+      }
+    } else if (relation.currentVersion !== 1) {
+      throw new Error("Una relación nueva debe comenzar en versión 1.");
+    }
+    const parents: ProjectParentCheck[] = [];
+    if (relation.sourceRecordId) parents.push({
+      storeName: PROJECT_RECORDS, key: [relation.projectId, relation.sourceRecordId],
+      label: "la ficha de origen de la relación",
+      validate: value => validateProjectRecordContract(value as ProjectRecord, relation.projectId)
+    });
+    if (relation.targetRecordId) parents.push({
+      storeName: PROJECT_RECORDS, key: [relation.projectId, relation.targetRecordId],
+      label: "la ficha de destino de la relación",
+      validate: value => validateProjectRecordContract(value as ProjectRecord, relation.projectId)
+    });
+    await saveProjectRecordWithParents(
+      await this.open(), PROJECT_RELATIONS, relation, expectedCurrent, parents,
+      "relación MLDB", validateProjectRelation, cloneProjectRelation
+    );
+  }
+
+  async loadProjectEvidences(
+    projectId: string,
+    subjectKind?: EvidenceSubjectKind,
+    subjectId?: string
+  ): Promise<readonly ProjectEvidence[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        (subjectKind !== undefined && subjectKind !== "RECORD" && subjectKind !== "RELATION") ||
+        (subjectId !== undefined && (typeof subjectId !== "string" || !subjectId.trim())) ||
+        (subjectId !== undefined && subjectKind === undefined)) {
+      throw new Error("Filtros de evidencia inválidos.");
+    }
+    const records = await loadSimpleProjectRecords(
+      await this.open(), PROJECT_EVIDENCES, projectId, "evidencias",
+      validateProjectEvidence, cloneProjectEvidence
+    );
+    return records.filter(item => {
+      if (subjectKind === "RECORD") return subjectId === undefined || item.subjectRecordId === subjectId;
+      if (subjectKind === "RELATION") return subjectId === undefined || item.subjectRelationId === subjectId;
+      return true;
+    });
+  }
+
+  async saveProjectEvidence(
+    evidence: ProjectEvidence,
+    expectedCurrent?: ProjectEvidence
+  ): Promise<void> {
+    validateProjectEvidence(evidence, evidence.projectId);
+    const parents: ProjectParentCheck[] = [];
+    if (evidence.subjectKind === "RECORD") {
+      parents.push({
+        storeName: PROJECT_RECORDS, key: [evidence.projectId, evidence.subjectRecordId!],
+        label: "la ficha de la evidencia",
+        validate: value => validateProjectRecordContract(value as ProjectRecord, evidence.projectId)
+      });
+    } else {
+      parents.push({
+        storeName: PROJECT_RELATIONS, key: [evidence.projectId, evidence.subjectRelationId!],
+        label: "la relación de la evidencia",
+        validate: value => validateProjectRelation(value as ProjectRelation, evidence.projectId)
+      });
+    }
+    if (evidence.documentId) parents.push({
+      storeName: DOCUMENTS, key: [evidence.projectId, evidence.documentId],
+      label: "el documento de la evidencia"
+    });
+    if (evidence.fragmentId) parents.push({
+      storeName: MANUSCRIPT_FRAGMENTS, key: [evidence.projectId, evidence.fragmentId],
+      label: "el fragmento de la evidencia",
+      validate: value => {
+        const fragment = value as ManuscriptFragment;
+        validateManuscriptFragment(fragment, evidence.projectId);
+        if (fragment.documentId !== evidence.documentId) {
+          throw new Error("El fragmento de evidencia pertenece a otro documento.");
+        }
+      }
+    });
+    await saveProjectRecordWithParents(
+      await this.open(), PROJECT_EVIDENCES, evidence, expectedCurrent, parents,
+      "evidencia", validateProjectEvidence, cloneProjectEvidence
+    );
+  }
+
+  async loadTimelineOccurrences(
+    projectId: string,
+    eventRecordId?: string,
+    trackId?: string
+  ): Promise<readonly TimelineOccurrence[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        (eventRecordId !== undefined && (typeof eventRecordId !== "string" || !eventRecordId.trim())) ||
+        (trackId !== undefined && (typeof trackId !== "string" || !trackId.trim()))) {
+      throw new Error("Filtros de ocurrencia cronológica inválidos.");
+    }
+    const records = await loadSimpleProjectRecords(
+      await this.open(), TIMELINE_OCCURRENCES, projectId, "ocurrencias cronológicas",
+      validateTimelineOccurrence, cloneTimelineOccurrence
+    );
+    return records.filter(item =>
+      (eventRecordId === undefined || item.eventRecordId === eventRecordId) &&
+      (trackId === undefined || item.trackId === trackId)
+    );
+  }
+
+  async saveTimelineOccurrence(
+    occurrence: TimelineOccurrence,
+    expectedCurrent?: TimelineOccurrence
+  ): Promise<void> {
+    validateTimelineOccurrence(occurrence, occurrence.projectId);
+    const parents: ProjectParentCheck[] = [];
+    if (occurrence.eventRecordId) parents.push({
+      storeName: PROJECT_RECORDS, key: [occurrence.projectId, occurrence.eventRecordId],
+      label: "la ficha de evento de la ocurrencia",
+      validate: value => validateProjectRecordContract(value as ProjectRecord, occurrence.projectId)
+    });
+    if (occurrence.trackId) parents.push({
+      storeName: TIMELINE_TRACKS, key: [occurrence.projectId, occurrence.trackId],
+      label: "la pista de la ocurrencia",
+      validate: value => validateTimelineTrack(value as TimelineTrack, occurrence.projectId)
+    });
+    await saveProjectRecordWithParents(
+      await this.open(), TIMELINE_OCCURRENCES, occurrence, expectedCurrent, parents,
+      "ocurrencia cronológica", validateTimelineOccurrence, cloneTimelineOccurrence
     );
   }
 
@@ -2231,9 +2417,9 @@ export class IndexedDbProjectStore implements ProjectStore {
     await saveProjectRecordWithParents(
       await this.open(), RELATION_ATTRIBUTES, attribute, expectedCurrent,
       [{
-        storeName: RELATIONS, key: [attribute.projectId, attribute.relationId],
+        storeName: PROJECT_RELATIONS, key: [attribute.projectId, attribute.relationId],
         label: "la relación del atributo",
-        validate: value => validateNarrativeRelationRecord(value as NarrativeRelation, "relación del atributo")
+        validate: value => validateProjectRelation(value as ProjectRelation, attribute.projectId)
       }],
       "atributo de relación", validateRelationAttribute, cloneRelationAttribute
     );

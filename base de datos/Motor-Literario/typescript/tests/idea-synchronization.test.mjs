@@ -336,6 +336,35 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
   api.dispose();
 });
 
+test("detecta fichas eliminadas externamente aunque la caché de entidades esté caliente", async () => {
+  const store = new RacingStore(
+    [idea("idea-source", { relatedEntityIds: ["character-external"] })],
+    [entity("character-external", "Luz")]
+  );
+  const api = createApi(store);
+
+  const initial = await api.getNarrativeIdeas();
+  assert.deepEqual(initial[0].relatedEntityIds, ["character-external"]);
+  assert.equal(store.entityReads, 1);
+
+  store.entities.delete(projectId + ":character-external");
+  await assert.rejects(
+    api.getNarrativeIdeas(),
+    /referencias a entidades inexistentes en el proyecto activo/
+  );
+  assert.equal(store.entityReads, 2);
+
+  const cleaned = await api.setNarrativeIdeaEntityLink(
+    "idea-source", "character-external", false
+  );
+  assert.deepEqual(cleaned.relatedEntityIds, []);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedEntityIds,
+    []
+  );
+  api.dispose();
+});
+
 test("recupera la cola y la caché tras un fallo de persistencia", async () => {
   const store = new RacingStore([
     idea("idea-source"), idea("idea-target-a"), idea("idea-target-b")

@@ -1890,6 +1890,7 @@ test("el catálogo heredado de ideas vinculadas nunca se presenta como exhaustiv
 });
 
 test("el desempate de IDs Unicode mantiene un orden canónico estable", () => {
+  const decomposedId = String.fromCharCode(0x65, 0x301);
   const makeIdea = (ideaId, text) => ({
     projectId,
     ideaId,
@@ -1904,7 +1905,7 @@ test("el desempate de IDs Unicode mantiene un orden canónico estable", () => {
   });
   const ideas = [
     makeIdea("é", "motivo unicode compuesto"),
-    makeIdea("e\\u0301", "motivo unicode descompuesto")
+    makeIdea(decomposedId, "motivo unicode descompuesto")
   ];
   const analyze = (knownProjectIdeas) => analyzeLiteraryFragment({
     projectId,
@@ -1916,8 +1917,8 @@ test("el desempate de IDs Unicode mantiene un orden canónico estable", () => {
   const forward = analyze(ideas);
   const reversed = analyze([...ideas].reverse());
   assert.deepEqual(reversed.nodes.map(node => node.ideaId), forward.nodes.map(node => node.ideaId));
-  assert.deepEqual(forward.nodes.map(node => node.ideaId), ["e\\u0301", "é"]);
+  assert.deepEqual(forward.nodes.map(node => node.ideaId), [decomposedId, "é"]);
   assert.equal(forward.ideaCount, 2);
   assert.equal(forward.weakComponentCount, 2);
   assert.equal(forward.isolatedWithinSnapshotNodeCount, 2);
-});
+});;

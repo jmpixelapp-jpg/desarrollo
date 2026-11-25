@@ -177,3 +177,49 @@ test("normaliza espacios externos del nombre del archivo descargado", () => {
     globalThis.setTimeout = originalSetTimeout;
   }
 });
+
+test("libera la URL temporal si el navegador no puede crear el enlace de descarga", () => {
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const originalCreate = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+  const originalRevoke = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+  const originalSetTimeout = globalThis.setTimeout;
+  let revoked = false;
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      body: { append() {} },
+      createElement() { throw new Error("No se pudo crear el enlace."); }
+    }
+  });
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value() { return "blob:failed-download"; }
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value(value) {
+      assert.equal(value, "blob:failed-download");
+      revoked = true;
+    }
+  });
+  globalThis.setTimeout = callback => {
+    callback();
+    return 1;
+  };
+
+  try {
+    assert.throws(
+      () => downloadIndexedDbBackupFile(sampleBackup, "respaldo.json"),
+      /No se pudo crear el enlace/u
+    );
+    assert.equal(revoked, true);
+  } finally {
+    if (originalDocument) Object.defineProperty(globalThis, "document", originalDocument);
+    else delete globalThis.document;
+    if (originalCreate) Object.defineProperty(URL, "createObjectURL", originalCreate);
+    else delete URL.createObjectURL;
+    if (originalRevoke) Object.defineProperty(URL, "revokeObjectURL", originalRevoke);
+    else delete URL.revokeObjectURL;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});

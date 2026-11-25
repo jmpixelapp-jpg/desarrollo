@@ -494,8 +494,8 @@ test("el archivo rechaza referencias desde ideas que permanecerán en el libro",
 });
 
 
-test("una instancia puede descartar sus cachés narrativas y leer cambios confirmados por otra", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-refresh-"));
+test("una instancia recibe una notificación y actualiza sus cachés por cambios narrativos externos", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-auto-sync-"));
   const databasePath = resolve(directory, "motor.sqlite");
   let first;
   let second;
@@ -531,36 +531,39 @@ test("una instancia puede descartar sus cachés narrativas y leer cambios confir
       projectId: "shared-project", method: "getNarrativeIdeas", args: []
     });
     assert.equal(secondIdeas.length, 1);
+
+    const knowledgeChanged = new Promise((resolveNotice, rejectNotice) => {
+      const timer = setTimeout(
+        () => rejectNotice(new Error("No llegó la notificación de conocimiento narrativo.")),
+        10_000
+      );
+      first.client.onNotification("engine.knowledgeChanged", params => {
+        if (params?.projectId === "shared-project") {
+          clearTimeout(timer);
+          resolveNotice(params);
+        }
+      });
+    });
     await second.client.request("project.call", {
       projectId: "shared-project",
       method: "setNarrativeIdeaStatus",
       args: [secondIdeas[0].id, "incorporated"]
     });
+    const notice = await knowledgeChanged;
+    assert.equal(notice.projectId, "shared-project");
 
-    const stale = await first.client.request("project.call", {
+    const automaticallyRefreshed = await first.client.request("project.call", {
       projectId: "shared-project", method: "getNarrativeIdeas", args: []
     });
-    assert.equal(stale[0].status, "IDEA");
-    await assert.rejects(
-      first.client.request("project.call", {
-        projectId: "shared-project",
-        method: "setNarrativeIdeaStatus",
-        args: [stale[0].id, "discarded"]
-      }),
-      /cambió en otra instancia/
-    );
-    const unchangedByStaleWrite = await second.client.request("project.call", {
-      projectId: "shared-project", method: "getNarrativeIdeas", args: []
-    });
-    assert.equal(unchangedByStaleWrite[0].status, "incorporated");
+    assert.equal(automaticallyRefreshed[0].status, "incorporated");
 
     await first.client.request("project.call", {
       projectId: "shared-project", method: "refreshNarrativeKnowledge", args: []
     });
-    const refreshed = await first.client.request("project.call", {
+    const explicitlyRefreshed = await first.client.request("project.call", {
       projectId: "shared-project", method: "getNarrativeIdeas", args: []
     });
-    assert.equal(refreshed[0].status, "incorporated");
+    assert.equal(explicitlyRefreshed[0].status, "incorporated");
 
     const firstExit = waitForExit(first.child);
     await first.client.shutdown();

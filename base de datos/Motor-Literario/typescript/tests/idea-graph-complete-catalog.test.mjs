@@ -95,6 +95,21 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     );
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .earliestKnownStatusChangeAt,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .latestKnownStatusChangeAt,
+      3
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .knownStatusHistorySpanMs,
+      2
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .statusReversalCount,
       1
     );

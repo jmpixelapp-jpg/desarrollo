@@ -5303,7 +5303,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       });
       transaction.oncomplete = () => {
         this.publishNarrativeChange(projectId);
-        if (writerId && results[5].length > 0) {
+        if (writerId && (results[5] as PersonalIdeaLibraryEntry[]).length > 0) {
           this.publishPersonalIdeaLibraryChange(writerId);
         }
         resolve();

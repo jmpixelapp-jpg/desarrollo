@@ -60,9 +60,11 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
     const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(bridgeNode.currentStatusHistoryConsistency, "mismatch");
     assert.equal(bridgeNode.observedStatusTransitionCount, 3);
     assert.equal(bridgeNode.statusReversalCount, 1);
     const soloNode = result.ideaGraph.nodes.find(node => node.ideaId === "solo");
+    assert.equal(soloNode.currentStatusHistoryConsistency, "consistent");
     assert.equal(soloNode.observedStatusTransitionCount, 5);
     assert.equal(soloNode.statusReversalCount, 3);
     assert.equal(soloNode.comparableStatusTimestampPairCount, 6);

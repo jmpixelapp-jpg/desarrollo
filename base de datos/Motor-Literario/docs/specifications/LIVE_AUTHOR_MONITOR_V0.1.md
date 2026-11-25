@@ -421,3 +421,12 @@ La fuente ahora serializa también el procesamiento de las transacciones nativas
 - Una resincronización requerida o un desmontaje vacía las transacciones aplazadas para evitar procesar eventos de un stream suspendido.
 
 La prueba reentrante verifica tanto el orden como la coherencia de estado: dos suscriptores generan/observan el evento anidado y ambos deben observar `[[1, 1], [2, 2]]`, donde cada pareja contiene la secuencia del delta y la secuencia consultada al propio source durante el callback.
+
+
+## 21. Límite de seguridad para eventos reentrantes
+
+La serialización de transacciones ahora tiene un límite configurable de memoria mediante `maxQueuedTransactions` (valor predeterminado: 4096; rango permitido: 1–65536). Si el proveedor genera una ráfaga reentrante mayor que ese límite, el source no descarta eventos y continúa como si nada: emite `transaction-backlog-overflow`, suspende la suscripción y exige resincronizar contra un snapshot autoritativo.
+
+El límite solo aplica a transacciones que se acumulan mientras otra transacción está siendo notificada. El procesamiento normal secuencial no consume esta cola de espera. Al entrar en estado de resincronización, los eventos aplazados se limpian y no vuelven a alimentar el motor; el snapshot local actualizado permite reconciliar lo que realmente aplicó el editor.
+
+La prueba fija el límite en un evento, provoca dos ediciones síncronas reentrantes y verifica que solo se admite el primer delta, la fuente queda pausada con `transaction-backlog-overflow` y la suscripción nativa se retira. La recuperación debe hacerse con el snapshot reconciliado, no reintentando eventos parciales fuera de orden.

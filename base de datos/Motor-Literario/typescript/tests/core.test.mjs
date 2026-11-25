@@ -9459,17 +9459,34 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
           index(indexName) {
             assert.equal(indexName, "by-project");
             return {
-              getAll(requestedProjectId) {
+              openCursor(requestedProjectId) {
                 assert.equal(requestedProjectId, projectId);
                 const request = {};
-                queueMicrotask(() => {
-                  request.result = structuredClone(projectIdeas);
+                const ordered = projectIdeas
+                  .filter(item => item.projectId === requestedProjectId)
+                  .sort((first, second) => first.id.localeCompare(second.id));
+                let index = 0;
+                const advance = () => queueMicrotask(() => {
+                  const item = ordered[index++];
+                  request.result = item
+                    ? { value: structuredClone(item), continue: advance }
+                    : null;
                   request.onsuccess?.();
-                  queueMicrotask(() => transaction.oncomplete?.());
+                  if (!item) queueMicrotask(() => transaction.oncomplete?.());
                 });
+                advance();
                 return request;
               }
             };
+          },
+          get(key) {
+            const request = {};
+            queueMicrotask(() => {
+              const item = projectIdeas.find(entry => entry.projectId === key[0] && entry.id === key[1]);
+              request.result = item ? structuredClone(item) : undefined;
+              request.onsuccess?.();
+            });
+            return request;
           },
           delete(key) { deleted.push(key); }
         };

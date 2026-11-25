@@ -146,10 +146,13 @@ test("cada tabla lógica tiene una correspondencia física declarada y con ámbi
   }
 });
 
-test("el modelo identifica las relaciones de diccionario que hoy están embebidas", () => {
+test("el modelo declara parcial la relación de diccionario mientras falten metadatos por vínculo", () => {
   const mapping = storageMapping.entries.find((entry) => entry.table === "dictionary_entry_entities");
   assert.equal(mapping.representation, "embedded");
-  assert.equal(mapping.contract, "DictionaryEntry.relatedEntityIds; vínculos confirmados y validados en la misma transacción que la entrada.");
+  assert.equal(mapping.implementationStatus, "partial");
+  assert.ok(mapping.contract.includes("link_kind"));
+  assert.ok(mapping.contract.includes("provenance_kind"));
+  assert.ok(mapping.contract.includes("created_at"));
 });
 
 

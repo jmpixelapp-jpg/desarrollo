@@ -2466,7 +2466,7 @@ export class HostEngineApi {
         attributes: input.attributes ?? {},
         status: input.status,
         provenanceKind: input.provenanceKind,
-        relatedEntityIds: [...(input.relatedEntityIds ?? [])],
+        relatedEntityIds: [...(input.relatedEntityIds ?? current?.relatedEntityIds ?? [])],
         createdAt: current?.createdAt ?? input.createdAt,
         updatedAt: input.updatedAt
       };

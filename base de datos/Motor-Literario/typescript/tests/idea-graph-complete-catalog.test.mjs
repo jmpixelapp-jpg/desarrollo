@@ -20,7 +20,7 @@ const store = {
         {status:"IDEA",reason:"initial",changedAt:1},
         {status:"incorporated",reason:"writer",changedAt:3},
         {status:"IDEA",reason:"writer",changedAt:2},
-        {status:"discarded",reason:"writer"}
+        {status:"discarded",reason:"text-revised"}
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
@@ -57,6 +57,9 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
     assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
     assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);
+    assert.equal(bridgeNode.observedInitialStatusRecordCount, 1);
+    assert.equal(bridgeNode.observedWriterStatusChangeCount, 2);
+    assert.equal(bridgeNode.observedTextRevisionStatusChangeCount, 1);
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .nonMonotonicStatusTimestampCount,
@@ -70,6 +73,21 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .uncomparableStatusTimestampPairCount,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedInitialStatusRecordCount,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedWriterStatusChangeCount,
+      2
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedTextRevisionStatusChangeCount,
       1
     );
     assert.equal(

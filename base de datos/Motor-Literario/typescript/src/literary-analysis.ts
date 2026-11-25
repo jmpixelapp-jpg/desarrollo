@@ -377,7 +377,7 @@ function findSceneCharacterMentions(
   const grouped = new Map<string,{
     readonly entityId: string;
     readonly canonicalName: string;
-    matchedNames: Set<string>;
+    matchedNames: Map<string, number>;
     occurrences: LocalRange[];
   }>();
   const excerpt = text.slice(contentRange.start,contentRange.end);
@@ -394,19 +394,22 @@ function findSceneCharacterMentions(
     const group = grouped.get(owner.entityId) ?? {
       entityId:owner.entityId,
       canonicalName:owner.canonicalName,
-      matchedNames:new Set<string>(),
+      matchedNames:new Map<string,number>(),
       occurrences:[]
     };
     for (const match of excerpt.matchAll(expression)) {
       const matchedName = match[0];
       const start = contentRange.start + (match.index ?? 0);
-      group.matchedNames.add(matchedName);
-      if (group.occurrences.length < 20) {
-        group.occurrences.push({
-          start:baseOffset+start,
-          end:baseOffset+start+matchedName.length
-        });
+      const previousMatch = group.matchedNames.get(matchedName);
+      if (previousMatch === undefined || start < previousMatch) {
+        group.matchedNames.set(matchedName,start);
       }
+      group.occurrences.push({
+        start:baseOffset+start,
+        end:baseOffset+start+matchedName.length
+      });
+      group.occurrences.sort((a,b) => a.start-b.start || a.end-b.end);
+      if (group.occurrences.length > 20) group.occurrences.pop();
     }
     if (group.occurrences.length > 0) grouped.set(owner.entityId,group);
   }
@@ -416,7 +419,9 @@ function findSceneCharacterMentions(
     .map(group => ({
       entityId:group.entityId,
       canonicalName:group.canonicalName,
-      matchedNames:[...group.matchedNames].slice(0,10),
+      matchedNames:[...group.matchedNames.entries()]
+        .sort((a,b) => a[1]-b[1] || a[0].localeCompare(b[0],"es"))
+        .slice(0,10).map(([name]) => name),
       occurrences:group.occurrences
     }));
 }

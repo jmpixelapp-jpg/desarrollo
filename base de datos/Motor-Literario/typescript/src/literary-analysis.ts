@@ -3253,6 +3253,36 @@ function buildLiteraryIdeaGraph(
   );
   const projectCatalogComplete = catalogScope === "project" && omittedIdeaCount === 0;
   const ideaIds = new Set(orderedIdeas.map(idea => idea.ideaId));
+  const ideaIndexById = new Map(
+    orderedIdeas.map((idea, index) => [idea.ideaId, index] as const)
+  );
+  const unionParent = new Int32Array(orderedIdeas.length);
+  const unionSize = new Int32Array(orderedIdeas.length);
+  for (let index = 0; index < orderedIdeas.length; index++) {
+    unionParent[index] = index;
+    unionSize[index] = 1;
+  }
+  const findUnionRoot = (initialIndex: number): number => {
+    let root = initialIndex;
+    while (unionParent[root] !== root) root = unionParent[root]!;
+    let current = initialIndex;
+    while (unionParent[current] !== current) {
+      const next = unionParent[current]!;
+      unionParent[current] = root;
+      current = next;
+    }
+    return root;
+  };
+  const unionNodes = (leftIndex: number, rightIndex: number): void => {
+    let leftRoot = findUnionRoot(leftIndex);
+    let rightRoot = findUnionRoot(rightIndex);
+    if (leftRoot === rightRoot) return;
+    if (unionSize[leftRoot]! < unionSize[rightRoot]!) {
+      [leftRoot, rightRoot] = [rightRoot, leftRoot];
+    }
+    unionParent[rightRoot] = leftRoot;
+    unionSize[leftRoot] = unionSize[leftRoot]! + unionSize[rightRoot]!;
+  };
   const adjacency = new Map<string, string[]>();
   const incoming = new Map<string, number>();
   for (const idea of orderedIdeas) {
@@ -3278,6 +3308,7 @@ function buildLiteraryIdeaGraph(
         includedReferenceCount++;
         adjacency.get(idea.ideaId)!.push(targetId);
         incoming.set(targetId, (incoming.get(targetId) ?? 0) + 1);
+        unionNodes(ideaIndexById.get(idea.ideaId)!, ideaIndexById.get(targetId)!);
       } else {
         notIncludedReferenceCount++;
         if (projectCatalogComplete) missingFromProjectReferenceCount++;
@@ -3360,54 +3391,44 @@ function buildLiteraryIdeaGraph(
     left.ideaIds[0]!.localeCompare(right.ideaIds[0]!, "en")
   );
 
-  // Componentes débilmente conexos: se ignora la dirección, no la autoría del vínculo.
-  // Las referencias externas al snapshot no conectan nodos porque no tienen destino cargado.
-  const undirectedAdjacency = new Map<string, Set<string>>();
-  for (const idea of orderedIdeas) {
-    undirectedAdjacency.set(idea.ideaId, new Set<string>());
+  // Union-find agrupa los componentes débiles en O(V + E α(V)) sin duplicar
+  // las aristas en un segundo mapa de conjuntos no dirigidos.
+  const weakGroups = new Map<number, string[]>();
+  for (let index = 0; index < orderedIdeas.length; index++) {
+    const root = findUnionRoot(index);
+    const group = weakGroups.get(root) ?? [];
+    group.push(orderedIdeas[index]!.ideaId);
+    weakGroups.set(root, group);
   }
-  for (const idea of orderedIdeas) {
-    for (const targetId of adjacency.get(idea.ideaId) ?? []) {
-      undirectedAdjacency.get(idea.ideaId)!.add(targetId);
-      undirectedAdjacency.get(targetId)!.add(idea.ideaId);
-    }
-  }
-  const visitedWeakNodes = new Set<string>();
-  const allWeakComponents: LiteraryIdeaGraphWeakComponent[] = [];
-  for (const idea of orderedIdeas) {
-    if (visitedWeakNodes.has(idea.ideaId)) continue;
-    const pending = [idea.ideaId];
-    const componentIds: string[] = [];
-    visitedWeakNodes.add(idea.ideaId);
-    while (pending.length > 0) {
-      const currentId = pending.pop()!;
-      componentIds.push(currentId);
-      for (const neighborId of undirectedAdjacency.get(currentId) ?? []) {
-        if (visitedWeakNodes.has(neighborId)) continue;
-        visitedWeakNodes.add(neighborId);
-        pending.push(neighborId);
-      }
-    }
-    componentIds.sort((left, right) => left.localeCompare(right, "en"));
-    allWeakComponents.push({
-      representativeIdeaId: componentIds[0]!,
-      ideaIds: componentIds
-    });
-  }
+  const allWeakComponents: LiteraryIdeaGraphWeakComponent[] = [...weakGroups.values()]
+    .map(ideaIds => ({
+      representativeIdeaId: ideaIds[0]!,
+      ideaIds
+    }));
   allWeakComponents.sort((left, right) =>
     right.ideaIds.length - left.ideaIds.length ||
     left.representativeIdeaId.localeCompare(right.representativeIdeaId, "en")
   );
 
-  const directedTargets = new Map<string, Set<string>>();
-  for (const idea of orderedIdeas) {
-    directedTargets.set(idea.ideaId, new Set(adjacency.get(idea.ideaId) ?? []));
-  }
+  // Las listas de adyacencia están ordenadas; buscar el arco inverso por
+  // búsqueda binaria evita mantener otra copia de todas las aristas.
+  const hasSortedTarget = (sortedTargets: readonly string[], targetId: string): boolean => {
+    let low = 0;
+    let high = sortedTargets.length - 1;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const comparison = sortedTargets[middle]!.localeCompare(targetId, "en");
+      if (comparison === 0) return true;
+      if (comparison < 0) low = middle + 1;
+      else high = middle - 1;
+    }
+    return false;
+  };
   let reciprocalReferencePairCount = 0;
   for (const idea of orderedIdeas) {
     for (const targetId of adjacency.get(idea.ideaId) ?? []) {
       if (idea.ideaId.localeCompare(targetId, "en") < 0 &&
-          directedTargets.get(targetId)?.has(idea.ideaId)) {
+          hasSortedTarget(adjacency.get(targetId) ?? [], idea.ideaId)) {
         reciprocalReferencePairCount++;
       }
     }

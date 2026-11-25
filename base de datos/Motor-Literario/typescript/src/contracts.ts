@@ -4,7 +4,7 @@ import type {
   ImportAuthorization, SchemaMigration
 } from "./mldb-records";
 import type { ProjectDictionary, DictionaryEntry, DictionaryEntryEntityLink } from "./dictionaries";
-import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle } from "./project-data";
+import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle, EventLifecycle } from "./project-data";
 
 /** Contratos públicos. La identidad del proyecto siempre pertenece al anfitrión. */
 
@@ -155,6 +155,14 @@ export interface ProjectStore {
   appendRecordLifecycle?(item: RecordLifecycle): Promise<void>;
   loadRelationLifecycles?(projectId: string, relationId: string): Promise<readonly RelationLifecycle[]>;
   appendRelationLifecycle?(item: RelationLifecycle): Promise<void>;
+  /** Historial versionado de etiquetas y participantes de acontecimientos. */
+  loadEventLifecycles?(projectId: string, eventId: string): Promise<readonly EventLifecycle[]>;
+  /** Actualiza el acontecimiento y añade su transición append-only en una sola transacción. */
+  saveEventAndAppendLifecycleIfUnchanged?(
+    event: import("./narrative-knowledge").NarrativeEvent,
+    expectedCurrent: import("./narrative-knowledge").NarrativeEvent,
+    lifecycle: EventLifecycle
+  ): Promise<void>;
 
 
   /** Preferencias persistentes del libro, siempre aisladas por projectId. */

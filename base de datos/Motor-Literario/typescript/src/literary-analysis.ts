@@ -3065,6 +3065,7 @@ function buildCharacterProjectEventTimeline(
     readonly orderValue: number;
     events: Map<string,LiteraryAnalysisKnownProjectEvent>;
     evidence: LiteraryCharacterProjectEventTimelineEvidence[];
+    evidenceCount: number;
     rawReferences: Set<string>;
     documents: Set<string>;
   }>();
@@ -3078,10 +3079,14 @@ function buildCharacterProjectEventTimeline(
   for (const event of projectEvents) {
     if (!event.participants.includes(entityId)) continue;
     sourceEventCount++;
-    const currentEvidence = event.evidence.filter(item => item.status !== "stale");
+    const currentEvidence = event.evidence.filter(
+      (item: LiteraryAnalysisKnownEventEvidence) => item.status !== "stale"
+    );
     const totalActiveEvidenceCount = event.evidenceCount ?? currentEvidence.length;
     const eventStaleEvidenceCount = event.staleEvidenceCount ??
-      event.evidence.filter(item => item.status === "stale").length;
+      event.evidence.filter(
+        (item: LiteraryAnalysisKnownEventEvidence) => item.status === "stale"
+      ).length;
     staleEvidenceCount += eventStaleEvidenceCount;
     if (totalActiveEvidenceCount === 0) {
       if (eventStaleEvidenceCount > 0) staleEventCount++;
@@ -3474,7 +3479,8 @@ function buildCharacterNarrativeTrajectories(
   knownRelations: readonly LiteraryAnalysisKnownRelation[],
   knownIdeas: readonly LiteraryAnalysisKnownIdea[],
   omittedRelationCount: number,
-  omittedIdeaCount: number
+  omittedIdeaCount: number,
+  omittedProjectEventCount: number
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
   for (const profile of attributeEvolution.profiles) {
@@ -3750,7 +3756,7 @@ function buildCharacterNarrativeTrajectories(
     omittedAttributeProfileCount:attributeEvolution.omittedProfileCount,
     omittedEventAssociationCount:eventEvidence.omittedAssociationCount,
     omittedCausalCandidateCount:dependencies.omittedCandidateCount,
-    omittedProjectEventCount:input.knownProjectEventsOmittedCount ?? 0,
+    omittedProjectEventCount,
     relationshipRecordCount:knownRelations.length+omittedRelationCount,
     omittedRelationshipCount:omittedRelationCount,
     linkedIdeaCount:knownIdeas.length,
@@ -4980,7 +4986,9 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(event.evidence) || event.evidence.length > 200 ||
         (event.evidenceCount !== undefined &&
           (!Number.isSafeInteger(event.evidenceCount) ||
-            event.evidenceCount < event.evidence.filter(item => item.status !== "stale").length)) ||
+            event.evidenceCount < event.evidence.filter(
+              (item: LiteraryAnalysisKnownEventEvidence) => item.status !== "stale"
+            ).length)) ||
         (event.staleEvidenceCount !== undefined &&
           (!Number.isSafeInteger(event.staleEvidenceCount) || event.staleEvidenceCount < 0)) ||
         (event.timelineTrackId !== undefined &&
@@ -5043,10 +5051,10 @@ function validateInput(input: LiteraryAnalysisInput): number {
         typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
         typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||
         !Array.isArray(idea.relatedEntityIds) || idea.relatedEntityIds.length > 500 ||
-        idea.relatedEntityIds.some(id => typeof id !== "string" || !knownCharacterIds.has(id)) ||
+        idea.relatedEntityIds.some((id: string) => typeof id !== "string" || !knownCharacterIds.has(id)) ||
         new Set(idea.relatedEntityIds).size !== idea.relatedEntityIds.length ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
-        idea.relatedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
+        idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
         idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
@@ -5055,7 +5063,9 @@ function validateInput(input: LiteraryAnalysisInput): number {
         idea.evidenceCount < idea.evidence.length ||
         !Array.isArray(idea.statusHistory) || idea.statusHistory.length > 100 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
-        idea.writerDecisionCount < idea.statusHistory.filter(change => change.reason==="writer").length ||
+        idea.writerDecisionCount < idea.statusHistory.filter(
+          (change: NarrativeIdeaStatusChange) => change.reason==="writer"
+        ).length ||
         !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
       throw new Error("El catálogo de ideas y decisiones del análisis literario es inválido.");
     }
@@ -5192,7 +5202,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     explicitScenes,input.knownCharacters ?? [],characterAttributeEvolution,
     characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
     input.documentId,input.revision,input.knownRelations ?? [],input.knownIdeas ?? [],
-    input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0
+    input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0,
+    input.knownProjectEventsOmittedCount ?? 0
   );
   const ideaGraph = buildLiteraryIdeaGraph(
     input.knownIdeas ?? [],input.knownIdeasOmittedCount ?? 0

@@ -1781,7 +1781,7 @@ export class HostEngineApi {
           staleEvidenceCount:idea.evidence.length-activeEvidence.length,
           statusHistory:statusHistory.slice(-100),
           writerDecisionCount:statusHistory.filter(change => change.reason==="writer").length,
-          omittedStatusHistoryCount:Math.max(0,idea.omittedStatusHistoryCount ?? 0)+Math.max(0,statusHistory.length-100)
+          omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
         };
       }) : undefined;
     const knownIdeas=knownLinkedIdeas.map(idea => {
@@ -1810,7 +1810,7 @@ export class HostEngineApi {
           })),
         statusHistory:statusHistory.slice(-100),
         writerDecisionCount:statusHistory.filter(change => change.reason==="writer").length,
-        omittedStatusHistoryCount:Math.max(0,idea.omittedStatusHistoryCount ?? 0)+Math.max(0,statusHistory.length-100)
+        omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
       };
     });
     const knownEventLifecycles:EventLifecycle[]=[];

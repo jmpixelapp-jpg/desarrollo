@@ -1617,6 +1617,7 @@ export class HostEngineApi {
         return {
           projectId:idea.projectId,
           ideaId:idea.id,
+          text:idea.text,
           status:idea.status,
           relatedIdeaIds:idea.relatedIdeaIds ?? [],
           evidenceCount:activeEvidence.length,

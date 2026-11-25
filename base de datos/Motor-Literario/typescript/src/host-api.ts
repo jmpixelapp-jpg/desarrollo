@@ -1570,13 +1570,16 @@ export class HostEngineApi {
         relationType:relation.relationType,
         evidenceCount:activeEvidence.length,
         staleEvidenceCount,
-        evidence:activeEvidence.slice(0,20).map(evidence => ({
-          documentId:evidence.documentId,
-          revision:evidence.revision,
-          start:evidence.start,
-          end:evidence.end,
-          excerpt:evidence.excerpt
-        }))
+        evidence:[...activeEvidence]
+          .sort((a,b) => a.documentId.localeCompare(b.documentId,"en") ||
+            a.revision-b.revision || a.start-b.start || a.end-b.end)
+          .slice(0,20).map(evidence => ({
+            documentId:evidence.documentId,
+            revision:evidence.revision,
+            start:evidence.start,
+            end:evidence.end,
+            excerpt:evidence.excerpt
+          }))
       };
     });
     const projectIdeas = this.store.loadIdeas
@@ -1600,14 +1603,18 @@ export class HostEngineApi {
         relatedIdeaIds:idea.relatedIdeaIds ?? [],
         evidenceCount:activeEvidence.length,
         staleEvidenceCount:idea.evidence.length-activeEvidence.length,
-        evidence:activeEvidence.slice(0,20).map(evidence => ({
-          documentId:evidence.documentId,
-          revision:evidence.revision,
-          start:evidence.start,
-          end:evidence.end,
-          excerpt:evidence.excerpt
-        })),
+        evidence:[...activeEvidence]
+          .sort((a,b) => a.documentId.localeCompare(b.documentId,"en") ||
+            a.revision-b.revision || a.start-b.start || a.end-b.end)
+          .slice(0,20).map(evidence => ({
+            documentId:evidence.documentId,
+            revision:evidence.revision,
+            start:evidence.start,
+            end:evidence.end,
+            excerpt:evidence.excerpt
+          })),
         statusHistory:statusHistory.slice(-100),
+        writerDecisionCount:statusHistory.filter(change => change.reason==="writer").length,
         omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
       };
     });

@@ -39,6 +39,104 @@ const REQUIRED_COLUMNS = {
   bridge_metadata: ["key", "value"]
 };
 
+function fnv1a64(update) {
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < update.length; index++) {
+    hash ^= BigInt(update.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+}
+
+function checksumForArchiveIds(ids) {
+  return fnv1a64(JSON.stringify([...ids].sort()));
+}
+
+function checksumForArchiveContent(entries) {
+  let serialized = "[";
+  for (let index = 0; index < entries.length; index++) {
+    const item = JSON.stringify(entries[index]);
+    if (typeof item !== "string") throw new Error("Una entrada archivada no se puede serializar.");
+    if (index > 0) serialized += ",";
+    serialized += item;
+  }
+  serialized += "]";
+  return fnv1a64(serialized);
+}
+
+/**
+ * Comprueba recibos y entradas archivadas antes de aceptar o restaurar un
+ * respaldo. Las lecturas por clave evitan materializar toda la biblioteca.
+ * Recibos legacy sin checksum de contenido mantienen compatibilidad.
+ */
+function validatePersonalIdeaFinalizationIntegrity(database) {
+  const receipts = database.prepare(
+    "SELECT writer_id, record_key, value_json FROM bridge_records " +
+    "WHERE collection = ? ORDER BY writer_id, record_key"
+  ).all("writer-library-finalization-receipts");
+  const countEntries = database.prepare(
+    "SELECT COUNT(*) AS total FROM bridge_records " +
+    "WHERE collection = ? AND writer_id = ? AND json_extract(value_json, '$.sourceProjectId') = ?"
+  );
+  const loadEntry = database.prepare(
+    "SELECT value_json FROM bridge_records " +
+    "WHERE collection = ? AND record_key = ? AND writer_id = ?"
+  );
+
+  for (const row of receipts) {
+    const receipt = JSON.parse(row.value_json);
+    const ids = receipt?.archivedIdeaIds;
+    if (!receipt || typeof receipt.writerId !== "string" || !receipt.writerId.trim() ||
+        receipt.writerId !== row.writer_id ||
+        typeof receipt.sourceProjectId !== "string" || !receipt.sourceProjectId.trim() ||
+        receipt.receiptId !== "finalization-v1" ||
+        typeof receipt.sourceProjectName !== "string" || !receipt.sourceProjectName.trim() ||
+        !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
+        !Array.isArray(ids) ||
+        ids.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(ids).size !== ids.length ||
+        ids.some((id, index) => index > 0 && ids[index - 1].localeCompare(id) > 0) ||
+        row.record_key !== JSON.stringify([receipt.writerId, receipt.sourceProjectId, receipt.receiptId]) ||
+        receipt.archiveChecksum !== checksumForArchiveIds(ids) ||
+        (receipt.archiveContentChecksum !== undefined &&
+          !/^fnv1a64:[0-9a-f]{16}$/u.test(receipt.archiveContentChecksum))) {
+      throw new Error("El respaldo SQLite contiene un recibo de finalización inválido.");
+    }
+
+    const count = countEntries.get(
+      "personal-idea-library", receipt.writerId, receipt.sourceProjectId
+    );
+    if (Number(count?.total ?? -1) !== ids.length) {
+      throw new Error("El respaldo SQLite no conserva todas las entradas de la biblioteca del recibo.");
+    }
+
+    if (receipt.archiveContentChecksum === undefined) continue;
+    const entries = [];
+    for (const ideaId of ids) {
+      const key = JSON.stringify([receipt.writerId, receipt.sourceProjectId, ideaId]);
+      const stored = loadEntry.get("personal-idea-library", key, receipt.writerId);
+      if (!stored) {
+        throw new Error("El respaldo SQLite perdió una idea archivada del recibo.");
+      }
+      const entry = JSON.parse(stored.value_json);
+      if (!entry || entry.writerId !== receipt.writerId ||
+          entry.sourceProjectId !== receipt.sourceProjectId ||
+          entry.sourceProjectName !== receipt.sourceProjectName ||
+          entry.category !== receipt.sourceProjectName ||
+          entry.idea?.projectId !== receipt.sourceProjectId ||
+          entry.idea?.id !== ideaId || entry.idea?.status !== "IDEA" ||
+          entry.idea?.sourceProjectName !== receipt.sourceProjectName ||
+          !entry.context || entry.context.version !== 1) {
+        throw new Error("El respaldo SQLite contiene una entrada de biblioteca incompatible con su recibo.");
+      }
+      entries.push(entry);
+    }
+    if (checksumForArchiveContent(entries) !== receipt.archiveContentChecksum) {
+      throw new Error("El respaldo SQLite no coincide con el checksum del contenido archivado.");
+    }
+  }
+}
+
 function requirePath(value, label) {
   if (typeof value !== "string" || !value.trim()) {
     throw new TypeError(label + " es obligatorio.");
@@ -117,6 +215,8 @@ function inspectDatabaseFile(filePath) {
     if (Number(invalidJson?.total ?? -1) !== 0) {
       throw new Error("La base SQLite contiene registros JSON malformados.");
     }
+
+    validatePersonalIdeaFinalizationIntegrity(database);
 
     const recordCount = Number(database.prepare(
       "SELECT COUNT(*) AS total FROM bridge_records"

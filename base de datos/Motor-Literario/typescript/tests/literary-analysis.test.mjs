@@ -1861,7 +1861,7 @@ test("no asigna alias ambiguos a personajes ni genera co-menciones falsas", () =
     text: [
       "Escena 1",
       "Alex habló con Luis."
-    ].join("\\n"),
+    ].join("\n"),
     knownCharacters: [
       { entityId: "ana-id", canonicalName: "Ana", aliases: ["Alex"] },
       { entityId: "alex-id", canonicalName: "Alex" },

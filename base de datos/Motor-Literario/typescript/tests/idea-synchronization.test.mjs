@@ -578,6 +578,24 @@ test("reconcilia dos altas concurrentes del mismo vínculo como una sola asociac
   api.dispose();
 });
 
+test("no reintenta cambios de estado ante errores ajenos a CAS", async () => {
+  const store = new RacingStore([idea("idea-source")]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.nextWriteError = new Error("fallo de almacenamiento");
+
+  await assert.rejects(
+    api.setNarrativeIdeaStatus("idea-source", "incorporated"),
+    /fallo de almacenamiento/
+  );
+  assert.equal(store.writes, 1);
+  assert.equal(
+    store.ideas.get(projectId + ":idea-source").status,
+    "IDEA"
+  );
+  api.dispose();
+});
+
 test("reintenta cambios de estado tras CAS y conserva vínculos concurrentes", async () => {
   const store = new RacingStore([
     idea("idea-source"), idea("idea-concurrent-target")

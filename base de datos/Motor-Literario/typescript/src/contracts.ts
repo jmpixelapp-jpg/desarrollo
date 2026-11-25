@@ -1,3 +1,4 @@
+import type { ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion, ImportAuthorization, SchemaMigration } from "./mldb-records";
 import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
 import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle } from "./project-data";
 

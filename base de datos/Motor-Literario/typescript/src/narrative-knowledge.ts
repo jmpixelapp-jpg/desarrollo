@@ -344,7 +344,7 @@ export function extractNarrativeRelations(
 ): readonly NarrativeRelation[] {
   validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset, entities);
   const relationSignal = new RegExp(
-    `\\\\b(?:es|era|fue)\\\\s+(?:el|la)?\\\\s*(?:${RELATION_TYPES.join("|")})\\\\s+de\\\\b|\\\\b(?:${ACTION_RELATIONS.join("|")})\\\\s+a\\\\b`,
+    `\\b(?:es|era|fue)\\s+(?:el|la)?\\s*(?:${RELATION_TYPES.join("|")})\\s+de\\b|\\b(?:${ACTION_RELATIONS.join("|")})\\s+a\\b`,
     "iu"
   );
   if (!relationSignal.test(text)) return [];

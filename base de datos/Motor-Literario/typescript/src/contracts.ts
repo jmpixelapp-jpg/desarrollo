@@ -104,16 +104,24 @@ export interface StoredProjectFinalizationReceipt {
   readonly archiveChecksum: string;
 }
 
-/** Cursor estable de lectura de la biblioteca; el escritor se deriva de la sesión autenticada. */
+/** Cursor estable de lectura de la biblioteca; el escritor se deriva de la sesión autenticada.
+ * libraryVersion convierte la paginación en una lectura consistente: si cambia entre páginas,
+ * el almacén solicita reiniciar desde la primera página en lugar de mezclar generaciones.
+ */
 export interface PersonalIdeaLibraryCursor {
   readonly sourceProjectId: string;
   readonly ideaId: string;
+  readonly libraryVersion?: number;
 }
 
 /** Página acotada de la biblioteca privada de ideas de un escritor. */
 export interface PersonalIdeaLibraryPage {
   readonly items: readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[];
   readonly nextCursor: PersonalIdeaLibraryCursor | null;
+  /** Versión monotónica del conjunto leído, cuando el adaptador la soporta. */
+  readonly libraryVersion?: number;
+  /** true indica que hubo una mutación entre páginas y el cliente debe reiniciar con cursor null. */
+  readonly restartRequired?: boolean;
 }
 
 export interface ProjectStore {

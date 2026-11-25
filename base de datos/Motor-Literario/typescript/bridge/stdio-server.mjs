@@ -542,15 +542,34 @@ async function closeGracefully() {
   await Promise.allSettled([...inFlight]);
   await Promise.allSettled([...activeDispatches]);
   if (!store || store.closed) return;
-  try { await drainKnowledgeSync(); } catch (error) { writeError(error); }
-  try { await flushAll(); } catch (error) { writeError(error); }
+  let closeFailed = false;
+  try {
+    await drainKnowledgeSync();
+  } catch (error) {
+    closeFailed = true;
+    writeError(error);
+  }
+  try {
+    await flushAll();
+  } catch (error) {
+    closeFailed = true;
+    writeError(error);
+  }
   for (const record of projects.values()) record.api.dispose();
   projects.clear();
   lastNarrativeVersions.clear();
   pendingNarrativeSyncs.clear();
   pendingWriterLibrarySyncs.clear();
   lastWriterLibraryVersions.clear();
-  try { store.close(); } catch (error) { writeError(error); }
+  try {
+    store.close();
+  } catch (error) {
+    closeFailed = true;
+    writeError(error);
+  }
+  // EOF no admite reintentos. El código de salida debe distinguir un vaciado
+  // incompleto de un cierre limpio para que el anfitrión active recuperación.
+  if (closeFailed) process.exitCode = 1;
 }
 
 async function main() {

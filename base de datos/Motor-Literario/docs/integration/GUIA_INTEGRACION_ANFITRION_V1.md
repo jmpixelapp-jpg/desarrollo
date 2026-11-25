@@ -289,6 +289,10 @@ La API también proporciona métodos de lectura/escritura para:
 
 Antes de mostrar una pestaña o habilitar una función opcional, consultar `motor.getCapabilities()`. Esta respuesta identifica capacidades del adaptador actual; no asumir que todo adaptador futuro implementará las mismas funciones. La capacidad `semanticContradictionAnalysis` es `false` y `externalRuntimeServices` es `false`.
 
+Para presentar el grafo de ideas como una vista del libro completo, comprobar `projectWideNarrativeIdeaGraph`. Solo se anuncia cuando el adaptador puede leer tanto `loadIdeas` como `loadEntities`, para validar los vínculos explícitos. El análisis sigue devolviendo `ideaGraph` en modo de compatibilidad cuando esa capacidad no está disponible, pero `catalogScope: "character-linked-fallback"` indica que su catálogo procede únicamente del subconjunto ligado a personajes; la interfaz no debe llamarlo grafo global.
+
+Cuando `catalogScope: "project"`, `omittedIdeaCount` indica cuántas ideas quedaron fuera del snapshot de hasta 2.000. Las referencias `not-in-snapshot` no deben mostrarse como vínculos rotos porque su destino podría estar entre las ideas omitidas. Solo `missingFromProjectReferenceCount`, con catálogo global completo y cero ideas omitidas, confirma referencias sin destino en el proyecto. Las muestras visibles están limitadas: hasta 5.000 referencias y 100 ciclos o componentes conexos; presentar sus contadores de omisión para no sugerir exhaustividad. El grafo refleja únicamente vínculos declarados por el escritor, no inferencias semánticas.
+
 Análisis descriptivo de un rango abierto:
 
 ```ts

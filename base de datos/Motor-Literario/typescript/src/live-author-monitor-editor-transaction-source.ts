@@ -136,13 +136,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.listeners.add(listener);
     if (this.listeners.size === 1) {
       try {
-        this.unsubscribeProvider = this.provider.subscribeTransactions(
-          this.documentId,
-          this.handleTransaction
-        );
-        if (typeof this.unsubscribeProvider !== "function") {
-          throw new TypeError("subscribeTransactions debe devolver una función de cancelación.");
-        }
+        this.attachProvider();
       } catch (error) {
         this.listeners.delete(listener);
         this.unsubscribeProvider = undefined;
@@ -192,6 +186,14 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.lastTransactionKind = null;
     this.seenTransactions.clear();
     this.needsResync = false;
+    if (this.listeners.size > 0) {
+      try {
+        this.attachProvider();
+      } catch (error) {
+        this.fail("resync-required", "No se pudo reanudar la suscripción de transacciones tras resincronizar.");
+        throw error;
+      }
+    }
     return this.getState();
   }
 
@@ -282,6 +284,18 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       }
     }
   };
+
+  private attachProvider(): void {
+    if (this.unsubscribeProvider) return;
+    const unsubscribe = this.provider.subscribeTransactions(
+      this.documentId,
+      this.handleTransaction
+    );
+    if (typeof unsubscribe !== "function") {
+      throw new TypeError("subscribeTransactions debe devolver una función de cancelación.");
+    }
+    this.unsubscribeProvider = unsubscribe;
+  }
 
   private detachProvider(): void {
     const unsubscribe = this.unsubscribeProvider;

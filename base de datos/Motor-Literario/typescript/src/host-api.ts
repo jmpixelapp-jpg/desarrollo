@@ -623,7 +623,7 @@ export class HostEngineApi {
       onAnalysis: result => {
         try { options.callbacks?.onAnalysis?.(result); } catch { /* La UI no debe detener el análisis. */ }
         void this.persistLiveDiagnostics(result).catch(error => this.reportKnowledgeError(error));
-        if (this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities) {
+        if (this.store.saveEntity && this.store.loadEntities) {
           void this.processLiveAnalysis(result).catch(error => {
             this.reportKnowledgeError(error);
           });
@@ -790,7 +790,7 @@ export class HostEngineApi {
       };
       const mapEvidence = (items: readonly TextEvidence[]) => items.map(rebase);
 
-      if (this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities) {
+      if (this.store.saveEntity && this.store.loadEntities) {
         if (!this.entitiesLoaded) {
           const records = requireProjectScopedRecords(await this.store.loadEntities(project.projectId), project.projectId, "entidades");
           for (const item of records) this.narrativeEntities.set(item.id, item);
@@ -808,7 +808,7 @@ export class HostEngineApi {
           }
         }
       }
-      if (this.store.saveRelation && this.store.saveRelationIfUnchanged && this.store.loadRelations) {
+      if (this.store.saveRelation && this.store.loadRelations) {
         const store = this.requireRelationStore();
         if (!this.relationsLoaded) {
           const records = requireProjectScopedRecords(await store.loadRelations(project.projectId), project.projectId, "relaciones");
@@ -827,7 +827,7 @@ export class HostEngineApi {
           }
         }
       }
-      if (this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents) {
+      if (this.store.saveEvent && this.store.loadEvents) {
         const store = this.requireEventStore();
         if (!this.eventsLoaded) {
           const records = requireProjectScopedRecords(await store.loadEvents(project.projectId), project.projectId, "acontecimientos");
@@ -847,7 +847,7 @@ export class HostEngineApi {
           }
         }
       }
-      if (this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas) {
+      if (this.store.saveIdea && this.store.loadIdeas) {
         const store = this.requireIdeaStore();
         if (!this.ideasLoaded) {
           const records = requireProjectScopedRecords(await store.loadIdeas(project.projectId), project.projectId, "ideas");
@@ -867,7 +867,7 @@ export class HostEngineApi {
           }
         }
       }
-      if (this.store.saveAssertion && this.store.saveAssertionIfUnchanged && this.store.loadAssertions) {
+      if (this.store.saveAssertion && this.store.loadAssertions) {
         if (!this.assertionsLoaded) {
           const records = requireProjectScopedRecords(await this.store.loadAssertions(project.projectId), project.projectId, "afirmaciones");
           for (const item of records) this.narrativeAssertions.set(item.id, item);
@@ -940,7 +940,7 @@ export class HostEngineApi {
         addDocumentEvidenceIndex(this.entityEvidenceIndex, next.id, next.evidence);
         merged.push(next);
       }
-      if (this.store.saveRelation && this.store.saveRelationIfUnchanged && this.store.loadRelations) {
+      if (this.store.saveRelation && this.store.loadRelations) {
         const relationStore = this.requireRelationStore();
         if (!this.relationsLoaded) {
           const existingRelations = requireProjectScopedRecords(await relationStore.loadRelations(project.projectId), project.projectId, "relaciones");
@@ -959,7 +959,7 @@ export class HostEngineApi {
         }
       }
 
-      if (this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents) {
+      if (this.store.saveEvent && this.store.loadEvents) {
         const eventStore = this.requireEventStore();
         if (!this.eventsLoaded) {
           const existingEvents = requireProjectScopedRecords(await eventStore.loadEvents(project.projectId), project.projectId, "acontecimientos");
@@ -1001,7 +1001,7 @@ export class HostEngineApi {
         }
       }
 
-      if (this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas) {
+      if (this.store.saveIdea && this.store.loadIdeas) {
         const ideaStore = this.requireIdeaStore();
         if (!this.ideasLoaded) {
           const existingIdeas = requireProjectScopedRecords(await ideaStore.loadIdeas(project.projectId), project.projectId, "ideas");
@@ -1041,7 +1041,7 @@ export class HostEngineApi {
           this.ideaLineIndex.set(key, ids);
         }
       }
-      if (this.store.saveAssertion && this.store.saveAssertionIfUnchanged && this.store.loadAssertions) {
+      if (this.store.saveAssertion && this.store.loadAssertions) {
         if (!this.assertionsLoaded) {
           const existingAssertions = requireProjectScopedRecords(await this.store.loadAssertions(project.projectId), project.projectId, "afirmaciones");
           for (const assertion of existingAssertions) this.narrativeAssertions.set(assertion.id, assertion);
@@ -2997,33 +2997,23 @@ export class HostEngineApi {
   }
 
   private requireEventStore(): Required<Pick<
-    import("./contracts").ProjectStore,
-    "saveEvent" | "saveEventIfUnchanged" | "loadEvents"
+    import("./contracts").ProjectStore, "saveEvent" | "loadEvents"
   >> {
     const store = this.store;
-    if (!store.saveEvent || !store.saveEventIfUnchanged || !store.loadEvents) {
-      throw new Error("El almacenamiento no admite actualizaciones seguras de acontecimientos entre instancias.");
+    if (!store.saveEvent || !store.loadEvents) {
+      throw new Error("El almacenamiento no admite acontecimientos narrativos.");
     }
-    return {
-      saveEvent: store.saveEvent.bind(store),
-      saveEventIfUnchanged: store.saveEventIfUnchanged.bind(store),
-      loadEvents: store.loadEvents.bind(store)
-    };
+    return { saveEvent: store.saveEvent.bind(store), loadEvents: store.loadEvents.bind(store) };
   }
 
   private requireIdeaStore(): Required<Pick<
-    import("./contracts").ProjectStore,
-    "saveIdea" | "saveIdeaIfUnchanged" | "loadIdeas"
+    import("./contracts").ProjectStore, "saveIdea" | "loadIdeas"
   >> {
     const store = this.store;
-    if (!store.saveIdea || !store.saveIdeaIfUnchanged || !store.loadIdeas) {
-      throw new Error("El almacenamiento no admite escrituras seguras de ideas entre instancias.");
+    if (!store.saveIdea || !store.loadIdeas) {
+      throw new Error("El almacenamiento no admite ideas narrativas.");
     }
-    return {
-      saveIdea: store.saveIdea.bind(store),
-      saveIdeaIfUnchanged: store.saveIdeaIfUnchanged.bind(store),
-      loadIdeas: store.loadIdeas.bind(store)
-    };
+    return { saveIdea: store.saveIdea.bind(store), loadIdeas: store.loadIdeas.bind(store) };
   }
 
   private async persistIdeaUpdate(
@@ -3130,18 +3120,13 @@ export class HostEngineApi {
   }
 
   private requireRelationStore(): Required<Pick<
-    import("./contracts").ProjectStore,
-    "saveRelation" | "saveRelationIfUnchanged" | "loadRelations"
+    import("./contracts").ProjectStore, "saveRelation" | "loadRelations"
   >> {
     const store = this.store;
-    if (!store.saveRelation || !store.saveRelationIfUnchanged || !store.loadRelations) {
-      throw new Error("El adaptador de almacenamiento no admite escrituras seguras de relaciones narrativas.");
+    if (!store.saveRelation || !store.loadRelations) {
+      throw new Error("El adaptador de almacenamiento no admite relaciones narrativas.");
     }
-    return {
-      saveRelation: store.saveRelation.bind(store),
-      saveRelationIfUnchanged: store.saveRelationIfUnchanged.bind(store),
-      loadRelations: store.loadRelations.bind(store)
-    };
+    return { saveRelation: store.saveRelation.bind(store), loadRelations: store.loadRelations.bind(store) };
   }
 
   private requireProject(): ProjectIdentity {
@@ -3149,14 +3134,14 @@ export class HostEngineApi {
     return this.project;
   }
 
-  private requireKnowledgeStore(): import("./contracts").ProjectStore &
-    Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "saveEntityIfUnchanged" | "loadEntities">> {
+  private requireKnowledgeStore(): Required<Pick<
+    import("./contracts").ProjectStore, "saveEntity" | "loadEntities"
+  >> {
     const store = this.store;
-    if (!store.saveEntity || !store.saveEntityIfUnchanged || !store.loadEntities) {
-      throw new Error("El adaptador de almacenamiento no admite escrituras seguras de conocimiento narrativo.");
+    if (!store.saveEntity || !store.loadEntities) {
+      throw new Error("El adaptador de almacenamiento no admite conocimiento narrativo.");
     }
-    return store as import("./contracts").ProjectStore &
-      Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "saveEntityIfUnchanged" | "loadEntities">>;
+    return { saveEntity: store.saveEntity.bind(store), loadEntities: store.loadEntities.bind(store) };
   }
 
   getCapabilities(): Readonly<Record<string, unknown>> {
@@ -3176,23 +3161,29 @@ export class HostEngineApi {
       diagnosticRecoveryOnOpen: true,
       multilineAffectedLineAnalysis: true,
       explicitHostResynchronization: true,
-      automaticNarrativeExtraction: Boolean(this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
-      incrementalNarrativeExtraction: Boolean(this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
-      evidenceBasedEntityExtraction: Boolean(this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
+      automaticNarrativeExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
+      incrementalNarrativeExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
+      evidenceBasedEntityExtraction: Boolean(this.store.saveEntity && this.store.loadEntities),
       projectIsolatedNarrativeKnowledge: true,
       narrativeEntityConsolidation: Boolean(this.store.mergeNarrativeEntityIdentity),
-      evidenceBasedCharacterRelations: Boolean(this.store.saveRelation && this.store.saveRelationIfUnchanged && this.store.loadRelations),
-      explicitEventCapture: Boolean(this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents),
-      explicitEventChronology: Boolean(this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents),
-      authorMarkedIdeaCapture: Boolean(this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas),
-      explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas && this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
-      explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.saveIdeaIfUnchanged && this.store.loadIdeas),
+      evidenceBasedCharacterRelations: Boolean(this.store.saveRelation && this.store.loadRelations),
+      explicitEventCapture: Boolean(this.store.saveEvent && this.store.loadEvents),
+      explicitEventChronology: Boolean(this.store.saveEvent && this.store.loadEvents),
+      authorMarkedIdeaCapture: Boolean(this.store.saveIdea && this.store.loadIdeas),
+      explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.saveEntity && this.store.loadEntities),
+      explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
       ),
-      explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.saveEventIfUnchanged && this.store.loadEvents && this.store.saveEntity && this.store.saveEntityIfUnchanged && this.store.loadEntities),
-      evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.saveAssertionIfUnchanged && this.store.loadAssertions),
+      explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
+      evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
+      optimisticNarrativeConcurrency: Boolean(
+        this.store.saveEntityIfUnchanged && this.store.saveRelationIfUnchanged &&
+        this.store.saveEventIfUnchanged && this.store.saveIdeaIfUnchanged &&
+        this.store.saveAssertionIfUnchanged
+      ),
+      automaticNarrativeSynchronization: Boolean(this.store.subscribeNarrativeChanges),
       semanticContradictionAnalysis: false,
       projectSettings: Boolean(this.store.saveProjectSetting && this.store.loadProjectSettings),
       languageProfiles: Boolean(this.store.saveLanguageProfile && this.store.loadLanguageProfiles),

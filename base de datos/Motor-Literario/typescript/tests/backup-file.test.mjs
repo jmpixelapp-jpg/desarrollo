@@ -119,6 +119,10 @@ test("rechaza nombres de respaldo con rutas, controles y nombres reservados del 
     "backup?.json",
     "CON.json",
     "nul.backup.json",
+    "CON .json",
+    "NUL .backup.json",
+    "COM¹.json",
+    "LPT².backup.json",
     "final-backup."
   ]) {
     assert.throws(

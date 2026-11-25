@@ -532,3 +532,29 @@ test("los puntos de articulación respetan componentes débiles desconectados", 
   assert.equal(byId.get("a").weakComponentPiecesAfterRemoval, 1);
   assert.equal(byId.get("isolated").weakComponentPiecesAfterRemoval, 0);
 });
+
+
+test("las muestras de componentes y ciclos informan los elementos omitidos", () => {
+  const isolatedIdeas = Array.from({ length: 103 }, (_, index) =>
+    idea("isolated-" + String(index).padStart(3, "0"))
+  );
+  const isolatedGraph = analyze(isolatedIdeas);
+  assert.equal(isolatedGraph.weakComponentCount, 103);
+  assert.equal(isolatedGraph.weakComponents.length, 100);
+  assert.equal(isolatedGraph.omittedWeakComponentCount, 3);
+  assert.equal(isolatedGraph.largestWeakComponentSize, 1);
+  assert.equal(isolatedGraph.weakComponents[0].representativeIdeaId, "isolated-000");
+  assert.equal(isolatedGraph.weakComponents.at(-1).representativeIdeaId, "isolated-099");
+
+  const cyclicIdeas = Array.from({ length: 103 }, (_, index) => {
+    const id = "cycle-" + String(index).padStart(3, "0");
+    return idea(id, [id]);
+  });
+  const cyclicGraph = analyze(cyclicIdeas);
+  assert.equal(cyclicGraph.cycleCount, 103);
+  assert.equal(cyclicGraph.cycles.length, 100);
+  assert.equal(cyclicGraph.omittedCycleCount, 3);
+  assert.equal(cyclicGraph.selfReferenceCount, 103);
+  assert.equal(cyclicGraph.cycles[0].ideaIds[0], "cycle-000");
+  assert.equal(cyclicGraph.cycles.at(-1).ideaIds[0], "cycle-099");
+});

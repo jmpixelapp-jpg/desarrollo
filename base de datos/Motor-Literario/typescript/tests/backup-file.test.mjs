@@ -119,13 +119,61 @@ test("rechaza nombres de respaldo con rutas, controles y nombres reservados del 
     "backup?.json",
     "CON.json",
     "nul.backup.json",
-    "final-backup.",
-    "final-backup "
+    "final-backup."
   ]) {
     assert.throws(
       () => downloadIndexedDbBackupFile(sampleBackup, filename),
       /nombre del archivo.*no es válido/u,
       filename
     );
+  }
+});
+
+test("normaliza espacios externos del nombre del archivo descargado", () => {
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const originalCreate = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+  const originalRevoke = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+  const originalSetTimeout = globalThis.setTimeout;
+  let downloadName = "";
+  const parent = { append() {} };
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      body: parent,
+      createElement() {
+        return {
+          set href(value) {},
+          set download(value) { downloadName = value; },
+          set hidden(value) {},
+          click() {},
+          remove() {}
+        };
+      }
+    }
+  });
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value() { return "blob:normalized-name"; }
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value() {}
+  });
+  globalThis.setTimeout = callback => {
+    callback();
+    return 1;
+  };
+
+  try {
+    downloadIndexedDbBackupFile(sampleBackup, "  respaldo privado  ");
+    assert.equal(downloadName, "respaldo privado.json");
+  } finally {
+    if (originalDocument) Object.defineProperty(globalThis, "document", originalDocument);
+    else delete globalThis.document;
+    if (originalCreate) Object.defineProperty(URL, "createObjectURL", originalCreate);
+    else delete URL.createObjectURL;
+    if (originalRevoke) Object.defineProperty(URL, "revokeObjectURL", originalRevoke);
+    else delete URL.revokeObjectURL;
+    globalThis.setTimeout = originalSetTimeout;
   }
 });

@@ -1585,3 +1585,42 @@ test("el grafo de ideas es determinista ante permutaciones del catálogo y sus r
     { fromIdeaId: "idea-c", toIdeaId: "idea-a", resolution: "included-in-snapshot" }
   ]);
 });
+
+
+test("analiza iterativamente un ciclo largo sin depender de la pila recursiva", () => {
+  const projectId = "literary-analysis-test";
+  const nodeCount = 1500;
+  const knownProjectIdeas = Array.from({ length: nodeCount }, (_, index) => ({
+    projectId,
+    ideaId: "node-" + String(index).padStart(4, "0"),
+    status: "IDEA",
+    relatedIdeaIds: [
+      "node-" + String((index + 1) % nodeCount).padStart(4, "0")
+    ],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  }));
+
+  const graph = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nUna cadena de ideas permanece.",
+    knownProjectIdeas
+  }).ideaGraph;
+
+  assert.equal(graph.ideaCount, nodeCount);
+  assert.equal(graph.referenceCount, nodeCount);
+  assert.equal(graph.includedReferenceCount, nodeCount);
+  assert.equal(graph.weakComponentCount, 1);
+  assert.equal(graph.largestWeakComponentSize, nodeCount);
+  assert.equal(graph.sourceNodeCount, 0);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+  assert.equal(graph.cycleCount, 1);
+  assert.equal(graph.cycles[0].ideaIds.length, nodeCount);
+  assert.equal(graph.cycles[0].ideaIds[0], "node-0000");
+  assert.equal(graph.cycles[0].ideaIds.at(-1), "node-1499");
+});

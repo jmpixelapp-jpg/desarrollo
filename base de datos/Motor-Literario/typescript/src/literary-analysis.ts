@@ -92,7 +92,6 @@ export interface LiteraryAnalysisInput {
   readonly knownIdeas?: readonly LiteraryAnalysisKnownIdea[];
   readonly knownRelationsOmittedCount?: number;
   readonly knownIdeasOmittedCount?: number;
-  readonly knownIdeasOmittedCount?: number;
 }
 export interface LiteraryAnalysisOccurrence { readonly start: number; readonly end: number; }
 export interface LiteraryRepeatedWord {
@@ -3101,7 +3100,11 @@ function buildCharacterNarrativeTrajectories(
   attributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis,
   eventEvidence: LiteraryCharacterEventEvidenceAnalysis,
   dependencies: LiteraryEventDependencyAnalysis,
-  projectEvents: readonly LiteraryAnalysisKnownProjectEvent[]
+  projectEvents: readonly LiteraryAnalysisKnownProjectEvent[],
+  knownRelations: readonly LiteraryAnalysisKnownRelation[],
+  knownIdeas: readonly LiteraryAnalysisKnownIdea[],
+  knownRelationsOmittedCount: number,
+  knownIdeasOmittedCount: number
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
   for (const profile of attributeEvolution.profiles) {
@@ -3115,6 +3118,84 @@ function buildCharacterNarrativeTrajectories(
     profiles.push(profile);
     eventsByCharacter.set(profile.entityId,profiles);
   }
+  const characterById = new Map(knownCharacters.map(character => [character.entityId, character]));
+  const relationshipsByCharacter = new Map<string,LiteraryCharacterRelationshipProfile[]>();
+  for (const relation of knownRelations) {
+    for (const characterId of [relation.fromEntityId, relation.toEntityId]) {
+      if (!characterById.has(characterId)) continue;
+      const isSelf = relation.fromEntityId === characterId && relation.toEntityId === characterId;
+      const direction: LiteraryCharacterRelationshipProfile["direction"] = isSelf
+        ? "self"
+        : relation.fromEntityId === characterId ? "outgoing" : "incoming";
+      const otherEntityId = isSelf
+        ? characterId
+        : direction === "outgoing" ? relation.toEntityId : relation.fromEntityId;
+      const activeEvidence = relation.evidence;
+      const evidenceSamples = activeEvidence.slice(0, 20).map(item => ({
+        documentId: item.documentId,
+        revision: item.revision,
+        occurrence: { start: item.start, end: item.end },
+        excerpt: item.excerpt
+      }));
+      const profile: LiteraryCharacterRelationshipProfile = {
+        relationId: relation.relationId,
+        direction,
+        otherEntityId,
+        otherCharacterName: characterById.get(otherEntityId)?.canonicalName ?? null,
+        relationType: relation.relationType,
+        evidenceStatus: relation.evidenceCount > 0
+          ? "active-evidence"
+          : relation.staleEvidenceCount > 0 ? "stale-only" : "no-evidence",
+        evidenceCount: relation.evidenceCount,
+        staleEvidenceCount: relation.staleEvidenceCount,
+        evidenceSamples,
+        evidenceTruncated: relation.evidenceCount > evidenceSamples.length,
+        historyStatus: "current-record-only"
+      };
+      const profiles = relationshipsByCharacter.get(characterId) ?? [];
+      profiles.push(profile);
+      relationshipsByCharacter.set(characterId, profiles);
+    }
+  }
+  for (const profiles of relationshipsByCharacter.values()) {
+    profiles.sort((a,b) =>
+      a.relationId.localeCompare(b.relationId,"en") ||
+      a.direction.localeCompare(b.direction,"en")
+    );
+  }
+
+  const decisionsByCharacter = new Map<string,LiteraryCharacterDocumentedDecision[]>();
+  for (const idea of knownIdeas) {
+    const evidenceSamples = idea.evidence.slice(0, 20).map(item => ({
+      documentId: item.documentId,
+      revision: item.revision,
+      occurrence: { start: item.start, end: item.end },
+      excerpt: item.excerpt
+    }));
+    const decision: LiteraryCharacterDocumentedDecision = {
+      ideaId: idea.ideaId,
+      text: idea.text,
+      status: idea.status,
+      originDocumentId: idea.originDocumentId,
+      sourceProjectName: idea.sourceProjectName,
+      relatedIdeaIds: [...idea.relatedIdeaIds],
+      evidenceCount: idea.evidenceCount,
+      staleEvidenceCount: idea.staleEvidenceCount,
+      evidenceSamples,
+      statusHistory: [...idea.statusHistory],
+      omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
+      writerDecisionCount: idea.statusHistory.filter(change => change.reason === "writer").length
+    };
+    for (const characterId of idea.relatedEntityIds) {
+      const decisions = decisionsByCharacter.get(characterId) ?? [];
+      decisions.push(decision);
+      decisionsByCharacter.set(characterId, decisions);
+    }
+  }
+  for (const decisions of decisionsByCharacter.values()) {
+    decisions.sort((a,b) => a.ideaId.localeCompare(b.ideaId,"en"));
+  }
+
   const relationsByCharacter = new Map<string,LiteraryCharacterCausalRelation[]>();
   for (const candidate of dependencies.candidates) {
     const firstParticipants = new Set(candidate.firstEventParticipantIds);
@@ -3232,6 +3313,8 @@ function buildCharacterNarrativeTrajectories(
       observedSceneIndexes,
       incompleteSceneIndexes,
       attributes:attributeProfiles,
+      relationships:relationshipsByCharacter.get(character.entityId) ?? [],
+      documentedDecisions:decisionsByCharacter.get(character.entityId) ?? [],
       eventParticipation:eventProfiles,
       projectEventTimeline:buildCharacterProjectEventTimeline(character.entityId,projectEvents),
       causalRelations,
@@ -3257,6 +3340,10 @@ function buildCharacterNarrativeTrajectories(
     omittedEventAssociationCount:eventEvidence.omittedAssociationCount,
     omittedCausalCandidateCount:dependencies.omittedCandidateCount,
     omittedProjectEventCount:input.knownProjectEventsOmittedCount ?? 0,
+    relationshipRecordCount:knownRelations.length + knownRelationsOmittedCount,
+    omittedRelationshipCount:knownRelationsOmittedCount,
+    linkedIdeaCount:knownIdeas.length + knownIdeasOmittedCount,
+    omittedIdeaCount:knownIdeasOmittedCount,
     causalCandidateCount:dependencies.candidateCount,
     trajectories:trajectories.slice(0,200)
   };
@@ -4685,7 +4772,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const characterNarrativeTrajectories = buildCharacterNarrativeTrajectories(
     explicitScenes,input.knownCharacters ?? [],characterAttributeEvolution,
-    characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? []
+    characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
+    input.knownRelations ?? [],input.knownIdeas ?? [],
+    input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);

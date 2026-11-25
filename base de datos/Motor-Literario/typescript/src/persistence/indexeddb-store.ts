@@ -24,12 +24,13 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
   cloneLanguageProfile, cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef,
   type StyleProfile, type TimelineTrack, cloneStyleProfile, cloneTimelineTrack,
   validateStyleProfile, validateTimelineTrack,
-  type RecordLifecycle, type RelationLifecycle,
-  cloneRecordLifecycle, cloneRelationLifecycle, validateRecordLifecycle, validateRelationLifecycle
+  type RecordLifecycle, type RelationLifecycle, type EventLifecycle,
+  cloneRecordLifecycle, cloneRelationLifecycle, cloneEventLifecycle,
+  validateRecordLifecycle, validateRelationLifecycle, validateEventLifecycle
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 21;
+const DATABASE_VERSION = 22;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -53,6 +54,7 @@ const STYLE_PROFILES = "style-profiles";
 const TIMELINE_TRACKS = "timeline-tracks";
 const RECORD_LIFECYCLES = "record-lifecycles";
 const RELATION_LIFECYCLES = "relation-lifecycles";
+const EVENT_LIFECYCLES = "event-lifecycles";
 const MANUSCRIPT_FRAGMENTS = "manuscript-fragments";
 const RECORD_ATTRIBUTES = "record-attributes";
 const RELATION_ATTRIBUTES = "relation-attributes";
@@ -1143,16 +1145,45 @@ type LifecycleHistoryRecord = {
   readonly projectId: string;
   readonly id: string;
   readonly revision: number;
+  readonly changedAt: number;
+};
+type LifecycleSequenceRules<T extends LifecycleHistoryRecord> = {
+  readonly isInitial: (item: T) => boolean;
+  readonly continues: (previous: T, item: T) => boolean;
+};
+type LegacyLifecycleState = {
   readonly previousLabel: string | null;
   readonly newLabel: string;
   readonly previousState: string | null;
   readonly newState: string;
-  readonly changedAt: number;
+};
+function standardLifecycleSequenceRules<T extends LifecycleHistoryRecord>(): LifecycleSequenceRules<T> {
+  return {
+    isInitial:item => {
+      const value=item as T & LegacyLifecycleState;
+      return value.previousLabel===null && value.previousState===null;
+    },
+    continues:(previous,item) => {
+      const before=previous as T & LegacyLifecycleState;
+      const after=item as T & LegacyLifecycleState;
+      return after.previousLabel===before.newLabel && after.previousState===before.newState;
+    }
+  };
+}
+const EVENT_LIFECYCLE_SEQUENCE_RULES: LifecycleSequenceRules<EventLifecycle> = {
+  // El historial de acontecimientos comienza en el primer cambio que se registra.
+  // Por ello, su revisión 1 conserva una instantánea anterior real, no un baseline inventado.
+  isInitial:() => true,
+  continues:(previous,item) =>
+    item.previousLabel===previous.newLabel &&
+    item.previousParticipants.length===previous.newParticipants.length &&
+    item.previousParticipants.every((id,index)=>id===previous.newParticipants[index])
 };
 
 function validateLifecycleSequence<T extends LifecycleHistoryRecord>(
   records: readonly T[],
-  label: string
+  label: string,
+  rules: LifecycleSequenceRules<T> = standardLifecycleSequenceRules<T>()
 ): readonly T[] {
   if (!Array.isArray(records)) throw new Error(`El historial de ${label} no es una colección.`);
   const ordered = [...records].sort((first, second) => first.revision - second.revision);
@@ -1160,17 +1191,17 @@ function validateLifecycleSequence<T extends LifecycleHistoryRecord>(
   let previous: T | undefined;
   for (const item of ordered) {
     if (!item || typeof item.id !== "string" || !item.id.trim() ||
-        ids.has(item.id) || !Number.isSafeInteger(item.revision) || item.revision < 1) {
+        ids.has(item.id) || !Number.isSafeInteger(item.revision) || item.revision < 1 ||
+        typeof item.changedAt !== "number" || !Number.isFinite(item.changedAt) || item.changedAt < 0) {
       throw new Error(`El historial de ${label} contiene identificadores o revisiones duplicadas.`);
     }
     ids.add(item.id);
     if (!previous) {
-      if (item.revision !== 1 || item.previousLabel !== null || item.previousState !== null) {
-        throw new Error(`El historial de ${label} debe comenzar en revisión 1 sin estado previo.`);
+      if (item.revision !== 1 || !rules.isInitial(item)) {
+        throw new Error(`El historial de ${label} debe comenzar en revisión 1 con una transición válida.`);
       }
     } else if (item.revision !== previous.revision + 1 ||
-        item.previousLabel !== previous.newLabel ||
-        item.previousState !== previous.newState ||
+        !rules.continues(previous,item) ||
         item.changedAt < previous.changedAt) {
       throw new Error(`El historial de ${label} contiene una transición discontinua o una fecha regresiva.`);
     }
@@ -1179,6 +1210,7 @@ function validateLifecycleSequence<T extends LifecycleHistoryRecord>(
   return ordered;
 }
 
+
 async function appendLifecycleRecord<T extends LifecycleHistoryRecord>(
   db: IDBDatabase,
   historyStoreName: string,
@@ -1186,7 +1218,8 @@ async function appendLifecycleRecord<T extends LifecycleHistoryRecord>(
   item: T,
   subjectId: string,
   label: string,
-  validate: (value: T, expectedProjectId?: string) => void
+  validate: (value: T, expectedProjectId?: string) => void,
+  rules: LifecycleSequenceRules<T> = standardLifecycleSequenceRules<T>()
 ): Promise<void> {
   validate(item, item.projectId);
   await new Promise<void>((resolve, reject) => {
@@ -1214,15 +1247,14 @@ async function appendLifecycleRecord<T extends LifecycleHistoryRecord>(
         if (!parent || parent.projectId !== item.projectId || parent.id !== subjectId) {
           throw new Error(`No existe el elemento de destino del historial de ${label} en el proyecto activo.`);
         }
-        const ordered = validateLifecycleSequence(history, label);
+        const ordered = validateLifecycleSequence(history, label,rules);
         const previous = ordered[ordered.length - 1];
         if (!previous) {
-          if (item.revision !== 1 || item.previousLabel !== null || item.previousState !== null) {
-            throw new Error(`El primer cambio de ${label} debe comenzar en revisión 1 y no declarar estado previo.`);
+          if (item.revision !== 1 || !rules.isInitial(item)) {
+            throw new Error(`El primer cambio de ${label} debe comenzar en revisión 1 y declarar una transición válida.`);
           }
         } else if (item.revision !== previous.revision + 1 ||
-            item.previousLabel !== previous.newLabel ||
-            item.previousState !== previous.newState ||
+            !rules.continues(previous,item) ||
             item.changedAt < previous.changedAt) {
           throw new Error(`El cambio de ${label} no continúa la última revisión durable.`);
         }
@@ -1272,7 +1304,8 @@ async function loadLifecycleHistory<T extends LifecycleHistoryRecord>(
   subjectId: string,
   label: string,
   validate: (value: T, expectedProjectId?: string) => void,
-  clone: (value: T) => T
+  clone: (value: T) => T,
+  rules: LifecycleSequenceRules<T> = standardLifecycleSequenceRules<T>()
 ): Promise<readonly T[]> {
   const transaction = db.transaction([historyStoreName, parentStoreName], "readonly");
   const historyRequest = transaction.objectStore(historyStoreName).index("by-subject")
@@ -1316,7 +1349,7 @@ async function loadLifecycleHistory<T extends LifecycleHistoryRecord>(
       else if (!historyReady || !parentReady) reject(new Error(`La lectura del historial de ${label} quedó incompleta.`));
       else {
         try {
-          const ordered = validateLifecycleSequence(records, label);
+          const ordered = validateLifecycleSequence(records, label,rules);
           resolve(ordered.map(item => clone(item)));
         } catch (error) {
           reject(error);
@@ -1329,6 +1362,85 @@ async function loadLifecycleHistory<T extends LifecycleHistoryRecord>(
     transaction.onabort = () => reject(
       failure ?? transaction.error ?? new Error(`Se canceló la lectura del historial de ${label}.`)
     );
+  });
+}
+
+async function saveEventWithLifecycle(
+  db: IDBDatabase,
+  event: NarrativeEvent,
+  expectedCurrent: NarrativeEvent,
+  lifecycle: EventLifecycle
+): Promise<void> {
+  validateNarrativeEventRecord(event,"acontecimiento");
+  validateNarrativeEventRecord(expectedCurrent,"acontecimiento previo");
+  validateEventLifecycle(lifecycle,event.projectId);
+  const normalize = (ids: readonly string[]) => [...new Set(ids)].sort((a,b)=>a.localeCompare(b,"en"));
+  if (event.projectId!==expectedCurrent.projectId || event.id!==expectedCurrent.id ||
+      lifecycle.projectId!==event.projectId || lifecycle.eventId!==event.id ||
+      lifecycle.previousLabel!==expectedCurrent.label || lifecycle.newLabel!==event.label ||
+      JSON.stringify(lifecycle.previousParticipants)!==JSON.stringify(normalize(expectedCurrent.participants)) ||
+      JSON.stringify(lifecycle.newParticipants)!==JSON.stringify(normalize(event.participants))) {
+    throw new Error("La transición versionada no coincide con el cambio real del acontecimiento.");
+  }
+  await new Promise<void>((resolve,reject)=>{
+    const transaction=db.transaction([EVENTS,EVENT_LIFECYCLES],"readwrite");
+    const eventsStore=transaction.objectStore(EVENTS);
+    const historyStore=transaction.objectStore(EVENT_LIFECYCLES);
+    const currentRequest=eventsStore.get([event.projectId,event.id]);
+    const historyRequest=historyStore.index("by-subject").getAll([event.projectId,event.id]);
+    let currentReady=false;
+    let historyReady=false;
+    let history:EventLifecycle[]=[];
+    let failure:Error|undefined;
+    let finished=false;
+    const abortWith=(error:unknown):void=>{
+      if(finished)return;
+      failure=error instanceof Error?error:new Error("No se pudo actualizar el acontecimiento y su historial.");
+      finished=true;
+      try{transaction.abort();}catch{/* transacción ya abortada */}
+    };
+    const commitIfReady=():void=>{
+      if(finished || !currentReady || !historyReady)return;
+      try{
+        const current=currentRequest.result as NarrativeEvent|undefined;
+        if(!current || JSON.stringify(current)!==JSON.stringify(expectedCurrent)){
+          throw new Error("El acontecimiento cambió en otra instancia; actualiza la vista antes de registrar su evolución.");
+        }
+        for(const item of history)validateEventLifecycle(item,event.projectId);
+        const ordered=validateLifecycleSequence(history,"acontecimiento",EVENT_LIFECYCLE_SEQUENCE_RULES);
+        const previous=ordered[ordered.length-1];
+        if(!previous){
+          if(lifecycle.revision!==1 || !EVENT_LIFECYCLE_SEQUENCE_RULES.isInitial(lifecycle)){
+            throw new Error("La primera transición de acontecimiento debe comenzar en revisión 1.");
+          }
+        }else if(lifecycle.revision!==previous.revision+1 ||
+          !EVENT_LIFECYCLE_SEQUENCE_RULES.continues(previous,lifecycle) ||
+          lifecycle.changedAt<previous.changedAt){
+          throw new Error("La transición de acontecimiento no continúa la última revisión durable.");
+        }
+        if(ordered.some(item=>item.id===lifecycle.id)){
+          throw new Error("El ID de la transición de acontecimiento ya existe.");
+        }
+        // Ambas escrituras comparten transacción: el snapshot vigente nunca queda
+        // actualizado sin su correspondiente transición histórica.
+        eventsStore.put(event);
+        historyStore.add(lifecycle);
+      }catch(error){abortWith(error);}
+    };
+    currentRequest.onsuccess=()=>{currentReady=true;commitIfReady();};
+    currentRequest.onerror=()=>abortWith(currentRequest.error ?? new Error("No se pudo leer el acontecimiento vigente."));
+    historyRequest.onsuccess=()=>{
+      try{
+        history=historyRequest.result as EventLifecycle[];
+        if(!Array.isArray(history))throw new Error("El historial de acontecimiento no es una colección.");
+        historyReady=true;
+        commitIfReady();
+      }catch(error){abortWith(error);}
+    };
+    historyRequest.onerror=()=>abortWith(historyRequest.error ?? new Error("No se pudo leer el historial de acontecimiento."));
+    transaction.oncomplete=()=>resolve();
+    transaction.onerror=()=>reject(failure ?? transaction.error ?? new Error("No se pudo confirmar el acontecimiento y su historial."));
+    transaction.onabort=()=>reject(failure ?? transaction.error ?? new Error("Se canceló la actualización versionada del acontecimiento."));
   });
 }
 
@@ -1477,6 +1589,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           lifecycles.createIndex("by-project", "projectId", { unique: false });
           lifecycles.createIndex("by-subject", ["projectId", "relationId"], { unique: false });
           lifecycles.createIndex("by-subject-revision", ["projectId", "relationId", "revision"], { unique: true });
+        }
+        if (!db.objectStoreNames.contains(EVENT_LIFECYCLES)) {
+          const lifecycles = db.createObjectStore(EVENT_LIFECYCLES, { keyPath: ["projectId", "id"] });
+          lifecycles.createIndex("by-project", "projectId", { unique: false });
+          lifecycles.createIndex("by-subject", ["projectId", "eventId"], { unique: false });
+          lifecycles.createIndex("by-subject-revision", ["projectId", "eventId", "revision"], { unique: true });
         }
         if (!db.objectStoreNames.contains(DOCUMENTS)) {
           const store = db.createObjectStore(DOCUMENTS, { keyPath: ["projectId", "documentId"] });
@@ -1680,6 +1798,9 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(RELATION_LIFECYCLES, "by-project", "projectId");
         ensureIndex(RELATION_LIFECYCLES, "by-subject", ["projectId", "relationId"]);
         ensureIndex(RELATION_LIFECYCLES, "by-subject-revision", ["projectId", "relationId", "revision"], true);
+        ensureIndex(EVENT_LIFECYCLES, "by-project", "projectId");
+        ensureIndex(EVENT_LIFECYCLES, "by-subject", ["projectId", "eventId"]);
+        ensureIndex(EVENT_LIFECYCLES, "by-subject-revision", ["projectId", "eventId", "revision"], true);
         ensureIndex(DOCUMENTS, "by-project", "projectId");
         ensureIndex(CHANGES, CHANGE_INDEX, ["projectId", "documentId", "sequence"], true);
         ensureIndex(ENTITIES, "by-project", "projectId");
@@ -2135,6 +2256,26 @@ export class IndexedDbProjectStore implements ProjectStore {
       await this.open(), RECORD_LIFECYCLES, PROJECT_RECORDS,
       item, item.recordId, "ficha", validateRecordLifecycle
     );
+  }
+
+  async loadEventLifecycles(projectId: string, eventId: string): Promise<readonly EventLifecycle[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof eventId !== "string" || !eventId.trim()) {
+      throw new Error("Identidad de proyecto o acontecimiento inválida.");
+    }
+    return loadLifecycleHistory(
+      await this.open(),EVENT_LIFECYCLES,EVENTS,
+      projectId,eventId,"acontecimiento",validateEventLifecycle,cloneEventLifecycle,
+      EVENT_LIFECYCLE_SEQUENCE_RULES
+    );
+  }
+
+  async saveEventAndAppendLifecycleIfUnchanged(
+    event: NarrativeEvent,
+    expectedCurrent: NarrativeEvent,
+    lifecycle: EventLifecycle
+  ): Promise<void> {
+    return saveEventWithLifecycle(await this.open(),event,expectedCurrent,lifecycle);
   }
 
   async loadRelationLifecycles(projectId: string, relationId: string): Promise<readonly RelationLifecycle[]> {

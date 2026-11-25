@@ -1,0 +1,3 @@
+[workspace]
+members = ["engine", "storage"]
+resolver = "2"

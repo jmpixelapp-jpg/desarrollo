@@ -364,50 +364,32 @@ No interpretar `queued` como `applied`, ni un diagnóstico de una revisión ante
 El anfitrión controla el archivo y su ubicación. En navegador, el siguiente ejemplo resuelve el flujo básico con descarga JSON y selector de archivo; el motor conserva la responsabilidad de validar el contenido y restaurarlo atómicamente:
 
 ```ts
+import {
+  downloadIndexedDbBackupFile,
+  readIndexedDbBackupFile
+} from "./ruta-local/Motor-Literario/typescript/src/index";
 import type { HostEngineApi } from "./ruta-local/Motor-Literario/typescript/src/index";
 
 export async function downloadMotorKnowledgeBackup(
   motor: HostEngineApi
 ): Promise<void> {
-  // Espera automáticamente a que terminen journal, análisis y conocimiento.
+  // Espera journal, análisis, diagnósticos y conocimiento pendientes.
   const backup = await motor.exportDatabaseBackup();
-  const blob = new Blob([JSON.stringify(backup, null, 2)], {
-    type: "application/json"
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `motor-literario-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
-  link.hidden = true;
-  document.body.append(link);
-  try {
-    link.click();
-  } finally {
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
+  downloadIndexedDbBackupFile(backup);
 }
 
 export async function restoreMotorKnowledgeBackup(
   motorNuevoSinProyecto: HostEngineApi,
   file: File
 ): Promise<void> {
-  if (file.size === 0) {
-    throw new Error("El archivo de respaldo está vacío.");
-  }
-  let backup: unknown;
-  try {
-    backup = JSON.parse(await file.text()) as unknown;
-  } catch {
-    throw new Error("El archivo seleccionado no contiene JSON válido.");
-  }
-  // La API comprueba formato, versión, almacenes, checksum e integridad
-  // antes de reemplazar datos; la operación de almacenamiento es atómica.
+  const backup = await readIndexedDbBackupFile(file);
+  // La API valida versión, almacenes, checksum e integridad y restaura
+  // todos los object stores en una única transacción atómica.
   await motorNuevoSinProyecto.restoreDatabaseBackup(backup);
 }
 ```
 
-Uso de restauración: detener la edición, crear una instancia nueva de `HostEngineApi` sin llamar todavía a `initializeProject()`, seleccionar el archivo mediante un control `<input type="file" accept="application/json,.json">`, ejecutar `restoreMotorKnowledgeBackup()` y solo después inicializar el proyecto con las identidades proporcionadas por el anfitrión. Si el usuario cancela el selector, no se llama a la restauración. En Electron u otro entorno de escritorio, sustituir la descarga y lectura del navegador por el diálogo de archivos privado del anfitrión, manteniendo las mismas llamadas del motor.
+Uso de restauración: detener la edición, crear una instancia nueva de `HostEngineApi` sin llamar todavía a `initializeProject()`, seleccionar el archivo mediante un control `<input type="file" accept="application/json,.json">`, pasar el `File` a `restoreMotorKnowledgeBackup()` y solo después inicializar el proyecto con las identidades proporcionadas por el anfitrión. Si el usuario cancela el selector, no se llama a la restauración. En Electron u otro entorno de escritorio, sustituir la descarga y lectura del navegador por el diálogo de archivos privado del anfitrión, manteniendo las mismas llamadas del motor.
 
 El paquete IndexedDB contiene todos los libros y escritores almacenados en ese perfil local, no solo el proyecto que está abierto. Tratar el archivo como información privada: no guardarlo en carpetas compartidas ni enviarlo a servicios externos sin una decisión explícita de cifrado y acceso. El checksum incluido detecta alteraciones accidentales, pero no cifra ni autentica el archivo.
 

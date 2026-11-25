@@ -2717,8 +2717,12 @@ test("el grafo identifica puntos de articulación en cadenas de referencias", ()
   const node = id => graph.nodes.find(item => item.ideaId === id);
   assert.equal(node("a").articulationPointStatus, "not-articulation-within-snapshot");
   assert.equal(node("b").articulationPointStatus, "connector");
+  assert.equal(node("b").weakComponentPiecesAfterRemoval, 2);
+  assert.equal(node("b").undirectedReferenceDegree, 2);
+  assert.equal(node("a").weakComponentPiecesAfterRemoval, 1);
   assert.equal(node("c").articulationPointStatus, "not-articulation-within-snapshot");
   assert.equal(node("isolated").articulationPointStatus, "not-articulation-within-snapshot");
+  assert.equal(node("isolated").weakComponentPiecesAfterRemoval, 0);
   assert.equal(graph.articulationPointCount, 1);
   assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);
 });

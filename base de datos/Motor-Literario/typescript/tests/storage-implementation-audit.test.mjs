@@ -103,3 +103,16 @@ test("detecta cambios en keyPath e índices aunque el almacén exista", () => {
     (issue) => issue.code === "RUNTIME_INDEX_MISMATCH"
   ));
 });
+
+test("detecta almacenes IndexedDB creados que no figuran en el manifiesto", () => {
+  const sourceWithExtraStore = runtimeSource.replace(
+    "const DATABASE_VERSION = 21;",
+    'const DATABASE_VERSION = 21;\nconst UNDECLARED_STORE = "undeclared-store";'
+  ).replace(
+    "request.onupgradeneeded = (event) => {",
+    'request.onupgradeneeded = (event) => {\n        if (!db.objectStoreNames.contains(UNDECLARED_STORE)) db.createObjectStore(UNDECLARED_STORE, { keyPath: "id" });'
+  );
+  assert.ok(auditStorageImplementation(mapping, sourceWithExtraStore).some(
+    (issue) => issue.code === "UNMAPPED_RUNTIME_STORE"
+  ));
+});

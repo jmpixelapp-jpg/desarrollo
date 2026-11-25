@@ -308,7 +308,7 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     );
     assert.equal(unchangedPage.libraryVersion, page.libraryVersion,
       "el reintento idempotente no incrementa la generación de la biblioteca");
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 600));
     assert.deepEqual(libraryNotifications, [{
       projectId: "compact-finalization-project",
       writerId: "writer-compact"

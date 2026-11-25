@@ -56,9 +56,9 @@ export function findNarrativeEntityIdentityCandidates(
   const scoped = entities.filter(entity => entity.projectId === projectId);
   const candidates = new Map<string, NarrativeEntityIdentityCandidate>();
   for (let i = 0; i < scoped.length; i++) {
-    const first = scoped[i];
+    const first = scoped[i]!;
     for (let j = i + 1; j < scoped.length; j++) {
-      const second = scoped[j];
+      const second = scoped[j]!;
       if (first.id === second.id || first.kind !== second.kind) continue;
       const firstCanonical = normalizeEntityName(first.canonicalName);
       const secondCanonical = normalizeEntityName(second.canonicalName);
@@ -206,7 +206,7 @@ function validateNarrativeExtractionContext(
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
         typeof entity.normalizedName !== "string" || !entity.normalizedName.trim() ||
         !Array.isArray(entity.aliases) ||
-        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim())) {
+        entity.aliases.some((alias: unknown) => typeof alias !== "string" || !alias.trim())) {
       throw new Error("Colección de entidades inválida o perteneciente a otro proyecto.");
     }
   }
@@ -496,8 +496,9 @@ export function extractNarrativeEvents(
     if (!label) continue;
     const start = baseOffset + match.index + match[0].indexOf(label);
     const end = start + label.length;
+    const timeReference = extractExplicitTimeReference(label);
     const participants = entities
-      .filter(entity => entity.projectId === projectId && entity.kind === "character")
+      .filter((entity: NarrativeEntity) => entity.projectId === projectId && entity.kind === "character")
       .filter(entity => [entity.canonicalName, ...entity.aliases].some(name =>
         new RegExp(unicodeNamePattern(name), "iu").test(label)
       ))
@@ -516,7 +517,7 @@ export function extractNarrativeEvents(
         documentId, revision, start, end,
         excerpt: text.slice(lineStart, lineEnd)
       }],
-      ...(extractExplicitTimeReference(label) ? { timeReference: extractExplicitTimeReference(label) } : {})
+      ...(timeReference ? { timeReference } : {})
     });
   }
   return events;
@@ -579,7 +580,7 @@ export function mergeNarrativeEvent(
     ...previous,
     label: incoming.label,
     participants: incoming.participants,
-    timeReference: incoming.timeReference,
+    ...(incoming.timeReference ? { timeReference: incoming.timeReference } : {}),
     evidence: [...evidence.values()]
   };
 }

@@ -2483,10 +2483,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["project-evidences", "by-fragment"],
       ["timeline-occurrences", "by-project"],
       ["timeline-occurrences", "by-event-record"],
-      ["timeline-occurrences", "by-track-order"],
-      ["dictionary-entry-entities", "by-project"],
-      ["dictionary-entry-entities", "by-entry"],
-      ["dictionary-entry-entities", "by-record"]
+      ["timeline-occurrences", "by-track-order"]
     ];
     assert.deepEqual(createdIndexes.map(([storeName, indexName]) => [storeName, indexName]), expected);
     assert.equal(

@@ -299,8 +299,9 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
         (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
           links.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(links).size !== links.length)) {
+      const category = links === idea.relatedEntityIds ? "fichas" : "ideas";
       throw new Error(
-        `Registro de ${label} malformado: referencias inválidas, duplicadas o superiores al límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`
+        `Registro de ${label} "${idea.id}" malformado: ${category} contiene ${Array.isArray(links) ? links.length : "un valor no válido"} referencias; máximo ${MAX_NARRATIVE_IDEA_REFERENCES}, sin IDs vacíos ni duplicados.`
       );
     }
   }
@@ -321,8 +322,7 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
         throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);
       }
     }
-    if (idea.statusHistory.length === 0 ||
-        idea.statusHistory.length < 0) {
+    if (idea.statusHistory.length === 0) {
       throw new Error(`Registro de ${label} malformado: el historial no coincide con el estado actual.`);
     }
   }
@@ -4040,6 +4040,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       const archivedIdeaIdSet = new Set<string>();
       const identityOwners = new Map<string, string>();
       const legacyIdeaCache = new Map<string, NarrativeIdea>();
+      let legacyIdeaCatalogLoaded = false;
 
       const abortWith = (error: unknown): void => {
         if (finished) return;
@@ -4058,7 +4059,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         ideaId: string,
         callback: (idea: NarrativeIdea | undefined) => void
       ): void => {
-        if (typeof ideas.get !== "function" && legacyIdeaCache.size > 0) {
+        if (typeof ideas.get !== "function" && legacyIdeaCatalogLoaded) {
           const cached = legacyIdeaCache.get(ideaId);
           if (cached) {
             try {
@@ -4404,13 +4405,29 @@ export class IndexedDbProjectStore implements ProjectStore {
         if (typeof projectIndex.getAll !== "function") {
           throw new Error("El adaptador IndexedDB no admite recorridos por cursor.");
         }
-        const sourceRequest = projectIndex.getAll(projectId);
         const cursorRequest = {
           result: null as IDBCursorWithValue | null,
           onsuccess: null as ((event: Event) => unknown) | null,
           onerror: null as ((event: Event) => unknown) | null,
           error: null as DOMException | null
         };
+        const advance = (): void => {
+          const values = [...legacyIdeaCache.values()];
+          let index = 0;
+          const continueCursor = (): void => {
+            const value = values[index++];
+            cursorRequest.result = value
+              ? ({ value, continue: continueCursor } as unknown as IDBCursorWithValue)
+              : null;
+            cursorRequest.onsuccess?.({} as Event);
+          };
+          continueCursor();
+        };
+        if (legacyIdeaCatalogLoaded) {
+          queueMicrotask(advance);
+          return cursorRequest as unknown as IDBRequest<IDBCursorWithValue | null>;
+        }
+        const sourceRequest = projectIndex.getAll(projectId);
         sourceRequest.onsuccess = () => {
           try {
             const values = sourceRequest.result;
@@ -4425,14 +4442,7 @@ export class IndexedDbProjectStore implements ProjectStore {
               }
               legacyIdeaCache.set(value.id, value);
             }
-            let index = 0;
-            const advance = (): void => {
-              const value = (values as NarrativeIdea[])[index++];
-              cursorRequest.result = value
-                ? ({ value, continue: advance } as unknown as IDBCursorWithValue)
-                : null;
-              cursorRequest.onsuccess?.({} as Event);
-            };
+            legacyIdeaCatalogLoaded = true;
             advance();
           } catch (error) {
             abortWith(error);

@@ -12,3 +12,4 @@ export * from "./project-data";
 export * from "./mldb-records";
 
 export * from "./literary-analysis";
+export * from "./bridge-client";

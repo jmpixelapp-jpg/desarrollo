@@ -2,7 +2,7 @@ import type {
   PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage,
   ProjectFinalizationSummary, StoredProjectFinalizationReceipt
 } from "./contracts";
-import type { NarrativeIdea, PersonalIdeaLibraryEntry } from "./narrative-knowledge";
+import type { NarrativeEntity, NarrativeIdea, PersonalIdeaLibraryEntry } from "./narrative-knowledge";
 import type { RecordLifecycle, RelationLifecycle } from "./project-data";
 
 export interface BridgeReadable {
@@ -299,6 +299,15 @@ export class MotorLiterarioBridgeClient {
     replacement: string;
   }): Promise<unknown> {
     return this.request("document.change", { projectId, change });
+  }
+
+  /** Lee las fichas narrativas del proyecto activo para resolver vínculos desde la interfaz. */
+  getNarrativeEntities(projectId: string): Promise<readonly NarrativeEntity[]> {
+    return this.request<readonly NarrativeEntity[]>("project.call", {
+      projectId,
+      method: "getNarrativeEntities",
+      args: []
+    });
   }
 
   /** Lee el catálogo de ideas del proyecto activo, sin mezclar bibliotecas de otros libros. */

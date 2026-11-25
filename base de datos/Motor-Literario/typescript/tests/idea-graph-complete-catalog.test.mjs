@@ -610,3 +610,60 @@ test("la resonancia léxica normaliza Unicode de compatibilidad y mayúsculas", 
     api.dispose();
   }
 });
+
+
+test("la resonancia léxica limita a cien pares y conserva el ranking determinista", async () => {
+  const ids = Array.from({ length: 15 }, (_, index) =>
+    "lexical-top-" + String(index).padStart(2, "0")
+  );
+  const termsByIdea = ids.map(() => []);
+  const encode = value => {
+    let result = "";
+    do {
+      result = String.fromCharCode(97 + value % 26) + result;
+      value = Math.floor(value / 26) - 1;
+    } while (value >= 0);
+    return result;
+  };
+  let pairIndex = 0;
+  const expectedPairs = [];
+  for (let left = 0; left < ids.length; left++) {
+    for (let right = left + 1; right < ids.length; right++) {
+      const suffix = encode(pairIndex++);
+      const firstTerm = "resonancealpha" + suffix;
+      const secondTerm = "resonancebeta" + suffix;
+      termsByIdea[left].push(firstTerm, secondTerm);
+      termsByIdea[right].push(firstTerm, secondTerm);
+      expectedPairs.push([ids[left], ids[right]]);
+    }
+  }
+  const ideas = ids.map((id, index) => ({
+    projectId, id, text: termsByIdea[index].join(" "),
+    status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+    evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+  }));
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-top-limit" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nEl ranking de resonancias se limita.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.candidatePairCount, 105);
+    assert.equal(lexical.resonances.length, 100);
+    assert.equal(lexical.omittedCandidatePairCount, 5);
+    assert.deepEqual(
+      lexical.resonances.map(pair => [pair.leftIdeaId, pair.rightIdeaId]),
+      expectedPairs.slice(0, 100)
+    );
+    assert.ok(lexical.resonances.every(pair => pair.sharedTermCount === 2));
+  } finally {
+    api.dispose();
+  }
+});

@@ -7,7 +7,7 @@
 
 ## Alcance
 
-El análisis entrega métricas de longitud y ritmo de oración/párrafo, diversidad léxica superficial, densidad estimada de diálogo, señales gramaticales explícitas de persona, palabras repetidas, aperturas de oración recurrentes y puntuación expresiva.
+El análisis entrega métricas de longitud y ritmo de oración/párrafo, diversidad léxica superficial, densidad estimada de diálogo, señales gramaticales explícitas de persona, palabras repetidas, aperturas de oración recurrentes, candidatos a anáfora en oraciones consecutivas, vocabulario sensorial explícito por modalidad y puntuación expresiva.
 
 Las señales gramaticales excluyen tramos de diálogo reconocidos por comillas o líneas que empiezan con raya. Las ocurrencias devuelven offsets absolutos. El motor limita las muestras gramaticales a 40, los términos repetidos a 12 y las aperturas a 8; limita también los offsets visibles por patrón.
 
@@ -29,6 +29,8 @@ npm test
 - La perspectiva gramatical cuenta pronombres explícitos fuera del diálogo; no identifica narrador, focalización ni persona verbal implícita.
 - La diversidad léxica usa formas normalizadas y no desambigua homónimos, flexiones ni función sintáctica.
 - Las aperturas recurrentes se calculan con las dos primeras palabras de cada oración y pueden reflejar conectores frecuentes.
+- La anáfora es un candidato cuando coinciden literalmente las dos primeras palabras de al menos dos oraciones consecutivas.
+- El vocabulario sensorial usa listas explícitas de palabras por modalidad; no reconoce sentidos implícitos, metáforas ni sinestesias.
 - El análisis acepta como máximo 2.000.000 de unidades UTF-16 por operación; manuscritos más extensos deben consultarse por rangos y revisión.
 
 Estas métricas son indicios para inspección del escritor. No son correcciones obligatorias y nunca autorizan cambios automáticos en el manuscrito.

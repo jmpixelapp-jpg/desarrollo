@@ -9887,3 +9887,35 @@ test("la API analiza el documento abierto sin modificar el manuscrito", async ()
   await assert.rejects(() => api.analyzeLiteraryDocument("missing"),/abierto/i);
   await assert.rejects(() => api.analyzeLiteraryDocument("chapter",0,text.length+1),/supera/i);
 });
+
+
+test("detecta candidatos a anáfora en oraciones consecutivas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "La noche cae sobre la plaza. La noche cubre las calles. La noche apaga las luces. Después llega el alba.";
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-anaphora",documentId:"chapter",revision:1,text,baseOffset:30
+  });
+  const candidate = result.anaphoraCandidates.find(item => item.phrase === "La noche");
+  assert.ok(candidate);
+  assert.deepEqual(candidate.sentenceIndexes,[1,2,3]);
+  assert.equal(candidate.occurrences.length,3);
+  assert.ok(candidate.occurrences.every(item => item.start >= 30 && item.end > item.start));
+  assert.equal(result.anaphoraCandidates.some(item => item.phrase === "Después llega"),false);
+});
+
+test("identifica vocabulario sensorial explícito sin inferir metáforas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const result = analyzeLiteraryFragment({
+    projectId:"literary-senses",documentId:"chapter",revision:1,
+    text:"La luz brillaba y el ruido crecía. El aroma llenó la estancia; la piel sintió el frío y el sabor amargo."
+  });
+  const count = modality => result.sensorySignals.find(item => item.modality === modality)?.count ?? 0;
+  assert.ok(count("visual") >= 2);
+  assert.ok(count("auditory") >= 1);
+  assert.ok(count("olfactory") >= 1);
+  assert.ok(count("tactile") >= 2);
+  assert.ok(count("gustatory") >= 2);
+  assert.ok(result.sensorySignals.every(signal => signal.occurrences.every(
+    item => item.start >= 0 && item.end > item.start
+  )));
+});

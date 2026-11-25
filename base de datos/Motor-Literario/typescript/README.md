@@ -314,11 +314,13 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Estimación de diálogo a partir de comillas y líneas que comienzan con raya.
 - Repeticiones de palabras de contenido y aperturas de oración recurrentes, con ocurrencias acotadas para inspección.
 - Señales de primera, segunda y tercera persona basadas en pronombres explícitos fuera de los tramos de diálogo.
+- Candidatos a anáfora en comienzos de oraciones consecutivas.
+- Vocabulario sensorial explícito clasificado por modalidad visual, auditiva, táctil, olfativa y gustativa.
 - Conteos de interrogaciones, exclamaciones y elipsis.
 
 La API `analyzeLiteraryDocument(documentId, start?, end?)` espera a que terminen los cambios admitidos y analiza el rango UTF-16 solicitado en la revisión vigente. Es una operación de solo lectura, no persiste sugerencias ni modifica el manuscrito. Los resultados identifican proyecto, documento, revisión y rango; las ocurrencias usan offsets UTF-16 absolutos.
 
-Los perfiles de ritmo son umbrales descriptivos de longitud de oración, no juicios de calidad. Las señales gramaticales no identifican por sí solas al narrador: los pronombres tácitos, el estilo indirecto y los formatos de diálogo no reconocidos pueden cambiar el resultado. El motor expone estas limitaciones en cada respuesta.
+Los perfiles de ritmo son umbrales descriptivos de longitud de oración, no juicios de calidad. Las señales gramaticales no identifican por sí solas al narrador: los pronombres tácitos, el estilo indirecto y los formatos de diálogo no reconocidos pueden cambiar el resultado. El motor expone estas limitaciones en cada respuesta. La anáfora requiere coincidencia literal de las dos primeras palabras en oraciones consecutivas. El vocabulario sensorial es un léxico explícito: no interpreta metáforas, sinestesias ni imágenes implícitas.
 
 El análisis acepta hasta 2.000.000 de unidades UTF-16 por operación. Los documentos mayores deben analizarse por rangos y conservar su revisión al comparar resultados.
 

@@ -23,6 +23,18 @@ export interface LiterarySentenceOpening {
   readonly count: number;
   readonly occurrences: readonly LiteraryAnalysisOccurrence[];
 }
+export interface LiteraryAnaphoraCandidate {
+  readonly phrase: string;
+  /** Índices 1-based de las oraciones consecutivas dentro del fragmento. */
+  readonly sentenceIndexes: readonly number[];
+  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+}
+export type LiterarySensoryModality = "visual" | "auditory" | "tactile" | "olfactory" | "gustatory";
+export interface LiterarySensorySignal {
+  readonly modality: LiterarySensoryModality;
+  readonly count: number;
+  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+}
 export interface LiteraryVoiceSignalCounts {
   readonly firstPerson: number;
   readonly secondPerson: number;
@@ -73,6 +85,8 @@ export interface LiteraryAnalysisResult {
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedSentenceOpenings: readonly LiterarySentenceOpening[];
+  readonly anaphoraCandidates: readonly LiteraryAnaphoraCandidate[];
+  readonly sensorySignals: readonly LiterarySensorySignal[];
   readonly caveats: readonly string[];
 }
 interface LocalRange { readonly start: number; readonly end: number; }
@@ -115,6 +129,36 @@ const SECOND_PERSON = new Set([
 ]);
 const THIRD_PERSON = new Set(["él","ella","ellos","ellas"]);
 const ABBREVIATIONS = new Set(["sr","sra","srta","dr","dra","prof","profa","etc","ej","núm","núms"]);
+
+const SENSORY_LEXICON: Readonly<Record<LiterarySensoryModality, ReadonlySet<string>>> = {
+  visual: new Set([
+    "luz","brillo","brillaba","brillante","resplandor","sombra","oscuro","oscura",
+    "claro","clara","ver","vio","mirar","miró","miraba","observó","observaba",
+    "contempló","contemplaba","vista","ojo","ojos","color","colores"
+  ]),
+  auditory: new Set([
+    "sonido","ruido","voz","voces","silencio","susurro","susurró","susurraba",
+    "grito","gritó","gritaba","eco","resonó","resonaba","escuchó","escuchaba",
+    "oyó","oía","oír","oir","escuchar","sonó","sonaba","murmuró","murmuraba"
+  ]),
+  tactile: new Set([
+    "piel","frío","fria","fría","calor","caliente","helado","helada","suave",
+    "áspero","áspera","aspero","aspera","rugoso","rugosa","textura","tocó",
+    "tocaba","acarició","acariciaba","dolor","ardor","húmedo","húmeda","humedo","humeda"
+  ]),
+  olfactory: new Set([
+    "olor","aroma","perfume","fragancia","hedor","apestaba","olió","olia","olía",
+    "oler","olfato","huele","olía"
+  ]),
+  gustatory: new Set([
+    "sabor","dulce","amargo","amarga","salado","salada","ácido","ácida","acido",
+    "acida","agrio","agria","saboreó","saboreaba","saborear","degustó","degustaba"
+  ])
+};
+const SENSORY_MODALITIES: readonly LiterarySensoryModality[] = [
+  "visual","auditory","tactile","olfactory","gustatory"
+];
+
 
 function roundMetric(value: number): number {
   return Math.round(value * 1000) / 1000;
@@ -260,6 +304,24 @@ function toAbsoluteOccurrences(
     start: baseOffset + item.start, end: baseOffset + item.end
   }));
 }
+
+function collectSensorySignals(
+  tokens: readonly WordToken[], baseOffset: number
+): LiterarySensorySignal[] {
+  return SENSORY_MODALITIES.map(modality => {
+    const vocabulary = SENSORY_LEXICON[modality];
+    const matches = tokens.filter(token => vocabulary.has(token.normalized));
+    return {
+      modality,
+      count: matches.length,
+      occurrences: matches.slice(0, 20).map(token => ({
+        start: baseOffset + token.start,
+        end: baseOffset + token.end
+      }))
+    };
+  });
+}
+
 function validateInput(input: LiteraryAnalysisInput): number {
   const baseOffset = input?.baseOffset ?? 0;
   if (!input || typeof input !== "object" ||
@@ -328,6 +390,51 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       occurrences:toAbsoluteOccurrences(group.occurrences,baseOffset,12)
     }));
 
+
+  const anaphoraCandidates: LiteraryAnaphoraCandidate[] = [];
+  const sentenceOpeningRecords: {
+    readonly key: string;
+    readonly label: string;
+    readonly occurrence: LocalRange;
+  }[] = [];
+  let anaphoraTokenCursor = 0;
+  for (const range of sentenceRanges) {
+    while (anaphoraTokenCursor < tokens.length &&
+      tokens[anaphoraTokenCursor]!.end <= range.start) anaphoraTokenCursor++;
+    const first = tokens[anaphoraTokenCursor];
+    const second = tokens[anaphoraTokenCursor + 1];
+    if (!first || !second || first.start < range.start || second.end > range.end) {
+      sentenceOpeningRecords.push({ key: "", label: "", occurrence: { start: range.start, end: range.start } });
+      continue;
+    }
+    sentenceOpeningRecords.push({
+      key: first.normalized + " " + second.normalized,
+      label: first.text + " " + second.text,
+      occurrence: { start: first.start, end: second.end }
+    });
+  }
+  let runStart = 0;
+  while (runStart < sentenceOpeningRecords.length) {
+    const record = sentenceOpeningRecords[runStart]!;
+    let runEnd = runStart + 1;
+    if (record.key) {
+      while (runEnd < sentenceOpeningRecords.length &&
+        sentenceOpeningRecords[runEnd]!.key === record.key) runEnd++;
+    }
+    if (record.key && runEnd - runStart >= 2) {
+      const run = sentenceOpeningRecords.slice(runStart, runEnd);
+      anaphoraCandidates.push({
+        phrase: record.label,
+        sentenceIndexes: run.map((_, index) => runStart + index + 1),
+        occurrences: run.map(item => ({
+          start: baseOffset + item.occurrence.start,
+          end: baseOffset + item.occurrence.end
+        }))
+      });
+    }
+    runStart = runEnd;
+  }
+
   const wordCount = tokens.length;
   const uniqueWordCount = new Set(tokens.map(token => token.normalized)).size;
   const dialogueWordCount = countTokensInRanges(tokens,dialogueRanges);
@@ -383,11 +490,15 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedSentenceOpenings,
+    anaphoraCandidates,
+    sensorySignals:collectSensorySignals(tokens,baseOffset),
     caveats:[
       "El ritmo usa umbrales de longitud de oración; no mide calidad, tensión ni musicalidad.",
       "El diálogo se estima por comillas y líneas iniciadas con raya; otros formatos pueden quedar fuera.",
       "Las señales de persona cuentan pronombres explícitos fuera del diálogo y no identifican por sí solas al narrador.",
-      "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales."
+      "La diversidad léxica usa formas normalizadas; no desambigua homónimos ni funciones gramaticales.",
+      "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",
+      "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos."
     ]
   };
 }

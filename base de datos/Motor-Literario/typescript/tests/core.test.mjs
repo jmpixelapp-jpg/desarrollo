@@ -7524,6 +7524,51 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
     api.getPersonalIdeaLibrary(),
     /Violación de aislamiento/
   );
+
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    idea: {
+      ...structuredClone(entry.idea),
+      relatedIdeaIds: Array.from({ length: 501 }, (_, index) => "root-related-" + index)
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
+
+  const contextTargets = Array.from({ length: 501 }, (_, index) => ({
+    projectId: "library-api-validation",
+    id: "context-target-" + index,
+    text: "Idea contextual " + index,
+    status: "discarded",
+    originDocumentId: "chapter",
+    sourceProjectName: "Libro validado",
+    evidence: []
+  }));
+  const contextSource = {
+    projectId: "library-api-validation",
+    id: "context-source",
+    text: "Idea contextual con muchos vínculos",
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: "Libro validado",
+    evidence: [],
+    relatedIdeaIds: contextTargets.map(target => target.id)
+  };
+  store.loadPersonalIdeas = async () => [{
+    ...structuredClone(entry),
+    idea: { ...structuredClone(entry.idea), relatedIdeaIds: [] },
+    context: {
+      version: 1,
+      relatedIdeas: [contextSource, ...contextTargets],
+      relatedEntities: []
+    }
+  }];
+  await assert.rejects(
+    api.getPersonalIdeaLibrary(),
+    /Violación de aislamiento/
+  );
 });
 
 test("la API rechaza entradas de biblioteca con enlaces sin instantánea contextual", async () => {

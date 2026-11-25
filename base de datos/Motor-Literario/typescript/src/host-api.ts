@@ -1939,11 +1939,17 @@ export class HostEngineApi {
     const activeProjectId = this.requireProject().projectId;
     if (!sourceProject || !targetProject ||
         typeof sourceProject.projectId !== "string" || !sourceProject.projectId.trim() ||
-        typeof targetProject.projectId !== "string" || !targetProject.projectId.trim() ||
-        sourceProject.projectId === targetProject.projectId ||
-        sourceProject.writerId !== writerId || targetProject.writerId !== writerId ||
-        (activeProjectId !== sourceProject.projectId && activeProjectId !== targetProject.projectId)) {
-      throw new Error("Las dos identidades de proyecto deben estar verificadas para el mismo escritor autenticado.");
+        typeof targetProject.projectId !== "string" || !targetProject.projectId.trim()) {
+      throw new Error("Las identidades de proyecto para importar son inválidas.");
+    }
+    if (sourceProject.projectId === targetProject.projectId) {
+      throw new Error("La autorización debe conectar proyectos distintos.");
+    }
+    if (sourceProject.writerId !== writerId || targetProject.writerId !== writerId) {
+      throw new Error("Los dos proyectos deben pertenecer al mismo escritor autenticado.");
+    }
+    if (activeProjectId !== sourceProject.projectId && activeProjectId !== targetProject.projectId) {
+      throw new Error("El proyecto activo debe ser el origen o el destino de la autorización.");
     }
     return this.enqueueKnowledgeOperation(async () => {
       const append = this.store.appendImportAuthorization;
@@ -1982,7 +1988,10 @@ export class HostEngineApi {
         if (ids.has(item.migrationId)) throw new Error("Hay IDs duplicados de migraciones.");
         ids.add(item.migrationId);
       }
-      return records.map(cloneSchemaMigration);
+      return [...records].sort((first, second) =>
+        Number(first.toVersion) - Number(second.toVersion) ||
+        first.migrationId.localeCompare(second.migrationId)
+      ).map(cloneSchemaMigration);
     });
   }
 

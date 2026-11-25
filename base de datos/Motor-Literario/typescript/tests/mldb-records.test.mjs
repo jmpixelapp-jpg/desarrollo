@@ -61,7 +61,7 @@ class MldbRecordsMemoryStore {
     ).map(item => structuredClone(item));
   }
   async saveRecordAttribute(attribute, expectedCurrent) {
-    if (!this.entities.has(this.key(attribute.projectId, attribute.recordId))) throw new Error("record_missing");
+    if (!this.entities.has(this.key(attribute.projectId, attribute.recordId))) throw new Error("No existe la ficha del atributo.");
     const key = this.key(attribute.projectId, attribute.id);
     const current = this.recordAttributes.get(key);
     if (expectedCurrent === undefined ? current !== undefined
@@ -75,7 +75,7 @@ class MldbRecordsMemoryStore {
     ).map(item => structuredClone(item));
   }
   async saveRelationAttribute(attribute, expectedCurrent) {
-    if (!this.relations.has(this.key(attribute.projectId, attribute.relationId))) throw new Error("relation_missing");
+    if (!this.relations.has(this.key(attribute.projectId, attribute.relationId))) throw new Error("No existe la relación del atributo.");
     const key = this.key(attribute.projectId, attribute.id);
     const current = this.relationAttributes.get(key);
     if (expectedCurrent === undefined ? current !== undefined
@@ -92,11 +92,11 @@ class MldbRecordsMemoryStore {
   }
   async saveActiveSuggestion(suggestion, expectedCurrent) {
     if (suggestion.documentId && !this.documents.has(this.key(suggestion.projectId, suggestion.documentId))) {
-      throw new Error("suggestion_document_missing");
+      throw new Error("No existe el documento de la sugerencia.");
     }
     if (suggestion.fragmentId) {
       const fragment = this.fragments.get(this.key(suggestion.projectId, suggestion.fragmentId));
-      if (!fragment || fragment.documentId !== suggestion.documentId) throw new Error("suggestion_fragment_missing");
+      if (!fragment || fragment.documentId !== suggestion.documentId) throw new Error("El fragmento de la sugerencia no existe o pertenece a otro documento.");
     }
     const key = this.key(suggestion.projectId, suggestion.id);
     const current = this.suggestions.get(key);
@@ -215,7 +215,7 @@ test("las sugerencias conservan su revisión y referencias a documento y fragmen
   assert.equal((await api.getActiveSuggestions("chapter-1", "ACCEPTED")).length, 1);
   await assert.rejects(api.saveActiveSuggestion({
     id: "suggestion-bad", moduleId: "proofreading",
-    documentId: "foreign-document", fragmentId: "fragment-1", documentRevision: 1,
+    documentId: "chapter-1", fragmentId: "foreign-fragment", documentRevision: 1,
     suggestionKind: "grammar", priority: "HIGH", confidence: "HIGH",
     payload: {}, status: "ACTIVE", createdAt: 100
   }), /fragment/);

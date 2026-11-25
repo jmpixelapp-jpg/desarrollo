@@ -2245,9 +2245,6 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["document-diagnostics", "by-project"],
       ["project-dictionaries", "by-project"],
       ["project-dictionaries", "by-project-language-name"],
-      ["dictionary-entries", "by-project"],
-      ["dictionary-entries", "by-dictionary"],
-      ["dictionary-entries", "by-dictionary-normalized"],
       ["manuscript-fragments", "by-project"],
       ["manuscript-fragments", "by-document-revision"],
       ["manuscript-fragments", "by-parent"],
@@ -2262,7 +2259,12 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["import-authorizations", "by-source-target"],
       ["import-authorizations", "by-target"],
       ["schema-migrations", "by-to-version"],
-      ["schema-migrations", "by-applied-at"]
+      ["schema-migrations", "by-applied-at"],
+      ["project-dictionaries", "by-project"],
+      ["project-dictionaries", "by-project-language-name"],
+      ["dictionary-entries", "by-project"],
+      ["dictionary-entries", "by-dictionary"],
+      ["dictionary-entries", "by-dictionary-normalized"]
     ]);
     assert.equal(createdIndexes.find(index => index.name === "by-document-sequence")?.unique, true);
   } finally {
@@ -2415,7 +2417,22 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["project-dictionaries", "by-project-language-name"],
       ["dictionary-entries", "by-project"],
       ["dictionary-entries", "by-dictionary"],
-      ["dictionary-entries", "by-dictionary-normalized"]
+      ["dictionary-entries", "by-dictionary-normalized"],
+      ["manuscript-fragments", "by-project"],
+      ["manuscript-fragments", "by-document-revision"],
+      ["manuscript-fragments", "by-parent"],
+      ["record-attributes", "by-project"],
+      ["record-attributes", "by-record-key"],
+      ["relation-attributes", "by-project"],
+      ["relation-attributes", "by-relation-key"],
+      ["active-suggestions", "by-project"],
+      ["active-suggestions", "by-document-revision"],
+      ["active-suggestions", "by-status-priority"],
+      ["import-authorizations", "by-writer"],
+      ["import-authorizations", "by-source-target"],
+      ["import-authorizations", "by-target"],
+      ["schema-migrations", "by-to-version"],
+      ["schema-migrations", "by-applied-at"]
     ];
     assert.deepEqual(createdIndexes.map(([storeName, indexName]) => [storeName, indexName]), expected);
     assert.equal(

@@ -198,19 +198,11 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     });
     await client.flushProject("idea-project");
 
-    const ideas = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "getNarrativeIdeas",
-      args: []
-    });
+    const ideas = await client.getNarrativeIdeas("idea-project");
     assert.equal(ideas.length, 1);
     assert.equal(ideas[0].status, "IDEA");
 
-    const archived = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "archiveUnincorporatedIdeas",
-      args: []
-    });
+    const archived = await client.archiveUnincorporatedIdeas("idea-project");
     assert.equal(archived.length, 1);
     assert.equal(archived[0].writerId, "writer-private");
     assert.equal(archived[0].category, "Libro ideas");
@@ -220,11 +212,7 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     assert.equal(library.length, 1);
     assert.equal(library[0].idea.text, "La campana debe sonar antes del amanecer.");
 
-    const receipt = await client.request("project.call", {
-      projectId: "idea-project",
-      method: "getProjectFinalizationReceipt",
-      args: []
-    });
+    const receipt = await client.getProjectFinalizationReceipt("idea-project");
     assert.equal(receipt.sourceProjectId, "idea-project");
     assert.equal(receipt.writerId, "writer-private");
 

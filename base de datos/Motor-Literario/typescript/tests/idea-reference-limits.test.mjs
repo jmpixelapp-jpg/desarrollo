@@ -97,3 +97,46 @@ test("rechaza historiales y relojes inválidos al calcular decisiones narrativas
   ], 1), /marca temporal inválida/);
 });
 
+test("reabrir una idea editada conserva el historial y agrega una transición monotónica", async () => {
+  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    text: "Versión anterior de la idea.",
+    status: "incorporated",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 100 },
+      { status: "incorporated", reason: "writer", changedAt: Number.MAX_SAFE_INTEGER }
+    ]
+  });
+  const originalHistory = JSON.stringify(previous.statusHistory);
+  const incoming = baseIdea({ text: "La idea fue revisada por el escritor." });
+
+  const merged = mergeNarrativeIdea(previous, incoming);
+
+  assert.equal(merged.status, "IDEA");
+  assert.equal(merged.text, incoming.text);
+  assert.equal(merged.statusHistory.length, 3);
+  assert.deepEqual(merged.statusHistory.slice(0, 2), previous.statusHistory);
+  assert.equal(merged.statusHistory[2].status, "IDEA");
+  assert.equal(merged.statusHistory[2].reason, "text-revised");
+  assert.equal(merged.statusHistory[2].changedAt, Number.MAX_SAFE_INTEGER);
+  assert.equal(JSON.stringify(previous.statusHistory), originalHistory);
+});
+
+test("una idea sin cambios textuales no agrega transiciones editoriales", async () => {
+  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    status: "discarded",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 100 },
+      { status: "discarded", reason: "writer", changedAt: 200 }
+    ]
+  });
+  const incoming = baseIdea({ sourceProjectName: "Renamed book" });
+
+  const merged = mergeNarrativeIdea(previous, incoming);
+
+  assert.equal(merged.status, "discarded");
+  assert.equal(merged.statusHistory.length, 2);
+  assert.deepEqual(merged.statusHistory, previous.statusHistory);
+  assert.equal(merged.sourceProjectName, "Renamed book");
+});

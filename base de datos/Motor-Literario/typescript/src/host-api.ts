@@ -3394,7 +3394,9 @@ export class HostEngineApi {
             typeof summary.archiveChecksum !== "string" || !summary.archiveChecksum.trim() ||
             (summary.archiveContentChecksum !== undefined &&
               !isValidPersonalIdeaArchiveChecksum(summary.archiveContentChecksum)) ||
-            typeof summary.alreadyFinalized !== "boolean") {
+            typeof summary.alreadyFinalized !== "boolean" ||
+            (!summary.alreadyFinalized && this.store.loadPersonalIdeasByKeys &&
+              summary.archiveContentChecksum === undefined)) {
           throw new Error("Integridad de biblioteca: el resumen de finalización es inválido.");
         }
         if (!summary.alreadyFinalized && summary.archivedCount > 0) {

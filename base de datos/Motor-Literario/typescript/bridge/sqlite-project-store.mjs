@@ -999,6 +999,26 @@ export class SqliteProjectStore {
     });
   }
 
+  saveEntityIfUnchanged(entity, expectedCurrent) {
+    requireProjectRecord(entity, "entidad narrativa");
+    if (expectedCurrent !== undefined) {
+      requireProjectRecord(expectedCurrent, "entidad anterior");
+      if (entity.projectId !== expectedCurrent.projectId || entity.id !== expectedCurrent.id) {
+        throw new Error("La identidad de la entidad no puede cambiar.");
+      }
+    }
+    return this.transaction(() => {
+      for (const existing of this.find("narrative-entities", x => x.projectId === entity.projectId &&
+        x.id !== entity.id && x.kind === entity.kind && x.normalizedName === entity.normalizedName)) {
+        throw new Error("La identidad narrativa ya está asociada a otra ficha del mismo tipo.");
+      }
+      this.put("narrative-entities", identityKey(entity.projectId, entity.id), entity,
+        expectedCurrent === undefined
+          ? { insertOnly: true, conflictMessage: "La entidad apareció en otra instancia; actualiza la vista antes de volver a modificarla." }
+          : { expectedCurrent, conflictMessage: "La entidad cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarla." });
+    });
+  }
+
   loadEntities(projectId) { return this.loadProject("narrative-entities", projectId, "entidad narrativa"); }
 
   saveRelation(relation) {
@@ -1010,6 +1030,27 @@ export class SqliteProjectStore {
         }
       }
       this.put("narrative-relations", identityKey(relation.projectId, relation.id), relation);
+    });
+  }
+
+  saveRelationIfUnchanged(relation, expectedCurrent) {
+    requireProjectRecord(relation, "relación narrativa");
+    if (expectedCurrent !== undefined) {
+      requireProjectRecord(expectedCurrent, "relación anterior");
+      if (relation.projectId !== expectedCurrent.projectId || relation.id !== expectedCurrent.id) {
+        throw new Error("La identidad de la relación no puede cambiar.");
+      }
+    }
+    return this.transaction(() => {
+      for (const id of [relation.fromEntityId, relation.toEntityId]) {
+        if (!this.get("narrative-entities", identityKey(relation.projectId, id))) {
+          throw new Error("La relación narrativa apunta a una entidad inexistente.");
+        }
+      }
+      this.put("narrative-relations", identityKey(relation.projectId, relation.id), relation,
+        expectedCurrent === undefined
+          ? { insertOnly: true, conflictMessage: "La relación apareció en otra instancia; actualiza la vista antes de volver a modificarla." }
+          : { expectedCurrent, conflictMessage: "La relación cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarla." });
     });
   }
 
@@ -1030,6 +1071,30 @@ export class SqliteProjectStore {
     });
   }
 
+  saveEventIfUnchanged(event, expectedCurrent) {
+    requireProjectRecord(event, "acontecimiento narrativo");
+    if (expectedCurrent !== undefined) {
+      requireProjectRecord(expectedCurrent, "acontecimiento anterior");
+      if (event.projectId !== expectedCurrent.projectId || event.id !== expectedCurrent.id) {
+        throw new Error("La identidad del acontecimiento no puede cambiar.");
+      }
+    }
+    return this.transaction(() => {
+      for (const id of event.participants ?? []) {
+        if (!this.get("narrative-entities", identityKey(event.projectId, id))) {
+          throw new Error("El acontecimiento contiene un participante que no existe en el proyecto.");
+        }
+      }
+      if (event.timelineTrackId && !this.get("timeline-tracks", identityKey(event.projectId, event.timelineTrackId))) {
+        throw new Error("La pista cronológica del acontecimiento no existe.");
+      }
+      this.put("narrative-events", identityKey(event.projectId, event.id), event,
+        expectedCurrent === undefined
+          ? { insertOnly: true, conflictMessage: "El acontecimiento apareció en otra instancia; actualiza la vista antes de volver a modificarlo." }
+          : { expectedCurrent, conflictMessage: "El acontecimiento cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarlo." });
+    });
+  }
+
   loadEvents(projectId) { return this.loadProject("narrative-events", projectId, "acontecimiento narrativo"); }
 
   saveIdea(idea) {
@@ -1047,14 +1112,32 @@ export class SqliteProjectStore {
     });
   }
 
-  updateIdeaIfUnchanged(idea, expectedCurrent) {
+  saveIdeaIfUnchanged(idea, expectedCurrent) {
     requireProjectRecord(idea, "idea narrativa");
-    requireProjectRecord(expectedCurrent, "idea anterior");
-    if (idea.projectId !== expectedCurrent.projectId || idea.id !== expectedCurrent.id) throw new Error("La identidad de la idea no puede cambiar.");
-    return this.transaction(() => this.put("narrative-ideas", identityKey(idea.projectId, idea.id), idea, {
-      expectedCurrent,
-      conflictMessage: "La idea cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarla."
-    }));
+    if (expectedCurrent !== undefined) {
+      requireProjectRecord(expectedCurrent, "idea anterior");
+      if (idea.projectId !== expectedCurrent.projectId || idea.id !== expectedCurrent.id) {
+        throw new Error("La identidad de la idea no puede cambiar.");
+      }
+    }
+    return this.transaction(() => {
+      for (const id of idea.relatedEntityIds ?? []) {
+        if (!this.get("narrative-entities", identityKey(idea.projectId, id))) throw new Error("La idea enlaza una ficha inexistente.");
+      }
+      for (const id of idea.relatedIdeaIds ?? []) {
+        if (id === idea.id || !this.get("narrative-ideas", identityKey(idea.projectId, id))) {
+          throw new Error("La idea enlaza una idea inexistente o se enlaza a sí misma.");
+        }
+      }
+      this.put("narrative-ideas", identityKey(idea.projectId, idea.id), idea,
+        expectedCurrent === undefined
+          ? { insertOnly: true, conflictMessage: "La idea apareció en otra instancia; actualiza la vista antes de volver a modificarla." }
+          : { expectedCurrent, conflictMessage: "La idea cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarla." });
+    });
+  }
+
+  updateIdeaIfUnchanged(idea, expectedCurrent) {
+    return this.saveIdeaIfUnchanged(idea, expectedCurrent);
   }
 
   loadIdeas(projectId) { return this.loadProject("narrative-ideas", projectId, "idea narrativa"); }
@@ -1066,6 +1149,25 @@ export class SqliteProjectStore {
         throw new Error("La afirmación apunta a una entidad inexistente.");
       }
       this.put("narrative-assertions", identityKey(assertion.projectId, assertion.id), assertion);
+    });
+  }
+
+  saveAssertionIfUnchanged(assertion, expectedCurrent) {
+    requireProjectRecord(assertion, "afirmación narrativa");
+    if (expectedCurrent !== undefined) {
+      requireProjectRecord(expectedCurrent, "afirmación anterior");
+      if (assertion.projectId !== expectedCurrent.projectId || assertion.id !== expectedCurrent.id) {
+        throw new Error("La identidad de la afirmación no puede cambiar.");
+      }
+    }
+    return this.transaction(() => {
+      if (!this.get("narrative-entities", identityKey(assertion.projectId, assertion.entityId))) {
+        throw new Error("La afirmación apunta a una entidad inexistente.");
+      }
+      this.put("narrative-assertions", identityKey(assertion.projectId, assertion.id), assertion,
+        expectedCurrent === undefined
+          ? { insertOnly: true, conflictMessage: "La afirmación apareció en otra instancia; actualiza la vista antes de volver a modificarla." }
+          : { expectedCurrent, conflictMessage: "La afirmación cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarla." });
     });
   }
 

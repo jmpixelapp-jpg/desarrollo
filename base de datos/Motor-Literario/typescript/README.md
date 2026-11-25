@@ -294,19 +294,13 @@ La API ofrece `getRecordLifecycleHistory`, `appendRecordLifecycle`, `getRelation
 
 La base local también persiste fichas genéricas de tipo abierto, nombres principales y alias separados, relaciones genéricas, evidencias con anclajes documentales, ocurrencias cronológicas, fragmentos de manuscrito con offsets UTF-16, atributos JSON extensibles, sugerencias con revisión de documento, autorizaciones de importación y recibos de migraciones. Todos los registros de proyecto se aíslan mediante `projectId`; las autorizaciones se aíslan por `writerId`.
 
-La API del anfitrión expone `getProjectRecords`/`saveProjectRecord`, `getRecordNames`/`saveRecordName`, `getProjectRelations`/`saveProjectRelation`, `getProjectEvidences`/`saveProjectEvidence`, `getTimelineOccurrences`/`saveTimelineOccurrence`, `getManuscriptFragments`/`saveManuscriptFragment`, `getRecordAttributes`/`saveRecordAttribute`, `getRelationAttributes`/`saveRelationAttribute`, `getActiveSuggestions`/`saveActiveSuggestion`, `getImportAuthorizations`/`authorizeImportBetweenProjects` y `getSchemaMigrations`. Las importaciones no se autorizan por semejanza ni por IDs coincidentes: el anfitrión debe proporcionar ambas identidades verificadas para el mismo escritor autenticado. La migración IndexedDB 20 crea estos almacenes sin eliminar datos anteriores y registra cada upgrade posterior.
-
-
-
-### Límite conocido: metadatos de vínculos de diccionario
-
-Las entradas de diccionario conservan los IDs de fichas relacionadas y validan que pertenezcan al mismo libro. El esquema lógico exige además un `link_kind`, un `provenance_kind` y un `created_at` independientes para cada vínculo; esos tres valores aún no se guardan por vínculo. No se reconstruyen a partir de datos que no los contienen, por lo que `dictionary_entry_entities` figura como parcial en el manifiesto.
+La API del anfitrión expone `getProjectRecords`/`saveProjectRecord`, `getRecordNames`/`saveRecordName`, `getProjectRelations`/`saveProjectRelation`, `getProjectEvidences`/`saveProjectEvidence`, `getTimelineOccurrences`/`saveTimelineOccurrence`, `getManuscriptFragments`/`saveManuscriptFragment`, `getRecordAttributes`/`saveRecordAttribute`, `getRelationAttributes`/`saveRelationAttribute`, `getActiveSuggestions`/`saveActiveSuggestion`, `getImportAuthorizations`/`authorizeImportBetweenProjects` y `getSchemaMigrations`. Las importaciones no se autorizan por semejanza ni por IDs coincidentes: el anfitrión debe proporcionar ambas identidades verificadas para el mismo escritor autenticado. La migración IndexedDB 21 crea estos almacenes sin eliminar datos anteriores y registra cada upgrade posterior.
 
 
 
 ### Vínculos de diccionario con metadatos propios (IndexedDB 21)
 
-Los vínculos nuevos o confirmados se guardan en `dictionary-entry-entities`, con `linkKind`, `provenanceKind` y `createdAt` por cada par entrada/ficha. `setDictionaryEntryEntityLink` actualiza en una misma transacción el registro del vínculo y la proyección de IDs de la entrada; `getDictionaryEntryEntityLinks` permite recuperar los metadatos. Se puede proporcionar el tipo de vínculo, la procedencia y la fecha; la acción manual usa `RELATED` y `WRITER` como valores predeterminados explícitos.
+Todos los vínculos se guardan en `dictionary-entry-entities`, con `linkKind`, `provenanceKind` y `createdAt` por cada par entrada/ficha. `setDictionaryEntryEntityLink` actualiza en una misma transacción el registro del vínculo y la proyección de IDs de la entrada; `getDictionaryEntryEntityLinks` permite recuperar y validar los metadatos. La API permite proporcionar el tipo de vínculo, la procedencia y la fecha; la acción manual usa `RELATED` y `WRITER` como valores predeterminados explícitos.
 
-Los vínculos heredados que solo contienen IDs se conservan para compatibilidad. No se inventan para ellos fechas ni procedencias históricas; por eso la tabla lógica permanece parcial hasta que esos vínculos se re-confirmen con sus metadatos.
+La migración DB21 materializa los vínculos heredados que solo contenían IDs: usa `RELATED` como tipo genérico, `MIGRATION` como procedencia explícita y la fecha real de migración como `createdAt`. No presenta esa fecha como si fuera la fecha histórica original. La tabla queda completamente implementada y las asociaciones anteriores no se pierden.
 

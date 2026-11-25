@@ -146,12 +146,16 @@ export function nextNarrativeIdeaStatusChangeAt(
   }
   let latestKnownAt = 0;
   for (const change of statusHistory) {
-    if (!change ||
-        (change.changedAt !== undefined &&
-          (!Number.isFinite(change.changedAt) || change.changedAt < 0))) {
-      throw new Error("El historial contiene una marca temporal inválida.");
+    if (!change || typeof change !== "object" ||
+        !["IDEA", "incorporated", "discarded"].includes(change.status) ||
+        !["initial", "writer", "text-revised"].includes(change.reason)) {
+      throw new Error("El historial contiene una decisión narrativa inválida.");
     }
     if (change.changedAt !== undefined) {
+      if (typeof change.changedAt !== "number" ||
+          !Number.isFinite(change.changedAt) || change.changedAt < 0) {
+        throw new Error("El historial contiene una marca temporal inválida.");
+      }
       latestKnownAt = Math.max(latestKnownAt, change.changedAt);
     }
   }

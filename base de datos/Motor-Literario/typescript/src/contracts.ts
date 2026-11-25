@@ -211,13 +211,31 @@ export interface ProjectStore {
   loadDiagnostics?(projectId: string, documentId: string): Promise<StoredDiagnostics | undefined>;
   /** Opcional: conocimiento narrativo persistente, siempre aislado por projectId. */
   saveEntity?(entity: import("./narrative-knowledge").NarrativeEntity): Promise<void>;
+  /** Inserta o actualiza una entidad solo si la versión actual coincide con la lectura. */
+  saveEntityIfUnchanged?(
+    entity: import("./narrative-knowledge").NarrativeEntity,
+    expectedCurrent?: import("./narrative-knowledge").NarrativeEntity
+  ): Promise<void>;
   loadEntities?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeEntity[]>;
   saveRelation?(relation: import("./narrative-knowledge").NarrativeRelation): Promise<void>;
+  saveRelationIfUnchanged?(
+    relation: import("./narrative-knowledge").NarrativeRelation,
+    expectedCurrent?: import("./narrative-knowledge").NarrativeRelation
+  ): Promise<void>;
   loadRelations?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeRelation[]>;
   saveEvent?(event: import("./narrative-knowledge").NarrativeEvent): Promise<void>;
+  saveEventIfUnchanged?(
+    event: import("./narrative-knowledge").NarrativeEvent,
+    expectedCurrent?: import("./narrative-knowledge").NarrativeEvent
+  ): Promise<void>;
   loadEvents?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeEvent[]>;
   saveIdea?(idea: import("./narrative-knowledge").NarrativeIdea): Promise<void>;
-  /** Actualiza solo si la idea sigue presente y coincide con la versión leída. */
+  /** Inserta o actualiza una idea solo si la versión actual coincide con la lectura. */
+  saveIdeaIfUnchanged?(
+    idea: import("./narrative-knowledge").NarrativeIdea,
+    expectedCurrent?: import("./narrative-knowledge").NarrativeIdea
+  ): Promise<void>;
+  /** Compatibilidad explícita para actualizar una idea existente. */
   updateIdeaIfUnchanged?(
     idea: import("./narrative-knowledge").NarrativeIdea,
     expectedCurrent: import("./narrative-knowledge").NarrativeIdea
@@ -225,6 +243,10 @@ export interface ProjectStore {
   loadIdeas?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeIdea[]>;
   /** Historial versionado de afirmaciones explícitas sobre entidades. */
   saveAssertion?(assertion: import("./narrative-history").NarrativeAssertion): Promise<void>;
+  saveAssertionIfUnchanged?(
+    assertion: import("./narrative-history").NarrativeAssertion,
+    expectedCurrent?: import("./narrative-history").NarrativeAssertion
+  ): Promise<void>;
   loadAssertions?(projectId: string): Promise<readonly import("./narrative-history").NarrativeAssertion[]>;
   /**
    * Consolidación atómica de identidad y referencias narrativas dentro del proyecto

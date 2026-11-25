@@ -7,3 +7,4 @@ export * from "./text-buffer";
 export * from "./narrative-knowledge";
 
 export * from "./narrative-history";
+export * from "./dictionaries";

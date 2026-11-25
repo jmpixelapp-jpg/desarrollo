@@ -1,3 +1,5 @@
+import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
+
 /** Contratos públicos. La identidad del proyecto siempre pertenece al anfitrión. */
 
 export interface ProjectIdentity {
@@ -97,6 +99,12 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Diccionarios y vocabulario propios, siempre aislados por proyecto. */
+  saveDictionary?(dictionary: ProjectDictionary, expectedCurrent?: ProjectDictionary): Promise<void>;
+  loadDictionaries?(projectId: string): Promise<readonly ProjectDictionary[]>;
+  saveDictionaryEntry?(entry: DictionaryEntry, expectedCurrent?: DictionaryEntry): Promise<void>;
+  loadDictionaryEntries?(projectId: string, dictionaryId: string): Promise<readonly DictionaryEntry[]>;
+
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;
   /** Obligatorio: lee snapshot y journal desde una misma vista transaccional consistente. */

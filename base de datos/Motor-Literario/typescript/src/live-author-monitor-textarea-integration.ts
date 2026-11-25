@@ -5,7 +5,8 @@ import type {
 } from "./contracts";
 import {
   bindLiveAuthorMonitorEditorChanges,
-  type LiveAuthorMonitorChangeBindingControl
+  type LiveAuthorMonitorChangeBindingControl,
+  type LiveAuthorMonitorBackpressureSnapshot
 } from "./live-author-monitor-change-binding";
 import type { LiveAuthorMonitorSnapshot } from "./live-author-monitor";
 import {
@@ -34,6 +35,8 @@ export interface LiveAuthorMonitorTextAreaIntegrationOptions {
   readonly documentId: string;
   readonly hostApi: LiveAuthorMonitorTextAreaHostApi;
   readonly onAdmission?: (change: EditorChange, admission: ChangeAdmission) => void;
+  /** Estado de la cola FIFO para indicadores visuales; nunca contiene texto del manuscrito. */
+  readonly onBackpressure?: (snapshot: LiveAuthorMonitorBackpressureSnapshot) => void;
   readonly onError?: (error: unknown, change?: EditorChange) => void;
 }
 
@@ -111,6 +114,7 @@ export function mountLiveAuthorMonitorTextArea(
       sink: options.hostApi,
       subscribeRetrySignal: listener =>
         options.hostApi.subscribeLiveAuthorMonitor(() => listener()),
+      onBackpressure: options.onBackpressure,
       onAdmission: (change, admission) => {
         if (admission.status === "rejected" && admission.reason !== "queue_full") {
           source.requireResynchronization(

@@ -1,5 +1,5 @@
 import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic } from "../contracts";
-import { normalizeEntityName } from "../narrative-knowledge";
+import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
 import type { ProjectDictionary, DictionaryEntry, DictionaryEntryEntityLink } from "../dictionaries";
@@ -281,9 +281,12 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
   }
   for (const links of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
     if (links !== undefined &&
-        (!Array.isArray(links) || links.some(id => typeof id !== "string" || !id.trim()) ||
+        (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+          links.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(links).size !== links.length)) {
-      throw new Error(`Registro de ${label} malformado: referencias inválidas o duplicadas.`);
+      throw new Error(
+        `Registro de ${label} malformado: referencias inválidas, duplicadas o superiores al límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`
+      );
     }
   }
   if (idea.relatedIdeaIds?.includes(idea.id)) {

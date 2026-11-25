@@ -133,7 +133,14 @@ motor.onNotification("engine.commit", message => {
 motor.onNotification("engine.knowledgeError", message => {
   hostLogger.error(message.error.message);
 });
+
+motor.onNotification("engine.personalIdeaLibraryChanged", message => {
+  if (message.writerId !== authenticatedWriterId) return;
+  refreshPersonalIdeaLibraryPage(message.projectId);
+});
 ~~~
+
+`engine.personalIdeaLibraryChanged` é um aviso de invalidação, não transporta ideas nem datos narrativos. Se uma idea é arquivada o consolidada em qualquer libro do escritor, el puente avisa a todos los proyectos abiertos asociados a esa misma identidad autenticada. La aplicación vuelve a consultar las páginas de la biblioteca; nunca usa el `writerId` recibido para cambiar la identidad autenticada ni para autorizar consultas. Los proyectos de otros escritores no reciben el aviso.
 
 Enviar cada operación de edición como un reemplazo:
 
@@ -194,9 +201,9 @@ Todas las solicitudes usan JSON-RPC 2.0 y una línea JSON completa por mensaje. 
 
 project.call recibe argumentos posicionales en args, un arreglo JSON. Solo permite métodos públicos incluidos en la lista blanca del servidor; un nombre arbitrario no se ejecuta.
 
-Entre las consultas y operaciones autorizadas están getNarrativeEntities, getNarrativeRelations, getNarrativeEvents, getNarrativeIdeas, getNarrativeAssertions, getNarrativeTimeline, getNarrativeContradictions, getNarrativeEntityHistory, getProjectRecords, getRecordNames, getProjectRelations, getProjectEvidences, getTimelineOccurrences, getProjectDictionaries, getDictionaryEntries, mergeNarrativeEntities, setNarrativeIdeaStatus, setNarrativeIdeaEntityLink, setNarrativeIdeaLink, archiveUnincorporatedIdeas y getPersonalIdeaLibrary. El código del servidor contiene la lista exacta vigente.
+Entre las consultas y operaciones autorizadas están getNarrativeEntities, getNarrativeRelations, getNarrativeEvents, getNarrativeIdeas, getNarrativeAssertions, getNarrativeTimeline, getNarrativeContradictions, getNarrativeEntityHistory, getEventLifecycleHistory, updateNarrativeEvent, getRecordLifecycleHistory, appendRecordLifecycle, getRelationLifecycleHistory, appendRelationLifecycle, getProjectRecords, getRecordNames, getProjectRelations, getProjectEvidences, getTimelineOccurrences, getProjectDictionaries, getDictionaryEntries, mergeNarrativeEntities, setNarrativeIdeaStatus, setNarrativeIdeaEntityLink, setNarrativeIdeaLink, archiveUnincorporatedIdeas, finalizeProjectToIdeaLibrary, getProjectFinalizationReceipt, getPersonalIdeaLibrary y getPersonalIdeaLibraryPage. El código del servidor contiene la lista exacta vigente.
 
-La consolidación transaccional de identidades narrativas está disponible mediante `project.call` con `method: "mergeNarrativeEntities"` y `args: [targetEntityId, sourceEntityId]`. SQLite actualiza en una sola transacción la identidad canónica, relaciones, acontecimientos, afirmaciones, vínculos de ideas y las instantáneas de contexto de la biblioteca personal del escritor. Conserva textos, evidencias, procedencia e historial de estados; rechaza referencias huérfanas, colisiones de alias y contextos históricos que no pueda resolver. `engine.capabilities` expone `narrativeEntityConsolidation`; el anfitrión debe consultar esa capacidad antes de mostrar la acción.
+La finalización compacta se solicita mediante `project.call` con `method: "finalizeProjectToIdeaLibrary"` y `args: []`. La respuesta contiene `writerId`, `sourceProjectId`, `sourceProjectName`, `archivedCount`, `finalizedAt`, `archiveChecksum` y `alreadyFinalized`; no contiene las ideas transferidas. Para recuperar el contenido, el anfitrión usa `getPersonalIdeaLibraryPage` con cursor y límite (1–200). Un reintento valida el recibo existente y marca `alreadyFinalized: true`; no vuelve a publicar una notificación de cambio. `archiveUnincorporatedIdeas` permanece disponible para compatibilidad y conserva su respuesta histórica completa.\n\nLa consolidación transaccional de identidades narrativas está disponible mediante `project.call` con `method: "mergeNarrativeEntities"` y `args: [targetEntityId, sourceEntityId]`. SQLite actualiza en una sola transacción la identidad canónica, relaciones, acontecimientos, afirmaciones, vínculos de ideas y las instantáneas de contexto de la biblioteca personal del escritor. Conserva textos, evidencias, procedencia e historial de estados; rechaza referencias huérfanas, colisiones de alias y contextos históricos que no pueda resolver. `engine.capabilities` expone `narrativeEntityConsolidation`; el anfitrión debe consultar esa capacidad antes de mostrar la acción.
 
 ## 5. Notificaciones que envía el proceso compañero
 

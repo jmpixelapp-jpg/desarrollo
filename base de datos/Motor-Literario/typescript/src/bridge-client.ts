@@ -1,3 +1,9 @@
+import type {
+  PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage,
+  ProjectFinalizationSummary, StoredProjectFinalizationReceipt
+} from "./contracts";
+import type { RecordLifecycle, RelationLifecycle } from "./project-data";
+
 export interface BridgeReadable {
   on(event: "data" | "error", listener: (value: unknown) => void): unknown;
   setEncoding?(encoding: "utf8"): unknown;
@@ -292,6 +298,97 @@ export class MotorLiterarioBridgeClient {
     replacement: string;
   }): Promise<unknown> {
     return this.request("document.change", { projectId, change });
+  }
+
+  finalizeProjectToIdeaLibrary(projectId: string): Promise<ProjectFinalizationSummary> {
+    return this.request<ProjectFinalizationSummary>("project.call", {
+      projectId,
+      method: "finalizeProjectToIdeaLibrary",
+      args: []
+    });
+  }
+
+  getProjectFinalizationReceipt(
+    projectId: string
+  ): Promise<StoredProjectFinalizationReceipt | null> {
+    return this.request<StoredProjectFinalizationReceipt | null>("project.call", {
+      projectId,
+      method: "getProjectFinalizationReceipt",
+      args: []
+    });
+  }
+
+  getPersonalIdeaLibraryPage(
+    projectId: string,
+    cursor: PersonalIdeaLibraryCursor | null = null,
+    limit = 50
+  ): Promise<PersonalIdeaLibraryPage> {
+    return this.request<PersonalIdeaLibraryPage>("project.call", {
+      projectId,
+      method: "getPersonalIdeaLibraryPage",
+      args: [cursor, limit]
+    });
+  }
+
+  getRecordLifecycleHistory(projectId: string, recordId: string): Promise<readonly RecordLifecycle[]> {
+    return this.request<readonly RecordLifecycle[]>("project.call", {
+      projectId,
+      method: "getRecordLifecycleHistory",
+      args: [recordId]
+    });
+  }
+
+  appendRecordLifecycle(
+    projectId: string,
+    input: Omit<RecordLifecycle, "projectId">
+  ): Promise<RecordLifecycle> {
+    return this.request<RecordLifecycle>("project.call", {
+      projectId,
+      method: "appendRecordLifecycle",
+      args: [input]
+    });
+  }
+
+  getRelationLifecycleHistory(projectId: string, relationId: string): Promise<readonly RelationLifecycle[]> {
+    return this.request<readonly RelationLifecycle[]>("project.call", {
+      projectId,
+      method: "getRelationLifecycleHistory",
+      args: [relationId]
+    });
+  }
+
+  appendRelationLifecycle(
+    projectId: string,
+    input: Omit<RelationLifecycle, "projectId">
+  ): Promise<RelationLifecycle> {
+    return this.request<RelationLifecycle>("project.call", {
+      projectId,
+      method: "appendRelationLifecycle",
+      args: [input]
+    });
+  }
+
+  getEventLifecycleHistory(projectId: string, eventId: string): Promise<unknown> {
+    return this.request("project.call", {
+      projectId,
+      method: "getEventLifecycleHistory",
+      args: [eventId]
+    });
+  }
+
+  updateNarrativeEvent(projectId: string, input: {
+    eventId: string;
+    label?: string;
+    participants?: readonly string[];
+    changedBy: string;
+    changeReason?: string | null;
+    changedAt?: number;
+  }): Promise<unknown> {
+    return this.request("project.call", {
+      projectId,
+      method: "updateNarrativeEvent",
+      args: [input]
+    });
   }
 
   async flushProject(projectId: string): Promise<void> {

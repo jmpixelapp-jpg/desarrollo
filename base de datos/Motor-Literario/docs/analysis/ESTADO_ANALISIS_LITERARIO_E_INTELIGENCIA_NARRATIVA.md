@@ -181,6 +181,6 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo es `main`. Las consultas de estado y workflows para las últimas tandas (`8603f7b`, `25a1291` y sus actualizaciones documentales) no devolvieron checks ni ejecuciones asociadas. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para estas tandas**. No se afirma aquí que las pruebas se hayan ejecutado.
+La rama de trabajo es `main`. Las consultas de estado y workflows para las últimas tandas (`41bc0dd`, `00196e6` y `f4dc681`) no devolvieron checks ni ejecuciones asociadas. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para estas tandas**. Las nuevas comprobaciones de IndexedDB son auditorías estáticas del contrato de implementación, no pruebas de ejecución en un navegador. No se afirma aquí que las pruebas se hayan ejecutado.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.

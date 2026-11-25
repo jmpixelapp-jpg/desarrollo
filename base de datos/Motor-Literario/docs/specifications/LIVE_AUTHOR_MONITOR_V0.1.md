@@ -496,3 +496,6 @@ Los guardados automáticos de checkpoint son no bloqueantes durante la escritura
 - Un commit durable posterior o un guardado final que tenga éxito limpia el error retenido.
 
 La prueba de HostEngineApi utiliza un almacén que falla al guardar y comprueba que `disposeSafely` rechaza la operación mientras el snapshot de métricas sigue disponible. Esto separa la observabilidad no bloqueante del estado real de persistencia: el autor puede seguir escribiendo, pero el anfitrión no recibe una falsa confirmación de cierre seguro.
+
+
+**Validación de lifecycle seguro:** ejecución aislada [45723191692](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723191692), commit `dde974d98cd5b0c9b9dacc9c86a35ab26e4b0d95`: build Vite correcto; **85 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye el caso donde el almacenamiento falla y se comprueba que `disposeSafely()` no libera falsamente la instancia.

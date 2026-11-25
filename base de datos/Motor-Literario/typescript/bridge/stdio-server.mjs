@@ -26,6 +26,8 @@ const PUBLIC_API_METHODS = new Set([
   "getNarrativeEntities",
   "getNarrativeRelations",
   "getNarrativeEvents",
+  "getEventLifecycleHistory",
+  "updateNarrativeEvent",
   "setNarrativeEventTimelineTrack",
   "getNarrativeTimeline",
   "getNarrativeContradictions",

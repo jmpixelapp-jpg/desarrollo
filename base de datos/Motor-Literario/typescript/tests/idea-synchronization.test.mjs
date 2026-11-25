@@ -24,6 +24,7 @@ class RacingStore {
   onNextConflict;
   nextWriteError;
   writes = 0;
+  ideaReads = 0;
   entityReads = 0;
 
   constructor(ideas = [], entities = []) {
@@ -33,6 +34,7 @@ class RacingStore {
   key(item) { return item.projectId + ":" + item.id; }
   async saveIdea(item) { this.ideas.set(this.key(item), structuredClone(item)); }
   async loadIdeas(id) {
+    this.ideaReads++;
     return [...this.ideas.values()].filter(x => x.projectId === id).map(x => structuredClone(x));
   }
   async saveEntity(item) { this.entities.set(this.key(item), structuredClone(item)); }
@@ -334,6 +336,33 @@ test("no reintenta errores de almacenamiento que no son conflictos CAS", async (
   api.dispose();
 });
 
+test("recupera la cola y la caché tras un fallo de persistencia", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-target-a"), idea("idea-target-b")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.nextWriteError = new Error("fallo transitorio de almacenamiento");
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-target-a", true),
+    /fallo transitorio de almacenamiento/
+  );
+  assert.equal(store.writes, 1);
+
+  const recovered = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target-b", true
+  );
+  assert.deepEqual(recovered.relatedIdeaIds, ["idea-target-b"]);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-target-b"]
+  );
+  assert.equal(store.ideaReads, 2);
+  assert.equal(store.writes, 2);
+  api.dispose();
+});
+
 test("revalida el máximo de referencias después de un conflicto CAS", async () => {
   const existingIds = Array.from({ length: 499 }, (_, index) =>
     "idea-existing-" + String(index).padStart(3, "0")
@@ -390,6 +419,14 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   assert.deepEqual(persisted.relatedIdeaIds, concurrentIds);
   assert.equal(persisted.relatedIdeaIds.includes("idea-local"), false);
   assert.equal(store.writes, 3);
+
+  // El tercer conflicto también debe dejar invalidada la caché local:
+  // la siguiente lectura tiene que reflejar las tres escrituras externas.
+  const reloaded = await api.getNarrativeIdeas();
+  const reloadedSource = reloaded.find(item => item.id === "idea-source");
+  assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
+  assert.equal(store.ideaReads, 4);
+  assert.equal(store.writes, 3);
   api.dispose();
 });
 
@@ -433,6 +470,30 @@ test("reconcilia dos altas concurrentes del mismo vínculo como una sola asociac
     ["idea-target"]
   );
   assert.equal(store.writes, 1);
+  api.dispose();
+});
+
+test("serializa vínculos y decisiones editoriales simultáneas en una misma instancia", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-target-a"), idea("idea-target-b")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  const [linkedA, updatedStatus, linkedB] = await Promise.all([
+    api.setNarrativeIdeaLink("idea-source", "idea-target-a", true),
+    api.setNarrativeIdeaStatus("idea-source", "incorporated"),
+    api.setNarrativeIdeaLink("idea-source", "idea-target-b", true)
+  ]);
+
+  const persisted = store.ideas.get(projectId + ":idea-source");
+  assert.deepEqual(persisted.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+  assert.equal(persisted.status, "incorporated");
+  assert.equal(persisted.statusHistory.at(-1).reason, "writer");
+  assert.deepEqual(linkedA.relatedIdeaIds, ["idea-target-a"]);
+  assert.equal(updatedStatus.status, "incorporated");
+  assert.deepEqual(linkedB.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+  assert.equal(store.writes, 3);
   api.dispose();
 });
 

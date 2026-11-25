@@ -19,7 +19,8 @@ const store = {
       statusHistory:[
         {status:"IDEA",reason:"initial",changedAt:1},
         {status:"incorporated",reason:"writer",changedAt:3},
-        {status:"IDEA",reason:"writer",changedAt:2}
+        {status:"IDEA",reason:"writer",changedAt:2},
+        {status:"discarded",reason:"writer"}
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
@@ -51,12 +52,24 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
     const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
-    assert.equal(bridgeNode.observedStatusTransitionCount, 2);
+    assert.equal(bridgeNode.observedStatusTransitionCount, 3);
     assert.equal(bridgeNode.statusReversalCount, 1);
     assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
+    assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
+    assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .nonMonotonicStatusTimestampCount,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .comparableStatusTimestampPairCount,
+      2
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .uncomparableStatusTimestampPairCount,
       1
     );
     assert.equal(
@@ -67,7 +80,7 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .observedStatusTransitionCount,
-      2
+      3
     );
     assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount,4);
     assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount,0);

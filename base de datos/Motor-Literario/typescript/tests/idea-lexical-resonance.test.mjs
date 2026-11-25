@@ -188,6 +188,11 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
 test("invalida la caché ante cambios de evidencia y decisiones editoriales", () => {
   const original = {
     ...idea("metadata-a", "memoria espejo luz"),
+    status: "incorporated",
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "incorporated", reason: "writer", changedAt: 2 }
+    ],
     evidenceCount: 1,
     staleEvidenceCount: 0,
     writerDecisionCount: 1
@@ -200,13 +205,14 @@ test("invalida la caché ante cambios de evidencia y decisiones editoriales", ()
 
   const revised = analyzeGraph([{
     ...original,
+    status: "IDEA",
     evidenceCount: 4,
     staleEvidenceCount: 2,
     writerDecisionCount: 3,
     omittedStatusHistoryCount: 1,
     statusHistory: [
-      ...original.statusHistory,
-      { status: "IDEA", reason: "reconsidered", changedAt: 2 }
+      { status: "incorporated", reason: "writer", changedAt: 2 },
+      { status: "IDEA", reason: "writer", changedAt: 3 }
     ]
   }]);
   assert.equal(revised.nodes[0].activeEvidenceCount, 4);
@@ -253,6 +259,11 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     {
       ...idea("aggregate-a", "memoria espejo"),
       relatedIdeaIds: ["aggregate-b", "outside-snapshot"],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 },
+        { status: "IDEA", reason: "writer", changedAt: 3 }
+      ],
       writerDecisionCount: 2,
       evidenceCount: 3,
       staleEvidenceCount: 1
@@ -262,7 +273,7 @@ test("agrega métricas globales y por estado de forma coherente", () => {
       status: "incorporated",
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 1 },
-        { status: "incorporated", reason: "accepted", changedAt: 2 }
+        { status: "incorporated", reason: "writer", changedAt: 2 }
       ],
       writerDecisionCount: 1,
       staleEvidenceCount: 2
@@ -270,6 +281,11 @@ test("agrega métricas globales y por estado de forma coherente", () => {
     {
       ...idea("aggregate-c", "ceniza bruma"),
       status: "discarded",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "writer", changedAt: 2 }
+      ],
+      writerDecisionCount: 1,
       evidenceCount: 1
     }
   ];

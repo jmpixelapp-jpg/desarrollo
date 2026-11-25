@@ -9,6 +9,7 @@ on:
       - "base de datos/Motor-Literario/typescript/src/contracts.ts"
       - "base de datos/Motor-Literario/typescript/src/engine.ts"
       - "base de datos/Motor-Literario/typescript/src/persistence/indexeddb-store.ts"
+      - "base de datos/Motor-Literario/MLDB/storage_mapping_v0.4.1.json"
       - "base de datos/Motor-Literario/typescript/tests/live-author-monitor*.test.mjs"
       - ".github/workflows/live-author-monitor.yml"
   pull_request:
@@ -40,6 +41,8 @@ jobs:
           node-version: 22
       - name: Install development tools
         run: npm install --no-audit --no-fund
+      - name: Validate MLDB schema and physical storage mapping
+        run: npm run validate:schema
       - name: Build runtime bundle
         run: npx vite build
       - name: Run monitor-specific tests

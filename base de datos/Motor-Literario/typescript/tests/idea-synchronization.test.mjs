@@ -610,7 +610,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 3);
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"

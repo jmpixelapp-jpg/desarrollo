@@ -10288,6 +10288,24 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(receipt.finalizedAt, 100);
     assert.deepEqual(receipt.archivedIdeaIds, ["idea-to-archive"]);
     assert.match(receipt.archiveChecksum, /^fnv1a64:[0-9a-f]{16}$/);
+    assert.match(receipt.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/);
+    assert.equal(
+      receipt.archiveContentChecksum,
+      (await store.archiveUnincorporatedIdeasSummary(projectId, writerId, projectName, 150))
+        .archiveContentChecksum
+    );
+
+    const archivedKey = makeKey([writerId, projectId, "idea-to-archive"]);
+    const originalEntry = library.get(archivedKey);
+    library.set(archivedKey, {
+      ...originalEntry,
+      idea: { ...originalEntry.idea, text: "Texto alterado fuera del archivo." }
+    });
+    await assert.rejects(
+      store.archiveUnincorporatedIdeas(projectId, writerId, projectName, 175),
+      /checksum del contenido archivado/u
+    );
+    library.set(archivedKey, originalEntry);
 
     const retryArchive = await store.archiveUnincorporatedIdeas(
       projectId, writerId, projectName, 200

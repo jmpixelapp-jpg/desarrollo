@@ -677,7 +677,7 @@ test("analiza todas las líneas introducidas por una edición multilínea", asyn
 });
 
 
-test("el snapshot del anfitrión prevalece si el texto difiere aunque coincidan revisión y secuencia", async () => {
+test("rechaza un snapshot del anfitrión que cambia el texto sin avanzar revisión ni secuencia", async () => {
   const store = new MemoryStore();
   const first = new HostEngineApi({ store });
   first.initializeProject({ projectId: "book-authority", projectName: "Autoridad anfitrión" });
@@ -685,9 +685,12 @@ test("el snapshot del anfitrión prevalece si el texto difiere aunque coincidan 
 
   const reopened = new HostEngineApi({ store });
   reopened.initializeProject({ projectId: "book-authority", projectName: "Autoridad anfitrión" });
-  await reopened.openDocument({ documentId: "chapter", text: "texto del editor", revision: 3, sequence: 8 });
-  assert.equal(reopened.getSnapshot("chapter")?.text, "texto del editor");
-  assert.equal(store.documents.get("book-authority:chapter")?.text, "texto del editor");
+  await assert.rejects(
+    reopened.openDocument({ documentId: "chapter", text: "texto del editor", revision: 3, sequence: 8 }),
+    /no se permite retroceder ni desalinear revisión y secuencia/
+  );
+  assert.equal(reopened.getSnapshot("chapter"), undefined);
+  assert.equal(store.documents.get("book-authority:chapter")?.text, "texto local");
 });
 
 

@@ -1653,18 +1653,19 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
     assert.equal(before.statusProfiles.some(profile => profile.status === "incorporated"), false);
 
     const bridge = ideas.find(idea => idea.id === "bridge");
-    bridge.status = "incorporated";
+    bridge.status = "discarded";
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    const incorporatedProfile = after.statusProfiles.find(profile => profile.status === "incorporated");
+    const discardedProfile = after.statusProfiles.find(profile => profile.status === "discarded");
     const ideaProfile = after.statusProfiles.find(profile => profile.status === "IDEA");
     const bridgeNode = after.nodes.find(node => node.ideaId === "bridge");
-    assert.equal(incorporatedProfile.ideaCount, 1);
+    assert.equal(discardedProfile.ideaCount, 1);
     assert.equal(ideaProfile.ideaCount, 3);
-    assert.equal(bridgeNode.status, "incorporated");
-    assert.equal(bridgeNode.currentStatusHistoryConsistency, "mismatch");
-    assert.equal(after.statusHistoryConsistency.mismatchIdeaCount, 2);
-    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 1);
+    assert.equal(bridgeNode.status, "discarded");
+    assert.equal(bridgeNode.currentStatusHistoryConsistency, "consistent");
+    assert.equal(after.statusHistoryConsistency.mismatchIdeaCount, 0);
+    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 3);
+    assert.equal(after.statusHistoryConsistency.unknownIdeaCount, 1);
   } finally {
     api.dispose();
   }

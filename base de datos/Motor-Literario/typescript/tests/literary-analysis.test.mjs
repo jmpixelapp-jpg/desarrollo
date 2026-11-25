@@ -2694,3 +2694,31 @@ test("cada nodo identifica su componente cíclico incluso cuando hay auto-refere
   assert.equal(node("outside-cycle").cycleMembership, "acyclic-within-snapshot");
   assert.equal(node("outside-cycle").cycleComponentSize, 0);
 });
+
+
+test("el grafo identifica puntos de articulación en cadenas de referencias", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, relatedIdeaIds = []) => ({
+    projectId, ideaId, text: "Idea " + ideaId, status: "IDEA", relatedIdeaIds,
+    evidenceCount: 0, staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0, omittedStatusHistoryCount: 0
+  });
+  const graph = analyzeLiteraryFragment({
+    projectId, documentId: "chapter-one", revision: 1,
+    text: "Escena 1\nUna idea permanece.",
+    knownProjectIdeas: [
+      makeIdea("a", ["b"]),
+      makeIdea("b", ["c"]),
+      makeIdea("c"),
+      makeIdea("isolated")
+    ]
+  }).ideaGraph;
+  const node = id => graph.nodes.find(item => item.ideaId === id);
+  assert.equal(node("a").articulationPointStatus, "not-articulation-within-snapshot");
+  assert.equal(node("b").articulationPointStatus, "connector");
+  assert.equal(node("c").articulationPointStatus, "not-articulation-within-snapshot");
+  assert.equal(node("isolated").articulationPointStatus, "not-articulation-within-snapshot");
+  assert.equal(graph.articulationPointCount, 1);
+  assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);
+});

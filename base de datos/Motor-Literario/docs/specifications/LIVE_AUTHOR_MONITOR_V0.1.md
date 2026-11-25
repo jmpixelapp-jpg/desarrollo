@@ -251,3 +251,7 @@ El adaptador `LiveAuthorMonitorTextAreaSource` usa `selectionStart`, `selectionE
 `historyUndo` y `historyRedo` requieren un adaptador del historial nativo del editor. Después de restaurar el snapshot autoritativo en el textarea y en el motor, se puede llamar a `authorMonitor.resynchronize()`. Los editores con historial/composición propios deben implementar `LiveAuthorMonitorEditorChangeSource` con sus transacciones nativas.
 
 Las pruebas `live-author-monitor-textarea-source.test.mjs`, `live-author-monitor-change-binding.test.mjs` y `live-author-monitor-textarea-integration.test.mjs` verifican rangos, secuencias, UTF-16, operaciones ambiguas, contrapresión FIFO, reintentos automáticos, ciclo de vida y resincronización durable.
+
+## 12. Validación CI aislada del monitor
+
+El workflow `.github/workflows/live-author-monitor.yml` construye el bundle de runtime con Vite y ejecuta exclusivamente las pruebas `tests/live-author-monitor*.test.mjs`. Esta validación separada permite verificar el monitor y su integración con el editor aunque una comprobación de tipos de otro módulo del motor interrumpa el workflow general. No reemplaza el chequeo TypeScript estricto ni la suite completa: ambos deben volver a quedar verdes antes de declarar validación global.

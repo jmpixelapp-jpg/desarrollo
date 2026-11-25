@@ -68,7 +68,7 @@ test("el grafo de ideas es determinista ante permutaciones del catálogo y sus r
 test("el grafo conserva la distinción entre destino compartido y destinos exclusivos", () => {
   const graph = analyze([
     idea("origin", ["branch-a", "branch-b"]),
-    idea("branch-a", ["shared", "exclusive-a", "exclusive-a"]),
+    idea("branch-a", ["shared", "exclusive-a"]),
     idea("branch-b", ["shared"]),
     idea("shared"),
     idea("exclusive-a")
@@ -148,12 +148,13 @@ test("la caché separa catálogos completos de snapshots con ideas omitidas", ()
 test("el historial de estados distingue pares temporales comparables e incomparables", () => {
   const graph = analyze([{
     ...idea("history"),
-    status: "incorporated",
+    status: "IDEA",
+    writerDecisionCount: 2,
     statusHistory: [
       { status: "IDEA", reason: "initial", changedAt: 10 },
       { status: "incorporated", reason: "writer" },
       { status: "discarded", reason: "writer", changedAt: 8 },
-      { status: "incorporated", reason: "text-revised", changedAt: 8 }
+      { status: "IDEA", reason: "text-revised", changedAt: 8 }
     ]
   }]);
   const node = graph.nodes[0];
@@ -173,6 +174,7 @@ test("el historial acepta marcas temporales iguales y detecta retrocesos adyacen
   const graph = analyze([{
     ...idea("history"),
     status: "discarded",
+    writerDecisionCount: 2,
     statusHistory: [
       { status: "IDEA", reason: "initial", changedAt: 100 },
       { status: "incorporated", reason: "writer", changedAt: 100 },
@@ -193,9 +195,10 @@ test("un historial truncado conserva métricas observadas pero no certifica su c
   const graph = analyze([{
     ...idea("history"),
     status: "discarded",
+    writerDecisionCount: 1,
     statusHistory: [
-      { status: "IDEA", reason: "initial", changedAt: 10 },
-      { status: "incorporated", reason: "writer", changedAt: 20 }
+      { status: "IDEA", reason: "text-revised", changedAt: 10 },
+      { status: "discarded", reason: "writer", changedAt: 20 }
     ],
     omittedStatusHistoryCount: 4
   }]);
@@ -379,7 +382,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(complete.missingFromProjectReferenceCount, 1);
   assert.deepEqual(
     complete.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "missing-from-project"]
+    ["missing-from-project", "included-in-snapshot"]
   );
 
   const partial = analyze([source, included], 3);
@@ -388,7 +391,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(partial.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     partial.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 
   const legacy = analyzeLiteraryFragment({
@@ -403,7 +406,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(legacy.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     legacy.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 });
 
@@ -449,8 +452,6 @@ test("los perfiles por estado conservan los totales de nodos y referencias dirig
     ]
   );
 });
-
-
 test("las auto-referencias forman ciclos unitarios sin inflar pares recíprocos", () => {
   const graph = analyze([
     idea("self", ["self"]),

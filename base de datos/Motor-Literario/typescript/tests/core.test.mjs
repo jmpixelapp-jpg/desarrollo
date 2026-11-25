@@ -6818,16 +6818,41 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidación at�
   };
   const puts = [];
   const deletes = [];
+  const writerVersions = new Map();
   let pendingReads = 6;
   let transaction;
   const database = {
     onversionchange: null,
+    objectStoreNames: {
+      contains(name) { return name === "writer-library-versions"; }
+    },
     close() {},
-    transaction() {
+    transaction(storeNames) {
+      const names = Array.isArray(storeNames) ? storeNames : [storeNames];
       transaction = {
+        objectStoreNames: { contains(name) { return names.includes(name); } },
         error: null,
         abort() { queueMicrotask(() => transaction.onabort?.()); },
         objectStore(name) {
+          if (name === "writer-library-versions") {
+            return {
+              get(key) {
+                assert.equal(key, "writer-canonical");
+                const request = {};
+                pendingReads++;
+                queueMicrotask(() => {
+                  request.result = writerVersions.get(key);
+                  request.onsuccess?.();
+                  pendingReads--;
+                  if (pendingReads === 0) queueMicrotask(() => transaction.oncomplete?.());
+                });
+                return request;
+              },
+              put(record) {
+                writerVersions.set(record.writerId, structuredClone(record));
+              }
+            };
+          }
           return {
             index(indexName) {
               return {
@@ -6895,6 +6920,10 @@ test("IndexedDB actualiza la biblioteca personal dentro de la consolidación at�
     assert.equal(archived.record.idea.text, "La idea pendiente");
     assert.equal(puts.filter(item => item.store === "personal-idea-library").length, 2,
       "solo se actualizan las entradas del escritor solicitado");
+    assert.deepEqual(writerVersions.get("writer-canonical"), {
+      writerId: "writer-canonical",
+      version: 1
+    }, "la consolidación incrementa la versión en la misma transacción que los snapshots archivados");
     const legacy = puts.find(item =>
       item.store === "personal-idea-library" && item.record.idea.id === "legacy-archived"
     );

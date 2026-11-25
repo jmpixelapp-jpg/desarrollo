@@ -188,8 +188,14 @@ export class MotorLiterarioBridgeClient {
         reject(new TypeError("El timeout debe ser un entero positivo."));
         return;
       }
+      const messageBytes = this.byteLength(message);
       const timeout = setTimeout(() => {
         this.pending.delete(id);
+        const queuedIndex = this.outboundQueue.indexOf(message);
+        if (queuedIndex >= 0) {
+          this.outboundQueue.splice(queuedIndex, 1);
+          this.outboundBytes -= messageBytes;
+        }
         reject(new Error("Tiempo de espera agotado para la solicitud " + method + "."));
       }, duration);
       this.pending.set(id, {
@@ -198,16 +204,14 @@ export class MotorLiterarioBridgeClient {
         timeout
       });
 
-      this.outboundQueue.push(message);
-      this.outboundBytes += this.byteLength(message);
-      if (this.outboundBytes > this.maxMessageBytes * 4) {
+      if (this.outboundBytes + messageBytes > this.maxMessageBytes * 4) {
         this.pending.delete(id);
         clearTimeout(timeout);
-        this.outboundQueue.length = 0;
-        this.outboundBytes = 0;
         reject(new Error("La cola de salida del puente superó 64 MiB; aplique contrapresión en el anfitrión."));
         return;
       }
+      this.outboundQueue.push(message);
+      this.outboundBytes += messageBytes;
       this.drainWrites();
     });
   }
@@ -305,6 +309,7 @@ export class MotorLiterarioBridgeClient {
   }
 
   private failAll(error: Error): void {
+    this.closed = true;
     for (const pending of this.pending.values()) {
       if (pending.timeout !== undefined) clearTimeout(pending.timeout);
       pending.reject(error);

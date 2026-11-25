@@ -200,6 +200,10 @@ export interface LiterarySceneVoiceSnapshot {
   readonly classification: LiteraryVoiceSignalClassification;
   readonly counts: LiteraryVoiceSignalCounts;
   readonly totalSignals: number;
+  readonly narrativeWordCount: number;
+  /** Conteos normalizados por cada 1.000 palabras fuera del diálogo reconocido. */
+  readonly ratesPer1000Words: LiteraryVoiceSignalCounts;
+  readonly totalRatePer1000Words: number;
 }
 export interface LiterarySceneVoiceCategoryCoverage {
   readonly category: keyof LiteraryVoiceSignalCounts;
@@ -211,7 +215,11 @@ export interface LiterarySceneVoiceCategoryCoverage {
 export interface LiterarySceneVoiceProfile {
   readonly sceneCount: number;
   readonly totalSignals: number;
+  readonly totalNarrativeWordCount: number;
   readonly categoryTotals: LiteraryVoiceSignalCounts;
+  /** Conteos acumulados normalizados por cada 1.000 palabras fuera del diálogo reconocido. */
+  readonly categoryRatesPer1000Words: LiteraryVoiceSignalCounts;
+  readonly totalRatePer1000Words: number;
   readonly classificationSceneCounts: {
     readonly firstPerson: number;
     readonly secondPerson: number;
@@ -230,6 +238,8 @@ export interface LiteraryExplicitSceneSegment {
   readonly markerOccurrence: LiteraryAnalysisOccurrence;
   readonly contentRange: LiteraryAnalysisOccurrence;
   readonly wordCount: number;
+  /** Palabras de narración fuera de los rangos de diálogo reconocidos. */
+  readonly narrativeWordCount: number;
   /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
   readonly characterMentions: readonly LiterarySceneCharacterMention[];
   readonly eventLinks: readonly LiterarySceneEventLink[];
@@ -604,8 +614,11 @@ function analyzeExplicitScenes(
     localRanges.push(contentRange);
     sceneDrafts.push({marker,contentRange});
   }
-  const wordCounts = countTokensPerRange(tokens,localRanges);
-  return sceneDrafts.slice(0,100).map((scene,index) => {
+  const boundedScenes = sceneDrafts.slice(0,100);
+  const boundedRanges = boundedScenes.map(scene => scene.contentRange);
+  const wordCounts = countTokensPerRange(tokens,boundedRanges);
+  const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,boundedRanges,dialogueRanges);
+  return boundedScenes.map((scene,index) => {
     const characterMentions = findSceneCharacterMentions(
       text,scene.contentRange,baseOffset,knownCharacters
     );
@@ -622,6 +635,7 @@ function analyzeExplicitScenes(
       end:baseOffset+scene.contentRange.end
     },
     wordCount:wordCounts[index] ?? 0,
+    narrativeWordCount:narrativeWordCounts[index] ?? 0,
     characterMentions,
     eventLinks:findSceneEventLinks(
       scene.contentRange,baseOffset,documentId,revision,characterMentions,knownEvents
@@ -735,9 +749,7 @@ function buildSceneVoiceProfile(
   const categories: readonly (keyof LiteraryVoiceSignalCounts)[] = [
     "firstPerson","secondPerson","thirdPerson"
   ];
-  const categoryTotals = {
-    firstPerson:0,secondPerson:0,thirdPerson:0
-  };
+  const categoryTotals = {firstPerson:0,secondPerson:0,thirdPerson:0};
   const scenesWithOccurrences: Record<keyof LiteraryVoiceSignalCounts,number> = {
     firstPerson:0,secondPerson:0,thirdPerson:0
   };
@@ -745,9 +757,11 @@ function buildSceneVoiceProfile(
     firstPerson:0,secondPerson:0,thirdPerson:0,mixed:0,undetermined:0
   };
   let totalSignals = 0;
+  let totalNarrativeWordCount = 0;
 
   for (const scene of scenes) {
     const counts = scene.voiceSignals.counts;
+    totalNarrativeWordCount += scene.narrativeWordCount;
     for (const category of categories) {
       categoryTotals[category] += counts[category];
       if (counts[category] > 0) scenesWithOccurrences[category]++;
@@ -762,10 +776,22 @@ function buildSceneVoiceProfile(
     }
   }
 
+  const categoryRatesPer1000Words: LiteraryVoiceSignalCounts = {
+    firstPerson:totalNarrativeWordCount > 0
+      ? roundMetric(categoryTotals.firstPerson/totalNarrativeWordCount*1000) : 0,
+    secondPerson:totalNarrativeWordCount > 0
+      ? roundMetric(categoryTotals.secondPerson/totalNarrativeWordCount*1000) : 0,
+    thirdPerson:totalNarrativeWordCount > 0
+      ? roundMetric(categoryTotals.thirdPerson/totalNarrativeWordCount*1000) : 0
+  };
   return {
     sceneCount:scenes.length,
     totalSignals,
+    totalNarrativeWordCount,
     categoryTotals,
+    categoryRatesPer1000Words,
+    totalRatePer1000Words:totalNarrativeWordCount > 0
+      ? roundMetric(totalSignals/totalNarrativeWordCount*1000) : 0,
     classificationSceneCounts,
     categoryCoverage:categories.map(category => ({
       category,
@@ -775,13 +801,29 @@ function buildSceneVoiceProfile(
         ? roundMetric(scenesWithOccurrences[category]/scenes.length)
         : 0
     })),
-    sceneSnapshots:scenes.map(scene => ({
-      sceneIndex:scene.sceneIndex,
-      classification:scene.voiceSignals.classification,
-      counts:{...scene.voiceSignals.counts},
-      totalSignals:scene.voiceSignals.counts.firstPerson +
-        scene.voiceSignals.counts.secondPerson + scene.voiceSignals.counts.thirdPerson
-    }))
+    sceneSnapshots:scenes.map(scene => {
+      const counts = scene.voiceSignals.counts;
+      const narrativeWordCount = scene.narrativeWordCount;
+      const ratesPer1000Words: LiteraryVoiceSignalCounts = {
+        firstPerson:narrativeWordCount > 0
+          ? roundMetric(counts.firstPerson/narrativeWordCount*1000) : 0,
+        secondPerson:narrativeWordCount > 0
+          ? roundMetric(counts.secondPerson/narrativeWordCount*1000) : 0,
+        thirdPerson:narrativeWordCount > 0
+          ? roundMetric(counts.thirdPerson/narrativeWordCount*1000) : 0
+      };
+      const totalSignals = counts.firstPerson + counts.secondPerson + counts.thirdPerson;
+      return {
+        sceneIndex:scene.sceneIndex,
+        classification:scene.voiceSignals.classification,
+        counts:{...counts},
+        totalSignals,
+        narrativeWordCount,
+        ratesPer1000Words,
+        totalRatePer1000Words:narrativeWordCount > 0
+          ? roundMetric(totalSignals/narrativeWordCount*1000) : 0
+      };
+    })
   };
 }
 
@@ -886,6 +928,28 @@ function countTokensPerRange(tokens: readonly WordToken[], ranges: readonly Loca
 }
 function countTokensInRanges(tokens: readonly WordToken[], ranges: readonly LocalRange[]): number {
   return countTokensPerRange(tokens, ranges).reduce((total, count) => total + count, 0);
+}
+
+function countTokensOutsideRangesPerRange(
+  tokens: readonly WordToken[],
+  scopes: readonly LocalRange[],
+  excludedRanges: readonly LocalRange[]
+): number[] {
+  const counts = scopes.map(() => 0);
+  let scopeIndex = 0;
+  let excludedIndex = 0;
+  for (const token of tokens) {
+    while (scopeIndex < scopes.length && scopes[scopeIndex]!.end <= token.start) scopeIndex++;
+    if (scopeIndex >= scopes.length) break;
+    const scope = scopes[scopeIndex]!;
+    if (token.end <= scope.start || token.start >= scope.end) continue;
+    while (excludedIndex < excludedRanges.length &&
+      excludedRanges[excludedIndex]!.end <= token.start) excludedIndex++;
+    const excluded = excludedRanges[excludedIndex];
+    if (excluded && token.start < excluded.end && token.end > excluded.start) continue;
+    counts[scopeIndex]++;
+  }
+  return counts;
 }
 function classifyVoiceSignals(
   tokens: readonly WordToken[],

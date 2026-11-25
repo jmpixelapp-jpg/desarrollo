@@ -10309,10 +10309,17 @@ test("compara variaciones de señales gramaticales entre escenas contiguas", asy
     result.sceneVoiceTransitions[0].toSceneIndex);
   assert.equal(result.explicitScenes[0].voiceSignals.samples.some(sample => sample.term === "Él"),false);
 
+  assert.equal(result.explicitScenes[0].wordCount,10);
+  assert.equal(result.explicitScenes[0].narrativeWordCount,6);
+  assert.equal(result.explicitScenes[1].narrativeWordCount,10);
+  assert.equal(result.explicitScenes[2].narrativeWordCount,5);
   assert.deepEqual(result.sceneVoiceProfile,{
     sceneCount:3,
     totalSignals:3,
+    totalNarrativeWordCount:21,
     categoryTotals:{firstPerson:1,secondPerson:1,thirdPerson:1},
+    categoryRatesPer1000Words:{firstPerson:47.619,secondPerson:47.619,thirdPerson:47.619},
+    totalRatePer1000Words:142.857,
     classificationSceneCounts:{
       firstPerson:1,secondPerson:0,thirdPerson:0,mixed:1,undetermined:1
     },
@@ -10323,11 +10330,17 @@ test("compara variaciones de señales gramaticales entre escenas contiguas", asy
     ],
     sceneSnapshots:[
       {sceneIndex:1,classification:"first-person-signals",
-        counts:{firstPerson:1,secondPerson:0,thirdPerson:0},totalSignals:1},
+        counts:{firstPerson:1,secondPerson:0,thirdPerson:0},totalSignals:1,
+        narrativeWordCount:6,ratesPer1000Words:{firstPerson:166.667,secondPerson:0,thirdPerson:0},
+        totalRatePer1000Words:166.667},
       {sceneIndex:2,classification:"mixed-signals",
-        counts:{firstPerson:0,secondPerson:1,thirdPerson:1},totalSignals:2},
+        counts:{firstPerson:0,secondPerson:1,thirdPerson:1},totalSignals:2,
+        narrativeWordCount:10,ratesPer1000Words:{firstPerson:0,secondPerson:100,thirdPerson:100},
+        totalRatePer1000Words:200},
       {sceneIndex:3,classification:"undetermined",
-        counts:{firstPerson:0,secondPerson:0,thirdPerson:0},totalSignals:0}
+        counts:{firstPerson:0,secondPerson:0,thirdPerson:0},totalSignals:0,
+        narrativeWordCount:5,ratesPer1000Words:{firstPerson:0,secondPerson:0,thirdPerson:0},
+        totalRatePer1000Words:0}
     ]
   });
 });

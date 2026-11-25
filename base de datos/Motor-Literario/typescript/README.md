@@ -326,6 +326,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Señales gramaticales de primera, segunda y tercera persona por escena explícita, excluyendo los tramos de diálogo reconocidos y conservando muestras UTF-16.
 - Comparación de variaciones entre escenas contiguas: cambio de clasificación, diferencias de conteos por persona y categorías modificadas, sin diagnosticar cambios de narrador.
 - Perfil agregado de señales por escena: totales por categoría, distribución de clasificaciones, cobertura y secuencia de instantáneas en orden textual.
+- Tasas normalizadas de señales gramaticales por cada 1.000 palabras de narración fuera del diálogo reconocido, tanto por escena como en el agregado, para comparar escenas de distinta longitud.
 - Acontecimientos vinculados a escenas solo mediante evidencia del mismo documento y revisión; participantes declarados separados de las menciones literales.
 - Señales de continuidad entre escenas explícitas contiguas: personajes mencionados en ambas, solo en la anterior o solo en la siguiente; y acontecimientos con evidencia en ambas o en una sola escena.
 - Patrones de co-mención de personajes conocidos en escenas compartidas, ordenados por frecuencia y sin inferir relaciones entre ellos.

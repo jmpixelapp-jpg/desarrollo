@@ -1653,6 +1653,7 @@ export class HostEngineApi {
       pieceTableEditing: true,
       incrementalChangeJournal: true,
       journalCrashRecovery: true,
+      localSnapshotRecovery: true,
       corruptJournalHostSnapshotFallback: true,
       periodicDocumentSnapshots: true,
       localPersistence: true,

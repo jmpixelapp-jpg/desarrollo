@@ -5,6 +5,8 @@ export interface BridgeReadable {
 
 export interface BridgeWritable {
   write(value: string): boolean;
+  on(event: "error", listener: (error: unknown) => void): unknown;
+  once(event: "drain", listener: () => void): unknown;
   end?(): void;
 }
 
@@ -56,6 +58,9 @@ type NotificationHandler = (params: unknown) => void;
 export class MotorLiterarioBridgeClient {
   private readonly pending = new Map<string, PendingRequest>();
   private readonly listeners = new Map<string, Set<NotificationHandler>>();
+  private readonly outboundQueue: string[] = [];
+  private outboundBytes = 0;
+  private writeBlocked = false;
   private buffer = "";
   private nextId = 0;
   private closed = false;
@@ -78,6 +83,7 @@ export class MotorLiterarioBridgeClient {
     child.stdout.setEncoding?.("utf8");
     child.stdout.on("data", chunk => this.receiveChunk(String(chunk)));
     child.stdout.on("error", error => this.failAll(this.asError(error)));
+    child.stdin.on("error", error => this.failAll(this.asError(error)));
     child.stderr?.setEncoding?.("utf8");
     child.stderr?.on("data", chunk => options.onStderr?.(String(chunk)));
     child.on("error", error => this.failAll(error));
@@ -173,6 +179,9 @@ export class MotorLiterarioBridgeClient {
       return Promise.reject(new Error("La solicitud supera el límite de 16 MiB del puente."));
     }
 
+    if (this.pending.size >= 4096) {
+      return Promise.reject(new Error("El límite del cliente es de 4096 solicitudes pendientes."));
+    }
     return new Promise<T>((resolve, reject) => {
       const duration = timeoutMs ?? this.requestTimeoutMs;
       if (!Number.isSafeInteger(duration) || duration < 1) {
@@ -189,14 +198,42 @@ export class MotorLiterarioBridgeClient {
         timeout
       });
 
-      try {
-        this.child.stdin.write(message);
-      } catch (error) {
-        clearTimeout(timeout);
+      this.outboundQueue.push(message);
+      this.outboundBytes += this.byteLength(message);
+      if (this.outboundBytes > this.maxMessageBytes * 4) {
         this.pending.delete(id);
-        reject(this.asError(error));
+        clearTimeout(timeout);
+        this.outboundQueue.length = 0;
+        this.outboundBytes = 0;
+        reject(new Error("La cola de salida del puente superó 64 MiB; aplique contrapresión en el anfitrión."));
+        return;
       }
+      this.drainWrites();
     });
+  }
+
+  private drainWrites(): void {
+    if (this.closed || this.writeBlocked) return;
+    while (this.outboundQueue.length > 0) {
+      const message = this.outboundQueue.shift()!;
+      this.outboundBytes -= this.byteLength(message);
+      try {
+        const canContinue = this.child.stdin.write(message);
+        if (!canContinue) {
+          this.writeBlocked = true;
+          this.child.stdin.once("drain", () => {
+            this.writeBlocked = false;
+            this.drainWrites();
+          });
+          return;
+        }
+      } catch (error) {
+        this.failAll(this.asError(error));
+        this.outboundQueue.length = 0;
+        this.outboundBytes = 0;
+        return;
+      }
+    }
   }
 
   onNotification(method: string, handler: NotificationHandler): () => void {
@@ -273,5 +310,8 @@ export class MotorLiterarioBridgeClient {
       pending.reject(error);
     }
     this.pending.clear();
+    this.outboundQueue.length = 0;
+    this.outboundBytes = 0;
+    this.writeBlocked = false;
   }
 }

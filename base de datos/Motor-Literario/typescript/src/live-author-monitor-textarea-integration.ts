@@ -114,7 +114,7 @@ export function mountLiveAuthorMonitorTextArea(
       sink: options.hostApi,
       subscribeRetrySignal: listener =>
         options.hostApi.subscribeLiveAuthorMonitor(() => listener()),
-      onBackpressure: options.onBackpressure,
+      ...(options.onBackpressure ? { onBackpressure: options.onBackpressure } : {}),
       onAdmission: (change, admission) => {
         if (admission.status === "rejected" && admission.reason !== "queue_full") {
           source.requireResynchronization(

@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `21`.
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `21` (manifiesto físico, mapping version `11`).
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -19,7 +19,7 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `narrative-relations` | `[projectId, id]` | `by-project` | Relaciones y evidencias |
 | `narrative-events` | `[projectId, id]` | `by-project` | Acontecimientos y referencias temporales explícitas |
 | `narrative-ideas` | `[projectId, id]` | `by-project` | Ideas del libro, estado e historial |
-| `personal-idea-library` | `[writerId, sourceProjectId, idea.id]` | `by-writer`, `by-writer-source`, `by-source-project` | Ideas no incorporadas archivadas con contexto |
+| `personal-idea-library` | `[writerId, sourceProjectId, idea.id]` | `by-writer`, `by-writer-source`, `by-source-project` | Ideas no incorporadas archivadas con contexto |\n| `writer-library-finalization-receipts` | `[writerId, sourceProjectId, receiptId]` | `by-writer`, `by-writer-source` | Recibos idempotentes de transferencia final de ideas |
 | `narrative-assertions` | `[projectId, id]` | `by-project`, `by-entity` | Afirmaciones históricas explícitas |
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
 | `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |

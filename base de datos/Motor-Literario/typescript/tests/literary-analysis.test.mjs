@@ -2003,7 +2003,10 @@ test("las trayectorias resuelven escenas con evidencia posterior a las primeras 
       evidenceCount: 21,
       staleEvidenceCount: 0,
       evidence: evidenceSamples,
-      statusHistory: [{ status: "incorporated", reason: "writer", changedAt: 2 }],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
       writerDecisionCount: 1,
       omittedStatusHistoryCount: 0
     }]
@@ -2071,7 +2074,10 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
       evidenceCount: 2,
       staleEvidenceCount: 1,
       evidence: foreignEvidence,
-      statusHistory: [{ status: "incorporated", reason: "writer", changedAt: 2 }],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
       writerDecisionCount: 1,
       omittedStatusHistoryCount: 0
     }]
@@ -2566,7 +2572,8 @@ test("las trayectorias no concluyen la evolución cuando el historial de decisio
   });
   const decision = result.characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
   assert.equal(decision.statusEvolutionStatus, "unknown-incomplete-history");
-  assert.equal(decision.reopeningCount, 0);
+  // El historial global es incompleto, pero la transición reincorporada-visible se conserva como hecho observado.
+  assert.equal(decision.reopeningCount, 1);
   assert.equal(decision.currentStatusHistoryConsistency, "unknown");
 });
 

@@ -337,6 +337,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Acontecimientos vinculados a escenas solo mediante evidencia del mismo documento y revisión; participantes declarados separados de las menciones literales.
 - Señales de continuidad entre escenas explícitas contiguas: personajes mencionados en ambas, solo en la anterior o solo en la siguiente; y acontecimientos con evidencia en ambas o en una sola escena.
 - Patrones de co-mención de personajes conocidos en escenas compartidas, ordenados por frecuencia y sin inferir relaciones entre ellos.
+- Distribución de menciones literales de personajes conocidos por escena: cobertura, primera y última mención, intervalos sin coincidencia y rachas consecutivas, sin inferir ausencias ni arcos narrativos.
 
 La API `analyzeLiteraryDocument(documentId, start?, end?)` espera a que terminen los cambios admitidos y analiza el rango UTF-16 solicitado en la revisión vigente. Es una operación de solo lectura, no persiste sugerencias ni modifica el manuscrito. Los resultados identifican proyecto, documento, revisión y rango; las ocurrencias usan offsets UTF-16 absolutos.
 

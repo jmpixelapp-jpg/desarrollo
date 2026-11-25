@@ -9,7 +9,8 @@ const NARRATIVE_COLLECTIONS = new Set([
   "narrative-relations",
   "narrative-events",
   "narrative-ideas",
-  "narrative-assertions"
+  "narrative-assertions",
+  "event-lifecycles"
 ]);
 
 function clone(value) {
@@ -196,6 +197,62 @@ function validateNarrativeEvent(event, projectId) {
   }
   validateEvidenceList(event.evidence, "acontecimiento narrativo");
 }
+function validateEventLifecycle(item, projectId) {
+  if (!item || typeof item !== "object" ||
+      item.projectId !== projectId ||
+      typeof item.id !== "string" || !item.id.trim() || item.id.length > 512 ||
+      typeof item.eventId !== "string" || !item.eventId.trim() || item.eventId.length > 256 ||
+      !Number.isSafeInteger(item.revision) || item.revision < 1 ||
+      typeof item.previousLabel !== "string" || !item.previousLabel.trim() || item.previousLabel.length > 512 ||
+      typeof item.newLabel !== "string" || !item.newLabel.trim() || item.newLabel.length > 512 ||
+      typeof item.changedBy !== "string" || !item.changedBy.trim() || item.changedBy.length > 256 ||
+      (item.changeReason !== undefined && item.changeReason !== null &&
+        (typeof item.changeReason !== "string" || item.changeReason.length > 4096)) ||
+      typeof item.changedAt !== "number" || !Number.isFinite(item.changedAt) || item.changedAt < 0) {
+    throw new Error("Registro de ciclo de vida de acontecimiento inválido.");
+  }
+  for (const [participants, label] of [
+    [item.previousParticipants, "anteriores"],
+    [item.newParticipants, "nuevos"]
+  ]) {
+    if (!Array.isArray(participants) || participants.length > 500 ||
+        participants.some(id => typeof id !== "string" || !id.trim() || id.length > 256) ||
+        new Set(participants).size !== participants.length ||
+        participants.some((id, index) => index > 0 && participants[index - 1].localeCompare(id, "en") > 0)) {
+      throw new Error("Los participantes " + label + " del historial de acontecimiento son inválidos o no están normalizados.");
+    }
+  }
+  const changedParticipants = item.previousParticipants.length !== item.newParticipants.length ||
+    !item.previousParticipants.every((id, index) => id === item.newParticipants[index]);
+  if (item.previousLabel === item.newLabel && !changedParticipants) {
+    throw new Error("Una transición de acontecimiento debe cambiar la etiqueta o los participantes.");
+  }
+}
+
+function validateEventLifecycleHistory(records, projectId, eventId) {
+  if (!Array.isArray(records)) throw new Error("El historial de acontecimiento no es una colección.");
+  const ordered = [...records].sort((first, second) => first.revision - second.revision);
+  const ids = new Set();
+  let previous;
+  for (const item of ordered) {
+    validateEventLifecycle(item, projectId);
+    if (item.eventId !== eventId || ids.has(item.id) ||
+        (!previous && item.revision !== 1) ||
+        (previous && (
+          item.revision !== previous.revision + 1 ||
+          item.previousLabel !== previous.newLabel ||
+          item.previousParticipants.length !== previous.newParticipants.length ||
+          !item.previousParticipants.every((id, index) => id === previous.newParticipants[index]) ||
+          item.changedAt < previous.changedAt
+        ))) {
+      throw new Error("El historial de acontecimiento contiene revisiones duplicadas o transiciones discontinuas.");
+    }
+    ids.add(item.id);
+    previous = item;
+  }
+  return ordered;
+}
+
 function validateNarrativeAssertion(assertion, projectId) {
   requireProjectRecord(assertion, "afirmación narrativa");
   if (assertion.projectId !== projectId || typeof assertion.entityId !== "string" ||
@@ -662,6 +719,98 @@ export class SqliteProjectStore {
       const expectedRevision = history.length ? history[history.length - 1].revision + 1 : 1;
       if (item.revision !== expectedRevision) throw new Error("La revisión del historial de ficha debe ser consecutiva.");
       this.put("record-lifecycles", [item.projectId, item.recordId, item.revision], item, { insertOnly: true });
+    });
+  }
+
+  loadEventLifecycles(projectId, eventId) {
+    requireProject(projectId);
+    requireText(eventId, "eventId");
+    const event = this.get("narrative-events", identityKey(projectId, eventId));
+    if (!event) throw new Error("No existe el acontecimiento solicitado en el proyecto.");
+    validateNarrativeEvent(event, projectId);
+    const history = this.find("event-lifecycles", item =>
+      item.projectId === projectId && item.eventId === eventId
+    );
+    return clone(validateEventLifecycleHistory(history, projectId, eventId));
+  }
+
+  loadProjectEventLifecycles(projectId) {
+    requireProject(projectId);
+    const events = new Map(this.loadEvents(projectId).map(event => [event.id, event]));
+    const history = this.loadProject("event-lifecycles", projectId, "historial de acontecimiento");
+    const grouped = new Map();
+    for (const item of history) {
+      validateEventLifecycle(item, projectId);
+      if (!events.has(item.eventId)) {
+        throw new Error("El historial de acontecimiento referencia un evento inexistente.");
+      }
+      const rows = grouped.get(item.eventId) ?? [];
+      rows.push(item);
+      grouped.set(item.eventId, rows);
+    }
+    const ordered = [];
+    for (const [eventId, rows] of grouped) {
+      ordered.push(...validateEventLifecycleHistory(rows, projectId, eventId));
+    }
+    return clone(ordered.sort((first, second) =>
+      first.eventId.localeCompare(second.eventId, "en") || first.revision - second.revision
+    ));
+  }
+
+  saveEventAndAppendLifecycleIfUnchanged(event, expectedCurrent, lifecycle) {
+    requireProjectRecord(event, "acontecimiento narrativo");
+    requireProjectRecord(expectedCurrent, "acontecimiento anterior");
+    validateNarrativeEvent(event, event.projectId);
+    validateNarrativeEvent(expectedCurrent, event.projectId);
+    validateEventLifecycle(lifecycle, event.projectId);
+    const normalizeParticipants = values => [...new Set(values)].sort((a, b) => a.localeCompare(b, "en"));
+    if (event.id !== expectedCurrent.id ||
+        lifecycle.eventId !== event.id ||
+        lifecycle.previousLabel !== expectedCurrent.label ||
+        lifecycle.newLabel !== event.label ||
+        JSON.stringify(lifecycle.previousParticipants) !== JSON.stringify(normalizeParticipants(expectedCurrent.participants)) ||
+        JSON.stringify(lifecycle.newParticipants) !== JSON.stringify(normalizeParticipants(event.participants))) {
+      throw new Error("La transición versionada no coincide con el cambio real del acontecimiento.");
+    }
+
+    return this.transaction(() => {
+      const current = this.get("narrative-events", identityKey(event.projectId, event.id));
+      if (!current || !sameValue(current, expectedCurrent)) {
+        throw new Error("El acontecimiento cambió en otra instancia; actualiza la vista antes de registrar su evolución.");
+      }
+      for (const id of event.participants) {
+        if (!this.get("narrative-entities", identityKey(event.projectId, id))) {
+          throw new Error("El acontecimiento contiene un participante que no existe en el proyecto.");
+        }
+      }
+      if (event.timelineTrackId &&
+          !this.get("timeline-tracks", identityKey(event.projectId, event.timelineTrackId))) {
+        throw new Error("La pista cronológica del acontecimiento no existe.");
+      }
+      const history = this.loadEventLifecycles(event.projectId, event.id);
+      const previous = history[history.length - 1];
+      if (!previous) {
+        if (lifecycle.revision !== 1) {
+          throw new Error("La primera transición de acontecimiento debe comenzar en revisión 1.");
+        }
+      } else if (lifecycle.revision !== previous.revision + 1 ||
+          lifecycle.previousLabel !== previous.newLabel ||
+          lifecycle.previousParticipants.length !== previous.newParticipants.length ||
+          !lifecycle.previousParticipants.every((id, index) => id === previous.newParticipants[index]) ||
+          lifecycle.changedAt < previous.changedAt) {
+        throw new Error("La transición de acontecimiento no continúa la última revisión durable.");
+      }
+      if (history.some(item => item.id === lifecycle.id)) {
+        throw new Error("El ID de la transición de acontecimiento ya existe.");
+      }
+      this.put("narrative-events", identityKey(event.projectId, event.id), event, {
+        expectedCurrent,
+        conflictMessage: "El acontecimiento cambió en otra instancia; actualiza la vista antes de registrar su evolución."
+      });
+      this.put("event-lifecycles", [event.projectId, event.id, lifecycle.revision], lifecycle, {
+        insertOnly: true,
+        conflictMessage: "La transición de acontecimiento ya existe y no puede reemplazarse."
+      });
     });
   }
 
@@ -1731,6 +1880,7 @@ function keyForCollection(collection, row) {
   if (collection === "writer-library-finalization-receipts") return [row.writerId, row.sourceProjectId, row.receiptId];
   if (collection === "record-lifecycles") return [row.projectId, row.recordId, row.revision];
   if (collection === "relation-lifecycles") return [row.projectId, row.relationId, row.revision];
+  if (collection === "event-lifecycles") return [row.projectId, row.eventId, row.revision];
   if (collection === "dictionary-entry-entities") return [row.projectId, row.entryId, row.recordId];
   return identityKey(row.projectId, row.id);
 }

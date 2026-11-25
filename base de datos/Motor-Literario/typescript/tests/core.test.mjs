@@ -10732,6 +10732,43 @@ test("traza evidencia de acontecimientos por participante sin inferir presencia 
   });
 });
 
+test("evalúa participantes nombrados aunque la muestra pública exceda cuarenta personajes", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const knownCharacters = Array.from({length:40},(_,index) => ({
+    entityId:"character-"+String(index).padStart(3,"0"),
+    canonicalName:"Personaje "+String(index).padStart(3,"0")
+  }));
+  knownCharacters.push({entityId:"ana",canonicalName:"Ana"});
+  const text = [
+    "ESCENA 1",
+    knownCharacters.map(character => character.canonicalName).join(". ")+".",
+    "Ana espera. La alarma sonó."
+  ].join("\n");
+  const excerpt = "La alarma sonó.";
+  const start = text.indexOf(excerpt);
+  const result = analyzeLiteraryFragment({
+    projectId:"event-participant-over-character-sample",documentId:"chapter",revision:1,text,
+    knownCharacters,
+    knownEvents:[{
+      eventId:"alarm",label:"Suena la alarma",participants:["ana"],
+      evidence:[{
+        documentId:"chapter",revision:1,start,end:start+excerpt.length,excerpt
+      }]
+    }]
+  });
+
+  assert.equal(result.explicitScenes[0].characterMentions.length,40);
+  assert.equal(
+    result.explicitScenes[0].characterMentions.some(item => item.entityId === "ana"),
+    false
+  );
+  assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,true);
+  assert.equal(
+    result.characterEventEvidenceProfiles.profiles[0].participantMentionedByNameSceneCount,
+    1
+  );
+});
+
 test("conserva el conteo total de evidencia cuando sus rangos se limitan a veinte", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = "ESCENA 1\nLa puerta cedió.";

@@ -3430,53 +3430,83 @@ function buildLiteraryIdeaGraph(
     staleEvidenceCount: idea.staleEvidenceCount
   }));
 
-  // Tarjan usa índices compactos en arreglos tipados; detecta componentes
-  // cíclicos en O(V + E) sin mapas y conjuntos de cadenas por nodo.
+  // Tarjan iterativo evita desbordar la pila de JavaScript en catálogos
+  // narrativos profundos; conserva la complejidad O(V + E) y el orden canónico.
   let nextIndex = 0;
   const discoveryIndex = new Int32Array(ideaCount);
   const lowLink = new Int32Array(ideaCount);
   discoveryIndex.fill(-1);
   lowLink.fill(-1);
-  const stack: number[] = [];
+  const componentStack: number[] = [];
   const onStack = new Uint8Array(ideaCount);
   const cycles: LiteraryIdeaGraphCycle[] = [];
 
-  const visit = (ideaIndex: number): void => {
-    const index = nextIndex++;
-    discoveryIndex[ideaIndex] = index;
-    lowLink[ideaIndex] = index;
-    stack.push(ideaIndex);
-    onStack[ideaIndex] = 1;
+  // Pila DFS explícita: cada cursor señala la próxima arista por examinar.
+  const dfsNodes: number[] = [];
+  const dfsEdgeCursors: number[] = [];
 
-    for (const targetIndex of adjacency[ideaIndex]!) {
-      if (discoveryIndex[targetIndex] === -1) {
-        visit(targetIndex);
-        lowLink[ideaIndex] = Math.min(lowLink[ideaIndex]!, lowLink[targetIndex]!);
-      } else if (onStack[targetIndex] === 1) {
-        lowLink[ideaIndex] = Math.min(
-          lowLink[ideaIndex]!, discoveryIndex[targetIndex]!
+  for (let rootIndex = 0; rootIndex < ideaCount; rootIndex++) {
+    if (discoveryIndex[rootIndex] !== -1) continue;
+
+    discoveryIndex[rootIndex] = nextIndex;
+    lowLink[rootIndex] = nextIndex;
+    nextIndex++;
+    componentStack.push(rootIndex);
+    onStack[rootIndex] = 1;
+    dfsNodes.push(rootIndex);
+    dfsEdgeCursors.push(0);
+
+    while (dfsNodes.length > 0) {
+      const frameIndex = dfsNodes.length - 1;
+      const nodeIndex = dfsNodes[frameIndex]!;
+      const edgeCursor = dfsEdgeCursors[frameIndex]!;
+      const neighbors = adjacency[nodeIndex]!;
+
+      if (edgeCursor < neighbors.length) {
+        const targetIndex = neighbors[edgeCursor]!;
+        dfsEdgeCursors[frameIndex] = edgeCursor + 1;
+
+        if (discoveryIndex[targetIndex] === -1) {
+          discoveryIndex[targetIndex] = nextIndex;
+          lowLink[targetIndex] = nextIndex;
+          nextIndex++;
+          componentStack.push(targetIndex);
+          onStack[targetIndex] = 1;
+          dfsNodes.push(targetIndex);
+          dfsEdgeCursors.push(0);
+        } else if (onStack[targetIndex] === 1) {
+          lowLink[nodeIndex] = Math.min(
+            lowLink[nodeIndex]!, discoveryIndex[targetIndex]!
+          );
+        }
+        continue;
+      }
+
+      // El nodo terminó: propaga su low-link al padre DFS antes de retirarlo.
+      dfsNodes.pop();
+      dfsEdgeCursors.pop();
+      const parentIndex = dfsNodes[dfsNodes.length - 1];
+      if (parentIndex !== undefined) {
+        lowLink[parentIndex] = Math.min(
+          lowLink[parentIndex]!, lowLink[nodeIndex]!
         );
       }
-    }
 
-    if (lowLink[ideaIndex] !== discoveryIndex[ideaIndex]) return;
-    const component: number[] = [];
-    while (stack.length > 0) {
-      const member = stack.pop()!;
-      onStack[member] = 0;
-      component.push(member);
-      if (member === ideaIndex) break;
+      if (lowLink[nodeIndex] !== discoveryIndex[nodeIndex]) continue;
+      const component: number[] = [];
+      while (componentStack.length > 0) {
+        const member = componentStack.pop()!;
+        onStack[member] = 0;
+        component.push(member);
+        if (member === nodeIndex) break;
+      }
+      if (component.length > 1) {
+        component.sort((left, right) => left - right);
+        cycles.push({
+          ideaIds: component.map(member => orderedIdeas[member]!.ideaId)
+        });
+      }
     }
-    if (component.length > 1) {
-      component.sort((left, right) => left - right);
-      cycles.push({
-        ideaIds: component.map(member => orderedIdeas[member]!.ideaId)
-      });
-    }
-  };
-
-  for (let index = 0; index < ideaCount; index++) {
-    if (discoveryIndex[index] === -1) visit(index);
   }
   cycles.sort((left, right) =>
     compareIdeaIds(left.ideaIds[0]!, right.ideaIds[0]!)

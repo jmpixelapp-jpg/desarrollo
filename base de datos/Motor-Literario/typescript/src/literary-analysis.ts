@@ -787,6 +787,8 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly ideasWithoutActiveEvidenceCount: number;
 }
 export interface LiteraryIdeaGraphAnalysis {
+  /** Catálogo de entrada completo del proyecto o compatibilidad con el subconjunto ligado a personajes. */
+  readonly catalogScope: "project" | "character-linked-fallback";
   /** Nodos del snapshot recibido; el catálogo no transferido se informa aparte. */
   readonly ideaCount: number;
   /** Distribución estructural de los nodos por estado editorial explícito. */
@@ -3238,7 +3240,8 @@ const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
  */
 function buildLiteraryIdeaGraph(
   ideas: readonly LiteraryAnalysisKnownProjectIdea[],
-  omittedIdeaCount: number
+  omittedIdeaCount: number,
+  catalogScope: LiteraryIdeaGraphAnalysis["catalogScope"]
 ): LiteraryIdeaGraphAnalysis {
   const orderedIdeas = [...ideas].sort((left, right) =>
     left.ideaId.localeCompare(right.ideaId, "en")
@@ -3271,7 +3274,9 @@ function buildLiteraryIdeaGraph(
         incoming.set(targetId, (incoming.get(targetId) ?? 0) + 1);
       } else {
         notIncludedReferenceCount++;
-        if (omittedIdeaCount === 0) missingFromProjectReferenceCount++;
+        if (catalogScope === "project" && omittedIdeaCount === 0) {
+          missingFromProjectReferenceCount++;
+        }
         outgoingExternal.set(idea.ideaId, (outgoingExternal.get(idea.ideaId) ?? 0) + 1);
       }
       if (references.length < MAX_IDEA_GRAPH_REFERENCE_SAMPLES) {
@@ -3280,7 +3285,9 @@ function buildLiteraryIdeaGraph(
           toIdeaId: targetId,
           resolution: included
             ? "included-in-snapshot"
-            : omittedIdeaCount > 0 ? "not-in-snapshot" : "missing-from-project"
+            : catalogScope === "project" && omittedIdeaCount === 0
+              ? "missing-from-project"
+              : "not-in-snapshot"
         });
       }
     }
@@ -3466,6 +3473,7 @@ function buildLiteraryIdeaGraph(
   });
 
   return {
+    catalogScope,
     ideaCount: orderedIdeas.length,
     statusProfiles,
     omittedIdeaCount,
@@ -5268,11 +5276,15 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.knownProjectEventsOmittedCount ?? 0
   );
   const graphIdeas = input.knownProjectIdeas ?? input.knownIdeas ?? [];
-  const graphOmittedIdeaCount = input.knownProjectIdeas !== undefined
+  const usesProjectIdeaCatalog = input.knownProjectIdeas !== undefined;
+  const graphOmittedIdeaCount = usesProjectIdeaCatalog
     ? input.knownProjectIdeasOmittedCount ?? 0
     : input.knownIdeasOmittedCount ?? 0;
+  const graphCatalogScope = usesProjectIdeaCatalog
+    ? "project" as const
+    : "character-linked-fallback" as const;
   const ideaGraph = buildLiteraryIdeaGraph(
-    graphIdeas,graphOmittedIdeaCount
+    graphIdeas,graphOmittedIdeaCount,graphCatalogScope
   );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);

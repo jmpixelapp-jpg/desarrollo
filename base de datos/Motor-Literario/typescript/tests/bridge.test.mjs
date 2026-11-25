@@ -299,13 +299,13 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     assert.ok(Number.isSafeInteger(page.libraryVersion));
     assert.ok(page.libraryVersion >= 1);
 
-    const summary = await client.finalizeProjectToIdeaLibrary(
+    const retry = await client.finalizeProjectToIdeaLibrary(
       "compact-finalization-project"
     );
     assert.equal(retry.alreadyFinalized, true);
     assert.deepEqual({ ...retry, alreadyFinalized: false }, summary);
 
-    const page = await client.getPersonalIdeaLibraryPage(
+    const unchangedPage = await client.getPersonalIdeaLibraryPage(
       "compact-finalization-project", null, 1
     );
     assert.equal(unchangedPage.libraryVersion, page.libraryVersion,

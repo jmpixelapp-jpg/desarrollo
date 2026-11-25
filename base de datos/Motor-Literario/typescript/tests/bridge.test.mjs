@@ -1472,6 +1472,94 @@ test("sincroniza archivo y consolidación de biblioteca entre proyectos y proces
   }
 });
 
+test("SQLite revierte una finalización interrumpida a mitad de transferencia y permite reintentarla", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-finalization-recovery-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "library-recovery-project";
+  const writerId = "writer-library-recovery";
+  const projectName = "Libro con recuperación";
+  let store = await SqliteProjectStore.open(databasePath);
+  const ids = ["idea-a", "idea-b", "idea-c"];
+  try {
+    for (const id of ids) {
+      store.saveIdea({
+        projectId,
+        id,
+        text: "Contenido privado de " + id,
+        status: "IDEA",
+        originDocumentId: "chapter-recovery",
+        sourceProjectName: projectName,
+        evidence: [],
+        relatedIdeaIds: [],
+        statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+      });
+    }
+
+    // La primera idea se copia y se retira dentro de la transacción. El trigger
+    // interrumpe la segunda escritura para simular un cierre/fallo a mitad del lote.
+    store.database.exec(
+      "CREATE TRIGGER interrupt_personal_idea_archive " +
+      "BEFORE INSERT ON bridge_records " +
+      "WHEN NEW.collection = 'personal-idea-library' " +
+      "AND NEW.value_json LIKE '%idea-b%' " +
+      "BEGIN SELECT RAISE(ABORT, 'simulated archive interruption'); END"
+    );
+
+    assert.throws(
+      () => store.archiveUnincorporatedIdeasSummary(
+        projectId, writerId, projectName, 100
+      ),
+      /simulated archive interruption/
+    );
+
+    assert.deepEqual(
+      store.loadIdeas(projectId).map(idea => idea.id).sort(),
+      ids,
+      "ninguna idea debe desaparecer del libro tras el aborto"
+    );
+    assert.deepEqual(
+      store.loadPersonalIdeas(writerId),
+      [],
+      "la biblioteca no debe exponer una transferencia parcial"
+    );
+    assert.equal(
+      store.loadProjectFinalizationReceipt(writerId, projectId),
+      undefined,
+      "no debe publicarse un recibo de una transferencia incompleta"
+    );
+
+    store.database.exec("DROP TRIGGER interrupt_personal_idea_archive");
+    const retry = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 200
+    );
+    assert.equal(retry.archivedCount, ids.length);
+    assert.equal(retry.alreadyFinalized, false);
+    assert.deepEqual(store.loadIdeas(projectId), []);
+    assert.deepEqual(
+      store.loadPersonalIdeas(writerId).map(entry => entry.idea.id).sort(),
+      ids
+    );
+
+    store.close();
+    store = await SqliteProjectStore.open(databasePath);
+    const recoveredReceipt = store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.deepEqual(recoveredReceipt.archivedIdeaIds, ids);
+    assert.equal(recoveredReceipt.finalizedAt, 200);
+    assert.equal(store.loadPersonalIdeas(writerId).length, ids.length);
+
+    const repeated = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 300
+    );
+    assert.equal(repeated.alreadyFinalized, true);
+    assert.equal(repeated.finalizedAt, 200);
+    assert.equal(repeated.archivedCount, ids.length);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
 test("SQLite finaliza libros grandes por páginas sin materializar todas las ideas ni entidades", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-paged-finalization-"));
   const databasePath = resolve(directory, "motor.sqlite");

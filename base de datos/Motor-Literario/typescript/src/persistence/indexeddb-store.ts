@@ -1,4 +1,5 @@
 import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
+import { createPersonalIdeaArchiveChecksumBuilder, isValidPersonalIdeaArchiveChecksum } from "./personal-idea-checksum";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -93,7 +94,9 @@ function validateFinalizationReceipt(
       new Set(receipt.archivedIdeaIds).size !== receipt.archivedIdeaIds.length ||
       [...receipt.archivedIdeaIds].some((id, index, ids) => index > 0 && ids[index - 1]!.localeCompare(id) > 0) ||
       typeof receipt.archiveChecksum !== "string" ||
-      receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds)) {
+      receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds) ||
+      (receipt.archiveContentChecksum !== undefined &&
+        !isValidPersonalIdeaArchiveChecksum(receipt.archiveContentChecksum))) {
     throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");
   }
 }
@@ -3900,6 +3903,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       let existingReceipt: StoredProjectFinalizationReceipt | undefined;
       let finished = false;
       let didChange = false;
+      let archiveContentChecksum: string | undefined;
       const archived: PersonalIdeaLibraryEntry[] = [];
       const archivedIdeaIds: string[] = [];
       const identityOwners = new Map<string, string>();
@@ -4007,6 +4011,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         }
 
         const archivedIds = new Set(receipt.archivedIdeaIds);
+        const contentChecksum = createPersonalIdeaArchiveChecksumBuilder();
         const countRequest = personal.index("by-writer-source").count([writerId, projectId]);
         countRequest.onsuccess = () => {
           try {
@@ -4017,6 +4022,10 @@ export class IndexedDbProjectStore implements ProjectStore {
             const readNext = (): void => {
               if (finished) return;
               if (index >= receipt.archivedIdeaIds.length) {
+                if (receipt.archiveContentChecksum !== undefined &&
+                    contentChecksum.digest() !== receipt.archiveContentChecksum) {
+                  throw new Error("La biblioteca personal no coincide con el checksum del contenido archivado.");
+                }
                 return;
               }
               const ideaId = receipt.archivedIdeaIds[index++]!;
@@ -4040,6 +4049,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                   validatePersonalIdeaLibraryContext(
                     entry.context, projectId, sourceProjectName, "contexto archivado"
                   );
+                  contentChecksum.add(entry);
                   const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
                   const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
                   for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
@@ -4378,15 +4388,44 @@ export class IndexedDbProjectStore implements ProjectStore {
             if (!cursor) {
               if (supportsReceipts) {
                 archivedIdeaIds.sort((first, second) => first.localeCompare(second));
-                receipts.add({
-                  writerId,
-                  sourceProjectId: projectId,
-                  receiptId: FINALIZATION_RECEIPT_ID,
-                  sourceProjectName,
-                  finalizedAt: archivedAt,
-                  archivedIdeaIds,
-                  archiveChecksum: checksumArchivedIdeaIds(archivedIdeaIds)
-                } satisfies StoredProjectFinalizationReceipt);
+                const contentChecksum = createPersonalIdeaArchiveChecksumBuilder();
+                let checksumIndex = 0;
+                const addNextArchivedEntry = (): void => {
+                  if (finished) return;
+                  if (checksumIndex >= archivedIdeaIds.length) {
+                    archiveContentChecksum = contentChecksum.digest();
+                    receipts.add({
+                      writerId,
+                      sourceProjectId: projectId,
+                      receiptId: FINALIZATION_RECEIPT_ID,
+                      sourceProjectName,
+                      finalizedAt: archivedAt,
+                      archivedIdeaIds,
+                      archiveChecksum: checksumArchivedIdeaIds(archivedIdeaIds),
+                      archiveContentChecksum
+                    } satisfies StoredProjectFinalizationReceipt);
+                    return;
+                  }
+                  const ideaId = archivedIdeaIds[checksumIndex++]!;
+                  const archivedRequest = personal.get([writerId, projectId, ideaId]);
+                  archivedRequest.onsuccess = () => {
+                    try {
+                      const entry = archivedRequest.result as PersonalIdeaLibraryEntry | undefined;
+                      if (!entry || entry.writerId !== writerId ||
+                          entry.sourceProjectId !== projectId || entry.idea?.id !== ideaId) {
+                        throw new Error("La biblioteca personal no conserva una entrada recién archivada.");
+                      }
+                      contentChecksum.add(entry);
+                      addNextArchivedEntry();
+                    } catch (error) {
+                      abortWith(error);
+                    }
+                  };
+                  archivedRequest.onerror = () => abortWith(
+                    archivedRequest.error ?? new Error("No se pudo verificar el contenido recién archivado.")
+                  );
+                };
+                addNextArchivedEntry();
               }
               return;
             }
@@ -4480,7 +4519,10 @@ export class IndexedDbProjectStore implements ProjectStore {
               alreadyFinalized: Boolean(receipt),
               archiveChecksum: receipt?.archiveChecksum ?? checksumArchivedIdeaIds(
                 [...archivedIdeaIds].sort((first, second) => first.localeCompare(second))
-              )
+              ),
+              ...(receipt?.archiveContentChecksum ?? archiveContentChecksum
+                ? { archiveContentChecksum: receipt?.archiveContentChecksum ?? archiveContentChecksum }
+                : {})
             });
           }
         }

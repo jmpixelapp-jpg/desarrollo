@@ -60,6 +60,9 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(bridgeNode.observedInitialStatusRecordCount, 1);
     assert.equal(bridgeNode.observedWriterStatusChangeCount, 2);
     assert.equal(bridgeNode.observedTextRevisionStatusChangeCount, 1);
+    assert.equal(bridgeNode.earliestKnownStatusChangeAt, 1);
+    assert.equal(bridgeNode.latestKnownStatusChangeAt, 3);
+    assert.equal(bridgeNode.knownStatusHistorySpanMs, 2);
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .nonMonotonicStatusTimestampCount,

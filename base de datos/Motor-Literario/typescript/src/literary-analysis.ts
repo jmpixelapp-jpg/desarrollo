@@ -473,6 +473,31 @@ export interface LiteraryCharacterMentionDistributionAnalysis {
   /** Perfiles ordenados por cobertura, racha consecutiva y, finalmente, ID estable. */
   readonly characters: readonly LiteraryCharacterMentionDistribution[];
 }
+export interface LiteraryEventDependencyCandidate {
+  readonly firstEventId: string;
+  readonly firstEventLabel: string;
+  readonly secondEventId: string;
+  readonly secondEventLabel: string;
+  readonly causeEventId: string;
+  readonly consequenceEventId: string;
+  readonly direction: "cause-before-consequence" | "consequence-before-cause";
+  readonly connector: string;
+  readonly connectorOccurrence: LiteraryAnalysisOccurrence;
+  readonly firstEventOccurrence: LiteraryAnalysisOccurrence;
+  readonly secondEventOccurrence: LiteraryAnalysisOccurrence;
+  readonly sentenceOccurrence: LiteraryAnalysisOccurrence;
+  readonly sceneIndex: number | null;
+  readonly status: "candidate-needs-review";
+}
+export interface LiteraryEventDependencyAnalysis {
+  readonly evidenceAnchorCount: number;
+  readonly omittedEvidenceAnchorCount: number;
+  readonly candidateCount: number;
+  readonly omittedCandidateCount: number;
+  /** Candidatos basados en conectores causales literales; máximo cincuenta. */
+  readonly candidates: readonly LiteraryEventDependencyCandidate[];
+}
+
 export interface LiteraryCharacterAttributeAssertionEvidence {
   readonly assertionId: string;
   readonly value: string | number;
@@ -1007,6 +1032,8 @@ export interface LiteraryAnalysisResult {
   readonly characterSceneEvidence: LiteraryCharacterSceneEvidenceAnalysis;
   /** Comparación de atributos explícitos de personajes entre escenas de la revisión vigente. */
   readonly characterAttributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis;
+  /** Dependencias causales candidatas entre acontecimientos, respaldadas por conectores literales del texto. */
+  readonly eventDependencyAnalysis: LiteraryEventDependencyAnalysis;
   /** Evidencia de acontecimientos asociados explícitamente a participantes, desglosada por escena. */
   readonly characterEventEvidenceProfiles: LiteraryCharacterEventEvidenceAnalysis;
   /** Recurrencia de acontecimientos en escenas, independiente de que tengan participantes declarados. */
@@ -2798,6 +2825,140 @@ function buildCharacterMentionDistributions(
   };
 }
 
+function findExplicitEventDependencyConnector(
+  textBetweenEvents: string
+): { readonly connector: string; readonly index: number; readonly direction: LiteraryEventDependencyCandidate["direction"] } | undefined {
+  const expression = /\b(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)\b/giu;
+  const matches = [...textBetweenEvents.matchAll(expression)];
+  if (matches.length === 0) return undefined;
+  const match = matches[0]!;
+  const connector = match[0];
+  const normalized = connector.normalize("NFKC").toLocaleLowerCase("es");
+  const consequenceBeforeCause = new Set([
+    "porque","debido a","a causa de","gracias a","por culpa de","como consecuencia de"
+  ]);
+  return {
+    connector,
+    index:match.index ?? 0,
+    direction:consequenceBeforeCause.has(normalized)
+      ? "consequence-before-cause"
+      : "cause-before-consequence"
+  };
+}
+
+function buildExplicitEventDependencyAnalysis(
+  text: string,
+  sentenceRanges: readonly LocalRange[],
+  scenes: readonly LiteraryExplicitSceneSegment[],
+  events: readonly LiteraryAnalysisKnownEvent[],
+  documentId: string,
+  revision: number,
+  baseOffset: number
+): LiteraryEventDependencyAnalysis {
+  const anchors: Array<{
+    readonly eventId: string;
+    readonly eventLabel: string;
+    readonly start: number;
+    readonly end: number;
+    readonly sentenceIndex: number;
+  }> = [];
+  let evidenceAnchorCount = 0;
+  const MAX_EVIDENCE_ANCHORS = 2_000;
+
+  for (const event of events) {
+    for (const evidence of event.evidence) {
+      if (evidence.status === "stale" ||
+          evidence.documentId !== documentId ||
+          evidence.revision !== revision ||
+          evidence.start < baseOffset ||
+          evidence.end > baseOffset + text.length) continue;
+      const localStart = evidence.start - baseOffset;
+      const localEnd = evidence.end - baseOffset;
+      if (localStart < 0 || localEnd <= localStart || localEnd > text.length) continue;
+      const sentenceIndex = sentenceRanges.findIndex(range =>
+        localStart >= range.start && localEnd <= range.end
+      );
+      if (sentenceIndex < 0) continue;
+      evidenceAnchorCount++;
+      if (anchors.length >= MAX_EVIDENCE_ANCHORS) continue;
+      anchors.push({
+        eventId:event.eventId,
+        eventLabel:event.label,
+        start:localStart,
+        end:localEnd,
+        sentenceIndex
+      });
+    }
+  }
+  anchors.sort((a,b) =>
+    a.sentenceIndex-b.sentenceIndex ||
+    a.start-b.start ||
+    a.end-b.end ||
+    a.eventId.localeCompare(b.eventId,"en")
+  );
+
+  const bySentence = new Map<number, typeof anchors>();
+  for (const anchor of anchors) {
+    const group = bySentence.get(anchor.sentenceIndex) ?? [];
+    // Una sola ancla por evento y oración evita crear pares artificiales por menciones duplicadas.
+    if (!group.some(item => item.eventId === anchor.eventId)) group.push(anchor);
+    bySentence.set(anchor.sentenceIndex,group);
+  }
+
+  const candidates: LiteraryEventDependencyCandidate[] = [];
+  let candidateCount = 0;
+  for (const [sentenceIndex,sentenceAnchors] of bySentence) {
+    sentenceAnchors.sort((a,b) => a.start-b.start || a.end-b.end);
+    for (let index=0; index+1<sentenceAnchors.length; index++) {
+      const first = sentenceAnchors[index]!;
+      const second = sentenceAnchors[index+1]!;
+      if (first.eventId === second.eventId || first.end > second.start) continue;
+      const between = text.slice(first.end,second.start);
+      const causal = findExplicitEventDependencyConnector(between);
+      if (!causal) continue;
+      candidateCount++;
+      const sentence = sentenceRanges[sentenceIndex]!;
+      const causeEventId = causal.direction === "cause-before-consequence"
+        ? first.eventId : second.eventId;
+      const consequenceEventId = causal.direction === "cause-before-consequence"
+        ? second.eventId : first.eventId;
+      const scene = scenes.find(item =>
+        first.start >= item.contentRange.start-baseOffset &&
+        second.end <= item.contentRange.end-baseOffset
+      );
+      if (candidates.length < 50) {
+        candidates.push({
+          firstEventId:first.eventId,
+          firstEventLabel:first.eventLabel,
+          secondEventId:second.eventId,
+          secondEventLabel:second.eventLabel,
+          causeEventId,
+          consequenceEventId,
+          direction:causal.direction,
+          connector:causal.connector,
+          connectorOccurrence:{
+            start:baseOffset+first.end+causal.index,
+            end:baseOffset+first.end+causal.index+causal.connector.length
+          },
+          firstEventOccurrence:{start:baseOffset+first.start,end:baseOffset+first.end},
+          secondEventOccurrence:{start:baseOffset+second.start,end:baseOffset+second.end},
+          sentenceOccurrence:{start:baseOffset+sentence.start,end:baseOffset+sentence.end},
+          sceneIndex:scene?.sceneIndex ?? null,
+          status:"candidate-needs-review"
+        });
+      }
+    }
+  }
+
+  return {
+    evidenceAnchorCount,
+    omittedEvidenceAnchorCount:Math.max(0,evidenceAnchorCount-anchors.length),
+    candidateCount,
+    omittedCandidateCount:Math.max(0,candidateCount-candidates.length),
+    candidates
+  };
+}
+
 function normalizeCharacterAttributeValue(value: string | number): string {
   return typeof value === "number"
     ? "number:" + String(value)
@@ -3835,6 +3996,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   );
   const sceneLexicalEchoes = buildSceneLexicalEchoes(tokens, explicitScenes, dialogueRanges, baseOffset);
   const characterSceneEvidence = buildCharacterSceneEvidenceProfiles(explicitScenes,input.knownCharacters ?? []);
+  const eventDependencyAnalysis = buildExplicitEventDependencyAnalysis(
+    text,sentenceRanges,explicitScenes,input.knownEvents ?? [],input.documentId,input.revision,baseOffset
+  );
   const characterAttributeEvolution = buildCharacterAttributeEvolution(
     explicitScenes,input.knownAssertions ?? [],input.documentId,input.revision
   );
@@ -4047,6 +4211,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterMentionDistributions,
     characterSceneEvidence,
     characterAttributeEvolution,
+    eventDependencyAnalysis,
     characterEventEvidenceProfiles,
     sceneEventEvidenceProfiles,
     sceneEventSequenceMotifs,
@@ -4091,7 +4256,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "Los ecos léxicos agrupan formas normalizadas idénticas que aparecen al menos tres veces en dos o más escenas explícitas; separan ocurrencias en narración y diálogo reconocido, no agrupan sinónimos o flexiones ni demuestran un motivo temático. Cada escena conserva hasta doce ocurrencias UTF-16.",
       "Los perfiles de personajes separan menciones nominales literales de asociaciones a acontecimientos con evidencia vigente de la misma revisión. Una mención no prueba participación; una asociación de participante no prueba presencia física, acción, causalidad ni cambio del personaje. Las escenas con muestras truncadas declaran el estado como desconocido en vez de tratarlo como ausencia.",
       "La evolución de atributos compara afirmaciones explícitas de edad, ubicación y rol en escenas de la misma revisión del documento analizado. Solo los cambios entre valores únicos se clasifican como changed-value; varios valores en una escena o la falta de afirmación no se resuelven como contradicción ni como continuidad.",
-      "La cronología de atributos entre capítulos compara únicamente referencias temporales explícitas con la misma base y precisión; las afirmaciones sin fecha comparable no se ordenan. Varios valores asociados al mismo punto temporal se conservan como multiple-values-at-same-time, y una fecha explícita no demuestra causalidad ni resuelve contradicciones."
+      "La cronología de atributos entre capítulos compara únicamente referencias temporales explícitas con la misma base y precisión; las afirmaciones sin fecha comparable no se ordenan. Varios valores asociados al mismo punto temporal se conservan como multiple-values-at-same-time, y una fecha explícita no demuestra causalidad ni resuelve contradicciones.",
+      "Las dependencias entre acontecimientos son candidatos basados en dos evidencias vigentes de la misma oración y en conectores causales literales reconocidos. La dirección se orienta según el patrón del conector, pero no demuestra causalidad, suficiencia explicativa ni una secuencia completa; requiere revisión editorial."
     ]
   };
 }

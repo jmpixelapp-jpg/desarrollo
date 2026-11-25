@@ -53,6 +53,42 @@ export function auditStorageImplementation(mapping, runtimeSource) {
       .map((match) => match[1])
   );
 
+  const resolveLiteral = (value) => {
+    if (value === undefined) return undefined;
+    const trimmed = value.trim();
+    if (trimmed === "true") return true;
+    if (trimmed === "false") return false;
+    if (trimmed.startsWith("[") || trimmed.startsWith('"')) {
+      try { return JSON.parse(trimmed); } catch { return undefined; }
+    }
+    const constant = runtimeSource.match(
+      new RegExp("^\\\\s*const\\\\s+" + trimmed + "\\\\s*=\\\\s*(?:\\\"([^\\\"]+)\\\"|'([^']+)')\\\\s*;", "m")
+    );
+    return constant ? (constant[1] ?? constant[2]) : undefined;
+  };
+
+  const runtimeKeyPaths = new Map();
+  for (const match of runtimeSource.matchAll(
+    /createObjectStore\\(\\s*([A-Z][A-Z0-9_]*)\\s*,\\s*\\{\\s*keyPath:\\s*(\\[[^\\]]*\\]|"[^"]+")\\s*\\}\\s*\\)/g
+  )) {
+    const storeName = [...constantsByStore.entries()].find(([, constant]) => constant === match[1])?.[0];
+    if (storeName) runtimeKeyPaths.set(storeName, resolveLiteral(match[2]));
+  }
+
+  const runtimeIndexes = new Map();
+  for (const match of runtimeSource.matchAll(
+    /ensureIndex\\(\\s*([A-Z][A-Z0-9_]*)\\s*,\\s*([^,]+?)\\s*,\\s*(\\[[^\\]]*\\]|"[^"]+")\\s*(?:,\\s*(true|false))?\\s*\\)/g
+  )) {
+    const storeName = [...constantsByStore.entries()].find(([, constant]) => constant === match[1])?.[0];
+    const indexName = resolveLiteral(match[2]);
+    const keyPath = resolveLiteral(match[3]);
+    const unique = match[4] === "true";
+    if (!storeName || typeof indexName !== "string" || keyPath === undefined) continue;
+    const indexes = runtimeIndexes.get(storeName) ?? new Map();
+    indexes.set(indexName, { keyPath, unique });
+    runtimeIndexes.set(storeName, indexes);
+  }
+
   const seenTables = new Set();
   const mappedStores = new Set();
   let projectOwnerCount = 0;
@@ -137,6 +173,30 @@ export function auditStorageImplementation(mapping, runtimeSource) {
         add("RUNTIME_DESCRIPTOR_CONSTANT_MISSING", `El almacén "${descriptor.name}" no tiene constante en el adaptador.`);
       } else if (!createdConstants.has(constantName)) {
         add("RUNTIME_DESCRIPTOR_CREATION_MISSING", `El almacén "${descriptor.name}" está definido en el manifiesto pero no se crea con createObjectStore.`);
+      }
+
+      const actualKeyPath = runtimeKeyPaths.get(descriptor.name);
+      if (JSON.stringify(actualKeyPath) !== JSON.stringify(descriptor.keyPath)) {
+        add("RUNTIME_STORE_KEY_PATH_MISMATCH", `El keyPath de "${descriptor.name}" no coincide con el manifiesto físico.`);
+      }
+
+      const expectedIndexes = new Map(
+        (Array.isArray(descriptor.indexes) ? descriptor.indexes : []).map(
+          ([name, keyPath, unique = false]) => [name, { keyPath, unique }]
+        )
+      );
+      const actualIndexes = runtimeIndexes.get(descriptor.name) ?? new Map();
+      for (const [indexName, expected] of expectedIndexes) {
+        const actual = actualIndexes.get(indexName);
+        if (!actual || JSON.stringify(actual.keyPath) !== JSON.stringify(expected.keyPath) ||
+            actual.unique !== expected.unique) {
+          add("RUNTIME_INDEX_MISMATCH", `El índice "${descriptor.name}.${indexName}" no coincide con nombre, keyPath y unicidad del manifiesto.`);
+        }
+      }
+      for (const indexName of actualIndexes.keys()) {
+        if (!expectedIndexes.has(indexName)) {
+          add("UNMAPPED_RUNTIME_INDEX", `El índice "${descriptor.name}.${indexName}" no está declarado en el manifiesto físico.`);
+        }
       }
     }
     for (const storeName of mappedStores) {

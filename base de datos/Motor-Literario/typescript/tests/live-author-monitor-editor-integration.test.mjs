@@ -69,12 +69,19 @@ function fixture() {
   const document = new FakeDocument();
   const workspaceContainer = document.createElement("div");
   const activeDocumentContainer = document.createElement("div");
-  monitor.openDocument({ documentId: "chapter-1", text: "one", revision: 0, sequence: 0 }, "book");
-  monitor.openDocument({ documentId: "chapter-2", text: "two", revision: 0, sequence: 0 }, "book");
+  const snapshots = new Map([
+    ["chapter-1", { documentId: "chapter-1", text: "one", revision: 0, sequence: 0 }],
+    ["chapter-2", { documentId: "chapter-2", text: "two", revision: 0, sequence: 0 }]
+  ]);
+  monitor.openDocument(snapshots.get("chapter-1"), "book");
+  monitor.openDocument(snapshots.get("chapter-2"), "book");
   const hostApi = {
     getLiveAuthorMonitorSnapshot: id => monitor.getSnapshot(id),
     getLiveAuthorMonitorSnapshots: () => monitor.getSnapshots(),
-    subscribeLiveAuthorMonitor: (listener, id) => monitor.subscribe(listener, id)
+    subscribeLiveAuthorMonitor: (listener, id) => monitor.subscribe(listener, id),
+    ensureLiveAuthorMonitorDocument(id) {
+      return monitor.getSnapshot(id) ?? monitor.openDocument(snapshots.get(id), "book");
+    }
   };
   let activeDocumentId = "chapter-1";
   const listeners = new Set();
@@ -171,4 +178,31 @@ test("rechaza contenedores compartidos antes de registrar suscripciones", () => 
   }), /contenedores separados/);
   assert.equal(f.listeners.size, 0);
   assert.equal(f.workspaceContainer.children.length, 0);
+});
+
+test("reanuda una sesión de monitoreo cerrada al volver a seleccionar el documento", () => {
+  const f = fixture();
+  let refresh;
+  const unmount = mountLiveAuthorMonitorEditorIntegration({
+    hostApi: f.hostApi,
+    editor: f.editor,
+    workspaceContainer: f.workspaceContainer,
+    activeDocumentContainer: f.activeDocumentContainer,
+    schedule(callback) {
+      refresh = callback;
+      return () => {};
+    }
+  });
+  const originalSessionId = f.monitor.getSnapshot("chapter-2").sessionId;
+  f.monitor.closeDocument("chapter-2");
+  assert.equal(f.monitor.getSnapshot("chapter-2"), undefined);
+
+  f.editor.activateDocument("chapter-2");
+  const resumed = f.monitor.getSnapshot("chapter-2");
+  assert.ok(resumed);
+  assert.notEqual(resumed.sessionId, originalSessionId);
+  assert.ok(activePanel(f.activeDocumentContainer));
+  refresh();
+  assert.match(workspace(f.workspaceContainer).textContent, /2 documentos observados/);
+  unmount();
 });

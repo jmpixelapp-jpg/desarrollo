@@ -3928,6 +3928,31 @@ export class HostEngineApi {
     return this.engine.getSyncState(documentId);
   }
 
+  /**
+   * Asegura una sesión de métricas para un documento ya abierto en el motor.
+   * Es idempotente y permite reanudar el monitoreo después de desmontar/cerrar
+   * una vista sin reabrir el documento ni duplicar su sesión de edición.
+   */
+  ensureLiveAuthorMonitorDocument(documentId: string): LiveAuthorMonitorSnapshot {
+    if (typeof documentId !== "string" || !documentId.trim()) {
+      throw new TypeError("documentId es obligatorio para iniciar el monitoreo.");
+    }
+
+    const existing = this.liveAuthorMonitor.getSnapshot(documentId);
+    if (existing) return existing;
+
+    const snapshot = this.engine.getSnapshot(documentId);
+    const sync = this.engine.getSyncState(documentId);
+    if (!snapshot || !sync) {
+      throw new Error("El documento no está abierto en HostEngineApi: " + documentId + ".");
+    }
+    if (sync.needsResync || sync.pendingSequence !== sync.sequence) {
+      throw new Error("Espera a que el documento quede durable y sincronizado antes de reanudar su monitoreo.");
+    }
+
+    return this.liveAuthorMonitor.openDocument(snapshot, this.requireProject().projectId);
+  }
+
   /** Snapshot de actividad en vivo; no incluye texto del manuscrito. */
   getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined {
     return this.liveAuthorMonitor.getSnapshot(documentId);

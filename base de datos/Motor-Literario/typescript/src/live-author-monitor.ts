@@ -418,6 +418,8 @@ export class LiveAuthorMonitor {
  * No expone ni conserva el texto del manuscrito.
  */
 export interface LiveAuthorMonitorHostApi {
+  /** Reanuda de forma idempotente las métricas desde el snapshot durable del motor. */
+  ensureLiveAuthorMonitorDocument?(documentId: string): LiveAuthorMonitorSnapshot;
   getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined;
   getLiveAuthorMonitorSnapshots(): readonly LiveAuthorMonitorSnapshot[];
   subscribeLiveAuthorMonitor(listener: LiveAuthorMonitorListener, documentId?: string): () => void;

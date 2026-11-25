@@ -1,8 +1,8 @@
 # Monitoreo de actividad del autor en vivo — contrato v0.1
 
-- **Estado:** núcleo implementado e integrado en `HostEngineApi`; adaptador de suscripción con refresco temporal disponible; panel visual del editor anfitrión pendiente.
+- **Estado:** núcleo, refresco temporal, panel DOM, tablero multi-documento, selección de pestaña activa y enlace tipado del stream de cambios disponibles; la conexión al editor concreto del anfitrión requiere su adaptador de deltas.
 - **Runtime:** TypeScript/JavaScript puro; sin dependencias externas ni servicios remotos.
-- **Ubicación:** **typescript/src/live-author-monitor.ts**.
+- **Ubicación:** **typescript/src/live-author-monitor.ts**, **live-author-monitor-panel.ts**, **live-author-monitor-workspace.ts**, **live-author-monitor-editor-integration.ts** y **live-author-monitor-change-binding.ts**.
 - **Alcance:** métricas por sesión y documento, eventos de admisión/commit, pausas, ritmo estimado, resincronización y suscripciones.
 
 ## 1. Responsabilidad y límites
@@ -193,6 +193,15 @@ stopAuthorMonitoring();
 - La conexión solo observa la selección y las métricas; el flujo de cambios sigue pasando una única vez por HostEngineApi.onEditorChange.
 - El desmontaje retira la suscripción a selección, el panel activo, el tablero y los temporizadores. No dispone HostEngineApi ni cierra capítulos.
 
-## 10. Próximo tramo
+## 10. Enlace de deltas y reanudación de sesiones
 
-Conectar este adaptador a la implementación concreta del editor anfitrión y validar escritura sostenida, varios documentos abiertos, saturación, recuperación, navegación entre capítulos y desmontaje de vistas en los runtimes objetivo.
+El anfitrión puede conectar su fuente nativa de cambios mediante bindLiveAuthorMonitorEditorChanges. La fuente debe entregar un EditorChange ya calculado por el adaptador específico del editor; el enlace no sintetiza offsets ni intercepta eventos DOM.
+
+- Llama a HostEngineApi.onEditorChange exactamente una vez por delta.
+- Devuelve el resultado queued o rejected a onAdmission, para que el anfitrión confirme tickets o conserve/reintente deltas rechazados.
+- Informa excepciones a onError y deja al anfitrión la política de recuperación.
+- No registra eventos manuales adicionales en LiveAuthorMonitor, porque HostEngineApi ya incorpora admisiones y commits.
+
+ensureLiveAuthorMonitorDocument(documentId) restaura una sesión de observabilidad que se cerró mientras el documento del motor seguía abierto. Devuelve la sesión existente si ya está activa; en caso contrario, utiliza el snapshot actual del motor. Rechaza si el documento tiene cambios pendientes (pendingSequence !== sequence) o necesita resincronización. La integración con la pestaña activa usa este método automáticamente si la sesión no existe.
+
+## 11. Próximo tramo

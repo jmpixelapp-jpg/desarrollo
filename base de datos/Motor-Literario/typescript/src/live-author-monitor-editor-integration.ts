@@ -90,14 +90,22 @@ export function mountLiveAuthorMonitorEditorIntegration(
     activeDocumentId = nextDocumentId;
     if (nextDocumentId === undefined) return;
 
-    const panelOptions: LiveAuthorMonitorPanelOptions = {
-      documentId: nextDocumentId,
-      title: options.activeDocumentTitle ?? "Actividad del capítulo activo",
-      ...(options.intervalMs === undefined ? {} : { intervalMs: options.intervalMs }),
-      ...(options.locale === undefined ? {} : { locale: options.locale }),
-      ...(options.schedule === undefined ? {} : { schedule: options.schedule })
-    };
     try {
+      if (!options.hostApi.getLiveAuthorMonitorSnapshot(nextDocumentId)) {
+        const ensureSession = options.hostApi.ensureLiveAuthorMonitorDocument;
+        if (typeof ensureSession !== "function") {
+          throw new Error("El anfitrión debe implementar ensureLiveAuthorMonitorDocument para reanudar una sesión cerrada.");
+        }
+        ensureSession.call(options.hostApi, nextDocumentId);
+      }
+
+      const panelOptions: LiveAuthorMonitorPanelOptions = {
+        documentId: nextDocumentId,
+        title: options.activeDocumentTitle ?? "Actividad del capítulo activo",
+        ...(options.intervalMs === undefined ? {} : { intervalMs: options.intervalMs }),
+        ...(options.locale === undefined ? {} : { locale: options.locale }),
+        ...(options.schedule === undefined ? {} : { schedule: options.schedule })
+      };
       unmountActivePanel = mountLiveAuthorMonitorPanel(
         options.activeDocumentContainer,
         options.hostApi,

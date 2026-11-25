@@ -188,6 +188,40 @@ function sendReplacement(
 
 Los rangos de una operación deben corresponder al texto que resulta de las operaciones anteriores ya aceptadas para ese documento. El cálculo anterior obtiene la próxima secuencia y revisión base de la cola local del motor, incluso cuando hay cambios anteriores pendientes.
 
+### Enlace del flujo de deltas del editor
+
+Cuando el editor anfitrión ya publica deltas normalizados, puede conectarlos sin duplicar la llamada manual a onEditorChange():
+
+~~~ts
+import { bindLiveAuthorMonitorEditorChanges } from "../../typescript/src/index";
+
+const stopChangeBinding = bindLiveAuthorMonitorEditorChanges({
+  source: {
+    // Debe emitir EditorChange exactos, con offsets UTF-16 y revisión/secuencia.
+    subscribeChanges: listener => hostEditor.subscribeDeltas(listener)
+  },
+  sink: motor,
+  onAdmission(change, admission) {
+    if (admission.status === "queued") {
+      hostEditor.markMotorChangeQueued(change.documentId, admission.ticketId);
+    } else {
+      // Conservar exactamente el delta y reintentarlo en orden cuando proceda.
+      hostEditor.retainMotorChange(change.documentId, change, admission.reason);
+    }
+  },
+  onError(error, change) {
+    // También conservar el delta si la llamada al motor no pudo completarse.
+    hostEditor.retainUnsubmittedChange(change, error);
+    hostEditor.reportMotorSubmissionError(error, change.documentId);
+  }
+});
+
+// Al detener la edición, dejar de producir deltas antes de vaciar la cola.
+stopChangeBinding();
+~~~
+
+El enlace no calcula offsets a partir de eventos DOM, no altera el texto y no almacena cambios rechazados: el adaptador concreto del editor debe convertir sus eventos nativos en EditorChange. Debe instalarse una sola ruta de envío; no combinar este enlace con otra llamada directa a motor.onEditorChange() para el mismo evento. HostEngineApi registra por sí mismo la admisión y el commit en LiveAuthorMonitor; no llamar manualmente a recordAdmission ni a recordCommit.
+
 ### Admisión y contrapresión
 
 `onEditorChange()` es síncrono y no espera a IndexedDB. Devuelve una de estas respuestas:
@@ -253,6 +287,34 @@ await motor.flushPendingChanges();
 ```
 
 Esta barrera espera la cola de cambios, el análisis en vivo, la persistencia de diagnósticos, la recuperación de diagnósticos y las operaciones de conocimiento narrativo en cola. El motor ya escribe deltas de forma durable y crea snapshots periódicos; el anfitrión no necesita reconstruir el manuscrito completo en cada pulsación.
+
+### Ciclo de vida de paneles y sesiones de monitoreo
+
+La integración visual se monta una vez por instancia del editor; cambia únicamente el panel detallado cuando cambia la pestaña activa:
+
+~~~ts
+import { mountLiveAuthorMonitorEditorIntegration } from "../../typescript/src/index";
+
+const stopAuthorMonitoring = mountLiveAuthorMonitorEditorIntegration({
+  hostApi: motor,
+  workspaceContainer: document.querySelector("#author-monitoring")!,
+  activeDocumentContainer: document.querySelector("#active-chapter-monitor")!,
+  editor: {
+    getActiveDocumentId: () => editorTabs.activeDocumentId,
+    subscribeActiveDocument: listener => editorTabs.subscribeActive(listener),
+    activateDocument: documentId => editorTabs.activate(documentId)
+  },
+  getDocumentLabel: documentId => chapterTitles.get(documentId) ?? documentId,
+  intervalMs: 1_000
+});
+~~~
+
+- El tablero general conserva las sesiones observadas; el panel detallado sigue la pestaña activa.
+- Si la sesión de métricas de un documento se había cerrado, la selección activa invoca ensureLiveAuthorMonitorDocument(documentId) y la reanuda desde el snapshot actual del motor.
+- ensureLiveAuthorMonitorDocument es idempotente. Rechaza reanudar si hay cambios pendientes o el documento necesita resincronización; primero hay que ejecutar flushPendingChanges() y resolver el conflicto.
+- Cerrar solo una pestaña no obliga a cerrar la sesión de métricas. Si se retira definitivamente esa observación, ejecutar flushPendingChanges() y luego closeLiveAuthorMonitorDocument(documentId). El documento del motor sigue abierto; no se debe llamar otra vez a openDocument() para reanudarlo.
+- Al cerrar la instancia del libro: detener el stream de deltas, esperar flushPendingChanges(), desmontar los paneles y finalmente llamar a motor.dispose().
+
 
 ## 7. Consultas de conocimiento y módulos disponibles
 
@@ -383,6 +445,10 @@ La integración no debe declararse terminada hasta comprobar, en el programa anf
 - [ ] Espera confirmaciones durables y no confunde `queued` con `applied`.
 - [ ] Muestra diagnósticos solo en la revisión vigente y no aplica reemplazos automáticamente.
 - [ ] Cierra/suspende después de `flushPendingChanges()`.
+- [ ] Conecta el stream del editor con bindLiveAuthorMonitorEditorChanges o demuestra que cada delta llama exactamente una vez a onEditorChange(); nunca instala ambas rutas para un mismo evento.
+- [ ] Comprueba que los rechazos queue_full/change_too_large quedan retenidos y se reintentan en orden, y que los errores del enlace llegan al anfitrión.
+- [ ] Monta el tablero de documentos y el panel de pestaña activa; cambia de capítulo, cierra una sesión de métricas y verifica su reanudación con ensureLiveAuthorMonitorDocument().
+- [ ] Desmonta paneles y enlace de cambios sin disponer el motor; antes del cierre definitivo, detén el stream, vacía la cola y llama a dispose().
 - [ ] Reinicia la aplicación y verifica recuperación con snapshot del anfitrión y con `recoverDocument()`.
 - [ ] Fuerza una resincronización y comprueba que el anfitrión resuelve conflictos sin borrar deltas ni reiniciar contadores.
 - [ ] Verifica aislamiento entre dos proyectos y dos escritores en el mismo perfil local.

@@ -465,7 +465,6 @@ export interface LiteraryExplicitSceneSegment {
   readonly dialogueSignals: LiterarySceneDialogueProfile;
   /** Distribución por párrafo de narración, diálogo exclusivo y párrafos mixtos. */
   readonly dialogueFlowSignals: LiterarySceneDialogueFlowProfile;
-  readonly dialogueSignals: LiterarySceneDialogueProfile;
   /** Ritmo de las oraciones completas de la escena; incluye diálogo y mantiene evidencia propia. */
   readonly rhythmSignals: LiterarySceneRhythmProfile;
   /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
@@ -838,23 +837,7 @@ function summarizeSceneDialogueFlow(
   }));
   const wordCounts = countTokensPerRange(tokens,paragraphRanges);
   const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,paragraphRanges,dialogueRanges);
-  const paragraphs: LiterarySceneDialogueParagraph[] = [];
-  for (let index=0; index<paragraphRanges.length; index++) {
-    const wordCount = wordCounts[index] ?? 0;
-    if (wordCount === 0) continue;
-    const dialogueWordCount = Math.max(0,wordCount-(narrativeWordCounts[index] ?? 0));
-    const classification: LiterarySceneDialogueParagraphClassification =
-      dialogueWordCount === 0 ? "narrative-only" :
-      dialogueWordCount >= wordCount ? "dialogue-only" : "mixed";
-    const range = paragraphRanges[index]!;
-    paragraphs.push({
-      paragraphIndex:index+1,
-      classification,
-      wordCount,
-      dialogueWordCount,
-      occurrence:{start:baseOffset+range.start,end:baseOffset+range.end}
-    });
-  }
+  const paragraphSamples: LiterarySceneDialogueParagraph[] = [];
   const classificationCounts = {narrativeOnly:0,dialogueOnly:0,mixed:0};
   const classificationTransitionCounts = {
     narrativeOnlyToNarrativeOnly:0,
@@ -870,28 +853,47 @@ function summarizeSceneDialogueFlow(
   const classificationKey = (value: LiterarySceneDialogueParagraphClassification) =>
     value === "narrative-only" ? "narrativeOnly" :
     value === "dialogue-only" ? "dialogueOnly" : "mixed";
+  let paragraphCount = 0;
   let classificationChangeCount = 0;
-  for (let index=0; index<paragraphs.length; index++) {
-    const current = paragraphs[index]!.classification;
-    classificationCounts[classificationKey(current)]++;
-    if (index === 0) continue;
-    const previous = paragraphs[index-1]!.classification;
-    const transitionKey =
-      `${classificationKey(previous)}To${classificationKey(current)}` as keyof typeof classificationTransitionCounts;
-    classificationTransitionCounts[transitionKey]++;
-    if (previous !== current) classificationChangeCount++;
+  let previousClassification: LiterarySceneDialogueParagraphClassification | undefined;
+  for (let index=0; index<paragraphRanges.length; index++) {
+    const wordCount = wordCounts[index] ?? 0;
+    if (wordCount === 0) continue;
+    const dialogueWordCount = Math.max(0,wordCount-(narrativeWordCounts[index] ?? 0));
+    const classification: LiterarySceneDialogueParagraphClassification =
+      dialogueWordCount === 0 ? "narrative-only" :
+      dialogueWordCount >= wordCount ? "dialogue-only" : "mixed";
+    const range = paragraphRanges[index]!;
+    paragraphCount++;
+    classificationCounts[classificationKey(classification)]++;
+    if (previousClassification !== undefined) {
+      const transitionKey =
+        `${classificationKey(previousClassification)}To${classificationKey(classification)}` as keyof typeof classificationTransitionCounts;
+      classificationTransitionCounts[transitionKey]++;
+      if (previousClassification !== classification) classificationChangeCount++;
+    }
+    if (paragraphSamples.length < 40) {
+      paragraphSamples.push({
+        paragraphIndex:index+1,
+        classification,
+        wordCount,
+        dialogueWordCount,
+        occurrence:{start:baseOffset+range.start,end:baseOffset+range.end}
+      });
+    }
+    previousClassification = classification;
   }
   const dialogueBearingParagraphCount = classificationCounts.dialogueOnly+classificationCounts.mixed;
   return {
-    paragraphCount:paragraphs.length,
+    paragraphCount,
     classificationCounts,
     dialogueBearingParagraphCount,
-    dialogueBearingParagraphRatio:roundMetric(paragraphs.length > 0
-      ? dialogueBearingParagraphCount/paragraphs.length : 0),
+    dialogueBearingParagraphRatio:roundMetric(paragraphCount > 0
+      ? dialogueBearingParagraphCount/paragraphCount : 0),
     classificationTransitionCounts,
     classificationChangeCount,
-    paragraphs:paragraphs.slice(0,40),
-    evidenceTruncated:paragraphs.length>40
+    paragraphs:paragraphSamples,
+    evidenceTruncated:paragraphCount>40
   };
 }
 
@@ -978,7 +980,6 @@ function analyzeExplicitScenes(
     const dialogueFlowSignals = summarizeSceneDialogueFlow(
       tokens,text,scene.contentRange,dialogueRanges,baseOffset
     );
-    const sceneText = text.slice(scene.contentRange.start,scene.contentRange.end);
     const sceneText = text.slice(scene.contentRange.start,scene.contentRange.end);
     const sceneSentenceRanges = findSentenceRanges(sceneText).map(range => ({
       start:scene.contentRange.start+range.start,

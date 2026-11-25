@@ -3798,7 +3798,12 @@ function buildLiteraryIdeaGraph(
   };
 
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => {
-    const directReferenceStatusCounts = {
+    const directReferenceStatusCounts: {
+      IDEA: number;
+      incorporated: number;
+      discarded: number;
+      notInSnapshot: number;
+    } = {
       IDEA: 0,
       incorporated: 0,
       discarded: 0,

@@ -1379,8 +1379,10 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
 
     const aggregateIdeaLoader = store.loadIdeas;
     const aggregateEntityLoader = store.loadEntities;
+    const aggregatePersonalLoader = store.loadPersonalIdeas;
     store.loadIdeas = () => { throw new Error("No debe materializar la colección completa de ideas."); };
     store.loadEntities = () => { throw new Error("No debe materializar la colección completa de entidades."); };
+    store.loadPersonalIdeas = () => { throw new Error("No debe materializar la biblioteca personal completa."); };
 
     let summary;
     try {
@@ -1388,6 +1390,7 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     } finally {
       store.loadIdeas = aggregateIdeaLoader;
       store.loadEntities = aggregateEntityLoader;
+      store.loadPersonalIdeas = aggregatePersonalLoader;
     }
 
     assert.equal(summary.archivedCount, total);

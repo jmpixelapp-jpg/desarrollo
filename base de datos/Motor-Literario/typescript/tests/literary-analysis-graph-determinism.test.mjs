@@ -582,3 +582,26 @@ test("el análisis de dos saltos deduplica intermediarios y destinos sin borrar 
     [["branch-a", "origin"]]
   );
 });
+
+
+test("el catálogo vacío mantiene métricas de cobertura coherentes y no inventa nodos", () => {
+  const graph = analyze([]);
+
+  assert.equal(graph.ideaCount, 0);
+  assert.equal(graph.omittedIdeaCount, 0);
+  assert.equal(graph.projectCatalogComplete, true);
+  assert.equal(graph.referenceCount, 0);
+  assert.equal(graph.includedReferenceCount, 0);
+  assert.equal(graph.notIncludedReferenceCount, 0);
+  assert.equal(graph.weakComponentCount, 0);
+  assert.equal(graph.omittedWeakComponentCount, 0);
+  assert.equal(graph.cycleCount, 0);
+  assert.equal(graph.selfReferenceCount, 0);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+  assert.equal(graph.terminalReachableNodeCount, 0);
+  assert.equal(graph.terminalUnreachableNodeCount, 0);
+  assert.equal(graph.terminalReachabilityCoverage, 1);
+  assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
+  assert.deepEqual(graph.nodes, []);
+  assert.deepEqual(graph.references, []);
+});

@@ -9971,6 +9971,177 @@ test("IndexedDB rechaza una entidad obsoleta sin sustituir la versión confirmad
   }
 });
 
+test("IndexedDB rechaza relaciones, acontecimientos y afirmaciones basados en versiones antiguas", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const projectId = "indexeddb-narrative-record-cas";
+  const entities = ["entity-a", "entity-b"].map((id, index) => ({
+    projectId,
+    id,
+    kind: "character",
+    canonicalName: index === 0 ? "Ana" : "Bruno",
+    normalizedName: index === 0 ? "ana" : "bruno",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  }));
+  const evidence = {
+    documentId: "chapter-1",
+    revision: 0,
+    start: 0,
+    end: 3,
+    excerpt: "Ana"
+  };
+  const cases = [
+    {
+      storeName: "narrative-relations",
+      expected: {
+        id: "relation-1", projectId,
+        fromEntityId: "entity-a", toEntityId: "entity-b",
+        relationType: "knows", evidence: []
+      },
+      current: {
+        id: "relation-1", projectId,
+        fromEntityId: "entity-a", toEntityId: "entity-b",
+        relationType: "protects", evidence: []
+      },
+      stale: {
+        id: "relation-1", projectId,
+        fromEntityId: "entity-a", toEntityId: "entity-b",
+        relationType: "enemy", evidence: []
+      },
+      save: (store, stale, expected) => store.saveRelationIfUnchanged(stale, expected)
+    },
+    {
+      storeName: "narrative-events",
+      expected: {
+        id: "event-1", projectId,
+        label: "Ana llega", participants: ["entity-a"], evidence: []
+      },
+      current: {
+        id: "event-1", projectId,
+        label: "Ana entra", participants: ["entity-a"], evidence: []
+      },
+      stale: {
+        id: "event-1", projectId,
+        label: "Ana se marcha", participants: ["entity-a"], evidence: []
+      },
+      save: (store, stale, expected) => store.saveEventIfUnchanged(stale, expected)
+    },
+    {
+      storeName: "narrative-assertions",
+      expected: {
+        id: "assertion-1", projectId,
+        entityId: "entity-a", entityName: "Ana",
+        attribute: "role", value: "guardiana", evidence, capturedAt: 1
+      },
+      current: {
+        id: "assertion-1", projectId,
+        entityId: "entity-a", entityName: "Ana",
+        attribute: "role", value: "capitana", evidence, capturedAt: 1
+      },
+      stale: {
+        id: "assertion-1", projectId,
+        entityId: "entity-a", entityName: "Ana",
+        attribute: "role", value: "enemiga", evidence, capturedAt: 1
+      },
+      save: (store, stale, expected) => store.saveAssertionIfUnchanged(stale, expected)
+    }
+  ];
+
+  try {
+    for (const item of cases) {
+      let putCount = 0;
+      const database = {
+        onversionchange: null,
+        close() {},
+        transaction(storeNames, mode) {
+          assert.deepEqual(new Set(storeNames), new Set(["narrative-entities", item.storeName]));
+          assert.equal(mode, "readwrite");
+          const transaction = {
+            error: null,
+            aborted: false,
+            completed: false,
+            pendingRequests: 0,
+            abort() {
+              if (transaction.aborted || transaction.completed) return;
+              transaction.aborted = true;
+              transaction.error = new Error("simulated_narrative_version_conflict");
+              queueMicrotask(() => transaction.onabort?.());
+            },
+            request(resultFactory) {
+              transaction.pendingRequests++;
+              const request = {};
+              queueMicrotask(() => {
+                if (transaction.aborted) return;
+                request.result = structuredClone(resultFactory());
+                request.onsuccess?.();
+                transaction.pendingRequests--;
+                if (transaction.pendingRequests === 0 && !transaction.aborted) {
+                  queueMicrotask(() => {
+                    if (transaction.aborted || transaction.completed) return;
+                    transaction.completed = true;
+                    transaction.oncomplete?.();
+                  });
+                }
+              });
+              return request;
+            },
+            objectStore(name) {
+              if (name === "narrative-entities") {
+                return {
+                  index(indexName) {
+                    assert.equal(indexName, "by-project");
+                    return {
+                      getAll(requestedProjectId) {
+                        assert.equal(requestedProjectId, projectId);
+                        return transaction.request(() => entities);
+                      }
+                    };
+                  }
+                };
+              }
+              assert.equal(name, item.storeName);
+              return {
+                get(key) {
+                  assert.deepEqual(key, [projectId, item.expected.id]);
+                  return transaction.request(() => item.current);
+                },
+                put() {
+                  putCount++;
+                }
+              };
+            }
+          };
+          return transaction;
+        }
+      };
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: {
+          open() {
+            const request = { result: database };
+            queueMicrotask(() => request.onsuccess?.());
+            return request;
+          }
+        }
+      });
+
+      const store = new IndexedDbProjectStore();
+      await assert.rejects(
+        item.save(store, item.stale, item.expected),
+        /cambió en otra instancia/
+      );
+      assert.equal(putCount, 0, `no debe guardarse la ${item.storeName} obsoleta`);
+      assert.deepEqual(item.current, cases.find(entry => entry.storeName === item.storeName).current);
+    }
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});
+
 test("el análisis literario mide ritmo, diálogo y repeticiones con offsets UTF-16", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

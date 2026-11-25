@@ -269,6 +269,7 @@ test("la finalización compacta devuelve un recibo resumido y permite leer las i
     assert.equal(summary.sourceProjectId, "compact-finalization-project");
     assert.equal(summary.sourceProjectName, "Libro compacto");
     assert.equal(summary.archivedCount, 1);
+    assert.equal(summary.alreadyFinalized, false);
     assert.equal(typeof summary.archiveChecksum, "string");
     assert.equal(Array.isArray(summary), false);
     assert.equal(Object.hasOwn(summary, "items"), false);
@@ -287,7 +288,8 @@ test("la finalización compacta devuelve un recibo resumido y permite leer las i
       method: "finalizeProjectToIdeaLibrary",
       args: []
     });
-    assert.deepEqual(retry, summary);
+    assert.equal(retry.alreadyFinalized, true);
+    assert.deepEqual({ ...retry, alreadyFinalized: false }, summary);
 
     const exited = waitForExit(child);
     await client.shutdown();

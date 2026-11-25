@@ -1,5 +1,6 @@
 import {
-  analyzeLiteraryFragment, type LiteraryAnalysisResult, type LiteraryAnalysisKnownProjectIdea
+  analyzeLiteraryFragment, MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS,
+  type LiteraryAnalysisResult, type LiteraryAnalysisKnownProjectIdea
 } from "./literary-analysis";
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
@@ -1734,23 +1735,35 @@ export class HostEngineApi {
         ? localizedOrder
         : left.id === right.id ? 0 : left.id < right.id ? -1 : 1;
     });
+    const linkedIdeas = orderedProjectIdeas
+      .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)));
+    const knownIdeasOmittedCount=Math.max(0,linkedIdeas.length-2_000);
+    const knownLinkedIdeaIds = new Set(
+      linkedIdeas.slice(0,2_000).map(idea => idea.id)
+    );
+    const projectIdeaSnapshot = orderedProjectIdeas.slice(0,2_000);
+    // Las ideas enlazadas ya transfieren su texto en knownIdeas para las
+    // trayectorias; no se vuelve a copiar ese texto al catálogo global.
+    let lexicalTextUnitCount = 0;
     const knownProjectIdeasOmittedCount = projectIdeaCatalogAvailable
       ? Math.max(0,orderedProjectIdeas.length-2_000)
       : 0;
     const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] | undefined =
-      projectIdeaCatalogAvailable ? orderedProjectIdeas.slice(0,2_000).map(idea => {
+      projectIdeaCatalogAvailable ? projectIdeaSnapshot.map(idea => {
         const activeEvidence = idea.evidence.filter(evidence => evidence.status !== "stale");
         const statusHistory = idea.statusHistory ?? [
           {status:idea.status,reason:"initial" as const}
         ];
+        const textFitsBudget = idea.text.length <= 100_000 &&
+          lexicalTextUnitCount + idea.text.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;
+        if (textFitsBudget) lexicalTextUnitCount += idea.text.length;
+        const includeLexicalText = !knownLinkedIdeaIds.has(idea.id) && textFitsBudget;
         return {
           projectId:idea.projectId,
           ideaId:idea.id,
-          // El análisis léxico es deliberadamente acotado: los textos mayores
-          // a 100.000 unidades UTF-16 se omiten del índice, no del grafo.
-          ...(idea.text.length <= 100_000
-            ? { text: idea.text }
-            : { textOmitted: "budget" as const }),
+          ...(includeLexicalText ? {text:idea.text} : {}),
+          ...(!knownLinkedIdeaIds.has(idea.id) && !includeLexicalText
+            ? {textOmitted:"budget" as const} : {}),
           status:idea.status,
           relatedIdeaIds:idea.relatedIdeaIds ?? [],
           evidenceCount:activeEvidence.length,
@@ -1760,16 +1773,13 @@ export class HostEngineApi {
           omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
         };
       }) : undefined;
-    const linkedIdeas = orderedProjectIdeas
-      .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)));
-    const knownIdeasOmittedCount=Math.max(0,linkedIdeas.length-2_000);
     const knownIdeas=linkedIdeas.slice(0,2_000).map(idea => {
       const activeEvidence=idea.evidence.filter(evidence => evidence.status !== "stale");
       const statusHistory=idea.statusHistory ?? [{status:idea.status,reason:"initial" as const}];
       return {
         projectId:idea.projectId,
         ideaId:idea.id,
-        ...(idea.text.length <= 100_000 ? { text: idea.text } : {}),
+        text:idea.text,
         status:idea.status,
         originDocumentId:idea.originDocumentId,
         sourceProjectName:idea.sourceProjectName,

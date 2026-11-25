@@ -2147,3 +2147,55 @@ test("la cronología aísla IDs reutilizados con identidades narrativas distinta
   assert.equal(timeline.pointCount, 0);
   assert.equal(timeline.transitionCount, 0);
 });
+
+
+test("contrasta las dependencias causales con el orden temporal del proyecto", () => {
+  const text = "Escena 1\\nLa tormenta provocó el derrumbe.";
+  const stormStart = text.indexOf("La tormenta");
+  const collapseStart = text.indexOf("el derrumbe");
+  const evidence = (start, phrase) => ({
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + phrase.length,
+    excerpt: phrase
+  });
+  const eventEvidence = [
+    evidence(stormStart, "La tormenta"),
+    evidence(collapseStart, "el derrumbe")
+  ];
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownEvents: [
+      { eventId: "storm", label: "La tormenta", participants: ["ana-id"], evidence: [eventEvidence[0]] },
+      { eventId: "collapse", label: "El derrumbe", participants: ["ana-id"], evidence: [eventEvidence[1]] }
+    ],
+    knownProjectEvents: [
+      {
+        projectId: "literary-analysis-test",
+        eventId: "storm",
+        label: "La tormenta",
+        participants: ["ana-id"],
+        timelineTrackId: "main",
+        timeReference: { basis: "calendar", precision: "year", raw: "2021", orderValue: 2021 },
+        evidence: [eventEvidence[0]]
+      },
+      {
+        projectId: "literary-analysis-test",
+        eventId: "collapse",
+        label: "El derrumbe",
+        participants: ["ana-id"],
+        timelineTrackId: "main",
+        timeReference: { basis: "calendar", precision: "year", raw: "2020", orderValue: 2020 },
+        evidence: [eventEvidence[1]]
+      }
+    ]
+  });
+  const trajectory = result.characterNarrativeTrajectories.trajectories[0];
+  assert.equal(trajectory.causalRelations.length, 1);
+  assert.equal(trajectory.causalRelations[0].temporalConsistency, "contradiction");
+});

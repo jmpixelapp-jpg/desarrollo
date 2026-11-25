@@ -707,6 +707,16 @@ export interface LiteraryCharacterDocumentedDecision {
   readonly nonMonotonicStatusTimestampCount: number;
   /** Pares adyacentes con ambas marcas temporales disponibles. */
   readonly comparableStatusTimestampPairCount: number;
+  /** Escenas actuales que contienen evidencia vigente de la idea. */
+  readonly evidencedSceneIndexes: readonly number[];
+  /** Acontecimientos vinculados en esas escenas y con participación explícita del personaje. */
+  readonly materializedEventIds: readonly string[];
+  /** Alcance verificable del vínculo entre decisión y acontecimiento en este fragmento. */
+  readonly eventMaterializationStatus:
+    | "linked-to-event"
+    | "no-event-in-evidenced-scene"
+    | "no-current-scene-evidence"
+    | "unknown-due-to-truncation";
   /** Cambios de estado registrados explícitamente con reason=writer. */
   readonly writerDecisionCount: number;
 }
@@ -4472,6 +4482,30 @@ function buildCharacterNarrativeTrajectories(
       const records = decisionRecordsByCharacter.get(entityId) ?? [];
       records.push(idea);
       decisionRecordsByCharacter.set(entityId,records);
+      const currentEvidence = idea.evidence.filter(item =>
+        item.documentId === documentId && item.revision === revision && item.status !== "stale"
+      );
+      const evidencedScenes = scenes.filter(scene =>
+        currentEvidence.some(item =>
+          item.start < scene.contentRange.end && item.end > scene.contentRange.start
+        )
+      );
+      const evidencedSceneIndexes = evidencedScenes.map(scene => scene.sceneIndex);
+      const materializedEventIds = [...new Set(evidencedScenes.flatMap(scene =>
+        scene.eventLinks
+          .filter(link => link.participants.some(participant => participant.entityId === entityId))
+          .map(link => link.eventId)
+      ))].sort((a,b) => a.localeCompare(b,"en"));
+      const sceneEvidenceTruncated = evidencedScenes.some(scene =>
+        scene.eventLinksTruncated
+      ) || (evidencedScenes.length === 0 && idea.evidenceCount > currentEvidence.length);
+      const eventMaterializationStatus = materializedEventIds.length > 0
+        ? "linked-to-event" as const
+        : evidencedScenes.length === 0
+          ? "no-current-scene-evidence" as const
+          : sceneEvidenceTruncated
+            ? "unknown-due-to-truncation" as const
+            : "no-event-in-evidenced-scene" as const;
       const decision:LiteraryCharacterDocumentedDecision = {
         ideaId:idea.ideaId,
         text:idea.text,
@@ -4510,6 +4544,9 @@ function buildCharacterNarrativeTrajectories(
         comparableStatusTimestampPairCount:idea.statusHistory.slice(1).filter((change,index) =>
           idea.statusHistory[index]!.changedAt !== undefined && change.changedAt !== undefined
         ).length,
+        evidencedSceneIndexes,
+        materializedEventIds,
+        eventMaterializationStatus,
         writerDecisionCount:idea.writerDecisionCount
       };
       const decisions=decisionsByCharacter.get(entityId) ?? [];

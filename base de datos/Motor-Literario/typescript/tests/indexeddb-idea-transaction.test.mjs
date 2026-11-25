@@ -133,10 +133,11 @@ test("IndexedDB valida destinos idea dentro del proyecto y revierte referencias 
 
   try {
     await store.saveIdea(original);
+    await store.saveEntity(entity);
 
     await assert.rejects(
       store.saveIdeaIfUnchanged(
-        idea({ relatedIdeaIds: ["idea-missing"] }),
+        idea({ relatedEntityIds: [entity.id], relatedIdeaIds: ["idea-missing"] }),
         original
       ),
       /Referencia narrativa inválida/
@@ -154,7 +155,10 @@ test("IndexedDB valida destinos idea dentro del proyecto y revierte referencias 
     assert.deepEqual(await store.loadIdeas(projectId), [original]);
 
     await store.saveIdea(relatedIdea);
-    const linked = idea({ relatedIdeaIds: [relatedIdea.id] });
+    const linked = idea({
+      relatedEntityIds: [entity.id],
+      relatedIdeaIds: [relatedIdea.id]
+    });
     await store.saveIdeaIfUnchanged(linked, original);
     assert.deepEqual(
       (await store.loadIdeas(projectId)).find(record => record.id === original.id),

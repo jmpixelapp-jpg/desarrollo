@@ -80,3 +80,23 @@ test("el grafo conserva la distinción entre destino compartido y destinos exclu
   assert.equal(graph.twoHopIndependentBranchSourceCount, 0);
   assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
 });
+
+
+test("las instantáneas cacheadas del grafo no se contaminan al mutar resultados previos", () => {
+  const catalog = [
+    idea("alpha", ["beta"]),
+    idea("beta", ["alpha", "terminal"]),
+    idea("terminal")
+  ];
+  const first = analyze(catalog);
+  const expected = structuredClone(first);
+
+  first.nodes[0].ideaId = "mutated-node";
+  first.references[0].toIdeaId = "mutated-reference";
+  first.cycles[0].ideaIds[0] = "mutated-cycle-member";
+
+  const second = analyze(catalog);
+  assert.deepEqual(second, expected);
+  assert.equal(second.nodes.some(node => node.ideaId === "mutated-node"), false);
+  assert.equal(second.references.some(reference => reference.toIdeaId === "mutated-reference"), false);
+});

@@ -456,8 +456,34 @@ function validatePersonalIdeaLibraryPage(
           typeof candidate.nextCursor.sourceProjectId !== "string" ||
           !candidate.nextCursor.sourceProjectId.trim() ||
           typeof candidate.nextCursor.ideaId !== "string" ||
-          !candidate.nextCursor.ideaId.trim()))) {
+          !candidate.nextCursor.ideaId.trim() ||
+          (candidate.nextCursor.libraryVersion !== undefined &&
+            (!Number.isSafeInteger(candidate.nextCursor.libraryVersion) ||
+              candidate.nextCursor.libraryVersion < 0)))) ||
+      (candidate.libraryVersion !== undefined &&
+        (!Number.isSafeInteger(candidate.libraryVersion) || candidate.libraryVersion < 0)) ||
+      (candidate.restartRequired !== undefined && typeof candidate.restartRequired !== "boolean")) {
     throw new Error("Integridad de biblioteca: la página o su cursor están malformados.");
+  }
+
+  const hasLibraryVersion = candidate.libraryVersion !== undefined;
+  const restartRequired = candidate.restartRequired === true;
+  if (cursor?.libraryVersion !== undefined &&
+      (!hasLibraryVersion ||
+        (candidate.libraryVersion !== cursor.libraryVersion && !restartRequired))) {
+    throw new Error("Integridad de biblioteca: la generación cambió sin solicitar reiniciar la paginación.");
+  }
+  if (restartRequired &&
+      (!hasLibraryVersion || candidate.items.length !== 0 || candidate.nextCursor !== null)) {
+    throw new Error("Integridad de biblioteca: una resincronización debe devolver una página vacía y sin cursor.");
+  }
+  if (candidate.nextCursor !== null && hasLibraryVersion &&
+      candidate.nextCursor.libraryVersion !== candidate.libraryVersion) {
+    throw new Error("Integridad de biblioteca: el cursor siguiente pertenece a otra generación.");
+  }
+  if (candidate.nextCursor !== null && !hasLibraryVersion &&
+      candidate.nextCursor.libraryVersion !== undefined) {
+    throw new Error("Integridad de biblioteca: el cursor declara una generación que la página no contiene.");
   }
 
   const items = candidate.items as PersonalIdeaLibraryEntry[];
@@ -526,7 +552,12 @@ function validatePersonalIdeaLibraryPage(
   }
 
   return {
-    page: { items, nextCursor },
+    page: {
+      items,
+      nextCursor,
+      ...(hasLibraryVersion ? { libraryVersion: candidate.libraryVersion } : {}),
+      ...(restartRequired ? { restartRequired: true } : {})
+    },
     unresolved: [...unresolvedByKey.values()]
   };
 }
@@ -3240,13 +3271,23 @@ export class HostEngineApi {
     const writerId = this.requireWriterId();
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
         (cursor !== null && (!cursor || typeof cursor.sourceProjectId !== "string" ||
-          !cursor.sourceProjectId.trim() || typeof cursor.ideaId !== "string" || !cursor.ideaId.trim()))) {
+          !cursor.sourceProjectId.trim() || typeof cursor.ideaId !== "string" || !cursor.ideaId.trim() ||
+          (cursor.libraryVersion !== undefined &&
+            (!Number.isSafeInteger(cursor.libraryVersion) || cursor.libraryVersion < 0))))) {
       throw new Error("Parámetros de paginación de biblioteca inválidos.");
     }
     const work = this.knowledgeTail.then(async () => {
       if (this.store.loadPersonalIdeasPage) {
         const rawPage = await this.store.loadPersonalIdeasPage(writerId, cursor, limit);
         const checked = validatePersonalIdeaLibraryPage(rawPage, writerId, cursor, limit);
+        if (checked.page.restartRequired) {
+          return {
+            items: [],
+            nextCursor: null,
+            libraryVersion: checked.page.libraryVersion,
+            restartRequired: true
+          };
+        }
         if (checked.unresolved.length > 0) {
           if (this.store.loadPersonalIdeasByKeys) {
             const requested = new Map(checked.unresolved.map(reference => [
@@ -3310,12 +3351,19 @@ export class HostEngineApi {
           )),
           nextCursor: checked.page.nextCursor
             ? cloneNarrativeRecord(checked.page.nextCursor)
-            : null
+            : null,
+          ...(checked.page.libraryVersion === undefined
+            ? {}
+            : { libraryVersion: checked.page.libraryVersion }),
+          ...(checked.page.restartRequired ? { restartRequired: true } : {})
         };
       }
 
       // Compatibilidad con adaptadores anteriores: conservan la API paginada,
       // aunque su lectura subyacente todavía materializa la biblioteca completa.
+      if (cursor?.libraryVersion !== undefined) {
+        throw new Error("El adaptador de biblioteca no admite continuar una lectura versionada.");
+      }
       if (!this.store.loadPersonalIdeas) {
         throw new Error("El almacenamiento no admite la biblioteca personal de ideas.");
       }

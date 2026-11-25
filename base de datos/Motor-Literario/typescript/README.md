@@ -96,7 +96,7 @@ Al abrir un documento, el motor compara el snapshot local con el snapshot autori
 El contrato lógico de la base se versiona como JSON declarativo en `../MLDB/`, y se valida con JavaScript puro mediante `scripts/validate-mldb-schema.mjs`. La versión vigente define 25 tablas propiedad del motor, más la identidad `projects` bajo responsabilidad exclusiva del anfitrión, con claves compuestas, ámbitos `global`, `project` y `writer`, propiedad de proyectos y referencias que no pueden cruzar libros o escritores.
 
 - `../MLDB/schema_v0.4.2.json`: esquema lógico vigente.
-- `../MLDB/schema_v0.4.0.json`, `schema_v0.3.0.json` y `schema_v0.2.0.json`: versiones anteriores verificadas para compatibilidad.
+- `../MLDB/schema_v0.4.1.json`, `schema_v0.4.0.json`, `schema_v0.3.0.json` y `schema_v0.2.0.json`: versiones anteriores verificadas para compatibilidad.
 - `../MLDB/storage_mapping_v0.4.2.json`: correspondencia entre las 25 tablas lógicas y el almacenamiento local IndexedDB.
 - `../MLDB/PHYSICAL_STORAGE_MAPPING_v0.4.2.md`: explicación de almacenes, claves, índices y estado real de implementación.
 

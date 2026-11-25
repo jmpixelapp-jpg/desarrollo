@@ -215,3 +215,26 @@ test("acota la ventana de IDs de transacción duplicados", () => {
   f.stop();
   f.source.dispose();
 });
+
+test("no acepta una transacción antes de que el snapshot nativo refleje el cambio", () => {
+  const f = fixture("abc");
+  f.editor.publish({
+    transactionId: "tx-not-applied",
+    kind: "edit",
+    change: {
+      documentId: "chapter-1",
+      sequence: 1,
+      baseRevision: 0,
+      start: 3,
+      end: 3,
+      replacement: "!"
+    }
+  });
+
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "editor-state-mismatch");
+  assert.equal(f.editor.listeners.size, 0);
+  f.stop();
+  f.source.dispose();
+});

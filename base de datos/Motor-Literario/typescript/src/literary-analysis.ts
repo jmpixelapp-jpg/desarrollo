@@ -806,6 +806,12 @@ export interface LiteraryIdeaLexicalResonance {
   readonly overlapCoefficient: number;
   /** Muestra ordenada de términos compartidos; no implica equivalencia semántica. */
   readonly sharedTerms: readonly string[];
+  /** Frecuencia literal de cada término compartido en ambos textos; no representa peso semántico. */
+  readonly sharedTermFrequencies: readonly {
+    readonly term: string;
+    readonly leftFrequency: number;
+    readonly rightFrequency: number;
+  }[];
   readonly omittedSharedTermCount: number;
 }
 export interface LiteraryIdeaLexicalResonanceAnalysis {
@@ -3833,7 +3839,7 @@ function buildLiteraryIdeaLexicalResonances(
     const localized = left.localeCompare(right, "en");
     return localized !== 0 ? localized : left === right ? 0 : left < right ? -1 : 1;
   };
-  const prepared: { ideaId: string; terms: string[] }[] = [];
+  const prepared: { ideaId: string; terms: string[]; frequencies: Map<string, number> }[] = [];
   let tokenizedTextUnitCount = 0;
   let ideasWithoutTextCount = 0;
   let omittedTextBudgetIdeaCount = 0;
@@ -3870,7 +3876,8 @@ function buildLiteraryIdeaLexicalResonances(
     );
     prepared.push({
       ideaId: idea.ideaId,
-      terms: rankedTerms.slice(0, MAX_IDEA_LEXICAL_TERMS_PER_IDEA).map(([term]) => term)
+      terms: rankedTerms.slice(0, MAX_IDEA_LEXICAL_TERMS_PER_IDEA).map(([term]) => term),
+      frequencies: new Map(rankedTerms.slice(0, MAX_IDEA_LEXICAL_TERMS_PER_IDEA))
     });
   }
 
@@ -4022,6 +4029,13 @@ function buildLiteraryIdeaLexicalResonances(
       jaccardSimilarity: pair.jaccardSimilarity,
       overlapCoefficient: pair.overlapCoefficient,
       sharedTerms: orderedSharedTerms.slice(0, MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES),
+      sharedTermFrequencies: orderedSharedTerms
+        .slice(0, MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES)
+        .map(term => ({
+          term,
+          leftFrequency: prepared[pair.leftIndex]!.frequencies.get(term) ?? 0,
+          rightFrequency: prepared[pair.rightIndex]!.frequencies.get(term) ?? 0
+        })),
       omittedSharedTermCount: Math.max(
         0, orderedSharedTerms.length - MAX_IDEA_LEXICAL_SHARED_TERM_SAMPLES
       )

@@ -4,6 +4,10 @@ import { dirname } from "node:path";
 
 const TABLE = "bridge_records";
 const ARCHIVE_PAGE_SIZE = 128;
+const WRITER_LIBRARY_COLLECTIONS = new Set([
+  "personal-idea-library",
+  "writer-library-finalization-receipts"
+]);
 const NARRATIVE_COLLECTIONS = new Set([
   "narrative-entities",
   "narrative-relations",
@@ -586,6 +590,7 @@ export class SqliteProjectStore {
       "sequence=excluded.sequence, sort_key=excluded.sort_key, value_json=excluded.value_json"
     ).run(collection, key, projectId, writerId, documentId, sequence, sortKey, JSON.stringify(value));
     if (projectId && NARRATIVE_COLLECTIONS.has(collection)) this.bumpNarrativeVersion(projectId);
+    if (writerId && WRITER_LIBRARY_COLLECTIONS.has(collection)) this.bumpWriterLibraryVersion(writerId);
     return clone(value);
   }
 
@@ -612,6 +617,29 @@ export class SqliteProjectStore {
     return version;
   }
 
+  bumpWriterLibraryVersion(writerId) {
+    requireText(writerId, "writerId");
+    this.ensureOpen();
+    this.database.prepare(
+      "INSERT INTO bridge_metadata(key, value) VALUES(?, '1') " +
+      "ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1"
+    ).run("writer-library-version:" + writerId);
+  }
+
+  getWriterLibraryVersion(writerId) {
+    requireText(writerId, "writerId");
+    this.ensureOpen();
+    const row = this.database.prepare(
+      "SELECT value FROM bridge_metadata WHERE key = ?"
+    ).get("writer-library-version:" + writerId);
+    if (!row) return 0;
+    const version = Number(row.value);
+    if (!Number.isSafeInteger(version) || version < 0) {
+      throw new Error("La versión de biblioteca del escritor almacenada es inválida.");
+    }
+    return version;
+  }
+
   getDataVersion() {
     this.ensureOpen();
     const row = this.database.prepare("PRAGMA data_version").get();
@@ -627,9 +655,15 @@ export class SqliteProjectStore {
     const result = this.database.prepare(
       "DELETE FROM " + TABLE + " WHERE collection = ? AND record_key = ?"
     ).run(collection, encodedKey(parts));
-    if (Number(result.changes) > 0 && NARRATIVE_COLLECTIONS.has(collection)) {
-      const projectId = Array.isArray(parts) ? parts[0] : undefined;
-      if (typeof projectId === "string" && projectId.trim()) this.bumpNarrativeVersion(projectId);
+    if (Number(result.changes) > 0) {
+      if (NARRATIVE_COLLECTIONS.has(collection)) {
+        const projectId = Array.isArray(parts) ? parts[0] : undefined;
+        if (typeof projectId === "string" && projectId.trim()) this.bumpNarrativeVersion(projectId);
+      }
+      if (WRITER_LIBRARY_COLLECTIONS.has(collection)) {
+        const writerId = Array.isArray(parts) ? parts[0] : undefined;
+        if (typeof writerId === "string" && writerId.trim()) this.bumpWriterLibraryVersion(writerId);
+      }
     }
   }
 

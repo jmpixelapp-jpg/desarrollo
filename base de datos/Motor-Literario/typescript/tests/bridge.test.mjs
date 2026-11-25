@@ -765,14 +765,22 @@ test("SQLite rechaza más de 500 vínculos por idea incluso sin pasar por HostEn
   try {
     assert.throws(
       () => store.saveIdea({ ...base, relatedIdeaIds: tooManyIds }),
-      /más de 500 vínculos por categoría/
+      /más de 500 vínculos explícitos en total/
     );
     assert.throws(
       () => store.saveIdeaIfUnchanged({
         ...base,
         relatedEntityIds: tooManyIds
       }, base),
-      /más de 500 vínculos por categoría/
+      /más de 500 vínculos explícitos en total/
+    );
+    assert.throws(
+      () => store.saveIdea({
+        ...base,
+        relatedEntityIds: Array.from({ length: 300 }, (_, index) => "entity-" + index),
+        relatedIdeaIds: Array.from({ length: 201 }, (_, index) => "idea-" + index)
+      }),
+      /más de 500 vínculos explícitos en total/
     );
     assert.throws(
       () => store.saveIdea({

@@ -110,7 +110,7 @@ export function bindLiveAuthorMonitorEditorChanges(
     }
   };
 
-  const publishBackpressure = (fallbackChange?: EditorChange): void => {
+  const publishBackpressure = (): void => {
     if (!options.onBackpressure) return;
     const first = pending[0];
     const last = pending[pending.length - 1];
@@ -129,7 +129,6 @@ export function bindLiveAuthorMonitorEditorChanges(
     } catch {
       // La vista de contrapresión es observabilidad opcional; no debe frenar al autor.
       // Sus errores no se reenvían a onError para evitar bucles entre callbacks.
-      void fallbackChange;
     }
   };
 
@@ -137,7 +136,7 @@ export function bindLiveAuthorMonitorEditorChanges(
     if (disposed) return;
     if (pending.length > 0) {
       pending.push(change);
-      publishBackpressure(change);
+      publishBackpressure();
       return;
     }
 

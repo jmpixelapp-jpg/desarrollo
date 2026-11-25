@@ -2172,7 +2172,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 11);
+      assert.equal(version, 12);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2192,6 +2192,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "narrative-events", keyPath: ["projectId", "id"] },
       { name: "narrative-ideas", keyPath: ["projectId", "id"] },
       { name: "personal-idea-library", keyPath: ["writerId", "sourceProjectId", "idea.id"] },
+      { name: "writer-library-finalization-receipts", keyPath: ["writerId", "sourceProjectId", "receiptId"] },
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
       { name: "document-diagnostics", keyPath: ["projectId", "documentId"] }
     ]);
@@ -2205,6 +2206,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["personal-idea-library", "by-writer"],
       ["personal-idea-library", "by-writer-source"],
       ["personal-idea-library", "by-source-project"],
+      ["writer-library-finalization-receipts", "by-writer"],
+      ["writer-library-finalization-receipts", "by-writer-source"],
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
       ["document-diagnostics", "by-project"]
@@ -2269,7 +2272,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   const names = [
     "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
-    "narrative-assertions", "document-diagnostics"
+    "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics"
   ];
   const stores = new Map(names.map(name => [name, {
     indexNames: { contains: () => false },
@@ -2318,7 +2321,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 11);
+    assert.equal(openedVersion, 12);
     const expected = [
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
@@ -2329,6 +2332,8 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["personal-idea-library", "by-writer"],
       ["personal-idea-library", "by-writer-source"],
       ["personal-idea-library", "by-source-project"],
+      ["writer-library-finalization-receipts", "by-writer"],
+      ["writer-library-finalization-receipts", "by-writer-source"],
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
       ["document-diagnostics", "by-project"]
@@ -2350,7 +2355,7 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
   const names = [
     "documents", "changes", "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
-    "narrative-assertions", "document-diagnostics"
+    "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics"
   ];
   const deleted = [];
   const created = [];

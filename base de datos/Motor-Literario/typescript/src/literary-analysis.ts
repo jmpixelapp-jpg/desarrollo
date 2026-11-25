@@ -3329,6 +3329,19 @@ const IDEA_ITALIAN_STOP_WORDS = new Set([
   "una","uno","va","vi","voi","vostra","vostre","vostri","vostro"
 ]);
 
+
+const IDEA_DUTCH_STOP_WORDS = new Set([
+  "aan","aangezien","achter","af","al","alles","als","altijd","andere","anderen","ben","beneden",
+  "bent","bij","bijna","binnen","boven","buiten","daar","daarom","daarna","dan","dat","de","deze",
+  "die","dit","doch","doen","door","dus","een","eens","en","er","geen","gehad","gekregen","geweest",
+  "haar","had","hadden","heb","hebben","hebt","heeft","hem","hen","het","hier","hoe","hoewel","hun",
+  "ieder","iedere","iets","ik","in","is","ja","je","jij","jouw","jou","kan","kon","konden","kunnen",
+  "maar","me","meer","men","met","mij","mijn","moet","moeten","na","naar","nee","niet","niets","nog",
+  "nu","of","om","omdat","onder","ons","onze","ook","op","over","per","reeds","te","tegen","ten",
+  "ter","tot","tussen","uit","uw","van","vanaf","veel","voor","voordat","waren","was","wat","we",
+  "wel","welke","werd","werden","wie","wij","wil","wilden","willen","worden","wordt","zal","ze",
+  "zelf","zich","zij","zijn","zo","zonder","zou","zouden"
+]);
 const IDEA_GERMAN_STOP_WORDS = new Set([
   "aber","alle","allem","allen","aller","alles","als","also","am","an","andere","anderem","anderen",
   "anderer","anderes","anderm","andern","anderr","anders","auch","auf","aus","bei","bin","bis","bist",
@@ -3802,7 +3815,7 @@ function buildLiteraryIdeaLexicalResonances(
       if (Array.from(term).length < 2 || !/\p{L}/u.test(term) ||
           STOP_WORDS.has(term) || IDEA_ENGLISH_STOP_WORDS.has(term) ||
           IDEA_PORTUGUESE_STOP_WORDS.has(term) || IDEA_FRENCH_STOP_WORDS.has(term) ||
-          IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term)) continue;
+          IDEA_ITALIAN_STOP_WORDS.has(term) || IDEA_GERMAN_STOP_WORDS.has(term) || IDEA_DUTCH_STOP_WORDS.has(term)) continue;
       frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
     }
     const rankedTerms = [...frequencies.entries()].sort((left, right) =>

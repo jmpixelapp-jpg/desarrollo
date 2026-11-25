@@ -7628,7 +7628,8 @@ test("dos instancias concurrentes archivan sin duplicar el mismo libro ni colisi
     transaction(storeNames, mode) {
       assert.equal(mode, "readwrite");
       assert.deepEqual(new Set(storeNames), new Set([
-        "narrative-ideas", "personal-idea-library", "narrative-entities"
+        "narrative-ideas", "personal-idea-library", "narrative-entities",
+        "writer-library-finalization-receipts"
       ]));
       let started = false;
       const pendingRequests = [];
@@ -9333,7 +9334,8 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     transaction(storeNames, mode) {
       assert.equal(mode, "readwrite");
       assert.deepEqual(new Set(storeNames), new Set([
-        "narrative-ideas", "personal-idea-library", "narrative-entities"
+        "narrative-ideas", "personal-idea-library", "narrative-entities",
+        "writer-library-finalization-receipts"
       ]));
       return transaction;
     }

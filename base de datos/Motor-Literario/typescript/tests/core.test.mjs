@@ -5067,6 +5067,7 @@ test("IndexedDB aborta la consolidación si alguna colección contiene registros
     "narrative-events": [],
     "narrative-assertions": []
   };
+  let pendingReads = 6;
   const database = {
     onversionchange: null,
     close() {},

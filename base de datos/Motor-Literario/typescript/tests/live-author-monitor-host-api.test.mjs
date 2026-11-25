@@ -198,3 +198,25 @@ test("guarda checkpoints automáticamente al completar commits y al disponer de 
   assert.equal(checkpoint.committedChanges, 1);
   assert.equal(checkpoint.currentDocumentLength, 2);
 });
+
+
+test("no dispone el HostEngineApi cuando un checkpoint automático falla al persistirse", async () => {
+  class FailingCheckpointStore extends MemoryDocumentStore {
+    async saveLiveAuthorMonitorCheckpoint() {
+      throw new Error("quota_exceeded");
+    }
+  }
+
+  const api = new HostEngineApi({ store: new FailingCheckpointStore() });
+  api.initializeProject({ projectId: "monitor-checkpoint-failure", projectName: "Checkpoint failure" });
+  await api.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  await assert.rejects(api.disposeSafely(), /quota_exceeded|checkpoints.*no pudieron persistirse/);
+  assert.ok(api.getLiveAuthorMonitorSnapshot("chapter-1"));
+  api.dispose();
+});

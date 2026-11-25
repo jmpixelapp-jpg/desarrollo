@@ -5,9 +5,14 @@ import { HostEngineApi } from "../dist/motor-literario.js";
 const projectId = "complete-idea-graph";
 const store = {
   documents: new Map(),
+  entities: [{
+    projectId, id:"character-ana", kind:"character", canonicalName:"Ana",
+    normalizedName:"ana", aliases:[], evidence:[], firstSeenAt:1, lastSeenAt:1,
+    extractionVersion:1
+  }],
   ideas: [
     { projectId, id:"origin", text:"La luz revela la memoria del espejo", status:"IDEA", originDocumentId:"chapter",
-      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["bridge"], relatedEntityIds:[],
+      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["bridge"], relatedEntityIds:["character-ana"],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"bridge", text:"El espejo conserva la memoria y la luz", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
@@ -25,7 +30,7 @@ const store = {
   },
   async loadDocumentWithChanges(project,id) { return {document:await this.loadDocument(project,id),changes:[]}; },
   async loadIdeas(project) { return this.ideas.filter(item=>item.projectId===project).map(item=>structuredClone(item)); },
-  async loadEntities(project) { return []; }
+  async loadEntities(project) { return this.entities.filter(item=>item.projectId===project).map(item=>structuredClone(item)); }
 };
 
 test("el grafo literario incluye ideas sin vínculos a personajes", async () => {
@@ -37,11 +42,12 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
   await api.openDocument({documentId:"chapter",text:"Escena 1\nLa tarde avanza.",revision:0,sequence:0});
   try {
     const result=await api.analyzeLiteraryDocument("chapter");
-    assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount,0);
+    assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount,1);
     assert.equal(result.ideaGraph.catalogScope,"project");
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
     assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount,4);
+    assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount,0);
     assert.equal(result.ideaGraph.lexicalResonances.candidatePairCount,1);
     assert.deepEqual(
       result.ideaGraph.lexicalResonances.resonances[0].sharedTerms,

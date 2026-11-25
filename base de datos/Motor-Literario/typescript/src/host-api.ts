@@ -295,7 +295,7 @@ function isValidPersonalIdeaContext(
     }
     for (const references of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
       if (references !== undefined &&
-          (!Array.isArray(references) ||
+          (!Array.isArray(references) || references.length > MAX_NARRATIVE_IDEA_REFERENCES ||
             references.some(id => typeof id !== "string" || !id.trim()) ||
             new Set(references).size !== references.length)) return false;
     }
@@ -308,6 +308,7 @@ function isValidPersonalIdeaContext(
         if (!change ||
             !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
+            (change.reason === "text-revised" && change.status !== "IDEA") ||
             (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
               change.status === idea.statusHistory[index - 1]?.status) ||
             (change.changedAt !== undefined &&
@@ -400,7 +401,8 @@ function isValidPersonalIdeaEntry(
   }
   for (const references of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
     if (references !== undefined &&
-        (!Array.isArray(references) || references.some(id => typeof id !== "string" || !id.trim()) ||
+        (!Array.isArray(references) || references.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+          references.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(references).size !== references.length)) {
       return false;
     }
@@ -422,6 +424,7 @@ function isValidPersonalIdeaEntry(
           !["IDEA", "incorporated", "discarded"].includes(change.status) ||
           (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
           !["initial", "writer", "text-revised"].includes(change.reason) ||
+          (change.reason === "text-revised" && change.status !== "IDEA") ||
           (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
             change.status === idea.statusHistory[index - 1]?.status) ||
           (change.changedAt !== undefined && previousChangedAt !== undefined &&

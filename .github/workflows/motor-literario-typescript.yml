@@ -15,14 +15,27 @@ on:
 permissions:
   contents: read
 
+# Una ejecución nueva para la misma referencia sustituye a la anterior.
+# Evita acumular CI obsoleta cuando la rama recibe varios commits seguidos.
+concurrency:
+  group: motor-literario-typescript-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   typecheck-and-tests:
     name: TypeScript build and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: "base de datos/Motor-Literario/typescript"
     steps:
+      - name: Runner diagnostics
+        run: |
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner architecture: $RUNNER_ARCH"
+          node --version
+          npm --version
       - name: Checkout
         uses: actions/checkout@v4
       - name: Set up Node.js

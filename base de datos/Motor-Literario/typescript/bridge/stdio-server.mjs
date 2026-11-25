@@ -83,6 +83,7 @@ const PUBLIC_API_METHODS = new Set([
   "setNarrativeIdeaEntityLink",
   "setNarrativeIdeaLink",
   "archiveUnincorporatedIdeas",
+  "finalizeProjectToIdeaLibrary",
   "getPersonalIdeaLibrary",
   "getPersonalIdeaLibraryPage",
   "getProjectFinalizationReceipt",

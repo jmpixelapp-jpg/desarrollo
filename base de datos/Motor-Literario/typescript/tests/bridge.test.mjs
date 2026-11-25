@@ -1213,6 +1213,26 @@ test("el cliente TypeScript del puente lee y añade historiales versionados de r
       [recordFirst, recordSecond]
     );
 
+    await assert.rejects(
+      client.appendRecordLifecycle(projectId, {
+        id: "record-ana:v3-invalid",
+        recordId: record.id,
+        revision: 3,
+        previousLabel: "REGISTRADO EN LA OBRA",
+        newLabel: "REGISTRADO EN LA OBRA",
+        previousState: "cerrado",
+        newState: "cerrado",
+        changedBy: "writer-relation-history",
+        changedAt: 24
+      }),
+      /debe continuar exactamente la última revisión durable/
+    );
+    assert.deepEqual(
+      await client.getRecordLifecycleHistory(projectId, record.id),
+      [recordFirst, recordSecond],
+      "un cambio con fecha regresiva no debe contaminar el historial"
+    );
+
     const relation = await client.request("project.call", {
       projectId,
       method: "saveProjectRelation",
@@ -1248,6 +1268,41 @@ test("el cliente TypeScript del puente lee y añade historiales versionados de r
 
     const history = await client.getRelationLifecycleHistory(projectId, relation.id);
     assert.deepEqual(history, [first]);
+
+    const second = await client.appendRelationLifecycle(projectId, {
+      id: "relation-ana-map:v2",
+      relationId: relation.id,
+      revision: 2,
+      previousLabel: "IDEA",
+      newLabel: "REGISTRADO EN LA OBRA",
+      previousState: "abierto",
+      newState: "cerrado",
+      changedBy: "writer-relation-history",
+      changedAt: 30
+    });
+    assert.deepEqual(
+      await client.getRelationLifecycleHistory(projectId, relation.id),
+      [first, second]
+    );
+    await assert.rejects(
+      client.appendRelationLifecycle(projectId, {
+        id: "relation-ana-map:v3-invalid",
+        relationId: relation.id,
+        revision: 3,
+        previousLabel: "REGISTRADO EN LA OBRA",
+        newLabel: "REGISTRADO EN LA OBRA",
+        previousState: "cerrado",
+        newState: "cerrado",
+        changedBy: "writer-relation-history",
+        changedAt: 29
+      }),
+      /debe continuar exactamente la última revisión durable/
+    );
+    assert.deepEqual(
+      await client.getRelationLifecycleHistory(projectId, relation.id),
+      [first, second],
+      "una revisión con fecha regresiva debe rechazarse sin alterar el historial"
+    );
 
     const exited = waitForExit(child);
     await client.shutdown();

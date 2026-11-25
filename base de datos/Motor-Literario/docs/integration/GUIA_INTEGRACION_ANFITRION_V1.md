@@ -34,7 +34,7 @@ El paquete TypeScript del repositorio sigue marcado como privado (`private: true
 | Aplicar cambios al manuscrito | Responsable | No escribe sobre el editor ni cambia el texto original |
 | Mostrar diagnósticos | Responsable | Devuelve diagnósticos asociados a una revisión concreta |
 | Conservar conocimiento narrativo | Puede consultarlo y presentarlo | Extrae y persiste registros aislados por proyecto |
-| Copias de seguridad y restauración del programa | Responsable | No expone aún una API pública completa de backup/restore |
+| Respaldo local SQLite e IndexedDB | Motor + anfitrión | APIs de almacenamiento implementadas; escritura/lectura de archivo y aceptación real corresponden al anfitrión |
 
 El anfitrión debe usar la misma identidad externa de proyecto en todas las llamadas de un libro. No debe crear un proyecto paralelo en la base del motor.
 
@@ -342,7 +342,9 @@ No interpretar `queued` como `applied`, ni un diagnóstico de una revisión ante
 - No escribir directamente en `motor-literario-local`, sus object stores, claves o índices, ni en `bridge_records`/`bridge_document_heads`. Las migraciones pertenecen a cada adaptador.
 - IndexedDB está ligado al origen y perfil local. El archivo SQLite del puente está ligado a la ruta local proporcionada al proceso compañero. Son bases físicas independientes y no se fusionan automáticamente.
 - Al copiar el archivo SQLite para una copia de seguridad, detener antes el puente con `bridge.shutdown` y esperar el cierre del proceso; no copiar solo el archivo principal mientras SQLite está activo y puede tener datos en WAL.
-- La API pública actual no incluye exportación/importación integral ni restauración asistida de toda la base. La aplicación anfitriona debe implementar y probar su mecanismo de backup/restore antes de confiar manuscritos irremplazables al entorno de producción. No copiar object stores en caliente ni asumir que el archivo del manuscrito contiene todo el conocimiento MLDB.
+- El puente Node incluye `bridge/database-snapshot.mjs` para crear, verificar y restaurar copias completas de SQLite; exige detener el puente y conserva la base anterior y sus sidecars.
+- `IndexedDbProjectStore.exportDatabaseBackup()` y `restoreDatabaseBackup(backup)` cubren todos los object stores del navegador. La exportación lee una instantánea en una transacción readonly y genera un paquete JSON versionado con checksum. La restauración valida versión, catálogo de almacenes y checksum, y reemplaza todos los almacenes dentro de una transacción readwrite; un aborto conserva el estado anterior y un commit publica invalidaciones de proyecto y escritor.
+- El anfitrión aún debe implementar el selector/guardado/lectura del archivo de respaldo con el mecanismo de archivos del entorno, ejecutar `flushPendingChanges()` antes de exportar y restaurar en modo de mantenimiento antes de abrir libros o documentos. Probar el flujo en el navegador real y definir cifrado en reposo sigue siendo parte de la aceptación de la aplicación. Ninguno de los dos respaldos copia object stores en caliente ni debe confundirse con el archivo de texto visible del manuscrito.
 
 El anfitrión debe proporcionar copias de seguridad independientes tanto del manuscrito autoritativo como de los datos locales de conocimiento que decida conservar.
 
@@ -366,7 +368,8 @@ La integración no debe declararse terminada hasta comprobar, en el programa anf
 - [ ] Verifica aislamiento entre dos proyectos y dos escritores en el mismo perfil local.
 - [ ] Comprueba extracción, consulta e historial narrativo; prueba la transferencia de ideas no incorporadas en un libro de ensayo.
 - [ ] Ejecuta pruebas de cuota, bloqueo/cierre de IndexedDB, actualización de versión y cierre inesperado.
-- [ ] Implementa y prueba backup/restore integral del manuscrito y del conocimiento local.
+- [ ] Integra el paquete JSON de `exportDatabaseBackup()`/`restoreDatabaseBackup()` con archivos privados del anfitrión; prueba exportación, restauración y fallo/aborto en el navegador real.
+- [ ] Define protección/cifrado en reposo y automatización de copias de seguridad según la política del anfitrión.
 - [ ] Registra la versión de API, versión MLDB, navegador/runtime, sistema operativo, resultados y límites observados.
 
 ## 11. Validación del núcleo

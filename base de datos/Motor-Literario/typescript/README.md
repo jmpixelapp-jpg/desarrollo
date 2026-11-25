@@ -108,6 +108,50 @@ Las actualizaciones se comparan con la versión leída para rechazar escrituras 
 
 Métodos del anfitrión: `saveProjectDictionary`, `getProjectDictionaries`, `saveDictionaryEntry`, `getDictionaryEntries` y `setDictionaryEntryEntityLink`.
 
+## Respaldo y restauración local del puente SQLite
+
+El puente SQLite incluye una utilidad JavaScript de respaldo y restauración. La copia se crea con `VACUUM INTO`, por lo que es un archivo SQLite autónomo e incluye el estado confirmado del WAL: manuscritos, journal, conocimiento narrativo, biblioteca personal, historiales y recibos de finalización. Antes de publicar o restaurar una copia se ejecutan `PRAGMA integrity_check`, comprobación de esquema y validación de que los registros almacenados contienen JSON válido.
+
+Ejecutar desde esta carpeta:
+
+```sh
+node bridge/database-snapshot.mjs create --source ./datos/motor.sqlite --destination ./respaldos/motor-2026-11-25.sqlite
+node bridge/database-snapshot.mjs verify --backup ./respaldos/motor-2026-11-25.sqlite
+node bridge/database-snapshot.mjs restore --backup ./respaldos/motor-2026-11-25.sqlite --destination ./datos/motor.sqlite
+```
+
+La creación nunca sobrescribe una copia existente. La restauración exige detener el puente y cerrar todas las conexiones a la base de destino. Cuando ya existe una base, se conserva con el sufijo `.pre-restore-...` junto con sus archivos auxiliares WAL/journal, para permitir una recuperación manual. La utilidad rechaza enlaces simbólicos y copias con integridad o esquema incompatibles. Los permisos restrictivos del archivo se aplican cuando el sistema operativo los admite.
+
+El respaldo contiene el manuscrito y los datos privados de la biblioteca en claro; debe guardarse en una carpeta protegida y cifrarse mediante los mecanismos del sistema operativo o del anfitrión cuando se necesite protección en reposo. El checksum estructural no es una firma ni demuestra quién creó el archivo.
+
+**Alcance:** esta utilidad respalda la base SQLite del puente Node. No respalda IndexedDB del navegador. La aplicación anfitriona que utilice IndexedDB debe implementar su propio flujo de exportación/importación y probarlo en el navegador de destino; no debe presentar una copia SQLite como respaldo de IndexedDB.
+
+## Respaldo y restauración de IndexedDB del navegador
+
+`IndexedDbProjectStore` incluye `exportDatabaseBackup()` y `restoreDatabaseBackup(backup)`. La exportación lee todos los object stores de la versión abierta dentro de una sola transacción readonly y devuelve un paquete JSON con el número de versión, fecha y checksum FNV-1a para detectar alteraciones accidentales. Incluye documentos, journal, conocimiento narrativo, biblioteca personal, diccionarios, historiales, configuraciones, evidencias, autorizaciones y recibos.
+
+El anfitrión debe vaciar primero las colas del motor y guardar el paquete como un archivo privado mediante su propio mecanismo de archivos:
+
+~~~ts
+await api.flushPendingChanges();
+const backup = await indexedDbStore.exportDatabaseBackup();
+await hostFiles.writePrivateFile(
+  "motor-literario-backup.json",
+  JSON.stringify(backup)
+);
+~~~
+
+Para restaurar, leer y validar el JSON antes de abrir proyectos o documentos en la sesión del editor:
+
+~~~ts
+const backup = JSON.parse(await hostFiles.readPrivateFile("motor-literario-backup.json"));
+await indexedDbStore.restoreDatabaseBackup(backup);
+~~~
+
+La restauración exige coincidencia exacta de versión y nombres de almacenes. Reemplaza todas las colecciones dentro de una sola transacción readwrite: si una escritura falla, IndexedDB aborta la transacción y conserva el estado anterior. Después de confirmar, publica invalidaciones de conocimiento narrativo y biblioteca para que las otras pestañas recarguen sus datos. El anfitrión debe ejecutar la restauración en modo de mantenimiento, sin sesiones de edición activas, y reconstruir las instancias del motor que dependan de los datos restaurados.
+
+La capacidad se consulta mediante `getCapabilities().fullDatabaseBackupRestore`; solo se anuncia cuando el adaptador implementa ambas operaciones. El puente SQLite no anuncia esta capacidad IndexedDB: dispone de su utilidad de archivo independiente.\n\nEl paquete contiene texto narrativo, ideas y datos privados sin cifrar. El anfitrión es responsable de guardarlo en una ubicación protegida y de aplicar cifrado en reposo cuando corresponda. El checksum no es una firma criptográfica ni autentica al creador. La exportación es una operación manual que materializa todos los almacenes en memoria; no debe ejecutarse durante la escritura normal ni en cada cambio del editor.
+
 ## Límites deliberados
 
 La implementación del producto se desarrolla exclusivamente en TypeScript/JavaScript. Las carpetas Rust del repositorio son material histórico y no forman parte del runtime ni deben ampliarse.

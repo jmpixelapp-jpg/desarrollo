@@ -1,6 +1,6 @@
 # Puente entre procesos — Motor Literario v1
 
-**Estado:** implementado y probado en CI  
+**Estado:** implementación presente; validación CI pendiente de disponibilidad de runner  
 **Protocolo:** JSON-RPC 2.0, una solicitud JSON por línea (JSONL)  
 **Transporte:** stdin/stdout del proceso hijo; no abre puertos ni escucha en la red  
 **Versión del puente:** 1.0.0  
@@ -18,7 +18,7 @@ Incluir juntos, manteniendo su estructura relativa:
 
 - typescript/dist/motor-literario.js — bundle ESM del núcleo y del cliente TypeScript.
 - typescript/bridge/stdio-server.mjs — proceso servidor.
-- typescript/bridge/sqlite-project-store.mjs — adaptador SQLite local.
+- typescript/bridge/sqlite-project-store.mjs — adaptador SQLite local.\n- typescript/bridge/database-snapshot.mjs — respaldo, verificación y restauración del archivo SQLite.
 - El runtime Node.js 22.13.0 o posterior instalado en la máquina.
 
 No se requiere instalar paquetes npm en tiempo de ejecución para el puente. SQLite se obtiene de la biblioteca integrada node:sqlite de Node.js. En Node.js 22.13 ya no se necesita la opción `--experimental-sqlite`, pero el módulo sigue clasificado como experimental (Stability 1.1, Active Development); conviene fijar la versión de Node utilizada y volver a ejecutar las pruebas antes de actualizarla. [Documentación oficial de Node.js 22.13](https://nodejs.org/download/release/v22.23.0/docs/api/sqlite.html).
@@ -133,7 +133,14 @@ motor.onNotification("engine.commit", message => {
 motor.onNotification("engine.knowledgeError", message => {
   hostLogger.error(message.error.message);
 });
+
+motor.onNotification("engine.personalIdeaLibraryChanged", message => {
+  if (message.writerId !== authenticatedWriterId) return;
+  refreshPersonalIdeaLibraryPage(message.projectId);
+});
 ~~~
+
+`engine.personalIdeaLibraryChanged` é um aviso de invalidação, não transporta ideas nem datos narrativos. Se uma idea é arquivada o consolidada em qualquer libro do escritor, el puente avisa a todos los proyectos abiertos asociados a esa misma identidad autenticada. La aplicación vuelve a consultar las páginas de la biblioteca; nunca usa el `writerId` recibido para cambiar la identidad autenticada ni para autorizar consultas. Los proyectos de otros escritores no reciben el aviso.
 
 Enviar cada operación de edición como un reemplazo:
 
@@ -194,9 +201,9 @@ Todas las solicitudes usan JSON-RPC 2.0 y una línea JSON completa por mensaje. 
 
 project.call recibe argumentos posicionales en args, un arreglo JSON. Solo permite métodos públicos incluidos en la lista blanca del servidor; un nombre arbitrario no se ejecuta.
 
-Entre las consultas y operaciones autorizadas están getNarrativeEntities, getNarrativeRelations, getNarrativeEvents, getNarrativeIdeas, getNarrativeAssertions, getNarrativeTimeline, getNarrativeContradictions, getNarrativeEntityHistory, getProjectRecords, getRecordNames, getProjectRelations, getProjectEvidences, getTimelineOccurrences, getProjectDictionaries, getDictionaryEntries, mergeNarrativeEntities, setNarrativeIdeaStatus, setNarrativeIdeaEntityLink, setNarrativeIdeaLink, archiveUnincorporatedIdeas y getPersonalIdeaLibrary. El código del servidor contiene la lista exacta vigente.
+Entre las consultas y operaciones autorizadas están getNarrativeEntities, getNarrativeRelations, getNarrativeEvents, getNarrativeIdeas, getNarrativeAssertions, getNarrativeTimeline, getNarrativeContradictions, getNarrativeEntityHistory, getEventLifecycleHistory, updateNarrativeEvent, getRecordLifecycleHistory, appendRecordLifecycle, getRelationLifecycleHistory, appendRelationLifecycle, getProjectRecords, getRecordNames, getProjectRelations, getProjectEvidences, getTimelineOccurrences, getProjectDictionaries, getDictionaryEntries, mergeNarrativeEntities, setNarrativeIdeaStatus, setNarrativeIdeaEntityLink, setNarrativeIdeaLink, archiveUnincorporatedIdeas, finalizeProjectToIdeaLibrary, getProjectFinalizationReceipt, getPersonalIdeaLibrary y getPersonalIdeaLibraryPage. El código del servidor contiene la lista exacta vigente.
 
-La consolidación transaccional de identidades narrativas está disponible mediante `project.call` con `method: "mergeNarrativeEntities"` y `args: [targetEntityId, sourceEntityId]`. SQLite actualiza en una sola transacción la identidad canónica, relaciones, acontecimientos, afirmaciones, vínculos de ideas y las instantáneas de contexto de la biblioteca personal del escritor. Conserva textos, evidencias, procedencia e historial de estados; rechaza referencias huérfanas, colisiones de alias y contextos históricos que no pueda resolver. `engine.capabilities` expone `narrativeEntityConsolidation`; el anfitrión debe consultar esa capacidad antes de mostrar la acción.
+La finalización compacta se solicita mediante `project.call` con `method: "finalizeProjectToIdeaLibrary"` y `args: []`. La respuesta contiene `writerId`, `sourceProjectId`, `sourceProjectName`, `archivedCount`, `finalizedAt`, `archiveChecksum` y `alreadyFinalized`; no contiene las ideas transferidas. Para recuperar el contenido, el anfitrión usa `getPersonalIdeaLibraryPage` con cursor y límite (1–200). Un reintento valida el recibo existente y marca `alreadyFinalized: true`; no vuelve a publicar una notificación de cambio. `archiveUnincorporatedIdeas` permanece disponible para compatibilidad y conserva su respuesta histórica completa.\n\nLa consolidación transaccional de identidades narrativas está disponible mediante `project.call` con `method: "mergeNarrativeEntities"` y `args: [targetEntityId, sourceEntityId]`. SQLite actualiza en una sola transacción la identidad canónica, relaciones, acontecimientos, afirmaciones, vínculos de ideas y las instantáneas de contexto de la biblioteca personal del escritor. Conserva textos, evidencias, procedencia e historial de estados; rechaza referencias huérfanas, colisiones de alias y contextos históricos que no pueda resolver. `engine.capabilities` expone `narrativeEntityConsolidation`; el anfitrión debe consultar esa capacidad antes de mostrar la acción.
 
 ## 5. Notificaciones que envía el proceso compañero
 
@@ -237,7 +244,7 @@ Si ya existen datos en una instalación que usó IndexedDB directamente, no camb
 
 No abrir el mismo archivo SQLite desde dos instancias del servidor para el mismo proyecto como si fueran dos escritores independientes. Centralizar el proceso compañero por perfil de aplicación. No modificar bridge_records directamente desde el anfitrión.
 
-La aplicación debe proteger el directorio mediante permisos del sistema operativo y mantener copias de seguridad. Para una copia simple y coherente, apagar el puente con bridge.shutdown y esperar a que el proceso termine antes de copiar el archivo SQLite. No copiar solo el archivo principal mientras SQLite está activo: puede haber transacciones aún en WAL. El puente no expone todavía una API integral de backup/restore.
+La aplicación debe proteger el directorio mediante permisos del sistema operativo y mantener copias de seguridad. El puente incluye `database-snapshot.mjs`: `create` produce una copia autónoma mediante `VACUUM INTO`, `verify` ejecuta comprobaciones de integridad/esquema/JSON y `restore` sustituye la base local después de validar el respaldo, conservando el archivo anterior y sus sidecars como `.pre-restore-*`. Ejemplos: `node bridge/database-snapshot.mjs create --source <motor.sqlite> --destination <copia.sqlite>`, `verify --backup <copia.sqlite>` y `restore --backup <copia.sqlite> --destination <motor.sqlite>`. La restauración exige apagar el puente y cerrar todas las conexiones. La copia contiene manuscritos y datos privados sin cifrar; debe almacenarse en una ubicación protegida. Esta utilidad cubre únicamente SQLite: no respalda ni importa IndexedDB del navegador, cuyos almacenes requieren un flujo propio del anfitrión.
 
 ## 8. Cierre ordenado y recuperación
 
@@ -258,14 +265,14 @@ El servidor vacía todas las instancias antes de cerrar SQLite. Si el proceso se
 
 ## 9. Prueba de aceptación del puente
 
-La suite tests/bridge.test.mjs inicia dos procesos reales del servidor en secuencia y comprueba:
+La suite `tests/bridge.test.mjs` inicia procesos reales del servidor y comprueba:
 - intercambio JSON-RPC y versión de protocolo;
 - apertura de proyecto/documento;
 - admisión y notificación de confirmación durable;
 - snapshot correcto después de una edición;
 - cierre ordenado;
 - recuperación del mismo documento desde el archivo SQLite después de reiniciar el proceso;
-- aislamiento de dos proyectos que usan el mismo documentId.
+- aislamiento de dos proyectos que usan el mismo documentId;\n- sincronización de biblioteca entre proyectos/procesos del mismo escritor y exclusión de otros escritores;\n- rollback completo y reintento de una finalización interrumpida;\n- copia, verificación y restauración de SQLite en `tests/database-snapshot.test.mjs`.
 
 Ejecutar desde typescript:
 
@@ -273,4 +280,4 @@ Ejecutar desde typescript:
 npm test
 ~~~
 
-La CI también ejecuta typecheck, build, validación de esquema, todas las pruebas y el benchmark de edición. La aceptación final de la integración requiere además conectarlo al editor y probar contrapresión, recuperación y copia de seguridad en la instalación real del programa anfitrión.
+La workflow de GitHub Actions está configurada para ejecutar typecheck, build, validación de esquema, todas las pruebas y el benchmark de edición. Las ejecuciones inspeccionadas han fallado antes de asignar un runner (`runner_id: 0`, sin pasos); por tanto, no se afirma que esta revisión haya pasado CI. La aceptación final requiere ejecutar esa suite en un runner disponible y probar la integración de IndexedDB y sus respaldos en la instalación real del programa anfitrión.

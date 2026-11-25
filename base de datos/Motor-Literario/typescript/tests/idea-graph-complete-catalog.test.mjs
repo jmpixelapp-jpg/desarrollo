@@ -39,6 +39,7 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
     const result=await api.analyzeLiteraryDocument("chapter");
     assert.equal(result.characterNarrativeTrajectories.linkedIdeaCount,0);
     assert.equal(result.ideaGraph.catalogScope,"project");
+    assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
     assert.equal(result.ideaGraph.referenceCount,4);
     assert.equal(result.ideaGraph.includedReferenceCount,3);
@@ -82,6 +83,7 @@ test("no presenta como catálogo global completo un almacenamiento sin lectura d
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(graph.catalogScope, "character-linked-fallback");
+    assert.equal(graph.projectCatalogComplete, false);
     assert.equal(graph.ideaCount, 0);
     assert.equal(graph.missingFromProjectReferenceCount, 0);
   } finally {
@@ -130,6 +132,7 @@ test("limita la muestra y clasifica referencias a ideas fuera del snapshot", asy
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(graph.catalogScope, "project");
+    assert.equal(graph.projectCatalogComplete, false);
     assert.equal(graph.ideaCount, 2_000);
     assert.equal(graph.omittedIdeaCount, 5);
     assert.equal(graph.weakComponentCount, 1_357);

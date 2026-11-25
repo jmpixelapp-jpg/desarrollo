@@ -1569,6 +1569,15 @@ test("sincroniza archivo y consolidación de biblioteca entre proyectos y proces
       "writer-sync-other", null, 50
     );
     assert.equal(privatePage.items.length, 0);
+  } catch (error) {
+    const diagnostic = [first, second]
+      .filter(Boolean)
+      .map((bridge, index) => "bridge-" + (index + 1) + " stderr:\\n" + bridge.getStderr())
+      .join("\\n");
+    throw new Error(
+      (error instanceof Error ? error.message : String(error)) +
+      (diagnostic ? "\\n" + diagnostic : "")
+    );
   } finally {
     if (first) {
       try {

@@ -291,6 +291,37 @@ test("rechaza fichas inexistentes y listas que superan el límite por categoría
   }
 });
 
+test("rechaza fichas inexistentes y listas que superan el límite por categoría", async () => {
+  const store = new AtomicIdeaStore(
+    [idea("source"), idea("idea-a")],
+    [entity("character-a", "Ana")]
+  );
+  const api = createApi(store);
+
+  try {
+    await assert.rejects(
+      api.synchronizeNarrativeIdeaLinks(
+        "source",
+        links([], []),
+        links([], ["missing-character"])
+      ),
+      /ficha de destino inexistente/
+    );
+    const tooManyIdeas = Array.from({ length: 501 }, (_, index) => "idea-" + index);
+    await assert.rejects(
+      api.synchronizeNarrativeIdeaLinks(
+        "source",
+        links([], []),
+        links(tooManyIdeas, [])
+      ),
+      /excede el límite/
+    );
+    assert.equal(store.writes, 0);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("una sincronización sin cambios es idempotente y no necesita CAS", async () => {
   const store = {
     ideas: [idea("source", { relatedIdeaIds: ["idea-a"] }), idea("idea-a")],

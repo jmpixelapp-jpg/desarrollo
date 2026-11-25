@@ -3241,7 +3241,7 @@ export class HostEngineApi {
       const targetExists = referenceKind === "relatedIdeaIds"
         ? this.narrativeIdeas.get(targetId)?.projectId === projectId
         : this.narrativeEntities.get(targetId)?.projectId === projectId;
-      const targetRequired = linked || referenceKind === "relatedEntityIds";
+      const targetRequired = linked;
       if (!idea || idea.projectId !== projectId || (targetRequired && !targetExists)) {
         if (referenceKind === "relatedEntityIds") {
           throw new Error("La idea y la entidad deben existir en el proyecto activo.");

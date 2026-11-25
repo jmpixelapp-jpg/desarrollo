@@ -3608,7 +3608,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const archiveStores = [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS];
-      if (db.objectStoreNames.contains(WRITER_LIBRARY_VERSIONS)) {
+      if (db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS)) {
         archiveStores.push(WRITER_LIBRARY_VERSIONS);
       }
       const transaction = db.transaction(archiveStores, "readwrite");
@@ -4246,7 +4246,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       throw new Error("Parámetros de paginación de biblioteca inválidos.");
     }
     const db = await this.open();
-    const versioned = db.objectStoreNames.contains(WRITER_LIBRARY_VERSIONS);
+    const versioned = Boolean(db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS));
     if (!versioned && cursor?.libraryVersion !== undefined) {
       throw new Error("Este almacén no admite continuar una lectura versionada de biblioteca.");
     }
@@ -4338,7 +4338,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                 !Number.isSafeInteger(stored.version) || (stored.version as number) < 0)) {
               throw new Error("La versión durable de la biblioteca del escritor está malformada.");
             }
-            libraryVersion = stored?.version as number | undefined ?? 0;
+            libraryVersion = stored ? stored.version as number : 0;
             if (cursor?.libraryVersion !== undefined && cursor.libraryVersion !== libraryVersion) {
               restartRequired = true;
               return;
@@ -4783,7 +4783,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       // La biblioteca se incluye incluso sin writerId para detectar
       // entradas archivadas que no podríamos mantener coherentes sin identidad.
       const stores = [ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS];
-      if (db.objectStoreNames.contains(WRITER_LIBRARY_VERSIONS)) {
+      if (db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS)) {
         stores.push(WRITER_LIBRARY_VERSIONS);
       }
       const transaction = db.transaction(stores, "readwrite");

@@ -4152,7 +4152,10 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.oncomplete = () => {
         if (!finished) {
           finished = true;
-          if (didChange) this.publishNarrativeChange(projectId);
+          if (didChange) {
+            this.publishNarrativeChange(projectId);
+            this.publishPersonalIdeaLibraryChange(writerId);
+          }
           resolve(archived);
         }
       };

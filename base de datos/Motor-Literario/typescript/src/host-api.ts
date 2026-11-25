@@ -2,7 +2,7 @@ import { analyzeLiteraryFragment, type LiteraryAnalysisResult } from "./literary
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
-  PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic
+  PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, ProjectFinalizationSummary, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput, DictionaryEntryEntityLink } from "./dictionaries";
@@ -3202,6 +3202,48 @@ export class HostEngineApi {
       } finally {
         // Un adaptador pudo confirmar la transacción y devolver una respuesta inválida.
         // Invalidar igualmente la caché evita exponer ideas que ya fueron transferidas.
+        this.narrativeIdeas.clear();
+        this.ideasLoaded = false;
+        this.ideaEvidenceIndex = undefined;
+        this.ideaLineIndex = undefined;
+      }
+    });
+    this.knowledgeTail = work.then(() => undefined, () => undefined);
+    return work;
+  }
+
+  /**
+   * Finaliza un libro sin devolver ni acumular el contenido transferido.
+   * El anfitrión obtiene las ideas con getPersonalIdeaLibraryPage().
+   */
+  async finalizeProjectToIdeaLibrary(): Promise<ProjectFinalizationSummary> {
+    const project = this.requireProject();
+    const writerId = this.requireWriterId();
+    const finalize = this.store.archiveUnincorporatedIdeasSummary;
+    if (!finalize) {
+      throw new Error("El almacenamiento no admite la finalización compacta de la biblioteca personal.");
+    }
+    await this.flushPendingChanges();
+    const work = this.knowledgeTail.then(async () => {
+      try {
+        const summary = await finalize.call(
+          this.store, project.projectId, writerId, project.projectName, Date.now()
+        );
+        if (!summary || summary.writerId !== writerId ||
+            summary.sourceProjectId !== project.projectId ||
+            summary.sourceProjectName !== project.projectName ||
+            !Number.isSafeInteger(summary.archivedCount) || summary.archivedCount < 0 ||
+            !Number.isFinite(summary.finalizedAt) || summary.finalizedAt < 0 ||
+            typeof summary.archiveChecksum !== "string" || !summary.archiveChecksum.trim()) {
+          throw new Error("Integridad de biblioteca: el resumen de finalización es inválido.");
+        }
+        if (summary.archivedCount > 0) {
+          try { this.onPersonalIdeaLibraryChanged?.(writerId); } catch (error) {
+            this.onKnowledgeError?.(error);
+          }
+        }
+        return { ...summary };
+      } finally {
         this.narrativeIdeas.clear();
         this.ideasLoaded = false;
         this.ideaEvidenceIndex = undefined;

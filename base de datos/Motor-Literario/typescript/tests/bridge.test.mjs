@@ -31,6 +31,7 @@ function startBridge(databasePath) {
 function waitForExit(child) {
   return new Promise(resolveExit => {
     if (child.exitCode !== null) return resolveExit(child.exitCode);
+    if (child.signalCode !== null) return resolveExit(128);
     child.once("exit", code => resolveExit(code));
   });
 }
@@ -259,6 +260,11 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
     await client.shutdown();
     assert.equal(await exited, 0);
   } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = waitForExit(child);
+      child.kill();
+      await exited;
+    }
     await rm(directory, { recursive: true, force: true });
   }
 });

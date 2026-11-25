@@ -70,7 +70,20 @@ test("rechaza historiales y relojes inválidos al calcular decisiones narrativas
   assert.throws(() => nextNarrativeIdeaStatusChangeAt(null, 1), /Historial o reloj/);
   assert.throws(() => nextNarrativeIdeaStatusChangeAt([], Number.NaN), /Historial o reloj/);
   assert.throws(() => nextNarrativeIdeaStatusChangeAt([], -1), /Historial o reloj/);
-  assert.throws(() => nextNarrativeIdeaStatusChangeAt([null], 1), /marca temporal inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([null], 1), /decisión narrativa inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt(["IDEA"], 1), /decisión narrativa inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([
+    { status: "IDEA", changedAt: 10 }
+  ], 1), /decisión narrativa inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([
+    { status: "pending", reason: "writer", changedAt: 10 }
+  ], 1), /decisión narrativa inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([
+    { status: "IDEA", reason: "import", changedAt: 10 }
+  ], 1), /decisión narrativa inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([
+    { status: "IDEA", reason: "initial", changedAt: "10" }
+  ], 1), /marca temporal inválida/);
   assert.throws(() => nextNarrativeIdeaStatusChangeAt([
     { status: "IDEA", reason: "initial", changedAt: Number.POSITIVE_INFINITY }
   ], 1), /marca temporal inválida/);

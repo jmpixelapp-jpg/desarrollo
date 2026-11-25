@@ -5076,7 +5076,13 @@ export class IndexedDbProjectStore implements ProjectStore {
       existingRequest.onsuccess = () => {
         const existing = existingRequest.result as StoredLiveAuthorMonitorCheckpoint | undefined;
         if (existing !== undefined) {
-          if (!existing || !Number.isFinite(existing.savedAt) || existing.savedAt < 0) {
+          try {
+            validateLiveAuthorMonitorCheckpoint(
+              existing,
+              checkpoint.projectId,
+              checkpoint.documentId
+            );
+          } catch {
             failure = new Error("El checkpoint existente del monitor está malformado.");
             try { transaction.abort(); } catch { /* transacción ya abortada */ }
             return;
@@ -5085,6 +5091,41 @@ export class IndexedDbProjectStore implements ProjectStore {
             failure = new Error("Se rechazó guardar un checkpoint anterior al ya persistido.");
             try { transaction.abort(); } catch { /* transacción ya abortada */ }
             return;
+          }
+          if (existing.revision > checkpoint.revision ||
+              existing.sequence > checkpoint.sequence) {
+            failure = new Error(
+              "Se rechazó guardar un checkpoint basado en una revisión o secuencia durable anterior."
+            );
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            return;
+          }
+          if (existing.sessionId === checkpoint.sessionId) {
+            const monotonicMetrics = [
+              "sessionDurationMs",
+              "activeDurationMs",
+              "idleDurationMs",
+              "pauseCount",
+              "acceptedChanges",
+              "rejectedChanges",
+              "committedChanges",
+              "failedChanges",
+              "insertedCharacters",
+              "deletedCharacters",
+              "resynchronizations",
+              "totalCommitLatencyMs"
+            ] as const;
+            const regressedMetric = monotonicMetrics.find(
+              key => checkpoint[key] < existing[key]
+            );
+            if (regressedMetric) {
+              failure = new Error(
+                "Se rechazó un checkpoint de la misma sesión que hace retroceder la métrica " +
+                regressedMetric + "."
+              );
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              return;
+            }
           }
         }
         try {

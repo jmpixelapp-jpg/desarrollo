@@ -3607,7 +3607,7 @@ function buildLiteraryIdeaGraph(
 
   const summarizeStatusHistory = (
     history: readonly NarrativeIdeaStatusChange[],
-    _currentStatus: NarrativeIdea["status"],
+    currentStatus: NarrativeIdea["status"],
     omittedCount: number
   ) => {
     const seenStatuses = new Set<NarrativeIdea["status"]>();

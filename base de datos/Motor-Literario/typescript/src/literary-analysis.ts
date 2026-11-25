@@ -4973,6 +4973,38 @@ function collectSensorySignals(
   });
 }
 
+function isValidNarrativeIdeaStatusHistory(
+  value: unknown,
+  currentStatus: NarrativeIdea["status"],
+  writerDecisionCount: number,
+  omittedStatusHistoryCount: number
+): value is readonly NarrativeIdeaStatusChange[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
+  let previousChangedAt: number | undefined;
+  for (let index = 0; index < value.length; index++) {
+    const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
+    if (!change ||
+        !["IDEA","incorporated","discarded"].includes(change.status) ||
+        !["initial","writer","text-revised"].includes(change.reason) ||
+        (index === 0
+          ? omittedStatusHistoryCount === 0
+            ? change.reason !== "initial"
+            : change.reason === "initial"
+          : change.reason === "initial") ||
+        (change.changedAt !== undefined &&
+          (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
+        (change.changedAt !== undefined && previousChangedAt !== undefined &&
+          change.changedAt < previousChangedAt)) {
+      return false;
+    }
+    if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+  }
+  return value[value.length - 1]?.status === currentStatus &&
+    writerDecisionCount >= value.filter(
+      (change: NarrativeIdeaStatusChange) => change.reason === "writer"
+    ).length;
+}
+
 function validateInput(input: LiteraryAnalysisInput): number {
   const baseOffset = input?.baseOffset ?? 0;
   if (!input || typeof input !== "object" ||
@@ -5124,23 +5156,14 @@ function validateInput(input: LiteraryAnalysisInput): number {
         idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
-        !Array.isArray(idea.statusHistory) || idea.statusHistory.length > 100 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
-        idea.writerDecisionCount < idea.statusHistory.filter(
-          (change: NarrativeIdeaStatusChange) => change.reason === "writer"
-        ).length ||
-        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
+        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0 ||
+        !isValidNarrativeIdeaStatusHistory(
+          idea.statusHistory,idea.status,idea.writerDecisionCount,idea.omittedStatusHistoryCount
+        )) {
       throw new Error("El catálogo global de ideas del análisis literario es inválido.");
     }
     projectIdeaIds.add(idea.ideaId);
-    for (const change of idea.statusHistory) {
-      if (!change || !["IDEA","incorporated","discarded"].includes(change.status) ||
-          !["initial","writer","text-revised"].includes(change.reason) ||
-          (change.changedAt !== undefined &&
-            (!Number.isFinite(change.changedAt) || change.changedAt < 0))) {
-        throw new Error("El historial de decisiones del catálogo global de ideas es inválido.");
-      }
-    }
   }
 
   const ideaIds = new Set<string>();
@@ -5163,12 +5186,11 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||
         idea.evidenceCount < idea.evidence.length ||
-        !Array.isArray(idea.statusHistory) || idea.statusHistory.length > 100 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
-        idea.writerDecisionCount < idea.statusHistory.filter(
-          (change: NarrativeIdeaStatusChange) => change.reason==="writer"
-        ).length ||
-        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
+        !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0 ||
+        !isValidNarrativeIdeaStatusHistory(
+          idea.statusHistory,idea.status,idea.writerDecisionCount,idea.omittedStatusHistoryCount
+        )) {
       throw new Error("El catálogo de ideas y decisiones del análisis literario es inválido.");
     }
     ideaIds.add(idea.ideaId);
@@ -5180,14 +5202,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
           typeof evidence.excerpt !== "string" ||
           (evidence.status !== undefined && evidence.status !== "stale")) {
         throw new Error("La evidencia de una idea vinculada es inválida.");
-      }
-    }
-    for (const change of idea.statusHistory) {
-      if (!change || !["IDEA","incorporated","discarded"].includes(change.status) ||
-          !["initial","writer","text-revised"].includes(change.reason) ||
-          (change.changedAt !== undefined &&
-            (!Number.isFinite(change.changedAt) || change.changedAt < 0))) {
-        throw new Error("El historial de decisiones de una idea vinculada es inválido.");
       }
     }
   }

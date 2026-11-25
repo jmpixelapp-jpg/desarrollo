@@ -99,6 +99,42 @@ test("memoiza el grafo completo, aísla las respuestas e invalida cambios estruc
   assert.equal(changed.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 1);
 });
 
+test("invalida la caché ante cambios de evidencia y decisiones editoriales", () => {
+  const original = {
+    ...idea("metadata-a", "memoria espejo luz"),
+    evidenceCount: 1,
+    staleEvidenceCount: 0,
+    writerDecisionCount: 1
+  };
+  const initial = analyzeGraph([original]);
+  assert.equal(initial.nodes[0].activeEvidenceCount, 1);
+  assert.equal(initial.nodes[0].writerDecisionCount, 1);
+  assert.equal(initial.statusProfiles[0].activeEvidenceCount, 1);
+  assert.equal(initial.statusProfiles[0].statusHistoryRecordCount, 1);
+
+  const revised = analyzeGraph([{
+    ...original,
+    evidenceCount: 4,
+    staleEvidenceCount: 2,
+    writerDecisionCount: 3,
+    omittedStatusHistoryCount: 1,
+    statusHistory: [
+      ...original.statusHistory,
+      { status: "IDEA", reason: "reconsidered", changedAt: 2 }
+    ]
+  }]);
+  assert.equal(revised.nodes[0].activeEvidenceCount, 4);
+  assert.equal(revised.nodes[0].staleEvidenceCount, 2);
+  assert.equal(revised.nodes[0].writerDecisionCount, 3);
+  assert.equal(revised.nodes[0].omittedStatusHistoryCount, 1);
+  assert.equal(revised.nodes[0].statusHistory.length, 2);
+  assert.equal(revised.statusProfiles[0].activeEvidenceCount, 4);
+  assert.equal(revised.statusProfiles[0].staleEvidenceCount, 2);
+  assert.equal(revised.statusProfiles[0].writerDecisionCount, 3);
+  assert.equal(revised.statusProfiles[0].statusHistoryRecordCount, 2);
+  assert.equal(revised.statusProfiles[0].omittedStatusHistoryCount, 1);
+});
+
 test("invalida la caché al cambiar el alcance o la integridad del catálogo", () => {
   const ideas = [
     { ...idea("scope-a", "memoria espejo luz"), relatedIdeaIds: ["outside"] }

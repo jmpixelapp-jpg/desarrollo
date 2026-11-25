@@ -84,6 +84,42 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
   }
 });
 
+test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
+  const api = new HostEngineApi({ store: { ...store, documents: new Map() } });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph-cache-isolation" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa instantánea debe permanecer aislada.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const first = await api.analyzeLiteraryDocument("chapter");
+    const firstOrigin = first.ideaGraph.nodes.find(node => node.ideaId === "origin");
+    const originalHistoryLength = firstOrigin.statusHistory.length;
+    const originalReferenceCount = first.ideaGraph.references.length;
+    firstOrigin.statusHistory.push({
+      status: "discarded",
+      reason: "external-mutation",
+      changedAt: 999
+    });
+    first.ideaGraph.references.push({
+      fromIdeaId: "external",
+      toIdeaId: "origin",
+      resolution: "included-in-snapshot"
+    });
+
+    const second = await api.analyzeLiteraryDocument("chapter");
+    const secondOrigin = second.ideaGraph.nodes.find(node => node.ideaId === "origin");
+    assert.equal(secondOrigin.statusHistory.length, originalHistoryLength);
+    assert.equal(secondOrigin.statusHistory.at(-1).changedAt, 1);
+    assert.equal(second.ideaGraph.references.length, originalReferenceCount);
+    assert.equal(second.ideaGraph.referenceCount, originalReferenceCount);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculadas", async () => {
   const api = new HostEngineApi({store});
   assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, true);

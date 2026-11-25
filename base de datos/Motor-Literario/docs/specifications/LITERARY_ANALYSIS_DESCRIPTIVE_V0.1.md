@@ -135,6 +135,16 @@ La serie `scenes` conserva una entrada por escena explícita. `evidenceRangeCoun
 
 El perfil describe la distribución de referencias de evidencia asociadas al mismo ID persistido. Que un acontecimiento tenga evidencia en varias escenas no demuestra que el suceso ocurra varias veces, que sean sucesos distintos, ni establece causalidad, orden temporal o continuidad factual. Tampoco determina presencia, acción o participación de personajes. Es una herramienta para localizar recurrencias documentales y discontinuidades que requieren revisión editorial.
 
+### Secuencias recurrentes de acontecimientos entre escenas
+
+La propiedad `sceneEventSequenceMotifs` compara ventanas móviles de dos y tres escenas explícitas contiguas. Para cada posición conserva el conjunto de IDs de acontecimientos que tienen evidencia enlazada en esa escena, ordenados por ID para que el orden del catálogo no altere la firma. Un conjunto vacío indica que no hubo vínculos de acontecimientos reconocidos en esa escena; no demuestra que no ocurriera ningún suceso.
+
+Cada motivo reúne firmas idénticas observadas en al menos dos ventanas. `sceneSequence` describe los IDs por posición relativa y `instances` informa los índices inicial y final de cada ventana coincidente. Se permiten ventanas solapadas. Se exponen como máximo veinte instancias por motivo y cincuenta motivos; `instancesTruncated` y `omittedMotifCount` muestran los recortes respectivos.
+
+El resumen informa `candidateWindowCount` (todas las ventanas contiguas posibles de dos o tres escenas), `analyzedWindowCount` (ventanas no vacías y con fuente completa), `emptyWindowCount` (ventanas sin ningún vínculo conocido) y `sourceTruncatedWindowCount` (ventanas que incluyen al menos una escena con más de cien vínculos). Las ventanas con alguna escena marcada `eventLinksTruncated` se excluyen, ya que los acontecimientos omitidos podrían cambiar la firma. Una ventana vacía se distingue de una ventana excluida por truncamiento.
+
+La firma representa conjuntos de IDs por escena, no el orden textual de los acontecimientos dentro de una misma escena. Por tanto, una coincidencia indica repetición de una estructura de vínculos de evidencia entre escenas; no prueba repetición material de sucesos, causalidad, secuencia temporal intradiegética, simultaneidad, interacción ni relación dramática. La ausencia de un vínculo conocido tampoco prueba ausencia del acontecimiento. Los IDs y las evidencias originales deben inspeccionarse antes de cualquier interpretación editorial.
+
 ### Cronología de evidencia de acontecimientos por participante
 
 La propiedad `characterEventEvidenceProfiles` agrupa, por ID de participante y de acontecimiento, las asociaciones declaradas en los vínculos de evidencia de las escenas explícitas. Cada perfil expone el número de escenas con evidencia, sus índices, la primera y última escena, los intervalos intermedios sin evidencia, el total de rangos de evidencia y en cuántas escenas vinculadas el nombre del participante también aparece literalmente. `canonicalName` usa el nombre conocido por el catálogo cuando existe en alguna escena del fragmento; si el participante solo está declarado por ID y nunca se reconoce su nombre, devuelve `null`.

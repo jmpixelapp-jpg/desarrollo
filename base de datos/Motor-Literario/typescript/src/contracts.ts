@@ -245,6 +245,13 @@ export interface ProjectStore {
   compactChanges?(projectId: string, documentId: string, throughSequence: number): Promise<void>;
   /** Guarda el snapshot y elimina los deltas incluidos en una sola transacción durable. */
   saveDocumentAndCompactChanges?(document: StoredDocument, throughSequence: number): Promise<void>;
+  /** Guarda y recupera checkpoints de métricas del autor sin texto del manuscrito. */
+  saveLiveAuthorMonitorCheckpoint?(checkpoint: StoredLiveAuthorMonitorCheckpoint): Promise<void>;
+  loadLiveAuthorMonitorCheckpoint?(
+    projectId: string,
+    documentId: string
+  ): Promise<StoredLiveAuthorMonitorCheckpoint | undefined>;
+  deleteLiveAuthorMonitorCheckpoint?(projectId: string, documentId: string): Promise<void>;
   /** Guarda y recupera diagnósticos asociados a una revisión exacta. */
   saveDiagnostics?(diagnostics: StoredDiagnostics): Promise<void>;
   loadDiagnostics?(projectId: string, documentId: string): Promise<StoredDiagnostics | undefined>;

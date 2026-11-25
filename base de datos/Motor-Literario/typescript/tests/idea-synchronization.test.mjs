@@ -8,7 +8,9 @@ const projectName = "Libro de sincronización";
 const idea = (id, extra = {}) => ({
   projectId, id, text: "La luz conduce a una revelación.", status: "IDEA",
   originDocumentId: "chapter-1", sourceProjectName: projectName,
-  evidence: [], relatedEntityIds: [], relatedIdeaIds: [], ...extra
+  evidence: [], relatedEntityIds: [], relatedIdeaIds: [],
+  statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+  ...extra
 });
 const entity = (id, name) => ({
   projectId, id, kind: "character", canonicalName: name,

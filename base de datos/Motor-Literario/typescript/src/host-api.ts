@@ -1609,9 +1609,8 @@ export class HostEngineApi {
           omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
         };
       });
-    const linkedIdeas = projectIdeas
-      .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)))
-      .sort((a,b) => a.id.localeCompare(b.id,"en"));
+    const linkedIdeas = orderedProjectIdeas
+      .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => characterIds.has(entityId)));
     const knownIdeasOmittedCount=Math.max(0,linkedIdeas.length-2_000);
     const knownIdeas=linkedIdeas.slice(0,2_000).map(idea => {
       const activeEvidence=idea.evidence.filter(evidence => evidence.status !== "stale");

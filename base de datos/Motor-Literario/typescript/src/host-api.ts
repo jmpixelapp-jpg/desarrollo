@@ -617,6 +617,7 @@ export class HostEngineApi {
   private readonly documentDiagnostics = new Map<string, StoredDiagnostics>();
   private readonly liveSubmissionTimes = new Map<string, number>();
   private readonly liveMonitorCheckpointTails = new Map<string, Promise<void>>();
+  private readonly liveMonitorCheckpointErrors = new Map<string, unknown>();
   private readonly liveMetrics = {
     completedAnalyses: 0,
     failedAnalyses: 0,
@@ -4023,7 +4024,7 @@ export class HostEngineApi {
       throw new Error("No se puede cerrar el monitor mientras el documento no sea durable y esté sincronizado.");
     }
     const queuedCheckpoint = this.liveMonitorCheckpointTails.get(documentId);
-    if (queuedCheckpoint) await queuedCheckpoint;
+    if (queuedCheckpoint) await queuedCheckpoint.catch(() => undefined);
     const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
     if (!checkpoint) {
       throw new Error("No se puede cerrar el monitor con cambios pendientes o métricas que requieren resincronización.");
@@ -4039,6 +4040,13 @@ export class HostEngineApi {
   async disposeSafely(): Promise<void> {
     await this.flushPendingChanges();
     await Promise.all([...this.liveMonitorCheckpointTails.values()]);
+    if (this.liveMonitorCheckpointErrors.size > 0) {
+      const firstError = this.liveMonitorCheckpointErrors.values().next().value as unknown;
+      throw new Error(
+        "No se puede disponer el HostEngineApi: hay checkpoints del monitor que no pudieron persistirse.",
+        { cause: firstError }
+      );
+    }
     this.dispose();
   }
 
@@ -4068,7 +4076,13 @@ export class HostEngineApi {
   ): Promise<void> {
     const save = this.store.saveLiveAuthorMonitorCheckpoint;
     if (!save) throw new Error("El almacén no implementa persistencia de checkpoints del monitor.");
-    await save.call(this.store, checkpoint);
+    try {
+      await save.call(this.store, checkpoint);
+      this.liveMonitorCheckpointErrors.delete(checkpoint.documentId);
+    } catch (error) {
+      this.liveMonitorCheckpointErrors.set(checkpoint.documentId, error);
+      throw error;
+    }
   }
 
   /** Permite al anfitrión esperar la persistencia de todos los cambios admitidos. */

@@ -10402,6 +10402,50 @@ test("resume el ritmo de cada escena y compara sus cambios por separado de las s
   assert.equal(second.voiceSignals.counts.thirdPerson,1);
 });
 
+test("detecta cadencias alternantes, progresivas y estables dentro de cada escena", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const sentence = count => Array.from({length:count},() => "palabra").join(" ") + ".";
+  const text = [
+    "ESCENA 1",
+    sentence(3),sentence(25),sentence(4),sentence(26),sentence(5),
+    "***",
+    "ESCENA 2",
+    sentence(3),sentence(9),sentence(19),sentence(29),
+    "***",
+    "ESCENA 3",
+    sentence(3),sentence(4),sentence(7)
+  ].join("\n");
+  const baseOffset = 900;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-cadence",documentId:"chapter",revision:3,text,baseOffset
+  });
+  const [alternating,ascending,stable] = result.explicitScenes.map(scene => scene.rhythmSignals.cadence);
+
+  assert.deepEqual(alternating.sentenceBandCounts,{short:3,medium:0,long:2});
+  assert.equal(alternating.bandTransitionCounts.shortToLong,2);
+  assert.equal(alternating.bandTransitionCounts.longToShort,2);
+  assert.equal(alternating.patternCount,1);
+  assert.equal(alternating.patterns[0].patternType,"alternating-length-band-run");
+  assert.equal(alternating.patterns[0].fromSentenceIndex,1);
+  assert.equal(alternating.patterns[0].toSentenceIndex,5);
+  assert.deepEqual(alternating.patterns[0].sentenceWordCounts,[3,25,4,26,5]);
+  assert.equal(alternating.patterns[0].occurrences[0].start,
+    baseOffset+text.indexOf(sentence(3)));
+
+  assert.equal(ascending.patternCount,1);
+  assert.equal(ascending.patterns[0].patternType,"ascending-length-run");
+  assert.deepEqual(ascending.patterns[0].sentenceWordCounts,[3,9,19,29]);
+
+  assert.equal(stable.patternCount,1);
+  assert.equal(stable.patterns[0].patternType,"stable-length-band-run");
+  assert.equal(stable.patterns[0].sentenceCount,3);
+  assert.deepEqual(stable.patterns[0].lengthBands,["short","short","short"]);
+
+  assert.equal(result.explicitScenes[0].voiceSignals.classification,"undetermined");
+  assert.equal(result.explicitScenes[0].rhythmSignals.cadence.sentenceCount,5);
+  assert.equal(result.sceneVoiceTransitions.length,2);
+});
+
 test("detecta tramos estables y alternancias de señales gramaticales entre escenas", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

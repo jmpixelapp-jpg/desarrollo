@@ -325,6 +325,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Presencia literal de personajes conocidos del proyecto en cada escena, usando nombres y alias no ambiguos con evidencias UTF-16.
 - Señales gramaticales de primera, segunda y tercera persona por escena explícita, excluyendo los tramos de diálogo reconocidos y conservando muestras UTF-16.
 - Perfil de ritmo para cada escena: media, mediana, dispersión, distribución de longitudes y contrastes entre oraciones consecutivas con offsets UTF-16.
+- Indicadores de cadencia por escena: bandas de longitud, transiciones entre bandas y patrones estables, alternantes o progresivos, con muestras de oraciones y ocurrencias UTF-16.
 - Comparación de variaciones métricas de ritmo entre escenas contiguas, separada de las comparaciones gramaticales y sin inferir por sí sola tensión o cambio de voz.
 - Comparación de variaciones entre escenas contiguas: cambio de clasificación, diferencias de conteos por persona y categorías modificadas, sin diagnosticar cambios de narrador.
 - Perfil agregado de señales por escena: totales por categoría, distribución de clasificaciones, cobertura y secuencia de instantáneas en orden textual.

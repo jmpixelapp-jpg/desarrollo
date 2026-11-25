@@ -125,8 +125,48 @@ export interface LiteraryRhythmTransition {
   readonly occurrences: readonly [LiteraryAnalysisOccurrence, LiteraryAnalysisOccurrence];
 }
 export type LiteraryRhythmProfile = "fragmented" | "balanced" | "extended" | "insufficient-text";
+export type LiterarySentenceLengthBand = "short" | "medium" | "long";
+export type LiterarySceneCadencePatternType =
+  | "stable-length-band-run"
+  | "alternating-length-band-run"
+  | "ascending-length-run"
+  | "descending-length-run";
+export interface LiterarySceneCadencePattern {
+  readonly patternType: LiterarySceneCadencePatternType;
+  readonly fromSentenceIndex: number;
+  readonly toSentenceIndex: number;
+  readonly sentenceCount: number;
+  /** Muestras alineadas y limitadas a las primeras 40 oraciones del patrón. */
+  readonly sentenceWordCounts: readonly number[];
+  readonly lengthBands: readonly LiterarySentenceLengthBand[];
+  readonly occurrences: readonly LiteraryAnalysisOccurrence[];
+  readonly evidenceTruncated: boolean;
+}
+export interface LiterarySceneCadenceProfile {
+  readonly sentenceCount: number;
+  readonly sentenceBandCounts: {
+    readonly short: number;
+    readonly medium: number;
+    readonly long: number;
+  };
+  readonly bandTransitionCounts: {
+    readonly shortToShort: number;
+    readonly shortToMedium: number;
+    readonly shortToLong: number;
+    readonly mediumToShort: number;
+    readonly mediumToMedium: number;
+    readonly mediumToLong: number;
+    readonly longToShort: number;
+    readonly longToMedium: number;
+    readonly longToLong: number;
+  };
+  readonly patternCount: number;
+  /** Patrones ordenados por posición; se devuelven como máximo 20. */
+  readonly patterns: readonly LiterarySceneCadencePattern[];
+}
 export interface LiterarySceneRhythmProfile {
   readonly sentenceCount: number;
+  readonly cadence: LiterarySceneCadenceProfile;
   readonly averageWordsPerSentence: number;
   readonly medianWordsPerSentence: number;
   /** Desviación estándar poblacional de la longitud de las oraciones de esta escena. */
@@ -1316,7 +1356,111 @@ function summarizeSceneRhythm(
     mediumSentenceCount:sentenceWordCounts.filter(count => count >= 9 && count <= 24).length,
     longSentenceCount:sentenceWordCounts.filter(count => count >= 25).length,
     rhythmProfile,
-    transitions:findRhythmTransitions(sentenceRanges,sentenceWordCounts,baseOffset)
+    transitions:findRhythmTransitions(sentenceRanges,sentenceWordCounts,baseOffset),
+    cadence:buildSceneCadence(sentenceRanges,sentenceWordCounts,baseOffset)
+  };
+}
+
+function getSentenceLengthBand(wordCount: number): LiterarySentenceLengthBand {
+  if (wordCount <= 8) return "short";
+  if (wordCount <= 24) return "medium";
+  return "long";
+}
+
+function buildSceneCadence(
+  sentenceRanges: readonly LocalRange[],
+  sentenceWordCounts: readonly number[],
+  baseOffset: number
+): LiterarySceneCadenceProfile {
+  const bands = sentenceWordCounts.map(getSentenceLengthBand);
+  const sentenceBandCounts = {
+    short:bands.filter(band => band === "short").length,
+    medium:bands.filter(band => band === "medium").length,
+    long:bands.filter(band => band === "long").length
+  };
+  const bandTransitionCounts = {
+    shortToShort:0, shortToMedium:0, shortToLong:0,
+    mediumToShort:0, mediumToMedium:0, mediumToLong:0,
+    longToShort:0, longToMedium:0, longToLong:0
+  };
+  for (let index=0; index+1<bands.length; index++) {
+    const previous = bands[index]!;
+    const next = bands[index+1]!;
+    const key = `${previous}To${next[0]!.toLocaleUpperCase("en")}${next.slice(1)}` as keyof typeof bandTransitionCounts;
+    bandTransitionCounts[key]++;
+  }
+
+  const patterns: LiterarySceneCadencePattern[] = [];
+  const addPattern = (
+    patternType: LiterarySceneCadencePatternType,
+    start: number,
+    end: number
+  ) => {
+    const sampleEnd = Math.min(end,start+40);
+    patterns.push({
+      patternType,
+      fromSentenceIndex:start+1,
+      toSentenceIndex:end,
+      sentenceCount:end-start,
+      sentenceWordCounts:sentenceWordCounts.slice(start,sampleEnd),
+      lengthBands:bands.slice(start,sampleEnd),
+      occurrences:sentenceRanges.slice(start,sampleEnd).map(range => ({
+        start:baseOffset+range.start,
+        end:baseOffset+range.end
+      })),
+      evidenceTruncated:end-start>40
+    });
+  };
+
+  let index=0;
+  while (index<bands.length) {
+    let end=index+1;
+    while (end<bands.length && bands[end]===bands[index]) end++;
+    if (end-index>=3) addPattern("stable-length-band-run",index,end);
+    index=end;
+  }
+
+  index=0;
+  while (index+3<bands.length) {
+    if (bands[index]===bands[index+1]) { index++; continue; }
+    let end=index+2;
+    while (end<bands.length && bands[end]===bands[end-2]) end++;
+    if (end-index>=4) {
+      addPattern("alternating-length-band-run",index,end);
+      index=end;
+    } else index++;
+  }
+
+  for (const direction of [1,-1] as const) {
+    index=0;
+    while (index+2<sentenceWordCounts.length) {
+      const firstStep=(sentenceWordCounts[index+1]??0)-(sentenceWordCounts[index]??0);
+      if (direction*firstStep<2) { index++; continue; }
+      let end=index+2;
+      while (end<sentenceWordCounts.length) {
+        const step=(sentenceWordCounts[end]??0)-(sentenceWordCounts[end-1]??0);
+        if (direction*step<2) break;
+        end++;
+      }
+      const totalChange=(sentenceWordCounts[end-1]??0)-(sentenceWordCounts[index]??0);
+      if (end-index>=3 && direction*totalChange>=8) {
+        addPattern(direction===1?"ascending-length-run":"descending-length-run",index,end);
+        index=end;
+      } else index++;
+    }
+  }
+
+  patterns.sort((a,b) =>
+    a.fromSentenceIndex-b.fromSentenceIndex ||
+    a.toSentenceIndex-b.toSentenceIndex ||
+    a.patternType.localeCompare(b.patternType,"en")
+  );
+  return {
+    sentenceCount:sentenceWordCounts.length,
+    sentenceBandCounts,
+    bandTransitionCounts,
+    patternCount:patterns.length,
+    patterns:patterns.slice(0,20)
   };
 }
 

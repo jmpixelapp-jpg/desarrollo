@@ -35,12 +35,12 @@ function analyzeGraph(ideas, options = {}) {
     documentId: "chapter-1",
     revision: 1,
     text: "Fragmento narrativo de prueba.",
-    ...(options.projectCatalog
-      ? { knownProjectIdeas: ideas }
-      : { knownIdeas: ideas }),
-    ...(options.projectCatalog
-      ? { knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0 }
-      : { knownIdeasOmittedCount: options.omittedIdeaCount ?? 0 })
+    ...(options.projectCatalog === false
+      ? { knownIdeas: ideas }
+      : { knownProjectIdeas: ideas }),
+    ...(options.projectCatalog === false
+      ? { knownIdeasOmittedCount: options.omittedIdeaCount ?? 0 }
+      : { knownProjectIdeasOmittedCount: options.omittedIdeaCount ?? 0 })
   }).ideaGraph;
 }
 

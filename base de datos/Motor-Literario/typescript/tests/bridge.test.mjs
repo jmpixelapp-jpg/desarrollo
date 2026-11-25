@@ -1065,12 +1065,12 @@ test("SQLite guarda cada cambio de acontecimiento junto con su historial append-
       id: original.id + ":v3",
       eventId: original.id,
       revision: 3,
-      previousLabel: "Etiqueta anterior incorrecta",
+      previousLabel: secondUpdate.label,
       newLabel: invalidEvent.label,
       previousParticipants: [],
       newParticipants: [],
       changedBy: "writer-event-history",
-      changedAt: 300
+      changedAt: 150
     };
     assert.throws(
       () => store.saveEventAndAppendLifecycleIfUnchanged(

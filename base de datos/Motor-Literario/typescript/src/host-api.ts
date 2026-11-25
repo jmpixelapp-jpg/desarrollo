@@ -1656,6 +1656,64 @@ export class HostEngineApi {
         }))
       };
     });
+    const knownCharacterIds = new Set(knownCharacters.map(character => character.entityId));
+    const narrativeRelations = this.store.loadRelations
+      ? await this.getNarrativeRelations()
+      : [];
+    const orderedRelations = [...narrativeRelations]
+      .sort((a,b) => a.id.localeCompare(b.id,"en"));
+    const knownRelationsOmittedCount = Math.max(0,orderedRelations.length-2_000);
+    const knownRelations = orderedRelations.slice(0,2_000).map(relation => {
+      const activeEvidence = relation.evidence.filter(evidence => evidence.status !== "stale");
+      return {
+        projectId:relation.projectId,
+        relationId:relation.id,
+        fromEntityId:relation.fromEntityId,
+        toEntityId:relation.toEntityId,
+        relationType:relation.relationType,
+        evidenceCount:activeEvidence.length,
+        staleEvidenceCount:relation.evidence.length-activeEvidence.length,
+        evidence:activeEvidence.slice(0,20).map(evidence => ({
+          documentId:evidence.documentId,
+          revision:evidence.revision,
+          start:evidence.start,
+          end:evidence.end,
+          excerpt:evidence.excerpt
+        }))
+      };
+    });
+    const narrativeIdeas = this.store.loadIdeas
+      ? await this.getNarrativeIdeas()
+      : [];
+    const linkedIdeas = narrativeIdeas
+      .filter(idea => (idea.relatedEntityIds ?? []).some(entityId => knownCharacterIds.has(entityId)))
+      .sort((a,b) => a.id.localeCompare(b.id,"en"));
+    const knownIdeasOmittedCount = Math.max(0,linkedIdeas.length-2_000);
+    const knownIdeas = linkedIdeas.slice(0,2_000).map(idea => {
+      const activeEvidence = idea.evidence.filter(evidence => evidence.status !== "stale");
+      const statusHistory = idea.statusHistory ?? [];
+      return {
+        projectId:idea.projectId,
+        ideaId:idea.id,
+        text:idea.text,
+        status:idea.status,
+        originDocumentId:idea.originDocumentId,
+        sourceProjectName:idea.sourceProjectName,
+        relatedEntityIds:(idea.relatedEntityIds ?? []).filter(entityId => knownCharacterIds.has(entityId)),
+        relatedIdeaIds:idea.relatedIdeaIds ?? [],
+        evidenceCount:activeEvidence.length,
+        staleEvidenceCount:idea.evidence.length-activeEvidence.length,
+        evidence:activeEvidence.slice(0,20).map(evidence => ({
+          documentId:evidence.documentId,
+          revision:evidence.revision,
+          start:evidence.start,
+          end:evidence.end,
+          excerpt:evidence.excerpt
+        })),
+        statusHistory:statusHistory.slice(-100),
+        omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
+      };
+    });
     const knownEvents = narrativeEvents
       .map(event => ({
         eventId:event.id,
@@ -1707,7 +1765,11 @@ export class HostEngineApi {
       knownProjectEvents,
       knownProjectEventsOmittedCount,
       knownEventLifecycles,
-      knownAssertions
+      knownAssertions,
+      knownRelations,
+      knownRelationsOmittedCount,
+      knownIdeas,
+      knownIdeasOmittedCount
     });
   }
 

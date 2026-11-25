@@ -210,3 +210,53 @@ test("procesa una cadena dirigida de 2.000 ideas sin clasificarla como ciclo", a
     api.dispose();
   }
 });
+
+test("agrupa referencias densas sin perder la cobertura ni duplicar ciclos", async () => {
+  const denseStore = {
+    ...store,
+    documents: new Map(),
+    ideas: Array.from({ length: 2_000 }, (_, index) => ({
+      projectId,
+      id: "dense-" + String(index).padStart(4, "0"),
+      text: "Idea densa " + index,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: Array.from({ length: 50 }, (_, offset) =>
+        "dense-" + String((index + offset + 1) % 2_000).padStart(4, "0")
+      ),
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }))
+  };
+  const api = new HostEngineApi({ store: denseStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-dense" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\nLa red se expande.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.projectCatalogComplete, true);
+    assert.equal(graph.ideaCount, 2_000);
+    assert.equal(graph.referenceCount, 100_000);
+    assert.equal(graph.includedReferenceCount, 100_000);
+    assert.equal(graph.notIncludedReferenceCount, 0);
+    assert.equal(graph.referenceSampleCount, 5_000);
+    assert.equal(graph.omittedReferenceSampleCount, 95_000);
+    assert.equal(graph.referencesTruncated, true);
+    assert.equal(graph.sourceNodeCount, 0);
+    assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
+    assert.equal(graph.reciprocalReferencePairCount, 0);
+    assert.equal(graph.weakComponentCount, 1);
+    assert.equal(graph.largestWeakComponentSize, 2_000);
+    assert.equal(graph.cycleCount, 1);
+    assert.equal(graph.omittedCycleCount, 0);
+    assert.equal(graph.cycles[0].ideaIds.length, 2_000);
+  } finally {
+    api.dispose();
+  }
+});

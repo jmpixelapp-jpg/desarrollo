@@ -308,6 +308,29 @@ export class MotorLiterarioBridgeClient {
     });
   }
 
+  getEventLifecycleHistory(projectId: string, eventId: string): Promise<unknown> {
+    return this.request("project.call", {
+      projectId,
+      method: "getEventLifecycleHistory",
+      args: [eventId]
+    });
+  }
+
+  updateNarrativeEvent(projectId: string, input: {
+    eventId: string;
+    label?: string;
+    participants?: readonly string[];
+    changedBy: string;
+    changeReason?: string | null;
+    changedAt?: number;
+  }): Promise<unknown> {
+    return this.request("project.call", {
+      projectId,
+      method: "updateNarrativeEvent",
+      args: [input]
+    });
+  }
+
   async flushProject(projectId: string): Promise<void> {
     await this.request("engine.flush", { projectId });
   }

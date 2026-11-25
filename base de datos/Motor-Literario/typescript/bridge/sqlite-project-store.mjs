@@ -232,7 +232,7 @@ function validateNarrativeIdeaReferenceLimit(idea) {
         (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES)) {
       throw new Error(
         "Una idea no puede conservar más de " + MAX_NARRATIVE_IDEA_REFERENCES +
-        " vínculos por categoría."
+        " vínculos explícitos en total."
       );
     }
   }

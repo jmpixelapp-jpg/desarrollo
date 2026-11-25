@@ -302,3 +302,11 @@ La API del anfitrión expone `getProjectRecords`/`saveProjectRecord`, `getRecord
 
 Las entradas de diccionario conservan los IDs de fichas relacionadas y validan que pertenezcan al mismo libro. El esquema lógico exige además un `link_kind`, un `provenance_kind` y un `created_at` independientes para cada vínculo; esos tres valores aún no se guardan por vínculo. No se reconstruyen a partir de datos que no los contienen, por lo que `dictionary_entry_entities` figura como parcial en el manifiesto.
 
+
+
+### Vínculos de diccionario con metadatos propios (IndexedDB 21)
+
+Los vínculos nuevos o confirmados se guardan en `dictionary-entry-entities`, con `linkKind`, `provenanceKind` y `createdAt` por cada par entrada/ficha. `setDictionaryEntryEntityLink` actualiza en una misma transacción el registro del vínculo y la proyección de IDs de la entrada; `getDictionaryEntryEntityLinks` permite recuperar los metadatos. Se puede proporcionar el tipo de vínculo, la procedencia y la fecha; la acción manual usa `RELATED` y `WRITER` como valores predeterminados explícitos.
+
+Los vínculos heredados que solo contienen IDs se conservan para compatibilidad. No se inventan para ellos fechas ni procedencias históricas; por eso la tabla lógica permanece parcial hasta que esos vínculos se re-confirmen con sus metadatos.
+

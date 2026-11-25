@@ -146,13 +146,14 @@ test("cada tabla lógica tiene una correspondencia física declarada y con ámbi
   }
 });
 
-test("el modelo declara parcial la relación de diccionario mientras falten metadatos por vínculo", () => {
+test("el modelo declara el almacén de metadatos por vínculo y conserva el legado como parcial", () => {
   const mapping = storageMapping.entries.find((entry) => entry.table === "dictionary_entry_entities");
-  assert.equal(mapping.representation, "embedded");
+  assert.equal(mapping.representation, "record");
   assert.equal(mapping.implementationStatus, "partial");
-  assert.ok(mapping.contract.includes("link_kind"));
-  assert.ok(mapping.contract.includes("provenance_kind"));
-  assert.ok(mapping.contract.includes("created_at"));
+  assert.ok(mapping.objectStores.includes("dictionary-entry-entities"));
+  assert.ok(mapping.contract.includes("linkKind"));
+  assert.ok(mapping.contract.includes("provenanceKind"));
+  assert.ok(mapping.contract.includes("createdAt"));
 });
 
 

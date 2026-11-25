@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 8,
+  "mapping_version": 9,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 20,
+    "database_version": 21,
     "object_stores": [
       {
         "name": "project-settings",
@@ -744,6 +744,37 @@
             false
           ]
         ]
+      },
+      {
+        "name": "dictionary-entry-entities",
+        "keyPath": [
+          "projectId",
+          "entryId",
+          "recordId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-entry",
+            [
+              "projectId",
+              "entryId"
+            ],
+            false
+          ],
+          [
+            "by-record",
+            [
+              "projectId",
+              "recordId"
+            ],
+            false
+          ]
+        ]
       }
     ]
   },
@@ -1204,12 +1235,20 @@
       "keyPrefixes": [
         "project/dictionary-entries/related-entities/"
       ],
-      "representation": "embedded",
-      "contract": "DictionaryEntry.relatedEntityIds permite crear y validar vínculos explícitos con fichas del mismo proyecto, pero no conserva aún por cada vínculo link_kind, provenance_kind y created_at exigidos por el esquema lógico. No se atribuyen esos metadatos por inferencia; la tabla queda parcial hasta incorporarlos.",
+      "representation": "record",
+      "contract": "Los vínculos creados o confirmados desde DB21 se persisten como DictionaryEntryEntityLink con linkKind, provenanceKind y createdAt propios; la operación setDictionaryEntryEntityLink actualiza en una transacción el vínculo y DictionaryEntry.relatedEntityIds. Los vínculos anteriores que solo conservan IDs se mantienen como legado sin reconstruir metadatos históricos inexistentes; la tabla queda partial hasta su revisión o re-confirmación.",
       "implementationStatus": "partial",
       "objectStores": [
+        "dictionary-entry-entities",
         "dictionary-entries",
         "narrative-entities"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "entryId",
+          "recordId"
+        ]
       ]
     },
     {

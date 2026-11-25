@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `20`.
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `21`.
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -24,6 +24,7 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
 | `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |
 | `dictionary-entries` | `[projectId, id]` | `by-project`, `by-dictionary`, `by-dictionary-normalized` único | Entradas, atributos JSON y vínculos con entidades |
+| `dictionary-entry-entities` | `[projectId, entryId, recordId]` | `by-project`, `by-entry`, `by-record` | Metadatos de cada vínculo: tipo, procedencia y fecha |
 | `manuscript-fragments` | `[projectId, id]` | `by-project`, `by-document-revision`, `by-parent` | Fragmentos con offsets UTF-16, revisión y jerarquía |
 | `record-attributes` | `[projectId, id]` | `by-project`, `by-record-key` | Atributos JSON extensibles de fichas |
 | `relation-attributes` | `[projectId, id]` | `by-project`, `by-relation-key` | Atributos JSON extensibles de relaciones |
@@ -66,13 +67,13 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `schema_migrations` | `schema-migrations` | Implementado desde DB18; cada actualización escribe un recibo con versiones y checksum |
 | `project_dictionaries` | `project-dictionaries` | Implementado; unicidad por proyecto, idioma y nombre normalizado |
 | `dictionary_entries` | `dictionary-entries` | Implementado; actualización comparada y forma normalizada única |
-| `dictionary_entry_entities` | `DictionaryEntry.relatedEntityIds` embebido | Parcial; valida el vínculo por libro, pero aún no persiste `link_kind`, `provenance_kind` y `created_at` por vínculo |
+| `dictionary_entry_entities` | `dictionary-entry-entities` + proyección `relatedEntityIds` | Parcial; DB21 persiste metadatos para vínculos nuevos/confirmados; los vínculos heredados por IDs no se completan con metadatos inventados |
 | `record_lifecycles` | `record-lifecycles` | Implementado; historial append-only con continuidad de revisión |
 | `relation_lifecycles` | `relation-lifecycles` | Implementado; historial append-only con continuidad de revisión |
 | `writer_library_ideas` | `personal-idea-library` | Implementado con transacción de transferencia |
 | `writer_library_finalization_receipts` | `writer-library-finalization-receipts` | Implementado; recibo idempotente con checksum y transferencia en la misma transacción |
 
-La única tabla lógica que permanece parcial es `dictionary_entry_entities`: los vínculos por ID ya se guardan y validan por libro, pero el modelo actual no almacena el tipo, la procedencia y la fecha propios de cada vínculo. No se inventan estos metadatos para registros anteriores.
+La única tabla lógica que permanece parcial es `dictionary_entry_entities`: desde DB21 los vínculos nuevos/confirmados guardan tipo, procedencia y fecha por separado y se actualizan atómicamente; los vínculos heredados que solo tenían IDs se conservan sin inventar sus metadatos históricos.
 
 El archivo `storage_mapping_v0.4.1.json` es la fuente verificable del mapeo: contiene todas las tablas, el ámbito lógico, el ámbito físico, prefijos, representación, contrato TypeScript y estado de implementación. El validador falla cuando falta una tabla, hay una tabla extra, se repite una entrada o el ámbito/contrato/representación es inválido.
 

@@ -1,4 +1,5 @@
 import type { PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage } from "./contracts";
+import type { RecordLifecycle, RelationLifecycle } from "./project-data";
 
 export interface BridgeReadable {
   on(event: "data" | "error", listener: (value: unknown) => void): unknown;
@@ -305,6 +306,44 @@ export class MotorLiterarioBridgeClient {
       projectId,
       method: "getPersonalIdeaLibraryPage",
       args: [cursor, limit]
+    });
+  }
+
+  getRecordLifecycleHistory(projectId: string, recordId: string): Promise<readonly RecordLifecycle[]> {
+    return this.request("project.call", {
+      projectId,
+      method: "getRecordLifecycleHistory",
+      args: [recordId]
+    });
+  }
+
+  appendRecordLifecycle(
+    projectId: string,
+    input: Omit<RecordLifecycle, "projectId">
+  ): Promise<RecordLifecycle> {
+    return this.request("project.call", {
+      projectId,
+      method: "appendRecordLifecycle",
+      args: [input]
+    });
+  }
+
+  getRelationLifecycleHistory(projectId: string, relationId: string): Promise<readonly RelationLifecycle[]> {
+    return this.request("project.call", {
+      projectId,
+      method: "getRelationLifecycleHistory",
+      args: [relationId]
+    });
+  }
+
+  appendRelationLifecycle(
+    projectId: string,
+    input: Omit<RelationLifecycle, "projectId">
+  ): Promise<RelationLifecycle> {
+    return this.request("project.call", {
+      projectId,
+      method: "appendRelationLifecycle",
+      args: [input]
     });
   }
 

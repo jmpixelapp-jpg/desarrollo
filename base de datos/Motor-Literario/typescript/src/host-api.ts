@@ -2682,6 +2682,36 @@ export class HostEngineApi {
     });
   }
 
+  /**
+   * Descarta las cachés narrativas de esta instancia para recoger cambios
+   * confirmados por otras instancias que comparten el mismo almacenamiento.
+   * No borra datos; las siguientes consultas vuelven a leer el estado durable.
+   */
+  async refreshNarrativeKnowledge(): Promise<void> {
+    await this.liveAnalysisTail;
+    await this.flushPendingChanges();
+    await this.enqueueKnowledgeOperation(async () => {
+      this.narrativeEntities.clear();
+      this.narrativeRelations.clear();
+      this.narrativeEvents.clear();
+      this.narrativeIdeas.clear();
+      this.narrativeAssertions.clear();
+      this.entitiesLoaded = false;
+      this.relationsLoaded = false;
+      this.eventsLoaded = false;
+      this.ideasLoaded = false;
+      this.assertionsLoaded = false;
+      this.entityEvidenceIndex = undefined;
+      this.relationEvidenceIndex = undefined;
+      this.eventEvidenceIndex = undefined;
+      this.ideaEvidenceIndex = undefined;
+      this.assertionEvidenceIndex = undefined;
+      this.eventLineIndex = undefined;
+      this.ideaLineIndex = undefined;
+      this.entityNameIndex = undefined;
+    });
+  }
+
   async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;

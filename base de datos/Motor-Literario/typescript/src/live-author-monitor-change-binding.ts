@@ -96,6 +96,7 @@ export function bindLiveAuthorMonitorEditorChanges(
   let disposed = false;
   let retrying = false;
   let pendingReason: LiveAuthorMonitorBackpressureReason | undefined;
+  let lastPublishedBackpressure: LiveAuthorMonitorBackpressureSnapshot | undefined;
   const pending: EditorChange[] = [];
 
   const reportError = (error: unknown, change: EditorChange): void => {
@@ -123,6 +124,16 @@ export function bindLiveAuthorMonitorEditorChanges(
           ...(last ? { lastPendingSequence: last.sequence } : {}),
           reason: pendingReason ?? "rejected"
         });
+
+    if (lastPublishedBackpressure &&
+        lastPublishedBackpressure.status === snapshot.status &&
+        lastPublishedBackpressure.pendingCount === snapshot.pendingCount &&
+        lastPublishedBackpressure.firstPendingSequence === snapshot.firstPendingSequence &&
+        lastPublishedBackpressure.lastPendingSequence === snapshot.lastPendingSequence &&
+        lastPublishedBackpressure.reason === snapshot.reason) {
+      return;
+    }
+    lastPublishedBackpressure = snapshot;
 
     try {
       options.onBackpressure(snapshot);
@@ -216,10 +227,11 @@ export function bindLiveAuthorMonitorEditorChanges(
 
   const stop = (() => {
     if (disposed) return;
+    const hadPending = pending.length > 0;
     disposed = true;
     pending.length = 0;
     pendingReason = undefined;
-    publishBackpressure();
+    if (hadPending) publishBackpressure();
     try { unsubscribeSource?.(); } finally { unsubscribeRetrySignal?.(); }
   }) as LiveAuthorMonitorChangeBindingControl;
 
@@ -227,9 +239,10 @@ export function bindLiveAuthorMonitorEditorChanges(
   stop.getPendingChanges = () => Object.freeze([...pending]);
   stop.discardPendingAfterResynchronization = () => {
     if (disposed) return;
+    const hadPending = pending.length > 0;
     pending.length = 0;
     pendingReason = undefined;
-    publishBackpressure();
+    if (hadPending) publishBackpressure();
   };
   return stop;
 }

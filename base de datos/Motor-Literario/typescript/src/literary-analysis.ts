@@ -6465,33 +6465,29 @@ function collectSensorySignals(
  */
 function isValidNarrativeIdeaStatusHistory(
   value: unknown,
+  writerDecisionCount: number,
   omittedStatusHistoryCount: number
 ): boolean {
   if (!Array.isArray(value) || value.length > 100) return false;
-  if (value.length === 0) return true;
-  for (let index = 0; index < value.length; index++) {
-    const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
-    if (!change ||
-        !["IDEA","incorporated","discarded"].includes(change.status) ||
+  for (const rawChange of value) {
+    if (!rawChange || typeof rawChange !== "object") return false;
+    const change = rawChange as NarrativeIdeaStatusChange;
+    if (!["IDEA","incorporated","discarded"].includes(change.status) ||
         !["initial","writer","text-revised"].includes(change.reason) ||
-        (change.reason === "initial" && change.status !== "IDEA") ||
-        (change.reason === "text-revised" && change.status !== "IDEA") ||
-        (index === 0
-          ? omittedStatusHistoryCount === 0
-            ? change.reason !== "initial"
-            : change.reason === "initial"
-          : change.reason === "initial" ||
-            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
         (change.changedAt !== undefined &&
           (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0))) {
       return false;
     }
   }
-  // El último estado puede diferir del valor actual: el analizador informa esa
-  // divergencia en currentStatusHistoryConsistency sin descartar el historial.
-  // Las marcas de tiempo también pueden retroceder en una importación y se
-  // contabilizan en nonMonotonicStatusTimestampCount.
-  return true;
+
+  // El historial puede estar importado, truncado o contener transiciones
+  // anómalas. Se conserva para diagnóstico; solo se contrasta el total durable
+  // de decisiones con las entradas visibles y las que quedaron omitidas.
+  const visibleWriterDecisionCount = value.filter(
+    (change: NarrativeIdeaStatusChange) => change.reason === "writer"
+  ).length;
+  return writerDecisionCount >= visibleWriterDecisionCount &&
+    writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
 }
 
 function validateInput(input: LiteraryAnalysisInput): number {
@@ -6647,7 +6643,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
       throw new Error("El catálogo global de ideas del análisis literario es inválido.");
     }
     if (!isValidNarrativeIdeaStatusHistory(
-      idea.statusHistory,idea.omittedStatusHistoryCount
+      idea.statusHistory,idea.writerDecisionCount,idea.omittedStatusHistoryCount
     )) {
       throw new Error("El historial de decisiones del catálogo global de ideas es inválido.");
     }
@@ -6677,7 +6673,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
       throw new Error("El catálogo de ideas y decisiones del análisis literario es inválido.");
     }
     if (!isValidNarrativeIdeaStatusHistory(
-      idea.statusHistory,idea.omittedStatusHistoryCount
+      idea.statusHistory,idea.writerDecisionCount,idea.omittedStatusHistoryCount
     )) {
       throw new Error("El historial de decisiones de una idea vinculada es inválido.");
     }

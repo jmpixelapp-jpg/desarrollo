@@ -1059,6 +1059,14 @@ test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async ()
       store.loadPersonalIdea(writerId, projectId, "idea-b").idea.id,
       "idea-b"
     );
+    assert.deepEqual(
+      store.loadPersonalIdeasByKeys(writerId, [
+        { sourceProjectId: projectId, ideaId: "idea-a" },
+        { sourceProjectId: projectId, ideaId: "missing-idea" },
+        { sourceProjectId: projectId, ideaId: "idea-c" }
+      ]).map(item => item.idea.id),
+      ["idea-a", "idea-c"]
+    );
 
     const schema = database.prepare("PRAGMA table_info(bridge_records)").all();
     assert.ok(schema.some(column => column.name === "sort_key"));

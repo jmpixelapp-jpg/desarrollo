@@ -1552,7 +1552,12 @@ export class IndexedDbProjectStore implements ProjectStore {
         // v21 separa los vínculos y conserva las asociaciones existentes.
         // Su fecha registra la materialización de la migración, no una fecha
         // histórica inventada; la procedencia queda explícitamente marcada.
-        const previousVersion = (event as IDBVersionChangeEvent | undefined)?.oldVersion ?? 0;
+        const changeEvent = event && typeof event === "object"
+          ? event as IDBVersionChangeEvent
+          : undefined;
+        const previousVersion = changeEvent && Number.isSafeInteger(changeEvent.oldVersion)
+          ? changeEvent.oldVersion
+          : 0;
         if (previousVersion > 0 && previousVersion < 21) {
           const legacyEntries = upgrade.objectStore(DICTIONARY_ENTRIES);
           const migratedLinks = upgrade.objectStore(DICTIONARY_ENTRY_ENTITIES);
@@ -1630,17 +1635,19 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(TIMELINE_OCCURRENCES, "by-project", "projectId");
         ensureIndex(TIMELINE_OCCURRENCES, "by-event-record", ["projectId", "eventRecordId"]);
         ensureIndex(TIMELINE_OCCURRENCES, "by-track-order", ["projectId", "trackId", "narrativeOrder"]);
-        const nextVersion = event?.newVersion ?? DATABASE_VERSION;
+        const nextVersion = changeEvent && Number.isSafeInteger(changeEvent.newVersion)
+          ? changeEvent.newVersion
+          : DATABASE_VERSION;
         const migration: SchemaMigration = {
           migrationId: `indexeddb-v${nextVersion}`,
-          fromVersion: String(event?.oldVersion ?? 0),
+          fromVersion: String(previousVersion),
           toVersion: String(nextVersion),
           appliedAt: Date.now(),
           result: "APPLIED",
           checksum: `motor-literario-mldb-0.4.1-indexeddb-${nextVersion}`
         };
         validateSchemaMigration(migration);
-        if (event) {
+        if (changeEvent) {
           upgrade.objectStore(SCHEMA_MIGRATIONS).put(cloneSchemaMigration(migration));
         }
       };

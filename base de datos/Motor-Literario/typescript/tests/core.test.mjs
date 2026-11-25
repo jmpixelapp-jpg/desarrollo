@@ -9921,6 +9921,7 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
   const unsubscribeObserver = observer.subscribePersonalIdeaLibraryChanges(
     writerId => receivedFinalizationChanges.push(writerId)
   );
+  let archiveStore;
   const projectId = "finalization-receipt-book";
   const writerId = "finalization-receipt-writer";
   const projectName = "El libro finalizado";
@@ -10080,8 +10081,8 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
   });
 
   try {
-    const store = new IndexedDbProjectStore();
-    const firstArchive = await store.archiveUnincorporatedIdeas(
+    archiveStore = new IndexedDbProjectStore();
+    const firstArchive = await archiveStore.archiveUnincorporatedIdeas(
       projectId, writerId, projectName, 100
     );
     assert.equal(firstArchive.length, 1);
@@ -10094,7 +10095,7 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.deepEqual(receivedFinalizationChanges, [writerId],
       "la transferencia confirmada notifica al escritor una sola vez");
 
-    const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
+    const receipt = await archiveStore.loadProjectFinalizationReceipt(writerId, projectId);
     assert.ok(receipt);
     assert.equal(receipt.receiptId, "finalization-v1");
     assert.equal(receipt.sourceProjectName, projectName);
@@ -10102,7 +10103,7 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.deepEqual(receipt.archivedIdeaIds, ["idea-to-archive"]);
     assert.match(receipt.archiveChecksum, /^fnv1a64:[0-9a-f]{16}$/);
 
-    const retryArchive = await store.archiveUnincorporatedIdeas(
+    const retryArchive = await archiveStore.archiveUnincorporatedIdeas(
       projectId, writerId, projectName, 200
     );
     assert.deepEqual(retryArchive, [],
@@ -10125,7 +10126,7 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
       text: "Esta idea se añadió después del cierre."
     });
     await assert.rejects(
-      store.archiveUnincorporatedIdeas(projectId, writerId, projectName, 300),
+      archiveStore.archiveUnincorporatedIdeas(projectId, writerId, projectName, 300),
       /recibo de finalización; las ideas nuevas/
     );
     assert.equal(projectIdeas.length, 1, "el reintento posterior no elimina ni archiva ideas nuevas");
@@ -10134,6 +10135,7 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
   } finally {
     unsubscribeObserver();
     observer.dispose?.();
+    archiveStore?.dispose?.();
     FinalizationBroadcastChannel.channels.clear();
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;

@@ -9324,6 +9324,7 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
       if (name === "personal-idea-library") {
         return { add(entry) { entries.push(structuredClone(entry)); } };
       }
+      if (name === "writer-library-finalization-receipts") return {};
       assert.equal(name, "narrative-entities");
       return {};
     }

@@ -63,7 +63,7 @@ El módulo `narrative-knowledge.ts` incorpora la primera capa de conocimiento es
 - Captura ideas únicamente desde líneas marcadas con `IDEA:`. Cada idea conserva el documento de origen, el título del libro proporcionado por el anfitrión, evidencia e historial de revisiones. El anfitrión puede cambiar su estado a `IDEA`, `incorporated` o `discarded`; las transiciones quedan registradas por separado con fecha y motivo (`writer` o `text-revised`), sin duplicar entradas cuando se repite el mismo estado. Si el texto cambia, la versión nueva vuelve a `IDEA` y conserva el historial anterior. La transferencia final de ideas `IDEA` a una biblioteca personal aislada por escritor está implementada mediante una transacción local; requiere que el anfitrión suministre `writerId` al inicializar el proyecto.
 - Todas las colecciones se aíslan mediante el `projectId` proporcionado por la aplicación anfitriona.
 
-La base IndexedDB está en versión 22 y conserva las colecciones previas, con entidades, relaciones, acontecimientos, ideas, afirmaciones históricas y la biblioteca personal de ideas local. La migración verifica y reconstruye índices faltantes en almacenes existentes, sin reemplazar ni vaciar las colecciones.
+La base IndexedDB está en versión 21 y conserva las colecciones previas, con entidades, relaciones, acontecimientos, ideas, afirmaciones históricas y la biblioteca personal de ideas local. La migración verifica y reconstruye índices faltantes en almacenes existentes, sin reemplazar ni vaciar las colecciones.
 
 La API del anfitrión expone `extractNarrativeKnowledge(documentId, revision, text)`, `getNarrativeEntities()`, `getNarrativeRelations()`, `getNarrativeEvents()`, `getNarrativeIdeas()`, `setNarrativeIdeaStatus(ideaId, status)`, `getNarrativeAssertions()` y `getNarrativeEntityHistory(entityId)`.
 
@@ -88,14 +88,14 @@ Al abrir un documento, el motor compara el snapshot local con el snapshot autori
 - Si `getDocumentSyncState` indica `needsResync`, detener el envío de deltas y reabrir con el snapshot completo actual del editor.
 - Para recuperar una sesión ya guardada después de reiniciar la aplicación, inicializar la identidad del proyecto y llamar `await api.recoverDocument(documentId)`. El método recupera el snapshot local y reproduce los deltas durables; no requiere volver a enviar el texto completo. Solo funciona cuando existe una base durable válida.
 
-## Esquema lógico MLDB 0.4.2 y correspondencia física
+## Esquema lógico MLDB 0.4.1 y correspondencia física
 
 El contrato lógico de la base se versiona como JSON declarativo en `../MLDB/`, y se valida con JavaScript puro mediante `scripts/validate-mldb-schema.mjs`. La versión vigente define 25 tablas lógicas, claves compuestas, ámbitos `global`, `project` y `writer`, propiedad de proyectos y referencias que no pueden cruzar libros o escritores.
 
-- `../MLDB/schema_v0.4.2.json`: esquema lógico vigente.
+- `../MLDB/schema_v0.4.1.json`: esquema lógico vigente.
 - `../MLDB/schema_v0.4.0.json`, `schema_v0.3.0.json` y `schema_v0.2.0.json`: versiones anteriores verificadas para compatibilidad.
-- `../MLDB/storage_mapping_v0.4.2.json`: correspondencia entre las 25 tablas lógicas y el almacenamiento local IndexedDB 22.
-- `../MLDB/PHYSICAL_STORAGE_MAPPING_v0.4.2.md`: explicación de almacenes, claves, índices y estado real de implementación.
+- `../MLDB/storage_mapping_v0.4.1.json`: correspondencia entre las 25 tablas lógicas y el almacenamiento local IndexedDB.
+- `../MLDB/PHYSICAL_STORAGE_MAPPING_v0.4.1.md`: explicación de almacenes, claves, índices y estado real de implementación.
 
 El mapa físico distingue capacidades implementadas, parciales y pendientes; una tabla lógica declarada no se presenta como persistida cuando aún no existe su almacén o contrato TypeScript. El modelo actual usa IndexedDB nativo, sin SQL, servicios remotos ni código Rust en el runtime. `npm test` ejecuta ahora también el validador y los casos de compatibilidad del esquema, además de las pruebas del núcleo.
 
@@ -360,6 +360,7 @@ El módulo `src/literary-analysis.ts` incorpora una lectura cuantitativa, local 
 - Distribución de menciones literales de personajes conocidos por escena: cobertura, primera y última mención, intervalos sin coincidencia, rachas consecutivas y tasas por cada 1.000 palabras para comparar escenas de distinta longitud. Cuenta todas las coincidencias detectadas y distingue esos conteos de los ejemplos UTF-16 y formas de nombre limitados por escena.
 - Perfiles de evidencia de personajes por escena: separan mención nominal literal y participación declarada en acontecimientos con evidencia vigente de la misma revisión. Conservan series por escena, IDs de acontecimientos y estados desconocidos cuando los límites de muestras impiden concluir ausencia.
 - Evolución de atributos explícitos entre escenas: compara afirmaciones de edad, ubicación y rol de la revisión vigente, distingue valores sin cambio, cambios observados y múltiples valores en una escena, y conserva fragmentos UTF-16 y contadores de evidencia obsoleta o fuera de alcance. También construye una cronología intercapítulos cuando existen referencias temporales explícitas de la misma base y precisión; no ordena afirmaciones sin fecha comparable.
+- Trayectorias narrativas integradas por personaje: consolidan por ID canónico atributos históricos, participación declarada en acontecimientos, candidatos causales y una instantánea por escena. Separan mención, participación y evidencia de atributos; exponen límites, fuentes truncadas y relaciones que requieren revisión sin inferir arcos psicológicos. Incluyen una cronología intercapítulos de acontecimientos solo con referencias temporales explícitas, agrupadas por pista, base y precisión; eventos sin fecha y evidencia obsoleta quedan contabilizados pero fuera del orden.
 
 La API `analyzeLiteraryDocument(documentId, start?, end?)` espera a que terminen los cambios admitidos y analiza el rango UTF-16 solicitado en la revisión vigente. Es una operación de solo lectura, no persiste sugerencias ni modifica el manuscrito. Los resultados identifican proyecto, documento, revisión y rango; las ocurrencias usan offsets UTF-16 absolutos.
 

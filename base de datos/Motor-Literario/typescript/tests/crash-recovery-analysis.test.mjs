@@ -437,6 +437,11 @@ test("reanuda una extracción narrativa interrumpida después de guardar entidad
 
 test("recupera identidades de acontecimientos e ideas si falla el guardado de offsets desplazados", async () => {
   const store = new DurableJournalStore();
+  // En esta prueba el proceso continúa vivo: la escritura del journal debe
+  // confirmar para poder medir el fallo posterior de reconciliación narrativa.
+  store.appendChange = async change => {
+    store.changes.push(structuredClone(change));
+  };
   const errors = [];
   const project = {
     projectId: "narrative-evidence-rebase-recovery",

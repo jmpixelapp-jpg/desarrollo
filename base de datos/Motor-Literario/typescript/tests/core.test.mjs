@@ -13697,6 +13697,12 @@ test("la API rechaza recibos de biblioteca con checksum incorrecto o IDs desorde
   });
   const legacyReceipt = await api.getProjectFinalizationReceipt();
   assert.deepEqual(legacyReceipt.archivedIdeaIds, mixedCaseIds);
+
+  store.loadPersonalIdeasByKeys = async () => [];
+  await assert.rejects(
+    api.getProjectFinalizationReceipt(),
+    /entradas ausentes o duplicadas/
+  );
   api.dispose();
 });
 

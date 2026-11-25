@@ -1111,7 +1111,7 @@ test("acota la muestra de componentes sin perder sus totales globales", () => {
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
-    text: "Escena 1\\nAna espera.",
+    text: "Escena 1\nAna espera.",
     knownIdeas
   }).ideaGraph;
 

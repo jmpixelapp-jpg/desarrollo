@@ -578,6 +578,56 @@ test("reconcilia dos altas concurrentes del mismo vínculo como una sola asociac
   api.dispose();
 });
 
+test("no reintenta cambios de estado ante errores ajenos a CAS", async () => {
+  const store = new RacingStore([idea("idea-source")]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.nextWriteError = new Error("fallo de almacenamiento");
+
+  await assert.rejects(
+    api.setNarrativeIdeaStatus("idea-source", "incorporated"),
+    /fallo de almacenamiento/
+  );
+  assert.equal(store.writes, 1);
+  assert.equal(
+    store.ideas.get(projectId + ":idea-source").status,
+    "IDEA"
+  );
+  api.dispose();
+});
+
+test("reintenta cambios de estado tras CAS y conserva vínculos concurrentes", async () => {
+  const store = new RacingStore([
+    idea("idea-source"), idea("idea-concurrent-target")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.onNextConflict = current => ({
+    ...current,
+    relatedIdeaIds: ["idea-concurrent-target"],
+    status: "discarded",
+    statusHistory: [
+      ...current.statusHistory,
+      { status: "discarded", reason: "writer", changedAt: 2 }
+    ]
+  });
+
+  const result = await api.setNarrativeIdeaStatus("idea-source", "incorporated");
+  assert.equal(result.status, "incorporated");
+  assert.deepEqual(result.relatedIdeaIds, ["idea-concurrent-target"]);
+  assert.deepEqual(result.statusHistory.map(change => change.status), [
+    "IDEA", "discarded", "incorporated"
+  ]);
+  assert.equal(result.statusHistory.at(-1).reason, "writer");
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-concurrent-target"]
+  );
+  assert.equal(store.writes, 2);
+  assert.equal(store.ideaReads, 2);
+  api.dispose();
+});
+
 test("serializa vínculos y decisiones editoriales simultáneas en una misma instancia", async () => {
   const store = new RacingStore([
     idea("idea-source"), idea("idea-target-a"), idea("idea-target-b")

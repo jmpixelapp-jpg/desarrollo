@@ -4515,14 +4515,19 @@ function buildCharacterNarrativeTrajectories(
           : sceneEvidenceTruncated
             ? "unknown-due-to-truncation" as const
             : "no-event-in-evidenced-scene" as const;
-      const crossDocumentEventEvidence = projectEvents
-        .filter(event => materializedEventIds.includes(event.eventId))
-        .flatMap(event => event.evidence.filter(item =>
+      const materializedProjectEvents = projectEvents.filter(event =>
+        materializedEventIds.includes(event.eventId)
+      );
+      const crossDocumentEventEvidence = materializedProjectEvents.flatMap(event =>
+        event.evidence.filter(item =>
           item.status !== "stale" && item.documentId !== documentId
-        ));
-      const crossDocumentEventIds = [...new Set(crossDocumentEventEvidence.map(item =>
-        projectEvents.find(event => event.evidence.includes(item))?.eventId
-      ).filter((eventId): eventId is string => eventId !== undefined))]
+        )
+      );
+      const crossDocumentEventIds = materializedProjectEvents
+        .filter(event => event.evidence.some(item =>
+          item.status !== "stale" && item.documentId !== documentId
+        ))
+        .map(event => event.eventId)
         .sort((a,b) => a.localeCompare(b,"en"));
       const crossDocumentContinuityStatus = materializedEventIds.length === 0
         ? "not-applicable" as const

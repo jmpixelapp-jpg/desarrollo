@@ -523,6 +523,7 @@ export interface LiteraryCharacterTrajectorySceneSnapshot {
   readonly attributeValues: readonly {
     readonly attribute: NarrativeAssertion["attribute"];
     readonly values: readonly (string | number)[];
+    readonly assertionCount: number;
     readonly assertionIds: readonly string[];
     readonly status: "single-value" | "multiple-values";
   }[];
@@ -550,6 +551,9 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
   readonly omittedCharacterCount: number;
   readonly sourceTruncatedSceneCount: number;
   readonly sourceTruncatedSceneIndexes: readonly number[];
+  readonly omittedAttributeProfileCount: number;
+  readonly omittedEventAssociationCount: number;
+  readonly omittedCausalCandidateCount: number;
   readonly causalCandidateCount: number;
   readonly trajectories: readonly LiteraryCharacterNarrativeTrajectory[];
 }
@@ -2892,8 +2896,8 @@ function buildCharacterNarrativeTrajectories(
         .filter(item => item.candidate.sceneIndex === scene.sceneIndex)
         .map(item => item.candidateId);
       const incompleteReasons: Array<"mention-truncation" | "event-truncation"> = [];
-      if (scene.characterMentionsTruncated && !mention) incompleteReasons.push("mention-truncation");
-      if (scene.eventLinksTruncated && linkedEvents.length === 0) incompleteReasons.push("event-truncation");
+      if (scene.characterMentionsTruncated) incompleteReasons.push("mention-truncation");
+      if (scene.eventLinksTruncated) incompleteReasons.push("event-truncation");
       const hasDocumentedEvidence =
         mention !== undefined ||
         linkedEvents.length > 0 ||
@@ -2957,6 +2961,9 @@ function buildCharacterNarrativeTrajectories(
     omittedCharacterCount:Math.max(0,trajectories.length-200),
     sourceTruncatedSceneCount:sourceTruncatedSceneIndexes.length,
     sourceTruncatedSceneIndexes,
+    omittedAttributeProfileCount:attributeEvolution.omittedProfileCount,
+    omittedEventAssociationCount:eventEvidence.omittedAssociationCount,
+    omittedCausalCandidateCount:dependencies.omittedCandidateCount,
     causalCandidateCount:dependencies.candidateCount,
     trajectories:trajectories.slice(0,200)
   };

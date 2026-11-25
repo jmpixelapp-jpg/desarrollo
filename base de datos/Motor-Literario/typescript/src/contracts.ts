@@ -92,6 +92,17 @@ export interface StoredDiagnostics {
   readonly updatedAt: number;
 }
 
+/** Confirmación compacta de finalización; las ideas se recuperan por páginas. */
+export interface ProjectFinalizationSummary {
+  readonly writerId: string;
+  readonly sourceProjectId: string;
+  readonly sourceProjectName: string;
+  readonly archivedCount: number;
+  readonly finalizedAt: number;
+  readonly archiveChecksum: string;
+  readonly alreadyFinalized: boolean;
+}
+
 /** Recibo durable e idempotente de la transferencia al cerrar un libro. */
 export interface StoredProjectFinalizationReceipt {
   readonly writerId: string;
@@ -104,9 +115,23 @@ export interface StoredProjectFinalizationReceipt {
   readonly archiveChecksum: string;
 }
 
+/** Cursor estable de lectura de la biblioteca; el escritor se deriva de la sesión autenticada. */
+export interface PersonalIdeaLibraryCursor {
+  readonly sourceProjectId: string;
+  readonly ideaId: string;
+}
+
+/** Página acotada de la biblioteca privada de ideas de un escritor. */
+export interface PersonalIdeaLibraryPage {
+  readonly items: readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[];
+  readonly nextCursor: PersonalIdeaLibraryCursor | null;
+}
+
 export interface ProjectStore {
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
+  /** Avisa cambios confirmados en la biblioteca global de un escritor, sin revelar su contenido. */
+  subscribePersonalIdeaLibraryChanges?(listener: (writerId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */
   loadProjectRelations(projectId: string): Promise<readonly ProjectRelation[]>;
   saveProjectRelation(relation: ProjectRelation, expectedCurrent?: ProjectRelation): Promise<void>;
@@ -274,7 +299,28 @@ export interface ProjectStore {
   ): Promise<void>;
   /** Transfiere atómicamente ideas aún no incorporadas a la biblioteca privada del escritor. */
   archiveUnincorporatedIdeas?(projectId: string, writerId: string, sourceProjectName: string, archivedAt: number): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
+  /** Igual operación atómica, con confirmación compacta y sin materializar las entradas transferidas. */
+  archiveUnincorporatedIdeasSummary?(
+    projectId: string, writerId: string, sourceProjectName: string, archivedAt: number
+  ): Promise<ProjectFinalizationSummary>;
   loadPersonalIdeas?(writerId: string): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
+  /** Lectura keyset por páginas; el límite máximo admitido es 200 entradas. */
+  loadPersonalIdeasPage?(
+    writerId: string,
+    cursor: PersonalIdeaLibraryCursor | null,
+    limit: number
+  ): Promise<PersonalIdeaLibraryPage>;
+  /** Lectura puntual usada para verificar vínculos a ideas archivadas fuera de la página actual. */
+  loadPersonalIdea?(
+    writerId: string,
+    sourceProjectId: string,
+    ideaId: string
+  ): Promise<import("./narrative-knowledge").PersonalIdeaLibraryEntry | undefined>;
+  /** Resuelve varios vínculos de páginas distintas en una sola lectura del almacén. */
+  loadPersonalIdeasByKeys?(
+    writerId: string,
+    references: readonly PersonalIdeaLibraryCursor[]
+  ): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadProjectFinalizationReceipt?(
     writerId: string,
     projectId: string

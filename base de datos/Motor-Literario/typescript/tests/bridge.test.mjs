@@ -1166,6 +1166,53 @@ test("el cliente TypeScript del puente lee y añade historiales versionados de r
       writerId: "writer-relation-history"
     });
 
+    const record = await client.request("project.call", {
+      projectId,
+      method: "saveProjectRecord",
+      args: [{
+        id: "record-ana",
+        recordType: "character",
+        primaryName: "Ana",
+        description: null,
+        label: "IDEA",
+        state: "abierto",
+        confidence: "confirmed",
+        confirmationKind: "explicit",
+        provenanceKind: "writer",
+        createdAt: 5,
+        updatedAt: 5
+      }]
+    });
+    const recordFirst = await client.appendRecordLifecycle(projectId, {
+      id: "record-ana:v1",
+      recordId: record.id,
+      revision: 1,
+      previousLabel: null,
+      newLabel: "IDEA",
+      previousState: null,
+      newState: "abierto",
+      changedBy: "writer-relation-history",
+      changedAt: 15
+    });
+    assert.equal(recordFirst.projectId, projectId);
+
+    const recordSecond = await client.appendRecordLifecycle(projectId, {
+      id: "record-ana:v2",
+      recordId: record.id,
+      revision: 2,
+      previousLabel: "IDEA",
+      newLabel: "REGISTRADO EN LA OBRA",
+      previousState: "abierto",
+      newState: "cerrado",
+      changedBy: "writer-relation-history",
+      changeReason: "La ficha quedó incorporada al manuscrito",
+      changedAt: 25
+    });
+    assert.deepEqual(
+      await client.getRecordLifecycleHistory(projectId, record.id),
+      [recordFirst, recordSecond]
+    );
+
     const relation = await client.request("project.call", {
       projectId,
       method: "saveProjectRelation",

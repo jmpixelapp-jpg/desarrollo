@@ -626,7 +626,8 @@ function remapPersonalIdeaEntriesForEntityMerge(
 async function saveNarrativeIdeaWithReferences(
   db: IDBDatabase,
   idea: NarrativeIdea,
-  expectedCurrent?: NarrativeIdea
+  expectedCurrent?: NarrativeIdea,
+  checkExpectedCurrent = expectedCurrent !== undefined
 ): Promise<void> {
   const entityIds = idea.relatedEntityIds ?? [];
   const relatedIdeaIds = idea.relatedIdeaIds ?? [];
@@ -655,7 +656,7 @@ async function saveNarrativeIdeaWithReferences(
         kind: "idea" as const
       }))
     ];
-    const existingRequest = expectedCurrent
+    const existingRequest = checkExpectedCurrent
       ? ideaStore.get([idea.projectId, idea.id])
       : undefined;
     const totalChecks = checks.length + (existingRequest ? 1 : 0);
@@ -671,22 +672,15 @@ async function saveNarrativeIdeaWithReferences(
         remaining--;
         if (remaining === 0) ideaStore.put(idea);
       };
-      if (existingRequest && expectedCurrent) {
+      if (existingRequest) {
         existingRequest.onsuccess = () => {
-          const current = existingRequest.result as NarrativeIdea | undefined;
-          if (!current || current.projectId !== idea.projectId || current.id !== idea.id) {
-            abortWith(new Error(
-              "La idea ya no existe en el proyecto; puede haberse archivado o eliminado desde otra instancia."
-            ));
-            return;
+          try {
+            const current = existingRequest.result as NarrativeIdea | undefined;
+            assertExpectedNarrativeVersion(current, idea, expectedCurrent, "La idea");
+            markCheckComplete();
+          } catch (error) {
+            abortWith(error);
           }
-          if (JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
-            abortWith(new Error(
-              "La idea cambió en otra instancia; actualiza la vista antes de volver a modificarla."
-            ));
-            return;
-          }
-          markCheckComplete();
         };
         existingRequest.onerror = () => abortWith(
           existingRequest.error ?? new Error("No se pudo verificar la versión actual de la idea.")
@@ -731,16 +725,24 @@ async function saveNarrativeIdeaWithReferences(
 
 async function saveNarrativeEventWithReferences(
   db: IDBDatabase,
-  event: NarrativeEvent
+  event: NarrativeEvent,
+  expectedCurrent?: NarrativeEvent,
+  checkExpectedCurrent = false
 ): Promise<void> {
   const requiredIds = [...new Set(event.participants)];
   if (requiredIds.some(id => typeof id !== "string" || !id.trim())) {
     throw new Error("El acontecimiento contiene participantes inválidos.");
   }
+  if (checkExpectedCurrent && expectedCurrent !== undefined &&
+      (expectedCurrent.projectId !== event.projectId || expectedCurrent.id !== event.id)) {
+    throw new Error("La actualización debe conservar la identidad del acontecimiento.");
+  }
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction([ENTITIES, TIMELINE_TRACKS, EVENTS], "readwrite");
+    const eventStore = transaction.objectStore(EVENTS);
     let entitiesReady = false;
     let trackReady = event.timelineTrackId === undefined;
+    let expectedReady = !checkExpectedCurrent;
     let referenceConflict = false;
     let failure: Error | undefined;
     const abortWith = (error: unknown, conflict = false): void => {
@@ -749,24 +751,20 @@ async function saveNarrativeEventWithReferences(
       try { transaction.abort(); } catch { /* transacción ya abortada */ }
     };
     const saveIfReady = (): void => {
-      if (!entitiesReady || !trackReady || failure) return;
-      transaction.objectStore(EVENTS).put(event);
+      if (!entitiesReady || !trackReady || !expectedReady || failure) return;
+      eventStore.put(event);
     };
 
     const entitiesRequest = transaction.objectStore(ENTITIES).index("by-project").getAll(event.projectId);
     entitiesRequest.onsuccess = () => {
       try {
         const entities = entitiesRequest.result as NarrativeEntity[];
-        if (!Array.isArray(entities)) {
-          throw new Error("La colección de entidades del acontecimiento es inválida.");
-        }
+        if (!Array.isArray(entities)) throw new Error("La colección de entidades del acontecimiento es inválida.");
         const available = new Set<string>();
         for (const entity of entities) {
           if (entity && typeof entity.id === "string" && requiredIds.includes(entity.id)) {
             validateNarrativeEntityRecord(entity, "entidad participante");
-            if (entity.projectId !== event.projectId) {
-              throw new Error("Una entidad participante pertenece a otro proyecto.");
-            }
+            if (entity.projectId !== event.projectId) throw new Error("Una entidad participante pertenece a otro proyecto.");
             available.add(entity.id);
           }
         }
@@ -803,6 +801,23 @@ async function saveNarrativeEventWithReferences(
         trackRequest.error ?? new Error("No se pudo verificar la pista cronológica del acontecimiento.")
       );
     }
+    if (checkExpectedCurrent) {
+      const currentRequest = eventStore.get([event.projectId, event.id]);
+      currentRequest.onsuccess = () => {
+        try {
+          assertExpectedNarrativeVersion(
+            currentRequest.result as NarrativeEvent | undefined, event, expectedCurrent, "El acontecimiento"
+          );
+          expectedReady = true;
+          saveIfReady();
+        } catch (error) {
+          abortWith(error);
+        }
+      };
+      currentRequest.onerror = () => abortWith(
+        currentRequest.error ?? new Error("No se pudo verificar la versión actual del acontecimiento.")
+      );
+    }
 
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(
@@ -816,28 +831,103 @@ async function saveNarrativeEventWithReferences(
   });
 }
 
-async function saveNarrativeRecordWithEntityReferences<T extends { readonly projectId: string }>(
+function assertExpectedNarrativeVersion<T extends { readonly projectId: string; readonly id: string }>(
+  current: T | undefined,
+  record: T,
+  expectedCurrent: T | undefined,
+  label: string
+): void {
+  if (expectedCurrent === undefined) {
+    if (current !== undefined) {
+      throw new Error(`${label} apareció en otra instancia; actualiza la vista antes de volver a modificarlo.`);
+    }
+    return;
+  }
+  if (!current || current.projectId !== record.projectId || current.id !== record.id ||
+      JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+    throw new Error(`${label} cambió en otra instancia o ya no existe; actualiza la vista antes de volver a modificarlo.`);
+  }
+}
+
+async function saveNarrativeEntityRecord(
+  db: IDBDatabase,
+  entity: NarrativeEntity,
+  expectedCurrent?: NarrativeEntity,
+  checkExpectedCurrent = false
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(ENTITIES, "readwrite");
+    const store = transaction.objectStore(ENTITIES);
+    const request = store.index("by-project").getAll(entity.projectId);
+    let requestError: unknown;
+    request.onsuccess = () => {
+      try {
+        const current = request.result as NarrativeEntity[];
+        const scoped = validateProjectRecords(current, entity.projectId, "entidad narrativa");
+        for (const existing of scoped) validateNarrativeEntityRecord(existing, "entidad narrativa");
+        const previous = scoped.find(existing => existing.id === entity.id);
+        if (checkExpectedCurrent) assertExpectedNarrativeVersion(previous, entity, expectedCurrent, "La entidad");
+        const next = scoped.filter(existing => existing.id !== entity.id);
+        next.push(entity);
+        validateNarrativeEntityIdentityHistory(next);
+        store.put(entity);
+      } catch (error) {
+        requestError = error;
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      }
+    };
+    request.onerror = () => {
+      requestError = request.error ?? new Error("No se pudieron verificar las identidades narrativas.");
+      try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    transaction.oncomplete = () => {
+      if (requestError !== undefined) reject(requestError);
+      else resolve();
+    };
+    transaction.onerror = () => reject(requestError ?? transaction.error ??
+      new Error("No se pudo guardar la entidad narrativa."));
+    transaction.onabort = () => reject(requestError ?? transaction.error ??
+      new Error("Se canceló el guardado de la entidad."));
+  });
+}
+
+async function saveNarrativeRecordWithEntityReferences<T extends { readonly projectId: string; readonly id: string }>(
   db: IDBDatabase,
   storeName: string,
   record: T,
   entityIds: readonly string[],
-  failureMessage: string
+  failureMessage: string,
+  expectedCurrent?: T,
+  checkExpectedCurrent = false
 ): Promise<void> {
   const requiredIds = [...new Set(entityIds)];
   if (requiredIds.some(id => typeof id !== "string" || !id.trim())) {
     throw new Error("La referencia narrativa contiene identificadores de entidad inválidos.");
   }
+  if (checkExpectedCurrent && expectedCurrent !== undefined &&
+      (expectedCurrent.projectId !== record.projectId || expectedCurrent.id !== record.id)) {
+    throw new Error("La actualización debe conservar la identidad del registro narrativo.");
+  }
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction([ENTITIES, storeName], "readwrite");
+    const recordStore = transaction.objectStore(storeName);
+    let failure: Error | undefined;
     let referenceConflict = false;
-    const abort = () => {
+    let entitiesReady = false;
+    let expectedReady = !checkExpectedCurrent;
+    const abort = (error?: unknown) => {
+      if (error !== undefined) failure = error instanceof Error ? error : new Error(failureMessage);
+      referenceConflict = error === undefined;
       try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    const saveIfReady = () => {
+      if (!entitiesReady || !expectedReady || failure) return;
+      recordStore.put(record);
     };
     const request = transaction.objectStore(ENTITIES).index("by-project").getAll(record.projectId);
     request.onsuccess = () => {
       const entities = request.result as NarrativeEntity[];
       if (!Array.isArray(entities)) {
-        referenceConflict = true;
         abort();
         return;
       }
@@ -850,24 +940,38 @@ async function saveNarrativeRecordWithEntityReferences<T extends { readonly proj
             available.add(entity.id);
           }
         }
-      } catch {
-        referenceConflict = true;
-        abort();
+      } catch (error) {
+        abort(error);
         return;
       }
       if (requiredIds.some(id => !available.has(id))) {
-        referenceConflict = true;
         abort();
         return;
       }
-      transaction.objectStore(storeName).put(record);
+      entitiesReady = true;
+      saveIfReady();
     };
-    request.onerror = abort;
+    request.onerror = () => abort(request.error ?? new Error(failureMessage));
+    if (checkExpectedCurrent) {
+      const currentRequest = recordStore.get([record.projectId, record.id]);
+      currentRequest.onsuccess = () => {
+        try {
+          assertExpectedNarrativeVersion(
+            currentRequest.result as T | undefined, record, expectedCurrent, "El registro narrativo"
+          );
+          expectedReady = true;
+          saveIfReady();
+        } catch (error) {
+          abort(error);
+        }
+      };
+      currentRequest.onerror = () => abort(currentRequest.error ?? new Error(failureMessage));
+    }
     transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error(failureMessage));
-    transaction.onabort = () => reject(referenceConflict
+    transaction.onerror = () => reject(failure ?? transaction.error ?? new Error(failureMessage));
+    transaction.onabort = () => reject(failure ?? (referenceConflict
       ? new Error("Referencia narrativa inválida: una o más entidades no existen en el proyecto.")
-      : transaction.error ?? new Error(failureMessage));
+      : transaction.error ?? new Error(failureMessage)));
   });
 }
 
@@ -3611,6 +3715,19 @@ export class IndexedDbProjectStore implements ProjectStore {
     );
   }
 
+  async saveAssertionIfUnchanged(
+    assertion: NarrativeAssertion,
+    expectedCurrent?: NarrativeAssertion
+  ): Promise<void> {
+    validateNarrativeAssertionRecord(assertion, "afirmación narrativa");
+    if (expectedCurrent !== undefined) validateNarrativeAssertionRecord(expectedCurrent, "afirmación anterior");
+    const db = await this.open();
+    await saveNarrativeRecordWithEntityReferences(
+      db, ASSERTIONS, assertion, [assertion.entityId],
+      "No se pudo guardar la afirmación narrativa.", expectedCurrent, true
+    );
+  }
+
   async loadAssertions(projectId: string): Promise<readonly NarrativeAssertion[]> {
     if (typeof projectId !== "string" || !projectId.trim()) throw new Error("Identificador de proyecto inválido.");
     const db = await this.open();
@@ -3628,6 +3745,13 @@ export class IndexedDbProjectStore implements ProjectStore {
     validateNarrativeEventRecord(event, "acontecimiento");
     const db = await this.open();
     await saveNarrativeEventWithReferences(db, event);
+  }
+
+  async saveEventIfUnchanged(event: NarrativeEvent, expectedCurrent?: NarrativeEvent): Promise<void> {
+    validateNarrativeEventRecord(event, "acontecimiento");
+    if (expectedCurrent !== undefined) validateNarrativeEventRecord(expectedCurrent, "acontecimiento anterior");
+    const db = await this.open();
+    await saveNarrativeEventWithReferences(db, event, expectedCurrent, true);
   }
 
   async loadEvents(projectId: string): Promise<readonly NarrativeEvent[]> {
@@ -3697,6 +3821,13 @@ export class IndexedDbProjectStore implements ProjectStore {
     await saveNarrativeIdeaWithReferences(db, idea);
   }
 
+  async saveIdeaIfUnchanged(idea: NarrativeIdea, expectedCurrent?: NarrativeIdea): Promise<void> {
+    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    if (expectedCurrent !== undefined) validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
+    const db = await this.open();
+    await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
+  }
+
   /**
    * Actualiza una idea existente solo si sigue presente y coincide con la
    * versión leída por el anfitrión. Impide que una caché antigua la restaure
@@ -3709,7 +3840,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     validateNarrativeIdeaRecord(idea, "idea narrativa");
     validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
-    await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent);
+    await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
   }
 
   async loadIdeas(projectId: string): Promise<readonly NarrativeIdea[]> {
@@ -3732,6 +3863,19 @@ export class IndexedDbProjectStore implements ProjectStore {
     );
   }
 
+  async saveRelationIfUnchanged(
+    relation: NarrativeRelation,
+    expectedCurrent?: NarrativeRelation
+  ): Promise<void> {
+    validateNarrativeRelationRecord(relation, "relación narrativa");
+    if (expectedCurrent !== undefined) validateNarrativeRelationRecord(expectedCurrent, "relación anterior");
+    const db = await this.open();
+    await saveNarrativeRecordWithEntityReferences(
+      db, RELATIONS, relation, [relation.fromEntityId, relation.toEntityId],
+      "No se pudo guardar la relación narrativa.", expectedCurrent, true
+    );
+  }
+
   async loadRelations(projectId: string): Promise<readonly NarrativeRelation[]> {
     if (typeof projectId !== "string" || !projectId.trim()) throw new Error("Identificador de proyecto inválido.");
     const db = await this.open();
@@ -3746,42 +3890,14 @@ export class IndexedDbProjectStore implements ProjectStore {
   async saveEntity(entity: NarrativeEntity): Promise<void> {
     validateNarrativeEntityRecord(entity, "entidad narrativa");
     const db = await this.open();
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(ENTITIES, "readwrite");
-      const store = transaction.objectStore(ENTITIES);
-      const request = store.index("by-project").getAll(entity.projectId);
-      let requestError: unknown;
-      request.onsuccess = () => {
-        try {
-          const current = request.result as NarrativeEntity[];
-          const scoped = validateProjectRecords(current, entity.projectId, "entidad narrativa");
-          for (const existing of scoped) {
-            validateNarrativeEntityRecord(existing, "entidad narrativa");
-          }
-          const next = scoped.filter(existing => existing.id !== entity.id);
-          next.push(entity);
-          // La unicidad de los IDs actuales e históricos se comprueba antes
-          // de escribir; dos entidades nunca pueden reclamar la misma identidad.
-          validateNarrativeEntityIdentityHistory(next);
-          store.put(entity);
-        } catch (error) {
-          requestError = error;
-          try { transaction.abort(); } catch { /* transacción ya abortada */ }
-        }
-      };
-      request.onerror = () => {
-        requestError = request.error ?? new Error("No se pudieron verificar las identidades narrativas.");
-        try { transaction.abort(); } catch { /* transacción ya abortada */ }
-      };
-      transaction.oncomplete = () => {
-        if (requestError !== undefined) reject(requestError);
-        else resolve();
-      };
-      transaction.onerror = () => reject(requestError ?? transaction.error ??
-        new Error("No se pudo guardar la entidad narrativa."));
-      transaction.onabort = () => reject(requestError ?? transaction.error ??
-        new Error("Se canceló el guardado de la entidad."));
-    });
+    await saveNarrativeEntityRecord(db, entity);
+  }
+
+  async saveEntityIfUnchanged(entity: NarrativeEntity, expectedCurrent?: NarrativeEntity): Promise<void> {
+    validateNarrativeEntityRecord(entity, "entidad narrativa");
+    if (expectedCurrent !== undefined) validateNarrativeEntityRecord(expectedCurrent, "entidad anterior");
+    const db = await this.open();
+    await saveNarrativeEntityRecord(db, entity, expectedCurrent, true);
   }
 
   async loadEntities(projectId: string): Promise<readonly NarrativeEntity[]> {

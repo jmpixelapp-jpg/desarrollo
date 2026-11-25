@@ -2704,6 +2704,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "El perfil de diálogo por escena recorta los segmentos reconocidos al contenido local, omite formatos no detectados y no atribuye hablantes.",
       "La estructura de escenas solo se segmenta cuando hay encabezados o separadores explícitos; no infiere cambios de escena a partir del contenido.",
       "La presencia de personajes se basa en nombres y alias literales no ambiguos del catálogo del proyecto; no implica que el personaje actúe, hable o sea el punto de vista de la escena.",
+      "Las tasas de mención por cada 1.000 palabras usan como denominador el texto completo de cada escena explícita, incluido el diálogo, y el agregado pondera por la extensión total de las escenas.",
       "La distribución de menciones resume solo coincidencias literales en escenas explícitas; los conteos se calculan antes de limitar las muestras de offsets y formas de nombre, pero heredan el máximo de 40 identidades expuestas por escena.",
       "La distribución de menciones resume solo coincidencias literales en escenas explícitas; los intervalos sin mención y las rachas observadas no demuestran ausencia, entrada o salida del personaje, protagonismo ni arco narrativo.",
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",

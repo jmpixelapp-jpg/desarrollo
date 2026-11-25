@@ -58,7 +58,10 @@ export interface LiveAuthorMonitorTextAreaIntegration {
    * Rechaza si el motor aún tiene cambios sin confirmar o necesita resincronización.
    */
   resynchronize(): LiveAuthorMonitorTextAreaSourceState;
-  /** Retira listeners y suscripciones sin cerrar el documento ni disponer HostEngineApi. */
+  /**
+   * Retira listeners y suscripciones sin cerrar el documento ni disponer HostEngineApi.
+   * Lanza un error y mantiene la integración activa mientras haya deltas sin admitir.
+   */
   dispose(): void;
 }
 

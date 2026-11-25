@@ -13126,6 +13126,90 @@ test("la API paginada mantiene compatibilidad con adaptadores antiguos de biblio
 
 
 
+test("la API obliga a reiniciar la biblioteca si cambia su generación entre páginas", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-versioned-api";
+  const projectId = "book-versioned-api";
+  const makeEntry = id => ({
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro versionado",
+    category: "Libro versionado",
+    idea: {
+      projectId,
+      id,
+      text: "Idea " + id,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Libro versionado",
+      evidence: []
+    },
+    archivedAt: 1
+  });
+  const entries = [makeEntry("idea-a"), makeEntry("idea-b")];
+  let version = 7;
+  let forceInvalidGeneration = false;
+  store.loadPersonalIdeasPage = async (requestedWriterId, cursor, limit) => {
+    assert.equal(requestedWriterId, writerId);
+    assert.equal(limit, 1);
+    if (forceInvalidGeneration) {
+      return {
+        items: [entries[1]],
+        nextCursor: null,
+        libraryVersion: version + 1
+      };
+    }
+    if (cursor?.libraryVersion !== undefined && cursor.libraryVersion !== version) {
+      return { items: [], nextCursor: null, libraryVersion: version, restartRequired: true };
+    }
+    const remaining = cursor
+      ? entries.filter(entry =>
+          entry.sourceProjectId > cursor.sourceProjectId ||
+          (entry.sourceProjectId === cursor.sourceProjectId && entry.idea.id > cursor.ideaId)
+        )
+      : entries;
+    const items = remaining.slice(0, limit);
+    const last = items[items.length - 1];
+    return {
+      items,
+      libraryVersion: version,
+      nextCursor: remaining.length > items.length && last
+        ? { sourceProjectId: last.sourceProjectId, ideaId: last.idea.id, libraryVersion: version }
+        : null
+    };
+  };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Libro versionado", writerId });
+
+  const first = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(first.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.equal(first.libraryVersion, 7);
+  assert.deepEqual(first.nextCursor, {
+    sourceProjectId: projectId,
+    ideaId: "idea-a",
+    libraryVersion: 7
+  });
+
+  version = 8;
+  const stale = await api.getPersonalIdeaLibraryPage(first.nextCursor, 1);
+  assert.deepEqual(stale.items, []);
+  assert.equal(stale.nextCursor, null);
+  assert.equal(stale.libraryVersion, 8);
+  assert.equal(stale.restartRequired, true);
+
+  const restarted = await api.getPersonalIdeaLibraryPage(null, 1);
+  assert.deepEqual(restarted.items.map(entry => entry.idea.id), ["idea-a"]);
+  assert.equal(restarted.libraryVersion, 8);
+  assert.equal(restarted.nextCursor.libraryVersion, 8);
+
+  forceInvalidGeneration = true;
+  await assert.rejects(
+    api.getPersonalIdeaLibraryPage(restarted.nextCursor, 1),
+    /la generación cambió sin solicitar reiniciar la paginación/
+  );
+});
+
+
 test("la API rechaza páginas de biblioteca sin un cursor final explícito", async () => {
   const store = new MemoryStore();
   store.loadPersonalIdeasPage = async () => ({ items: [] });

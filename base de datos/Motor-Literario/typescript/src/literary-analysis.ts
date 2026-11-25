@@ -1046,6 +1046,12 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly directedBranchNodeCount: number;
   /** Nodos con más de una fuente directa: convergencias dirigidas. */
   readonly directedConvergenceNodeCount: number;
+  /** Fuentes cuyos caminos de dos aristas convergen en al menos un destino común. */
+  readonly twoHopConvergentSourceCount: number;
+  /** Pares fuente-destino con al menos dos intermediarios distintos en dos saltos. */
+  readonly twoHopSharedDestinationCount: number;
+  /** Indica si se examinó el espacio completo de caminos de dos aristas. */
+  readonly twoHopConvergenceAnalysisStatus: "complete" | "truncated-by-work-budget";
   /** Aristas de salida de nodos con bifurcación, usando destinos únicos. */
   readonly directedBranchEdgeCount: number;
   /** Aristas entrantes a nodos con convergencia, usando fuentes únicas. */
@@ -3515,6 +3521,8 @@ function buildCharacterProjectEventTimeline(
 }
 
 const MAX_IDEA_GRAPH_REFERENCE_SAMPLES = 5_000;
+/** Límite de expansiones de caminos de longitud dos para acotar el coste. */
+const MAX_IDEA_GRAPH_TWO_HOP_WORK = 1_000_000;
 const MAX_IDEA_GRAPH_CYCLE_SAMPLES = 100;
 const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
 /** Presupuesto agregado máximo de texto UTF-16 transferido al análisis léxico de ideas. */
@@ -4104,6 +4112,42 @@ function buildLiteraryIdeaGraph(
       terminalQueue[terminalQueueTail++] = predecessorIndex;
     }
   }
+  let twoHopConvergentSourceCount = 0;
+  let twoHopSharedDestinationCount = 0;
+  let twoHopWork = 0;
+  let twoHopConvergenceAnalysisStatus: "complete" | "truncated-by-work-budget" = "complete";
+  for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
+    const intermediaries = new Set(adjacency[sourceIndex]!);
+    if (intermediaries.size < 2) continue;
+    const destinationCounts = new Map<number, number>();
+    let sourceWork = 0;
+    let sourceTruncated = false;
+    for (const intermediaryIndex of intermediaries) {
+      const destinations = new Set(adjacency[intermediaryIndex]!);
+      for (const destinationIndex of destinations) {
+        sourceWork++;
+        if (twoHopWork + sourceWork > MAX_IDEA_GRAPH_TWO_HOP_WORK) {
+          sourceTruncated = true;
+          break;
+        }
+        destinationCounts.set(destinationIndex, (destinationCounts.get(destinationIndex) ?? 0) + 1);
+      }
+      if (sourceTruncated) break;
+    }
+    if (sourceTruncated) {
+      twoHopConvergenceAnalysisStatus = "truncated-by-work-budget";
+      break;
+    }
+    twoHopWork += sourceWork;
+    let sourceSharedDestinationCount = 0;
+    for (const intermediaryCount of destinationCounts.values()) {
+      if (intermediaryCount > 1) sourceSharedDestinationCount++;
+    }
+    if (sourceSharedDestinationCount > 0) {
+      twoHopConvergentSourceCount++;
+      twoHopSharedDestinationCount += sourceSharedDestinationCount;
+    }
+  }
   let terminalReachableNodeCount = 0;
   let directedBranchNodeCount = 0;
   let directedConvergenceNodeCount = 0;
@@ -4353,6 +4397,10 @@ function buildLiteraryIdeaGraph(
     terminalWithinSnapshotNodeCount,
     terminalReachableNodeCount,
     terminalUnreachableNodeCount: ideaCount - terminalReachableNodeCount,    directedBranchNodeCount,
+    directedConvergenceNodeCount,    twoHopConvergentSourceCount,
+    twoHopSharedDestinationCount,
+    twoHopConvergenceAnalysisStatus,
+    directedBranchNodeCount,
     directedConvergenceNodeCount,
     directedBranchEdgeCount,
     directedConvergenceEdgeCount,

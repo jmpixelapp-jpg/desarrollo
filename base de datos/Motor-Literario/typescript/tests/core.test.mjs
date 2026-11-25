@@ -9898,6 +9898,29 @@ test("la recuperación local no inventa un snapshot cuando el documento nunca fu
 
 test("IndexedDB registra el cierre del libro y repite la transferencia usando el mismo recibo durable", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const originalBroadcastChannel = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class FinalizationBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    constructor(name) { this.name = name; FinalizationBroadcastChannel.channels.add(this); }
+    postMessage(data) {
+      for (const channel of FinalizationBroadcastChannel.channels) {
+        if (channel === this || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: structuredClone(data) }));
+      }
+    }
+    close() { FinalizationBroadcastChannel.channels.delete(this); }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true, value: FinalizationBroadcastChannel
+  });
+  const receivedFinalizationChanges = [];
+  const observer = new IndexedDbProjectStore();
+  const unsubscribeObserver = observer.subscribePersonalIdeaLibraryChanges(
+    writerId => receivedFinalizationChanges.push(writerId)
+  );
   const projectId = "finalization-receipt-book";
   const writerId = "finalization-receipt-writer";
   const projectName = "El libro finalizado";
@@ -10067,6 +10090,9 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(receipts.size, 1);
     assert.deepEqual(writerVersions.get(writerId), { writerId, version: 1 },
       "el archivo incrementa la generación dentro de la transacción de biblioteca");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(receivedFinalizationChanges, [writerId],
+      "la transferencia confirmada notifica al escritor una sola vez");
 
     const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
     assert.ok(receipt);
@@ -10085,6 +10111,9 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
     assert.equal(writerVersions.get(writerId).version, 1,
       "un reintento idempotente no cambia la generación si no modifica la biblioteca");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(receivedFinalizationChanges, [writerId],
+      "repetir un recibo no emite una segunda notificación");
     assert.equal(
       (await store.loadProjectFinalizationReceipt(writerId, projectId)).archiveChecksum,
       receipt.archiveChecksum
@@ -10103,8 +10132,13 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     assert.equal(library.size, 1);
     assert.equal(receipts.size, 1);
   } finally {
+    unsubscribeObserver();
+    observer.dispose?.();
+    FinalizationBroadcastChannel.channels.clear();
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;
+    if (originalBroadcastChannel) Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);
+    else delete globalThis.BroadcastChannel;
   }
 });
 

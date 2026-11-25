@@ -166,7 +166,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
           links.some((value: unknown) => typeof value !== "string" || !value.trim()) ||
           new Set(links).size !== links.length)) invalid();
     }
-    if (item.relatedIdeaIds?.includes(item.id)) invalid();
+    // Las autorreferencias se conservan como aristas explícitas del grafo.
     if (item.statusHistory !== undefined) {
       if (!Array.isArray(item.statusHistory) || item.statusHistory.length === 0) invalid();
       let previousChangedAt: number | undefined;

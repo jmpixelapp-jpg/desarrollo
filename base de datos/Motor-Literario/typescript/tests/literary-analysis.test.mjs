@@ -2089,7 +2089,7 @@ test("la cronología excluye IDs de acontecimiento con posiciones incompatibles"
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
-    text: "Escena 1\\nAna.",
+    text: "Escena 1\nAna.",
     knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
     knownProjectEvents: [
       makeEvent(2020, "La tormenta"),

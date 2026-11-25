@@ -21,7 +21,7 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
-      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost"], relatedEntityIds:[],
+      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] }
   ],
   async saveDocument(doc) { this.documents.set(doc.projectId+":"+doc.documentId,structuredClone(doc)); },
@@ -53,17 +53,20 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
       result.ideaGraph.lexicalResonances.resonances[0].sharedTerms,
       ["espejo","luz","memoria"]
     );
-    assert.equal(result.ideaGraph.referenceCount,5);
-    assert.equal(result.ideaGraph.includedReferenceCount,4);
+    assert.equal(result.ideaGraph.referenceCount,6);
+    assert.equal(result.ideaGraph.includedReferenceCount,5);
     assert.equal(result.ideaGraph.notIncludedReferenceCount,1);
     assert.equal(result.ideaGraph.reciprocalReferencePairCount,1);
+    assert.equal(result.ideaGraph.selfReferenceCount,1);
     assert.equal(result.ideaGraph.missingFromProjectReferenceCount,1);
     assert.equal(
       result.ideaGraph.references.find(reference => reference.toIdeaId === "ghost").resolution,
       "missing-from-project"
     );
-    assert.equal(result.ideaGraph.cycleCount,1);
-    assert.deepEqual(result.ideaGraph.cycles[0].ideaIds,["bridge","finish","origin"]);
+    assert.equal(result.ideaGraph.cycleCount,2);
+    assert.deepEqual(result.ideaGraph.cycles.map(cycle => cycle.ideaIds),[
+      ["bridge","finish","origin"], ["solo"]
+    ]);
     assert.equal(result.ideaGraph.weakComponentCount,2);
     assert.equal(result.ideaGraph.largestWeakComponentSize,3);
   } finally { api.dispose(); }

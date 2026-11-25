@@ -5277,79 +5277,123 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   async saveLiveAuthorMonitorCheckpoint(
-    checkpoint: StoredLiveAuthorMonitorCheckpoint
+    checkpoint: StoredLiveAuthorMonitorCheckpoint,
+    lease?: StoredLiveAuthorMonitorLease
   ): Promise<void> {
     validateLiveAuthorMonitorCheckpoint(checkpoint);
+    if (!lease) {
+      throw new Error("Se requiere un lease vigente para guardar checkpoints del monitor.");
+    }
+    validateLiveAuthorMonitorLease(lease, checkpoint.projectId, checkpoint.documentId);
+    const now = Date.now();
+    if (lease.expiresAt <= now || checkpoint.savedAt > lease.expiresAt) {
+      throw new Error("El lease del monitor expiró antes de guardar el checkpoint.");
+    }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "readwrite");
-      const store = transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS);
+      const transaction = db.transaction(
+        [LIVE_AUTHOR_MONITOR_LEASES, LIVE_AUTHOR_MONITOR_CHECKPOINTS],
+        "readwrite"
+      );
+      const leaseStore = transaction.objectStore(LIVE_AUTHOR_MONITOR_LEASES);
+      const checkpointStore = transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS);
       let failure: Error | undefined;
-      const existingRequest = store.get([checkpoint.projectId, checkpoint.documentId]);
-      existingRequest.onsuccess = () => {
-        const existing = existingRequest.result as StoredLiveAuthorMonitorCheckpoint | undefined;
-        if (existing !== undefined) {
-          try {
-            validateLiveAuthorMonitorCheckpoint(
-              existing,
-              checkpoint.projectId,
-              checkpoint.documentId
-            );
-          } catch {
-            failure = new Error("El checkpoint existente del monitor está malformado.");
-            try { transaction.abort(); } catch { /* transacción ya abortada */ }
-            return;
-          }
-          if (existing.savedAt > checkpoint.savedAt) {
-            failure = new Error("Se rechazó guardar un checkpoint anterior al ya persistido.");
-            try { transaction.abort(); } catch { /* transacción ya abortada */ }
-            return;
-          }
-          if (existing.revision > checkpoint.revision ||
-              existing.sequence > checkpoint.sequence) {
-            failure = new Error(
-              "Se rechazó guardar un checkpoint basado en una revisión o secuencia durable anterior."
-            );
-            try { transaction.abort(); } catch { /* transacción ya abortada */ }
-            return;
-          }
-          if (existing.sessionId === checkpoint.sessionId) {
-            const monotonicMetrics = [
-              "sessionDurationMs",
-              "activeDurationMs",
-              "idleDurationMs",
-              "pauseCount",
-              "acceptedChanges",
-              "rejectedChanges",
-              "committedChanges",
-              "failedChanges",
-              "insertedCharacters",
-              "deletedCharacters",
-              "resynchronizations",
-              "totalCommitLatencyMs"
-            ] as const;
-            const regressedMetric = monotonicMetrics.find(
-              key => checkpoint[key] < existing[key]
-            );
-            if (regressedMetric) {
+      const leaseRequest = leaseStore.get([checkpoint.projectId, checkpoint.documentId]);
+      leaseRequest.onsuccess = () => {
+        const currentLease = leaseRequest.result as StoredLiveAuthorMonitorLease | undefined;
+        if (currentLease === undefined) {
+          failure = new Error("No existe un lease vigente para guardar el checkpoint del monitor.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        try {
+          validateLiveAuthorMonitorLease(currentLease, checkpoint.projectId, checkpoint.documentId);
+        } catch {
+          failure = new Error("El lease vigente del monitor está malformado.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        const commitNow = Date.now();
+        if (currentLease.ownerId !== lease.ownerId ||
+            currentLease.fencingToken !== lease.fencingToken ||
+            currentLease.expiresAt <= commitNow ||
+            lease.expiresAt <= commitNow) {
+          failure = new Error("El checkpoint fue rechazado porque perdió el fencing token del monitor.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+
+        const existingRequest = checkpointStore.get([checkpoint.projectId, checkpoint.documentId]);
+        existingRequest.onsuccess = () => {
+          const existing = existingRequest.result as StoredLiveAuthorMonitorCheckpoint | undefined;
+          if (existing !== undefined) {
+            try {
+              validateLiveAuthorMonitorCheckpoint(
+                existing,
+                checkpoint.projectId,
+                checkpoint.documentId
+              );
+            } catch {
+              failure = new Error("El checkpoint existente del monitor está malformado.");
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              return;
+            }
+            if (existing.savedAt > checkpoint.savedAt) {
+              failure = new Error("Se rechazó guardar un checkpoint anterior al ya persistido.");
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              return;
+            }
+            if (existing.revision > checkpoint.revision ||
+                existing.sequence > checkpoint.sequence) {
               failure = new Error(
-                "Se rechazó un checkpoint de la misma sesión que hace retroceder la métrica " +
-                regressedMetric + "."
+                "Se rechazó guardar un checkpoint basado en una revisión o secuencia durable anterior."
               );
               try { transaction.abort(); } catch { /* transacción ya abortada */ }
               return;
             }
+            if (existing.sessionId === checkpoint.sessionId) {
+              const monotonicMetrics = [
+                "sessionDurationMs",
+                "activeDurationMs",
+                "idleDurationMs",
+                "pauseCount",
+                "acceptedChanges",
+                "rejectedChanges",
+                "committedChanges",
+                "failedChanges",
+                "insertedCharacters",
+                "deletedCharacters",
+                "resynchronizations",
+                "totalCommitLatencyMs"
+              ] as const;
+              const regressedMetric = monotonicMetrics.find(
+                key => checkpoint[key] < existing[key]
+              );
+              if (regressedMetric) {
+                failure = new Error(
+                  "Se rechazó un checkpoint de la misma sesión que hace retroceder la métrica " +
+                  regressedMetric + "."
+                );
+                try { transaction.abort(); } catch { /* transacción ya abortada */ }
+                return;
+              }
+            }
           }
-        }
-        try {
-          store.put(structuredClone(checkpoint));
-        } catch (error) {
-          failure = error instanceof Error ? error : new Error("No se pudo clonar el checkpoint.");
+          try {
+            checkpointStore.put(structuredClone(checkpoint));
+          } catch (error) {
+            failure = error instanceof Error ? error : new Error("No se pudo clonar el checkpoint.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          }
+        };
+        existingRequest.onerror = () => {
+          failure = existingRequest.error ??
+            new Error("No se pudo comprobar el checkpoint anterior.");
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
-        }
+        };
       };
-      existingRequest.onerror = () => {
-        failure = existingRequest.error ?? new Error("No se pudo comprobar el checkpoint anterior.");
+      leaseRequest.onerror = () => {
+        failure = leaseRequest.error ?? new Error("No se pudo verificar el lease del monitor.");
         try { transaction.abort(); } catch { /* transacción ya abortada */ }
       };
       transaction.oncomplete = () => resolve();

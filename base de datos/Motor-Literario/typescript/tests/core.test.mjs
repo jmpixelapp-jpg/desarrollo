@@ -4677,7 +4677,7 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
   store.loadIdeas = async () => [{ ...base, relatedIdeaIds: ["idea-b", "idea-b"] }];
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [{ ...base, relatedIdeaIds: ["idea-a"] }];
-  await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
+  await assert.rejects(() => api.getNarrativeIdeas(), /no puede enlazarse a sí misma/i);
   store.loadIdeas = async () => [{
     ...base,
     statusHistory: [
@@ -4685,7 +4685,9 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
       { status: "IDEA", reason: "writer", changedAt: 2 }
     ]
   }];
-  await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
+  await api.invalidateNarrativeKnowledgeFromExternalChange();
+  const repeatedWriterDecision = await api.getNarrativeIdeas();
+  assert.equal(repeatedWriterDecision[0].statusHistory.length, 2);
   store.loadIdeas = async () => [{
     ...base,
     status: "discarded",
@@ -4694,6 +4696,7 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
       { status: "discarded", reason: "text-revised", changedAt: 2 }
     ]
   }];
+  await api.invalidateNarrativeKnowledgeFromExternalChange();
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [];
   assert.deepEqual(await api.getNarrativeIdeas(), []);
@@ -8050,12 +8053,12 @@ test("IndexedDB rechaza ideas malformadas tanto al guardar como al recuperar", a
     };
     await assert.rejects(
       store.saveIdea(historyMismatch),
-      /historial no coincide con el estado actual/
+      /historial de estados no coincide con la idea que se va a guardar/
     );
     storedIdea = historyMismatch;
     await assert.rejects(
       store.loadIdeas("idea-integrity"),
-      /historial no coincide con el estado actual/
+      /historial de estados no coincide con la idea que se va a guardar/
     );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);

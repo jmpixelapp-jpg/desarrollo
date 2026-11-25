@@ -176,3 +176,31 @@ test("fusionar ideas conserva evidencia histórica y deduplica solo registros id
   assert.deepEqual(merged.relatedIdeaIds, ["idea-related"]);
   assert.equal(previous.evidence.length, 2);
 });
+
+test("fusionar ideas combina referencias explícitas sin duplicarlas y respeta el límite", async () => {
+  const { mergeNarrativeIdea, MAX_NARRATIVE_IDEA_REFERENCES } =
+    await import("../dist/motor-literario.js");
+  const previous = baseIdea({
+    relatedIdeaIds: ["idea-a", "idea-shared"]
+  });
+  const incoming = baseIdea({
+    relatedIdeaIds: ["idea-shared", "idea-b"]
+  });
+
+  const merged = mergeNarrativeIdea(previous, incoming);
+  assert.deepEqual(merged.relatedIdeaIds, ["idea-a", "idea-shared", "idea-b"]);
+  assert.deepEqual(previous.relatedIdeaIds, ["idea-a", "idea-shared"]);
+  assert.deepEqual(incoming.relatedIdeaIds, ["idea-shared", "idea-b"]);
+
+  const tooMany = baseIdea({
+    relatedIdeaIds: Array.from(
+      { length: MAX_NARRATIVE_IDEA_REFERENCES },
+      (_, index) => "existing-" + index
+    )
+  });
+  const oneMore = baseIdea({ relatedIdeaIds: ["new-reference"] });
+  assert.throws(
+    () => mergeNarrativeIdea(tooMany, oneMore),
+    /referencias explícitas a ideas superan el límite de 500/
+  );
+});

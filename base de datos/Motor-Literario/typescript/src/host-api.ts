@@ -3008,12 +3008,21 @@ export class HostEngineApi {
 
   private requireIdeaStore(): Required<Pick<
     import("./contracts").ProjectStore, "saveIdea" | "loadIdeas"
-  >> {
+  >> & Pick<
+    import("./contracts").ProjectStore, "saveIdeaIfUnchanged" | "updateIdeaIfUnchanged"
+  > {
     const store = this.store;
     if (!store.saveIdea || !store.loadIdeas) {
       throw new Error("El almacenamiento no admite ideas narrativas.");
     }
-    return { saveIdea: store.saveIdea.bind(store), loadIdeas: store.loadIdeas.bind(store) };
+    return {
+      saveIdea: store.saveIdea.bind(store),
+      loadIdeas: store.loadIdeas.bind(store),
+      ...(store.saveIdeaIfUnchanged
+        ? { saveIdeaIfUnchanged: store.saveIdeaIfUnchanged.bind(store) } : {}),
+      ...(store.updateIdeaIfUnchanged
+        ? { updateIdeaIfUnchanged: store.updateIdeaIfUnchanged.bind(store) } : {})
+    };
   }
 
   private async persistIdeaUpdate(

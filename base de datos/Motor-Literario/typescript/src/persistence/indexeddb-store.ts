@@ -3698,12 +3698,10 @@ export class IndexedDbProjectStore implements ProjectStore {
             if (countRequest.result !== receipt.archivedIdeaIds.length) {
               throw new Error("La biblioteca personal no coincide con el recibo de finalización.");
             }
-            const selected: PersonalIdeaLibraryEntry[] = [];
             let index = 0;
             const readNext = (): void => {
               if (finished) return;
               if (index >= receipt.archivedIdeaIds.length) {
-                archived.push(...selected);
                 return;
               }
               const ideaId = receipt.archivedIdeaIds[index++]!;
@@ -3737,7 +3735,6 @@ export class IndexedDbProjectStore implements ProjectStore {
                       throw new Error("La biblioteca personal contiene referencias históricas sin destino resoluble.");
                     }
                   }
-                  selected.push(entry);
                   readNext();
                 } catch (error) {
                   abortWith(error);

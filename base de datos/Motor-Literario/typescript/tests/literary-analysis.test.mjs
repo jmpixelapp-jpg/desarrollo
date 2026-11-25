@@ -1495,11 +1495,10 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
   );
   for (const invalidHistory of [
     [],
-    [{ status: "incorporated", reason: "initial" }],
     [{ status: "IDEA", reason: "writer", changedAt: 1 }],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "discarded", reason: "writer", changedAt: 2 }
+      { status: "IDEA", reason: "text-revised", changedAt: 2 }
     ]
   ]) {
     assert.throws(

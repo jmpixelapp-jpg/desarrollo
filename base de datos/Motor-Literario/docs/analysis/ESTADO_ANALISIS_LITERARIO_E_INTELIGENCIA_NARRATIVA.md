@@ -135,6 +135,7 @@ El archivo `typescript/tests/literary-analysis-graph-determinism.test.mjs` conce
 | Operaciones paralelas sobre registros distintos | Dos instancias del anfitrión sincronizan ideas de origen distintas en paralelo; ambas escrituras CAS se confirman y cada conjunto de vínculos permanece aislado en su registro. |
 | Conflicto entre lotes sobre el mismo registro | Dos instancias intentan reemplazar simultáneamente los vínculos de la misma idea a partir de la misma instantánea; exactamente una escritura prevalece y la otra operación falla por conflicto CAS, sin sobrescritura silenciosa. |
 | Contrato transaccional IndexedDB de referencias | Pruebas estáticas de la implementación verifican que la lectura CAS y las validaciones de ideas/fichas se ejecutan dentro del mismo alcance `readwrite`, que el `put` espera todas las comprobaciones y que una referencia inválida aborta la transacción. Estas pruebas inspeccionan el código fuente; no sustituyen una prueba de integración con IndexedDB real. |
+| Persistencia IndexedDB nativa de ideas | Una prueba de integración abre el almacén real del adaptador, intenta guardar una referencia inexistente y comprueba que el registro original permanece intacto; después confirma un vínculo válido y rechaza una escritura basada en una instantánea CAS obsoleta. Se omite explícitamente si el runtime no proporciona IndexedDB nativo. |
 
 Estas pruebas describen contratos, no demuestran por sí mismas que la suite se haya ejecutado. La verificación automatizada completa se realiza desde `typescript/` con `npm test`, que primero compila, valida el esquema y almacenamiento, y después ejecuta las suites Node. También existen `npm run typecheck`, `npm run build` y `npm run bench`.
 
@@ -164,6 +165,7 @@ Registro de commits de la línea de trabajo del análisis de ideas en `main`:
 - `0235361`: comprueba que dos instancias pueden sincronizar en paralelo ideas de origen distintas sin mezclar ni perder sus vínculos.
 - `41bc0dd`: comprueba que dos lotes concurrentes sobre la misma idea no se pisan: uno confirma y el otro recibe un conflicto de versión.
 - `00196e6`: añade auditorías de contrato para el alcance transaccional IndexedDB, la barrera previa al `put`, el aborto ante referencias inválidas y la inclusión del almacén de entidades.
+- `424f3d6`: incorpora una prueba de integración con IndexedDB nativo para comprobar rollback de referencias inválidas, persistencia de vínculos válidos y rechazo de CAS obsoleto.
 
 Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en su commit de GitHub para conocer su diff exacto. El trabajo concurrente de otros colaboradores puede intercalar commits en `main`; no atribuir esos cambios a esta línea de trabajo.
 
@@ -177,10 +179,10 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 6. Ampliar las pruebas de regresión para offsets UTF-16 por escena y por evento en cambios de revisión, rangos parciales y límites de fragmento; recurrencias y anclajes de eventos con caracteres suplementarios ya tienen cobertura.
 7. Ejecutar y registrar `npm run typecheck`, `npm test` y `npm run bench` en un entorno de proyecto; no declarar verde una verificación sin resultados observables.
 8. Validar la experiencia desde el programa anfitrión con manuscritos reales de prueba, manteniendo datos sintéticos o autorizados y confirmando que el motor nunca edita el texto por sí solo.
-9. Incorporar un entorno de integración con IndexedDB real o una implementación compatible para probar abortos, orden de transacciones y carreras entre altas/bajas de entidades y guardados CAS; las auditorías estáticas actuales solo protegen la forma del contrato.
+9. Ejecutar la nueva prueba de IndexedDB nativo en Node 22.13 o superior y ampliar la integración a transacciones solapadas, orden de escrituras y carreras entre altas/bajas de entidades y guardados CAS; la prueba añadida cubre rollback y CAS, pero no agota esos escenarios.
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo es `main`. Las consultas de estado y workflows para las últimas tandas (`41bc0dd`, `00196e6` y `f4dc681`) no devolvieron checks ni ejecuciones asociadas. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para estas tandas**. Las nuevas comprobaciones de IndexedDB son auditorías estáticas del contrato de implementación, no pruebas de ejecución en un navegador. No se afirma aquí que las pruebas se hayan ejecutado.
+La rama de trabajo es `main`. Las consultas de estado y workflows para las últimas tandas (`00196e6`, `424f3d6` y sus actualizaciones documentales) no devolvieron checks ni ejecuciones asociadas. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para estas tandas**. La cobertura combina auditorías estáticas con una nueva prueba de integración que usa IndexedDB nativo cuando está disponible; no hay evidencia de que esta prueba se haya ejecutado en CI ni localmente. No se afirma aquí que las pruebas se hayan ejecutado.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.

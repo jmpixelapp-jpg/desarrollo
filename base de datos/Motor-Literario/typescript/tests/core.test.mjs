@@ -10079,8 +10079,8 @@ test("IndexedDB registra el cierre del libro y repite la transferencia usando el
     const retryArchive = await store.archiveUnincorporatedIdeas(
       projectId, writerId, projectName, 200
     );
-    assert.equal(retryArchive.length, 1);
-    assert.equal(retryArchive[0].idea.id, "idea-to-archive");
+    assert.deepEqual(retryArchive, [],
+      "el recibo valida el archivo existente sin volver a entregar las ideas al anfitrión");
     assert.equal(library.size, 1, "el reintento no duplica entradas de biblioteca");
     assert.equal(receipts.size, 1, "el reintento no crea un segundo recibo");
     assert.equal(writerVersions.get(writerId).version, 1,

@@ -3244,6 +3244,12 @@ function buildCharacterProjectEventTimeline(
       untimedEventCount++;
       continue;
     }
+    // NaN e infinitos no representan posiciones cronológicas ordenables.
+    // Se contabilizan como eventos no verificados y no contaminan los grupos.
+    if (!Number.isFinite(event.timeReference.orderValue)) {
+      unverifiedEventCount++;
+      continue;
+    }
     timedEventCount++;
     const reference = event.timeReference;
     const timelineTrackId = event.timelineTrackId ?? null;

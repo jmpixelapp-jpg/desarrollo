@@ -35,6 +35,10 @@ export interface LiteraryAnalysisKnownProjectEvent {
   readonly participants: readonly string[];
   readonly timelineTrackId?: string;
   readonly timeReference?: NarrativeTimeReference;
+  /** Total de evidencias activas antes de limitar las muestras transferidas. */
+  readonly evidenceCount?: number;
+  /** Evidencias obsoletas no incluidas en la muestra activa. */
+  readonly staleEvidenceCount?: number;
   readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
 }
 export interface LiteraryAnalysisInput {
@@ -49,6 +53,8 @@ export interface LiteraryAnalysisInput {
   readonly knownEvents?: readonly LiteraryAnalysisKnownEvent[];
   /** Catálogo global de acontecimientos del proyecto para cronologías intercapítulos explícitamente fechadas. */
   readonly knownProjectEvents?: readonly LiteraryAnalysisKnownProjectEvent[];
+  /** Registros globales omitidos al acotar el catálogo transferido al análisis. */
+  readonly knownProjectEventsOmittedCount?: number;
   /** Historiales append-only validados de cambios explícitos de etiqueta y participantes. */
   readonly knownEventLifecycles?: readonly EventLifecycle[];
   /** Afirmaciones históricas del proyecto; solo se asignan a escenas con evidencia vigente de esta revisión. */
@@ -561,6 +567,7 @@ export interface LiteraryCharacterProjectEventTimelinePoint {
   readonly omittedEventIdCount: number;
   readonly documentIds: readonly string[];
   readonly evidenceCount: number;
+  readonly omittedEvidenceCount: number;
   readonly evidenceSamples: readonly LiteraryCharacterProjectEventTimelineEvidence[];
   readonly evidenceTruncated: boolean;
 }
@@ -579,7 +586,9 @@ export interface LiteraryCharacterProjectEventTimeline {
   readonly sourceEventCount: number;
   readonly timedEventCount: number;
   readonly untimedEventCount: number;
+  readonly unverifiedEventCount: number;
   readonly staleEventCount: number;
+  readonly staleEvidenceCount: number;
   readonly pointCount: number;
   readonly omittedPointCount: number;
   readonly transitionCount: number;
@@ -613,6 +622,7 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
   readonly omittedAttributeProfileCount: number;
   readonly omittedEventAssociationCount: number;
   readonly omittedCausalCandidateCount: number;
+  readonly omittedProjectEventCount: number;
   readonly causalCandidateCount: number;
   readonly trajectories: readonly LiteraryCharacterNarrativeTrajectory[];
 }
@@ -2881,14 +2891,21 @@ function buildCharacterProjectEventTimeline(
   let sourceEventCount = 0;
   let timedEventCount = 0;
   let untimedEventCount = 0;
+  let unverifiedEventCount = 0;
   let staleEventCount = 0;
+  let staleEvidenceCount = 0;
 
   for (const event of projectEvents) {
     if (!event.participants.includes(entityId)) continue;
     sourceEventCount++;
     const currentEvidence = event.evidence.filter(item => item.status !== "stale");
-    if (currentEvidence.length === 0) {
-      if (event.evidence.length > 0) staleEventCount++;
+    const totalActiveEvidenceCount = event.evidenceCount ?? currentEvidence.length;
+    const eventStaleEvidenceCount = event.staleEvidenceCount ??
+      event.evidence.filter(item => item.status === "stale").length;
+    staleEvidenceCount += eventStaleEvidenceCount;
+    if (totalActiveEvidenceCount === 0) {
+      if (eventStaleEvidenceCount > 0) staleEventCount++;
+      else unverifiedEventCount++;
       continue;
     }
     if (!event.timeReference) {
@@ -2908,10 +2925,12 @@ function buildCharacterProjectEventTimeline(
       orderValue:reference.orderValue,
       events:new Map<string,LiteraryAnalysisKnownProjectEvent>(),
       evidence:[],
+      evidenceCount:0,
       rawReferences:new Set<string>(),
       documents:new Set<string>()
     };
     group.events.set(event.eventId,event);
+    group.evidenceCount += totalActiveEvidenceCount;
     group.rawReferences.add(reference.raw);
     for (const evidence of currentEvidence) {
       group.documents.add(evidence.documentId);
@@ -2945,9 +2964,10 @@ function buildCharacterProjectEventTimeline(
       eventIds:orderedEvents.slice(0,50),
       omittedEventIdCount:Math.max(0,orderedEvents.length-50),
       documentIds:[...group.documents].sort((a,b) => a.localeCompare(b,"en")),
-      evidenceCount:orderedEvidence.length,
+      evidenceCount:group.evidenceCount,
+      omittedEvidenceCount:Math.max(0,group.evidenceCount-Math.min(20,orderedEvidence.length)),
       evidenceSamples:orderedEvidence.slice(0,20),
-      evidenceTruncated:orderedEvidence.length>20
+      evidenceTruncated:group.evidenceCount>Math.min(20,orderedEvidence.length)
     };
   }).sort((a,b) =>
     (a.timelineTrackId ?? "").localeCompare(b.timelineTrackId ?? "","en") ||
@@ -2988,7 +3008,9 @@ function buildCharacterProjectEventTimeline(
     sourceEventCount,
     timedEventCount,
     untimedEventCount,
+    unverifiedEventCount,
     staleEventCount,
+    staleEvidenceCount,
     pointCount:allPoints.length,
     omittedPointCount:Math.max(0,allPoints.length-200),
     transitionCount:allTransitions.length,
@@ -3159,6 +3181,7 @@ function buildCharacterNarrativeTrajectories(
     omittedAttributeProfileCount:attributeEvolution.omittedProfileCount,
     omittedEventAssociationCount:eventEvidence.omittedAssociationCount,
     omittedCausalCandidateCount:dependencies.omittedCandidateCount,
+    omittedProjectEventCount:input.knownProjectEventsOmittedCount ?? 0,
     causalCandidateCount:dependencies.candidateCount,
     trajectories:trajectories.slice(0,200)
   };
@@ -4317,6 +4340,8 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (!Array.isArray(input.knownEvents) || input.knownEvents.length > 2_000)) ||
       (input.knownProjectEvents !== undefined &&
         (!Array.isArray(input.knownProjectEvents) || input.knownProjectEvents.length > 2_000)) ||
+      (input.knownProjectEventsOmittedCount !== undefined &&
+        (!Number.isSafeInteger(input.knownProjectEventsOmittedCount) || input.knownProjectEventsOmittedCount < 0)) ||
       (input.knownEventLifecycles !== undefined &&
         (!Array.isArray(input.knownEventLifecycles) || input.knownEventLifecycles.length > 20_000)) ||
       (input.knownAssertions !== undefined &&
@@ -4369,6 +4394,10 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(event.participants) || event.participants.length > 500 ||
         event.participants.some((participant: string) => typeof participant !== "string" || !participant.trim()) ||
         !Array.isArray(event.evidence) || event.evidence.length > 200 ||
+        (event.evidenceCount !== undefined &&
+          (!Number.isSafeInteger(event.evidenceCount) || event.evidenceCount < event.evidence.length)) ||
+        (event.staleEvidenceCount !== undefined &&
+          (!Number.isSafeInteger(event.staleEvidenceCount) || event.staleEvidenceCount < 0)) ||
         (event.timelineTrackId !== undefined &&
           (typeof event.timelineTrackId !== "string" || !event.timelineTrackId.trim() || event.timelineTrackId.length > 256)) ||
         (event.timeReference !== undefined &&
@@ -4745,7 +4774,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La evolución de atributos compara afirmaciones explícitas de edad, ubicación y rol en escenas de la misma revisión del documento analizado. Solo los cambios entre valores únicos se clasifican como changed-value; varios valores en una escena o la falta de afirmación no se resuelven como contradicción ni como continuidad.",
       "La cronología de atributos entre capítulos compara únicamente referencias temporales explícitas con la misma base y precisión; las afirmaciones sin fecha comparable no se ordenan. Varios valores asociados al mismo punto temporal se conservan como multiple-values-at-same-time, y una fecha explícita no demuestra causalidad ni resuelve contradicciones.",
       "Las dependencias entre acontecimientos son candidatos basados en dos evidencias vigentes de la misma oración y en conectores causales literales reconocidos. La dirección se orienta según el patrón del conector, pero no demuestra causalidad, suficiencia explicativa ni una secuencia completa; requiere revisión editorial.",
-      "Las trayectorias narrativas consolidan por ID atributos, asociaciones de participante y candidatos causales expuestos; los límites de perfiles y escenas se informan por separado. Una trayectoria sin evidencia en una escena no prueba ausencia en la ficción ni describe por sí sola un arco psicológico. Las relaciones causales conservan el estado candidate-needs-review."
+      "Las trayectorias narrativas consolidan por ID atributos, asociaciones de participante y candidatos causales expuestos; los límites de perfiles y escenas se informan por separado. Una trayectoria sin evidencia en una escena no prueba ausencia en la ficción ni describe por sí sola un arco psicológico. Las relaciones causales conservan el estado candidate-needs-review.",
+      "La cronología global de acontecimientos usa la lista actual de participantes y fechas explícitas de las fichas del proyecto. No reconstruye listas históricas de participantes a partir de menciones, no ordena eventos sin tiempo comparable y no cruza transiciones entre pistas temporales no declaradas."
     ]
   };
 }

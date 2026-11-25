@@ -175,7 +175,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
             !["initial", "writer", "text-revised"].includes(change.reason) ||
             (change.reason === "text-revised" && change.status !== "IDEA") ||
             (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-              (change.status === item.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
+              change.status === item.statusHistory[index - 1]?.status) ||
             (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
             false) invalid();
       }
@@ -3152,8 +3152,12 @@ export class HostEngineApi {
       : [...this.narrativeIdeas.values()];
 
     if (!allowHistoricalSelfReferences &&
-        ideas.some(idea => idea.relatedIdeaIds?.includes(idea.id))) {
-      throw new Error("Integridad narrativa: una idea no puede enlazarse a sí misma.");
+        ideas.some(idea =>
+          idea.relatedIdeaIds?.includes(idea.id) ||
+          (idea.statusHistory?.length &&
+            idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status)
+        )) {
+      throw new Error("Integridad narrativa: las ideas contienen autorreferencias o historiales que no coinciden con su estado actual.");
     }
 
     let entities: readonly NarrativeEntity[] | undefined;

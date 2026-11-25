@@ -169,7 +169,6 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
     // Las autorreferencias se conservan como aristas explícitas del grafo.
     if (item.statusHistory !== undefined) {
       if (!Array.isArray(item.statusHistory) || item.statusHistory.length === 0) invalid();
-      let previousChangedAt: number | undefined;
       for (let index = 0; index < item.statusHistory.length; index++) {
         const change = item.statusHistory[index];
         if (!change || !["IDEA", "incorporated", "discarded"].includes(change.status) ||
@@ -178,8 +177,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
             (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
               change.status === item.statusHistory[index - 1]?.status) ||
             (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-            (change.changedAt !== undefined && previousChangedAt !== undefined && change.changedAt < previousChangedAt)) invalid();
-        if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+            false) invalid();
       }
       if (item.statusHistory[item.statusHistory.length - 1]?.status !== item.status) invalid();
     }

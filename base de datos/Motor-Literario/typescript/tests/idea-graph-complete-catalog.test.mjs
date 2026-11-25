@@ -971,3 +971,45 @@ test("la resonancia léxica excluye stopwords frecuentes en francés", async () 
     api.dispose();
   }
 });
+
+
+test("la resonancia léxica excluye stopwords frecuentes en italiano", async () => {
+  const ideas = [
+    {
+      projectId, id: "lexical-italian-stopwords-a",
+      text: "la memoria e lo specchio con una luce",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "lexical-italian-stopwords-b",
+      text: "la memoria dello specchio nella notte",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }
+  ];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-italian-stopwords" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLe parole funzionali italiane devono essere escluse.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.analyzedIdeaCount, 2);
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.equal(lexical.resonances.length, 1);
+    assert.equal(lexical.resonances[0].leftTermCount, 3);
+    assert.equal(lexical.resonances[0].rightTermCount, 3);
+    assert.equal(lexical.resonances[0].sharedTermCount, 2);
+    assert.deepEqual(lexical.resonances[0].sharedTerms, ["memoria", "specchio"]);
+  } finally {
+    api.dispose();
+  }
+});

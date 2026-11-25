@@ -931,6 +931,94 @@ async function saveSimpleProjectRecord<T extends { readonly projectId: string; r
 }
 
 
+
+interface ProjectParentCheck {
+  readonly storeName: string;
+  readonly key: IDBValidKey;
+  readonly label: string;
+  readonly validate?: (value: unknown) => void;
+}
+
+async function saveProjectRecordWithParents<T extends { readonly projectId: string; readonly id: string }>(
+  db: IDBDatabase,
+  storeName: string,
+  record: T,
+  expectedCurrent: T | undefined,
+  parents: readonly ProjectParentCheck[],
+  label: string,
+  validate: (value: T, expectedProjectId?: string) => void,
+  clone: (value: T) => T
+): Promise<void> {
+  validate(record, record.projectId);
+  if (expectedCurrent) {
+    validate(expectedCurrent, record.projectId);
+    if (expectedCurrent.id !== record.id) throw new Error(`La actualización de ${label} debe conservar su ID.`);
+  }
+  const storeNames = [...new Set([storeName, ...parents.map(parent => parent.storeName)])];
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(storeNames, "readwrite");
+    const target = transaction.objectStore(storeName);
+    const currentRequest = target.get([record.projectId, record.id]);
+    const parentRequests = parents.map(parent =>
+      transaction.objectStore(parent.storeName).get(parent.key)
+    );
+    let currentReady = false;
+    const parentsReady = parents.map(() => false);
+    const parentValues: unknown[] = [];
+    let current: T | undefined;
+    let failure: Error | undefined;
+    let finished = false;
+    const abortWith = (error: unknown): void => {
+      if (finished) return;
+      failure = error instanceof Error ? error : new Error(`No se pudo guardar ${label}.`);
+      finished = true;
+      try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    const commitIfReady = (): void => {
+      if (finished || !currentReady || parentsReady.some(ready => !ready)) return;
+      try {
+        parents.forEach((parent, index) => {
+          const value = parentValues[index];
+          if (!value) throw new Error(`No existe ${parent.label} en el proyecto activo.`);
+          parent.validate?.(value);
+        });
+        if (expectedCurrent) {
+          if (!current || current.projectId !== record.projectId || current.id !== record.id ||
+              JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+            throw new Error(`${label} cambió en otra instancia; vuelve a leerlo antes de actualizar.`);
+          }
+        } else if (current) {
+          throw new Error(`${label} ya existe; vuelve a leerlo antes de actualizar.`);
+        }
+        target.put(clone(record));
+      } catch (error) {
+        abortWith(error);
+      }
+    };
+    currentRequest.onsuccess = () => {
+      current = currentRequest.result as T | undefined;
+      currentReady = true;
+      commitIfReady();
+    };
+    currentRequest.onerror = () => abortWith(
+      currentRequest.error ?? new Error(`No se pudo verificar ${label}.`)
+    );
+    parentRequests.forEach((request, index) => {
+      request.onsuccess = () => {
+        parentValues[index] = request.result;
+        parentsReady[index] = true;
+        commitIfReady();
+      };
+      request.onerror = () => abortWith(
+        request.error ?? new Error(`No se pudo verificar ${parents[index]!.label}.`)
+      );
+    });
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(failure ?? transaction.error ?? new Error(`No se pudo guardar ${label}.`));
+    transaction.onabort = () => reject(failure ?? transaction.error ?? new Error(`Se canceló el guardado de ${label}.`));
+  });
+}
+
 type LifecycleHistoryRecord = {
   readonly projectId: string;
   readonly id: string;
@@ -1770,6 +1858,229 @@ export class IndexedDbProjectStore implements ProjectStore {
       await this.open(), RELATION_LIFECYCLES, RELATIONS,
       item, item.relationId, "relación", validateRelationLifecycle
     );
+  }
+
+  async loadManuscriptFragments(
+    projectId: string,
+    documentId?: string
+  ): Promise<readonly ManuscriptFragment[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        (documentId !== undefined && (typeof documentId !== "string" || !documentId.trim()))) {
+      throw new Error("Identidad de proyecto o documento inválida para leer fragmentos.");
+    }
+    const fragments = await loadSimpleProjectRecords(
+      await this.open(), MANUSCRIPT_FRAGMENTS, projectId, "fragmentos",
+      validateManuscriptFragment, cloneManuscriptFragment
+    );
+    const all = new Map(fragments.map(fragment => [fragment.id, fragment]));
+    for (const fragment of fragments) {
+      if (fragment.parentFragmentId) {
+        const parent = all.get(fragment.parentFragmentId);
+        if (!parent) throw new Error("Un fragmento persistido referencia un padre inexistente.");
+        if ((parent.documentId ?? null) !== (fragment.documentId ?? null)) {
+          throw new Error("Un fragmento y su padre deben pertenecer al mismo documento.");
+        }
+      }
+      if (fragment.documentId) {
+        const parentDocument = await this.loadDocument(projectId, fragment.documentId);
+        if (!parentDocument) throw new Error("Un fragmento persistido referencia un documento inexistente.");
+      }
+    }
+    return fragments.filter(fragment => documentId === undefined || fragment.documentId === documentId);
+  }
+
+  async saveManuscriptFragment(
+    fragment: ManuscriptFragment,
+    expectedCurrent?: ManuscriptFragment
+  ): Promise<void> {
+    validateManuscriptFragment(fragment, fragment.projectId);
+    const parents: ProjectParentCheck[] = [];
+    if (fragment.documentId) {
+      parents.push({
+        storeName: DOCUMENTS, key: [fragment.projectId, fragment.documentId],
+        label: "el documento del fragmento"
+      });
+    }
+    if (fragment.parentFragmentId) {
+      parents.push({
+        storeName: MANUSCRIPT_FRAGMENTS, key: [fragment.projectId, fragment.parentFragmentId],
+        label: "el fragmento padre",
+        validate: value => {
+          const parent = value as ManuscriptFragment;
+          validateManuscriptFragment(parent, fragment.projectId);
+          if ((parent.documentId ?? null) !== (fragment.documentId ?? null)) {
+            throw new Error("El fragmento padre pertenece a otro documento.");
+          }
+        }
+      });
+    }
+    await saveProjectRecordWithParents(
+      await this.open(), MANUSCRIPT_FRAGMENTS, fragment, expectedCurrent, parents,
+      "fragmento de manuscrito", validateManuscriptFragment, cloneManuscriptFragment
+    );
+  }
+
+  async loadRecordAttributes(projectId: string, recordId: string): Promise<readonly RecordAttribute[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof recordId !== "string" || !recordId.trim()) {
+      throw new Error("Identidad de proyecto o ficha inválida para leer atributos.");
+    }
+    const records = await loadSimpleProjectRecords(
+      await this.open(), RECORD_ATTRIBUTES, projectId, "atributos de ficha",
+      validateRecordAttribute, cloneRecordAttribute
+    );
+    return records.filter(item => item.recordId === recordId);
+  }
+
+  async saveRecordAttribute(
+    attribute: RecordAttribute,
+    expectedCurrent?: RecordAttribute
+  ): Promise<void> {
+    validateRecordAttribute(attribute, attribute.projectId);
+    await saveProjectRecordWithParents(
+      await this.open(), RECORD_ATTRIBUTES, attribute, expectedCurrent,
+      [{
+        storeName: ENTITIES, key: [attribute.projectId, attribute.recordId],
+        label: "la ficha del atributo",
+        validate: value => validateNarrativeEntityRecord(value as NarrativeEntity, "ficha del atributo")
+      }],
+      "atributo de ficha", validateRecordAttribute, cloneRecordAttribute
+    );
+  }
+
+  async loadRelationAttributes(projectId: string, relationId: string): Promise<readonly RelationAttribute[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof relationId !== "string" || !relationId.trim()) {
+      throw new Error("Identidad de proyecto o relación inválida para leer atributos.");
+    }
+    const records = await loadSimpleProjectRecords(
+      await this.open(), RELATION_ATTRIBUTES, projectId, "atributos de relación",
+      validateRelationAttribute, cloneRelationAttribute
+    );
+    return records.filter(item => item.relationId === relationId);
+  }
+
+  async saveRelationAttribute(
+    attribute: RelationAttribute,
+    expectedCurrent?: RelationAttribute
+  ): Promise<void> {
+    validateRelationAttribute(attribute, attribute.projectId);
+    await saveProjectRecordWithParents(
+      await this.open(), RELATION_ATTRIBUTES, attribute, expectedCurrent,
+      [{
+        storeName: RELATIONS, key: [attribute.projectId, attribute.relationId],
+        label: "la relación del atributo",
+        validate: value => validateNarrativeRelationRecord(value as NarrativeRelation, "relación del atributo")
+      }],
+      "atributo de relación", validateRelationAttribute, cloneRelationAttribute
+    );
+  }
+
+  async loadActiveSuggestions(
+    projectId: string,
+    documentId?: string,
+    status?: ActiveSuggestion["status"]
+  ): Promise<readonly ActiveSuggestion[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        (documentId !== undefined && (typeof documentId !== "string" || !documentId.trim()))) {
+      throw new Error("Identidad de proyecto o documento inválida para consultar sugerencias.");
+    }
+    const suggestions = await loadSimpleProjectRecords(
+      await this.open(), ACTIVE_SUGGESTIONS, projectId, "sugerencias activas",
+      validateActiveSuggestion, cloneActiveSuggestion
+    );
+    return suggestions.filter(item =>
+      (documentId === undefined || item.documentId === documentId) &&
+      (status === undefined || item.status === status)
+    );
+  }
+
+  async saveActiveSuggestion(
+    suggestion: ActiveSuggestion,
+    expectedCurrent?: ActiveSuggestion
+  ): Promise<void> {
+    validateActiveSuggestion(suggestion, suggestion.projectId);
+    const parents: ProjectParentCheck[] = [];
+    if (suggestion.documentId) {
+      parents.push({
+        storeName: DOCUMENTS, key: [suggestion.projectId, suggestion.documentId],
+        label: "el documento de la sugerencia"
+      });
+    }
+    if (suggestion.fragmentId) {
+      parents.push({
+        storeName: MANUSCRIPT_FRAGMENTS, key: [suggestion.projectId, suggestion.fragmentId],
+        label: "el fragmento de la sugerencia",
+        validate: value => {
+          const fragment = value as ManuscriptFragment;
+          validateManuscriptFragment(fragment, suggestion.projectId);
+          if (fragment.documentId !== suggestion.documentId) {
+            throw new Error("El fragmento de la sugerencia pertenece a otro documento.");
+          }
+        }
+      });
+    }
+    await saveProjectRecordWithParents(
+      await this.open(), ACTIVE_SUGGESTIONS, suggestion, expectedCurrent, parents,
+      "sugerencia activa", validateActiveSuggestion, cloneActiveSuggestion
+    );
+  }
+
+  async loadImportAuthorizations(writerId: string): Promise<readonly ImportAuthorization[]> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256) {
+      throw new Error("Identificador de escritor inválido para consultar autorizaciones.");
+    }
+    const transaction = (await this.open()).transaction(IMPORT_AUTHORIZATIONS, "readonly");
+    const request = transaction.objectStore(IMPORT_AUTHORIZATIONS).index("by-writer").getAll(writerId);
+    const records = await readAfterTransaction(
+      transaction, request, "No se pudieron leer las autorizaciones de importación."
+    ) as ImportAuthorization[];
+    if (!Array.isArray(records)) throw new Error("La colección de autorizaciones es inválida.");
+    const ids = new Set<string>();
+    for (const item of records) {
+      validateImportAuthorization(item, writerId);
+      const key = JSON.stringify([item.sourceProjectId, item.targetProjectId, item.authorizationId]);
+      if (ids.has(key)) throw new Error("Hay autorizaciones de importación duplicadas.");
+      ids.add(key);
+    }
+    return records.map(cloneImportAuthorization);
+  }
+
+  async appendImportAuthorization(authorization: ImportAuthorization): Promise<void> {
+    validateImportAuthorization(authorization, authorization.writerId);
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(IMPORT_AUTHORIZATIONS, "readwrite");
+      const store = transaction.objectStore(IMPORT_AUTHORIZATIONS);
+      const request = store.add(cloneImportAuthorization(authorization));
+      let failure: unknown;
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo registrar la autorización de importación.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo registrar la autorización de importación."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el registro de autorización."));
+    });
+  }
+
+  async loadSchemaMigrations(): Promise<readonly SchemaMigration[]> {
+    const transaction = (await this.open()).transaction(SCHEMA_MIGRATIONS, "readonly");
+    const request = transaction.objectStore(SCHEMA_MIGRATIONS).getAll();
+    const records = await readAfterTransaction(
+      transaction, request, "No se pudo leer el historial de migraciones."
+    ) as SchemaMigration[];
+    if (!Array.isArray(records)) throw new Error("El historial de migraciones no es una colección.");
+    const ids = new Set<string>();
+    for (const item of records) {
+      validateSchemaMigration(item);
+      if (ids.has(item.migrationId)) throw new Error("Hay IDs duplicados en el historial de migraciones.");
+      ids.add(item.migrationId);
+    }
+    return records.sort((first, second) =>
+      Number(first.toVersion) - Number(second.toVersion) ||
+      first.migrationId.localeCompare(second.migrationId)
+    ).map(cloneSchemaMigration);
   }
 
   async loadStyleProfiles(projectId: string): Promise<readonly StyleProfile[]> {

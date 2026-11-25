@@ -410,9 +410,7 @@ test("no acepta destinos con el mismo ID pertenecientes a otro proyecto", async 
       idea("source"),
       idea("shared-idea-id", { projectId: "other-project" })
     ],
-    [entity("shared-entity-id", "Ana").projectId === projectId
-      ? { ...entity("shared-entity-id", "Ana"), projectId: "other-project" }
-      : entity("shared-entity-id", "Ana")]
+    [{ ...entity("shared-entity-id", "Ana"), projectId: "other-project" }]
   );
   const api = createApi(store);
 

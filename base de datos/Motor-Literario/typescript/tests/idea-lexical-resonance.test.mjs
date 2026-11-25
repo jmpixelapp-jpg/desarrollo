@@ -148,6 +148,17 @@ test("respeta el presupuesto global de texto sin dividir una idea a medias", () 
   assert.equal(result.candidatePairCount, 0);
 });
 
+test("rechaza metadatos de omisión incompatibles con el contrato", () => {
+  assert.throws(
+    () => analyze([{ ...idea("idea-invalid"), textOmitted: "unknown" }]),
+    /catálogo global de ideas del análisis literario es inválido/
+  );
+  assert.throws(
+    () => analyze([{ ...idea("idea-invalid-text", "memoria"), textOmitted: "budget" }]),
+    /catálogo global de ideas del análisis literario es inválido/
+  );
+});
+
 test("distingue textos omitidos por presupuesto de textos ausentes en adaptadores antiguos", () => {
   const result = analyze([{ ...idea("idea-budget"), textOmitted: "budget" }]);
 

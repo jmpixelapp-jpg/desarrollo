@@ -143,6 +143,20 @@ test("conserva ciclos, reciprocidad y orden estable con índices compactos", () 
   );
 });
 
+test("reconoce una auto-referencia como ciclo sin clasificar nodos aislados", () => {
+  const graph = analyzeGraph([
+    { ...idea("self-loop"), relatedIdeaIds: ["self-loop"] },
+    idea("no-loop")
+  ]);
+
+  assert.equal(graph.referenceCount, 1);
+  assert.equal(graph.includedReferenceCount, 1);
+  assert.equal(graph.cycleCount, 1);
+  assert.deepEqual(graph.cycles, [{ ideaIds: ["self-loop"] }]);
+  assert.equal(graph.weakComponentCount, 2);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 1);
+});
+
 test("memoiza el grafo completo, aísla las respuestas e invalida cambios estructurales", () => {
   const ideas = [
     { ...idea("graph-a", "memoria espejo luz"), relatedIdeaIds: ["graph-b"] },

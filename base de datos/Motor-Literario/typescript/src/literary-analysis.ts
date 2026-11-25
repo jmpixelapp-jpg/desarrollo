@@ -3504,7 +3504,9 @@ function buildLiteraryIdeaGraph(
         component.push(member);
         if (member === currentIndex) break;
       }
-      if (component.length > 1) {
+      const hasSelfReference = component.length === 1 &&
+        adjacency[component[0]!]!.includes(component[0]!);
+      if (component.length > 1 || hasSelfReference) {
         component.sort((left, right) => left - right);
         cycles.push({
           ideaIds: component.map(member => orderedIdeas[member]!.ideaId)

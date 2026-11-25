@@ -314,3 +314,21 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **Resultado verificado:** CI aislada [45724732118](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724732118), build Vite correcto, esquema 0.4.2 válido, auditoría física correcta (25 tablas, 33 almacenes) y 100/100 pruebas aprobadas, 0 fallidas, 0 omitidas.
 
 **Límite:** fake-indexeddb valida el comportamiento del adaptador en memoria; la prueba de navegador real con almacenamiento físico y reinicio del navegador sigue pendiente.
+
+
+
+## 15. Nueva entrega — rechazo de checkpoints atrasados y protección de métricas monotónicas (25 de noviembre de 2026)
+
+**Objetivo:** evitar que una pestaña o instancia con una escritura retrasada sobrescriba métricas más avanzadas solo porque su reloj local produjo un timestamp mayor.
+
+**Implementación:** la transacción readwrite de IndexedDbProjectStore ahora valida el checkpoint existente y rechaza candidatos con revisión/secuencia anteriores. Si ambos usan la misma sessionId, exige que duraciones acumuladas, pausas, contadores aceptados/rechazados/commit/fallo, caracteres acumulados, resincronizaciones y latencia total no retrocedan. Una nueva sessionId puede reiniciar las métricas sobre el mismo snapshot durable si el timestamp avanza y no disminuyen revisión/secuencia.
+
+**Pruebas añadidas:** una escritura con timestamp nuevo pero revisión/secuencia antigua es rechazada; también se rechazan métricas regresivas en la misma sesión. Se verifica que el checkpoint previo permanece intacto y que una nueva identidad puede sustituirlo sin retroceder el snapshot.
+
+**Archivos:** typescript/src/persistence/indexeddb-store.ts; typescript/tests/live-author-monitor-indexeddb.test.mjs; sección 30 de la especificación.
+
+**Commits:** [b16f048 — bloquear checkpoints atrasados](https://github.com/jmpixelapp-jpg/desarrollo/commit/b16f048cf38cc07f22a0e7f15021347509794d9d), [8a58427 — pruebas de orden y métricas monotónicas](https://github.com/jmpixelapp-jpg/desarrollo/commit/8a584270842aca3d65f635a5b4ec0bd98ad84038).
+
+**Resultado verificado:** CI específica [45724891204](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724891204): auditoría de MLDB y almacenes válida, build Vite y **102/102 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+**Limitación:** esta protección de escritura no es un lease de edición ni sincroniza cursores/operaciones entre dos editores concurrentes. Impide regresiones del checkpoint, pero no sustituye la coordinación del journal durable.

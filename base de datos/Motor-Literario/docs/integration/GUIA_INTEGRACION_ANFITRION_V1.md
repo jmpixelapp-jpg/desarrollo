@@ -258,6 +258,22 @@ Esta barrera espera la cola de cambios, el análisis en vivo, la persistencia de
 
 La API expone consultas y operaciones tipadas para que el anfitrión construya su propia interfaz. Las listas que siguen son métodos públicos de `HostEngineApi`; los detalles exactos de cada objeto se definen en los tipos TypeScript enlazados al final de esta sección.
 
+Cuando el motor se ejecuta como proceso separado, `MotorLiterarioBridgeClient` ofrece wrappers tipados para las operaciones de ideas y biblioteca: `getNarrativeEntities(projectId)`, `getNarrativeIdeas(projectId)`, `setNarrativeIdeaEntityLink(projectId, ideaId, entityId, linked)`, `setNarrativeIdeaLink(projectId, ideaId, relatedIdeaId, linked)`, `setNarrativeIdeaStatus(projectId, ideaId, status)`, `getPersonalIdeaLibrary(projectId)`, `getPersonalIdeaLibraryPage(projectId, cursor, limit)`, `getProjectFinalizationReceipt(projectId)`, `archiveUnincorporatedIdeas(projectId)` y `finalizeProjectToIdeaLibrary(projectId)`. Todas las llamadas reciben `projectId`; el escritor se deriva de la identidad autenticada que el puente abrió para ese proyecto y no se envía como argumento de la consulta.
+
+Ejemplo de flujo recomendado para una biblioteca grande:
+
+~~~ts
+const ideas = await bridge.getNarrativeIdeas(projectId);
+const updated = await bridge.setNarrativeIdeaLink(
+  projectId, ideaSourceId, ideaTargetId, true
+);
+const summary = await bridge.finalizeProjectToIdeaLibrary(projectId);
+let page = await bridge.getPersonalIdeaLibraryPage(projectId, null, 100);
+// Continuar leyendo con page.nextCursor hasta que sea null.
+~~~
+
+`archiveUnincorporatedIdeas(projectId)` y `getPersonalIdeaLibrary(projectId)` se conservan para compatibilidad y devuelven colecciones completas en memoria. Para bibliotecas extensas, usar la finalización resumida y la lectura por páginas.
+
 ### Conocimiento narrativo
 
 - `getNarrativeEntities()`, `getNarrativeRelations()`, `getNarrativeEvents()`, `getNarrativeIdeas()` y `getNarrativeAssertions()`.

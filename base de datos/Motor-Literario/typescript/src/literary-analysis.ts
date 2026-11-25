@@ -687,6 +687,12 @@ export interface LiteraryCharacterDocumentedIdeaReference {
   /** La referencia puede apuntar a una idea omitida del snapshot, no necesariamente inexistente. */
   readonly resolution: "included-in-analysis-snapshot" | "not-in-analysis-snapshot";
 }
+export interface LiteraryCharacterIdeaStatusTransition {
+  readonly fromStatus: NarrativeIdeaStatusChange["status"];
+  readonly toStatus: NarrativeIdeaStatusChange["status"];
+  readonly changedAt: number | null;
+  readonly reason: NarrativeIdeaStatusChange["reason"];
+}
 export interface LiteraryCharacterDocumentedDecision {
   readonly ideaId: string;
   readonly text: string;
@@ -701,6 +707,17 @@ export interface LiteraryCharacterDocumentedDecision {
   readonly evidenceTruncated: boolean;
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
   readonly omittedStatusHistoryCount: number;
+  /** Transiciones explícitas entre estados consecutivos distintos del historial visible. */
+  readonly statusTransitions: readonly LiteraryCharacterIdeaStatusTransition[];
+  readonly omittedStatusTransitionCount: number;
+  readonly reopeningCount: number;
+  readonly statusEvolutionStatus:
+    | "unknown-incomplete-history"
+    | "no-history"
+    | "idea-retained"
+    | "incorporated"
+    | "discarded"
+    | "reopened";
   /** Compara el estado actual de la idea con el último estado visible del historial. */
   readonly currentStatusHistoryConsistency: "consistent" | "mismatch" | "unknown";
   /** Retrocesos entre marcas temporales conocidas de cambios adyacentes. */
@@ -4584,6 +4601,30 @@ function buildCharacterNarrativeTrajectories(
             : omittedProjectEventCount > 0
               ? "unknown-due-to-incomplete-catalog" as const
               : "no-later-event-in-snapshot" as const;
+      const statusTransitions = idea.statusHistory.slice(1)
+        .flatMap((change,index) => {
+          const previous = idea.statusHistory[index]!;
+          return previous.status === change.status ? [] : [{
+            fromStatus:previous.status,
+            toStatus:change.status,
+            changedAt:change.changedAt ?? null,
+            reason:change.reason
+          }];
+        });
+      const reopeningCount = statusTransitions.filter(transition =>
+        transition.toStatus === "IDEA" && transition.fromStatus !== "IDEA"
+      ).length;
+      const statusEvolutionStatus = idea.omittedStatusHistoryCount > 0
+        ? "unknown-incomplete-history" as const
+        : idea.statusHistory.length === 0
+          ? "no-history" as const
+          : reopeningCount > 0
+            ? "reopened" as const
+            : idea.status === "incorporated"
+              ? "incorporated" as const
+              : idea.status === "discarded"
+                ? "discarded" as const
+                : "idea-retained" as const;
       const decision:LiteraryCharacterDocumentedDecision = {
         ideaId:idea.ideaId,
         text:idea.text,
@@ -4609,6 +4650,10 @@ function buildCharacterNarrativeTrajectories(
           idea.evidenceCount>Math.min(20,idea.evidence.length),
         statusHistory:idea.statusHistory,
         omittedStatusHistoryCount:idea.omittedStatusHistoryCount,
+        statusTransitions:statusTransitions.slice(0,50),
+        omittedStatusTransitionCount:Math.max(0,statusTransitions.length-50),
+        reopeningCount,
+        statusEvolutionStatus,
         currentStatusHistoryConsistency:idea.omittedStatusHistoryCount > 0 ||
           idea.statusHistory.length === 0
           ? "unknown"

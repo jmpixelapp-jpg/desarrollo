@@ -1509,22 +1509,39 @@ export class HostEngineApi {
             aliases:entity.aliases
           }))
       : [];
-    const knownEvents = this.store.loadEvents
-      ? (await this.getNarrativeEvents())
-          .map(event => ({
-            eventId:event.id,
-            label:event.label,
-            participants:event.participants,
-            evidence:event.evidence.filter(evidence =>
-              evidence.status !== "stale" &&
-              evidence.documentId === documentId &&
-              evidence.revision === snapshot.revision &&
-              evidence.end > start &&
-              evidence.start < rangeEnd
-            )
-          }))
-          .filter(event => event.evidence.length > 0)
+    const narrativeEvents = this.store.loadEvents
+      ? await this.getNarrativeEvents()
       : [];
+    const knownProjectEvents = narrativeEvents.map(event => ({
+      projectId:event.projectId,
+      eventId:event.id,
+      label:event.label,
+      participants:event.participants,
+      ...(event.timelineTrackId ? {timelineTrackId:event.timelineTrackId} : {}),
+      ...(event.timeReference ? {timeReference:event.timeReference} : {}),
+      evidence:event.evidence.map(evidence => ({
+        documentId:evidence.documentId,
+        revision:evidence.revision,
+        start:evidence.start,
+        end:evidence.end,
+        excerpt:evidence.excerpt,
+        ...(evidence.status ? {status:evidence.status} : {})
+      }))
+    }));
+    const knownEvents = narrativeEvents
+      .map(event => ({
+        eventId:event.id,
+        label:event.label,
+        participants:event.participants,
+        evidence:event.evidence.filter(evidence =>
+          evidence.status !== "stale" &&
+          evidence.documentId === documentId &&
+          evidence.revision === snapshot.revision &&
+          evidence.end > start &&
+          evidence.start < rangeEnd
+        )
+      }))
+      .filter(event => event.evidence.length > 0);
     const knownEventLifecycles:EventLifecycle[]=[];
     if(knownEvents.length>0) {
       const eventIds=new Set(knownEvents.map(event=>event.eventId));
@@ -1559,6 +1576,7 @@ export class HostEngineApi {
       baseOffset: start,
       knownCharacters,
       knownEvents,
+      knownProjectEvents,
       knownEventLifecycles,
       knownAssertions
     });

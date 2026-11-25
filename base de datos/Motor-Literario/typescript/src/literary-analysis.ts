@@ -4729,7 +4729,10 @@ function buildCharacterMentionDistributions(
 function findExplicitEventDependencyConnector(
   textBetweenEvents: string
 ): { readonly connector: string; readonly index: number; readonly direction: LiteraryEventDependencyCandidate["direction"] } | undefined {
-  const expression = /\b(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)\b/giu;
+  // \b usa la noción ASCII de \w en JavaScript y falla después de letras
+  // acentuadas (por ejemplo, la ó final de "provocó"). Los límites Unicode
+  // evitan perder conectores causales españoles válidos.
+  const expression = /(?<![\p{L}\p{N}_])(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)(?![\p{L}\p{N}_])/giu;
   const matches = [...textBetweenEvents.matchAll(expression)];
   if (matches.length === 0) return undefined;
   const match = matches[0]!;

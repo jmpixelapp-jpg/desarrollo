@@ -250,17 +250,25 @@ test("IndexedDB permite reintentar la apertura después de un error inicial", as
     onversionchange: null,
     close() {},
     transaction() {
-      return {
+      const transaction = {
+        error: null,
+        oncomplete: null,
+        onerror: null,
+        onabort: null,
         objectStore() {
           return {
             get() {
               const request = { result: undefined, onsuccess: null, onerror: null };
-              queueMicrotask(() => request.onsuccess?.());
+              queueMicrotask(() => {
+                request.onsuccess?.();
+                queueMicrotask(() => transaction.oncomplete?.());
+              });
               return request;
             }
           };
         }
       };
+      return transaction;
     }
   };
   Object.defineProperty(globalThis, "indexedDB", {

@@ -2150,7 +2150,7 @@ test("la cronología aísla IDs reutilizados con identidades narrativas distinta
 
 
 test("contrasta las dependencias causales con el orden temporal del proyecto", () => {
-  const text = "Escena 1\\nLa tormenta provocó el derrumbe.";
+  const text = "Escena 1\nLa tormenta provocó el derrumbe.";
   const stormStart = text.indexOf("La tormenta");
   const collapseStart = text.indexOf("el derrumbe");
   const evidence = (start, phrase) => ({

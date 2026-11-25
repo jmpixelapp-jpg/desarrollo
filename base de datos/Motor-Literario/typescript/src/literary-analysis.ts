@@ -754,7 +754,7 @@ export interface LiteraryIdeaGraphNode {
 export interface LiteraryIdeaGraphReference {
   readonly fromIdeaId: string;
   readonly toIdeaId: string;
-  readonly resolution: "included-in-snapshot" | "not-in-snapshot";
+  readonly resolution: "included-in-snapshot" | "not-in-snapshot" | "missing-from-project";
 }
 export interface LiteraryIdeaGraphCycle {
   /** Componente fuertemente conexo; cada idea puede alcanzar a las demás. */
@@ -796,6 +796,8 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly referenceCount: number;
   readonly includedReferenceCount: number;
   readonly notIncludedReferenceCount: number;
+  /** Referencias sin destino en el catálogo cuando no se omitió ninguna idea. */
+  readonly missingFromProjectReferenceCount: number;
   /** Pares de ideas que se enlazan mutuamente de forma explícita. */
   readonly reciprocalReferencePairCount: number;
   /** Nodos sin referencias entrantes desde el snapshot; no contempla fuentes omitidas. */
@@ -3252,6 +3254,7 @@ function buildLiteraryIdeaGraph(
   let referenceCount = 0;
   let includedReferenceCount = 0;
   let notIncludedReferenceCount = 0;
+  let missingFromProjectReferenceCount = 0;
   const references: LiteraryIdeaGraphReference[] = [];
   const outgoingExternal = new Map<string, number>();
 
@@ -3268,13 +3271,16 @@ function buildLiteraryIdeaGraph(
         incoming.set(targetId, (incoming.get(targetId) ?? 0) + 1);
       } else {
         notIncludedReferenceCount++;
+        if (omittedIdeaCount === 0) missingFromProjectReferenceCount++;
         outgoingExternal.set(idea.ideaId, (outgoingExternal.get(idea.ideaId) ?? 0) + 1);
       }
       if (references.length < MAX_IDEA_GRAPH_REFERENCE_SAMPLES) {
         references.push({
           fromIdeaId: idea.ideaId,
           toIdeaId: targetId,
-          resolution: included ? "included-in-snapshot" : "not-in-snapshot"
+          resolution: included
+            ? "included-in-snapshot"
+            : omittedIdeaCount > 0 ? "not-in-snapshot" : "missing-from-project"
         });
       }
     }
@@ -3466,6 +3472,7 @@ function buildLiteraryIdeaGraph(
     referenceCount,
     includedReferenceCount,
     notIncludedReferenceCount,
+    missingFromProjectReferenceCount,
     reciprocalReferencePairCount,
     sourceNodeCount,
     terminalWithinSnapshotNodeCount,

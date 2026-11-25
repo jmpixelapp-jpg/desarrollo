@@ -112,7 +112,7 @@ Métodos del anfitrión: `saveProjectDictionary`, `getProjectDictionaries`, `sav
 
 ## Respaldo y restauración local del puente SQLite
 
-El puente SQLite incluye una utilidad JavaScript de respaldo y restauración. La copia se crea con `VACUUM INTO`, por lo que es un archivo SQLite autónomo e incluye el estado confirmado del WAL: manuscritos, journal, conocimiento narrativo, biblioteca personal, historiales y recibos de finalización. Antes de publicar o restaurar una copia se ejecutan `PRAGMA integrity_check`, comprobación de esquema y validación de que los registros almacenados contienen JSON válido.
+El puente SQLite incluye una utilidad JavaScript de respaldo y restauración. La copia se crea con `VACUUM INTO`, por lo que es un archivo SQLite autónomo e incluye el estado confirmado del WAL: manuscritos, journal, conocimiento narrativo, biblioteca personal, historiales y recibos de finalización. Antes de publicar o restaurar una copia se ejecutan `PRAGMA integrity_check`, comprobación de esquema y validación de que los registros almacenados contienen JSON válido. También se validan los recibos de finalización: conteo de entradas por escritor/libro, claves, procedencia, checksum de IDs y, cuando existe, checksum incremental del contenido completo de cada idea y sus snapshots. Una copia con una entrada archivada modificada o ausente no se considera verificable ni se restaura.
 
 Ejecutar desde esta carpeta:
 

@@ -534,3 +534,6 @@ La prueba verifica:
 `close()` espera una apertura pendiente, cierra la conexión IndexedDB y cierra el canal de notificaciones de la instancia. Una operación posterior puede abrir una nueva conexión. `fake-indexeddb` es dependencia de desarrollo; la implementación de producción sigue usando el IndexedDB nativo del navegador.
 
 **Límite de validación:** esta prueba ejercita las transacciones y operaciones del adaptador contra el polyfill en memoria. No sustituye una prueba de navegador real ni demuestra persistencia física entre cierres y reinicios del navegador. Esa prueba E2E de navegador queda pendiente.
+
+
+**Validación CI verificada:** ejecución [45724325962](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724325962), commit `2dca17b54eb2454026a298a6409f325e6dd1035e`: esquema 0.4.2 válido, 25 tablas del motor y 33 almacenes IndexedDB, build Vite correcto y **99 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye el test del adaptador IndexedDB contra `fake-indexeddb@6.2.8`.

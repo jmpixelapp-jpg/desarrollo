@@ -439,3 +439,12 @@ La prueba fija el límite en un evento, provoca dos ediciones síncronas reentra
 La prueba de configuración cubre los valores inválidos y confirma que los límites 1 y 65536, además del valor predeterminado, pueden construirse. También verifica que una configuración inválida no registre listeners en el proveedor.
 
 **Validación CI:** ejecución aislada [45721703791](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703791), commit `4f74096c8ce17e70a3c88aa1519ec2be81585d38`: build Vite correcto; **78 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+
+## 23. Recuperación después del desbordamiento reentrante
+
+La prueba de desbordamiento se amplió para validar también el ciclo completo de recuperación. Al superar el límite, el source conserva el estado de pausa y se desuscribe; no intenta aplicar los eventos parciales que quedaron en espera. El editor sí puede haber aplicado esas transacciones localmente, de modo que el anfitrión debe reconciliar primero su snapshot durable con el snapshot actual del editor.
+
+Una vez aceptado el snapshot local reconciliado, `resynchronize()` actualiza la revisión y secuencia de referencia, limpia los eventos aplazados y registra de nuevo el proveedor. La prueba fuerza dos eventos reentrantes por encima de un límite de uno: el source primero pausa en la secuencia 1, después acepta el snapshot que ya contiene hasta la secuencia 3 y finalmente captura la nueva edición de secuencia 4. Los consumidores observan `[1, 4]`; las secuencias 2 y 3 quedan incorporadas en el snapshot reconciliado, no reproducidas como deltas parciales.
+
+**Validación CI:** ejecución específica [45721849829](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721849829), commit `a9093daeac9b25bed3b2f5638f5c25fecb6d8efe`: build Vite correcto; **78 pruebas aprobadas, 0 fallidas y 0 omitidas**.

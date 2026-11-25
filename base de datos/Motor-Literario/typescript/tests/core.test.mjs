@@ -7053,7 +7053,7 @@ test("IndexedDB aborta también la actualización de la biblioteca si falla la c
   let queuedWrites = 0;
   let queuedDeletes = 0;
   let queuedPersonalWrites = 0;
-  let pendingReads = 6;
+  let pendingReads = 7;
   let transaction;
   const database = {
     onversionchange: null,
@@ -7091,6 +7091,25 @@ test("IndexedDB aborta también la actualización de la biblioteca si falla la c
                 });
                 return request;
               } };
+            },
+            get(key) {
+              const request = {};
+              queueMicrotask(() => {
+                request.result = structuredClone((committed["writer-library-finalization-receipts"] ?? [])
+                  .find(item => item.writerId === key[0] &&
+                    item.sourceProjectId === key[1] && item.receiptId === key[2]));
+                request.onsuccess?.();
+                pendingReads--;
+                if (pendingReads === 0) {
+                  queueMicrotask(() => {
+                    if (!aborted && !completed) {
+                      completed = true;
+                      transaction.oncomplete?.();
+                    }
+                  });
+                }
+              });
+              return request;
             },
             put(record) {
               queuedWrites++;

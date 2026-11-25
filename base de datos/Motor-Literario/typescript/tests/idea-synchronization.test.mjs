@@ -618,6 +618,31 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
   api.dispose();
 });
 
+test("no duplica una decisión editorial ya aplicada por otra instancia durante el CAS", async () => {
+  const store = new RacingStore([idea("idea-source")]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+  store.onNextConflict = current => ({
+    ...current,
+    status: "incorporated",
+    statusHistory: [
+      ...current.statusHistory,
+      { status: "incorporated", reason: "writer", changedAt: 2 }
+    ]
+  });
+
+  const result = await api.setNarrativeIdeaStatus("idea-source", "incorporated");
+  assert.equal(result.status, "incorporated");
+  assert.equal(result.statusHistory.length, 2);
+  assert.deepEqual(
+    result.statusHistory.map(change => change.status),
+    ["IDEA", "incorporated"]
+  );
+  assert.equal(store.writes, 1);
+  assert.equal(store.ideaReads, 2);
+  api.dispose();
+});
+
 test("reintenta cambios de estado tras CAS y conserva vínculos concurrentes", async () => {
   const store = new RacingStore([
     idea("idea-source"), idea("idea-concurrent-target")

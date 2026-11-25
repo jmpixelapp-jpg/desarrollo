@@ -742,6 +742,12 @@ export interface LiteraryIdeaGraphCycle {
   /** Componente fuertemente conexo; cada idea puede alcanzar a las demás. */
   readonly ideaIds: readonly string[];
 }
+export interface LiteraryIdeaGraphWeakComponent {
+  /** ID mínimo que identifica de forma estable este grupo dentro del snapshot. */
+  readonly representativeIdeaId: string;
+  /** Ideas conectadas al ignorar la dirección de sus referencias explícitas. */
+  readonly ideaIds: readonly string[];
+}
 export interface LiteraryIdeaGraphStatusProfile {
   readonly status: NarrativeIdea["status"];
   readonly ideaCount: number;
@@ -771,6 +777,11 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly terminalWithinSnapshotNodeCount: number;
   /** Nodos aislados únicamente respecto del conjunto de ideas incluido. */
   readonly isolatedWithinSnapshotNodeCount: number;
+  /** Grupos conectados ignorando la dirección de los vínculos explícitos. */
+  readonly weakComponentCount: number;
+  readonly omittedWeakComponentCount: number;
+  readonly largestWeakComponentSize: number;
+  readonly weakComponents: readonly LiteraryIdeaGraphWeakComponent[];
   readonly cycleCount: number;
   readonly omittedCycleCount: number;
   readonly referenceSampleCount: number;
@@ -3181,6 +3192,7 @@ function buildCharacterProjectEventTimeline(
 
 const MAX_IDEA_GRAPH_REFERENCE_SAMPLES = 5_000;
 const MAX_IDEA_GRAPH_CYCLE_SAMPLES = 100;
+const MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES = 100;
 
 /**
  * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
@@ -3296,6 +3308,45 @@ function buildLiteraryIdeaGraph(
     left.ideaIds[0]!.localeCompare(right.ideaIds[0]!, "en")
   );
 
+  // Componentes débilmente conexos: se ignora la dirección, no la autoría del vínculo.
+  // Las referencias externas al snapshot no conectan nodos porque no tienen destino cargado.
+  const undirectedAdjacency = new Map<string, Set<string>>();
+  for (const idea of orderedIdeas) {
+    undirectedAdjacency.set(idea.ideaId, new Set<string>());
+  }
+  for (const idea of orderedIdeas) {
+    for (const targetId of adjacency.get(idea.ideaId) ?? []) {
+      undirectedAdjacency.get(idea.ideaId)!.add(targetId);
+      undirectedAdjacency.get(targetId)!.add(idea.ideaId);
+    }
+  }
+  const visitedWeakNodes = new Set<string>();
+  const allWeakComponents: LiteraryIdeaGraphWeakComponent[] = [];
+  for (const idea of orderedIdeas) {
+    if (visitedWeakNodes.has(idea.ideaId)) continue;
+    const pending = [idea.ideaId];
+    const componentIds: string[] = [];
+    visitedWeakNodes.add(idea.ideaId);
+    while (pending.length > 0) {
+      const currentId = pending.pop()!;
+      componentIds.push(currentId);
+      for (const neighborId of undirectedAdjacency.get(currentId) ?? []) {
+        if (visitedWeakNodes.has(neighborId)) continue;
+        visitedWeakNodes.add(neighborId);
+        pending.push(neighborId);
+      }
+    }
+    componentIds.sort((left, right) => left.localeCompare(right, "en"));
+    allWeakComponents.push({
+      representativeIdeaId: componentIds[0]!,
+      ideaIds: componentIds
+    });
+  }
+  allWeakComponents.sort((left, right) =>
+    right.ideaIds.length - left.ideaIds.length ||
+    left.representativeIdeaId.localeCompare(right.representativeIdeaId, "en")
+  );
+
   const sourceNodeCount = nodes.filter(node => node.incomingReferenceCount === 0).length;
   const terminalWithinSnapshotNodeCount = nodes.filter(
     node => node.includedOutgoingReferenceCount === 0
@@ -3352,6 +3403,12 @@ function buildLiteraryIdeaGraph(
     sourceNodeCount,
     terminalWithinSnapshotNodeCount,
     isolatedWithinSnapshotNodeCount,
+    weakComponentCount: allWeakComponents.length,
+    omittedWeakComponentCount: Math.max(
+      0, allWeakComponents.length - MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES
+    ),
+    largestWeakComponentSize: allWeakComponents[0]?.ideaIds.length ?? 0,
+    weakComponents: allWeakComponents.slice(0, MAX_IDEA_GRAPH_WEAK_COMPONENT_SAMPLES),
     cycleCount: cycles.length,
     omittedCycleCount: Math.max(0, cycles.length - MAX_IDEA_GRAPH_CYCLE_SAMPLES),
     referenceSampleCount: references.length,

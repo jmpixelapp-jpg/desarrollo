@@ -368,6 +368,8 @@ test("la finalización compacta devuelve un recibo resumido y permite leer las i
     const receipt = await client.getProjectFinalizationReceipt("compact-finalization-project");
     assert.equal(receipt?.writerId, "writer-compact");
     assert.deepEqual(receipt?.archivedIdeaIds, [page.items[0].idea.id]);
+    assert.match(summary.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
+    assert.equal(receipt?.archiveContentChecksum, summary.archiveContentChecksum);
     const retry = await client.finalizeProjectToIdeaLibrary("compact-finalization-project");
     assert.equal(retry.alreadyFinalized, true);
     assert.deepEqual({ ...retry, alreadyFinalized: false }, summary);
@@ -456,6 +458,12 @@ test("el puente SQLite consolida identidades y actualiza atómicamente la biblio
     assert.deepEqual(library[0].idea.evidence, archived[0].idea.evidence);
     assert.deepEqual(library[0].idea.statusHistory, archived[0].idea.statusHistory);
     assert.equal(library[0].archivedAt, archived[0].archivedAt);
+    const finalizedReceipt = await first.client.request("project.call", {
+      projectId: "merge-library-project", method: "getProjectFinalizationReceipt", args: []
+    });
+    assert.match(finalizedReceipt.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u,
+      "la consolidación debe renovar el checksum del contenido en el recibo");
+
 
     const exitFirst = waitForExit(first.child);
     await first.client.shutdown();

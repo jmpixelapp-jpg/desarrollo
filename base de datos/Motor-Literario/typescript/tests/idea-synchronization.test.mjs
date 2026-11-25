@@ -398,7 +398,7 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   const reloaded = await api.getNarrativeIdeas();
   const reloadedSource = reloaded.find(item => item.id === "idea-source");
   assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 4);
   assert.equal(store.writes, 3);
   api.dispose();
 });

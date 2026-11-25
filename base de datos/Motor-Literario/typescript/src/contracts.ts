@@ -157,6 +157,7 @@ export interface ProjectStore {
   appendRelationLifecycle?(item: RelationLifecycle): Promise<void>;
   /** Historial versionado de etiquetas y participantes de acontecimientos. */
   loadEventLifecycles?(projectId: string, eventId: string): Promise<readonly EventLifecycle[]>;
+  loadProjectEventLifecycles?(projectId: string): Promise<readonly EventLifecycle[]>;
   /** Actualiza el acontecimiento y añade su transición append-only en una sola transacción. */
   saveEventAndAppendLifecycleIfUnchanged?(
     event: import("./narrative-knowledge").NarrativeEvent,

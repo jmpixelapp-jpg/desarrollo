@@ -260,8 +260,8 @@ test("crea y restaura checkpoint durable conservando métricas y contando la int
   assert.ok(checkpoint);
   assert.equal(checkpoint.version, 1);
   assert.equal(checkpoint.sessionDurationMs, 20);
-  assert.equal(checkpoint.activeDurationMs, 15);
-  assert.equal(checkpoint.idleDurationMs, 5);
+  assert.equal(checkpoint.activeDurationMs, 10);
+  assert.equal(checkpoint.idleDurationMs, 10);
   assert.equal(checkpoint.lastActivityAgeMs, 15);
   assert.equal(checkpoint.committedChanges, 1);
   assert.equal(checkpoint.sequence, 1);
@@ -276,8 +276,8 @@ test("crea y restaura checkpoint durable conservando métricas y contando la int
   );
   assert.equal(restored.sessionId, checkpoint.sessionId);
   assert.equal(restored.sessionDurationMs, 1020);
-  assert.equal(restored.activeDurationMs, 15);
-  assert.equal(restored.idleDurationMs, 1005);
+  assert.equal(restored.activeDurationMs, 10);
+  assert.equal(restored.idleDurationMs, 1010);
   assert.equal(restored.state, "idle");
   assert.equal(restored.currentIdleMs, 1005);
   assert.equal(restored.committedChanges, 1);

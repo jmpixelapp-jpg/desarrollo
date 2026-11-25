@@ -762,6 +762,12 @@ export interface LiteraryIdeaGraphNode {
   readonly observedWriterStatusChangeCount: number;
   /** Cambios visibles atribuidos explícitamente a una revisión del texto. */
   readonly observedTextRevisionStatusChangeCount: number;
+  /** Marca temporal conocida más antigua del historial visible; null si ninguna está disponible. */
+  readonly earliestKnownStatusChangeAt: number | null;
+  /** Marca temporal conocida más reciente del historial visible; null si ninguna está disponible. */
+  readonly latestKnownStatusChangeAt: number | null;
+  /** Amplitud entre la primera y última marca conocida, sin asumir orden cronológico. */
+  readonly knownStatusHistorySpanMs: number | null;
   /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
@@ -3632,6 +3638,28 @@ function buildLiteraryIdeaGraph(
     observedTextRevisionStatusChangeCount: idea.statusHistory.filter(
       change => change.reason === "text-revised"
     ).length,
+    earliestKnownStatusChangeAt: idea.statusHistory.reduce<number | null>(
+      (earliest, change) => change.changedAt === undefined
+        ? earliest
+        : earliest === null ? change.changedAt : Math.min(earliest, change.changedAt),
+      null
+    ),
+    latestKnownStatusChangeAt: idea.statusHistory.reduce<number | null>(
+      (latest, change) => change.changedAt === undefined
+        ? latest
+        : latest === null ? change.changedAt : Math.max(latest, change.changedAt),
+      null
+    ),
+    knownStatusHistorySpanMs: (() => {
+      let earliest: number | null = null;
+      let latest: number | null = null;
+      for (const change of idea.statusHistory) {
+        if (change.changedAt === undefined) continue;
+        earliest = earliest === null ? change.changedAt : Math.min(earliest, change.changedAt);
+        latest = latest === null ? change.changedAt : Math.max(latest, change.changedAt);
+      }
+      return earliest === null || latest === null ? null : latest - earliest;
+    })(),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));

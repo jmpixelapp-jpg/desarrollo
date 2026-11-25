@@ -10557,7 +10557,7 @@ test("compara cambios de evidencia y menciones nominales de participantes entre 
     "ESCENA 1","Ana vio la alarma. Bruno aguardó.","***",
     "ESCENA 2","La alarma volvió a sonar. La alarma persistió.","***",
     "ESCENA 3","Bruno cerró la puerta."
-  ].join("\\n");
+  ].join("\n");
   const evidenceForAll = excerpt => {
     const evidence=[];
     let cursor=0;

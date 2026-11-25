@@ -18,7 +18,8 @@ Incluir juntos, manteniendo su estructura relativa:
 
 - typescript/dist/motor-literario.js — bundle ESM del núcleo y del cliente TypeScript.
 - typescript/bridge/stdio-server.mjs — proceso servidor.
-- typescript/bridge/sqlite-project-store.mjs — adaptador SQLite local.\n- typescript/bridge/database-snapshot.mjs — respaldo, verificación y restauración del archivo SQLite.
+- typescript/bridge/sqlite-project-store.mjs — adaptador SQLite local.
+- typescript/bridge/database-snapshot.mjs — respaldo, verificación y restauración del archivo SQLite.
 - El runtime Node.js 22.13.0 o posterior instalado en la máquina.
 
 No se requiere instalar paquetes npm en tiempo de ejecución para el puente. SQLite se obtiene de la biblioteca integrada node:sqlite de Node.js. En Node.js 22.13 ya no se necesita la opción `--experimental-sqlite`, pero el módulo sigue clasificado como experimental (Stability 1.1, Active Development); conviene fijar la versión de Node utilizada y volver a ejecutar las pruebas antes de actualizarla. [Documentación oficial de Node.js 22.13](https://nodejs.org/download/release/v22.23.0/docs/api/sqlite.html).

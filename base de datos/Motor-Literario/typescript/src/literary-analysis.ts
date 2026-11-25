@@ -991,6 +991,12 @@ export interface LiteraryIdeaLexicalResonanceAnalysis {
   /** Candidatos ordenados por cantidad de términos compartidos y Jaccard; máximo cien. */
   readonly resonances: readonly LiteraryIdeaLexicalResonance[];
 }
+export interface LiteraryIdeaGraphStatusTransitionProfile {
+  readonly fromStatus: NarrativeIdea["status"];
+  readonly toStatus: NarrativeIdea["status"];
+  /** Referencias explícitas dirigidas entre ideas de esos estados en el snapshot. */
+  readonly referenceCount: number;
+}
 export interface LiteraryIdeaGraphAnalysis {
   /** Coincidencias léxicas entre textos de ideas; nunca crean vínculos del grafo. */
   readonly lexicalResonances: LiteraryIdeaLexicalResonanceAnalysis;
@@ -1002,6 +1008,8 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly ideaCount: number;
   /** Distribución estructural de los nodos por estado editorial explícito. */
   readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
+  /** Matriz dirigida de referencias entre estados; no implica transición temporal ni causal. */
+  readonly statusTransitionProfiles: readonly LiteraryIdeaGraphStatusTransitionProfile[];
   /** Resumen global de sincronización entre etiquetas actuales e historiales visibles. */
   readonly statusHistoryConsistency: {
     readonly consistentIdeaCount: number;
@@ -4206,6 +4214,22 @@ function buildLiteraryIdeaGraph(
       ideasWithoutActiveEvidenceCount: 0
     }] as const)
   );
+  const statusTransitionCounts = new Map<string, number>();
+  for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
+    const fromStatus = orderedIdeas[sourceIndex]!.status;
+    for (const targetIndex of adjacency[sourceIndex]!) {
+      const toStatus = orderedIdeas[targetIndex]!.status;
+      const key = fromStatus + "\\u0000" + toStatus;
+      statusTransitionCounts.set(key, (statusTransitionCounts.get(key) ?? 0) + 1);
+    }
+  }
+  const statusTransitionProfiles: LiteraryIdeaGraphStatusTransitionProfile[] = [];
+  for (const fromStatus of profileStatuses) {
+    for (const toStatus of profileStatuses) {
+      const referenceCount = statusTransitionCounts.get(fromStatus + "\\u0000" + toStatus) ?? 0;
+      if (referenceCount > 0) statusTransitionProfiles.push({ fromStatus, toStatus, referenceCount });
+    }
+  }
   let sourceNodeCount = 0;
   let terminalWithinSnapshotNodeCount = 0;
   let isolatedWithinSnapshotNodeCount = 0;
@@ -4282,6 +4306,7 @@ function buildLiteraryIdeaGraph(
     projectCatalogComplete,
     ideaCount: orderedIdeas.length,
     statusProfiles,
+    statusTransitionProfiles,
     statusHistoryConsistency: {
       ...statusHistoryConsistency,
       verifiableIdeaCount,

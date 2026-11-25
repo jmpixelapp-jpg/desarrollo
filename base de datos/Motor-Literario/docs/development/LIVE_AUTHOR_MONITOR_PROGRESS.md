@@ -181,3 +181,36 @@ A partir de esta entrega, cualquier avance nuevo del monitor debe actualizar est
 
 La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721849896), correspondiente al mismo commit `a9093daeac9b25bed3b2f5638f5c25fecb6d8efe`, sigue fallando en `src/literary-analysis.ts` (errores TS2322, TS2677, TS18047 y TS2345). El workflow específico del monitor terminó correctamente; no se modificó el archivo narrativo.
 
+
+
+## 9. Nueva entrega — checkpoints persistentes de sesión (25 de noviembre de 2026)
+
+**Objetivo:** conservar las métricas agregadas del autor entre reinicios sin guardar ni duplicar el texto del manuscrito.
+
+**Modelo de checkpoint:** se añadió `StoredLiveAuthorMonitorCheckpoint`, versión 1. Contiene identidad de proyecto/documento/sesión, duraciones activa e inactiva, edad de la última actividad, contadores, revisión/secuencia y la ventana reciente de latencias. No contiene texto, reemplazos, deltas ni tickets pendientes.
+
+**Reglas de seguridad:** el monitor solo crea un checkpoint cuando no existen commits pendientes, la sesión no requiere resincronización y la revisión/secuencia durable coincide con la más reciente. La restauración exige coincidencia exacta de proyecto, documento, longitud, revisión y secuencia. Un checkpoint inválido u obsoleto no bloquea la recuperación del documento: se elimina y se inicia una sesión de métricas nueva.
+
+**Persistencia:** `ProjectStore` tiene operaciones opcionales `save/load/deleteLiveAuthorMonitorCheckpoint`. `IndexedDbProjectStore` implementa el almacenamiento compuesto `live-author-monitor-checkpoints`; la versión IndexedDB aumenta de 22 a 23. La escritura no bloquea el flujo de edición. El tiempo fuera del proceso se suma al tiempo inactivo, nunca al tiempo activo.
+
+**Ciclo de vida del anfitrión:** `HostEngineApi` programa checkpoints después de commits durables y al recuperar documentos; `closeLiveAuthorMonitorDocumentSafely` espera al motor, valida durabilidad, persiste y cierra; `disposeSafely` espera las escrituras programadas antes de liberar la instancia.
+
+**IDs de sesión:** incluyen un nonce para no reutilizar identificadores después de reiniciar la aplicación.
+
+**Archivos modificados en esta entrega:**
+- `typescript/src/contracts.ts`: contrato durable y métodos opcionales de `ProjectStore`.
+- `typescript/src/live-author-monitor.ts`: creación/restauración de checkpoint y accounting de downtime.
+- `typescript/src/persistence/indexeddb-store.ts`: almacén IndexedDB version 23, validación y operaciones CRUD.
+- `typescript/src/host-api.ts`: guardado después de commit, recuperación, cierre seguro y disposición segura.
+- `typescript/tests/live-author-monitor.test.mjs`: restauración, downtime, mismatch y validación de checkpoint.
+- `typescript/tests/live-author-monitor-host-api.test.mjs`: persistencia, recuperación, descarte de checkpoint obsoleto y renovación.
+- `.github/workflows/live-author-monitor.yml`: incluye la persistencia IndexedDB en los filtros de CI.
+- `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`: sección 24.
+
+**Commits de implementación:** [50f9e5b — contrato de checkpoint](https://github.com/jmpixelapp-jpg/desarrollo/commit/50f9e5b1d811168b01e36e5e357f5751e7196a68), [925f246 — checkpoint en el monitor](https://github.com/jmpixelapp-jpg/desarrollo/commit/925f2465d0589bd32d950bf3c4863d29cea1e0e0), [3233438 — esquema IndexedDB](https://github.com/jmpixelapp-jpg/desarrollo/commit/323343872d4307ea38d1789b971649dd6c44e5a7), [f4f2803 — CRUD IndexedDB](https://github.com/jmpixelapp-jpg/desarrollo/commit/f4f2803dd9614c6a1b94a36e5380c06fa5d4fb5a), [6451748 — integración HostEngineApi](https://github.com/jmpixelapp-jpg/desarrollo/commit/64517483dad494f1f081ab20a248efdf6a9fc1c9), [f19ee72 — IDs únicos](https://github.com/jmpixelapp-jpg/desarrollo/commit/f19ee72464cbf15171cf938857a7fc66146c2f79), [8c25781 — fix de tipo en onCommit](https://github.com/jmpixelapp-jpg/desarrollo/commit/8c2578174e002a7ba55447a607b5ea07b4a73c61).
+
+**Pruebas añadidas:** cobertura de creación/restauración en `LiveAuthorMonitor`; persistencia vía contrato del almacén, recuperación de un documento con métricas anteriores, descarte de checkpoint obsoleto y persistencia automática al disponer de forma segura.
+
+**CI:** en la revisión anterior la ejecución aislada [45722802380](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45722802380) aprobó 83/83 pruebas. Esa ejecución precede a la última prueba de persistencia automática y al ajuste final de tipos; el resultado de la ejecución que incluya todo el cambio se añadirá cuando esté disponible. La CI general sigue teniendo errores ajenos en `literary-analysis.ts`; además, una ejecución intermedia detectó y permitió corregir un error propio de tipo (`CommitResult` no contiene `documentId`), ya corregido en el commit `8c25781`.
+
+**Limitación pendiente:** IndexedDB guarda los checkpoints por proyecto/documento, pero todavía no se implementó lease/fencing token entre dos pestañas que editen simultáneamente el mismo documento. Esto no sustituye el journal durable del manuscrito ni ofrece sincronización multi-pestaña de métricas.

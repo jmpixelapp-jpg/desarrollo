@@ -1766,3 +1766,45 @@ test("invalida el caché del grafo cuando cambia una relación o el texto de una
       resonance.rightIdeaId === "idea-b"
   ));
 });
+
+
+test("el caché distingue catálogos incompletos de catálogos globales completos", () => {
+  const projectId = "literary-analysis-test";
+  const knownProjectIdeas = [{
+    projectId,
+    ideaId: "idea-a",
+    text: "Una idea permanece.",
+    status: "IDEA",
+    relatedIdeaIds: ["idea-outside-snapshot"],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  }];
+  const input = {
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nUna idea permanece.",
+    knownProjectIdeas,
+    knownProjectIdeasOmittedCount: 1
+  };
+
+  const partial = analyzeLiteraryFragment(input).ideaGraph;
+  assert.equal(partial.catalogScope, "project");
+  assert.equal(partial.references[0].resolution, "not-in-snapshot");
+  assert.equal(partial.missingFromProjectReferenceCount, 0);
+
+  const complete = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeasOmittedCount: 0
+  }).ideaGraph;
+  assert.equal(complete.catalogScope, "project");
+  assert.equal(complete.references[0].resolution, "missing-from-project");
+  assert.equal(complete.missingFromProjectReferenceCount, 1);
+
+  const partialAgain = analyzeLiteraryFragment(input).ideaGraph;
+  assert.equal(partialAgain.references[0].resolution, "not-in-snapshot");
+  assert.equal(partialAgain.missingFromProjectReferenceCount, 0);
+});

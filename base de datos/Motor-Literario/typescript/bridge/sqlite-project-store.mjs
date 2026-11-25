@@ -56,7 +56,7 @@ function isValidArchiveContentChecksum(value) {
   return typeof value === "string" && /^fnv1a64:[0-9a-f]{16}$/u.test(value);
 }
 function checksumForArchiveIds(ids) {
-  const source = JSON.stringify(ids);
+  const source = JSON.stringify([...ids].sort());
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < source.length; index++) {
     hash ^= BigInt(source.charCodeAt(index));
@@ -1634,7 +1634,7 @@ export class SqliteProjectStore {
     if (!Number.isFinite(archivedAt) || archivedAt < 0) throw new Error("Fecha de archivo inválida.");
 
     const checksumFor = ids => {
-      const source = JSON.stringify(ids);
+      const source = JSON.stringify([...ids].sort());
       let hash = 0xcbf29ce484222325n;
       for (let index = 0; index < source.length; index++) {
         hash ^= BigInt(source.charCodeAt(index));

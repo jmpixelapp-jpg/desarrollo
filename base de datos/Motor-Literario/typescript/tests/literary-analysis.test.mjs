@@ -954,3 +954,42 @@ test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálo
     }]
   }), /ideas y decisiones/);
 });
+
+test("mantiene el total de decisiones de escritor cuando el historial de una idea se recorta", () => {
+  const statusHistory = [{ status: "IDEA", reason: "initial", changedAt: 1 }];
+  for (let index = 1; index <= 104; index++) {
+    statusHistory.push({
+      status: index % 2 === 1 ? "incorporated" : "discarded",
+      reason: "writer",
+      changedAt: index + 1
+    });
+  }
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nAna recordó su promesa.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "long-history",
+      text: "Ana decide mantener su promesa.",
+      status: "discarded",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "Libro",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: [],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      evidence: [],
+      statusHistory: statusHistory.slice(-100),
+      writerDecisionCount: 104,
+      omittedStatusHistoryCount: 5
+    }]
+  });
+  const decision = result.characterNarrativeTrajectories.trajectories[0].documentedDecisions[0];
+  assert.equal(decision.statusHistory.length, 100);
+  assert.equal(decision.writerDecisionCount, 104);
+  assert.equal(decision.omittedStatusHistoryCount, 5);
+  assert.equal(result.characterNarrativeTrajectories.trajectories[0].writerDecisionCount, 104);
+});

@@ -3430,75 +3430,79 @@ function buildLiteraryIdeaGraph(
     staleEvidenceCount: idea.staleEvidenceCount
   }));
 
-  // Tarjan iterativo evita desbordar la pila de JavaScript en catálogos
-  // narrativos profundos; conserva la complejidad O(V + E) y el orden canónico.
+  // Tarjan usa índices compactos en arreglos tipados; detecta componentes
+  // cíclicos en O(V + E) sin mapas y conjuntos de cadenas por nodo.
   let nextIndex = 0;
   const discoveryIndex = new Int32Array(ideaCount);
   const lowLink = new Int32Array(ideaCount);
   discoveryIndex.fill(-1);
   lowLink.fill(-1);
-  const componentStack: number[] = [];
+  const stack: number[] = [];
   const onStack = new Uint8Array(ideaCount);
   const cycles: LiteraryIdeaGraphCycle[] = [];
 
-  // Pila DFS explícita: cada cursor señala la próxima arista por examinar.
+  // DFS iterativo: evita consumir la pila de llamadas del runtime en grafos
+  // profundos. Cada marco conserva el siguiente vecino pendiente y su padre.
   const dfsNodes: number[] = [];
-  const dfsEdgeCursors: number[] = [];
+  const dfsParents: number[] = [];
+  const dfsNextNeighbors: number[] = [];
 
   for (let rootIndex = 0; rootIndex < ideaCount; rootIndex++) {
     if (discoveryIndex[rootIndex] !== -1) continue;
 
-    discoveryIndex[rootIndex] = nextIndex;
-    lowLink[rootIndex] = nextIndex;
-    nextIndex++;
-    componentStack.push(rootIndex);
+    const rootDiscoveryIndex = nextIndex++;
+    discoveryIndex[rootIndex] = rootDiscoveryIndex;
+    lowLink[rootIndex] = rootDiscoveryIndex;
+    stack.push(rootIndex);
     onStack[rootIndex] = 1;
     dfsNodes.push(rootIndex);
-    dfsEdgeCursors.push(0);
+    dfsParents.push(-1);
+    dfsNextNeighbors.push(0);
 
     while (dfsNodes.length > 0) {
       const frameIndex = dfsNodes.length - 1;
-      const nodeIndex = dfsNodes[frameIndex]!;
-      const edgeCursor = dfsEdgeCursors[frameIndex]!;
-      const neighbors = adjacency[nodeIndex]!;
+      const currentIndex = dfsNodes[frameIndex]!;
+      const nextNeighborIndex = dfsNextNeighbors[frameIndex]!;
+      const neighbors = adjacency[currentIndex]!;
 
-      if (edgeCursor < neighbors.length) {
-        const targetIndex = neighbors[edgeCursor]!;
-        dfsEdgeCursors[frameIndex] = edgeCursor + 1;
+      if (nextNeighborIndex < neighbors.length) {
+        const targetIndex = neighbors[nextNeighborIndex]!;
+        dfsNextNeighbors[frameIndex] = nextNeighborIndex + 1;
 
         if (discoveryIndex[targetIndex] === -1) {
-          discoveryIndex[targetIndex] = nextIndex;
-          lowLink[targetIndex] = nextIndex;
-          nextIndex++;
-          componentStack.push(targetIndex);
+          const targetDiscoveryIndex = nextIndex++;
+          discoveryIndex[targetIndex] = targetDiscoveryIndex;
+          lowLink[targetIndex] = targetDiscoveryIndex;
+          stack.push(targetIndex);
           onStack[targetIndex] = 1;
           dfsNodes.push(targetIndex);
-          dfsEdgeCursors.push(0);
+          dfsParents.push(currentIndex);
+          dfsNextNeighbors.push(0);
         } else if (onStack[targetIndex] === 1) {
-          lowLink[nodeIndex] = Math.min(
-            lowLink[nodeIndex]!, discoveryIndex[targetIndex]!
+          lowLink[currentIndex] = Math.min(
+            lowLink[currentIndex]!, discoveryIndex[targetIndex]!
           );
         }
         continue;
       }
 
-      // El nodo terminó: propaga su low-link al padre DFS antes de retirarlo.
       dfsNodes.pop();
-      dfsEdgeCursors.pop();
-      const parentIndex = dfsNodes[dfsNodes.length - 1];
-      if (parentIndex !== undefined) {
+      const parentIndex = dfsParents.pop()!;
+      dfsNextNeighbors.pop();
+
+      if (parentIndex !== -1) {
         lowLink[parentIndex] = Math.min(
-          lowLink[parentIndex]!, lowLink[nodeIndex]!
+          lowLink[parentIndex]!, lowLink[currentIndex]!
         );
       }
 
-      if (lowLink[nodeIndex] !== discoveryIndex[nodeIndex]) continue;
+      if (lowLink[currentIndex] !== discoveryIndex[currentIndex]) continue;
       const component: number[] = [];
-      while (componentStack.length > 0) {
-        const member = componentStack.pop()!;
+      while (stack.length > 0) {
+        const member = stack.pop()!;
         onStack[member] = 0;
         component.push(member);
-        if (member === nodeIndex) break;
+        if (member === currentIndex) break;
       }
       if (component.length > 1) {
         component.sort((left, right) => left - right);

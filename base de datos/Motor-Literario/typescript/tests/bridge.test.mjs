@@ -985,7 +985,9 @@ test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async ()
 
     // Inserta una idea que ordena antes del cursor ya entregado.
     // La página siguiente debe pedir reinicio para no omitirla silenciosamente.
-    store.put("personal-idea-library", [writerId, projectId, "idea-0"], entry("idea-0"));
+    store.transaction(() => {
+      store.put("personal-idea-library", [writerId, projectId, "idea-0"], entry("idea-0"));
+    });
     const stale = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
     assert.deepEqual(stale.items, []);
     assert.equal(stale.nextCursor, null);

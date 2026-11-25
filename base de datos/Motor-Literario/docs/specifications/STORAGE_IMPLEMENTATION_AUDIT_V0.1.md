@@ -40,7 +40,7 @@ La ejecución de GitHub Actions del **25 de noviembre de 2026** para el commit `
 - Suite Node: **293 pruebas, 284 aprobadas, 0 fallidas y 9 omitidas**.
 - Benchmark de edición en vivo: correcto.
 
-[Ver ejecución, pasos y logs](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45562960002).
+[Ver ejecución, pasos y logs](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45563427372).
 
 ## Benchmark registrado en CI
 

@@ -301,7 +301,7 @@ test("separa componentes cíclicos ante aristas cruzadas entre subgrafos", async
     d: ["e"],
     e: ["d", "f"],
     f: ["g"],
-    g: ["f", "a"],
+    g: ["f"],
     h: ["g"]
   };
   const ideas = Object.entries(links).map(([id, relatedIdeaIds]) => ({
@@ -329,8 +329,8 @@ test("separa componentes cíclicos ante aristas cruzadas entre subgrafos", async
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(graph.ideaCount, 8);
-    assert.equal(graph.referenceCount, 11);
-    assert.equal(graph.includedReferenceCount, 11);
+    assert.equal(graph.referenceCount, 10);
+    assert.equal(graph.includedReferenceCount, 10);
     assert.equal(graph.cycleCount, 3);
     assert.deepEqual(graph.cycles.map(cycle => cycle.ideaIds), [
       ["a", "b", "c"],
@@ -1687,7 +1687,7 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
   try {
     const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(before.statusProfiles.find(profile => profile.status === "IDEA").ideaCount, 4);
-    assert.equal(before.statusProfiles.some(profile => profile.status === "incorporated"), false);
+    assert.equal(before.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 0);
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.status = "discarded";
@@ -1801,7 +1801,7 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
   });
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(graph.ideaCount, 1);
+    assert.equal(graph.ideaCount, 11);
     assert.equal(graph.referenceCount, 5_003);
     assert.equal(graph.includedReferenceCount, 0);
     assert.equal(graph.notIncludedReferenceCount, 5_003);

@@ -93,7 +93,6 @@ export interface LiteraryAnalysisInput {
   readonly knownIdeas?: readonly LiteraryAnalysisKnownIdea[];
   readonly knownRelationsOmittedCount?: number;
   readonly knownIdeasOmittedCount?: number;
-  readonly knownIdeasOmittedCount?: number;
 }
 export interface LiteraryAnalysisOccurrence { readonly start: number; readonly end: number; }
 export interface LiteraryRepeatedWord {
@@ -710,6 +709,62 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
   readonly trajectories: readonly LiteraryCharacterNarrativeTrajectory[];
 }
 
+export interface LiteraryIdeaGraphNode {
+  readonly ideaId: string;
+  readonly status: NarrativeIdea["status"];
+  /** Entradas desde ideas incluidas en el snapshot actual. */
+  readonly incomingReferenceCount: number;
+  /** Salidas cuyo destino también está incluido en el snapshot actual. */
+  readonly includedOutgoingReferenceCount: number;
+  /** Salidas explícitas cuyo destino no está incluido en el snapshot actual. */
+  readonly notIncludedOutgoingReferenceCount: number;
+}
+export interface LiteraryIdeaGraphReference {
+  readonly fromIdeaId: string;
+  readonly toIdeaId: string;
+  readonly resolution: "included-in-snapshot" | "not-in-snapshot";
+}
+export interface LiteraryIdeaGraphCycle {
+  /** Componente fuertemente conexo; cada idea puede alcanzar a las demás. */
+  readonly ideaIds: readonly string[];
+}
+export interface LiteraryIdeaGraphStatusProfile {
+  readonly status: NarrativeIdea["status"];
+  readonly ideaCount: number;
+  readonly sourceIdeaCount: number;
+  readonly terminalWithinSnapshotIdeaCount: number;
+  readonly isolatedWithinSnapshotIdeaCount: number;
+  readonly incomingReferenceCount: number;
+  readonly includedOutgoingReferenceCount: number;
+  readonly notIncludedOutgoingReferenceCount: number;
+}
+export interface LiteraryIdeaGraphAnalysis {
+  readonly ideaCount: number;
+  /** Distribución estructural de los nodos por estado editorial explícito. */
+  readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
+  readonly omittedIdeaCount: number;
+  readonly referenceCount: number;
+  readonly includedReferenceCount: number;
+  readonly notIncludedReferenceCount: number;
+  /** Nodos sin referencias entrantes desde el snapshot; no contempla fuentes omitidas. */
+  readonly sourceNodeCount: number;
+  /** Nodos sin salidas hacia otros nodos incluidos; pueden conservar salidas externas. */
+  readonly terminalWithinSnapshotNodeCount: number;
+  /** Nodos aislados únicamente respecto del conjunto de ideas incluido. */
+  readonly isolatedWithinSnapshotNodeCount: number;
+  readonly cycleCount: number;
+  readonly omittedCycleCount: number;
+  readonly referenceSampleCount: number;
+  readonly omittedReferenceSampleCount: number;
+  readonly referencesTruncated: boolean;
+  /** Todos los nodos del snapshot actual, ordenados por ID. */
+  readonly nodes: readonly LiteraryIdeaGraphNode[];
+  /** Muestra acotada y determinista de referencias explícitas; máximo 5.000. */
+  readonly references: readonly LiteraryIdeaGraphReference[];
+  /** Componentes cíclicos; máximo 100. */
+  readonly cycles: readonly LiteraryIdeaGraphCycle[];
+}
+
 export interface LiteraryCharacterAttributeAssertionEvidence {
   readonly assertionId: string;
   readonly value: string | number;
@@ -1246,6 +1301,8 @@ export interface LiteraryAnalysisResult {
   readonly characterAttributeEvolution: LiteraryCharacterAttributeEvolutionAnalysis;
   /** Trayectorias documentales que integran atributos, participación y causalidades candidatas por personaje. */
   readonly characterNarrativeTrajectories: LiteraryCharacterNarrativeTrajectoryAnalysis;
+  /** Grafo dirigido de vínculos de ideas introducidos explícitamente por el escritor. */
+  readonly ideaGraph: LiteraryIdeaGraphAnalysis;
   /** Dependencias causales candidatas entre acontecimientos, respaldadas por conectores literales del texto. */
   readonly eventDependencyAnalysis: LiteraryEventDependencyAnalysis;
   /** Evidencia de acontecimientos asociados explícitamente a participantes, desglosada por escena. */
@@ -3103,6 +3160,178 @@ function buildCharacterProjectEventTimeline(
   };
 }
 
+const MAX_IDEA_GRAPH_REFERENCE_SAMPLES = 5_000;
+const MAX_IDEA_GRAPH_CYCLE_SAMPLES = 100;
+
+/**
+ * Resume el grafo dirigido definido únicamente por relatedIdeaIds.
+ * Un destino ausente del snapshot se cuenta como referencia no incluida,
+ * nunca como referencia rota ni como prueba de inexistencia.
+ */
+function buildLiteraryIdeaGraph(
+  ideas: readonly LiteraryAnalysisKnownIdea[],
+  omittedIdeaCount: number
+): LiteraryIdeaGraphAnalysis {
+  const orderedIdeas = [...ideas].sort((left, right) =>
+    left.ideaId.localeCompare(right.ideaId, "en")
+  );
+  const ideaIds = new Set(orderedIdeas.map(idea => idea.ideaId));
+  const adjacency = new Map<string, string[]>();
+  const incoming = new Map<string, number>();
+  for (const idea of orderedIdeas) {
+    adjacency.set(idea.ideaId, []);
+    incoming.set(idea.ideaId, 0);
+  }
+
+  let referenceCount = 0;
+  let includedReferenceCount = 0;
+  let notIncludedReferenceCount = 0;
+  const references: LiteraryIdeaGraphReference[] = [];
+  const outgoingExternal = new Map<string, number>();
+
+  for (const idea of orderedIdeas) {
+    const targets = [...idea.relatedIdeaIds].sort((left, right) =>
+      left.localeCompare(right, "en")
+    );
+    for (const targetId of targets) {
+      referenceCount++;
+      const included = ideaIds.has(targetId);
+      if (included) {
+        includedReferenceCount++;
+        adjacency.get(idea.ideaId)!.push(targetId);
+        incoming.set(targetId, (incoming.get(targetId) ?? 0) + 1);
+      } else {
+        notIncludedReferenceCount++;
+        outgoingExternal.set(idea.ideaId, (outgoingExternal.get(idea.ideaId) ?? 0) + 1);
+      }
+      if (references.length < MAX_IDEA_GRAPH_REFERENCE_SAMPLES) {
+        references.push({
+          fromIdeaId: idea.ideaId,
+          toIdeaId: targetId,
+          resolution: included ? "included-in-snapshot" : "not-in-snapshot"
+        });
+      }
+    }
+  }
+
+  const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map(idea => ({
+    ideaId: idea.ideaId,
+    status: idea.status,
+    incomingReferenceCount: incoming.get(idea.ideaId) ?? 0,
+    includedOutgoingReferenceCount: adjacency.get(idea.ideaId)!.length,
+    notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0
+  }));
+
+  // Tarjan: detecta componentes cíclicos en O(V + E), sin atribuir causalidad
+  // ni significado narrativo al hecho de que haya vínculos que formen un ciclo.
+  let nextIndex = 0;
+  const indexById = new Map<string, number>();
+  const lowLinkById = new Map<string, number>();
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const cycles: LiteraryIdeaGraphCycle[] = [];
+
+  const visit = (ideaId: string): void => {
+    const index = nextIndex++;
+    indexById.set(ideaId, index);
+    lowLinkById.set(ideaId, index);
+    stack.push(ideaId);
+    onStack.add(ideaId);
+
+    for (const targetId of adjacency.get(ideaId) ?? []) {
+      if (!indexById.has(targetId)) {
+        visit(targetId);
+        lowLinkById.set(
+          ideaId,
+          Math.min(lowLinkById.get(ideaId)!, lowLinkById.get(targetId)!)
+        );
+      } else if (onStack.has(targetId)) {
+        lowLinkById.set(
+          ideaId,
+          Math.min(lowLinkById.get(ideaId)!, indexById.get(targetId)!)
+        );
+      }
+    }
+
+    if (lowLinkById.get(ideaId) !== indexById.get(ideaId)) return;
+    const component: string[] = [];
+    while (stack.length > 0) {
+      const member = stack.pop()!;
+      onStack.delete(member);
+      component.push(member);
+      if (member === ideaId) break;
+    }
+    if (component.length > 1) {
+      component.sort((left, right) => left.localeCompare(right, "en"));
+      cycles.push({ ideaIds: component });
+    }
+  };
+
+  for (const idea of orderedIdeas) {
+    if (!indexById.has(idea.ideaId)) visit(idea.ideaId);
+  }
+  cycles.sort((left, right) =>
+    left.ideaIds[0]!.localeCompare(right.ideaIds[0]!, "en")
+  );
+
+  const sourceNodeCount = nodes.filter(node => node.incomingReferenceCount === 0).length;
+  const terminalWithinSnapshotNodeCount = nodes.filter(
+    node => node.includedOutgoingReferenceCount === 0
+  ).length;
+  const isolatedWithinSnapshotNodeCount = nodes.filter(
+    node => node.incomingReferenceCount === 0 &&
+      node.includedOutgoingReferenceCount === 0
+  ).length;
+  const statusProfiles: LiteraryIdeaGraphStatusProfile[] = (
+    ["IDEA", "incorporated", "discarded"] as const
+  ).map(status => {
+    const matchingNodes = nodes.filter(node => node.status === status);
+    return {
+      status,
+      ideaCount: matchingNodes.length,
+      sourceIdeaCount: matchingNodes.filter(node =>
+        node.incomingReferenceCount === 0
+      ).length,
+      terminalWithinSnapshotIdeaCount: matchingNodes.filter(node =>
+        node.includedOutgoingReferenceCount === 0
+      ).length,
+      isolatedWithinSnapshotIdeaCount: matchingNodes.filter(node =>
+        node.incomingReferenceCount === 0 &&
+        node.includedOutgoingReferenceCount === 0
+      ).length,
+      incomingReferenceCount: matchingNodes.reduce(
+        (total, node) => total + node.incomingReferenceCount, 0
+      ),
+      includedOutgoingReferenceCount: matchingNodes.reduce(
+        (total, node) => total + node.includedOutgoingReferenceCount, 0
+      ),
+      notIncludedOutgoingReferenceCount: matchingNodes.reduce(
+        (total, node) => total + node.notIncludedOutgoingReferenceCount, 0
+      )
+    };
+  });
+
+  return {
+    ideaCount: orderedIdeas.length,
+    statusProfiles,
+    omittedIdeaCount,
+    referenceCount,
+    includedReferenceCount,
+    notIncludedReferenceCount,
+    sourceNodeCount,
+    terminalWithinSnapshotNodeCount,
+    isolatedWithinSnapshotNodeCount,
+    cycleCount: cycles.length,
+    omittedCycleCount: Math.max(0, cycles.length - MAX_IDEA_GRAPH_CYCLE_SAMPLES),
+    referenceSampleCount: references.length,
+    omittedReferenceSampleCount: Math.max(0, referenceCount - references.length),
+    referencesTruncated: referenceCount > references.length,
+    nodes,
+    references,
+    cycles: cycles.slice(0, MAX_IDEA_GRAPH_CYCLE_SAMPLES)
+  };
+}
+
 function buildCharacterNarrativeTrajectories(
   scenes: readonly LiteraryExplicitSceneSegment[],
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[],
@@ -4816,6 +5045,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     input.documentId,input.revision,input.knownRelations ?? [],input.knownIdeas ?? [],
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0
   );
+  const ideaGraph = buildLiteraryIdeaGraph(
+    input.knownIdeas ?? [],input.knownIdeasOmittedCount ?? 0
+  );
   const sceneEventEvidenceProfiles = buildSceneEventEvidenceProfiles(explicitScenes);
   const sceneEventSequenceMotifs = buildSceneEventSequenceMotifs(explicitScenes);
   const eventLifecycleAnalysis = buildEventLifecycleAnalysis(
@@ -5011,6 +5243,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterAttributeEvolution,
     eventDependencyAnalysis,
     characterNarrativeTrajectories,
+    ideaGraph,
     characterEventEvidenceProfiles,
     sceneEventEvidenceProfiles,
     sceneEventSequenceMotifs,

@@ -379,6 +379,9 @@ export interface LiterarySceneDialogueTransition {
   readonly nextDialogueRatio: number;
   /** Diferencia next - previous de la proporción de palabras dialogadas. */
   readonly dialogueRatioDelta: number;
+  readonly previousDialogueWordsPer1000NarrativeWords: number;
+  readonly nextDialogueWordsPer1000NarrativeWords: number;
+  readonly dialogueWordsPer1000NarrativeWordsDelta: number;
   readonly previousSegmentCount: number;
   readonly nextSegmentCount: number;
   readonly segmentCountDelta: number;
@@ -398,6 +401,8 @@ export interface LiterarySceneDialogueProfile {
   readonly dialogueWordCount: number;
   /** Proporción de palabras dialogadas respecto de todas las palabras de la escena. */
   readonly dialogueRatio: number;
+  /** Palabras dialogadas por cada 1.000 palabras de narración fuera del diálogo reconocido. */
+  readonly dialogueWordsPer1000NarrativeWords: number;
   readonly density: LiteraryDialogueDensity;
   readonly averageWordsPerSegment: number;
   readonly longestSegmentWords: number;
@@ -844,6 +849,8 @@ function analyzeExplicitScenes(
       segmentCount:localDialogueSegments.length,
       dialogueWordCount,
       dialogueRatio:roundMetric(dialogueRatio),
+      dialogueWordsPer1000NarrativeWords:roundMetric((narrativeWordCounts[index] ?? 0) > 0
+        ? dialogueWordCount/(narrativeWordCounts[index] ?? 1)*1000 : 0),
       density:dialogueDensity,
       averageWordsPerSegment:roundMetric(localDialogueSegments.length > 0
         ? dialogueWordCount/localDialogueSegments.length : 0),
@@ -906,6 +913,11 @@ function buildSceneDialogueTransitions(
       previousDialogueRatio:previous.dialogueRatio,
       nextDialogueRatio:next.dialogueRatio,
       dialogueRatioDelta:roundMetric(next.dialogueRatio-previous.dialogueRatio),
+      previousDialogueWordsPer1000NarrativeWords:previous.dialogueWordsPer1000NarrativeWords,
+      nextDialogueWordsPer1000NarrativeWords:next.dialogueWordsPer1000NarrativeWords,
+      dialogueWordsPer1000NarrativeWordsDelta:roundMetric(
+        next.dialogueWordsPer1000NarrativeWords-previous.dialogueWordsPer1000NarrativeWords
+      ),
       previousSegmentCount:previous.segmentCount,
       nextSegmentCount:next.segmentCount,
       segmentCountDelta:next.segmentCount-previous.segmentCount,

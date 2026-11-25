@@ -10780,6 +10780,10 @@ test("compara las métricas de diálogo entre escenas explícitas contiguas", as
   assert.equal(transition.longestSegmentWordsDelta,-2);
   assert.deepEqual(transition.formatCountDelta,{quotation:-1,dialogueDash:0,mixed:0});
   assert.equal(transition.dialogueRatioDelta,-0.333);
+  assert.equal(transition.previousDialogueWordsPer1000NarrativeWords,500);
+  assert.equal(transition.nextDialogueWordsPer1000NarrativeWords,0);
+  assert.equal(transition.dialogueWordsPer1000NarrativeWordsDelta,-500);
+  assert.equal(result.explicitScenes[0].dialogueSignals.dialogueWordsPer1000NarrativeWords,500);
 });
 
 test("no crea transiciones de diálogo cuando hay menos de dos escenas explícitas", async () => {

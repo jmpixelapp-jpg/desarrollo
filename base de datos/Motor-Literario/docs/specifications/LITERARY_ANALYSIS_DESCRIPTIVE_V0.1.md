@@ -148,3 +148,10 @@ La comparación depende exclusivamente de los formatos reconocidos por el detect
 
 
 La transición también expone la longitud media y la longitud máxima de los segmentos dialogados en cada escena, junto con sus deltas (siguiente menos anterior). La media se redondea a tres decimales; el máximo es un conteo entero. Cuando no hay segmentos reconocidos, ambas métricas son cero. Estas medidas describen el tamaño textual de los segmentos detectados, no la duración oral ni el turno real de una persona.
+
+
+### Tasa de diálogo normalizada por narración
+
+Cada perfil `dialogueSignals` de escena incluye `dialogueWordsPer1000NarrativeWords`: palabras de diálogo reconocidas por cada 1.000 palabras de narración fuera de los rangos de diálogo detectados. Se calcula como `dialogueWordCount / narrativeWordCount * 1000`, con redondeo a tres decimales; si no hay palabras narrativas, el valor es cero. No sustituye a `dialogueRatio`, cuyo denominador son todas las palabras de la escena.
+
+La transición `sceneDialogueTransitions` expone la tasa anterior, la siguiente y el delta (siguiente menos anterior). La tasa permite comparar escenas con distintas cantidades de narración, pero depende de la precisión del detector de diálogo y no representa duración, número de turnos ni cantidad de hablantes.

@@ -67,6 +67,52 @@ test("analiza el límite de 2.000 ideas conectadas sin perder la topología", ()
   assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
 });
 
+test("recorre iterativamente una cadena profunda sin clasificarla como ciclo", () => {
+  const count = 2_000;
+  const ideas = Array.from({ length: count }, (_, index) => ({
+    ...idea("chain-" + String(index).padStart(4, "0")),
+    relatedIdeaIds: index + 1 < count
+      ? ["chain-" + String(index + 1).padStart(4, "0")]
+      : []
+  }));
+
+  const graph = analyzeGraph(ideas);
+  assert.equal(graph.ideaCount, count);
+  assert.equal(graph.referenceCount, count - 1);
+  assert.equal(graph.includedReferenceCount, count - 1);
+  assert.equal(graph.cycleCount, 0);
+  assert.deepEqual(graph.cycles, []);
+  assert.equal(graph.weakComponentCount, 1);
+  assert.equal(graph.largestWeakComponentSize, count);
+  assert.equal(graph.sourceNodeCount, 1);
+  assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+});
+
+test("separa componentes cíclicos aunque existan aristas entre ellos", () => {
+  const ideas = [
+    { ...idea("scc-a"), relatedIdeaIds: ["scc-b"] },
+    { ...idea("scc-b"), relatedIdeaIds: ["scc-a", "scc-c"] },
+    { ...idea("scc-c"), relatedIdeaIds: ["scc-d"] },
+    { ...idea("scc-d"), relatedIdeaIds: ["scc-c", "scc-e"] },
+    { ...idea("scc-e"), relatedIdeaIds: [] },
+    { ...idea("scc-f"), relatedIdeaIds: ["scc-g"] },
+    { ...idea("scc-g"), relatedIdeaIds: ["scc-f"] },
+    idea("scc-isolated")
+  ];
+
+  const graph = analyzeGraph(ideas);
+  assert.equal(graph.cycleCount, 3);
+  assert.deepEqual(graph.cycles.map(cycle => cycle.ideaIds), [
+    ["scc-a", "scc-b"],
+    ["scc-c", "scc-d"],
+    ["scc-f", "scc-g"]
+  ]);
+  assert.equal(graph.weakComponentCount, 2);
+  assert.equal(graph.largestWeakComponentSize, 5);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 1);
+});
+
 test("conserva ciclos, reciprocidad y orden estable con índices compactos", () => {
   const ideas = [
     { ...idea("a", "memoria espejo luz"), relatedIdeaIds: ["á", "z", "ghost"] },

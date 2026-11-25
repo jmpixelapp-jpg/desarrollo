@@ -873,6 +873,11 @@ export interface LiteraryIdeaGraphNode {
   readonly undirectedReferenceDegree: number;
   /** Componentes no vacíos que quedarían en su componente débil al retirar este nodo. */
   readonly weakComponentPiecesAfterRemoval: number;
+  /** Menor cantidad de referencias dirigidas hasta una idea terminal del snapshot; null si no existe ruta. */
+  readonly minimumDirectedHopsToTerminal: number | null;
+  readonly terminalReachabilityStatus:
+    | "reaches-terminal-within-snapshot"
+    | "no-terminal-reachable-within-snapshot";
 }
 /** Referencia explícita y resultado de resolver su destino contra el alcance de catálogo declarado. */
 export interface LiteraryIdeaGraphReference {
@@ -1023,6 +1028,11 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly sourceNodeCount: number;
   /** Nodos sin salidas hacia otros nodos incluidos; pueden conservar salidas externas. */
   readonly terminalWithinSnapshotNodeCount: number;
+  /** Nodos con alguna ruta dirigida hacia un terminal dentro del snapshot. */
+  readonly terminalReachableNodeCount: number;
+  /** Nodos sin ruta dirigida hacia un terminal dentro del snapshot. */
+  readonly terminalUnreachableNodeCount: number;
+  readonly terminalReachabilityCoverage: number;
   /** Nodos aislados únicamente respecto del conjunto de ideas incluido. */
   readonly isolatedWithinSnapshotNodeCount: number;
   /** Componentes débilmente conexos dentro del snapshot; ignoran la dirección y no incluyen nodos omitidos. */
@@ -4046,6 +4056,45 @@ function buildLiteraryIdeaGraph(
     };
   }
 
+  // BFS inversa multi-origen: distancia dirigida mínima hasta cualquier nodo
+  // terminal del snapshot. Una sola pasada O(V + E), incluso en ciclos extensos.
+  const reverseAdjacency: number[][] = Array.from({ length: ideaCount }, () => []);
+  const minimumDirectedHopsToTerminal = new Int32Array(ideaCount);
+  minimumDirectedHopsToTerminal.fill(-1);
+  const terminalQueue = new Int32Array(ideaCount);
+  let terminalQueueHead = 0;
+  let terminalQueueTail = 0;
+  for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
+    for (const targetIndex of adjacency[sourceIndex]!) {
+      reverseAdjacency[targetIndex]!.push(sourceIndex);
+    }
+    if (adjacency[sourceIndex]!.length === 0) {
+      minimumDirectedHopsToTerminal[sourceIndex] = 0;
+      terminalQueue[terminalQueueTail++] = sourceIndex;
+    }
+  }
+  while (terminalQueueHead < terminalQueueTail) {
+    const targetIndex = terminalQueue[terminalQueueHead++]!;
+    const nextDistance = minimumDirectedHopsToTerminal[targetIndex]! + 1;
+    for (const predecessorIndex of reverseAdjacency[targetIndex]!) {
+      if (minimumDirectedHopsToTerminal[predecessorIndex] !== -1) continue;
+      minimumDirectedHopsToTerminal[predecessorIndex] = nextDistance;
+      terminalQueue[terminalQueueTail++] = predecessorIndex;
+    }
+  }
+  let terminalReachableNodeCount = 0;
+  for (let index = 0; index < ideaCount; index++) {
+    if (minimumDirectedHopsToTerminal[index] !== -1) terminalReachableNodeCount++;
+    nodes[index] = {
+      ...nodes[index]!,
+      minimumDirectedHopsToTerminal: minimumDirectedHopsToTerminal[index] === -1
+        ? null : minimumDirectedHopsToTerminal[index]!,
+      terminalReachabilityStatus: minimumDirectedHopsToTerminal[index] === -1
+        ? "no-terminal-reachable-within-snapshot"
+        : "reaches-terminal-within-snapshot"
+    };
+  }
+
   // Union-find agrupa los componentes débiles sin duplicar las aristas.
   const weakGroups = new Map<number, string[]>();
   for (let index = 0; index < ideaCount; index++) {
@@ -4247,6 +4296,9 @@ function buildLiteraryIdeaGraph(
     selfReferenceCount,
     sourceNodeCount,
     terminalWithinSnapshotNodeCount,
+    terminalReachableNodeCount,
+    terminalUnreachableNodeCount: ideaCount - terminalReachableNodeCount,
+    terminalReachabilityCoverage: ideaCount === 0 ? 1 : terminalReachableNodeCount / ideaCount,
     isolatedWithinSnapshotNodeCount,
     weakComponentCount: allWeakComponents.length,
     omittedWeakComponentCount: Math.max(

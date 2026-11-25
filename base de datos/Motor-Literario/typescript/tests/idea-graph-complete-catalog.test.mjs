@@ -16,13 +16,26 @@ const store = {
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"bridge", text:"El espejo conserva la memoria y la luz", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
+      statusHistory:[
+        {status:"IDEA",reason:"initial",changedAt:1},
+        {status:"incorporated",reason:"writer",changedAt:3},
+        {status:"discarded",reason:"writer",changedAt:2},
+        {status:"IDEA",reason:"writer"}
+      ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"solo", text:"Independent idea", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["ghost","solo"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] }
+      statusHistory:[
+        {status:"IDEA",reason:"initial",changedAt:1},
+        {status:"incorporated",reason:"writer",changedAt:2},
+        {status:"discarded",reason:"writer",changedAt:3},
+        {status:"incorporated",reason:"writer",changedAt:4},
+        {status:"IDEA",reason:"writer",changedAt:5},
+        {status:"discarded",reason:"writer",changedAt:6},
+        {status:"IDEA",reason:"writer",changedAt:7}
+      ] }
   ],
   async saveDocument(doc) { this.documents.set(doc.projectId+":"+doc.documentId,structuredClone(doc)); },
   async loadDocument(project,id) {
@@ -46,6 +59,46 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(result.ideaGraph.catalogScope,"project");
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
+    const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(bridgeNode.observedStatusTransitionCount, 3);
+    assert.equal(bridgeNode.statusReversalCount, 1);
+    assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
+    assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
+    assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);
+    assert.equal(bridgeNode.observedInitialStatusRecordCount, 1);
+    assert.equal(bridgeNode.observedWriterStatusChangeCount, 3);
+    assert.equal(bridgeNode.observedTextRevisionStatusChangeCount, 0);
+    assert.equal(bridgeNode.earliestKnownStatusChangeAt, 1);
+    assert.equal(bridgeNode.latestKnownStatusChangeAt, 3);
+    assert.equal(bridgeNode.knownStatusHistorySpanMs, 2);
+    const soloNode = result.ideaGraph.nodes.find(node => node.ideaId === "solo");
+    assert.equal(soloNode.observedStatusTransitionCount, 6);
+    assert.equal(soloNode.statusReversalCount, 4);
+    assert.equal(soloNode.comparableStatusTimestampPairCount, 6);
+    assert.equal(soloNode.uncomparableStatusTimestampPairCount, 0);
+    assert.equal(soloNode.earliestKnownStatusChangeAt, 1);
+    assert.equal(soloNode.latestKnownStatusChangeAt, 7);
+    assert.equal(soloNode.knownStatusHistorySpanMs, 6);
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedStatusTransitionCount,
+      9
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .statusReversalCount,
+      5
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .nonMonotonicStatusTimestampCount,
+      1
+    );
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .uncomparableStatusTimestampPairCount,
+      1
+    );
     assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount,4);
     assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount,0);
     assert.equal(result.ideaGraph.lexicalResonances.candidatePairCount,1);

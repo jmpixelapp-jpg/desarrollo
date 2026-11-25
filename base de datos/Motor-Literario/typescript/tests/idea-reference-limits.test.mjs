@@ -34,7 +34,7 @@ test("IndexedDB rechaza más de 500 referencias explícitas por categoría", asy
     store.saveIdea(baseIdea({
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 1 },
-        { status: "IDEA", reason: "writer", changedAt: 2 }
+        { status: "IDEA", reason: "invalid-reason", changedAt: 2 }
       ]
     })),
     /transición de estado inválida/

@@ -70,7 +70,7 @@ test("distingue recurrencia léxica en narración y diálogo reconocido", () => 
     "Escena 2",
     "«La sombra habló.»",
     "La sombra avanzó."
-  ].join("\\n");
+  ].join("\n");
   const result = analyze(text);
   const echo = result.sceneLexicalEchoes.echoes.find(item => item.normalizedWord === "sombra");
 
@@ -90,7 +90,7 @@ test("clasifica como dialogada la recurrencia que solo aparece en citas", () => 
     "«La sombra cayó; la sombra se fue.»",
     "Escena 2",
     "«La sombra cruzó la plaza.»"
-  ].join("\\n");
+  ].join("\n");
   const result = analyze(text);
   const echo = result.sceneLexicalEchoes.echoes.find(item => item.normalizedWord === "sombra");
 
@@ -109,7 +109,7 @@ test("separa mención nominal de participación respaldada por evidencia de acon
     "El puente se derrumbó.",
     "Escena 3",
     "La carta llegó."
-  ].join("\\n");
+  ].join("\n");
   const firstEvidenceStart = text.indexOf("Ana cruzó el puente.");
   const secondEvidenceStart = text.indexOf("El puente se derrumbó.");
   const result = analyzeLiteraryFragment({
@@ -173,7 +173,7 @@ test("marca como desconocida la participación en escenas con vínculos de event
     "Ana esperaba junto a la ventana.",
     "Escena 2",
     "La puerta se cerró."
-  ].join("\\n");
+  ].join("\n");
   const evidenceStart = text.indexOf("La puerta se cerró.");
   const knownEvents = Array.from({ length: 101 }, (_, index) => ({
     eventId: "event-" + String(index + 1).padStart(3, "0"),

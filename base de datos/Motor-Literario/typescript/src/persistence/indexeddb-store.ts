@@ -1872,6 +1872,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(ASSERTIONS, "by-project", "projectId");
         ensureIndex(ASSERTIONS, "by-entity", ["projectId", "entityId"]);
         ensureIndex(DIAGNOSTICS, "by-project", "projectId");
+        ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId");
         ensureIndex(DICTIONARIES, "by-project", "projectId");
         ensureIndex(
           DICTIONARIES, "by-project-language-name",

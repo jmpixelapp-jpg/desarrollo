@@ -70,6 +70,51 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
 });
 
 
+test("el anfitrión respeta el presupuesto de texto del catálogo global", async () => {
+  const budgetStore = {
+    documents: new Map(),
+    ideas: Array.from({ length: 21 }, (_, index) => ({
+      projectId,
+      id: "budget-idea-" + String(index).padStart(2, "0"),
+      text: "memoria ".repeat(12_500),
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    })),
+    async saveDocument(doc) { this.documents.set(doc.projectId + ":" + doc.documentId, structuredClone(doc)); },
+    async loadDocument(project, id) {
+      const value = this.documents.get(project + ":" + id);
+      return value ? structuredClone(value) : undefined;
+    },
+    async loadDocumentWithChanges(project, id) {
+      return { document: await this.loadDocument(project, id), changes: [] };
+    },
+    async loadIdeas(project) {
+      return this.ideas.filter(item => item.projectId === project).map(item => structuredClone(item));
+    },
+    async loadEntities() { return []; }
+  };
+  const api = new HostEngineApi({ store: budgetStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-budget" });
+  await api.openDocument({
+    documentId: "chapter", text: "Escena 1\\nLa tarde avanza.", revision: 0, sequence: 0
+  });
+  try {
+    const result = await api.analyzeLiteraryDocument("chapter");
+    assert.equal(result.ideaGraph.ideaCount, 21);
+    assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount, 20);
+    assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount, 0);
+    assert.equal(result.ideaGraph.lexicalResonances.omittedTextBudgetIdeaCount, 1);
+    assert.equal(result.ideaGraph.lexicalResonances.tokenizedTextUnitCount, 2_000_000);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("declara la capacidad de grafo global solo cuando puede leer ideas y fichas", () => {
   for (const incompleteStore of [
     { ...store, loadIdeas: undefined },
@@ -318,41 +363,4 @@ test("el anfitrión recorta IDs Unicode colacionados de forma determinista", asy
   assert.equal(first.omittedIdeaCount, 1);
   assert.ok(first.nodes.some(node => node.ideaId === decomposedIdea.id));
   assert.equal(first.nodes.some(node => node.ideaId === composedIdea.id), false);
-});
-
-test("aplica el presupuesto agregado del texto de ideas en el anfitrión sin romper el grafo", async () => {
-  const largeStore = {
-    ...store,
-    documents: new Map(),
-    ideas: Array.from({ length: 22 }, (_, index) => ({
-      projectId,
-      id: "budget-idea-" + String(index).padStart(2, "0"),
-      text: "x".repeat(100_000),
-      status: "IDEA",
-      originDocumentId: "chapter",
-      sourceProjectName: "Book",
-      evidence: [],
-      relatedIdeaIds: [],
-      relatedEntityIds: [],
-      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
-    }))
-  };
-  const api = new HostEngineApi({ store: largeStore });
-  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-budget" });
-  await api.openDocument({
-    documentId: "chapter",
-    text: "Escena 1\nEl manuscrito conserva todas las ideas.",
-    revision: 0,
-    sequence: 0
-  });
-  try {
-    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(graph.ideaCount, 22);
-    assert.equal(graph.lexicalResonances.inputIdeaCount, 22);
-    assert.equal(graph.lexicalResonances.analyzedIdeaCount, 20);
-    assert.equal(graph.lexicalResonances.omittedTextBudgetIdeaCount, 2);
-    assert.equal(graph.lexicalResonances.tokenizedTextUnitCount, 2_000_000);
-  } finally {
-    api.dispose();
-  }
 });

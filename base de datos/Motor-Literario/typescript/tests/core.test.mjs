@@ -9969,9 +9969,13 @@ test("la API relaciona personajes del proyecto con escenas por nombre y alias", 
   await api.openDocument({documentId:"chapter",text,revision:0,sequence:0});
   const result = await api.analyzeLiteraryDocument("chapter");
   assert.equal(result.explicitScenes.length,1);
-  assert.equal(result.explicitScenes[0].characterMentions.length,1);
-  assert.equal(result.explicitScenes[0].characterMentions[0].entityId,"ana");
-  assert.deepEqual(result.explicitScenes[0].characterMentions[0].matchedNames,["La viajera","Ana"]);
+  assert.equal(result.explicitScenes[0].characterMentions.length,2);
+  assert.deepEqual(
+    result.explicitScenes[0].characterMentions.map(item => item.entityId).sort(),
+    ["ana","luis"]
+  );
+  const anaMention = result.explicitScenes[0].characterMentions.find(item => item.entityId === "ana");
+  assert.deepEqual(anaMention?.matchedNames,["La viajera","Ana"]);
   assert.deepEqual(result.characterCoMentions[0],{
     characterIds:["ana","luis"],sharedSceneCount:1,sceneIndexes:[1]
   });

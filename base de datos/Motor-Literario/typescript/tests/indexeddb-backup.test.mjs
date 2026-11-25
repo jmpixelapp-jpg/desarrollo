@@ -357,3 +357,102 @@ test("HostEngineApi expone backup, restaura antes de inicializar y rechaza una r
     legacyApi.dispose();
   }
 });
+
+test("sincroniza otra instancia tras restaurar y difunde solo identidades, nunca contenido narrativo", async () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class SharedBroadcastChannel {
+    static channels = new Set();
+    static messages = [];
+    name;
+    onmessage = null;
+    constructor(name) {
+      this.name = name;
+      SharedBroadcastChannel.channels.add(this);
+    }
+    postMessage(data) {
+      SharedBroadcastChannel.messages.push(clone(data));
+      for (const channel of SharedBroadcastChannel.channels) {
+        if (channel === this || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: clone(data) }));
+      }
+    }
+    close() { SharedBroadcastChannel.channels.delete(this); }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: SharedBroadcastChannel
+  });
+
+  const oldDocument = {
+    ...documentRecord,
+    projectId: "old-sync-project",
+    documentId: "old-chapter",
+    text: "Contenido privado anterior que nunca debe difundirse."
+  };
+  const oldIdea = {
+    ...archivedIdea,
+    writerId: "old-sync-writer",
+    sourceProjectId: "old-sync-project",
+    sourceProjectName: "Libro privado anterior",
+    category: "Libro privado anterior",
+    idea: {
+      ...archivedIdea.idea,
+      projectId: "old-sync-project",
+      id: "old-sync-idea",
+      text: "Idea privada anterior que nunca debe difundirse.",
+      originDocumentId: "old-chapter",
+      sourceProjectName: "Libro privado anterior"
+    }
+  };
+  const currentDatabase = createFakeDatabase({
+    documents: [oldDocument],
+    "personal-idea-library": [oldIdea],
+    "writer-library-finalization-receipts": []
+  });
+  const source = attach(createFakeDatabase({
+    documents: [documentRecord],
+    "personal-idea-library": [archivedIdea],
+    "writer-library-finalization-receipts": []
+  }));
+  const target = attach(currentDatabase);
+  const observer = attach(currentDatabase);
+  const observedProjects = [];
+  const observedWriters = [];
+  const offProjects = observer.subscribeNarrativeChanges(id => observedProjects.push(id));
+  const offWriters = observer.subscribePersonalIdeaLibraryChanges(id => observedWriters.push(id));
+
+  try {
+    const backup = await source.exportDatabaseBackup();
+    await target.restoreDatabaseBackup(backup);
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.deepEqual(observedProjects.sort(), ["backup-project", "old-sync-project"]);
+    assert.deepEqual(observedWriters.sort(), ["backup-writer", "old-sync-writer"]);
+    assert.ok(SharedBroadcastChannel.messages.length >= 4);
+    for (const message of SharedBroadcastChannel.messages) {
+      assert.ok(
+        message.type === "motor-literario:narrative-change" ||
+        message.type === "motor-literario:personal-idea-library-change"
+      );
+      assert.deepEqual(
+        Object.keys(message).sort(),
+        message.type === "motor-literario:narrative-change"
+          ? ["projectId", "type"]
+          : ["type", "writerId"]
+      );
+      assert.equal(JSON.stringify(message).includes("Contenido privado"), false);
+      assert.equal(JSON.stringify(message).includes("Idea privada"), false);
+      assert.equal(JSON.stringify(message).includes("La llave abre el jardín"), false);
+    }
+  } finally {
+    offProjects();
+    offWriters();
+    source.database = undefined;
+    target.database = undefined;
+    observer.database = undefined;
+    for (const channel of [...SharedBroadcastChannel.channels]) channel.close();
+    if (originalDescriptor) Object.defineProperty(globalThis, "BroadcastChannel", originalDescriptor);
+    else delete globalThis.BroadcastChannel;
+  }
+});

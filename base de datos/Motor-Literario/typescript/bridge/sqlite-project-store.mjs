@@ -1500,6 +1500,14 @@ export class SqliteProjectStore {
   loadAssertions(projectId) { return this.loadProject("narrative-assertions", projectId, "afirmación narrativa"); }
 
   archiveUnincorporatedIdeas(projectId, writerId, sourceProjectName, archivedAt) {
+    return this.archiveUnincorporatedIdeasInternal(projectId, writerId, sourceProjectName, archivedAt, true);
+  }
+
+  archiveUnincorporatedIdeasSummary(projectId, writerId, sourceProjectName, archivedAt) {
+    return this.archiveUnincorporatedIdeasInternal(projectId, writerId, sourceProjectName, archivedAt, false);
+  }
+
+  archiveUnincorporatedIdeasInternal(projectId, writerId, sourceProjectName, archivedAt, collectEntries) {
     requireProject(projectId);
     requireText(writerId, "writerId");
     requireText(sourceProjectName, "sourceProjectName");
@@ -1597,7 +1605,12 @@ export class SqliteProjectStore {
               }
             }
           }
-          return [];
+          return collectEntries ? [] : {
+            writerId, sourceProjectId: projectId, sourceProjectName,
+            archivedCount: existingReceipt.archivedIdeaIds.length,
+            finalizedAt: existingReceipt.finalizedAt,
+            archiveChecksum: existingReceipt.archiveChecksum
+          };
         }
 
         this.database.exec(
@@ -1713,7 +1726,7 @@ export class SqliteProjectStore {
           };
           this.put("personal-idea-library", [writerId, projectId, idea.id], entry, { insertOnly: true });
           this.remove("narrative-ideas", identityKey(projectId, idea.id));
-          archived.push(entry);
+          if (collectEntries) archived.push(entry);
           archivedIdeaIds.push(idea.id);
         });
 
@@ -1722,7 +1735,12 @@ export class SqliteProjectStore {
           writerId, sourceProjectId: projectId, receiptId, sourceProjectName,
           finalizedAt: archivedAt, archivedIdeaIds, archiveChecksum: checksumFor(archivedIdeaIds)
         }, { insertOnly: true });
-        return clone(archived);
+        return collectEntries ? clone(archived) : {
+          writerId, sourceProjectId: projectId, sourceProjectName,
+          archivedCount: archivedIdeaIds.length,
+          finalizedAt: archivedAt,
+          archiveChecksum: checksumFor(archivedIdeaIds)
+        };
       } finally {
         this.database.exec("DROP TABLE IF EXISTS temp." + pendingTable);
         this.database.exec("DROP TABLE IF EXISTS temp." + identityTable);

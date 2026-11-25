@@ -971,11 +971,39 @@ test("SQLite migra bibliotecas existentes y las lee por cursor keyset", async ()
     const store = new SqliteProjectStore(database, databasePath);
     const first = store.loadPersonalIdeasPage(writerId, null, 2);
     assert.deepEqual(first.items.map(item => item.idea.id), ["idea-a", "idea-b"]);
-    assert.deepEqual(first.nextCursor, { sourceProjectId: projectId, ideaId: "idea-b" });
+    assert.equal(first.libraryVersion, 0);
+    assert.deepEqual(first.nextCursor, {
+      sourceProjectId: projectId,
+      ideaId: "idea-b",
+      libraryVersion: 0
+    });
 
     const second = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
     assert.deepEqual(second.items.map(item => item.idea.id), ["idea-c"]);
     assert.equal(second.nextCursor, null);
+    assert.equal(second.libraryVersion, 0);
+
+    // Inserta una idea que ordena antes del cursor ya entregado.
+    // La página siguiente debe pedir reinicio para no omitirla silenciosamente.
+    store.put("personal-idea-library", [writerId, projectId, "idea-0"], entry("idea-0"));
+    const stale = store.loadPersonalIdeasPage(writerId, first.nextCursor, 2);
+    assert.deepEqual(stale.items, []);
+    assert.equal(stale.nextCursor, null);
+    assert.equal(stale.libraryVersion, 1);
+    assert.equal(stale.restartRequired, true);
+
+    const restarted = store.loadPersonalIdeasPage(writerId, null, 2);
+    assert.deepEqual(restarted.items.map(item => item.idea.id), ["idea-0", "idea-a"]);
+    assert.equal(restarted.libraryVersion, 1);
+    assert.deepEqual(restarted.nextCursor, {
+      sourceProjectId: projectId,
+      ideaId: "idea-a",
+      libraryVersion: 1
+    });
+    const finalPage = store.loadPersonalIdeasPage(writerId, restarted.nextCursor, 2);
+    assert.deepEqual(finalPage.items.map(item => item.idea.id), ["idea-b", "idea-c"]);
+    assert.equal(finalPage.nextCursor, null);
+    assert.equal(finalPage.libraryVersion, 1);
     assert.equal(
       store.loadPersonalIdea(writerId, projectId, "idea-b").idea.id,
       "idea-b"

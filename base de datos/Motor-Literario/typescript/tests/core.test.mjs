@@ -10642,6 +10642,114 @@ test("vincula acontecimientos a escenas solo con evidencia de la misma revisión
   assert.ok(result.explicitScenes[0].eventLinks[0].matchingEvidence[0].start >= 400);
 });
 
+test("traza evidencia de acontecimientos por participante sin inferir presencia o acción", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","Ana aguardó mientras la puerta cedía.","***",
+    "ESCENA 2","Bruno vio las huellas.","***",
+    "ESCENA 3","Ana regresó cuando la puerta cedía.","***",
+    "ESCENA 4","El patio quedó vacío."
+  ].join("\n");
+  const baseOffset = 900;
+  const evidenceFor = excerpt => {
+    const start = text.indexOf(excerpt);
+    assert.notEqual(start,-1);
+    return {
+      documentId:"chapter",revision:6,
+      start:baseOffset+start,end:baseOffset+start+excerpt.length,excerpt
+    };
+  };
+  const result = analyzeLiteraryFragment({
+    projectId:"character-event-evidence",documentId:"chapter",revision:6,text,baseOffset,
+    knownCharacters:[
+      {entityId:"ana",canonicalName:"Ana"},
+      {entityId:"bruno",canonicalName:"Bruno"}
+    ],
+    knownEvents:[
+      {
+        eventId:"gate",label:"La puerta cede",
+        participants:["ana","bruno"],
+        evidence:[evidenceFor("la puerta cedía."),evidenceFor("la puerta cedía.",)]
+      },
+      {
+        eventId:"footprints",label:"Se descubren huellas",
+        participants:["bruno"],
+        evidence:[evidenceFor("las huellas.")]
+      }
+    ]
+  });
+
+  assert.equal(result.explicitScenes[0].eventLinks[0].matchingEvidenceCount,1);
+  assert.equal(result.explicitScenes[0].eventLinks[0].matchingEvidenceTruncated,false);
+  assert.deepEqual(result.characterEventEvidenceProfiles,{
+    explicitSceneCount:4,
+    associationCount:3,
+    omittedAssociationCount:0,
+    characterCount:2,
+    eventCount:2,
+    profiles:[
+      {
+        entityId:"ana",canonicalName:"Ana",eventId:"gate",eventLabel:"La puerta cede",
+        sceneIndexes:[1,3],eventEvidenceSceneCount:2,
+        firstSceneIndex:1,lastSceneIndex:3,interveningSceneCount:1,
+        totalEvidenceRangeCount:2,participantMentionedByNameSceneCount:2,
+        scenes:[
+          {sceneIndex:1,evidenceRangeCount:1,participantMentionedByName:true},
+          {sceneIndex:2,evidenceRangeCount:null,participantMentionedByName:null},
+          {sceneIndex:3,evidenceRangeCount:1,participantMentionedByName:true},
+          {sceneIndex:4,evidenceRangeCount:null,participantMentionedByName:null}
+        ]
+      },
+      {
+        entityId:"bruno",canonicalName:"Bruno",eventId:"gate",eventLabel:"La puerta cede",
+        sceneIndexes:[1,3],eventEvidenceSceneCount:2,
+        firstSceneIndex:1,lastSceneIndex:3,interveningSceneCount:1,
+        totalEvidenceRangeCount:2,participantMentionedByNameSceneCount:0,
+        scenes:[
+          {sceneIndex:1,evidenceRangeCount:1,participantMentionedByName:false},
+          {sceneIndex:2,evidenceRangeCount:null,participantMentionedByName:null},
+          {sceneIndex:3,evidenceRangeCount:1,participantMentionedByName:false},
+          {sceneIndex:4,evidenceRangeCount:null,participantMentionedByName:null}
+        ]
+      },
+      {
+        entityId:"bruno",canonicalName:"Bruno",eventId:"footprints",
+        eventLabel:"Se descubren huellas",
+        sceneIndexes:[2],eventEvidenceSceneCount:1,
+        firstSceneIndex:2,lastSceneIndex:2,interveningSceneCount:0,
+        totalEvidenceRangeCount:1,participantMentionedByNameSceneCount:1,
+        scenes:[
+          {sceneIndex:1,evidenceRangeCount:null,participantMentionedByName:null},
+          {sceneIndex:2,evidenceRangeCount:1,participantMentionedByName:true},
+          {sceneIndex:3,evidenceRangeCount:null,participantMentionedByName:null},
+          {sceneIndex:4,evidenceRangeCount:null,participantMentionedByName:null}
+        ]
+      }
+    ]
+  });
+});
+
+test("conserva el conteo total de evidencia cuando sus rangos se limitan a veinte", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "ESCENA 1\nLa puerta cedió.";
+  const start = text.indexOf("La puerta");
+  const evidence = Array.from({length:25},() => ({
+    documentId:"chapter",revision:1,start,end:text.length,excerpt:"La puerta cedió."
+  }));
+  const result = analyzeLiteraryFragment({
+    projectId:"event-evidence-truncation",documentId:"chapter",revision:1,text,
+    knownEvents:[{
+      eventId:"door",label:"Cede la puerta",participants:["unlisted-character"],evidence
+    }]
+  });
+  const event = result.explicitScenes[0].eventLinks[0];
+  assert.equal(event.matchingEvidenceCount,25);
+  assert.equal(event.matchingEvidence.length,20);
+  assert.equal(event.matchingEvidenceTruncated,true);
+  assert.equal(result.characterEventEvidenceProfiles.profiles[0].canonicalName,null);
+  assert.equal(result.characterEventEvidenceProfiles.profiles[0].totalEvidenceRangeCount,25);
+});
+
 test("agrega patrones de co-mención de personajes por escena sin inferir relaciones", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

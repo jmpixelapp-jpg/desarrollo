@@ -302,9 +302,6 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
       );
     }
   }
-  if (idea.relatedIdeaIds?.includes(idea.id)) {
-    throw new Error(`Registro de ${label} malformado: una idea no puede relacionarse consigo misma.`);
-  }
   if (idea.statusHistory !== undefined) {
     if (!Array.isArray(idea.statusHistory)) {
       throw new Error(`Registro de ${label} malformado: historial inválido.`);
@@ -651,6 +648,9 @@ async function saveNarrativeIdeaWithReferences(
 ): Promise<void> {
   const entityIds = idea.relatedEntityIds ?? [];
   const relatedIdeaIds = idea.relatedIdeaIds ?? [];
+  if (relatedIdeaIds.includes(idea.id)) {
+    throw new Error("Una idea no puede enlazarse a sí misma.");
+  }
   if (expectedCurrent && (
     expectedCurrent.projectId !== idea.projectId || expectedCurrent.id !== idea.id
   )) {

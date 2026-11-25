@@ -144,6 +144,12 @@ test("cada tabla lógica tiene una correspondencia física declarada y con ámbi
     assert.ok(mapping.storageScopes.length > 0, table.name);
     assert.ok(mapping.keyPrefixes.length > 0, table.name);
   }
+  assert.deepEqual(
+    storageMapping.entries.filter(entry => entry.implementationStatus !== "implemented")
+      .map(entry => [entry.table, entry.implementationStatus]),
+    [["projects", "host-owned"]],
+    "solo projects pertenece al anfitrión; todas las demás tablas deben estar implementadas"
+  );
 });
 
 test("el modelo materializa cada vínculo de diccionario con metadatos completos", () => {

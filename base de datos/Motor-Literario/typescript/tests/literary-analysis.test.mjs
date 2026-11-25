@@ -2044,7 +2044,7 @@ test("la cronología de proyecto excluye posiciones temporales no finitas", () =
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
-    text: "Escena 1\\nAna.",
+    text: "Escena 1\nAna.",
     knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
     knownProjectEvents: [
       makeEvent("valid", 2020),

@@ -9877,6 +9877,100 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
   }
 });
 
+test("IndexedDB rechaza una entidad obsoleta sin sustituir la versión confirmada", async () => {
+  const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+  const projectId = "indexeddb-entity-cas";
+  const previous = {
+    projectId,
+    id: "entity-ana",
+    kind: "character",
+    canonicalName: "Ana",
+    normalizedName: "ana",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  };
+  const current = { ...previous, aliases: ["Anita"] };
+  const records = [structuredClone(current)];
+  let putCount = 0;
+
+  const database = {
+    onversionchange: null,
+    close() {},
+    transaction(storeNames, mode) {
+      assert.equal(mode, "readwrite");
+      assert.equal(storeNames, "narrative-entities");
+      const transaction = {
+        error: null,
+        aborted: false,
+        abort() {
+          if (transaction.aborted) return;
+          transaction.aborted = true;
+          transaction.error = new Error("simulated_version_conflict");
+          queueMicrotask(() => transaction.onabort?.());
+        },
+        objectStore(name) {
+          assert.equal(name, "narrative-entities");
+          return {
+            index(indexName) {
+              assert.equal(indexName, "by-project");
+              return {
+                getAll(requestedProjectId) {
+                  assert.equal(requestedProjectId, projectId);
+                  const request = {};
+                  queueMicrotask(() => {
+                    request.result = structuredClone(records.filter(item =>
+                      item.projectId === requestedProjectId
+                    ));
+                    request.onsuccess?.();
+                    if (!transaction.aborted) queueMicrotask(() => transaction.oncomplete?.());
+                  });
+                  return request;
+                }
+              };
+            },
+            put(record) {
+              putCount++;
+              const index = records.findIndex(item =>
+                item.projectId === record.projectId && item.id === record.id
+              );
+              if (index >= 0) records[index] = structuredClone(record);
+              else records.push(structuredClone(record));
+            }
+          };
+        }
+      };
+      return transaction;
+    }
+  };
+
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: {
+      open() {
+        const request = { result: database };
+        queueMicrotask(() => request.onsuccess?.());
+        return request;
+      }
+    }
+  });
+
+  try {
+    const store = new IndexedDbProjectStore();
+    await assert.rejects(
+      store.saveEntityIfUnchanged({ ...previous, aliases: ["Ana antigua"] }, previous),
+      /cambió en otra instancia/
+    );
+    assert.equal(putCount, 0, "la transacción obsoleta no debe encolar ninguna escritura");
+    assert.deepEqual(records[0].aliases, ["Anita"]);
+  } finally {
+    if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
+    else delete globalThis.indexedDB;
+  }
+});
+
 test("el análisis literario mide ritmo, diálogo y repeticiones con offsets UTF-16", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
   const text = [

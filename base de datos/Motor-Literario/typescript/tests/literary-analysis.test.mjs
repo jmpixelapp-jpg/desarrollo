@@ -1697,3 +1697,72 @@ test("aísla del caché las mutaciones de resultados del grafo de ideas", () => 
     resonance => resonance.leftIdeaId === "injected"
   ), false);
 });
+
+
+test("invalida el caché del grafo cuando cambia una relación o el texto de una idea", () => {
+  const projectId = "literary-analysis-test";
+  const ideaA = {
+    projectId,
+    ideaId: "idea-a",
+    text: "La promesa permanece en silencio.",
+    status: "IDEA",
+    relatedIdeaIds: ["idea-b"],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  };
+  const ideaB = {
+    projectId,
+    ideaId: "idea-b",
+    text: "La promesa permanece en silencio.",
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  };
+  const ideaC = {
+    projectId,
+    ideaId: "idea-c",
+    text: "El invierno comienza lejos.",
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  };
+  const input = {
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nLa promesa permanece.",
+    knownProjectIdeas: [ideaA, ideaB, ideaC]
+  };
+
+  const initial = analyzeLiteraryFragment(input).ideaGraph;
+  assert.equal(initial.references[0].toIdeaId, "idea-b");
+  assert.ok(initial.lexicalResonances.resonances.some(
+    resonance => resonance.leftIdeaId === "idea-a" &&
+      resonance.rightIdeaId === "idea-b"
+  ));
+
+  ideaA.relatedIdeaIds[0] = "idea-c";
+  ideaA.text = "El invierno comienza lejos.";
+  const updated = analyzeLiteraryFragment(input).ideaGraph;
+
+  assert.equal(updated.references[0].toIdeaId, "idea-c");
+  assert.ok(updated.lexicalResonances.resonances.some(
+    resonance => resonance.leftIdeaId === "idea-a" &&
+      resonance.rightIdeaId === "idea-c"
+  ));
+  assert.ok(!updated.lexicalResonances.resonances.some(
+    resonance => resonance.leftIdeaId === "idea-a" &&
+      resonance.rightIdeaId === "idea-b"
+  ));
+});

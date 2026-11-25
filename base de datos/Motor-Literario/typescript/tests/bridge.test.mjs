@@ -759,6 +759,132 @@ test("SQLite protege relaciones, acontecimientos, ideas y afirmaciones frente a 
   }
 });
 
+test("dos almacenes SQLite finalizan el mismo libro sin duplicar ideas y conservan su historial", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-concurrent-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  let first;
+  let second;
+  let reopened;
+  const projectId = "library-concurrent-project";
+  const writerId = "writer-library-concurrent";
+  const sourceProjectName = "El libro de la campana";
+  const evidence = {
+    documentId: "chapter-library",
+    revision: 3,
+    start: 18,
+    end: 48,
+    excerpt: "La campana anunció su regreso."
+  };
+  const entity = {
+    id: "entity:character:ana",
+    projectId,
+    kind: "character",
+    canonicalName: "Ana",
+    normalizedName: "ana",
+    aliases: ["La viajera"],
+    evidence: [evidence],
+    firstSeenAt: 1,
+    lastSeenAt: 3,
+    extractionVersion: 1
+  };
+  const retainedIdea = {
+    id: "idea:retained",
+    projectId,
+    text: "Ana regresará al pueblo.",
+    status: "incorporated",
+    originDocumentId: "chapter-library",
+    sourceProjectName,
+    evidence: [evidence],
+    relatedEntityIds: [entity.id],
+    statusHistory: [
+      { status: "IDEA", changedAt: 10, reason: "initial" },
+      { status: "incorporated", changedAt: 20, reason: "writer" }
+    ]
+  };
+  const pendingIdea = {
+    id: "idea:pending",
+    projectId,
+    text: "La campana debe sonar al amanecer.",
+    status: "IDEA",
+    originDocumentId: "chapter-library",
+    sourceProjectName,
+    evidence: [evidence],
+    relatedEntityIds: [entity.id],
+    relatedIdeaIds: [retainedIdea.id],
+    statusHistory: [
+      { status: "IDEA", changedAt: 11, reason: "initial" }
+    ]
+  };
+
+  try {
+    first = await SqliteProjectStore.open(databasePath);
+    second = await SqliteProjectStore.open(databasePath);
+    first.saveEntity(entity);
+    first.saveIdea(retainedIdea);
+    first.saveIdea(pendingIdea);
+
+    // Dos instancias independientes intentan finalizar el mismo proyecto.
+    const [firstTransfer, secondTransfer] = await Promise.all([
+      new Promise((resolveTransfer, rejectTransfer) => {
+        setImmediate(() => {
+          try {
+            resolveTransfer(first.archiveUnincorporatedIdeas(
+              projectId, writerId, sourceProjectName, 100
+            ));
+          } catch (error) { rejectTransfer(error); }
+        });
+      }),
+      new Promise((resolveTransfer, rejectTransfer) => {
+        setImmediate(() => {
+          try {
+            resolveTransfer(second.archiveUnincorporatedIdeas(
+              projectId, writerId, sourceProjectName, 200
+            ));
+          } catch (error) { rejectTransfer(error); }
+        });
+      })
+    ]);
+
+    assert.equal(firstTransfer.length, 1);
+    assert.equal(secondTransfer.length, 1);
+    assert.equal(firstTransfer[0].idea.id, pendingIdea.id);
+    assert.equal(secondTransfer[0].idea.id, pendingIdea.id);
+    assert.equal(secondTransfer[0].archivedAt, firstTransfer[0].archivedAt,
+      "el segundo intento recupera la transferencia confirmada, no la reemplaza");
+    assert.deepEqual(firstTransfer[0].idea.statusHistory, pendingIdea.statusHistory);
+    assert.deepEqual(secondTransfer[0].idea.statusHistory, pendingIdea.statusHistory);
+    assert.deepEqual(firstTransfer[0].context.relatedIdeas[0].statusHistory, retainedIdea.statusHistory);
+    assert.deepEqual(firstTransfer[0].context.relatedEntities.map(item => item.id), [entity.id]);
+    assert.equal(firstTransfer[0].writerId, writerId);
+    assert.equal(firstTransfer[0].sourceProjectId, projectId);
+    assert.equal(firstTransfer[0].category, sourceProjectName);
+
+    const remaining = second.loadIdeas(projectId);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].id, retainedIdea.id);
+    assert.deepEqual(remaining[0].statusHistory, retainedIdea.statusHistory);
+    assert.equal(second.loadPersonalIdeas(writerId).length, 1);
+    const receipt = second.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.deepEqual(receipt.archivedIdeaIds, [pendingIdea.id]);
+
+    first.close();
+    first = undefined;
+    second.close();
+    second = undefined;
+    reopened = await SqliteProjectStore.open(databasePath);
+    const recoveredLibrary = reopened.loadPersonalIdeas(writerId);
+    assert.equal(recoveredLibrary.length, 1);
+    assert.deepEqual(recoveredLibrary[0].idea.statusHistory, pendingIdea.statusHistory);
+    assert.deepEqual(recoveredLibrary[0].context.relatedIdeas[0].statusHistory, retainedIdea.statusHistory);
+    assert.deepEqual(reopened.loadProjectFinalizationReceipt(writerId, projectId).archivedIdeaIds, [pendingIdea.id]);
+  } finally {
+    first?.close();
+    second?.close();
+    reopened?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin modificar las fichas", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-identity-history-"));
   const databasePath = resolve(directory, "motor.sqlite");

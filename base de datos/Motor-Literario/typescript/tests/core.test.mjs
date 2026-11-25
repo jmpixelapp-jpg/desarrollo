@@ -2243,8 +2243,6 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
       ["document-diagnostics", "by-project"],
-      ["project-dictionaries", "by-project"],
-      ["project-dictionaries", "by-project-language-name"],
       ["manuscript-fragments", "by-project"],
       ["manuscript-fragments", "by-document-revision"],
       ["manuscript-fragments", "by-parent"],

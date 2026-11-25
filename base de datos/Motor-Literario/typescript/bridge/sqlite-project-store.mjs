@@ -1609,6 +1609,7 @@ export class SqliteProjectStore {
             writerId, sourceProjectId: projectId, sourceProjectName,
             archivedCount: existingReceipt.archivedIdeaIds.length,
             finalizedAt: existingReceipt.finalizedAt,
+            alreadyFinalized: true,
             archiveChecksum: existingReceipt.archiveChecksum
           };
         }
@@ -1739,6 +1740,7 @@ export class SqliteProjectStore {
           writerId, sourceProjectId: projectId, sourceProjectName,
           archivedCount: archivedIdeaIds.length,
           finalizedAt: archivedAt,
+          alreadyFinalized: false,
           archiveChecksum: checksumFor(archivedIdeaIds)
         };
       } finally {

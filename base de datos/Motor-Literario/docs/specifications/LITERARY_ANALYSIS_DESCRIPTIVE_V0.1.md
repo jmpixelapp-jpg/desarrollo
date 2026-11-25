@@ -115,6 +115,14 @@ El resumen diferencia los patrones candidatos totales de las muestras inspeccion
 
 Una firma recurrente significa únicamente que una secuencia idéntica de bandas y tipo de patrón aparece en varias escenas del fragmento analizado. No acredita repetición de tema, emoción, estructura dramática, intención estilística ni autoría; tampoco se combina con señales gramaticales o de diálogo.
 
+### Perfil de diálogo dentro de cada escena
+
+Cada escena explícita incluye `dialogueSignals`, calculado a partir de los segmentos reconocidos por el detector global y recortados al rango de contenido de esa escena. Informa el número de segmentos, palabras dialogadas, proporción sobre las palabras totales de la escena, densidad según los mismos umbrales globales (ninguna, baja, moderada o alta), media y máximo de palabras por segmento, y conteos por formato (comillas, raya de diálogo o segmento mixto). Se exponen hasta 20 segmentos por escena, con formato, longitud y ocurrencia UTF-16 absoluta; `evidenceTruncated` indica si hay más segmentos de los visibles.
+
+El diálogo de una escena se calcula sobre el contenido, sin incluir su encabezado ni el separador que la delimita. Si un segmento reconocido cruza un límite estructural, su rango y conteo se recortan al contenido de cada escena que intersecta; por tanto, los perfiles reflejan la cobertura textual local y no reescriben la segmentación original. Los conteos resumen todos los segmentos intersectados aunque la evidencia visible esté limitada a 20.
+
+El detector conserva sus límites de formato: reconoce texto entre comillas angulares, curvas o rectas y líneas iniciadas por raya. Una intervención puede quedar sin detectar si utiliza otra convención editorial. El perfil no infiere hablantes, turnos conversacionales, destinatarios, intención, calidad del diálogo ni relación entre personajes.
+
 ## Acontecimientos y continuidad entre escenas
 
 La API anfitriona aporta acontecimientos persistidos del proyecto activo. Una escena solo recibe un vínculo cuando existe evidencia no obsoleta del mismo documento y de la revisión exacta analizada cuyo rango UTF-16 se solapa con el contenido de la escena. Cada vínculo conserva el ID y etiqueta del acontecimiento, los rangos coincidentes y sus participantes declarados. Para cada participante se informa por separado si también aparece por nombre/alias en las menciones literales de esa escena. La falta de mención no se interpreta como ausencia ni contradicción. La evidencia de otras revisiones, otros documentos o marcada como obsoleta se descarta. El catálogo admite hasta 2.000 acontecimientos, 500 participantes y 200 evidencias por acontecimiento; cada escena devuelve como máximo 100 vínculos y 20 rangos por vínculo.

@@ -361,6 +361,31 @@ export interface LiterarySceneVoiceProfile {
   /** Instantáneas en orden textual; conservan una referencia por índice a explicitScenes. */
   readonly sceneSnapshots: readonly LiterarySceneVoiceSnapshot[];
 }
+export interface LiterarySceneDialogueSegment {
+  /** Índice local al conjunto de segmentos de diálogo de esta escena. */
+  readonly segmentIndex: number;
+  readonly format: LiteraryDialogueSegmentFormat;
+  readonly wordCount: number;
+  /** Evidencia recortada al contenido de la escena y expresada en offsets UTF-16 absolutos. */
+  readonly occurrence: LiteraryAnalysisOccurrence;
+}
+export interface LiterarySceneDialogueProfile {
+  readonly segmentCount: number;
+  readonly dialogueWordCount: number;
+  /** Proporción de palabras dialogadas respecto de todas las palabras de la escena. */
+  readonly dialogueRatio: number;
+  readonly density: LiteraryDialogueDensity;
+  readonly averageWordsPerSegment: number;
+  readonly longestSegmentWords: number;
+  readonly formatCounts: {
+    readonly quotation: number;
+    readonly dialogueDash: number;
+    readonly mixed: number;
+  };
+  /** Se exponen como máximo 20 segmentos; los conteos resumen el total completo. */
+  readonly segments: readonly LiterarySceneDialogueSegment[];
+  readonly evidenceTruncated: boolean;
+}
 export interface LiteraryExplicitSceneSegment {
   readonly sceneIndex: number;
   readonly markerType: "scene-heading" | "scene-divider";
@@ -370,6 +395,8 @@ export interface LiteraryExplicitSceneSegment {
   readonly wordCount: number;
   /** Palabras de narración fuera de los rangos de diálogo reconocidos. */
   readonly narrativeWordCount: number;
+  /** Distribución cuantitativa de los segmentos de diálogo recortados a esta escena. */
+  readonly dialogueSignals: LiterarySceneDialogueProfile;
   /** Ritmo de las oraciones completas de la escena; incluye diálogo y mantiene evidencia propia. */
   readonly rhythmSignals: LiterarySceneRhythmProfile;
   /** Menciones literales de personajes conocidos y no ambiguos dentro de esta escena. */
@@ -734,6 +761,7 @@ function analyzeExplicitScenes(
   knownCharacters: readonly LiteraryAnalysisKnownCharacter[],
   knownEvents: readonly LiteraryAnalysisKnownEvent[],
   dialogueRanges: readonly LocalRange[],
+  dialogueSegments: readonly (LocalRange & { readonly format: LiteraryDialogueSegmentFormat })[],
   documentId: string,
   revision: number
 ): LiteraryExplicitSceneSegment[] {
@@ -758,7 +786,51 @@ function analyzeExplicitScenes(
   const boundedRanges = boundedScenes.map(scene => scene.contentRange);
   const wordCounts = countTokensPerRange(tokens,boundedRanges);
   const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,boundedRanges,dialogueRanges);
+  let dialogueCursor = 0;
   return boundedScenes.map((scene,index) => {
+    while (dialogueCursor < dialogueSegments.length &&
+      dialogueSegments[dialogueCursor]!.end <= scene.contentRange.start) dialogueCursor++;
+    const localDialogueSegments: Array<LocalRange & { readonly format: LiteraryDialogueSegmentFormat }> = [];
+    for (let cursor=dialogueCursor; cursor<dialogueSegments.length &&
+      dialogueSegments[cursor]!.start < scene.contentRange.end; cursor++) {
+      const segment = dialogueSegments[cursor]!;
+      const start = Math.max(segment.start,scene.contentRange.start);
+      const end = Math.min(segment.end,scene.contentRange.end);
+      if (start < end) localDialogueSegments.push({start,end,format:segment.format});
+    }
+    const sceneDialogueWordCounts = countTokensPerRange(tokens,localDialogueSegments);
+    const dialogueWordCount = sceneDialogueWordCounts.reduce((total,count) => total+count,0);
+    const dialogueRatio = (wordCounts[index] ?? 0) > 0
+      ? dialogueWordCount/(wordCounts[index] ?? 1) : 0;
+    let dialogueDensity: LiteraryDialogueDensity = "none";
+    if (dialogueRatio > 0) {
+      if (dialogueRatio < 0.1) dialogueDensity = "low";
+      else if (dialogueRatio < 0.3) dialogueDensity = "moderate";
+      else dialogueDensity = "high";
+    }
+    const formatCounts = {quotation:0,dialogueDash:0,mixed:0};
+    for (const segment of localDialogueSegments) {
+      if (segment.format === "quotation") formatCounts.quotation++;
+      else if (segment.format === "dialogue-dash") formatCounts.dialogueDash++;
+      else formatCounts.mixed++;
+    }
+    const dialogueSignals: LiterarySceneDialogueProfile = {
+      segmentCount:localDialogueSegments.length,
+      dialogueWordCount,
+      dialogueRatio:roundMetric(dialogueRatio),
+      density:dialogueDensity,
+      averageWordsPerSegment:roundMetric(localDialogueSegments.length > 0
+        ? dialogueWordCount/localDialogueSegments.length : 0),
+      longestSegmentWords:sceneDialogueWordCounts.reduce((maximum,count) => Math.max(maximum,count),0),
+      formatCounts,
+      segments:localDialogueSegments.slice(0,20).map((segment,segmentIndex) => ({
+        segmentIndex:segmentIndex+1,
+        format:segment.format,
+        wordCount:sceneDialogueWordCounts[segmentIndex] ?? 0,
+        occurrence:{start:baseOffset+segment.start,end:baseOffset+segment.end}
+      })),
+      evidenceTruncated:localDialogueSegments.length>20
+    };
     const sceneText = text.slice(scene.contentRange.start,scene.contentRange.end);
     const sceneSentenceRanges = findSentenceRanges(sceneText).map(range => ({
       start:scene.contentRange.start+range.start,
@@ -782,6 +854,7 @@ function analyzeExplicitScenes(
     },
     wordCount:wordCounts[index] ?? 0,
     narrativeWordCount:narrativeWordCounts[index] ?? 0,
+    dialogueSignals,
     rhythmSignals:summarizeSceneRhythm(sceneSentenceRanges,sceneSentenceWordCounts,baseOffset),
     characterMentions,
     eventLinks:findSceneEventLinks(
@@ -1739,7 +1812,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   }));
   const explicitScenes = analyzeExplicitScenes(
     text,tokens,baseOffset,localStructureMarkers,input.knownCharacters ?? [],
-    input.knownEvents ?? [],dialogueRanges,input.documentId,input.revision
+    input.knownEvents ?? [],dialogueRanges,dialogueSegments,input.documentId,input.revision
   );
   const sceneContinuity = buildSceneContinuity(explicitScenes);
   const sceneRhythmTransitions = buildSceneRhythmTransitions(explicitScenes);
@@ -1938,6 +2011,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     caveats:[
       "El ritmo usa umbrales de longitud de oración; no mide calidad, tensión ni musicalidad.",
       "Los segmentos de diálogo son señales de formato; una línea o cita no equivale siempre a un turno completo ni permite identificar al hablante.",
+      "El perfil de diálogo por escena recorta los segmentos reconocidos al contenido local, omite formatos no detectados y no atribuye hablantes.",
       "La estructura de escenas solo se segmenta cuando hay encabezados o separadores explícitos; no infiere cambios de escena a partir del contenido.",
       "La presencia de personajes se basa en nombres y alias literales no ambiguos del catálogo del proyecto; no implica que el personaje actúe, hable o sea el punto de vista de la escena.",
       "Los acontecimientos se vinculan a escenas solo cuando la evidencia vigente coincide en documento y revisión y se solapa con el rango de la escena. Que un participante declarado no sea mencionado por nombre no demuestra que esté ausente.",

@@ -10677,3 +10677,78 @@ test("no convierte ausencia de mención literal en contradicción", async () => 
   });
   assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,false);
 });
+
+
+test("resume el volumen y formato del diálogo dentro de cada escena explícita", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "—Ven conmigo, Ana.",
+    "«No iré», respondió Ana.",
+    "La puerta quedó abierta.",
+    "***",
+    "ESCENA 2",
+    "—Volveré mañana.",
+    "El pasillo largo parecía completamente vacío bajo la luz de la luna y sin ninguna respuesta."
+  ].join("\\n");
+  const baseOffset = 2400;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue",documentId:"chapter",revision:8,text,baseOffset
+  });
+  const [first,second] = result.explicitScenes;
+  assert.equal(result.explicitScenes.length,2);
+  assert.deepEqual(first.dialogueSignals,{
+    segmentCount:2,
+    dialogueWordCount:5,
+    dialogueRatio:0.455,
+    density:"high",
+    averageWordsPerSegment:2.5,
+    longestSegmentWords:3,
+    formatCounts:{quotation:1,dialogueDash:1,mixed:0},
+    segments:[
+      {
+        segmentIndex:1,format:"dialogue-dash",wordCount:3,
+        occurrence:{
+          start:baseOffset+text.indexOf("Ven conmigo, Ana."),
+          end:baseOffset+text.indexOf("Ven conmigo, Ana.")+"Ven conmigo, Ana.".length
+        }
+      },
+      {
+        segmentIndex:2,format:"quotation",wordCount:2,
+        occurrence:{
+          start:baseOffset+text.indexOf("No iré"),
+          end:baseOffset+text.indexOf("No iré")+"No iré".length
+        }
+      }
+    ],
+    evidenceTruncated:false
+  });
+  assert.equal(first.narrativeWordCount,6);
+  assert.equal(second.dialogueSignals.segmentCount,1);
+  assert.equal(second.dialogueSignals.dialogueWordCount,2);
+  assert.equal(second.dialogueSignals.formatCounts.dialogueDash,1);
+  assert.equal(second.dialogueSignals.density,"moderate");
+  assert.equal(second.dialogueSignals.segments[0].wordCount,2);
+  assert.equal(second.dialogueSignals.segments[0].occurrence.start,
+    baseOffset+text.indexOf("Volveré mañana."));
+  assert.equal(second.dialogueSignals.evidenceTruncated,false);
+});
+
+test("mantiene el perfil de diálogo vacío cuando una escena no contiene segmentos reconocidos", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "ESCENA 1\\nEl jardín permaneció silencioso durante toda la tarde.";
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-empty",documentId:"chapter",revision:1,text
+  });
+  assert.deepEqual(result.explicitScenes[0].dialogueSignals,{
+    segmentCount:0,
+    dialogueWordCount:0,
+    dialogueRatio:0,
+    density:"none",
+    averageWordsPerSegment:0,
+    longestSegmentWords:0,
+    formatCounts:{quotation:0,dialogueDash:0,mixed:0},
+    segments:[],
+    evidenceTruncated:false
+  });
+});

@@ -165,7 +165,6 @@ test("permite retirar una referencia a una idea que ya no existe", async () => {
   api.dispose();
 });
 
-
 test("reaplica vínculos idea-ficha usando el catálogo recargado tras un conflicto CAS", async () => {
   const store = new RacingStore([idea("idea-source")], [
     entity("character-local", "Ana"), entity("character-external", "Bruno")
@@ -204,6 +203,120 @@ test("rechaza el vínculo a ficha si la entidad destino desaparece durante CAS",
   );
   assert.equal(store.entityReads, 2);
   assert.equal(store.writes, 1);
+  api.dispose();
+});
+
+test("permite limpiar el vínculo a una idea eliminada durante un conflicto CAS", async () => {
+  const store = new RacingStore([
+    idea("idea-source", { relatedIdeaIds: ["idea-target"] }),
+    idea("idea-target")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => {
+    store.ideas.delete(projectId + ":idea-target");
+    return {
+      ...current,
+      status: "incorporated",
+      statusHistory: [
+        ...current.statusHistory,
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ]
+    };
+  };
+
+  const result = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target", false
+  );
+
+  assert.deepEqual(result.relatedIdeaIds, []);
+  assert.equal(result.status, "incorporated");
+  assert.equal(result.statusHistory.at(-1).reason, "writer");
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    []
+  );
+  assert.equal(store.writes, 2);
+  api.dispose();
+});
+
+test("permite limpiar el vínculo a una ficha eliminada durante un conflicto CAS", async () => {
+  const store = new RacingStore([
+    idea("idea-source", { relatedEntityIds: ["character-local"] })
+  ], [entity("character-local", "Ana")]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => {
+    store.entities.delete(projectId + ":character-local");
+    return {
+      ...current,
+      status: "incorporated",
+      statusHistory: [
+        ...current.statusHistory,
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ]
+    };
+  };
+
+  const result = await api.setNarrativeIdeaEntityLink(
+    "idea-source", "character-local", false
+  );
+
+  assert.deepEqual(result.relatedEntityIds, []);
+  assert.equal(result.status, "incorporated");
+  assert.equal(result.statusHistory.at(-1).reason, "writer");
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedEntityIds,
+    []
+  );
+  assert.equal(store.entityReads, 2);
+  assert.equal(store.writes, 2);
+  api.dispose();
+});
+
+test("rechaza auto-vínculos sin intentar leer ni escribir el catálogo", async () => {
+  const store = new RacingStore([idea("idea-source")]);
+  const api = createApi(store);
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-source", true),
+    /Datos de relación entre ideas inválidos/
+  );
+  assert.equal(store.writes, 0);
+  assert.equal(store.entityReads, 0);
+  api.dispose();
+});
+
+test("las altas y bajas repetidas de un vínculo son idempotentes y no escriben", async () => {
+  const store = new RacingStore([
+    idea("idea-source", { relatedIdeaIds: ["idea-target"] }),
+    idea("idea-target")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  const alreadyLinked = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target", true
+  );
+  assert.deepEqual(alreadyLinked.relatedIdeaIds, ["idea-target"]);
+  alreadyLinked.relatedIdeaIds.push("external-mutation");
+
+  const stillLinked = await api.setNarrativeIdeaLink(
+    "idea-source", "idea-target", true
+  );
+  assert.deepEqual(stillLinked.relatedIdeaIds, ["idea-target"]);
+
+  const alreadyUnlinked = await api.setNarrativeIdeaLink(
+    "idea-source", "missing-target", false
+  );
+  assert.deepEqual(alreadyUnlinked.relatedIdeaIds, ["idea-target"]);
+  assert.equal(store.writes, 0);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-target"]
+  );
   api.dispose();
 });
 

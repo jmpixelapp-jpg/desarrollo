@@ -10374,7 +10374,7 @@ test("detecta secuencias recurrentes de acontecimientos en ventanas de escenas c
     "ESCENA 4","La tormenta comienza.","***",
     "ESCENA 5","El patio quedó vacío.","***",
     "ESCENA 6","La campana suena."
-  ].join("\\n");
+  ].join("\n");
   const evidenceForAll = excerpt => {
     const evidence=[];
     let cursor=0;
@@ -10465,7 +10465,7 @@ test("excluye ventanas con escenas truncadas y cuenta las ventanas vacías", asy
     "ESCENA 3","La campana repicó.","***",
     "ESCENA 4","La biblioteca cerró.","***",
     "ESCENA 5","El silencio continuó."
-  ].join("\\n");
+  ].join("\n");
   const alarmStart=text.indexOf("La alarma sonó.");
   const bellStart=text.indexOf("La campana repicó.");
   const knownEvents=[

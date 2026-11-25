@@ -80,12 +80,14 @@ export function downloadIndexedDbBackupFile(
 
   const blob = createIndexedDbBackupBlob(backup);
   const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = /\.json$/iu.test(safeFilename) ? safeFilename : `${safeFilename}.json`;
-  link.hidden = true;
+  let link: HTMLAnchorElement | undefined;
 
   try {
+    link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = /\\.json$/iu.test(safeFilename) ? safeFilename : `${safeFilename}.json`;
+    link.hidden = true;
+
     const parent = document.body ?? document.documentElement;
     if (!parent) {
       throw new Error("El documento no está preparado para descargar el respaldo.");
@@ -93,8 +95,12 @@ export function downloadIndexedDbBackupFile(
     parent.append(link);
     link.click();
   } finally {
-    link.remove();
-    // Mantiene la URL activa mientras el navegador inicia la descarga.
-    globalThis.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    // La URL se libera incluso si crear, insertar o retirar el enlace falla.
+    try {
+      link?.remove();
+    } finally {
+      // Mantiene la URL activa mientras el navegador inicia la descarga.
+      globalThis.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
   }
 }

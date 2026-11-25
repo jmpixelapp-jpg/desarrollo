@@ -15,7 +15,6 @@ let inputBuffer = "";
 const PUBLIC_API_METHODS = new Set([
   "extractNarrativeKnowledge",
   "addNarrativeEntityAlias",
-  "mergeNarrativeEntities",
   "getNarrativeEntityIdentityCandidates",
   "getNarrativeEntities",
   "getNarrativeRelations",

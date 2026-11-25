@@ -3688,12 +3688,14 @@ function buildLiteraryIdeaLexicalResonances(
     readonly leftTermCount: number;
     readonly rightTermCount: number;
     readonly sharedTermCount: number;
+    /** Precisión completa para ordenar; jaccardSimilarity es solo el valor presentado. */
+    readonly jaccardScore: number;
     readonly jaccardSimilarity: number;
     readonly overlapCoefficient: number;
   }
   const compareRank = (left: RankedPair, right: RankedPair): number =>
     right.sharedTermCount - left.sharedTermCount ||
-    right.jaccardSimilarity - left.jaccardSimilarity ||
+    right.jaccardScore - left.jaccardScore ||
     compareIdeaIds(left.leftIdeaId, right.leftIdeaId) ||
     compareIdeaIds(left.rightIdeaId, right.rightIdeaId);
   // Heap acotado: conserva solo los cien mejores pares sin materializar el catálogo entero.
@@ -3741,6 +3743,7 @@ function buildLiteraryIdeaLexicalResonances(
         leftTermCount: left.terms.length,
         rightTermCount: right.terms.length,
         sharedTermCount,
+        jaccardScore: sharedTermCount / unionTermCount,
         jaccardSimilarity: roundMetric(sharedTermCount / unionTermCount),
         overlapCoefficient: roundMetric(
           sharedTermCount / Math.min(left.terms.length, right.terms.length)

@@ -3837,9 +3837,10 @@ export class HostEngineApi {
         const current = this.narrativeIdeas.get(ideaId);
         if (!current) throw new Error("La idea no pertenece al proyecto activo o no existe.");
         if (current.status === status) return cloneNarrativeRecord(current);
-        const statusHistory = [...(current.statusHistory ?? [
-          { status: current.status, reason: "initial" as const }
-        ])];
+        const statusHistory = [...(current.statusHistory ??
+          (current.omittedStatusHistoryCount
+            ? []
+            : [{ status: current.status, reason: "initial" as const }]))];
         statusHistory.push({
           status,
           changedAt: nextNarrativeIdeaStatusChangeAt(statusHistory),

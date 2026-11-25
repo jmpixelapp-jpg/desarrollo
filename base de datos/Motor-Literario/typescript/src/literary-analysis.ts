@@ -815,6 +815,12 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly notIncludedOutgoingReferenceCount: number;
   /** Registros visibles del historial, incluido el estado inicial cuando está disponible. */
   readonly statusHistoryRecordCount: number;
+  /** Ideas cuyo último estado visible coincide con la etiqueta actual. */
+  readonly statusHistoryConsistentIdeaCount: number;
+  /** Ideas cuya etiqueta actual contradice el último estado visible. */
+  readonly statusHistoryMismatchIdeaCount: number;
+  /** Ideas sin historial suficiente para validar la etiqueta actual. */
+  readonly statusHistoryConsistencyUnknownIdeaCount: number;
   readonly omittedStatusHistoryCount: number;
   /** Transiciones explícitas registradas por el escritor. */
   readonly writerDecisionCount: number;
@@ -3824,6 +3830,9 @@ function buildLiteraryIdeaGraph(
     includedOutgoingReferenceCount: number;
     notIncludedOutgoingReferenceCount: number;
     statusHistoryRecordCount: number;
+    statusHistoryConsistentIdeaCount: number;
+    statusHistoryMismatchIdeaCount: number;
+    statusHistoryConsistencyUnknownIdeaCount: number;
     omittedStatusHistoryCount: number;
     writerDecisionCount: number;
     observedStatusTransitionCount: number;
@@ -3855,6 +3864,9 @@ function buildLiteraryIdeaGraph(
       includedOutgoingReferenceCount: 0,
       notIncludedOutgoingReferenceCount: 0,
       statusHistoryRecordCount: 0,
+      statusHistoryConsistentIdeaCount: 0,
+      statusHistoryMismatchIdeaCount: 0,
+      statusHistoryConsistencyUnknownIdeaCount: 0,
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 0,
       observedStatusTransitionCount: 0,
@@ -3895,6 +3907,9 @@ function buildLiteraryIdeaGraph(
     totals.includedOutgoingReferenceCount += node.includedOutgoingReferenceCount;
     totals.notIncludedOutgoingReferenceCount += node.notIncludedOutgoingReferenceCount;
     totals.statusHistoryRecordCount += node.statusHistory.length;
+    if (node.currentStatusHistoryConsistency === "consistent") totals.statusHistoryConsistentIdeaCount++;
+    else if (node.currentStatusHistoryConsistency === "mismatch") totals.statusHistoryMismatchIdeaCount++;
+    else totals.statusHistoryConsistencyUnknownIdeaCount++;
     totals.omittedStatusHistoryCount += node.omittedStatusHistoryCount;
     totals.writerDecisionCount += node.writerDecisionCount;
     totals.observedStatusTransitionCount += node.observedStatusTransitionCount;

@@ -35,6 +35,10 @@ export interface LiteraryAnalysisKnownProjectEvent {
   readonly participants: readonly string[];
   readonly timelineTrackId?: string;
   readonly timeReference?: NarrativeTimeReference;
+  /** Total de evidencias activas antes de limitar las muestras transferidas. */
+  readonly evidenceCount?: number;
+  /** Evidencias obsoletas no incluidas en la muestra activa. */
+  readonly staleEvidenceCount?: number;
   readonly evidence: readonly LiteraryAnalysisKnownEventEvidence[];
 }
 export interface LiteraryAnalysisInput {
@@ -561,6 +565,7 @@ export interface LiteraryCharacterProjectEventTimelinePoint {
   readonly omittedEventIdCount: number;
   readonly documentIds: readonly string[];
   readonly evidenceCount: number;
+  readonly omittedEvidenceCount: number;
   readonly evidenceSamples: readonly LiteraryCharacterProjectEventTimelineEvidence[];
   readonly evidenceTruncated: boolean;
 }
@@ -580,6 +585,7 @@ export interface LiteraryCharacterProjectEventTimeline {
   readonly timedEventCount: number;
   readonly untimedEventCount: number;
   readonly staleEventCount: number;
+  readonly staleEvidenceCount: number;
   readonly pointCount: number;
   readonly omittedPointCount: number;
   readonly transitionCount: number;
@@ -2882,13 +2888,18 @@ function buildCharacterProjectEventTimeline(
   let timedEventCount = 0;
   let untimedEventCount = 0;
   let staleEventCount = 0;
+  let staleEvidenceCount = 0;
 
   for (const event of projectEvents) {
     if (!event.participants.includes(entityId)) continue;
     sourceEventCount++;
     const currentEvidence = event.evidence.filter(item => item.status !== "stale");
-    if (currentEvidence.length === 0) {
-      if (event.evidence.length > 0) staleEventCount++;
+    const totalActiveEvidenceCount = event.evidenceCount ?? currentEvidence.length;
+    const eventStaleEvidenceCount = event.staleEvidenceCount ??
+      event.evidence.filter(item => item.status === "stale").length;
+    staleEvidenceCount += eventStaleEvidenceCount;
+    if (totalActiveEvidenceCount === 0) {
+      if (eventStaleEvidenceCount > 0) staleEventCount++;
       continue;
     }
     if (!event.timeReference) {
@@ -2908,10 +2919,12 @@ function buildCharacterProjectEventTimeline(
       orderValue:reference.orderValue,
       events:new Map<string,LiteraryAnalysisKnownProjectEvent>(),
       evidence:[],
+      evidenceCount:0,
       rawReferences:new Set<string>(),
       documents:new Set<string>()
     };
     group.events.set(event.eventId,event);
+    group.evidenceCount += totalActiveEvidenceCount;
     group.rawReferences.add(reference.raw);
     for (const evidence of currentEvidence) {
       group.documents.add(evidence.documentId);
@@ -2945,9 +2958,10 @@ function buildCharacterProjectEventTimeline(
       eventIds:orderedEvents.slice(0,50),
       omittedEventIdCount:Math.max(0,orderedEvents.length-50),
       documentIds:[...group.documents].sort((a,b) => a.localeCompare(b,"en")),
-      evidenceCount:orderedEvidence.length,
+      evidenceCount:group.evidenceCount,
+      omittedEvidenceCount:Math.max(0,group.evidenceCount-Math.min(20,orderedEvidence.length)),
       evidenceSamples:orderedEvidence.slice(0,20),
-      evidenceTruncated:orderedEvidence.length>20
+      evidenceTruncated:group.evidenceCount>Math.min(20,orderedEvidence.length)
     };
   }).sort((a,b) =>
     (a.timelineTrackId ?? "").localeCompare(b.timelineTrackId ?? "","en") ||
@@ -2989,6 +3003,7 @@ function buildCharacterProjectEventTimeline(
     timedEventCount,
     untimedEventCount,
     staleEventCount,
+    staleEvidenceCount,
     pointCount:allPoints.length,
     omittedPointCount:Math.max(0,allPoints.length-200),
     transitionCount:allTransitions.length,
@@ -4369,6 +4384,10 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Array.isArray(event.participants) || event.participants.length > 500 ||
         event.participants.some((participant: string) => typeof participant !== "string" || !participant.trim()) ||
         !Array.isArray(event.evidence) || event.evidence.length > 200 ||
+        (event.evidenceCount !== undefined &&
+          (!Number.isSafeInteger(event.evidenceCount) || event.evidenceCount < event.evidence.length)) ||
+        (event.staleEvidenceCount !== undefined &&
+          (!Number.isSafeInteger(event.staleEvidenceCount) || event.staleEvidenceCount < 0)) ||
         (event.timelineTrackId !== undefined &&
           (typeof event.timelineTrackId !== "string" || !event.timelineTrackId.trim() || event.timelineTrackId.length > 256)) ||
         (event.timeReference !== undefined &&

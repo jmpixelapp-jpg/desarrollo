@@ -29,6 +29,42 @@ export interface ProjectDictionaryInput {
   readonly updatedAt: number;
 }
 
+
+/** Vínculo explícito entre una entrada de diccionario y una ficha del mismo libro. */
+export interface DictionaryEntryEntityLink {
+  readonly projectId: string;
+  readonly entryId: string;
+  readonly recordId: string;
+  readonly linkKind: string;
+  readonly provenanceKind: string;
+  readonly createdAt: number;
+}
+
+export function validateDictionaryEntryEntityLink(
+  value: unknown,
+  expectedProjectId?: string,
+  expectedEntryId?: string
+): asserts value is DictionaryEntryEntityLink {
+  if (!value || typeof value !== "object") {
+    throw new Error("Vínculo de entrada y ficha inválido.");
+  }
+  const item = value as Record<string, unknown>;
+  if (!validIdentifier(item.projectId) ||
+      (expectedProjectId !== undefined && item.projectId !== expectedProjectId) ||
+      !validIdentifier(item.entryId) ||
+      (expectedEntryId !== undefined && item.entryId !== expectedEntryId) ||
+      !validIdentifier(item.recordId) ||
+      !validIdentifier(item.linkKind) ||
+      !validIdentifier(item.provenanceKind) ||
+      !validTimestamp(item.createdAt)) {
+    throw new Error("Vínculo de diccionario malformado: proyecto, entrada, ficha, tipo, procedencia o fecha inválidos.");
+  }
+}
+
+export const cloneDictionaryEntryEntityLink = (
+  item: DictionaryEntryEntityLink
+): DictionaryEntryEntityLink => structuredClone(item);
+
 export interface DictionaryEntry {
   readonly projectId: string;
   readonly id: string;

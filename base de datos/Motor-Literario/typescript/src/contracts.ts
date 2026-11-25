@@ -3,7 +3,7 @@ import type {
   ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion,
   ImportAuthorization, SchemaMigration
 } from "./mldb-records";
-import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
+import type { ProjectDictionary, DictionaryEntry, DictionaryEntryEntityLink } from "./dictionaries";
 import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle } from "./project-data";
 
 /** Contratos públicos. La identidad del proyecto siempre pertenece al anfitrión. */
@@ -177,6 +177,15 @@ export interface ProjectStore {
   loadDictionaries?(projectId: string): Promise<readonly ProjectDictionary[]>;
   saveDictionaryEntry?(entry: DictionaryEntry, expectedCurrent?: DictionaryEntry): Promise<void>;
   loadDictionaryEntries?(projectId: string, dictionaryId: string): Promise<readonly DictionaryEntry[]>;
+  /** Vínculos por entrada; las tres columnas de metadatos se conservan por vínculo. */
+  loadDictionaryEntryEntityLinks?(projectId: string, entryId: string): Promise<readonly DictionaryEntryEntityLink[]>;
+  /** Actualiza en una sola transacción la entrada y el vínculo explícito. */
+  setDictionaryEntryEntityLink?(
+    entry: DictionaryEntry,
+    expectedCurrent: DictionaryEntry,
+    link: DictionaryEntryEntityLink,
+    linked: boolean
+  ): Promise<void>;
 
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;

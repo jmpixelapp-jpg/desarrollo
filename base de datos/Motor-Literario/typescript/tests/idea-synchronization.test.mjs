@@ -775,3 +775,29 @@ test("rechaza catálogos de adaptadores con más de 500 vínculos por idea", asy
   );
   api.dispose();
 });
+
+
+test("una referencia rota no publica parcialmente la caché de ideas", async () => {
+  const invalidIdea = idea("idea-with-dangling-entity", {
+    relatedEntityIds: ["character-to-recover"]
+  });
+  const store = new RacingStore([invalidIdea]);
+  const api = createApi(store);
+
+  await assert.rejects(
+    api.getNarrativeIdeas(),
+    /referencias a entidades inexistentes/
+  );
+  const ideaReadsAfterFailure = store.ideaReads;
+  const entityReadsAfterFailure = store.entityReads;
+
+  const recoveredEntity = entity("character-to-recover", "Ana");
+  store.entities.set(store.key(recoveredEntity), structuredClone(recoveredEntity));
+  const recovered = await api.getNarrativeIdeas();
+
+  assert.equal(recovered.length, 1);
+  assert.deepEqual(recovered[0].relatedEntityIds, ["character-to-recover"]);
+  assert.equal(store.ideaReads, ideaReadsAfterFailure + 1);
+  assert.equal(store.entityReads, entityReadsAfterFailure + 1);
+  api.dispose();
+});

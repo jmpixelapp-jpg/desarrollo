@@ -869,6 +869,10 @@ export interface LiteraryIdeaGraphNode {
   readonly cycleComponentSize: number;
   /** Nodo de articulación en el grafo no dirigido derivado de referencias explícitas. */
   readonly articulationPointStatus: "connector" | "not-articulation-within-snapshot";
+  /** Vecindad única al ignorar dirección; no cuenta referencias repetidas. */
+  readonly undirectedReferenceDegree: number;
+  /** Componentes no vacíos que quedarían en su componente débil al retirar este nodo. */
+  readonly weakComponentPiecesAfterRemoval: number;
 }
 /** Referencia explícita y resultado de resolver su destino contra el alcance de catálogo declarado. */
 export interface LiteraryIdeaGraphReference {
@@ -3974,6 +3978,7 @@ function buildLiteraryIdeaGraph(
   const articulationParent = new Int32Array(ideaCount);
   const articulationChildCount = new Int32Array(ideaCount);
   const isArticulation = new Uint8Array(ideaCount);
+  const articulationSeparatingChildCount = new Int32Array(ideaCount);
   articulationDiscovery.fill(-1);
   articulationParent.fill(-1);
   let articulationClock = 0;
@@ -4012,9 +4017,9 @@ function buildLiteraryIdeaGraph(
       const parent = articulationParent[current]!;
       if (parent !== -1) {
         articulationLow[parent] = Math.min(articulationLow[parent]!, articulationLow[current]!);
-        if (articulationParent[parent] !== -1 &&
-            articulationLow[current]! >= articulationDiscovery[parent]!) {
-          isArticulation[parent] = 1;
+        if (articulationLow[current]! >= articulationDiscovery[parent]!) {
+          articulationSeparatingChildCount[parent] = articulationSeparatingChildCount[parent]! + 1;
+          if (articulationParent[parent] !== -1) isArticulation[parent] = 1;
         }
       } else if (articulationChildCount[current]! > 1) {
         isArticulation[current] = 1;
@@ -4031,7 +4036,13 @@ function buildLiteraryIdeaGraph(
       ...nodes[index]!,
       articulationPointStatus: isArticulation[index] === 1
         ? "connector"
-        : "not-articulation-within-snapshot"
+        : "not-articulation-within-snapshot",
+      undirectedReferenceDegree: undirectedAdjacency[index]!.length,
+      weakComponentPiecesAfterRemoval: isArticulation[index] === 1
+        ? articulationParent[index] === -1
+          ? articulationChildCount[index]!
+          : articulationSeparatingChildCount[index]! + 1
+        : unionSize[findUnionRoot(index)]! > 1 ? 1 : 0
     };
   }
 

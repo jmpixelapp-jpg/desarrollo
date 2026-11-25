@@ -370,7 +370,7 @@ function isValidPersonalIdeaContext(
 }
 
 function checksumForPersonalIdeaIds(ids: readonly string[]): string {
-  const source = JSON.stringify(ids);
+  const source = JSON.stringify([...ids].sort());
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < source.length; index++) {
     hash ^= BigInt(source.charCodeAt(index));

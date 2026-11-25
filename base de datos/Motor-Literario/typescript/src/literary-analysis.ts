@@ -774,8 +774,7 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly sourceIdeaCount: number;
   readonly terminalWithinSnapshotIdeaCount: number;
   readonly isolatedWithinSnapshotIdeaCount: number;
-  /** Entradas procedentes únicamente de ideas incluidas en este snapshot. */
-  /** Suma de entradas cuyo origen pertenece al snapshot. */
+  /** Suma de entradas desde orígenes incluidos en el snapshot. */
   readonly incomingReferenceCount: number;
   readonly includedOutgoingReferenceCount: number;
   readonly notIncludedOutgoingReferenceCount: number;

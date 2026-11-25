@@ -5802,7 +5802,7 @@ function isValidNarrativeIdeaStatusHistory(
             ? change.reason !== "initial"
             : change.reason === "initial"
           : change.reason === "initial" ||
-            (change.status === (value[index - 1] as NarrativeIdeaStatusChange).status && change.reason !== "writer")) ||
+            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
         (change.changedAt !== undefined &&
           (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
         false) {

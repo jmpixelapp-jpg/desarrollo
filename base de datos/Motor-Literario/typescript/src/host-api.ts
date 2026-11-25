@@ -1765,9 +1765,9 @@ export class HostEngineApi {
     const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] | undefined =
       projectIdeaCatalogAvailable ? projectIdeaSnapshot.map(idea => {
         const activeEvidence = idea.evidence.filter(evidence => evidence.status !== "stale");
-        const statusHistory = idea.statusHistory ?? [
-          {status:idea.status,reason:"initial" as const}
-        ];
+        const statusHistory = idea.statusHistory ?? (idea.omittedStatusHistoryCount
+          ? []
+          : [{status:idea.status,reason:"initial" as const}]);
         const textFitsBudget = idea.text.length <= 100_000 &&
           lexicalTextUnitCount + idea.text.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;
         if (textFitsBudget) lexicalTextUnitCount += idea.text.length;
@@ -1788,7 +1788,7 @@ export class HostEngineApi {
       }) : undefined;
     const knownIdeas=knownLinkedIdeas.map(idea => {
       const activeEvidence=idea.evidence.filter(evidence => evidence.status !== "stale");
-      const statusHistory=idea.statusHistory ?? [{status:idea.status,reason:"initial" as const}];
+      const statusHistory=idea.statusHistory ?? (idea.omittedStatusHistoryCount ? [] : [{status:idea.status,reason:"initial" as const}]);
       return {
         projectId:idea.projectId,
         ideaId:idea.id,

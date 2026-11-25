@@ -303,7 +303,8 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
           (change.status !== "IDEA" && change.status !== "incorporated" && change.status !== "discarded") ||
           (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
           (change.reason !== "initial" && change.reason !== "writer" && change.reason !== "text-revised") ||
-          (index === 0 ? change.reason !== "initial" : change.reason === "initial") ||
+          (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
+            change.status === idea.statusHistory[index - 1]?.status) ||
           (change.changedAt !== undefined && previousChangedAt !== undefined &&
             change.changedAt < previousChangedAt)) {
         throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);

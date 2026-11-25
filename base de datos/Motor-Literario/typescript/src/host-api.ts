@@ -159,7 +159,9 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
         !["IDEA", "incorporated", "discarded"].includes(item.status) ||
         typeof item.originDocumentId !== "string" || !item.originDocumentId.trim() ||
         typeof item.sourceProjectName !== "string" || !item.sourceProjectName.trim() ||
-        !validEvidence(item.evidence)) invalid();
+        !validEvidence(item.evidence) ||
+        (item.omittedStatusHistoryCount !== undefined &&
+          (!Number.isSafeInteger(item.omittedStatusHistoryCount) || item.omittedStatusHistoryCount < 0))) invalid();
     for (const links of [item.relatedEntityIds, item.relatedIdeaIds]) {
       if (links !== undefined && (!Array.isArray(links) ||
           links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
@@ -175,7 +177,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
             !["initial", "writer", "text-revised"].includes(change.reason) ||
             (change.reason === "text-revised" && change.status !== "IDEA") ||
             (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-              change.status === item.statusHistory[index - 1]?.status) ||
+              (change.status === item.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
             (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
             false) invalid();
       }
@@ -1781,7 +1783,7 @@ export class HostEngineApi {
           staleEvidenceCount:idea.evidence.length-activeEvidence.length,
           statusHistory:statusHistory.slice(-100),
           writerDecisionCount:statusHistory.filter(change => change.reason==="writer").length,
-          omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
+          omittedStatusHistoryCount:Math.max(0,idea.omittedStatusHistoryCount ?? 0)+Math.max(0,statusHistory.length-100)
         };
       }) : undefined;
     const knownIdeas=knownLinkedIdeas.map(idea => {
@@ -1810,7 +1812,7 @@ export class HostEngineApi {
           })),
         statusHistory:statusHistory.slice(-100),
         writerDecisionCount:statusHistory.filter(change => change.reason==="writer").length,
-        omittedStatusHistoryCount:Math.max(0,statusHistory.length-100)
+        omittedStatusHistoryCount:Math.max(0,idea.omittedStatusHistoryCount ?? 0)+Math.max(0,statusHistory.length-100)
       };
     });
     const knownEventLifecycles:EventLifecycle[]=[];

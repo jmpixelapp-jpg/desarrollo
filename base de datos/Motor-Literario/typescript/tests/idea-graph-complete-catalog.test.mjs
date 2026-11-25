@@ -163,3 +163,47 @@ test("limita la muestra y clasifica referencias a ideas fuera del snapshot", asy
     api.dispose();
   }
 });
+
+test("procesa una cadena dirigida de 2.000 ideas sin clasificarla como ciclo", async () => {
+  const chainStore = {
+    ...store,
+    documents: new Map(),
+    ideas: Array.from({ length: 2_000 }, (_, index) => ({
+      projectId,
+      id: "chain-" + String(index).padStart(4, "0"),
+      text: "Idea en cadena " + index,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: index < 1_999
+        ? ["chain-" + String(index + 1).padStart(4, "0")]
+        : [],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }))
+  };
+  const api = new HostEngineApi({ store: chainStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-chain" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\nLa cadena avanza.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 2_000);
+    assert.equal(graph.referenceCount, 1_999);
+    assert.equal(graph.includedReferenceCount, 1_999);
+    assert.equal(graph.notIncludedReferenceCount, 0);
+    assert.equal(graph.sourceNodeCount, 1);
+    assert.equal(graph.terminalWithinSnapshotNodeCount, 1);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);
+    assert.equal(graph.weakComponentCount, 1);
+    assert.equal(graph.largestWeakComponentSize, 2_000);
+    assert.equal(graph.cycleCount, 0);
+  } finally {
+    api.dispose();
+  }
+});

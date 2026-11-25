@@ -35,32 +35,32 @@ El aislamiento por proyecto y escritor se aplica en claves, índices, validacion
 
 ## Ejecutar y verificar
 
-Para preparar el núcleo y el puente, desde `typescript/`:
+Desde `typescript/`, preparar el núcleo y el puente:
 
 ```sh
 npm install
 npm run build
+```
+
+Para iniciar el proceso compañero durante el desarrollo:
+
+```sh
 node bridge/stdio-server.mjs --db "/ruta/privada/motor-literario.sqlite"
 ```
 
-El proceso necesita Node.js 22.13.0 o posterior. El ejemplo anterior inicia el servidor; en producción lo inicia el anfitrión como proceso hijo y se comunica con él mediante `MotorLiterarioBridgeClient`.
+En producción, la aplicación anfitriona inicia ese servidor como proceso hijo y utiliza `MotorLiterarioBridgeClient`. Se requiere Node.js 22.13.0 o posterior. El módulo SQLite integrado de Node está disponible sin la bandera experimental desde 22.13, aunque sigue clasificado como experimental; por ello se debe fijar la versión usada y probar las actualizaciones del runtime.
 
-Para ejecutar las verificaciones del núcleo:
+Verificaciones del núcleo:
 
 ```sh
-npm install
 npm run typecheck
-npm run build
 npm test
 npm run bench
 ```
 
-La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. En la ejecución registrada el **25 de noviembre de 2026**, commit `0544e368f4513bfff5326bfdf656155cebcfb147`, todos los pasos terminaron correctamente: **300 pruebas, 291 aprobadas, 0 fallidas y 9 omitidas**.
-
-[Consultar la ejecución de CI](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45565599266).
+La CI de GitHub Actions ejecuta typecheck, compilación, validación del esquema y almacenamiento, suite automatizada y benchmark. La ejecución más reciente debe consultarse en [GitHub Actions](https://github.com/jmpixelapp-jpg/desarrollo/actions).
 
 El benchmark de CI usa escenarios sintéticos y un adaptador en memoria. Sus latencias no representan mediciones de disco ni sustituyen pruebas en los equipos y adaptadores del programa anfitrión.
-
 ## Límites que permanecen
 
 La base de datos y su persistencia están implementadas, pero eso no significa que el motor literario completo esté terminado. Siguen fuera del alcance de la base de datos la comprensión semántica general, la inferencia fiable de acontecimientos y cronologías no explícitos, la resolución literaria completa de contradicciones y la clasificación semántica de afirmaciones que quedaron obsoletas al reescribirse el texto.

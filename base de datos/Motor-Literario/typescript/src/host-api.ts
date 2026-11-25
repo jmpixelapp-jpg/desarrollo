@@ -1698,7 +1698,21 @@ export class HostEngineApi {
 
   async openDocument(snapshot: DocumentSnapshot): Promise<void> {
     await this.engine.openDocument(snapshot);
-    const recoveredSnapshot = this.engine.getSnapshot(snapshot.documentId);
+    await this.afterDocumentRecovery(snapshot.documentId);
+  }
+
+  /**
+   * Reabre un documento desde el último snapshot y journal locales.
+   * El anfitrión no necesita conservar ni reenviar el texto completo para
+   * recuperar una sesión ya persistida.
+   */
+  async recoverDocument(documentId: string): Promise<void> {
+    await this.engine.recoverDocument(documentId);
+    await this.afterDocumentRecovery(documentId);
+  }
+
+  private async afterDocumentRecovery(documentId: string): Promise<void> {
+    const recoveredSnapshot = this.engine.getSnapshot(documentId);
     if (recoveredSnapshot) {
       const recovery = this.diagnosticsPersistenceTail.then(async () => {
         await this.restoreDocumentDiagnostics(recoveredSnapshot);
@@ -1708,16 +1722,15 @@ export class HostEngineApi {
       });
       this.diagnosticsPersistenceTail = this.diagnosticsRecoveryTail;
     }
-    if (this.store.saveEntity && this.store.loadEntities) {
-      // openDocument puede reconstruir revisiones posteriores desde el journal.
-      // El análisis inicial debe usar el snapshot realmente abierto, no la
-      // copia posiblemente más antigua que el anfitrión acaba de enviar.
-      const recovered = this.engine.getSnapshot(snapshot.documentId);
-      if (recovered) {
-        void this.extractNarrativeKnowledge(
-          recovered.documentId, recovered.revision, recovered.text, 0
-        ).catch(error => this.reportKnowledgeError(error));
-      }
+    if (this.store.saveEntity && this.store.loadEntities && recoveredSnapshot) {
+      // El análisis inicial usa el snapshot realmente recuperado, que puede
+      // incluir deltas durables posteriores al último checkpoint.
+      void this.extractNarrativeKnowledge(
+        recoveredSnapshot.documentId,
+        recoveredSnapshot.revision,
+        recoveredSnapshot.text,
+        0
+      ).catch(error => this.reportKnowledgeError(error));
     }
   }
 

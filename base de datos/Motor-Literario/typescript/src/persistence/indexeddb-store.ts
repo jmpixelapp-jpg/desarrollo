@@ -1446,10 +1446,6 @@ async function saveEventWithLifecycle(
 }
 
 /**
- * Persistencia local mediante IndexedDB nativo del entorno.
- * No transmite manuscritos ni depende de servicios de terceros.
- */
-/**
  * Incrementa la generación de la biblioteca dentro de la misma transacción
  * que modifica sus entradas. Las pestañas pueden detectar cambios incluso
  * cuando una notificación BroadcastChannel se pierde o no está disponible.
@@ -1481,6 +1477,10 @@ function advanceWriterLibraryVersion(transaction: IDBTransaction, writerId: stri
   };
 }
 
+/**
+ * Persistencia local mediante IndexedDB nativo del entorno.
+ * No transmite manuscritos ni depende de servicios de terceros.
+ */
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;

@@ -1741,6 +1741,8 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     assert.equal(receipt.archivedIdeaIds.length, total);
     assert.equal(receipt.archivedIdeaIds[0], "idea:0000");
     assert.equal(receipt.archivedIdeaIds[total - 1], "idea:0299");
+    assert.match(summary.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
+    assert.equal(receipt.archiveContentChecksum, summary.archiveContentChecksum);
     assert.equal(store.loadPersonalIdeas(writerId).length, total);
     const firstPage = store.loadPersonalIdeasPage(writerId, null, 120);
     assert.equal(firstPage.items.length, 120);
@@ -1754,6 +1756,7 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
     assert.equal(retry.alreadyFinalized, true);
     assert.equal(retry.archivedCount, summary.archivedCount);
     assert.equal(retry.archiveChecksum, summary.archiveChecksum);
+    assert.equal(retry.archiveContentChecksum, summary.archiveContentChecksum);
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });

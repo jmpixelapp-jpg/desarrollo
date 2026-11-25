@@ -33,7 +33,7 @@ function requireProjectScopedRecords<T extends { readonly projectId: string; rea
   }
   if (collection === "entidades") {
     const identityOwners = new Map<string, string>();
-    for (const record of records as readonly unknown as readonly NarrativeEntity[]) {
+    for (const record of records as unknown as readonly NarrativeEntity[]) {
       const historicalIds = new Set<string>([record.id]);
       for (const historicalId of record.mergedFromIds ?? []) {
         if (historicalIds.has(historicalId)) {
@@ -132,7 +132,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
   }
 }
 
-function requireNarrativeEntityReferences<T extends { readonly projectId: string }>(
+function requireNarrativeEntityReferences<T extends { readonly projectId: string; readonly id: string }>(
   records: readonly T[],
   projectId: string,
   entities: readonly NarrativeEntity[],
@@ -160,8 +160,9 @@ function requireUniquePersonalIdeaEntries(
   if (!Array.isArray(entries)) {
     throw new Error("Violación de aislamiento: la biblioteca devolvió una colección inválida.");
   }
+  const typedEntries = entries as PersonalIdeaLibraryEntry[];
   const identities = new Set<string>();
-  for (const entry of entries) {
+  for (const entry of typedEntries) {
     if (!isValidPersonalIdeaEntry(entry, writerId, sourceProjectId)) {
       throw new Error("Violación de aislamiento: la biblioteca devolvió ideas de otro escritor o proyecto.");
     }
@@ -171,10 +172,10 @@ function requireUniquePersonalIdeaEntries(
     }
     identities.add(identity);
   }
-  const archivedIdeaIds = new Set(entries.map(entry =>
+  const archivedIdeaIds = new Set(typedEntries.map(entry =>
     JSON.stringify([entry.sourceProjectId, entry.idea.id])
   ));
-  for (const entry of entries) {
+  for (const entry of typedEntries) {
     if (!entry.context) continue; // Entradas previas a la versión 1: lectura compatible.
     const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
     const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));

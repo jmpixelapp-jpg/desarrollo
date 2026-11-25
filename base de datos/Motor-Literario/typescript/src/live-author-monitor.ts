@@ -412,3 +412,94 @@ export class LiveAuthorMonitor {
     return value;
   }
 }
+
+/**
+ * Superficie pública de HostEngineApi necesaria para conectar un panel.
+ * No expone ni conserva el texto del manuscrito.
+ */
+export interface LiveAuthorMonitorHostApi {
+  getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined;
+  getLiveAuthorMonitorSnapshots(): readonly LiveAuthorMonitorSnapshot[];
+  subscribeLiveAuthorMonitor(listener: LiveAuthorMonitorListener, documentId?: string): () => void;
+}
+
+export interface LiveAuthorMonitorPollingOptions {
+  /** Limita las notificaciones a un documento concreto. */
+  readonly documentId?: string;
+  /** Intervalo de refresco visual; predeterminado: 1000 ms. */
+  readonly intervalMs?: number;
+  /** Permite inyectar un planificador determinista en pruebas o en el anfitrión. */
+  readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
+}
+
+const defaultMonitorRefreshScheduler = (
+  callback: () => void,
+  intervalMs: number
+): (() => void) => {
+  const handle = globalThis.setInterval(callback, intervalMs);
+  return () => globalThis.clearInterval(handle);
+};
+
+/**
+ * Combina los eventos inmediatos del motor con refrescos temporales.
+ *
+ * Los eventos inmediatos reflejan admisiones y commits. El refresco periódico
+ * permite que un panel observe el paso de "active" a "idle" aunque el escritor
+ * no genere otro evento. El anfitrión controla el ciclo de vida mediante la
+ * función de cancelación devuelta.
+ */
+export function subscribeLiveAuthorMonitorWithRefresh(
+  hostApi: LiveAuthorMonitorHostApi,
+  listener: LiveAuthorMonitorListener,
+  options: LiveAuthorMonitorPollingOptions = {}
+): () => void {
+  if (typeof listener !== "function") {
+    throw new TypeError("El suscriptor del monitor debe ser una función.");
+  }
+  const intervalMs = options.intervalMs ?? 1_000;
+  if (!Number.isSafeInteger(intervalMs) || intervalMs < 1 || intervalMs > 60_000) {
+    throw new RangeError("intervalMs debe estar entre 1 y 60000 milisegundos.");
+  }
+  const documentId = options.documentId;
+  if (documentId !== undefined && !documentId.trim()) {
+    throw new TypeError("documentId no puede estar vacío.");
+  }
+  const schedule = options.schedule ?? defaultMonitorRefreshScheduler;
+  let disposed = false;
+  const deliver: LiveAuthorMonitorListener = snapshot => {
+    if (disposed) return;
+    try { listener(snapshot); } catch { /* Un panel desconectado no debe interrumpir el flujo. */ }
+  };
+  const refresh = (): void => {
+    if (disposed) return;
+    try {
+      if (documentId === undefined) {
+        for (const snapshot of hostApi.getLiveAuthorMonitorSnapshots()) deliver(snapshot);
+      } else {
+        const snapshot = hostApi.getLiveAuthorMonitorSnapshot(documentId);
+        if (snapshot) deliver(snapshot);
+      }
+    } catch {
+      // Un fallo de observabilidad omite este refresco, no la escritura.
+    }
+  };
+  const unsubscribe = hostApi.subscribeLiveAuthorMonitor(deliver, documentId);
+  try {
+    // La suscripción se registra antes de la primera lectura para no perder eventos.
+    refresh();
+    const cancelRefresh = schedule(refresh, intervalMs);
+    if (typeof cancelRefresh !== "function") {
+      throw new TypeError("El planificador debe devolver una función de cancelación.");
+    }
+    return () => {
+      if (disposed) return;
+      disposed = true;
+      try { unsubscribe(); } catch { /* La cancelación local debe continuar. */ }
+      try { cancelRefresh(); } catch { /* La cancelación local debe ser idempotente. */ }
+    };
+  } catch (error) {
+    disposed = true;
+    try { unsubscribe(); } catch { /* Conserva el error original. */ }
+    throw error;
+  }
+}

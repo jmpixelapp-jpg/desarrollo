@@ -27,7 +27,7 @@ La integración dispone de dos modalidades: [guía general del anfitrión](docs/
 
 ## Base de datos MLDB
 
-La versión lógica vigente es **MLDB 0.4.1**. Define 25 tablas: 24 pertenecen al motor y están implementadas; `projects` pertenece a la aplicación anfitriona y no se duplica en la base narrativa. La correspondencia física declara **31 almacenes IndexedDB**, con versión de base **21**.
+La versión lógica vigente es **MLDB 0.4.1**. Define 25 tablas: 24 pertenecen al motor y están implementadas; `projects` pertenece a la aplicación anfitriona y no se duplica en la base narrativa. La modalidad dentro del mismo runtime utiliza **31 almacenes IndexedDB**, con versión de base **21**. Para procesos separados está disponible el puente JSON-RPC local, cuyo proceso compañero usa SQLite (`node:sqlite`) con esquema físico propio versión 1. Ambos modos mantienen los contratos lógicos MLDB, pero los archivos IndexedDB y SQLite son independientes y no se convierten ni sincronizan automáticamente. Consulta el [protocolo del puente](docs/integration/BRIDGE_PROCESS_PROTOCOL_V1.md) antes de elegir o migrar una instalación.
 
 La persistencia incluye documentos y journal incremental, diagnósticos por revisión, fragmentos, fichas, nombres y alias, atributos extensibles, relaciones, evidencias, acontecimientos, ocurrencias cronológicas, perfiles de idioma y estilo, diccionarios, sugerencias, autorizaciones de importación, historiales append-only, migraciones y biblioteca personal de ideas por escritor. Las ideas no incorporadas se transfieren con su historial, procedencia y contexto; las incorporadas o descartadas permanecen en el proyecto de origen.
 
@@ -35,7 +35,17 @@ El aislamiento por proyecto y escritor se aplica en claves, índices, validacion
 
 ## Ejecutar y verificar
 
-Desde `typescript/`:
+Para preparar el núcleo y el puente, desde `typescript/`:
+
+```sh
+npm install
+npm run build
+node bridge/stdio-server.mjs --db "/ruta/privada/motor-literario.sqlite"
+```
+
+El proceso necesita Node.js 22.13.0 o posterior. El ejemplo anterior inicia el servidor; en producción lo inicia el anfitrión como proceso hijo y se comunica con él mediante `MotorLiterarioBridgeClient`.
+
+Para ejecutar las verificaciones del núcleo:
 
 ```sh
 npm install

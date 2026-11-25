@@ -584,6 +584,12 @@ export interface LiteraryCharacterCausalRelation {
   readonly candidateId: string;
   readonly characterRole: LiteraryCharacterCausalRole;
   readonly candidate: LiteraryEventDependencyCandidate;
+  /** Contrasta la dirección causal textual con fechas comparables del catálogo del proyecto. */
+  readonly temporalConsistency:
+    | "consistent"
+    | "contradiction"
+    | "not-comparable"
+    | "insufficient-data";
 }
 export interface LiteraryCharacterTrajectorySceneSnapshot {
   readonly sceneIndex: number;
@@ -4525,6 +4531,48 @@ function buildCharacterNarrativeTrajectories(
         a.eventId.localeCompare(b.eventId,"en")
       );
     const causalRelations = [...(relationsByCharacter.get(character.entityId) ?? [])]
+      .map(relation => {
+        const causeEvents = projectEvents.filter(event =>
+          event.eventId === relation.candidate.causeEventId &&
+          event.participants.includes(character.entityId)
+        );
+        const consequenceEvents = projectEvents.filter(event =>
+          event.eventId === relation.candidate.consequenceEventId &&
+          event.participants.includes(character.entityId)
+        );
+        const uniqueTemporalReference = (events: readonly LiteraryAnalysisKnownProjectEvent[]) => {
+          const active = events.filter(event =>
+            (event.evidenceCount ?? event.evidence.filter(item => item.status !== "stale").length) > 0
+          );
+          if (active.length === 0) return null;
+          const signatures = new Set(active.map(event => JSON.stringify([
+            event.timelineTrackId ?? null,
+            event.timeReference?.basis ?? null,
+            event.timeReference?.precision ?? null,
+            event.timeReference?.orderValue ?? null
+          ])));
+          if (signatures.size !== 1) return null;
+          const reference = active[0]!.timeReference;
+          return reference && Number.isFinite(reference.orderValue)
+            ? {track:active[0]!.timelineTrackId ?? null,basis:reference.basis,
+                precision:reference.precision,orderValue:reference.orderValue}
+            : null;
+        };
+        const causeTime = uniqueTemporalReference(causeEvents);
+        const consequenceTime = uniqueTemporalReference(consequenceEvents);
+        const temporalConsistency = !causeTime || !consequenceTime
+          ? "insufficient-data" as const
+          : causeTime.track !== consequenceTime.track ||
+            causeTime.basis !== consequenceTime.basis ||
+            causeTime.precision !== consequenceTime.precision
+            ? "not-comparable" as const
+            : relation.candidate.direction === "cause-before-consequence"
+              ? causeTime.orderValue <= consequenceTime.orderValue
+                ? "consistent" as const : "contradiction" as const
+              : causeTime.orderValue >= consequenceTime.orderValue
+                ? "consistent" as const : "contradiction" as const;
+        return {...relation,temporalConsistency};
+      })
       .sort((a,b) =>
         (a.candidate.sceneIndex ?? Number.MAX_SAFE_INTEGER) -
           (b.candidate.sceneIndex ?? Number.MAX_SAFE_INTEGER) ||

@@ -1532,3 +1532,110 @@ test("distingue IDs Unicode distintos aunque el orden lingüístico los equipare
   assert.equal(graph.reciprocalReferencePairCount, 0);
   assert.equal(graph.references[0].resolution, "included-in-snapshot");
 });
+
+test("calcula resonancias léxicas entre textos de ideas sin convertirlas en vínculos explícitos", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, text) => ({
+    projectId,
+    ideaId,
+    text,
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nLa protagonista encuentra una carta.",
+    knownProjectIdeas: [
+      makeIdea("idea-alpha", "La brújula antigua revela una puerta escondida bajo el cristal oscuro."),
+      makeIdea("idea-beta", "El cristal oscuro protege la puerta secreta tras la brújula antigua.")
+    ]
+  });
+  const lexical = result.ideaGraph.lexicalResonances;
+  const resonance = lexical.resonances[0];
+
+  assert.equal(lexical.inputIdeaCount, 2);
+  assert.equal(lexical.analyzedIdeaCount, 2);
+  assert.equal(lexical.ideasWithoutTextCount, 0);
+  assert.equal(lexical.omittedTextBudgetIdeaCount, 0);
+  assert.equal(lexical.minimumSharedTermCount, 2);
+  assert.equal(lexical.candidatePairCount, 1);
+  assert.ok(resonance);
+  assert.equal(resonance.leftIdeaId, "idea-alpha");
+  assert.equal(resonance.rightIdeaId, "idea-beta");
+  assert.ok(resonance.sharedTermCount >= 4);
+  assert.ok(resonance.jaccardSimilarity > 0 && resonance.jaccardSimilarity <= 1);
+  assert.ok(resonance.overlapCoefficient > 0 && resonance.overlapCoefficient <= 1);
+  assert.ok(resonance.sharedTerms.includes("brújula"));
+  assert.ok(resonance.sharedTerms.includes("cristal"));
+  assert.equal(result.ideaGraph.references.length, 0,
+    "la similitud léxica nunca debe crear enlaces narrativos explícitos");
+});
+
+test("una sola palabra compartida y las palabras vacías no generan resonancias", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, text) => ({
+    projectId, ideaId, text, status: "IDEA", relatedIdeaIds: [],
+    evidenceCount: 0, staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0, omittedStatusHistoryCount: 0
+  });
+  const graph = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nLa noche permanece.",
+    knownProjectIdeas: [
+      makeIdea("idea-alpha", "La promesa permanece junto al fuego."),
+      makeIdea("idea-beta", "La promesa cruza la plaza durante la noche.")
+    ]
+  }).ideaGraph;
+
+  assert.equal(graph.lexicalResonances.minimumSharedTermCount, 2);
+  assert.equal(graph.lexicalResonances.candidatePairCount, 0);
+  assert.deepEqual(graph.lexicalResonances.resonances, []);
+});
+
+test("excluye términos ubicuos y limita el catálogo léxico a dos millones de unidades", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, text) => ({
+    projectId, ideaId, text, status: "IDEA", relatedIdeaIds: [],
+    evidenceCount: 0, staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0, omittedStatusHistoryCount: 0
+  });
+  const ubiquitous = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nUna historia comienza.",
+    knownProjectIdeas: Array.from({ length: 41 }, (_, index) =>
+      makeIdea("ubiquitous-" + String(index).padStart(2, "0"), "misterio antiguo")
+    )
+  }).ideaGraph.lexicalResonances;
+
+  assert.equal(ubiquitous.ignoredHighFrequencyTermCount, 2);
+  assert.equal(ubiquitous.candidatePairCount, 0);
+  assert.deepEqual(ubiquitous.resonances, []);
+
+  const budget = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nUna historia comienza.",
+    knownProjectIdeas: Array.from({ length: 21 }, (_, index) =>
+      makeIdea("budget-" + String(index).padStart(2, "0"), "a".repeat(100_000))
+    )
+  }).ideaGraph.lexicalResonances;
+
+  assert.equal(budget.inputIdeaCount, 21);
+  assert.equal(budget.analyzedIdeaCount, 20);
+  assert.equal(budget.omittedTextBudgetIdeaCount, 1);
+  assert.equal(budget.tokenizedTextUnitCount, 2_000_000);
+});

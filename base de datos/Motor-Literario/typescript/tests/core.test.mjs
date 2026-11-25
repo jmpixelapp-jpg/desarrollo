@@ -10854,3 +10854,26 @@ test("recorta una cita que atraviesa un separador sin incluir encabezados en las
   assert.equal(first.dialogueSignals.dialogueRatio,1);
   assert.equal(second.dialogueSignals.dialogueRatio,1);
 });
+
+
+test("describe un solapamiento entre cita y raya como un único segmento mixto por escena", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = "ESCENA 1\\n—«No volveré», dijo Ana.";
+  const baseOffset = 950;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-overlap",documentId:"chapter",revision:1,text,baseOffset
+  });
+  const profile = result.explicitScenes[0].dialogueSignals;
+  assert.equal(result.dialogueSegments.length,1);
+  assert.equal(result.dialogueSegments[0].format,"mixed");
+  assert.equal(profile.segmentCount,1);
+  assert.equal(profile.dialogueWordCount,4);
+  assert.equal(profile.dialogueRatio,1);
+  assert.deepEqual(profile.formatCounts,{quotation:0,dialogueDash:0,mixed:1});
+  assert.equal(profile.segments[0].format,"mixed");
+  assert.equal(profile.segments[0].wordCount,4);
+  assert.deepEqual(profile.segments[0].occurrence,{
+    start:baseOffset+text.indexOf("«"),
+    end:baseOffset+text.length
+  });
+});

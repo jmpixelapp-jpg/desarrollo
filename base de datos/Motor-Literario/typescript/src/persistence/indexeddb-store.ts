@@ -1720,10 +1720,12 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   private open(): Promise<IDBDatabase> {
+    // Los adaptadores anfitriones y las pruebas pueden inyectar una conexión
+    // compatible; se reutiliza antes de exigir el global del navegador.
+    if (this.database) return this.database;
     if (typeof indexedDB === "undefined") {
       return Promise.reject(new Error("IndexedDB no está disponible en este entorno."));
     }
-    if (this.database) return this.database;
 
     let opening!: Promise<IDBDatabase>;
     opening = new Promise((resolve, reject) => {

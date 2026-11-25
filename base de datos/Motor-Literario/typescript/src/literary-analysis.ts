@@ -4515,14 +4515,19 @@ function buildCharacterNarrativeTrajectories(
           : sceneEvidenceTruncated
             ? "unknown-due-to-truncation" as const
             : "no-event-in-evidenced-scene" as const;
-      const crossDocumentEventEvidence = projectEvents
-        .filter(event => materializedEventIds.includes(event.eventId))
-        .flatMap(event => event.evidence.filter(item =>
+      const materializedProjectEvents = projectEvents.filter(event =>
+        materializedEventIds.includes(event.eventId)
+      );
+      const crossDocumentEventEvidence = materializedProjectEvents.flatMap(event =>
+        event.evidence.filter(item =>
           item.status !== "stale" && item.documentId !== documentId
-        ));
-      const crossDocumentEventIds = [...new Set(crossDocumentEventEvidence.map(item =>
-        projectEvents.find(event => event.evidence.includes(item))?.eventId
-      ).filter((eventId): eventId is string => eventId !== undefined))]
+        )
+      );
+      const crossDocumentEventIds = materializedProjectEvents
+        .filter(event => event.evidence.some(item =>
+          item.status !== "stale" && item.documentId !== documentId
+        ))
+        .map(event => event.eventId)
         .sort((a,b) => a.localeCompare(b,"en"));
       const crossDocumentContinuityStatus = materializedEventIds.length === 0
         ? "not-applicable" as const
@@ -4909,7 +4914,8 @@ function buildCharacterMentionDistributions(
 function findExplicitEventDependencyConnector(
   textBetweenEvents: string
 ): { readonly connector: string; readonly index: number; readonly direction: LiteraryEventDependencyCandidate["direction"] } | undefined {
-  const expression = /\b(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)\b/giu;
+  // \b relies on ASCII \w boundaries and fails after accented Spanish letters.
+  const expression = /(?<![\p{L}\p{N}_])(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)(?![\p{L}\p{N}_])/giu;
   const matches = [...textBetweenEvents.matchAll(expression)];
   if (matches.length === 0) return undefined;
   const match = matches[0]!;

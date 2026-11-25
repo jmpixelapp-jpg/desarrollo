@@ -748,6 +748,8 @@ export interface LiteraryIdeaGraphNode {
   readonly writerDecisionCount: number;
   /** Cambios de estado distinguibles en el historial visible; es un mínimo si hay registros omitidos. */
   readonly observedStatusTransitionCount: number;
+  /** Retornos a un estado ya observado anteriormente; mínimo si el historial está truncado. */
+  readonly statusReversalCount: number;
   /** Evidencia no obsoleta registrada para esta idea, sin limitarse al capítulo abierto. */
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
@@ -792,6 +794,8 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly writerDecisionCount: number;
   /** Suma de cambios de estado distinguibles en los historiales visibles del perfil. */
   readonly observedStatusTransitionCount: number;
+  /** Suma de retornos a estados previamente observados en los historiales visibles. */
+  readonly statusReversalCount: number;
   readonly activeEvidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly ideasWithActiveEvidenceCount: number;
@@ -3563,6 +3567,13 @@ function buildLiteraryIdeaGraph(
         count + (changeIndex > 0 && change.status !== history[changeIndex - 1]!.status ? 1 : 0),
       0
     ),
+    statusReversalCount: idea.statusHistory.reduce((count, change, changeIndex, history) => {
+      if (changeIndex === 0 || change.status === history[changeIndex - 1]!.status) return count;
+      for (let previousIndex = 0; previousIndex < changeIndex - 1; previousIndex++) {
+        if (history[previousIndex]!.status === change.status) return count + 1;
+      }
+      return count;
+    }, 0),
     activeEvidenceCount: idea.evidenceCount,
     staleEvidenceCount: idea.staleEvidenceCount
   }));
@@ -3712,6 +3723,7 @@ function buildLiteraryIdeaGraph(
     omittedStatusHistoryCount: number;
     writerDecisionCount: number;
     observedStatusTransitionCount: number;
+    statusReversalCount: number;
     activeEvidenceCount: number;
     staleEvidenceCount: number;
     ideasWithActiveEvidenceCount: number;
@@ -3733,6 +3745,7 @@ function buildLiteraryIdeaGraph(
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 0,
       observedStatusTransitionCount: 0,
+      statusReversalCount: 0,
       activeEvidenceCount: 0,
       staleEvidenceCount: 0,
       ideasWithActiveEvidenceCount: 0,
@@ -3763,6 +3776,7 @@ function buildLiteraryIdeaGraph(
     totals.omittedStatusHistoryCount += node.omittedStatusHistoryCount;
     totals.writerDecisionCount += node.writerDecisionCount;
     totals.observedStatusTransitionCount += node.observedStatusTransitionCount;
+    totals.statusReversalCount += node.statusReversalCount;
     totals.activeEvidenceCount += node.activeEvidenceCount;
     totals.staleEvidenceCount += node.staleEvidenceCount;
     if (node.activeEvidenceCount > 0) totals.ideasWithActiveEvidenceCount++;

@@ -503,7 +503,8 @@ test("una restauración abortada no notifica cambios ni invalida otras instancia
     documents: [preservedDocument],
     "personal-idea-library": []
   }, {
-    failOnRecord: (_name, value) => value?.id === "explode" || value?.idea?.id === "explode"
+    failOnRecord: (_name, value) =>
+      value?.id === "explode" || value?.idea?.id === "explode" || value?.idea?.id === "explode"
   });
   const source = attach(createFakeDatabase({
     documents: [{ ...documentRecord, text: "No debe reemplazar la versión confirmada." }],

@@ -580,6 +580,8 @@ export interface LiteraryCharacterTrajectorySceneSnapshot {
     readonly status: "single-value" | "multiple-values";
   }[];
   readonly causalCandidateIds: readonly string[];
+  readonly relationshipIds: readonly string[];
+  readonly documentedDecisionIdeaIds: readonly string[];
   readonly incompleteReasons: readonly ("mention-truncation" | "event-truncation")[];
 }
 export interface LiteraryCharacterProjectEventTimelineEvidence {
@@ -673,6 +675,7 @@ export interface LiteraryCharacterNarrativeTrajectory {
   readonly eventParticipationSceneCount: number;
   readonly attributeAssertionCount: number;
   readonly causalCandidateCount: number;
+  readonly writerDecisionCount: number;
   readonly observedSceneIndexes: readonly number[];
   readonly incompleteSceneIndexes: readonly number[];
   readonly attributes: readonly LiteraryCharacterAttributeProfile[];

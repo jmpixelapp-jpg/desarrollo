@@ -6,6 +6,7 @@ class DictionaryMemoryStore {
   dictionaries = new Map();
   entries = new Map();
   entities = new Map();
+  entryLinks = new Map();
   async loadDictionaries(projectId) {
     return [...this.dictionaries.values()].filter(item => item.projectId === projectId).map(item => structuredClone(item));
   }
@@ -52,6 +53,29 @@ class DictionaryMemoryStore {
   async saveEntity(entity) {
     this.entities.set(JSON.stringify([entity.projectId, entity.id]), structuredClone(entity));
   }
+  async loadDictionaryEntryEntityLinks(projectId, entryId) {
+    return [...this.entryLinks.values()]
+      .filter(link => link.projectId === projectId && link.entryId === entryId)
+      .map(link => structuredClone(link));
+  }
+  async setDictionaryEntryEntityLink(entry, expectedCurrent, link, linked) {
+    const key = JSON.stringify([entry.projectId, entry.id]);
+    const current = this.entries.get(key);
+    if (!current || JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+      throw new Error("entry_conflict");
+    }
+    if (linked && !this.entities.has(JSON.stringify([entry.projectId, link.recordId]))) {
+      throw new Error("entity_missing");
+    }
+    if (entry.relatedEntityIds.includes(link.recordId) !== linked) {
+      throw new Error("link_projection_mismatch");
+    }
+    this.entries.set(key, structuredClone(entry));
+    const linkKey = JSON.stringify([link.projectId, link.entryId, link.recordId]);
+    if (linked) this.entryLinks.set(linkKey, structuredClone(link));
+    else this.entryLinks.delete(linkKey);
+  }
+
   async loadEntities(projectId) {
     return [...this.entities.values()].filter(item => item.projectId === projectId).map(item => structuredClone(item));
   }
@@ -143,10 +167,20 @@ test("los vínculos solo admiten entidades del mismo libro", async () => {
   await api.saveProjectDictionary(dictionaryInput());
   await api.saveDictionaryEntry(entryInput());
   store.entities.set(JSON.stringify(["book-one", "entity:ana"]), structuredClone(entity));
-  const linked = await api.setDictionaryEntryEntityLink("dict-es", "entry-casa", "entity:ana", true);
+  const linked = await api.setDictionaryEntryEntityLink(
+    "dict-es", "entry-casa", "entity:ana", true,
+    { linkKind: "DEFINITION_FOR", provenanceKind: "WRITER", createdAt: 35 }
+  );
   assert.deepEqual(linked.relatedEntityIds, ["entity:ana"]);
+  const linkRows = await api.getDictionaryEntryEntityLinks("dict-es", "entry-casa");
+  assert.equal(linkRows.length, 1);
+  assert.equal(linkRows[0].linkKind, "DEFINITION_FOR");
+  assert.equal(linkRows[0].provenanceKind, "WRITER");
+  assert.equal(linkRows[0].createdAt, 35);
+
   const unlinked = await api.setDictionaryEntryEntityLink("dict-es", "entry-casa", "entity:ana", false);
   assert.deepEqual(unlinked.relatedEntityIds, []);
+  assert.deepEqual(await api.getDictionaryEntryEntityLinks("dict-es", "entry-casa"), []);
   await assert.rejects(
     api.setDictionaryEntryEntityLink("dict-es", "entry-casa", "foreign-entity", true),
     /no existe en el mismo libro/

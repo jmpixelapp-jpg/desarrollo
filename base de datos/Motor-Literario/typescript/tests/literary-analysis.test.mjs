@@ -600,7 +600,7 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
     revision: 1,
     text,
     knownCharacters: [
-      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "ana-id", canonicalName: "Ana", aliases: ["Anita"] },
       { entityId: "bruno-id", canonicalName: "Bruno" },
       { entityId: "carla-id", canonicalName: "Carla" }
     ],
@@ -1813,7 +1813,7 @@ test("el caché distingue catálogos incompletos de catálogos globales completo
 test("cuenta co-menciones de personajes por escena sin confundirlas con relaciones", () => {
   const text = [
     "Escena 1",
-    "Ana encontró a Luis. Ana llamó a Luis otra vez.",
+    "Ana encontró a Luis. Anita llamó a Luis otra vez.",
     "Escena 2",
     "Ana y Luis hablaron con Marta.",
     "Escena 3",

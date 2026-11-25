@@ -1752,3 +1752,48 @@ test("SQLite finaliza libros grandes por páginas sin materializar todas las ide
   }
 });
 
+test("SQLite detecta cambios en el contenido de una idea archivada aunque el recibo conserve sus IDs", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-content-checksum-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "library-content-checksum-project";
+  const writerId = "writer-content-checksum";
+  const projectName = "Libro con integridad de contenido";
+  let store = await SqliteProjectStore.open(databasePath);
+  try {
+    store.saveIdea({
+      projectId,
+      id: "idea-content",
+      text: "La brújula señala el norte.",
+      status: "IDEA",
+      originDocumentId: "chapter-content",
+      sourceProjectName: projectName,
+      evidence: [],
+      relatedEntityIds: [],
+      relatedIdeaIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    });
+
+    const summary = store.archiveUnincorporatedIdeasSummary(
+      projectId, writerId, projectName, 100
+    );
+    assert.match(summary.archiveContentChecksum, /^fnv1a64:[0-9a-f]{16}$/u);
+    const receipt = store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.equal(receipt.archiveContentChecksum, summary.archiveContentChecksum);
+
+    const original = store.loadPersonalIdea(writerId, projectId, "idea-content");
+    store.put("personal-idea-library", [writerId, projectId, "idea-content"], {
+      ...original,
+      idea: { ...original.idea, text: "La brújula señala el sur." }
+    }, { expectedCurrent: original });
+
+    assert.throws(
+      () => store.archiveUnincorporatedIdeasSummary(
+        projectId, writerId, projectName, 200
+      ),
+      /checksum del contenido archivado/u
+    );
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

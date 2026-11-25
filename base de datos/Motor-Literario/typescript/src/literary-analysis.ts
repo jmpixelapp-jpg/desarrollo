@@ -742,6 +742,8 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
 export interface LiteraryIdeaGraphNode {
   readonly ideaId: string;
   readonly status: NarrativeIdea["status"];
+  /** Consistencia entre el estado actual y el último registro visible; unknown si falta historial o está truncado. */
+  readonly currentStatusHistoryConsistency: "consistent" | "mismatch" | "unknown";
   /** Historial visible de estados; puede estar acotado por omittedStatusHistoryCount. */
   readonly statusHistory: readonly NarrativeIdeaStatusChange[];
   readonly omittedStatusHistoryCount: number;
@@ -813,6 +815,12 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly notIncludedOutgoingReferenceCount: number;
   /** Registros visibles del historial, incluido el estado inicial cuando está disponible. */
   readonly statusHistoryRecordCount: number;
+  /** Ideas cuyo último estado visible coincide con la etiqueta actual. */
+  readonly statusHistoryConsistentIdeaCount: number;
+  /** Ideas cuya etiqueta actual contradice el último estado visible. */
+  readonly statusHistoryMismatchIdeaCount: number;
+  /** Ideas sin historial suficiente para validar la etiqueta actual. */
+  readonly statusHistoryConsistencyUnknownIdeaCount: number;
   readonly omittedStatusHistoryCount: number;
   /** Transiciones explícitas registradas por el escritor. */
   readonly writerDecisionCount: number;
@@ -895,6 +903,14 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly ideaCount: number;
   /** Distribución estructural de los nodos por estado editorial explícito. */
   readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
+  /** Resumen global de sincronización entre etiquetas actuales e historiales visibles. */
+  readonly statusHistoryConsistency: {
+    readonly consistentIdeaCount: number;
+    readonly mismatchIdeaCount: number;
+    readonly unknownIdeaCount: number;
+    readonly verifiableIdeaCount: number;
+    readonly verificationCoverage: number;
+  };
   /** Ideas omitidas del alcance indicado por catalogScope. */
   readonly omittedIdeaCount: number;
   /** Aristas declaradas por nodos incluidos en el snapshot, antes de limitar las muestras. */
@@ -3612,6 +3628,12 @@ function buildLiteraryIdeaGraph(
   const nodes: LiteraryIdeaGraphNode[] = orderedIdeas.map((idea, index) => ({
     ideaId: idea.ideaId,
     status: idea.status,
+    currentStatusHistoryConsistency: idea.statusHistory.length === 0 ||
+      idea.omittedStatusHistoryCount > 0
+      ? "unknown"
+      : idea.statusHistory[idea.statusHistory.length - 1]!.status === idea.status
+        ? "consistent"
+        : "mismatch",
     incomingReferenceCount: incoming[index]!,
     includedOutgoingReferenceCount: adjacency[index]!.length,
     notIncludedOutgoingReferenceCount: outgoingExternal[index]!,
@@ -3826,6 +3848,9 @@ function buildLiteraryIdeaGraph(
     includedOutgoingReferenceCount: number;
     notIncludedOutgoingReferenceCount: number;
     statusHistoryRecordCount: number;
+    statusHistoryConsistentIdeaCount: number;
+    statusHistoryMismatchIdeaCount: number;
+    statusHistoryConsistencyUnknownIdeaCount: number;
     omittedStatusHistoryCount: number;
     writerDecisionCount: number;
     observedStatusTransitionCount: number;
@@ -3857,6 +3882,9 @@ function buildLiteraryIdeaGraph(
       includedOutgoingReferenceCount: 0,
       notIncludedOutgoingReferenceCount: 0,
       statusHistoryRecordCount: 0,
+      statusHistoryConsistentIdeaCount: 0,
+      statusHistoryMismatchIdeaCount: 0,
+      statusHistoryConsistencyUnknownIdeaCount: 0,
       omittedStatusHistoryCount: 0,
       writerDecisionCount: 0,
       observedStatusTransitionCount: 0,
@@ -3897,6 +3925,9 @@ function buildLiteraryIdeaGraph(
     totals.includedOutgoingReferenceCount += node.includedOutgoingReferenceCount;
     totals.notIncludedOutgoingReferenceCount += node.notIncludedOutgoingReferenceCount;
     totals.statusHistoryRecordCount += node.statusHistory.length;
+    if (node.currentStatusHistoryConsistency === "consistent") totals.statusHistoryConsistentIdeaCount++;
+    else if (node.currentStatusHistoryConsistency === "mismatch") totals.statusHistoryMismatchIdeaCount++;
+    else totals.statusHistoryConsistencyUnknownIdeaCount++;
     totals.omittedStatusHistoryCount += node.omittedStatusHistoryCount;
     totals.writerDecisionCount += node.writerDecisionCount;
     totals.observedStatusTransitionCount += node.observedStatusTransitionCount;
@@ -3935,6 +3966,13 @@ function buildLiteraryIdeaGraph(
   const statusProfiles: LiteraryIdeaGraphStatusProfile[] = profileStatuses.map(
     status => profileTotals.get(status)!
   );
+  const statusHistoryConsistency = statusProfiles.reduce((totals, profile) => ({
+    consistentIdeaCount: totals.consistentIdeaCount + profile.statusHistoryConsistentIdeaCount,
+    mismatchIdeaCount: totals.mismatchIdeaCount + profile.statusHistoryMismatchIdeaCount,
+    unknownIdeaCount: totals.unknownIdeaCount + profile.statusHistoryConsistencyUnknownIdeaCount
+  }), { consistentIdeaCount: 0, mismatchIdeaCount: 0, unknownIdeaCount: 0 });
+  const verifiableIdeaCount = statusHistoryConsistency.consistentIdeaCount +
+    statusHistoryConsistency.mismatchIdeaCount;
 
   const lexicalResonances = buildLiteraryIdeaLexicalResonances(orderedIdeas);
   const result: LiteraryIdeaGraphAnalysis = {
@@ -3943,6 +3981,11 @@ function buildLiteraryIdeaGraph(
     projectCatalogComplete,
     ideaCount: orderedIdeas.length,
     statusProfiles,
+    statusHistoryConsistency: {
+      ...statusHistoryConsistency,
+      verifiableIdeaCount,
+      verificationCoverage: nodes.length === 0 ? 0 : verifiableIdeaCount / nodes.length
+    },
     omittedIdeaCount,
     referenceCount,
     includedReferenceCount,

@@ -716,6 +716,27 @@ test("SQLite rechaza más de 500 vínculos por idea incluso sin pasar por HostEn
       }, base),
       /más de 500 vínculos por categoría/
     );
+    assert.throws(
+      () => store.saveIdea({
+        ...base,
+        statusHistory: [
+          { status: "IDEA", reason: "initial", changedAt: 1 },
+          { status: "IDEA", reason: "writer", changedAt: 2 }
+        ]
+      }),
+      /Historial de estados de idea inválido/
+    );
+    assert.throws(
+      () => store.saveIdea({
+        ...base,
+        status: "discarded",
+        statusHistory: [
+          { status: "incorporated", reason: "initial", changedAt: 1 },
+          { status: "discarded", reason: "text-revised", changedAt: 2 }
+        ]
+      }),
+      /Historial de estados de idea inválido/
+    );
     assert.deepEqual(
       await store.loadIdeas(projectId),
       [],

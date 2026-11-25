@@ -171,16 +171,20 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
     }
     // Las autorreferencias se conservan como aristas explícitas del grafo.
     if (item.statusHistory !== undefined) {
-      if (!Array.isArray(item.statusHistory) || item.statusHistory.length === 0) invalid();
+      if (!Array.isArray(item.statusHistory) ||
+          (item.statusHistory.length === 0 && (item.omittedStatusHistoryCount ?? 0) === 0)) invalid();
       for (let index = 0; index < item.statusHistory.length; index++) {
         const change = item.statusHistory[index];
         if (!change || !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
             (change.reason === "text-revised" && change.status !== "IDEA") ||
-            (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-              (change.status === item.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
-            (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-            false) invalid();
+            (index === 0
+              ? (item.omittedStatusHistoryCount ?? 0) === 0
+                ? change.reason !== "initial"
+                : change.reason === "initial"
+              : change.reason === "initial" ||
+                (change.status === item.statusHistory[index - 1]?.status && change.reason !== "writer")) ||
+            (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0))) invalid();
       }
     }
   } else if (collection === "afirmaciones") {

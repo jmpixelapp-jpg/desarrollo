@@ -575,3 +575,114 @@ test("acota las anclas de evidencia causal y cuenta las omitidas por el límite"
   assert.equal(result.eventDependencyAnalysis.omittedEvidenceAnchorCount, 1);
   assert.equal(result.eventDependencyAnalysis.candidateCount, 0);
 });
+
+test("construye trayectorias de personaje integrando atributos, acontecimientos y causalidades candidatas", () => {
+  const text = [
+    "Escena 1",
+    "Ana tenía 18 años. Ana contempló cómo la tormenta provocó el derrumbe.",
+    "Escena 2",
+    "Ana tenía 19 años. Bruno observó la torre."
+  ].join("\n");
+  const evidence = phrase => {
+    const start = text.indexOf(phrase);
+    assert.notEqual(start, -1, "evidencia encontrada: " + phrase);
+    return {
+      documentId: "chapter-one",
+      revision: 1,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    };
+  };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [
+      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "bruno-id", canonicalName: "Bruno" },
+      { entityId: "carla-id", canonicalName: "Carla" }
+    ],
+    knownEvents: [
+      {
+        eventId: "storm",
+        label: "La tormenta",
+        participants: ["ana-id"],
+        evidence: [evidence("la tormenta")]
+      },
+      {
+        eventId: "collapse",
+        label: "El derrumbe",
+        participants: ["ana-id", "bruno-id"],
+        evidence: [evidence("el derrumbe")]
+      }
+    ],
+    knownAssertions: [
+      {
+        projectId: "literary-analysis-test",
+        id: "ana-age-18",
+        entityId: "ana-id",
+        entityName: "Ana",
+        attribute: "age",
+        value: 18,
+        evidence: evidence("Ana tenía 18 años."),
+        capturedAt: 1
+      },
+      {
+        projectId: "literary-analysis-test",
+        id: "ana-age-19",
+        entityId: "ana-id",
+        entityName: "Ana",
+        attribute: "age",
+        value: 19,
+        evidence: evidence("Ana tenía 19 años."),
+        capturedAt: 2
+      }
+    ]
+  });
+
+  const trajectories = result.characterNarrativeTrajectories.trajectories;
+  const ana = trajectories.find(item => item.entityId === "ana-id");
+  const bruno = trajectories.find(item => item.entityId === "bruno-id");
+  const carla = trajectories.find(item => item.entityId === "carla-id");
+  assert.ok(ana && bruno && carla);
+  assert.equal(result.characterNarrativeTrajectories.catalogCharacterCount, 3);
+  assert.equal(result.characterNarrativeTrajectories.profileCount, 3);
+  assert.deepEqual(ana.attributes.find(item => item.attribute === "age").scenes.map(item => item.values), [
+    [18], [19]
+  ]);
+  assert.equal(ana.attributes.find(item => item.attribute === "age").transitions[0].status, "changed-value");
+  assert.deepEqual(ana.scenes.map(item => item.evidenceStatus), ["documented", "documented"]);
+  assert.deepEqual(ana.scenes.map(item => item.eventIds), [["collapse", "storm"], []]);
+  assert.equal(ana.causalRelations.length, 1);
+  assert.equal(ana.causalRelations[0].characterRole, "both-events-participant");
+  assert.equal(ana.scenes[0].causalCandidateIds[0], ana.causalRelations[0].candidateId);
+  assert.equal(bruno.causalRelations[0].characterRole, "consequence-event-participant");
+  assert.deepEqual(bruno.eventParticipation.map(item => item.eventId), ["collapse"]);
+  assert.deepEqual(carla.observedSceneIndexes, []);
+  assert.deepEqual(carla.scenes.map(item => item.evidenceStatus), ["no-known-evidence", "no-known-evidence"]);
+});
+
+test("las trayectorias señalan escenas con fuente truncada sin convertirlas en ausencias", () => {
+  const text = ["Escena 1", "Ana cruzó el puente."].join("\n");
+  const knownCharacters = Array.from({ length: 42 }, (_, index) => ({
+    entityId: "character-" + index,
+    canonicalName: "Personaje " + index
+  }));
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters
+  });
+  const first = result.characterNarrativeTrajectories.trajectories.find(item =>
+    item.entityId === "character-0"
+  );
+  assert.ok(first);
+  assert.equal(first.scenes[0].mentionStatus, "unknown-due-to-mention-truncation");
+  assert.equal(first.scenes[0].evidenceStatus, "unknown-due-to-truncation");
+  assert.deepEqual(first.incompleteSceneIndexes, [1]);
+  assert.equal(result.characterNarrativeTrajectories.sourceTruncatedSceneCount, 1);
+});

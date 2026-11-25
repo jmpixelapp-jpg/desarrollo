@@ -1121,6 +1121,7 @@ test("la caché léxica se invalida cuando cambia el texto de una idea", async (
     assert.deepEqual(before.resonances[0].sharedTerms, ["destino", "espejo", "memoria"]);
 
     ideas[1] = { ...ideas[1], text: "memoria destino" };
+    await api.refreshNarrativeKnowledge();
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
     assert.equal(after.candidatePairCount, 1);
     assert.equal(after.resonances.length, 1);
@@ -1303,7 +1304,7 @@ test("la resonancia léxica excluye stopwords frecuentes en sueco", async () => 
   const ideas = [
     {
       projectId, id: "lexical-swedish-stopwords-a",
-      text: "en minne och en spegel med ett ljus",
+      text: "ett minne och en spegel med en natt",
       status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
       evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]

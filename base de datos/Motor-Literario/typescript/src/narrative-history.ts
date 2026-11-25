@@ -54,14 +54,14 @@ export function extractNarrativeAssertions(
   if (/\b(?:vive|vivía|reside|residía|se encuentra|está)\s+en\s+[^,.!?;\n]+/iu.test(text)) {
     definitions.push({
       attribute: "location" as const,
-      suffix: "\\s+(?:vive|vivía|reside|residía|se encuentra|está)\\s+en\\s+([^,.!?;\\n]+?)(?=\\s+(?:y|pero|aunque|porque|mientras)\\s+|[,.!?;\\n]|$)",
+      suffix: "(?:\\s+(?:tiene|tenía|tendrá)\\s+\\d{1,3}\\s+años?\\s+y)?\\s+(?:vive|vivía|reside|residía|se encuentra|está)\\s+en\\s+([^,.!?;\\n]+?)(?=\\s+(?:y|pero|aunque|porque|mientras)\\s+|[,.!?;\\n]|$)",
       capture: (m: RegExpExecArray) => (m[1] ?? "").trim()
     });
   }
   if (/\b(?:es|era|será)\s+(?:el|la|un|una)?\s*(?:rey|reina|príncipe|princesa|emperador|emperatriz|capitán|capitana|general|alcalde|alcaldesa|caballero|guardiana|guardián)\b/iu.test(text)) {
     definitions.push({
       attribute: "role" as const,
-      suffix: "\\s+(?:es|era|será)\\s+(?:el|la|un|una)?\\s*(rey|reina|príncipe|princesa|emperador|emperatriz|capitán|capitana|general|alcalde|alcaldesa|caballero|guardiana|guardián)\\b",
+      suffix: "(?:\\s+(?:tiene|tenía|tendrá)\\s+\\d{1,3}\\s+años?\\s+y)?\\s+(?:es|era|será)\\s+(?:el|la|un|una)?\\s*(rey|reina|príncipe|princesa|emperador|emperatriz|capitán|capitana|general|alcalde|alcaldesa|caballero|guardiana|guardián)\\b",
       capture: (m: RegExpExecArray) => (m[1] ?? "").toLocaleLowerCase("es")
     });
   }

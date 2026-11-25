@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 23;
+const DATABASE_VERSION = 24;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -45,6 +45,7 @@ const FINALIZATION_RECEIPT_ID = "finalization-v1";
 const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
 const LIVE_AUTHOR_MONITOR_CHECKPOINTS = "live-author-monitor-checkpoints";
+const LIVE_AUTHOR_MONITOR_LEASES = "live-author-monitor-leases";
 const DICTIONARIES = "project-dictionaries";
 const DICTIONARY_ENTRIES = "dictionary-entries";
 const DICTIONARY_ENTRY_ENTITIES = "dictionary-entry-entities";
@@ -1495,6 +1496,38 @@ function validateLiveAuthorMonitorCheckpoint(
   }
 }
 
+function validateLiveAuthorMonitorLease(
+  lease: StoredLiveAuthorMonitorLease,
+  projectId?: string,
+  documentId?: string
+): void {
+  if (!lease || lease.version !== 1 ||
+      typeof lease.projectId !== "string" || !lease.projectId.trim() ||
+      (projectId !== undefined && lease.projectId !== projectId) ||
+      typeof lease.documentId !== "string" || !lease.documentId.trim() ||
+      (documentId !== undefined && lease.documentId !== documentId) ||
+      typeof lease.ownerId !== "string" || !lease.ownerId.trim() ||
+      !Number.isSafeInteger(lease.fencingToken) || lease.fencingToken < 1 ||
+      !Number.isFinite(lease.acquiredAt) || lease.acquiredAt < 0 ||
+      !Number.isFinite(lease.expiresAt) || lease.expiresAt < lease.acquiredAt ||
+      !Number.isFinite(lease.updatedAt) || lease.updatedAt < lease.acquiredAt ||
+      lease.updatedAt > lease.expiresAt) {
+    throw new Error("Lease del monitor malformado o perteneciente a otra identidad.");
+  }
+}
+
+function validateLiveAuthorMonitorLeaseRequest(
+  now: number,
+  leaseDurationMs: number
+): void {
+  if (!Number.isSafeInteger(now) || now < 0 ||
+      !Number.isSafeInteger(leaseDurationMs) ||
+      leaseDurationMs < 1_000 || leaseDurationMs > 120_000 ||
+      !Number.isSafeInteger(now + leaseDurationMs)) {
+    throw new RangeError("El reloj o la duración del lease del monitor no son válidos.");
+  }
+}
+
 /**
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
@@ -1742,6 +1775,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           checkpoints.createIndex("by-project", "projectId", { unique: false });
         }
+        if (!db.objectStoreNames.contains(LIVE_AUTHOR_MONITOR_LEASES)) {
+          const leases = db.createObjectStore(LIVE_AUTHOR_MONITOR_LEASES, {
+            keyPath: ["projectId", "documentId"]
+          });
+          leases.createIndex("by-project", "projectId", { unique: false });
+        }
         if (!db.objectStoreNames.contains(MANUSCRIPT_FRAGMENTS)) {
           const fragments = db.createObjectStore(MANUSCRIPT_FRAGMENTS, { keyPath: ["projectId", "id"] });
           fragments.createIndex("by-project", "projectId", { unique: false });
@@ -1910,6 +1949,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(ASSERTIONS, "by-entity", ["projectId", "entityId"]);
         ensureIndex(DIAGNOSTICS, "by-project", "projectId");
         ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId");
+        ensureIndex(LIVE_AUTHOR_MONITOR_LEASES, "by-project", "projectId");
         ensureIndex(DICTIONARIES, "by-project", "projectId");
         ensureIndex(
           DICTIONARIES, "by-project-language-name",
@@ -5076,39 +5116,297 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
   }
 
-  async saveLiveAuthorMonitorCheckpoint(
-    checkpoint: StoredLiveAuthorMonitorCheckpoint
-  ): Promise<void> {
-    validateLiveAuthorMonitorCheckpoint(checkpoint);
+  async acquireLiveAuthorMonitorLease(
+    projectId: string,
+    documentId: string,
+    ownerId: string,
+    now: number,
+    leaseDurationMs: number
+  ): Promise<StoredLiveAuthorMonitorLease | undefined> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof documentId !== "string" || !documentId.trim() ||
+        typeof ownerId !== "string" || !ownerId.trim()) {
+      throw new Error("Identidad inválida para adquirir el lease del monitor.");
+    }
+    validateLiveAuthorMonitorLeaseRequest(now, leaseDurationMs);
     const db = await this.open();
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "readwrite");
-      const store = transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS);
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_LEASES, "readwrite");
+      const store = transaction.objectStore(LIVE_AUTHOR_MONITOR_LEASES);
+      const request = store.get([projectId, documentId]);
+      let acquired: StoredLiveAuthorMonitorLease | undefined;
       let failure: Error | undefined;
-      const existingRequest = store.get([checkpoint.projectId, checkpoint.documentId]);
-      existingRequest.onsuccess = () => {
-        const existing = existingRequest.result as StoredLiveAuthorMonitorCheckpoint | undefined;
+      request.onsuccess = () => {
+        const existing = request.result as StoredLiveAuthorMonitorLease | undefined;
         if (existing !== undefined) {
-          if (!existing || !Number.isFinite(existing.savedAt) || existing.savedAt < 0) {
-            failure = new Error("El checkpoint existente del monitor está malformado.");
+          try {
+            validateLiveAuthorMonitorLease(existing, projectId, documentId);
+          } catch {
+            failure = new Error("El lease previo del monitor está malformado; no se reemplazó.");
             try { transaction.abort(); } catch { /* transacción ya abortada */ }
             return;
           }
-          if (existing.savedAt > checkpoint.savedAt) {
-            failure = new Error("Se rechazó guardar un checkpoint anterior al ya persistido.");
-            try { transaction.abort(); } catch { /* transacción ya abortada */ }
-            return;
-          }
+          if (existing.expiresAt > now && existing.ownerId !== ownerId) return;
         }
+        const sameActiveOwner = existing !== undefined &&
+          existing.expiresAt > now && existing.ownerId === ownerId;
+        const fencingToken = sameActiveOwner
+          ? existing.fencingToken
+          : existing === undefined ? 1 : existing.fencingToken + 1;
+        if (!Number.isSafeInteger(fencingToken)) {
+          failure = new Error("Se agotó el rango del fencing token del monitor.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        acquired = {
+          version: 1,
+          projectId,
+          documentId,
+          ownerId,
+          fencingToken,
+          acquiredAt: sameActiveOwner ? existing.acquiredAt : now,
+          expiresAt: now + leaseDurationMs,
+          updatedAt: now
+        };
         try {
-          store.put(structuredClone(checkpoint));
+          store.put(structuredClone(acquired));
         } catch (error) {
-          failure = error instanceof Error ? error : new Error("No se pudo clonar el checkpoint.");
+          failure = error instanceof Error ? error : new Error("No se pudo clonar el lease del monitor.");
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
         }
       };
-      existingRequest.onerror = () => {
-        failure = existingRequest.error ?? new Error("No se pudo comprobar el checkpoint anterior.");
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo leer el lease previo del monitor.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve(acquired ? structuredClone(acquired) : undefined);
+      transaction.onerror = () => reject(failure ?? transaction.error ??
+        new Error("No se pudo adquirir el lease del monitor."));
+      transaction.onabort = () => reject(failure ?? transaction.error ??
+        new Error("Se canceló la adquisición del lease del monitor."));
+    });
+  }
+
+  async renewLiveAuthorMonitorLease(
+    lease: StoredLiveAuthorMonitorLease,
+    now: number,
+    leaseDurationMs: number
+  ): Promise<StoredLiveAuthorMonitorLease | undefined> {
+    validateLiveAuthorMonitorLease(lease);
+    validateLiveAuthorMonitorLeaseRequest(now, leaseDurationMs);
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_LEASES, "readwrite");
+      const store = transaction.objectStore(LIVE_AUTHOR_MONITOR_LEASES);
+      const request = store.get([lease.projectId, lease.documentId]);
+      let renewed: StoredLiveAuthorMonitorLease | undefined;
+      let failure: Error | undefined;
+      request.onsuccess = () => {
+        const existing = request.result as StoredLiveAuthorMonitorLease | undefined;
+        if (existing === undefined) return;
+        try {
+          validateLiveAuthorMonitorLease(existing, lease.projectId, lease.documentId);
+        } catch {
+          failure = new Error("El lease persistido del monitor está malformado.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        if (existing.ownerId !== lease.ownerId ||
+            existing.fencingToken !== lease.fencingToken ||
+            existing.expiresAt <= now || lease.expiresAt <= now) return;
+        renewed = {
+          ...existing,
+          expiresAt: now + leaseDurationMs,
+          updatedAt: now
+        };
+        try {
+          store.put(structuredClone(renewed));
+        } catch (error) {
+          failure = error instanceof Error ? error : new Error("No se pudo clonar el lease renovado.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        }
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo leer el lease para renovarlo.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve(renewed ? structuredClone(renewed) : undefined);
+      transaction.onerror = () => reject(failure ?? transaction.error ??
+        new Error("No se pudo renovar el lease del monitor."));
+      transaction.onabort = () => reject(failure ?? transaction.error ??
+        new Error("Se canceló la renovación del lease del monitor."));
+    });
+  }
+
+  async releaseLiveAuthorMonitorLease(
+    lease: StoredLiveAuthorMonitorLease,
+    now: number
+  ): Promise<boolean> {
+    validateLiveAuthorMonitorLease(lease);
+    if (!Number.isSafeInteger(now) || now < 0) {
+      throw new RangeError("El reloj para liberar el lease del monitor no es válido.");
+    }
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(LIVE_AUTHOR_MONITOR_LEASES, "readwrite");
+      const store = transaction.objectStore(LIVE_AUTHOR_MONITOR_LEASES);
+      const request = store.get([lease.projectId, lease.documentId]);
+      let released = false;
+      let failure: Error | undefined;
+      request.onsuccess = () => {
+        const existing = request.result as StoredLiveAuthorMonitorLease | undefined;
+        if (existing === undefined) return;
+        try {
+          validateLiveAuthorMonitorLease(existing, lease.projectId, lease.documentId);
+        } catch {
+          failure = new Error("El lease persistido del monitor está malformado.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        if (existing.ownerId !== lease.ownerId ||
+            existing.fencingToken !== lease.fencingToken) return;
+        released = true;
+        try {
+          store.put({
+            ...existing,
+            expiresAt: now,
+            updatedAt: Math.max(existing.acquiredAt, now)
+          } satisfies StoredLiveAuthorMonitorLease);
+        } catch (error) {
+          failure = error instanceof Error ? error : new Error("No se pudo liberar el lease del monitor.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        }
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo leer el lease para liberarlo.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve(released);
+      transaction.onerror = () => reject(failure ?? transaction.error ??
+        new Error("No se pudo liberar el lease del monitor."));
+      transaction.onabort = () => reject(failure ?? transaction.error ??
+        new Error("Se canceló la liberación del lease del monitor."));
+    });
+  }
+
+  async saveLiveAuthorMonitorCheckpoint(
+    checkpoint: StoredLiveAuthorMonitorCheckpoint,
+    lease?: StoredLiveAuthorMonitorLease
+  ): Promise<void> {
+    validateLiveAuthorMonitorCheckpoint(checkpoint);
+    if (!lease) {
+      throw new Error("Se requiere un lease vigente para guardar checkpoints del monitor.");
+    }
+    validateLiveAuthorMonitorLease(lease, checkpoint.projectId, checkpoint.documentId);
+    const now = Date.now();
+    if (lease.expiresAt <= now || checkpoint.savedAt > lease.expiresAt) {
+      throw new Error("El lease del monitor expiró antes de guardar el checkpoint.");
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(
+        [LIVE_AUTHOR_MONITOR_LEASES, LIVE_AUTHOR_MONITOR_CHECKPOINTS],
+        "readwrite"
+      );
+      const leaseStore = transaction.objectStore(LIVE_AUTHOR_MONITOR_LEASES);
+      const checkpointStore = transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS);
+      let failure: Error | undefined;
+      const leaseRequest = leaseStore.get([checkpoint.projectId, checkpoint.documentId]);
+      leaseRequest.onsuccess = () => {
+        const currentLease = leaseRequest.result as StoredLiveAuthorMonitorLease | undefined;
+        if (currentLease === undefined) {
+          failure = new Error("No existe un lease vigente para guardar el checkpoint del monitor.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        try {
+          validateLiveAuthorMonitorLease(currentLease, checkpoint.projectId, checkpoint.documentId);
+        } catch {
+          failure = new Error("El lease vigente del monitor está malformado.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        const commitNow = Date.now();
+        if (currentLease.ownerId !== lease.ownerId ||
+            currentLease.fencingToken !== lease.fencingToken ||
+            currentLease.expiresAt <= commitNow ||
+            lease.expiresAt <= commitNow) {
+          failure = new Error("El checkpoint fue rechazado porque perdió el fencing token del monitor.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+
+        const existingRequest = checkpointStore.get([checkpoint.projectId, checkpoint.documentId]);
+        existingRequest.onsuccess = () => {
+          const existing = existingRequest.result as StoredLiveAuthorMonitorCheckpoint | undefined;
+          if (existing !== undefined) {
+            try {
+              validateLiveAuthorMonitorCheckpoint(
+                existing,
+                checkpoint.projectId,
+                checkpoint.documentId
+              );
+            } catch {
+              failure = new Error("El checkpoint existente del monitor está malformado.");
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              return;
+            }
+            if (existing.savedAt > checkpoint.savedAt) {
+              failure = new Error("Se rechazó guardar un checkpoint anterior al ya persistido.");
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              return;
+            }
+            if (existing.revision > checkpoint.revision ||
+                existing.sequence > checkpoint.sequence) {
+              failure = new Error(
+                "Se rechazó guardar un checkpoint basado en una revisión o secuencia durable anterior."
+              );
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              return;
+            }
+            if (existing.sessionId === checkpoint.sessionId) {
+              const monotonicMetrics = [
+                "sessionDurationMs",
+                "activeDurationMs",
+                "idleDurationMs",
+                "pauseCount",
+                "acceptedChanges",
+                "rejectedChanges",
+                "committedChanges",
+                "failedChanges",
+                "insertedCharacters",
+                "deletedCharacters",
+                "resynchronizations",
+                "totalCommitLatencyMs"
+              ] as const;
+              const regressedMetric = monotonicMetrics.find(
+                key => checkpoint[key] < existing[key]
+              );
+              if (regressedMetric) {
+                failure = new Error(
+                  "Se rechazó un checkpoint de la misma sesión que hace retroceder la métrica " +
+                  regressedMetric + "."
+                );
+                try { transaction.abort(); } catch { /* transacción ya abortada */ }
+                return;
+              }
+            }
+          }
+          try {
+            checkpointStore.put(structuredClone(checkpoint));
+          } catch (error) {
+            failure = error instanceof Error ? error : new Error("No se pudo clonar el checkpoint.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          }
+        };
+        existingRequest.onerror = () => {
+          failure = existingRequest.error ??
+            new Error("No se pudo comprobar el checkpoint anterior.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        };
+      };
+      leaseRequest.onerror = () => {
+        failure = leaseRequest.error ?? new Error("No se pudo verificar el lease del monitor.");
         try { transaction.abort(); } catch { /* transacción ya abortada */ }
       };
       transaction.oncomplete = () => resolve();

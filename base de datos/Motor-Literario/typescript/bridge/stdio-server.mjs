@@ -186,8 +186,14 @@ function openProject(params) {
 function notifyPersonalIdeaLibraryChanged(writerId) {
   if (typeof writerId !== "string" || !writerId.trim()) return;
   if (store?.getWriterLibraryVersion) {
-    lastWriterLibraryVersions.set(writerId, store.getWriterLibraryVersion(writerId));
-    pendingWriterLibrarySyncs.delete(writerId);
+    // No adelantar la versión confirmada antes de entregar el aviso.
+    // Si stdout falla, el ciclo periódico conserva y reintenta esta invalidación.
+    const currentVersion = store.getWriterLibraryVersion(writerId);
+    if (lastWriterLibraryVersions.get(writerId) === currentVersion &&
+        !pendingWriterLibrarySyncs.has(writerId)) return;
+    pendingWriterLibrarySyncs.set(writerId, currentVersion);
+    scheduleKnowledgeSync();
+    return;
   }
   for (const [projectId, record] of projects) {
     if (record.identity.writerId !== writerId) continue;
@@ -301,14 +307,16 @@ async function pollExternalNarrativeChanges() {
   }
 }
 
+function scheduleKnowledgeSync() {
+  knowledgeSyncTail = knowledgeSyncTail
+    .then(() => pollExternalNarrativeChanges())
+    .catch(writeError);
+}
+
 function startKnowledgeSync() {
   lastObservedDataVersion = store.getDataVersion();
   if (knowledgeSyncInterval) clearInterval(knowledgeSyncInterval);
-  knowledgeSyncInterval = setInterval(() => {
-    knowledgeSyncTail = knowledgeSyncTail
-      .then(() => pollExternalNarrativeChanges())
-      .catch(writeError);
-  }, KNOWLEDGE_SYNC_INTERVAL_MS);
+  knowledgeSyncInterval = setInterval(scheduleKnowledgeSync, KNOWLEDGE_SYNC_INTERVAL_MS);
   knowledgeSyncInterval.unref?.();
 }
 

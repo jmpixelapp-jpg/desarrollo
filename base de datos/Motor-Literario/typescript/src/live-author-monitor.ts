@@ -424,17 +424,23 @@ export class LiveAuthorMonitor {
     const downtime = restoredAt - checkpoint.savedAt;
     const now = this.readClock();
     const sessionDurationMs = checkpoint.sessionDurationMs + downtime;
+    const idleDurationMs = checkpoint.idleDurationMs + downtime;
+    if (!Number.isFinite(downtime) || !Number.isFinite(sessionDurationMs) ||
+        !Number.isFinite(idleDurationMs)) {
+      throw new RangeError("El intervalo de recuperación excede el rango numérico admitido.");
+    }
+    const restoredActivityAge = checkpoint.lastActivityAgeMs === null
+      ? undefined
+      : Math.max(checkpoint.lastActivityAgeMs + downtime, this.idleAfterMs + 1);
     const session: DocumentSession = {
       sessionId: checkpoint.sessionId,
       projectId,
       documentId: snapshot.documentId,
       openedAt: now - sessionDurationMs,
       lastObservedAt: now,
-      lastActivityAt: checkpoint.lastActivityAgeMs === null
-        ? undefined
-        : now - (checkpoint.lastActivityAgeMs + downtime),
+      lastActivityAt: restoredActivityAge === undefined ? undefined : now - restoredActivityAge,
       activeDurationMs: checkpoint.activeDurationMs,
-      idleDurationMs: checkpoint.idleDurationMs + downtime,
+      idleDurationMs,
       pauseCount: checkpoint.pauseCount,
       acceptedChanges: checkpoint.acceptedChanges,
       rejectedChanges: checkpoint.rejectedChanges,

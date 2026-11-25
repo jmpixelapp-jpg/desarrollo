@@ -84,6 +84,13 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
       undefined
     );
 
+    // close() no invalida la instancia: su próxima operación vuelve a abrir IndexedDB.
+    await store.close();
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      newer
+    );
+
     await store.deleteLiveAuthorMonitorCheckpoint(projectId, documentId);
     assert.equal(
       await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),

@@ -246,6 +246,29 @@ test("suspende el proveedor para rechazos no recuperables y permite reanudar tra
   f.integration.dispose();
 });
 
+
+test("no permite desmontar transacciones nativas mientras existan deltas sin admitir", () => {
+  const f = fixture();
+  f.rejectNext("queue_full");
+  f.editor.apply("edit", "tx-pending-dispose", {
+    start: 3, end: 3, replacement: "!"
+  });
+
+  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1]);
+  assert.throws(() => f.integration.dispose(), /cambios sin admitir/);
+  assert.equal(f.editor.listeners.size, 1);
+  assert.equal(f.retryListeners.size, 1);
+  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1]);
+
+  f.publishRetrySignal();
+  assert.deepEqual(f.integration.getPendingChanges(), []);
+  assert.equal(f.getHostSnapshot().sequence, 1);
+
+  f.integration.dispose();
+  assert.equal(f.editor.listeners.size, 0);
+  assert.equal(f.retryListeners.size, 0);
+});
+
 test("rechaza montar cuando el editor nativo no coincide con HostEngineApi", () => {
   const initial = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
   const editor = new FakeTransactionalEditor({ ...initial, text: "other" });

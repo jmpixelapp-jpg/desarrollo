@@ -144,6 +144,7 @@ test("limita la salida a los cien pares mejor clasificados y declara el excedent
   }).flat();
   const result = analyze(ideas);
 
+  assert.equal(result.maxTermDocumentFrequency, 40);
   assert.equal(result.candidatePairCount, 101);
   assert.equal(result.resonances.length, 100);
   assert.equal(result.omittedCandidatePairCount, 1);

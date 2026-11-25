@@ -1977,9 +1977,12 @@ function findCharacterCoMentionPatterns(
 }
 
 function buildCharacterEventEvidenceProfiles(
-  scenes: readonly LiteraryExplicitSceneSegment[]
+  scenes: readonly LiteraryExplicitSceneSegment[],
+  knownCharacters: readonly LiteraryAnalysisKnownCharacter[]
 ): LiteraryCharacterEventEvidenceAnalysis {
-  const canonicalNames = new Map<string,string>();
+  const canonicalNames = new Map<string,string>(
+    knownCharacters.map(character => [character.entityId,character.canonicalName] as const)
+  );
   const groups = new Map<string,{
     readonly entityId: string;
     readonly eventId: string;
@@ -2640,7 +2643,9 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
   const characterMentionDistributions = buildCharacterMentionDistributions(explicitScenes);
-  const characterEventEvidenceProfiles = buildCharacterEventEvidenceProfiles(explicitScenes);
+  const characterEventEvidenceProfiles = buildCharacterEventEvidenceProfiles(
+    explicitScenes,input.knownCharacters ?? []
+  );
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);

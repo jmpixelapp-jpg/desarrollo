@@ -7,6 +7,8 @@ import {
 class FakeTransactionalEditor {
   snapshot;
   listeners = new Set();
+  subscribeCount = 0;
+  onSubscribe;
 
   constructor(snapshot) { this.snapshot = { ...snapshot }; }
 
@@ -17,6 +19,8 @@ class FakeTransactionalEditor {
   subscribeTransactions(documentId, listener) {
     if (documentId !== this.snapshot.documentId) throw new Error("unknown_document");
     this.listeners.add(listener);
+    this.subscribeCount++;
+    this.onSubscribe?.(this, listener, this.subscribeCount);
     return () => this.listeners.delete(listener);
   }
 
@@ -263,6 +267,43 @@ test("no permite desmontar transacciones nativas mientras existan deltas sin adm
   f.publishRetrySignal();
   assert.deepEqual(f.integration.getPendingChanges(), []);
   assert.equal(f.getHostSnapshot().sequence, 1);
+
+  f.integration.dispose();
+  assert.equal(f.editor.listeners.size, 0);
+  assert.equal(f.retryListeners.size, 0);
+});
+
+
+test("preserva transacciones nuevas reproducidas sincrónicamente al resincronizar", () => {
+  const f = fixture();
+  f.rejectNext("invalid_change");
+  f.editor.apply("edit", "tx-included-in-snapshot", {
+    start: 3, end: 3, replacement: "!"
+  });
+
+  assert.equal(f.integration.getState().needsResync, true);
+  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1]);
+
+  // El snapshot autoritativo ya contiene el cambio antiguo retenido.
+  f.setHostSnapshot(f.editor.getSnapshot("chapter-1"));
+  f.editor.onSubscribe = (editor, _listener, subscribeCount) => {
+    if (subscribeCount === 2) {
+      // El editor reproduce un cambio posterior mientras se registra el listener.
+      editor.apply("edit", "tx-emitted-during-resubscribe", {
+        start: 4, end: 4, replacement: "?"
+      });
+    }
+  };
+
+  const state = f.integration.resynchronize();
+  assert.equal(state.needsResync, false);
+  assert.equal(state.sequence, 2);
+  assert.equal(f.editor.subscribeCount, 2);
+  assert.equal(f.getHostSnapshot().sequence, 2);
+  assert.equal(f.getHostSnapshot().revision, 2);
+  assert.equal(f.getHostSnapshot().text, "abc!?");
+  assert.deepEqual(f.integration.getPendingChanges(), []);
+  assert.deepEqual(f.pressureStates.at(-1), { status: "clear", pendingCount: 0 });
 
   f.integration.dispose();
   assert.equal(f.editor.listeners.size, 0);

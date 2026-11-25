@@ -722,6 +722,10 @@ export interface LiteraryCharacterNarrativeTrajectoryAnalysis {
 export interface LiteraryIdeaGraphNode {
   readonly ideaId: string;
   readonly status: NarrativeIdea["status"];
+  /** Historial visible de estados; puede estar acotado por omittedStatusHistoryCount. */
+  readonly statusHistory: readonly NarrativeIdeaStatusChange[];
+  readonly omittedStatusHistoryCount: number;
+  readonly writerDecisionCount: number;
   /** Entradas desde ideas incluidas en el snapshot actual. */
   readonly incomingReferenceCount: number;
   /** Salidas cuyo destino también está incluido en el snapshot actual. */
@@ -747,6 +751,11 @@ export interface LiteraryIdeaGraphStatusProfile {
   readonly incomingReferenceCount: number;
   readonly includedOutgoingReferenceCount: number;
   readonly notIncludedOutgoingReferenceCount: number;
+  /** Registros visibles del historial, incluido el estado inicial cuando está disponible. */
+  readonly statusHistoryRecordCount: number;
+  readonly omittedStatusHistoryCount: number;
+  /** Transiciones explícitas registradas por el escritor. */
+  readonly writerDecisionCount: number;
 }
 export interface LiteraryIdeaGraphAnalysis {
   readonly ideaCount: number;
@@ -3229,7 +3238,10 @@ function buildLiteraryIdeaGraph(
     status: idea.status,
     incomingReferenceCount: incoming.get(idea.ideaId) ?? 0,
     includedOutgoingReferenceCount: adjacency.get(idea.ideaId)!.length,
-    notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0
+    notIncludedOutgoingReferenceCount: outgoingExternal.get(idea.ideaId) ?? 0,
+    statusHistory: idea.statusHistory,
+    omittedStatusHistoryCount: idea.omittedStatusHistoryCount,
+    writerDecisionCount: idea.writerDecisionCount
   }));
 
   // Tarjan: detecta componentes cíclicos en O(V + E), sin atribuir causalidad
@@ -3317,6 +3329,15 @@ function buildLiteraryIdeaGraph(
       ),
       notIncludedOutgoingReferenceCount: matchingNodes.reduce(
         (total, node) => total + node.notIncludedOutgoingReferenceCount, 0
+      ),
+      statusHistoryRecordCount: matchingNodes.reduce(
+        (total, node) => total + node.statusHistory.length, 0
+      ),
+      omittedStatusHistoryCount: matchingNodes.reduce(
+        (total, node) => total + node.omittedStatusHistoryCount, 0
+      ),
+      writerDecisionCount: matchingNodes.reduce(
+        (total, node) => total + node.writerDecisionCount, 0
       )
     };
   });

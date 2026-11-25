@@ -933,8 +933,13 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
     evidenceCount: 0,
     staleEvidenceCount: 0,
     evidence: [],
-    statusHistory: [{ status: "IDEA", reason: "initial" }],
-    writerDecisionCount: 0,
+    statusHistory: status === "IDEA"
+      ? [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+      : [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status, reason: "writer", changedAt: 2 }
+      ],
+    writerDecisionCount: status === "IDEA" ? 0 : 1,
     omittedStatusHistoryCount: 0
   });
   const result = analyzeLiteraryFragment({
@@ -961,7 +966,10 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       isolatedWithinSnapshotIdeaCount: 0,
       incomingReferenceCount: 2,
       includedOutgoingReferenceCount: 1,
-      notIncludedOutgoingReferenceCount: 0
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistoryRecordCount: 2,
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 0
     },
     {
       status: "incorporated",
@@ -971,7 +979,10 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       isolatedWithinSnapshotIdeaCount: 0,
       incomingReferenceCount: 1,
       includedOutgoingReferenceCount: 1,
-      notIncludedOutgoingReferenceCount: 1
+      notIncludedOutgoingReferenceCount: 1,
+      statusHistoryRecordCount: 2,
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
     },
     {
       status: "discarded",
@@ -981,7 +992,10 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
       isolatedWithinSnapshotIdeaCount: 0,
       incomingReferenceCount: 0,
       includedOutgoingReferenceCount: 1,
-      notIncludedOutgoingReferenceCount: 0
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistoryRecordCount: 2,
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
     }
   ]);
   assert.equal(graph.omittedIdeaCount, 3);
@@ -997,22 +1011,40 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
     {
       ideaId: "idea-a", status: "IDEA",
       incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
-      notIncludedOutgoingReferenceCount: 0
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 0
     },
     {
       ideaId: "idea-b", status: "incorporated",
       incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
-      notIncludedOutgoingReferenceCount: 1
+      notIncludedOutgoingReferenceCount: 1,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
     },
     {
       ideaId: "idea-c", status: "IDEA",
       incomingReferenceCount: 1, includedOutgoingReferenceCount: 0,
-      notIncludedOutgoingReferenceCount: 0
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 0
     },
     {
       ideaId: "idea-d", status: "discarded",
       incomingReferenceCount: 0, includedOutgoingReferenceCount: 1,
-      notIncludedOutgoingReferenceCount: 0
+      notIncludedOutgoingReferenceCount: 0,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "writer", changedAt: 2 }
+      ],
+      omittedStatusHistoryCount: 0,
+      writerDecisionCount: 1
     }
   ]);
   assert.deepEqual(graph.references, [

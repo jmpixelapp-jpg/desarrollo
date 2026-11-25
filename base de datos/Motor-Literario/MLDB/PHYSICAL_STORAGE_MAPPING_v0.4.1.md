@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `17`.
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `18`.
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -24,6 +24,12 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
 | `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |
 | `dictionary-entries` | `[projectId, id]` | `by-project`, `by-dictionary`, `by-dictionary-normalized` único | Entradas, atributos JSON y vínculos con entidades |
+| `manuscript-fragments` | `[projectId, id]` | `by-project`, `by-document-revision`, `by-parent` | Fragmentos con offsets UTF-16, revisión y jerarquía |
+| `record-attributes` | `[projectId, id]` | `by-project`, `by-record-key` | Atributos JSON extensibles de fichas |
+| `relation-attributes` | `[projectId, id]` | `by-project`, `by-relation-key` | Atributos JSON extensibles de relaciones |
+| `active-suggestions` | `[projectId, id]` | `by-project`, `by-document-revision`, `by-status-priority` | Sugerencias versionadas ligadas a documento/fragmento |
+| `import-authorizations` | `[writerId, sourceProjectId, targetProjectId, authorizationId]` | `by-writer`, `by-source-target`, `by-target` | Autorizaciones append-only del escritor |
+| `schema-migrations` | `migrationId` | `by-to-version`, `by-applied-at` | Historial durable de migraciones nativas |
 | `style-profiles` | `[projectId, id]` | `by-project`, `by-project-name` | Perfiles de estilo por libro y preferencias editoriales JSON |
 | `timeline-tracks` | `[projectId, id]` | `by-project`, `by-project-name` | Pistas cronológicas explícitas y reglas JSON |
 | `record-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de fichas |
@@ -38,21 +44,21 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `projects` | Identidad entregada por el anfitrión | Anfitrión; no se duplica en el contenido narrativo |
 | `project_settings` | `project-settings` | Implementado; JSON validado, origen WRITER/HOST y actualización optimista |
 | `manuscript_documents` | `documents` + `changes` | Implementado |
-| `manuscript_fragments` | Texto snapshot / tabla de piezas en memoria | Parcial; no hay filas persistentes por fragmento |
+| `manuscript_fragments` | `manuscript-fragments` | Implementado; offsets UTF-16, revisión y referencias a documento/padre validadas |
 | `records` | `narrative-entities` | Parcial; actualmente character/place/object |
 | `record_names` | `canonicalName` y `aliases` embebidos en entidad | Implementado |
-| `record_attributes` | Afirmaciones en `narrative-assertions` | Parcial; atributos explícitos limitados |
+| `record_attributes` | `record-attributes` | Implementado; valores JSON extensibles enlazados a fichas del mismo libro |
 | `relations` | `narrative-relations` | Implementado |
-| `relation_attributes` | Tipo/evidencia embebidos en relación | Parcial; sin atributos genéricos |
+| `relation_attributes` | `relation-attributes` | Implementado; valores JSON extensibles enlazados a relaciones del mismo libro |
 | `evidences` | `TextEvidence` embebido en registros | Implementado |
 | `timeline_tracks` | `timeline-tracks` | Implementado; pistas temporales explícitas sin inferencia automática |
 | `timeline_occurrences` | `timeReference` y `timelineTrackId` embebidos en `narrative-events` | Implementado; asociación explícita validada transaccionalmente contra `timeline-tracks` |
 | `language_profiles` | `language-profiles` | Implementado; perfiles reales/ficticios, preferencias JSON y cobertura declarada |
 | `language_resource_refs` | `language-resource-refs` | Implementado; referencias ligadas opcionalmente a perfiles del mismo proyecto |
 | `style_profiles` | `style-profiles` | Implementado; perfil de voz y preferencias editoriales del libro |
-| `active_suggestions` | `document-diagnostics` | Parcial; diagnósticos, no todos los módulos |
-| `import_authorizations` | Prefijo reservado | Pendiente |
-| `schema_migrations` | Versión nativa de IndexedDB y migraciones `onupgradeneeded` | Parcial; sin tabla de historial separada |
+| `active_suggestions` | `active-suggestions` | Implementado; sugerencias JSON con documento, fragmento, revisión y estado |
+| `import_authorizations` | `import-authorizations` | Implementado; append-only, ambos proyectos verificados por escritor autenticado |
+| `schema_migrations` | `schema-migrations` | Implementado desde DB18; cada actualización escribe un recibo con versiones y checksum |
 | `project_dictionaries` | `project-dictionaries` | Implementado; unicidad por proyecto, idioma y nombre normalizado |
 | `dictionary_entries` | `dictionary-entries` | Implementado; actualización comparada y forma normalizada única |
 | `dictionary_entry_entities` | `DictionaryEntry.relatedEntityIds` embebido | Implementado; referencias verificadas transaccionalmente dentro del libro |
@@ -65,6 +71,6 @@ El archivo `storage_mapping_v0.4.1.json` es la fuente verificable del mapeo: con
 
 ## Límites que no deben ocultarse
 
-El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. Las autorizaciones de importación siguen pendientes. Los historiales de ciclo de vida ya cuentan con contratos TypeScript, almacenes IndexedDB, migración 17, operaciones transaccionales y pruebas.
+El esquema lógico declara el modelo completo de 25 tablas, pero la implementación IndexedDB aún no materializa todas esas tablas por separado. Los estados `partial` y `not-implemented` son deliberados y explícitos. La versión IndexedDB 18 materializa todas las tablas lógicas salvo `records`, que permanece parcial porque su esquema permite `primary_name` nulo mientras la ficha narrativa actual exige un nombre canónico. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones empieza a registrar upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.

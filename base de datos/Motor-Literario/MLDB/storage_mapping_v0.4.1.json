@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 5,
+  "mapping_version": 6,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 17,
+    "database_version": 18,
     "object_stores": [
       {
         "name": "project-settings",
@@ -394,6 +394,164 @@
             true
           ]
         ]
+      },
+      {
+        "name": "manuscript-fragments",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-document-revision",
+            [
+              "projectId",
+              "documentId",
+              "revision"
+            ],
+            false
+          ],
+          [
+            "by-parent",
+            [
+              "projectId",
+              "parentFragmentId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "record-attributes",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-record-key",
+            [
+              "projectId",
+              "recordId",
+              "attributeKey"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "relation-attributes",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-relation-key",
+            [
+              "projectId",
+              "relationId",
+              "attributeKey"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "active-suggestions",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-document-revision",
+            [
+              "projectId",
+              "documentId",
+              "documentRevision"
+            ],
+            false
+          ],
+          [
+            "by-status-priority",
+            [
+              "projectId",
+              "status",
+              "priority"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "import-authorizations",
+        "keyPath": [
+          "writerId",
+          "sourceProjectId",
+          "targetProjectId",
+          "authorizationId"
+        ],
+        "indexes": [
+          [
+            "by-writer",
+            "writerId",
+            false
+          ],
+          [
+            "by-source-target",
+            [
+              "writerId",
+              "sourceProjectId",
+              "targetProjectId"
+            ],
+            false
+          ],
+          [
+            "by-target",
+            [
+              "writerId",
+              "targetProjectId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "schema-migrations",
+        "keyPath": "migrationId",
+        "indexes": [
+          [
+            "by-to-version",
+            "toVersion",
+            false
+          ],
+          [
+            "by-applied-at",
+            "appliedAt",
+            false
+          ]
+        ]
       }
     ]
   },
@@ -472,11 +630,17 @@
       "keyPrefixes": [
         "project/documents/text/"
       ],
-      "representation": "embedded",
-      "contract": "DocumentSnapshot.text; TextBuffer mantiene piezas durante la edición, pero no persiste filas de fragmento independientes.",
-      "implementationStatus": "partial",
+      "representation": "record",
+      "contract": "ManuscriptFragment persistido por proyecto; offsets UTF-16 opcionales, revisión, documento y jerarquía padre con validación transaccional.",
+      "implementationStatus": "implemented",
       "objectStores": [
-        "documents"
+        "manuscript-fragments"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
       ]
     },
     {
@@ -527,10 +691,10 @@
         "project/narrative-assertions/"
       ],
       "representation": "record",
-      "contract": "NarrativeAssertion en narrative-assertions; atributos actuales limitados a edad, ubicación y cargo/rol.",
-      "implementationStatus": "partial",
+      "contract": "RecordAttribute JSON extensible enlazado en la misma transacción a una ficha del mismo proyecto; procedencia, estado y confianza explícitos.",
+      "implementationStatus": "implemented",
       "objectStores": [
-        "narrative-assertions"
+        "record-attributes"
       ],
       "keyPath": [
         [
@@ -570,11 +734,17 @@
       "keyPrefixes": [
         "project/narrative-relations/attributes/"
       ],
-      "representation": "embedded",
-      "contract": "Tipo y evidencia de NarrativeRelation; no existe aún un conjunto genérico de atributos relacionales.",
-      "implementationStatus": "partial",
+      "representation": "record",
+      "contract": "RelationAttribute JSON extensible enlazado en la misma transacción a una relación del mismo proyecto; procedencia y confianza explícitas.",
+      "implementationStatus": "implemented",
       "objectStores": [
-        "narrative-relations"
+        "relation-attributes"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
       ]
     },
     {
@@ -722,15 +892,15 @@
         "project/document-diagnostics/"
       ],
       "representation": "record",
-      "contract": "StoredDiagnostics por documento y revisión en document-diagnostics; no cubre todavía todos los módulos de sugerencias.",
-      "implementationStatus": "partial",
+      "contract": "ActiveSuggestion estructurada con módulo, prioridad, confianza, payload JSON, estado y vínculos transaccionales a documento/fragmento/revisión.",
+      "implementationStatus": "implemented",
       "objectStores": [
-        "document-diagnostics"
+        "active-suggestions"
       ],
       "keyPath": [
         [
           "projectId",
-          "documentId"
+          "id"
         ]
       ]
     },
@@ -743,10 +913,20 @@
       "keyPrefixes": [
         "system/import-authorizations/"
       ],
-      "representation": "archive",
-      "contract": "Pendiente: autorización explícita de importación entre proyectos del mismo escritor.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "representation": "record",
+      "contract": "ImportAuthorization append-only; el anfitrión verifica ambos ProjectIdentity.writerId frente a la sesión autenticada antes de aceptar la autorización.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "import-authorizations"
+      ],
+      "keyPath": [
+        [
+          "writerId",
+          "sourceProjectId",
+          "targetProjectId",
+          "authorizationId"
+        ]
+      ]
     },
     {
       "table": "schema_migrations",
@@ -757,10 +937,17 @@
       "keyPrefixes": [
         "system/indexeddb-version/"
       ],
-      "representation": "embedded",
-      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=17); sin tabla de historial separada.",
-      "implementationStatus": "partial",
-      "objectStores": []
+      "representation": "record",
+      "contract": "SchemaMigration registrado dentro de cada transacción onupgradeneeded, con versiones, fecha de aplicación, resultado y checksum declarativo.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "schema-migrations"
+      ],
+      "keyPath": [
+        [
+          "migrationId"
+        ]
+      ]
     },
     {
       "table": "project_dictionaries",

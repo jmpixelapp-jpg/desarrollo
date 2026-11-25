@@ -12,7 +12,8 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 |---|---|---|---|
 | `language-profiles` | `[projectId, id]` | `by-project`, `by-project-language`, `by-project-active` | Perfiles lingüísticos reales o ficticios y preferencias editoriales |
 | `language-resource-refs` | `[projectId, id]` | `by-project`, `by-profile`, `by-resource-database` | Referencias locales a recursos lingüísticos declarados |
-| `project-settings` | `[projectId, key]` | `by-project` | Preferencias del libro y valores JSON |\n| `documents` | `[projectId, documentId]` | `by-project` | Snapshot UTF-16 por documento |
+| `project-settings` | `[projectId, key]` | `by-project` | Preferencias del libro y valores JSON |
+|`documents` | `[projectId, documentId]` | `by-project` | Snapshot UTF-16 por documento |
 | `changes` | `[projectId, documentId, sequence]` | `by-document-sequence` único | Journal durable de ediciones |
 | `narrative-entities` | `[projectId, id]` | `by-project` | Fichas de entidades y evidencias |
 | `narrative-relations` | `[projectId, id]` | `by-project` | Relaciones y evidencias |

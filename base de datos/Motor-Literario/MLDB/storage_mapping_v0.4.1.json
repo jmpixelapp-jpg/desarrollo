@@ -1,6 +1,6 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 2,
+  "mapping_version": 3,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
@@ -635,7 +635,7 @@
         "system/indexeddb-version/"
       ],
       "representation": "embedded",
-      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=11); no hay tabla de historial separada.",
+      "contract": "Migraciones nativas onupgradeneeded versionadas por IndexedDB (DATABASE_VERSION=15); sin tabla de historial separada.",
       "implementationStatus": "partial",
       "objectStores": []
     },

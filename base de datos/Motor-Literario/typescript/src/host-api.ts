@@ -1,7 +1,8 @@
 import { analyzeLiteraryFragment, type LiteraryAnalysisResult } from "./literary-analysis";
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
-  EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
+  EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
+  PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput, DictionaryEntryEntityLink } from "./dictionaries";
@@ -423,6 +424,114 @@ function isValidPersonalIdeaEntry(
 }
 
 
+function comparePersonalIdeaLibraryCursor(
+  first: PersonalIdeaLibraryCursor,
+  second: PersonalIdeaLibraryCursor
+): number {
+  if (first.sourceProjectId !== second.sourceProjectId) {
+    return first.sourceProjectId < second.sourceProjectId ? -1 : 1;
+  }
+  if (first.ideaId === second.ideaId) return 0;
+  return first.ideaId < second.ideaId ? -1 : 1;
+}
+
+/**
+ * Valida cada entrada y las referencias resolubles dentro de una página.
+ * Los destinos archivados que quedan fuera de ella se devuelven para lectura puntual.
+ */
+function validatePersonalIdeaLibraryPage(
+  value: unknown,
+  writerId: string,
+  cursor: PersonalIdeaLibraryCursor | null,
+  limit: number
+): { readonly page: PersonalIdeaLibraryPage; readonly unresolved: readonly PersonalIdeaLibraryCursor[] } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Violación de aislamiento: el almacenamiento devolvió una página de biblioteca inválida.");
+  }
+  const candidate = value as Partial<PersonalIdeaLibraryPage>;
+  if (!Array.isArray(candidate.items) || candidate.items.length > limit ||
+      !Object.prototype.hasOwnProperty.call(candidate, "nextCursor") ||
+      (candidate.nextCursor !== null &&
+        (!candidate.nextCursor ||
+          typeof candidate.nextCursor.sourceProjectId !== "string" ||
+          !candidate.nextCursor.sourceProjectId.trim() ||
+          typeof candidate.nextCursor.ideaId !== "string" ||
+          !candidate.nextCursor.ideaId.trim()))) {
+    throw new Error("Integridad de biblioteca: la página o su cursor están malformados.");
+  }
+
+  const items = candidate.items as PersonalIdeaLibraryEntry[];
+  const archiveKeys = new Set<string>();
+  let previousEntry: PersonalIdeaLibraryEntry | undefined;
+  for (const entry of items) {
+    if (!isValidPersonalIdeaEntry(entry, writerId)) {
+      throw new Error("Violación de aislamiento: una página contiene ideas de otro escritor o entradas malformadas.");
+    }
+    if (previousEntry && comparePersonalIdeaLibraryCursor(
+      { sourceProjectId: previousEntry.sourceProjectId, ideaId: previousEntry.idea.id },
+      { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }
+    ) >= 0) {
+      throw new Error("Integridad de biblioteca: las entradas de la página no están estrictamente ordenadas.");
+    }
+    previousEntry = entry;
+    const key = JSON.stringify([entry.sourceProjectId, entry.idea.id]);
+    if (archiveKeys.has(key)) {
+      throw new Error("Integridad de biblioteca: una página repite una idea archivada.");
+    }
+    archiveKeys.add(key);
+    if (cursor && comparePersonalIdeaLibraryCursor(
+      { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }, cursor
+    ) <= 0) {
+      throw new Error("Integridad de biblioteca: el cursor devolvió una entrada anterior o repetida.");
+    }
+  }
+
+  const unresolvedByKey = new Map<string, PersonalIdeaLibraryCursor>();
+  for (const entry of items) {
+    if (!entry.context) continue; // Compatibilidad con entradas anteriores a las instantáneas de contexto.
+    const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+    const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+    if (contextIdeaIds.size !== entry.context.relatedIdeas.length ||
+        contextEntityIds.size !== entry.context.relatedEntities.length ||
+        [...contextIdeaIds].some(id => archiveKeys.has(JSON.stringify([entry.sourceProjectId, id])))) {
+      throw new Error("Integridad de biblioteca: el contexto duplica una idea o una ficha ya archivada.");
+    }
+    for (const related of [entry.idea, ...entry.context.relatedIdeas]) {
+      if ((related.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id))) {
+        throw new Error("Integridad de biblioteca: una idea archivada conserva una referencia a ficha sin contexto.");
+      }
+      for (const relatedId of related.relatedIdeaIds ?? []) {
+        const key = JSON.stringify([entry.sourceProjectId, relatedId]);
+        if (!contextIdeaIds.has(relatedId) && !archiveKeys.has(key)) {
+          unresolvedByKey.set(key, { sourceProjectId: entry.sourceProjectId, ideaId: relatedId });
+        }
+      }
+    }
+  }
+
+  let nextCursor = candidate.nextCursor ?? null;
+  if (items.length === 0 && nextCursor !== null) {
+    throw new Error("Integridad de biblioteca: una página vacía no puede avanzar el cursor.");
+  }
+  if (items.length < limit && nextCursor !== null) {
+    throw new Error("Integridad de biblioteca: una página incompleta no puede indicar que hay más resultados.");
+  }
+  if (nextCursor !== null) {
+    const last = items[items.length - 1];
+    if (!last || nextCursor.sourceProjectId !== last.sourceProjectId ||
+        nextCursor.ideaId !== last.idea.id ||
+        (cursor && comparePersonalIdeaLibraryCursor(nextCursor, cursor) <= 0)) {
+      throw new Error("Integridad de biblioteca: el cursor no coincide con la última entrada de la página.");
+    }
+  }
+
+  return {
+    page: { items, nextCursor },
+    unresolved: [...unresolvedByKey.values()]
+  };
+}
+
+
 function buildDocumentEvidenceIndex<T extends { readonly id: string }>(
   records: Iterable<T>,
   getEvidence: (record: T) => readonly TextEvidence[]
@@ -575,6 +684,8 @@ export interface HostCallbacks {
   readonly onCommit?: (result: CommitResult) => void;
   readonly onKnowledgeError?: (error: unknown) => void;
   readonly onKnowledgeChanged?: (projectId: string) => void;
+  /** Notifica cambios de la biblioteca privada del escritor autenticado. */
+  readonly onPersonalIdeaLibraryChanged?: (writerId: string) => void;
 }
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
@@ -590,8 +701,10 @@ export class HostEngineApi {
   private project?: ProjectIdentity;
   private readonly store: HostEngineOptions["store"];
   private unsubscribeNarrativeChanges: (() => void) | undefined;
+  private unsubscribePersonalIdeaLibraryChanges: (() => void) | undefined;
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
   private readonly onKnowledgeChanged: HostCallbacks["onKnowledgeChanged"];
+  private readonly onPersonalIdeaLibraryChanged: HostCallbacks["onPersonalIdeaLibraryChanged"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
@@ -641,6 +754,7 @@ export class HostEngineApi {
     this.store = options.store;
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
+    this.onPersonalIdeaLibraryChanged = options.callbacks?.onPersonalIdeaLibraryChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
     this.engine = new LiteraryEngine({
       store: options.store,
@@ -1208,6 +1322,11 @@ export class HostEngineApi {
       const reloaded = await this.loadNarrativeEntitiesFromStore();
       const merged = reloaded.find(entity => entity.id === targetEntityId);
       if (!merged) throw new Error("La entidad consolidada no pudo recuperarse del almacenamiento.");
+      if (project.writerId) {
+        try { this.onPersonalIdeaLibraryChanged?.(project.writerId); } catch (error) {
+          this.onKnowledgeError?.(error);
+        }
+      }
       return cloneNarrativeRecord(merged);
     });
     this.knowledgeTail = work.then(() => undefined, () => undefined);
@@ -3074,6 +3193,11 @@ export class HostEngineApi {
         )) {
           throw new Error("Integridad de biblioteca: la transferencia no conservó el contexto relacionado del libro.");
         }
+        if (validatedEntries.length > 0) {
+          try { this.onPersonalIdeaLibraryChanged?.(writerId); } catch (error) {
+            this.onKnowledgeError?.(error);
+          }
+        }
         return cloneNarrativeRecords(validatedEntries);
       } finally {
         // Un adaptador pudo confirmar la transacción y devolver una respuesta inválida.
@@ -3103,6 +3227,123 @@ export class HostEngineApi {
         ? entry
         : { ...entry, contextStatus: "missing-legacy-context" as const }
       ));
+    });
+    this.knowledgeTail = work.then(() => undefined, () => undefined);
+    return work;
+  }
+
+
+  async getPersonalIdeaLibraryPage(
+    cursor: PersonalIdeaLibraryCursor | null = null,
+    limit = 50
+  ): Promise<PersonalIdeaLibraryPage> {
+    const writerId = this.requireWriterId();
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+        (cursor !== null && (!cursor || typeof cursor.sourceProjectId !== "string" ||
+          !cursor.sourceProjectId.trim() || typeof cursor.ideaId !== "string" || !cursor.ideaId.trim()))) {
+      throw new Error("Parámetros de paginación de biblioteca inválidos.");
+    }
+    const work = this.knowledgeTail.then(async () => {
+      if (this.store.loadPersonalIdeasPage) {
+        const rawPage = await this.store.loadPersonalIdeasPage(writerId, cursor, limit);
+        const checked = validatePersonalIdeaLibraryPage(rawPage, writerId, cursor, limit);
+        if (checked.unresolved.length > 0) {
+          if (this.store.loadPersonalIdeasByKeys) {
+            const requested = new Map(checked.unresolved.map(reference => [
+              JSON.stringify([reference.sourceProjectId, reference.ideaId]), reference
+            ]));
+            const resolved = new Set<string>();
+            // Mantiene cada transacción corta incluso si una página contiene
+            // contextos con muchos enlaces históricos.
+            for (let offset = 0; offset < checked.unresolved.length; offset += 128) {
+              const batch = checked.unresolved.slice(offset, offset + 128);
+              const targets = await this.store.loadPersonalIdeasByKeys(writerId, batch);
+              if (!Array.isArray(targets)) {
+                throw new Error("Integridad de biblioteca: la lectura agrupada devolvió una colección inválida.");
+              }
+              for (const target of targets) {
+                if (!target || typeof target !== "object" ||
+                    !isValidPersonalIdeaEntry(target, writerId, target.sourceProjectId)) {
+                  throw new Error("Integridad de biblioteca: una idea relacionada está malformada o pertenece a otro escritor.");
+                }
+                const key = JSON.stringify([target.sourceProjectId, target.idea.id]);
+                if (!requested.has(key) || resolved.has(key)) {
+                  throw new Error("Integridad de biblioteca: la lectura agrupada devolvió un destino ajeno o duplicado.");
+                }
+                resolved.add(key);
+              }
+            }
+            if (resolved.size !== requested.size) {
+              throw new Error("Integridad de biblioteca: una idea relacionada no existe en la biblioteca del escritor.");
+            }
+          } else if (this.store.loadPersonalIdea) {
+            for (const reference of checked.unresolved) {
+              const target = await this.store.loadPersonalIdea(
+                writerId, reference.sourceProjectId, reference.ideaId
+              );
+              if (!isValidPersonalIdeaEntry(target, writerId, reference.sourceProjectId) ||
+                  target.idea.id !== reference.ideaId) {
+                throw new Error("Integridad de biblioteca: una idea relacionada no existe en la biblioteca del escritor.");
+              }
+            }
+          } else if (this.store.loadPersonalIdeas) {
+            // Adaptadores antiguos pueden validar los destinos mediante la lectura completa.
+            const allEntries = requireUniquePersonalIdeaEntries(
+              await this.store.loadPersonalIdeas(writerId), writerId
+            );
+            const archived = new Set(allEntries.map(entry =>
+              JSON.stringify([entry.sourceProjectId, entry.idea.id])
+            ));
+            if (checked.unresolved.some(reference =>
+              !archived.has(JSON.stringify([reference.sourceProjectId, reference.ideaId]))
+            )) {
+              throw new Error("Integridad de biblioteca: una idea relacionada no existe en la biblioteca del escritor.");
+            }
+          } else {
+            throw new Error("El almacenamiento no permite resolver los vínculos de la biblioteca personal.");
+          }
+        }
+        return {
+          items: cloneNarrativeRecords(checked.page.items.map(entry => entry.context
+            ? entry
+            : { ...entry, contextStatus: "missing-legacy-context" as const }
+          )),
+          nextCursor: checked.page.nextCursor
+            ? cloneNarrativeRecord(checked.page.nextCursor)
+            : null
+        };
+      }
+
+      // Compatibilidad con adaptadores anteriores: conservan la API paginada,
+      // aunque su lectura subyacente todavía materializa la biblioteca completa.
+      if (!this.store.loadPersonalIdeas) {
+        throw new Error("El almacenamiento no admite la biblioteca personal de ideas.");
+      }
+      const allEntries = requireUniquePersonalIdeaEntries(
+        await this.store.loadPersonalIdeas(writerId), writerId
+      );
+      const ordered = [...allEntries].sort((first, second) =>
+        comparePersonalIdeaLibraryCursor(
+          { sourceProjectId: first.sourceProjectId, ideaId: first.idea.id },
+          { sourceProjectId: second.sourceProjectId, ideaId: second.idea.id }
+        )
+      );
+      const remaining = cursor
+        ? ordered.filter(entry => comparePersonalIdeaLibraryCursor(
+            { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }, cursor
+          ) > 0)
+        : ordered;
+      const items = remaining.slice(0, limit);
+      const nextCursor = remaining.length > items.length && items.length > 0
+        ? { sourceProjectId: items[items.length - 1]!.sourceProjectId, ideaId: items[items.length - 1]!.idea.id }
+        : null;
+      return {
+        items: cloneNarrativeRecords(items.map(entry => entry.context
+          ? entry
+          : { ...entry, contextStatus: "missing-legacy-context" as const }
+        )),
+        nextCursor
+      };
     });
     this.knowledgeTail = work.then(() => undefined, () => undefined);
     return work;
@@ -3501,12 +3742,19 @@ export class HostEngineApi {
       evidenceBasedCharacterRelations: Boolean(this.store.saveRelation && this.store.loadRelations),
       explicitEventCapture: Boolean(this.store.saveEvent && this.store.loadEvents),
       explicitEventChronology: Boolean(this.store.saveEvent && this.store.loadEvents),
+      eventLifecycleHistory: Boolean(
+        this.store.loadEventLifecycles && this.store.saveEventAndAppendLifecycleIfUnchanged
+      ),
       authorMarkedIdeaCapture: Boolean(this.store.saveIdea && this.store.loadIdeas),
       explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.saveEntity && this.store.loadEntities),
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
+      ),
+      personalIdeaLibraryPagedQuery: Boolean(this.store.loadPersonalIdeasPage),
+      personalIdeaLibraryChangeNotifications: Boolean(
+        this.store.subscribePersonalIdeaLibraryChanges || this.onPersonalIdeaLibraryChanged
       ),
       explicitStateContradictionCandidates: Boolean(this.store.saveEvent && this.store.loadEvents && this.store.saveEntity && this.store.loadEntities),
       evidenceBackedCharacterHistory: Boolean(this.store.saveAssertion && this.store.loadAssertions),
@@ -3552,6 +3800,7 @@ export class HostEngineApi {
     }
     this.engine.initializeProject(identity);
     this.unsubscribeNarrativeChanges?.();
+    this.unsubscribePersonalIdeaLibraryChanges?.();
     this.project = Object.freeze({ ...identity });
     const subscribe = this.store.subscribeNarrativeChanges;
     this.unsubscribeNarrativeChanges = subscribe?.call(this.store, projectId => {
@@ -3562,12 +3811,21 @@ export class HostEngineApi {
           this.onKnowledgeError?.(error);
         });
     });
+    const subscribeLibrary = this.store.subscribePersonalIdeaLibraryChanges;
+    this.unsubscribePersonalIdeaLibraryChanges = subscribeLibrary?.call(this.store, writerId => {
+      if (this.project?.writerId !== writerId) return;
+      try { this.onPersonalIdeaLibraryChanged?.(writerId); } catch (error) {
+        this.onKnowledgeError?.(error);
+      }
+    });
   }
 
-  /** Libera el suscriptor opcional de sincronización entre pestañas. */
+  /** Libera los suscriptores opcionales de sincronización entre pestañas. */
   dispose(): void {
     this.unsubscribeNarrativeChanges?.();
     this.unsubscribeNarrativeChanges = undefined;
+    this.unsubscribePersonalIdeaLibraryChanges?.();
+    this.unsubscribePersonalIdeaLibraryChanges = undefined;
   }
 
   /** La identidad del escritor nunca se recibe como argumento de una consulta de biblioteca. */

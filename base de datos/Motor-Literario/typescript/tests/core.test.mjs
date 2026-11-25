@@ -4428,6 +4428,14 @@ test("la API rechaza vínculos duplicados o autorreferenciales dentro de una ide
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [{ ...base, relatedIdeaIds: ["idea-a"] }];
   await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
+  store.loadIdeas = async () => [{
+    ...base,
+    statusHistory: [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "IDEA", reason: "writer", changedAt: 2 }
+    ]
+  }];
+  await assert.rejects(() => api.getNarrativeIdeas(), /registro malformado en ideas/i);
   store.loadIdeas = async () => [];
   assert.deepEqual(await api.getNarrativeIdeas(), []);
 });

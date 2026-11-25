@@ -9923,7 +9923,7 @@ test("identifica vocabulario sensorial explícito sin inferir metáforas", async
 
 test("calcula mediana, dispersión y transiciones bruscas del ritmo", async () => {
   const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
-  const longSentence = "La expedición atravesó lentamente el valle oscuro mientras la tormenta avanzaba sobre las montañas lejanas";
+  const longSentence = "La expedición atravesó lentamente el valle oscuro mientras la tormenta avanzaba sobre las montañas lejanas y distantes";
   const text = "¡Alto! " + longSentence + ". ¡Corre ahora!";
   const result = analyzeLiteraryFragment({
     projectId:"literary-rhythm",documentId:"chapter",revision:3,text,baseOffset:200

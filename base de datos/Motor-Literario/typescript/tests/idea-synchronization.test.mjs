@@ -228,7 +228,7 @@ test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS",
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-external"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 3, "la relectura confirma que el destino desapareció tras el CAS");
   assert.equal(store.writes, 1);
   api.dispose();
 });
@@ -463,7 +463,7 @@ test("recupera la cola y la caché tras un fallo de persistencia", async () => {
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-target-b"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 3, "la siguiente operación recarga la caché invalidada");
   assert.equal(store.writes, 2);
   api.dispose();
 });
@@ -530,7 +530,8 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   const reloaded = await api.getNarrativeIdeas();
   const reloadedSource = reloaded.find(item => item.id === "idea-source");
   assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 5, "incluye la recarga posterior a los tres conflictos");
+
   assert.equal(store.writes, 3);
   api.dispose();
 });
@@ -610,7 +611,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 3, "se lee una vez por cada intento de cambio de estado");
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"

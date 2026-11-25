@@ -3301,6 +3301,43 @@ test("el análisis literario expone evolución versionada de acontecimientos sep
   assert.equal(result.explicitScenes[0].eventLinks[0].participants[0].mentionedByName,false);
 });
 
+test("señala divergencia entre la ficha vigente y la última transición registrada", async () => {
+  const store=new MemoryStore();
+  const projectId="event-lifecycle-divergence";
+  const text="ESCENA 1\nLa puerta se abre.";
+  const excerpt="La puerta se abre.";
+  const start=text.indexOf(excerpt);
+  await store.saveEvent({
+    projectId,id:"gate",label:"Se abre la puerta",participants:[],
+    evidence:[{
+      documentId:"chapter",revision:5,start,end:start+excerpt.length,excerpt
+    }]
+  });
+  const first=new HostEngineApi({store});
+  first.initializeProject({projectId,projectName:"Divergencia"});
+  await first.openDocument({documentId:"chapter",text,revision:5,sequence:0});
+  await first.updateNarrativeEvent({
+    eventId:"gate",label:"La puerta queda abierta",
+    changedBy:"writer-1",changedAt:100
+  });
+
+  await store.saveEvent({
+    ...store.events.get(projectId+":gate"),
+    label:"La puerta se cierra después"
+  });
+  const reopened=new HostEngineApi({store});
+  reopened.initializeProject({projectId,projectName:"Divergencia"});
+  await reopened.openDocument({documentId:"chapter",text,revision:5,sequence:0});
+  const result=await reopened.analyzeLiteraryDocument("chapter");
+
+  const profile=result.eventLifecycleAnalysis.profiles[0];
+  assert.equal(profile.currentLabel,"La puerta se cierra después");
+  assert.equal(profile.latestRecordedLabel,"La puerta queda abierta");
+  assert.equal(profile.currentStateMatchesLatestRevision,false);
+  assert.deepEqual(profile.latestRecordedParticipantIds,[]);
+  assert.deepEqual(profile.currentParticipantIds,[]);
+});
+
 test("captura ideas marcadas por el escritor y permite cambiar su estado", async () => {
   const api = new HostEngineApi({ store: new MemoryStore() });
   api.initializeProject({ projectId: "novel-ideas", projectName: "Ideas" });

@@ -64,6 +64,7 @@ function fixture(text = "abc", revision = 0, sequence = 0, options = {}) {
     initialSnapshot: snapshot,
     provider: editor,
     ...(options.duplicateWindowSize ? { duplicateWindowSize: options.duplicateWindowSize } : {}),
+    ...(options.maxQueuedTransactions ? { maxQueuedTransactions: options.maxQueuedTransactions } : {}),
     onError: error => errors.push(error)
   });
   const stop = source.subscribeChanges(change => changes.push(change));
@@ -366,6 +367,37 @@ test("mantiene orden FIFO y snapshot coherente entre suscriptores ante reentrada
 
   stopSecond();
   stopFirst();
+  f.stop();
+  f.source.dispose();
+});
+
+
+test("limita transacciones reentrantes pendientes y exige resincronización sin perderlas silenciosamente", () => {
+  const f = fixture("abc", 0, 0, { maxQueuedTransactions: 1 });
+  const observed = [];
+  const stopReentrant = f.source.subscribeChanges(change => {
+    observed.push(change.sequence);
+    if (change.sequence === 1) {
+      f.editor.apply("edit", "tx-backlog-2", {
+        start: 4, end: 4, replacement: "?"
+      });
+      f.editor.apply("edit", "tx-backlog-3", {
+        start: 5, end: 5, replacement: "#"
+      });
+    }
+  });
+
+  f.editor.apply("edit", "tx-backlog-1", {
+    start: 3, end: 3, replacement: "!"
+  });
+
+  assert.deepEqual(observed, [1]);
+  assert.equal(f.source.getState().sequence, 1);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "transaction-backlog-overflow");
+  assert.equal(f.editor.listeners.size, 0);
+
+  stopReentrant();
   f.stop();
   f.source.dispose();
 });

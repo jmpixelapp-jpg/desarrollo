@@ -2768,3 +2768,38 @@ test("el grafo identifica puntos de articulación en cadenas de referencias", ()
   assert.equal(graph.articulationPointCount, 1);
   assert.deepEqual(graph.articulationPointIdeaIds, ["b"]);
 });
+
+
+test("conserva offsets UTF-16 absolutos después de caracteres Unicode suplementarios", () => {
+  const text = [
+    "Escena 1",
+    "😀 La sombra cubrió la torre. La sombra avanzó.",
+    "Escena 2",
+    "🧭 Una sombra cruzó la plaza."
+  ].join("\\n");
+  const baseOffset = 2_048;
+  const result = analyze(text, baseOffset);
+  const echo = result.sceneLexicalEchoes.echoes.find(item => item.normalizedWord === "sombra");
+
+  assert.ok(echo);
+  assert.equal(echo.totalOccurrenceCount, 3);
+  assert.equal(echo.scenes.length, 2);
+
+  const expectedStarts = [
+    text.indexOf("sombra"),
+    text.indexOf("sombra", text.indexOf("sombra") + 1),
+    text.indexOf("sombra", text.indexOf("sombra", text.indexOf("sombra") + 1) + 1)
+  ];
+  const actualOccurrences = echo.scenes.flatMap(scene => scene.occurrences);
+
+  assert.deepEqual(
+    actualOccurrences.map(occurrence => occurrence.start),
+    expectedStarts.map(start => baseOffset + start)
+  );
+  assert.deepEqual(
+    actualOccurrences.map(occurrence => occurrence.end),
+    expectedStarts.map(start => baseOffset + start + "sombra".length)
+  );
+  assert.ok(actualOccurrences[0].start > baseOffset + text.indexOf("😀"));
+  assert.ok(actualOccurrences[2].start > baseOffset + text.indexOf("🧭"));
+});

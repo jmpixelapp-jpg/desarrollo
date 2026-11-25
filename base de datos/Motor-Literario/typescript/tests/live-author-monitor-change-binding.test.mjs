@@ -83,16 +83,18 @@ test("el desmontaje cancela la fuente una sola vez e ignora notificaciones tard�
   assert.equal(f.listeners.size, 0);
 });
 
-test("envía errores del sink o del manejador al callback de error sin romper el stream", () => {
+test("retiene los deltas tras un error de envío y reintenta el stream en orden", () => {
   const f = sourceFixture();
   const errors = [];
+  const submitted = [];
   let shouldThrow = true;
   const stop = bindLiveAuthorMonitorEditorChanges({
     source: f.source,
     sink: {
-      onEditorChange() {
+      onEditorChange(value) {
+        submitted.push(value);
         if (shouldThrow) throw new Error("submit_failed");
-        return { status: "queued", ticketId: "ticket-ok" };
+        return { status: "queued", ticketId: "ticket-ok-" + value.sequence };
       }
     },
     onAdmission() { throw new Error("handler_failed"); },
@@ -103,9 +105,55 @@ test("envía errores del sink o del manejador al callback de error sin romper el
   f.emit(first);
   shouldThrow = false;
   f.emit(second);
+  assert.deepEqual(submitted, [first]);
+  assert.deepEqual(stop.getPendingChanges(), [first, second]);
+
+  stop.retryPending();
+  assert.deepEqual(submitted, [first, first, second]);
+  assert.deepEqual(stop.getPendingChanges(), []);
   assert.deepEqual(errors, [
     { message: "submit_failed", delta: first },
+    { message: "handler_failed", delta: first },
     { message: "handler_failed", delta: second }
+  ]);
+  stop();
+});
+
+test("queue_full retiene el delta rechazado y bloquea deltas posteriores hasta el reintento", () => {
+  const f = sourceFixture();
+  const attempts = [];
+  const admissions = [];
+  let capacityAvailable = false;
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        return capacityAvailable
+          ? { status: "queued", ticketId: "ticket-" + value.sequence }
+          : { status: "rejected", reason: "queue_full" };
+      }
+    },
+    onAdmission: (value, result) => admissions.push([value.sequence, result.status]),
+    onError: error => { throw error; }
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  f.emit(change(3));
+  assert.deepEqual(attempts, [1]);
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1, 2, 3]);
+  assert.deepEqual(admissions, [[1, "rejected"]]);
+
+  capacityAvailable = true;
+  stop.retryPending();
+  assert.deepEqual(attempts, [1, 1, 2, 3]);
+  assert.deepEqual(stop.getPendingChanges(), []);
+  assert.deepEqual(admissions, [
+    [1, "rejected"],
+    [1, "queued"],
+    [2, "queued"],
+    [3, "queued"]
   ]);
   stop();
 });

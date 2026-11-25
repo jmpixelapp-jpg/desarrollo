@@ -3312,12 +3312,23 @@ function buildLiteraryIdeaGraph(
   omittedIdeaCount: number,
   catalogScope: LiteraryIdeaGraphAnalysis["catalogScope"]
 ): LiteraryIdeaGraphAnalysis {
+  // Ordena una sola vez y reutiliza la instantánea canónica para clave y cálculo.
+  // El desempate exacto distingue IDs Unicode que comparten colación lingüística.
+  const compareIdeaIds = (left: string, right: string): number => {
+    const localizedOrder = left.localeCompare(right, "en");
+    if (localizedOrder !== 0) return localizedOrder;
+    return left === right ? 0 : left < right ? -1 : 1;
+  };
+  const orderedIdeas = [...ideas].sort((left, right) =>
+    compareIdeaIds(left.ideaId, right.ideaId)
+  );
+
   // La clave exacta evita invalidaciones manuales: estado, historial, evidencias,
   // vínculos y texto léxico participan en la identidad de la instantánea.
-  let cacheable = ideas.length <= 2_000;
+  let cacheable = orderedIdeas.length <= 2_000;
   let cacheTextUnits = 0;
   if (cacheable) {
-    for (const idea of ideas) {
+    for (const idea of orderedIdeas) {
       if (typeof idea.text === "string") {
         cacheTextUnits += idea.text.length;
         if (cacheTextUnits > MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS) {
@@ -3328,29 +3339,12 @@ function buildLiteraryIdeaGraph(
     }
   }
   const cacheKey = cacheable
-    ? JSON.stringify([
-        catalogScope,
-        omittedIdeaCount,
-        [...ideas].sort((left, right) =>
-          left.ideaId.localeCompare(right.ideaId, "en") ||
-          (left.ideaId === right.ideaId ? 0 : left.ideaId < right.ideaId ? -1 : 1)
-        )
-      ])
+    ? JSON.stringify([catalogScope, omittedIdeaCount, orderedIdeas])
     : undefined;
   if (cacheKey !== undefined && cacheKey === literaryIdeaGraphCacheKey &&
       literaryIdeaGraphCacheValue) {
     return structuredClone(literaryIdeaGraphCacheValue);
   }
-
-  // El desempate exacto distingue IDs Unicode que pueden compartir colación lingüística.
-  const compareIdeaIds = (left: string, right: string): number => {
-    const localizedOrder = left.localeCompare(right, "en");
-    if (localizedOrder !== 0) return localizedOrder;
-    return left === right ? 0 : left < right ? -1 : 1;
-  };
-  const orderedIdeas = [...ideas].sort((left, right) =>
-    compareIdeaIds(left.ideaId, right.ideaId)
-  );
   const projectCatalogComplete = catalogScope === "project" && omittedIdeaCount === 0;
   const ideaIds = new Set(orderedIdeas.map(idea => idea.ideaId));
   const ideaIndexById = new Map(

@@ -545,6 +545,7 @@ export interface HostCallbacks {
   readonly onAnalysis?: (result: AnalysisResult) => void;
   readonly onCommit?: (result: CommitResult) => void;
   readonly onKnowledgeError?: (error: unknown) => void;
+  readonly onKnowledgeChanged?: (projectId: string) => void;
 }
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
@@ -561,6 +562,7 @@ export class HostEngineApi {
   private readonly store: HostEngineOptions["store"];
   private unsubscribeNarrativeChanges: (() => void) | undefined;
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
+  private readonly onKnowledgeChanged: HostCallbacks["onKnowledgeChanged"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
@@ -609,6 +611,7 @@ export class HostEngineApi {
   constructor(options: HostEngineOptions) {
     this.store = options.store;
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
+    this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
     this.engine = new LiteraryEngine({
       store: options.store,
@@ -3230,9 +3233,11 @@ export class HostEngineApi {
     const subscribe = this.store.subscribeNarrativeChanges;
     this.unsubscribeNarrativeChanges = subscribe?.call(this.store, projectId => {
       if (this.project?.projectId !== projectId) return;
-      void this.invalidateNarrativeKnowledgeFromExternalChange().catch(error => {
-        this.onKnowledgeError?.(error);
-      });
+      void this.invalidateNarrativeKnowledgeFromExternalChange()
+        .then(() => this.onKnowledgeChanged?.(projectId))
+        .catch(error => {
+          this.onKnowledgeError?.(error);
+        });
     });
   }
 

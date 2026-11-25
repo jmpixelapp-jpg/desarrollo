@@ -779,7 +779,7 @@ test("SQLite rechaza más de 500 vínculos por idea incluso sin pasar por HostEn
         ...base,
         statusHistory: [
           { status: "IDEA", reason: "initial", changedAt: 1 },
-          { status: "IDEA", reason: "writer", changedAt: 2 }
+          { status: "IDEA", reason: "invalid-reason", changedAt: 2 }
         ]
       }),
       /Historial de estados de idea inválido/

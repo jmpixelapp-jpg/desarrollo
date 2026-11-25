@@ -228,7 +228,7 @@ test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS",
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-external"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 3, "un único reload confirma que el destino desapareció tras el CAS");
   assert.equal(store.writes, 1);
   api.dispose();
 });
@@ -463,7 +463,7 @@ test("recupera la cola y la caché tras un fallo de persistencia", async () => {
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-target-b"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 3, "la operación recuperada reutiliza la lectura durable de su intento");
   assert.equal(store.writes, 2);
   api.dispose();
 });
@@ -610,7 +610,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 3, "se lee una vez por cada reintento después de invalidar la caché");
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"

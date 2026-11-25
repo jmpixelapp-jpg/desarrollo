@@ -531,6 +531,21 @@ export class SqliteProjectStore {
     }
   }
 
+  /** Lee versión y página en el mismo snapshot SQLite, sin bloquear escritores con BEGIN IMMEDIATE. */
+  readTransaction(work) {
+    this.ensureOpen();
+    if (this.transactionDepth > 0) return work();
+    this.database.exec("BEGIN");
+    try {
+      const result = work();
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      try { this.database.exec("ROLLBACK"); } catch { /* La lectura pudo haberse abortado. */ }
+      throw error;
+    }
+  }
+
   get(collection, parts) {
     this.ensureOpen();
     const row = this.database.prepare(
@@ -1738,30 +1753,48 @@ export class SqliteProjectStore {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
         (cursor !== null && (!cursor || typeof cursor.sourceProjectId !== "string" ||
           !cursor.sourceProjectId.trim() || typeof cursor.ideaId !== "string" ||
-          !cursor.ideaId.trim()))) {
+          !cursor.ideaId.trim() ||
+          (cursor.libraryVersion !== undefined &&
+            (!Number.isSafeInteger(cursor.libraryVersion) || cursor.libraryVersion < 0))))) {
       throw new Error("Parámetros de paginación de biblioteca inválidos.");
     }
-    const afterSortKey = cursor
-      ? personalIdeaLibrarySortKey(cursor.sourceProjectId, cursor.ideaId)
-      : "";
-    const rows = this.database.prepare(
-      "SELECT value_json FROM " + TABLE +
-      " WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
-      "ORDER BY sort_key LIMIT ?"
-    ).all(writerId, afterSortKey, limit + 1);
-    const hasMore = rows.length > limit;
-    const selected = hasMore ? rows.slice(0, limit) : rows;
-    const items = selected.map(row => JSON.parse(row.value_json));
-    if (items.some(entry => entry.writerId !== writerId)) {
-      throw new Error("Biblioteca SQLite inconsistente: se rechazó una entrada de otro escritor.");
-    }
-    const last = items[items.length - 1];
-    return {
-      items: clone(items),
-      nextCursor: hasMore && last
-        ? { sourceProjectId: last.sourceProjectId, ideaId: last.idea.id }
-        : null
-    };
+    return this.readTransaction(() => {
+      const libraryVersion = this.getWriterLibraryVersion(writerId);
+      if (cursor?.libraryVersion !== undefined && cursor.libraryVersion !== libraryVersion) {
+        return {
+          items: [],
+          nextCursor: null,
+          libraryVersion,
+          restartRequired: true
+        };
+      }
+      const afterSortKey = cursor
+        ? personalIdeaLibrarySortKey(cursor.sourceProjectId, cursor.ideaId)
+        : "";
+      const rows = this.database.prepare(
+        "SELECT value_json FROM " + TABLE +
+        " WHERE collection = 'personal-idea-library' AND writer_id = ? AND sort_key > ? " +
+        "ORDER BY sort_key LIMIT ?"
+      ).all(writerId, afterSortKey, limit + 1);
+      const hasMore = rows.length > limit;
+      const selected = hasMore ? rows.slice(0, limit) : rows;
+      const items = selected.map(row => JSON.parse(row.value_json));
+      if (items.some(entry => entry.writerId !== writerId)) {
+        throw new Error("Biblioteca SQLite inconsistente: se rechazó una entrada de otro escritor.");
+      }
+      const last = items[items.length - 1];
+      return {
+        items: clone(items),
+        nextCursor: hasMore && last
+          ? {
+            sourceProjectId: last.sourceProjectId,
+            ideaId: last.idea.id,
+            libraryVersion
+          }
+          : null,
+        libraryVersion
+      };
+    });
   }
 
   loadPersonalIdea(writerId, sourceProjectId, ideaId) {

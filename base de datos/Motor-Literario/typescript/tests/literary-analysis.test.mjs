@@ -1490,16 +1490,7 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     [{ status: "IDEA", reason: "writer", changedAt: 1 }],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "IDEA", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 3 },
       { status: "discarded", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 2 }
     ]
   ]) {
     assert.throws(
@@ -1530,6 +1521,36 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     }),
     /historial de decisiones del catálogo global/
   );
+
+  const importedMismatch = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      status: "IDEA",
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
+      writerDecisionCount: 1
+    }]
+  }).ideaGraph;
+  assert.equal(importedMismatch.nodes[0].currentStatusHistoryConsistency, "mismatch");
+  assert.equal(importedMismatch.statusHistoryConsistency.mismatchIdeaCount, 1);
+
+  const importedClockSkew = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 10 },
+        { status: "incorporated", reason: "writer", changedAt: 9 }
+      ],
+      status: "incorporated",
+      writerDecisionCount: 1
+    }]
+  }).ideaGraph;
+  assert.equal(importedClockSkew.nodes[0].nonMonotonicStatusTimestampCount, 1);
+  assert.equal(importedClockSkew.nodes[0].currentStatusHistoryConsistency, "consistent");
 
   const truncated = analyzeLiteraryFragment({
     ...input,

@@ -140,3 +140,39 @@ test("una idea sin cambios textuales no agrega transiciones editoriales", async 
   assert.deepEqual(merged.statusHistory, previous.statusHistory);
   assert.equal(merged.sourceProjectName, "Renamed book");
 });
+
+test("fusionar ideas conserva evidencia histórica y deduplica solo registros idénticos", async () => {
+  const { mergeNarrativeIdea } = await import("../dist/motor-literario.js");
+  const currentEvidence = {
+    documentId: "chapter",
+    revision: 2,
+    start: 10,
+    end: 24,
+    excerpt: "La puerta se abre."
+  };
+  const staleEvidence = { ...currentEvidence, revision: 1, status: "stale" };
+  const previous = baseIdea({
+    evidence: [currentEvidence, staleEvidence],
+    relatedIdeaIds: ["idea-related"]
+  });
+  const incoming = baseIdea({
+    evidence: [currentEvidence, {
+      documentId: "chapter",
+      revision: 3,
+      start: 30,
+      end: 42,
+      excerpt: "La noche termina."
+    }]
+  });
+
+  const merged = mergeNarrativeIdea(previous, incoming);
+
+  assert.equal(merged.evidence.length, 3);
+  assert.deepEqual(merged.evidence, [
+    currentEvidence,
+    staleEvidence,
+    incoming.evidence[1]
+  ]);
+  assert.deepEqual(merged.relatedIdeaIds, ["idea-related"]);
+  assert.equal(previous.evidence.length, 2);
+});

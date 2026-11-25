@@ -605,3 +605,38 @@ test("rechaza restaurar IndexedDB si una idea archivada cambió aunque se recalc
     target.database = undefined;
   }
 });
+
+test("mantiene compatibilidad de respaldo y restauración con ideas archivadas legacy sin contexto", async () => {
+  const legacyEntry = clone(archivedIdea);
+  delete legacyEntry.context;
+  const legacyReceipt = makeReceipt(
+    legacyEntry.writerId,
+    legacyEntry.sourceProjectId,
+    legacyEntry.sourceProjectName,
+    [legacyEntry],
+    20
+  );
+  delete legacyReceipt.archiveContentChecksum;
+  const source = attach(createFakeDatabase({
+    documents: [documentRecord],
+    "personal-idea-library": [legacyEntry],
+    "writer-library-finalization-receipts": [legacyReceipt]
+  }));
+  const destination = attach(createFakeDatabase({
+    documents: [{ ...documentRecord, text: "Estado local previo." }],
+    "personal-idea-library": [],
+    "writer-library-finalization-receipts": []
+  }));
+  try {
+    const backup = await source.exportDatabaseBackup();
+    await destination.restoreDatabaseBackup(backup);
+    assert.deepEqual(destination.database.state.get("personal-idea-library"), [legacyEntry]);
+    assert.deepEqual(
+      destination.database.state.get("writer-library-finalization-receipts"),
+      [legacyReceipt]
+    );
+  } finally {
+    source.database = undefined;
+    destination.database = undefined;
+  }
+});

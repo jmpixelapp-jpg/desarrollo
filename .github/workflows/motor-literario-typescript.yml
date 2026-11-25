@@ -33,7 +33,12 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Type-check
         run: npm run typecheck
-      - name: Build and run automated tests
-        run: npm test
+      - name: Build TypeScript distribution
+        run: npm run build
+      - name: Run focused narrative idea synchronization regressions
+        run: |
+          node --test --test-name-pattern='rechaza el alta de un vínculo si la idea destino desaparece durante CAS|recupera la cola y la caché tras un fallo de persistencia|limita a tres intentos los conflictos CAS consecutivos|limita a tres intentos los conflictos CAS persistentes al cambiar estado|no duplica una decisión editorial ya aplicada por otra instancia durante el CAS|reintenta cambios de estado tras CAS y conserva vínculos concurrentes' tests/idea-synchronization.test.mjs
+      - name: Run complete automated test suite
+        run: npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs
       - name: Run live-edit benchmark
         run: npm run bench

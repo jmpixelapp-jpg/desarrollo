@@ -30,6 +30,8 @@ const store = {
 test("el grafo literario incluye ideas sin vínculos a personajes", async () => {
   const api = new HostEngineApi({store});
   assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, true);
+  assert.equal(api.getCapabilities().authorMarkedIdeaCapture, false);
+  assert.equal(api.getCapabilities().explicitIdeaLinks, false);
   api.initializeProject({projectId,projectName:"Book",writerId:"writer-graph"});
   await api.openDocument({documentId:"chapter",text:"Escena 1\nLa tarde avanza.",revision:0,sequence:0});
   try {

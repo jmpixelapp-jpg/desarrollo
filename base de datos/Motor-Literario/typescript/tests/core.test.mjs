@@ -12935,3 +12935,53 @@ test("la API rechaza vínculos a ideas ausentes aunque el almacén use lectura a
     /una idea relacionada no existe en la biblioteca del escritor/
   );
 });
+
+
+test("notifica cambios de biblioteca solo por la identidad del escritor", async () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  class TestBroadcastChannel {
+    static channels = new Set();
+    name;
+    onmessage = null;
+    closed = false;
+    constructor(name) {
+      this.name = name;
+      TestBroadcastChannel.channels.add(this);
+    }
+    postMessage(data) {
+      for (const channel of TestBroadcastChannel.channels) {
+        if (channel === this || channel.closed || channel.name !== this.name) continue;
+        queueMicrotask(() => channel.onmessage?.({ data: structuredClone(data) }));
+      }
+    }
+    close() {
+      this.closed = true;
+      TestBroadcastChannel.channels.delete(this);
+    }
+    unref() {}
+  }
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: TestBroadcastChannel
+  });
+
+  const publisher = new IndexedDbProjectStore();
+  const subscriber = new IndexedDbProjectStore();
+  const received = [];
+  const offPublisher = publisher.subscribePersonalIdeaLibraryChanges(() => {});
+  const offSubscriber = subscriber.subscribePersonalIdeaLibraryChanges(writerId => received.push(writerId));
+  try {
+    publisher.publishPersonalIdeaLibraryChange("writer-other");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(received, []);
+
+    publisher.publishPersonalIdeaLibraryChange("writer-authenticated");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(received, ["writer-authenticated"]);
+  } finally {
+    offPublisher();
+    offSubscriber();
+    if (originalDescriptor) Object.defineProperty(globalThis, "BroadcastChannel", originalDescriptor);
+    else delete globalThis.BroadcastChannel;
+  }
+});

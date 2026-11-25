@@ -11459,3 +11459,79 @@ test("describe un solapamiento entre cita y raya como un único segmento mixto p
     end:baseOffset+text.length
   });
 });
+
+test("agrupa bloques consecutivos del flujo de diálogo y conserva los offsets de cada tramo", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1",
+    "La lluvia cesó.",
+    "",
+    "«Ven aquí», dijo Ana.",
+    "",
+    "«Ahora mismo».",
+    "",
+    "El tren partió."
+  ].join("\n");
+  const baseOffset = 8700;
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow-runs",documentId:"chapter",revision:4,text,baseOffset
+  });
+  const flow = result.explicitScenes[0].dialogueFlowSignals;
+  assert.equal(flow.runCount,3);
+  assert.equal(flow.dialogueBearingRunCount,1);
+  assert.equal(flow.narrativeOnlyRunCount,2);
+  assert.equal(flow.longestDialogueBearingRunParagraphs,2);
+  assert.equal(flow.longestNarrativeOnlyRunParagraphs,1);
+  assert.equal(flow.runsTruncated,false);
+  assert.deepEqual(flow.runs.map(run => ({
+    runIndex:run.runIndex,
+    kind:run.kind,
+    fromParagraphIndex:run.fromParagraphIndex,
+    toParagraphIndex:run.toParagraphIndex,
+    paragraphCount:run.paragraphCount,
+    narrativeOnlyParagraphCount:run.narrativeOnlyParagraphCount,
+    dialogueOnlyParagraphCount:run.dialogueOnlyParagraphCount,
+    mixedParagraphCount:run.mixedParagraphCount
+  })),[
+    {
+      runIndex:1,kind:"narrative-only-run",fromParagraphIndex:1,toParagraphIndex:1,
+      paragraphCount:1,narrativeOnlyParagraphCount:1,dialogueOnlyParagraphCount:0,mixedParagraphCount:0
+    },
+    {
+      runIndex:2,kind:"dialogue-bearing-run",fromParagraphIndex:2,toParagraphIndex:3,
+      paragraphCount:2,narrativeOnlyParagraphCount:0,dialogueOnlyParagraphCount:1,mixedParagraphCount:1
+    },
+    {
+      runIndex:3,kind:"narrative-only-run",fromParagraphIndex:4,toParagraphIndex:4,
+      paragraphCount:1,narrativeOnlyParagraphCount:1,dialogueOnlyParagraphCount:0,mixedParagraphCount:0
+    }
+  ]);
+  assert.equal(flow.runs[0].occurrence.start,baseOffset+text.indexOf("La lluvia"));
+  assert.equal(flow.runs[0].occurrence.end,baseOffset+text.indexOf("cesó.")+"cesó.".length);
+  assert.equal(flow.runs[1].occurrence.start,baseOffset+text.indexOf("«Ven aquí»"));
+  assert.equal(flow.runs[1].occurrence.end,baseOffset+text.indexOf("«Ahora mismo».")+"«Ahora mismo».".length);
+  assert.equal(flow.runs[2].occurrence.start,baseOffset+text.indexOf("El tren"));
+  assert.equal(flow.runs[2].occurrence.end,baseOffset+text.indexOf("partió.")+"partió.".length);
+});
+
+test("limita las muestras de tramos del flujo sin truncar sus métricas", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const paragraphs = Array.from({length:41},(_,index) =>
+    index % 2 === 0 ? "La noche cayó." : "«Estoy aquí»."
+  );
+  const text = ["ESCENA 1",paragraphs.join("\n\n")].join("\n");
+  const result = analyzeLiteraryFragment({
+    projectId:"scene-dialogue-flow-run-truncation",documentId:"chapter",revision:1,text
+  });
+  const flow = result.explicitScenes[0].dialogueFlowSignals;
+  assert.equal(flow.paragraphCount,41);
+  assert.equal(flow.runCount,41);
+  assert.equal(flow.dialogueBearingRunCount,20);
+  assert.equal(flow.narrativeOnlyRunCount,21);
+  assert.equal(flow.longestDialogueBearingRunParagraphs,1);
+  assert.equal(flow.longestNarrativeOnlyRunParagraphs,1);
+  assert.equal(flow.runs.length,40);
+  assert.equal(flow.runsTruncated,true);
+  assert.equal(flow.runs[39].runIndex,40);
+  assert.equal(flow.runs[39].fromParagraphIndex,40);
+});

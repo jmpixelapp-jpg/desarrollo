@@ -166,6 +166,16 @@ Los párrafos de solo puntuación, sin palabras reconocidas, no entran en el den
 Esta clasificación es estructural y léxica: depende de los segmentos de diálogo reconocidos y del separador de párrafos (líneas en blanco). Un párrafo mixto no identifica qué persona habla ni distingue narración indirecta, citas no reconocidas o voz del narrador. La proporción de párrafos dialogados no equivale a la proporción de palabras dialogadas ni al número de turnos conversacionales.
 
 
+### Tramos consecutivos del flujo de diálogo
+
+Cada perfil `dialogueFlowSignals` añade `runs`, que agrupa los párrafos con palabras en tramos consecutivos de dos clases: `narrative-only-run` (solo párrafos `narrative-only`) y `dialogue-bearing-run` (párrafos `dialogue-only` o `mixed`). Por ello, un cambio entre diálogo exclusivo y párrafo mixto no divide el tramo; sí lo hace el paso entre un párrafo con diálogo reconocido y uno sin él.
+
+Cada muestra informa `runIndex`, los índices inicial y final de párrafo, la cantidad de párrafos, el desglose por las tres clasificaciones y el rango UTF-16 absoluto desde el comienzo del primer párrafo hasta el final del último. El perfil también expone `runCount`, `dialogueBearingRunCount`, `narrativeOnlyRunCount`, las longitudes máximas de ambos tipos de tramo y hasta 40 muestras iniciales; `runsTruncated` indica si se superó ese límite. Las métricas se calculan sobre todos los párrafos con palabras, aunque las muestras estén limitadas.
+
+Los tramos describen únicamente la continuidad textual de las clases detectadas. No representan turnos conversacionales, hablantes, duración, ritmo dramático ni calidad narrativa.
+
+
+
 ### Comparación del flujo de diálogo entre escenas
 
 La propiedad `sceneDialogueFlowTransitions` compara el perfil de párrafos de cada par de escenas explícitas contiguas. Expone el número de párrafos, la cantidad y proporción de párrafos con diálogo reconocido, y las diferencias (siguiente menos anterior) para esas medidas. Incluye deltas por clase (`narrative-only`, `dialogue-only`, `mixed`), por cada transición entre clases consecutivas y para el número de cambios de clase.

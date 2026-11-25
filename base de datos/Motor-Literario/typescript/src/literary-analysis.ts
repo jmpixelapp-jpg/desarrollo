@@ -369,6 +369,19 @@ export interface LiterarySceneDialogueParagraph {
   readonly dialogueWordCount: number;
   readonly occurrence: LiteraryAnalysisOccurrence;
 }
+export type LiterarySceneDialogueFlowRunKind = "narrative-only-run" | "dialogue-bearing-run";
+export interface LiterarySceneDialogueFlowRun {
+  readonly runIndex: number;
+  readonly kind: LiterarySceneDialogueFlowRunKind;
+  readonly fromParagraphIndex: number;
+  readonly toParagraphIndex: number;
+  readonly paragraphCount: number;
+  readonly narrativeOnlyParagraphCount: number;
+  readonly dialogueOnlyParagraphCount: number;
+  readonly mixedParagraphCount: number;
+  /** Rango UTF-16 absoluto desde el inicio del primer hasta el final del último párrafo del tramo. */
+  readonly occurrence: LiteraryAnalysisOccurrence;
+}
 export interface LiterarySceneDialogueFlowProfile {
   /** Párrafos con al menos una palabra reconocida dentro de la escena. */
   readonly paragraphCount: number;
@@ -394,6 +407,15 @@ export interface LiterarySceneDialogueFlowProfile {
     readonly mixedToMixed: number;
   };
   readonly classificationChangeCount: number;
+  /** Tramos consecutivos que agrupan párrafos narrativos o párrafos con diálogo reconocido. */
+  readonly runCount: number;
+  readonly dialogueBearingRunCount: number;
+  readonly narrativeOnlyRunCount: number;
+  readonly longestDialogueBearingRunParagraphs: number;
+  readonly longestNarrativeOnlyRunParagraphs: number;
+  /** Se exponen como máximo 40 tramos iniciales, calculados sobre todos los párrafos con palabras. */
+  readonly runs: readonly LiterarySceneDialogueFlowRun[];
+  readonly runsTruncated: boolean;
   /** Se exponen como máximo 40 párrafos iniciales con offsets UTF-16 absolutos. */
   readonly paragraphs: readonly LiterarySceneDialogueParagraph[];
   readonly evidenceTruncated: boolean;
@@ -897,6 +919,7 @@ function summarizeSceneDialogueFlow(
     return countTokensInRanges(tokens,intersections);
   });
   const paragraphSamples: LiterarySceneDialogueParagraph[] = [];
+  const runSamples: LiterarySceneDialogueFlowRun[] = [];
   const classificationCounts = {narrativeOnly:0,dialogueOnly:0,mixed:0};
   const classificationTransitionCounts = {
     narrativeOnlyToNarrativeOnly:0,
@@ -912,9 +935,54 @@ function summarizeSceneDialogueFlow(
   const classificationKey = (value: LiterarySceneDialogueParagraphClassification) =>
     value === "narrative-only" ? "narrativeOnly" :
     value === "dialogue-only" ? "dialogueOnly" : "mixed";
+  type MutableRun = {
+    kind: LiterarySceneDialogueFlowRunKind;
+    fromParagraphIndex: number;
+    toParagraphIndex: number;
+    paragraphCount: number;
+    narrativeOnlyParagraphCount: number;
+    dialogueOnlyParagraphCount: number;
+    mixedParagraphCount: number;
+    start: number;
+    end: number;
+  };
   let paragraphCount = 0;
   let classificationChangeCount = 0;
+  let dialogueBearingRunCount = 0;
+  let narrativeOnlyRunCount = 0;
+  let longestDialogueBearingRunParagraphs = 0;
+  let longestNarrativeOnlyRunParagraphs = 0;
   let previousClassification: LiterarySceneDialogueParagraphClassification | undefined;
+  let currentRun: MutableRun | undefined;
+  const flushRun = (): void => {
+    if (!currentRun) return;
+    const runIndex = dialogueBearingRunCount+narrativeOnlyRunCount+1;
+    if (currentRun.kind === "dialogue-bearing-run") {
+      dialogueBearingRunCount++;
+      longestDialogueBearingRunParagraphs = Math.max(
+        longestDialogueBearingRunParagraphs,currentRun.paragraphCount
+      );
+    } else {
+      narrativeOnlyRunCount++;
+      longestNarrativeOnlyRunParagraphs = Math.max(
+        longestNarrativeOnlyRunParagraphs,currentRun.paragraphCount
+      );
+    }
+    if (runSamples.length < 40) {
+      runSamples.push({
+        runIndex,
+        kind:currentRun.kind,
+        fromParagraphIndex:currentRun.fromParagraphIndex,
+        toParagraphIndex:currentRun.toParagraphIndex,
+        paragraphCount:currentRun.paragraphCount,
+        narrativeOnlyParagraphCount:currentRun.narrativeOnlyParagraphCount,
+        dialogueOnlyParagraphCount:currentRun.dialogueOnlyParagraphCount,
+        mixedParagraphCount:currentRun.mixedParagraphCount,
+        occurrence:{start:baseOffset+currentRun.start,end:baseOffset+currentRun.end}
+      });
+    }
+    currentRun = undefined;
+  };
   for (let index=0; index<paragraphRanges.length; index++) {
     const wordCount = wordCounts[index] ?? 0;
     if (wordCount === 0) continue;
@@ -923,6 +991,8 @@ function summarizeSceneDialogueFlow(
       dialogueWordCount === 0 ? "narrative-only" :
       dialogueWordCount >= wordCount ? "dialogue-only" : "mixed";
     const range = paragraphRanges[index]!;
+    const kind: LiterarySceneDialogueFlowRunKind = classification === "narrative-only"
+      ? "narrative-only-run" : "dialogue-bearing-run";
     paragraphCount++;
     classificationCounts[classificationKey(classification)]++;
     if (previousClassification !== undefined) {
@@ -942,8 +1012,31 @@ function summarizeSceneDialogueFlow(
         occurrence:{start:baseOffset+range.start,end:baseOffset+range.end}
       });
     }
+    if (currentRun && currentRun.kind !== kind) flushRun();
+    if (!currentRun) {
+      currentRun = {
+        kind,
+        fromParagraphIndex:index+1,
+        toParagraphIndex:index+1,
+        paragraphCount:1,
+        narrativeOnlyParagraphCount:classification === "narrative-only" ? 1 : 0,
+        dialogueOnlyParagraphCount:classification === "dialogue-only" ? 1 : 0,
+        mixedParagraphCount:classification === "mixed" ? 1 : 0,
+        start:range.start,
+        end:range.end
+      };
+    } else {
+      currentRun.toParagraphIndex = index+1;
+      currentRun.paragraphCount++;
+      if (classification === "narrative-only") currentRun.narrativeOnlyParagraphCount++;
+      else if (classification === "dialogue-only") currentRun.dialogueOnlyParagraphCount++;
+      else currentRun.mixedParagraphCount++;
+      currentRun.end = range.end;
+    }
     previousClassification = classification;
   }
+  flushRun();
+  const runCount = dialogueBearingRunCount+narrativeOnlyRunCount;
   const dialogueBearingParagraphCount = classificationCounts.dialogueOnly+classificationCounts.mixed;
   return {
     paragraphCount,
@@ -953,11 +1046,17 @@ function summarizeSceneDialogueFlow(
       ? dialogueBearingParagraphCount/paragraphCount : 0),
     classificationTransitionCounts,
     classificationChangeCount,
+    runCount,
+    dialogueBearingRunCount,
+    narrativeOnlyRunCount,
+    longestDialogueBearingRunParagraphs,
+    longestNarrativeOnlyRunParagraphs,
+    runs:runSamples,
+    runsTruncated:runCount>40,
     paragraphs:paragraphSamples,
     evidenceTruncated:paragraphCount>40
   };
 }
-
 function analyzeExplicitScenes(
   text: string,
   tokens: readonly WordToken[],
@@ -2413,6 +2512,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
       "La anáfora se propone por coincidencia literal de las dos primeras palabras en oraciones consecutivas.",
       "Las frases recurrentes requieren coincidencia literal de 2 a 4 palabras dentro de una oración y no prueban un motivo temático.",
       "Las señales sensoriales usan un vocabulario explícito y no detectan metáforas ni sentidos implícitos.",
+      "Los tramos del flujo de diálogo agrupan párrafos consecutivos por presencia o ausencia de diálogo reconocido; los párrafos mixtos y dialogados comparten tramo y esto no identifica turnos ni hablantes.",
       "Las transiciones de diálogo comparan únicamente métricas reconocidas entre escenas explícitas contiguas y no identifican hablantes."
     ]
   };

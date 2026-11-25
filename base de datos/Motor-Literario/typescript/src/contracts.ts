@@ -119,6 +119,8 @@ export interface PersonalIdeaLibraryPage {
 export interface ProjectStore {
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
+  /** Avisa cambios confirmados en la biblioteca global de un escritor, sin revelar su contenido. */
+  subscribePersonalIdeaLibraryChanges?(listener: (writerId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */
   loadProjectRelations(projectId: string): Promise<readonly ProjectRelation[]>;
   saveProjectRelation(relation: ProjectRelation, expectedCurrent?: ProjectRelation): Promise<void>;

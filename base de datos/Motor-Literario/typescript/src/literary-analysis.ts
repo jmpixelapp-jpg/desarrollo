@@ -3752,7 +3752,8 @@ function buildLiteraryIdeaGraph(
 
   for (let sourceIndex = 0; sourceIndex < ideaCount; sourceIndex++) {
     const idea = orderedIdeas[sourceIndex]!;
-    const targets = [...idea.relatedIdeaIds].sort(compareIdeaIds);
+    // Una referencia duplicada heredada no duplica una arista del grafo.
+    const targets = [...new Set(idea.relatedIdeaIds)].sort(compareIdeaIds);
     for (const targetId of targets) {
       referenceCount++;
       const targetIndex = ideaIndexById.get(targetId);
@@ -6466,9 +6467,8 @@ function isValidNarrativeIdeaStatusHistory(
   value: unknown,
   omittedStatusHistoryCount: number
 ): boolean {
-  if (value === undefined) return true;
   if (!Array.isArray(value) || value.length > 100) return false;
-  if (value.length === 0) return omittedStatusHistoryCount > 0 || true;
+  if (value.length === 0) return true;
   for (let index = 0; index < value.length; index++) {
     const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
     if (!change ||
@@ -6487,6 +6487,10 @@ function isValidNarrativeIdeaStatusHistory(
       return false;
     }
   }
+  // El último estado puede diferir del valor actual: el analizador informa esa
+  // divergencia en currentStatusHistoryConsistency sin descartar el historial.
+  // Las marcas de tiempo también pueden retroceder en una importación y se
+  // contabilizan en nonMonotonicStatusTimestampCount.
   return true;
 }
 

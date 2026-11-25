@@ -3595,6 +3595,7 @@ function buildLiteraryIdeaGraph(
     const seenStatuses = new Set<NarrativeIdea["status"]>();
     let previousStatus: NarrativeIdea["status"] | undefined;
     let previousAt: number | undefined;
+    let hasPreviousRecord = false;
     let observedStatusTransitionCount = 0;
     let statusReversalCount = 0;
     let nonMonotonicStatusTimestampCount = 0;
@@ -3614,13 +3615,11 @@ function buildLiteraryIdeaGraph(
       seenStatuses.add(change.status);
       previousStatus = change.status;
 
-      if (previousAt !== undefined && change.changedAt !== undefined) {
-        comparableStatusTimestampPairCount++;
-        if (change.changedAt < previousAt) nonMonotonicStatusTimestampCount++;
-      } else if (previousAt !== undefined || change.changedAt !== undefined || history.length > 1) {
-        // La comparabilidad se cuenta por pares adyacentes, incluso cuando
-        // una de las dos marcas temporales está ausente.
-        if (previousStatus !== undefined && history.length > 1) {
+      if (hasPreviousRecord) {
+        if (previousAt !== undefined && change.changedAt !== undefined) {
+          comparableStatusTimestampPairCount++;
+          if (change.changedAt < previousAt) nonMonotonicStatusTimestampCount++;
+        } else {
           uncomparableStatusTimestampPairCount++;
         }
       }
@@ -3637,6 +3636,7 @@ function buildLiteraryIdeaGraph(
       if (change.reason === "writer") observedWriterStatusChangeCount++;
       if (change.reason === "text-revised") observedTextRevisionStatusChangeCount++;
       previousAt = change.changedAt;
+      hasPreviousRecord = true;
     }
 
     return {

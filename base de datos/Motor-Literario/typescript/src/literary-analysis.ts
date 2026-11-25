@@ -450,6 +450,11 @@ export interface LiterarySceneDialogueFlowSnapshot {
   readonly dialogueBearingParagraphRatio: number;
   readonly classificationTransitionCounts: LiterarySceneDialogueFlowProfile["classificationTransitionCounts"];
   readonly classificationChangeCount: number;
+  readonly runCount: number;
+  readonly dialogueBearingRunCount: number;
+  readonly narrativeOnlyRunCount: number;
+  readonly longestDialogueBearingRunParagraphs: number;
+  readonly longestNarrativeOnlyRunParagraphs: number;
 }
 export interface LiterarySceneDialogueFlowSummary {
   readonly sceneCount: number;
@@ -464,6 +469,13 @@ export interface LiterarySceneDialogueFlowSummary {
   readonly classificationTransitionCounts: LiterarySceneDialogueFlowProfile["classificationTransitionCounts"];
   /** Suma de cambios entre párrafos consecutivos dentro de cada escena; no cruza límites de escena. */
   readonly classificationChangeCount: number;
+  /** Suma los tramos por escena; nunca une el final de una escena con el inicio de otra. */
+  readonly totalRunCount: number;
+  readonly dialogueBearingRunCount: number;
+  readonly narrativeOnlyRunCount: number;
+  /** Máxima longitud de un tramo dentro de una sola escena, no de una concatenación entre escenas. */
+  readonly longestDialogueBearingRunParagraphs: number;
+  readonly longestNarrativeOnlyRunParagraphs: number;
   readonly sceneSnapshots: readonly LiterarySceneDialogueFlowSnapshot[];
 }
 
@@ -1193,6 +1205,11 @@ function buildSceneDialogueFlowSummary(
   let dialogueBearingParagraphCount = 0;
   let scenesWithDialogueParagraphs = 0;
   let classificationChangeCount = 0;
+  let totalRunCount = 0;
+  let dialogueBearingRunCount = 0;
+  let narrativeOnlyRunCount = 0;
+  let longestDialogueBearingRunParagraphs = 0;
+  let longestNarrativeOnlyRunParagraphs = 0;
   const sceneSnapshots: LiterarySceneDialogueFlowSnapshot[] = [];
   for (const scene of scenes) {
     const flow = scene.dialogueFlowSignals;
@@ -1220,6 +1237,15 @@ function buildSceneDialogueFlowSummary(
     classificationTransitionCounts.mixedToMixed +=
       flow.classificationTransitionCounts.mixedToMixed;
     classificationChangeCount += flow.classificationChangeCount;
+    totalRunCount += flow.runCount;
+    dialogueBearingRunCount += flow.dialogueBearingRunCount;
+    narrativeOnlyRunCount += flow.narrativeOnlyRunCount;
+    longestDialogueBearingRunParagraphs = Math.max(
+      longestDialogueBearingRunParagraphs,flow.longestDialogueBearingRunParagraphs
+    );
+    longestNarrativeOnlyRunParagraphs = Math.max(
+      longestNarrativeOnlyRunParagraphs,flow.longestNarrativeOnlyRunParagraphs
+    );
     if (flow.dialogueBearingParagraphCount > 0) scenesWithDialogueParagraphs++;
     sceneSnapshots.push({
       sceneIndex:scene.sceneIndex,
@@ -1228,7 +1254,12 @@ function buildSceneDialogueFlowSummary(
       dialogueBearingParagraphCount:flow.dialogueBearingParagraphCount,
       dialogueBearingParagraphRatio:flow.dialogueBearingParagraphRatio,
       classificationTransitionCounts:{...flow.classificationTransitionCounts},
-      classificationChangeCount:flow.classificationChangeCount
+      classificationChangeCount:flow.classificationChangeCount,
+      runCount:flow.runCount,
+      dialogueBearingRunCount:flow.dialogueBearingRunCount,
+      narrativeOnlyRunCount:flow.narrativeOnlyRunCount,
+      longestDialogueBearingRunParagraphs:flow.longestDialogueBearingRunParagraphs,
+      longestNarrativeOnlyRunParagraphs:flow.longestNarrativeOnlyRunParagraphs
     });
   }
   return {
@@ -1243,10 +1274,14 @@ function buildSceneDialogueFlowSummary(
       ? scenesWithDialogueParagraphs/scenes.length : 0),
     classificationTransitionCounts,
     classificationChangeCount,
+    totalRunCount,
+    dialogueBearingRunCount,
+    narrativeOnlyRunCount,
+    longestDialogueBearingRunParagraphs,
+    longestNarrativeOnlyRunParagraphs,
     sceneSnapshots
   };
 }
-
 function buildSceneDialogueFlowTransitions(
   scenes: readonly LiteraryExplicitSceneSegment[]
 ): LiterarySceneDialogueFlowTransition[] {

@@ -11244,8 +11244,17 @@ test("agrega el flujo de diálogo por escena con proporciones ponderadas y cober
     mixedToMixed:0
   });
   assert.equal(summary.classificationChangeCount,4);
+  assert.equal(summary.totalRunCount,5);
+  assert.equal(summary.dialogueBearingRunCount,2);
+  assert.equal(summary.narrativeOnlyRunCount,3);
+  assert.equal(summary.longestDialogueBearingRunParagraphs,2);
+  assert.equal(summary.longestNarrativeOnlyRunParagraphs,1);
   assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.sceneIndex),[1,2]);
   assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.dialogueBearingParagraphCount),[2,1]);
+  assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.runCount),[3,2]);
+  assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.dialogueBearingRunCount),[1,1]);
+  assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.narrativeOnlyRunCount),[2,1]);
+  assert.deepEqual(summary.sceneSnapshots.map(snapshot => snapshot.longestDialogueBearingRunParagraphs),[2,1]);
 });
 
 test("mantiene vacío el resumen de flujo cuando no hay escenas explícitas", async () => {
@@ -11274,6 +11283,11 @@ test("mantiene vacío el resumen de flujo cuando no hay escenas explícitas", as
       mixedToMixed:0
     },
     classificationChangeCount:0,
+    totalRunCount:0,
+    dialogueBearingRunCount:0,
+    narrativeOnlyRunCount:0,
+    longestDialogueBearingRunParagraphs:0,
+    longestNarrativeOnlyRunParagraphs:0,
     sceneSnapshots:[]
   });
 });

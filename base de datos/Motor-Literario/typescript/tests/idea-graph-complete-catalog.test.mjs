@@ -149,6 +149,7 @@ test("el grafo global actualiza la consistencia al ampliarse el historial de una
       reason: "writer",
       changedAt: 8
     });
+    await api.invalidateNarrativeKnowledgeFromExternalChange();
 
     const after = await api.analyzeLiteraryDocument("chapter");
     const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");

@@ -67,6 +67,28 @@ test("declara la capacidad de grafo global solo cuando puede leer ideas y fichas
   }
 });
 
+
+
+test("no presenta como catálogo global completo un almacenamiento sin lectura de ideas", async () => {
+  const api = new HostEngineApi({ store: { ...store, loadIdeas: undefined } });
+  assert.equal(api.getCapabilities().projectWideNarrativeIdeaGraph, false);
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\nLa tarde avanza.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.catalogScope, "character-linked-fallback");
+    assert.equal(graph.ideaCount, 0);
+    assert.equal(graph.missingFromProjectReferenceCount, 0);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("limita la muestra y clasifica referencias a ideas fuera del snapshot", async () => {
   const largeStore = {
     ...store,

@@ -13523,6 +13523,40 @@ test("el anfitrión notifica al escritor después de archivar las ideas del libr
   api.dispose();
 });
 
+
+
+test("la API exige checksum de contenido en una finalización nueva si el adaptador ofrece verificación", async () => {
+  const store = new MemoryStore();
+  const writerId = "writer-required-content-checksum";
+  const projectId = "book-required-content-checksum";
+  const baseSummary = {
+    writerId,
+    sourceProjectId: projectId,
+    sourceProjectName: "Libro con integridad",
+    archivedCount: 0,
+    finalizedAt: 10,
+    archiveChecksum: "fnv1a64:09612b07b5ecb5a5",
+    alreadyFinalized: false
+  };
+  store.loadPersonalIdeasByKeys = async () => [];
+  store.archiveUnincorporatedIdeasSummary = async () => ({ ...baseSummary });
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName: "Libro con integridad", writerId });
+
+  await assert.rejects(
+    api.finalizeProjectToIdeaLibrary(),
+    /resumen de finalización es inválido/u
+  );
+
+  store.archiveUnincorporatedIdeasSummary = async () => ({
+    ...baseSummary,
+    archiveContentChecksum: "fnv1a64:09612b07b5ecb5a5"
+  });
+  const summary = await api.finalizeProjectToIdeaLibrary();
+  assert.equal(summary.archiveContentChecksum, "fnv1a64:09612b07b5ecb5a5");
+  api.dispose();
+});
+
 test("la lectura del recibo espera a que termine la finalización en curso", async () => {
   const store = new MemoryStore();
   const writerId = "writer-receipt-serialization";

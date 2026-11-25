@@ -6,8 +6,22 @@
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 13,
+    "database_version": 14,
     "object_stores": [
+      {
+        "name": "project-settings",
+        "keyPath": [
+          "projectId",
+          "key"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
       {
         "name": "documents",
         "keyPath": [
@@ -241,10 +255,18 @@
       "keyPrefixes": [
         "project/settings/"
       ],
-      "representation": "archive",
-      "contract": "Pendiente: no existe almacén ProjectSettings en IndexedDbProjectStore.",
-      "implementationStatus": "not-implemented",
-      "objectStores": []
+      "representation": "record",
+      "contract": "ProjectSetting en project-settings; valor JSON validado, origen WRITER/HOST y actualización optimista.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "project-settings"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "key"
+        ]
+      ]
     },
     {
       "table": "manuscript_documents",
@@ -676,5 +698,27 @@
         ]
       ]
     }
-  ]
+  ],
+  "projectSettings": {
+    "table": "project_settings",
+    "logicalScope": "project",
+    "storageScopes": [
+      "project"
+    ],
+    "keyPrefixes": [
+      "project/settings/"
+    ],
+    "representation": "record",
+    "contract": "ProjectSetting en project-settings; valor JSON validado, origen WRITER/HOST y actualización optimista.",
+    "implementationStatus": "implemented",
+    "objectStores": [
+      "project-settings"
+    ],
+    "keyPath": [
+      [
+        "projectId",
+        "key"
+      ]
+    ]
+  }
 }

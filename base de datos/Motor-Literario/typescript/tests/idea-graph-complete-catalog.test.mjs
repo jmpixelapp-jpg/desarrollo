@@ -572,3 +572,41 @@ test("la resonancia léxica descarta términos ubicuos sin perder coincidencias 
     api.dispose();
   }
 });
+
+
+test("la resonancia léxica normaliza Unicode de compatibilidad y mayúsculas", async () => {
+  const ideas = [
+    {
+      projectId, id: "unicode-normalization-a",
+      text: "ＭＥＭＯＲＩＡ ＥＳＰＥＪＯ aurora horizonte",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "unicode-normalization-b",
+      text: "memoria espejo bosque silencio",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }
+  ];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-unicode-normalization" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa normalización conserva el sentido.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.deepEqual(lexical.resonances[0].sharedTerms, ["espejo", "memoria"]);
+    assert.equal(lexical.resonances[0].sharedTermCount, 2);
+  } finally {
+    api.dispose();
+  }
+});

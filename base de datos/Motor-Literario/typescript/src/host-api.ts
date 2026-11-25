@@ -3870,6 +3870,7 @@ export class HostEngineApi {
       corruptJournalHostSnapshotFallback: true,
       periodicDocumentSnapshots: true,
       localPersistence: true,
+      fullDatabaseBackupRestore: Boolean(this.store.exportDatabaseBackup && this.store.restoreDatabaseBackup),
       deterministicProofreading: true,
       persistentRevisionDiagnostics: Boolean(this.store.saveDiagnostics && this.store.loadDiagnostics),
       diagnosticRecoveryOnOpen: true,

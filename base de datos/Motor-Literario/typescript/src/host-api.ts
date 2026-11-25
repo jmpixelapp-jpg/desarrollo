@@ -3884,15 +3884,21 @@ export class HostEngineApi {
       const monitored = this.liveAuthorMonitor.getSnapshot(documentId);
       if (!monitored) {
         let restored = false;
+        let checkpoint: import("./contracts").StoredLiveAuthorMonitorCheckpoint | undefined;
         if (this.store.loadLiveAuthorMonitorCheckpoint) {
           try {
-            const checkpoint = await this.store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
-            if (checkpoint) {
-              this.liveAuthorMonitor.restoreCheckpoint(checkpoint, recoveredSnapshot, projectId);
-              restored = true;
-            }
+            checkpoint = await this.store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
           } catch (error) {
-            // Un checkpoint obsoleto no bloquea la recuperación del manuscrito.
+            // Un fallo transitorio de lectura no debe eliminar un checkpoint potencialmente válido.
+            this.reportKnowledgeError(error);
+          }
+        }
+        if (checkpoint) {
+          try {
+            this.liveAuthorMonitor.restoreCheckpoint(checkpoint, recoveredSnapshot, projectId);
+            restored = true;
+          } catch (error) {
+            // Un checkpoint corrupto/obsoleto no bloquea la recuperación del manuscrito.
             try { await this.store.deleteLiveAuthorMonitorCheckpoint?.(projectId, documentId); } catch {
               // La sesión nueva puede continuar aunque no se pueda limpiar el registro inválido.
             }

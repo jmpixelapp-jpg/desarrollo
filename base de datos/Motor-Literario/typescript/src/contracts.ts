@@ -175,7 +175,11 @@ export interface ProjectStore {
   /** Diccionarios y vocabulario propios, siempre aislados por proyecto. */
   saveDictionary?(dictionary: ProjectDictionary, expectedCurrent?: ProjectDictionary): Promise<void>;
   loadDictionaries?(projectId: string): Promise<readonly ProjectDictionary[]>;
-  saveDictionaryEntry?(entry: DictionaryEntry, expectedCurrent?: DictionaryEntry): Promise<void>;
+  saveDictionaryEntry?(
+    entry: DictionaryEntry,
+    expectedCurrent?: DictionaryEntry,
+    links?: readonly DictionaryEntryEntityLink[]
+  ): Promise<void>;
   loadDictionaryEntries?(projectId: string, dictionaryId: string): Promise<readonly DictionaryEntry[]>;
   /** Vínculos por entrada; las tres columnas de metadatos se conservan por vínculo. */
   loadDictionaryEntryEntityLinks?(projectId: string, entryId: string): Promise<readonly DictionaryEntryEntityLink[]>;

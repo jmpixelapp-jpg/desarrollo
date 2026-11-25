@@ -241,6 +241,63 @@ test("el puente conserva ideas del libro y permite finalizarlas en la biblioteca
 });
 
 
+test("la finalización compacta devuelve un recibo resumido y permite leer las ideas por páginas", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-compact-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId: "compact-finalization-project",
+      projectName: "Libro compacto",
+      writerId: "writer-compact"
+    });
+    await client.openDocument("compact-finalization-project", {
+      documentId: "chapter-compact",
+      text: "IDEA: Una ciudad conserva la memoria de sus habitantes.",
+      revision: 0,
+      sequence: 0
+    });
+    await client.flushProject("compact-finalization-project");
+
+    const summary = await client.request("project.call", {
+      projectId: "compact-finalization-project",
+      method: "finalizeProjectToIdeaLibrary",
+      args: []
+    });
+    assert.equal(summary.writerId, "writer-compact");
+    assert.equal(summary.sourceProjectId, "compact-finalization-project");
+    assert.equal(summary.sourceProjectName, "Libro compacto");
+    assert.equal(summary.archivedCount, 1);
+    assert.equal(typeof summary.archiveChecksum, "string");
+    assert.equal(Array.isArray(summary), false);
+    assert.equal(Object.hasOwn(summary, "items"), false);
+
+    const page = await client.request("project.call", {
+      projectId: "compact-finalization-project",
+      method: "getPersonalIdeaLibraryPage",
+      args: [null, 1]
+    });
+    assert.equal(page.items.length, 1);
+    assert.equal(page.items[0].idea.text, "Una ciudad conserva la memoria de sus habitantes.");
+    assert.equal(page.nextCursor, null);
+
+    const retry = await client.request("project.call", {
+      projectId: "compact-finalization-project",
+      method: "finalizeProjectToIdeaLibrary",
+      args: []
+    });
+    assert.deepEqual(retry, summary);
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
 test("el puente SQLite consolida identidades y actualiza atómicamente la biblioteca personal", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-bridge-merge-"));
   const databasePath = resolve(directory, "motor.sqlite");

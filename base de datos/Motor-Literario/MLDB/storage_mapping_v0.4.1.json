@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 7,
+  "mapping_version": 8,
   "schema_version": "0.4.1",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 19,
+    "database_version": 20,
     "object_stores": [
       {
         "name": "project-settings",
@@ -247,6 +247,121 @@
             [
               "projectId",
               "name"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "project-relations",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-source",
+            [
+              "projectId",
+              "sourceRecordId"
+            ],
+            false
+          ],
+          [
+            "by-target",
+            [
+              "projectId",
+              "targetRecordId"
+            ],
+            false
+          ],
+          [
+            "by-type",
+            [
+              "projectId",
+              "relationType"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "project-evidences",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-subject-record",
+            [
+              "projectId",
+              "subjectRecordId"
+            ],
+            false
+          ],
+          [
+            "by-subject-relation",
+            [
+              "projectId",
+              "subjectRelationId"
+            ],
+            false
+          ],
+          [
+            "by-document",
+            [
+              "projectId",
+              "documentId"
+            ],
+            false
+          ],
+          [
+            "by-fragment",
+            [
+              "projectId",
+              "fragmentId"
+            ],
+            false
+          ]
+        ]
+      },
+      {
+        "name": "timeline-occurrences",
+        "keyPath": [
+          "projectId",
+          "id"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ],
+          [
+            "by-event-record",
+            [
+              "projectId",
+              "eventRecordId"
+            ],
+            false
+          ],
+          [
+            "by-track-order",
+            [
+              "projectId",
+              "trackId",
+              "narrativeOrder"
             ],
             false
           ]
@@ -793,13 +908,13 @@
         "project"
       ],
       "keyPrefixes": [
-        "project/narrative-relations/"
+        "project/relations/"
       ],
       "representation": "record",
-      "contract": "NarrativeRelation en narrative-relations.",
+      "contract": "ProjectRelation genérica con extremos opcionales a fichas del mismo proyecto, tipo abierto y control optimista de versión; separada de las relaciones automáticas de extracción narrativa.",
       "implementationStatus": "implemented",
       "objectStores": [
-        "narrative-relations"
+        "project-relations"
       ],
       "keyPath": [
         [
@@ -821,7 +936,8 @@
       "contract": "RelationAttribute JSON extensible enlazado en la misma transacción a una relación del mismo proyecto; procedencia y confianza explícitas.",
       "implementationStatus": "implemented",
       "objectStores": [
-        "relation-attributes"
+        "relation-attributes",
+        "project-relations"
       ],
       "keyPath": [
         [
@@ -837,21 +953,25 @@
         "project"
       ],
       "keyPrefixes": [
-        "project/narrative-entities/evidence/",
-        "project/narrative-relations/evidence/",
-        "project/narrative-events/evidence/",
-        "project/narrative-ideas/evidence/",
-        "project/narrative-assertions/evidence/"
+        "project/evidences/",
+        "project/narrative-evidence/"
       ],
       "representation": "embedded",
-      "contract": "TextEvidence integrado en entidades, relaciones, acontecimientos, ideas y afirmaciones; offsets UTF-16.",
+      "contract": "ProjectEvidence independiente, ligada a una ficha o relación del mismo proyecto y con anclajes documentales opcionales; la evidencia de extracción automática se conserva además en sus registros narrativos.",
       "implementationStatus": "implemented",
       "objectStores": [
+        "project-evidences",
         "narrative-entities",
         "narrative-relations",
         "narrative-events",
         "narrative-ideas",
         "narrative-assertions"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "id"
+        ]
       ]
     },
     {
@@ -883,14 +1003,13 @@
         "project"
       ],
       "keyPrefixes": [
-        "project/narrative-events/timeline/"
+        "project/timeline-occurrences/"
       ],
       "representation": "embedded",
-      "contract": "NarrativeEvent.timeReference y timelineTrackId dentro de narrative-events; la pista se comprueba contra timeline-tracks en la misma transacción.",
+      "contract": "TimelineOccurrence independiente ligada opcionalmente a una ficha de evento y una pista cronológica del mismo proyecto; orden y causalidad explícitos.",
       "implementationStatus": "implemented",
       "objectStores": [
-        "narrative-events",
-        "timeline-tracks"
+        "timeline-occurrences"
       ],
       "keyPath": [
         [

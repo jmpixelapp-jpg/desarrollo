@@ -4587,7 +4587,10 @@ function buildCharacterNarrativeTrajectories(
       decisionsByCharacter.set(entityId,decisions);
     }
   }
-  const relationsByCharacter = new Map<string,LiteraryCharacterCausalRelation[]>();
+  const relationsByCharacter = new Map<
+    string,
+    Omit<LiteraryCharacterCausalRelation, "temporalConsistency">[]
+  >();
   for (const candidate of dependencies.candidates) {
     const firstParticipants = new Set(candidate.firstEventParticipantIds);
     const secondParticipants = new Set(candidate.secondEventParticipantIds);

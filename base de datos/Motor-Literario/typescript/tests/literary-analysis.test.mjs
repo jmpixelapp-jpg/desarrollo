@@ -1090,6 +1090,40 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   assert.equal(graph.referencesTruncated, false);
 });
 
+test("acota la muestra de componentes sin perder sus totales globales", () => {
+  const knownIdeas = Array.from({ length: 105 }, (_, index) => ({
+    projectId: "literary-analysis-test",
+    ideaId: "idea-" + String(index).padStart(3, "0"),
+    text: "Idea independiente " + index,
+    status: "IDEA",
+    originDocumentId: "chapter-one",
+    sourceProjectName: "Libro",
+    relatedEntityIds: [],
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: [],
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  }));
+  const graph = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nAna espera.",
+    knownIdeas
+  }).ideaGraph;
+
+  assert.equal(graph.weakComponentCount, 105);
+  assert.equal(graph.omittedWeakComponentCount, 5);
+  assert.equal(graph.weakComponents.length, 100);
+  assert.equal(graph.largestWeakComponentSize, 1);
+  assert.equal(graph.isolatedWithinSnapshotNodeCount, 105);
+  assert.equal(graph.weakComponents[0].representativeIdeaId, "idea-000");
+  assert.equal(graph.weakComponents[99].representativeIdeaId, "idea-099");
+});
+
 test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálogo de personajes", () => {
   const text = "Escena 1\nAna observó la puerta.";
   const base = {

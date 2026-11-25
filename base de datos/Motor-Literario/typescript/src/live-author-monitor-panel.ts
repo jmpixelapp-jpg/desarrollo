@@ -11,7 +11,7 @@ export interface LiveAuthorMonitorPanelOptions {
   readonly locale?: string;
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
-type MetricKey = "session" | "active" | "wordsPerMinute" | "charactersPerMinute" |
+type MetricKey = "session" | "active" | "idle" | "pauses" | "wordsPerMinute" | "charactersPerMinute" |
   "inserted" | "deleted" | "accepted" | "committed" | "pending" | "failed" |
   "revision" | "commitP95";
 interface MetricNode { readonly value: HTMLElement; }
@@ -28,6 +28,8 @@ interface MetricDefinition { readonly key: MetricKey; readonly label: string; }
 const METRICS: readonly MetricDefinition[] = [
   { key: "session", label: "Tiempo de sesión" },
   { key: "active", label: "Tiempo escribiendo" },
+  { key: "idle", label: "Tiempo acumulado en pausa" },
+  { key: "pauses", label: "Pausas detectadas" },
   { key: "wordsPerMinute", label: "Ritmo estimado (palabras/min)" },
   { key: "charactersPerMinute", label: "Ritmo (caracteres/min)" },
   { key: "inserted", label: "Caracteres insertados" },
@@ -84,6 +86,8 @@ function formatMetric(
   switch (key) {
     case "session": return formatDuration(snapshot.sessionDurationMs);
     case "active": return formatDuration(snapshot.activeDurationMs);
+    case "idle": return formatDuration(snapshot.idleDurationMs);
+    case "pauses": return integer.format(snapshot.pauseCount);
     case "wordsPerMinute": return decimal.format(snapshot.estimatedWordsPerMinute);
     case "charactersPerMinute": return integer.format(snapshot.insertedCharactersPerMinute);
     case "inserted": return integer.format(snapshot.insertedCharacters);

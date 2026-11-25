@@ -1218,3 +1218,45 @@ test("la resonancia léxica excluye stopwords frecuentes en noruego", async () =
     api.dispose();
   }
 });
+
+
+test("la resonancia léxica conserva la frecuencia de los motivos compartidos", async () => {
+  const ideas = [
+    {
+      projectId, id: "lexical-frequency-a",
+      text: "memoria memoria espejo espejo luz",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "lexical-frequency-b",
+      text: "memoria espejo luz luz luz",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }
+  ];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-frequency" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa frecuencia de los motivos importa.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.resonances.length, 1);
+    assert.deepEqual(lexical.resonances[0].sharedTerms, ["espejo", "luz", "memoria"]);
+    assert.deepEqual(lexical.resonances[0].sharedTermFrequencies, [
+      { term: "espejo", leftFrequency: 2, rightFrequency: 1 },
+      { term: "luz", leftFrequency: 1, rightFrequency: 3 },
+      { term: "memoria", leftFrequency: 2, rightFrequency: 1 }
+    ]);
+  } finally {
+    api.dispose();
+  }
+});

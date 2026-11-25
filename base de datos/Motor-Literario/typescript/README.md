@@ -99,8 +99,9 @@ El contrato lógico de la base se versiona como JSON declarativo en `../MLDB/`, 
 
 - `../MLDB/schema_v0.4.2.json`: esquema lógico vigente.
 - `../MLDB/schema_v0.4.1.json`, `schema_v0.4.0.json`, `schema_v0.3.0.json` y `schema_v0.2.0.json`: versiones anteriores verificadas para compatibilidad.
-- `../MLDB/storage_mapping_v0.4.2.json`: correspondencia entre las 25 tablas lógicas y el almacenamiento local IndexedDB.
+- `../MLDB/storage_mapping_v0.4.2.json`: correspondencia entre las 25 tablas propiedad del motor, la identidad `projects` del anfitrión y el almacenamiento local IndexedDB.
 - `../MLDB/PHYSICAL_STORAGE_MAPPING_v0.4.2.md`: explicación de almacenes, claves, índices y estado real de implementación.
+- `../MLDB/SCHEMA_EVOLUTION_v0.4.2.md`: cambios lógicos incorporados en 0.4.2 y garantías del historial de acontecimientos.
 
 El mapa físico distingue capacidades implementadas, parciales y pendientes; una tabla lógica declarada no se presenta como persistida cuando aún no existe su almacén o contrato TypeScript. El modelo actual usa IndexedDB nativo, sin SQL, servicios remotos ni código Rust en el runtime. `npm test` ejecuta ahora también el validador y los casos de compatibilidad del esquema, además de las pruebas del núcleo.
 

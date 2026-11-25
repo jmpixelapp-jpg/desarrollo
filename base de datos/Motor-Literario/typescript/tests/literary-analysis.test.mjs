@@ -749,3 +749,43 @@ test("las trayectorias señalan escenas con fuente truncada sin convertirlas en 
   assert.deepEqual(first.incompleteSceneIndexes, [1]);
   assert.equal(result.characterNarrativeTrajectories.sourceTruncatedSceneCount, 1);
 });
+
+test("la cronología de acontecimientos conserva contadores cuando recorta evidencia global", () => {
+  const evidence = Array.from({ length: 200 }, (_, index) => ({
+    documentId: "chapter-" + index,
+    revision: 0,
+    start: 0,
+    end: 1,
+    excerpt: "x"
+  }));
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nAna cruzó el umbral.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownProjectEvents: [{
+      projectId: "literary-analysis-test",
+      eventId: "arrival",
+      label: "La llegada de Ana",
+      participants: ["ana-id"],
+      timeReference: {
+        basis: "calendar",
+        precision: "year",
+        raw: "año 2030",
+        orderValue: 300
+      },
+      evidenceCount: 250,
+      staleEvidenceCount: 2,
+      evidence
+    }]
+  });
+  const timeline = result.characterNarrativeTrajectories.trajectories[0].projectEventTimeline;
+  assert.equal(timeline.sourceEventCount, 1);
+  assert.equal(timeline.timedEventCount, 1);
+  assert.equal(timeline.staleEvidenceCount, 2);
+  assert.equal(timeline.points[0].evidenceCount, 250);
+  assert.equal(timeline.points[0].evidenceSamples.length, 20);
+  assert.equal(timeline.points[0].omittedEvidenceCount, 230);
+  assert.equal(timeline.points[0].evidenceTruncated, true);
+});

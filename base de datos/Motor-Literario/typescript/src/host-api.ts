@@ -23,13 +23,14 @@ import {
 } from "./mldb-records";
 import type {
   ProjectSetting, ProjectSettingSource, ProjectJsonValue,
-  LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle
+  LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle, EventLifecycle
 } from "./project-data";
 import {
   cloneProjectSetting, validateProjectSetting, cloneLanguageProfile,
   cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef,
   cloneStyleProfile, cloneTimelineTrack, validateStyleProfile, validateTimelineTrack,
-  cloneRecordLifecycle, cloneRelationLifecycle, validateRecordLifecycle, validateRelationLifecycle
+  cloneRecordLifecycle, cloneRelationLifecycle, cloneEventLifecycle,
+  validateRecordLifecycle, validateRelationLifecycle, validateEventLifecycle
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
@@ -1253,6 +1254,141 @@ export class HostEngineApi {
       );
       await this.validateEventTimelineTracks(events, projectId);
       return cloneNarrativeRecords(events);
+    });
+  }
+
+  /** Recupera el historial append-only de cambios de etiqueta y participantes. */
+  async getEventLifecycleHistory(eventId: string): Promise<readonly EventLifecycle[]> {
+    if (typeof eventId !== "string" || !eventId.trim()) {
+      throw new Error("Identificador de acontecimiento inválido.");
+    }
+    await this.getNarrativeEvents();
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId=this.requireProject().projectId;
+      if(!this.narrativeEvents.has(eventId)) {
+        throw new Error("El acontecimiento no existe en el proyecto activo.");
+      }
+      const load=this.store.loadEventLifecycles;
+      if(!load) throw new Error("El adaptador no admite historial de acontecimientos.");
+      const records=await load.call(this.store,projectId,eventId);
+      if(!Array.isArray(records)) throw new Error("El historial de acontecimiento no es una colección.");
+      let previous:EventLifecycle|undefined;
+      for(const item of records) {
+        validateEventLifecycle(item,projectId);
+        if(item.eventId!==eventId ||
+          (!previous && item.revision!==1) ||
+          (previous && (
+            item.revision!==previous.revision+1 ||
+            item.previousLabel!==previous.newLabel ||
+            item.previousParticipants.length!==previous.newParticipants.length ||
+            !item.previousParticipants.every((id,index)=>id===previous!.newParticipants[index]) ||
+            item.changedAt<previous.changedAt
+          ))) {
+          throw new Error("El historial de acontecimiento contiene una transición discontinua o ajena.");
+        }
+        previous=item;
+      }
+      return records.map(cloneEventLifecycle);
+    });
+  }
+
+  /**
+   * Actualiza etiqueta/participantes y registra ambas instantáneas en una
+   * única transacción durable. Las menciones del manuscrito no modifican estas
+   * asociaciones: solo las cambia una operación explícita del anfitrión.
+   */
+  async updateNarrativeEvent(input: {
+    readonly eventId: string;
+    readonly label?: string;
+    readonly participants?: readonly string[];
+    readonly changedBy: string;
+    readonly changeReason?: string | null;
+    readonly changedAt?: number;
+  }): Promise<NarrativeEvent> {
+    if(!input || typeof input!=="object" ||
+      typeof input.eventId!=="string" || !input.eventId.trim() ||
+      (input.label!==undefined && (typeof input.label!=="string" || !input.label.trim() || input.label.length>512)) ||
+      (input.participants!==undefined && (!Array.isArray(input.participants) ||
+        input.participants.length>500 || input.participants.some(id=>typeof id!=="string" || !id.trim() || id.length>256))) ||
+      typeof input.changedBy!=="string" || !input.changedBy.trim() || input.changedBy.length>256 ||
+      (input.changeReason!==undefined && input.changeReason!==null &&
+        (typeof input.changeReason!=="string" || input.changeReason.length>4096)) ||
+      (input.changedAt!==undefined && (!Number.isFinite(input.changedAt) || input.changedAt<0))) {
+      throw new Error("La actualización versionada del acontecimiento es inválida.");
+    }
+    await this.getNarrativeEvents();
+    return this.enqueueKnowledgeOperation(async()=>{
+      const projectId=this.requireProject().projectId;
+      const current=this.narrativeEvents.get(input.eventId);
+      if(!current) throw new Error("El acontecimiento no existe en el proyecto activo.");
+      const entities=await this.loadNarrativeEntitiesFromStore();
+      const participants=[...new Set(input.participants ?? current.participants)]
+        .sort((a,b)=>a.localeCompare(b,"en"));
+      const updated:NarrativeEvent={
+        ...current,
+        label:input.label ?? current.label,
+        participants
+      };
+      requireNarrativeEntityReferences(
+        [updated],projectId,entities,event=>event.participants,"acontecimientos"
+      );
+      const previousParticipants=[...new Set(current.participants)]
+        .sort((a,b)=>a.localeCompare(b,"en"));
+      if(updated.label===current.label &&
+        participants.length===previousParticipants.length &&
+        participants.every((id,index)=>id===previousParticipants[index])) {
+        return cloneNarrativeRecords([current])[0]!;
+      }
+      const load=this.store.loadEventLifecycles;
+      const save=this.store.saveEventAndAppendLifecycleIfUnchanged;
+      if(!load || !save) {
+        throw new Error("El adaptador no admite actualizaciones versionadas y atómicas de acontecimientos.");
+      }
+      const history=await load.call(this.store,projectId,current.id);
+      if(!Array.isArray(history)) throw new Error("El historial de acontecimiento no es una colección.");
+      let previous:EventLifecycle|undefined;
+      for(const item of history) {
+        validateEventLifecycle(item,projectId);
+        if(item.eventId!==current.id ||
+          (!previous && item.revision!==1) ||
+          (previous && (
+            item.revision!==previous.revision+1 ||
+            item.previousLabel!==previous.newLabel ||
+            item.previousParticipants.length!==previous.newParticipants.length ||
+            !item.previousParticipants.every((id,index)=>id===previous!.newParticipants[index]) ||
+            item.changedAt<previous.changedAt
+          ))) {
+          throw new Error("No se puede actualizar un acontecimiento con un historial discontinuo.");
+        }
+        previous=item;
+      }
+      const revision=(previous?.revision ?? 0)+1;
+      const lifecycle:EventLifecycle={
+        projectId,
+        id:current.id+":v"+revision,
+        eventId:current.id,
+        revision,
+        previousLabel:current.label,
+        newLabel:updated.label,
+        previousParticipants,
+        newParticipants:participants,
+        changedBy:input.changedBy,
+        ...(input.changeReason===undefined?{}:{changeReason:input.changeReason}),
+        changedAt:input.changedAt ?? Date.now()
+      };
+      validateEventLifecycle(lifecycle,projectId);
+      try{
+        await save.call(this.store,updated,current,lifecycle);
+      }catch(error){
+        this.narrativeEvents.delete(current.id);
+        this.eventsLoaded=false;
+        this.eventEvidenceIndex=undefined;
+        this.eventLineIndex=undefined;
+        throw error;
+      }
+      this.narrativeEvents.set(current.id,updated);
+      updateDocumentLineIndex(this.eventLineIndex,current.id,current.label,current.evidence,updated.evidence);
+      return cloneNarrativeRecords([updated])[0]!;
     });
   }
 

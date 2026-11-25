@@ -1138,3 +1138,43 @@ test("la resonancia léxica excluye stopwords frecuentes en neerlandés", async 
   }
 });
 
+test("la resonancia léxica excluye stopwords frecuentes en sueco", async () => {
+  const ideas = [
+    {
+      projectId, id: "lexical-swedish-stopwords-a",
+      text: "en minne och en spegel med ett ljus",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "lexical-swedish-stopwords-b",
+      text: "en spegel i ett minne utan natt",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }
+  ];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-swedish-stopwords" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nSvenska funktionsord ska filtreras bort.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.analyzedIdeaCount, 2);
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.equal(lexical.resonances.length, 1);
+    assert.equal(lexical.resonances[0].leftTermCount, 3);
+    assert.equal(lexical.resonances[0].rightTermCount, 3);
+    assert.equal(lexical.resonances[0].sharedTermCount, 3);
+    assert.deepEqual(lexical.resonances[0].sharedTerms, ["minne", "natt", "spegel"]);
+  } finally {
+    api.dispose();
+  }
+});

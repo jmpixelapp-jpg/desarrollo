@@ -139,6 +139,14 @@ La propiedad `characterCoMentions` agrupa pares de identidades del catálogo cuy
 
 La co-mención describe únicamente una coincidencia textual en la misma escena. No acredita que los personajes se encuentren físicamente, interactúen, conversen, mantengan una relación ni compartan el punto de vista narrativo. La evidencia de cada mención permanece disponible en `explicitScenes` para inspección.
 
+### Distribución de menciones de personajes entre escenas
+
+La propiedad `characterMentionDistributions` resume la distribución de menciones literales no ambiguas de personajes conocidos en las escenas explícitas del fragmento. Cada perfil expone los índices de las escenas donde aparece una coincidencia, el número de escenas cubiertas, la primera y la última escena observadas, la cantidad de escenas intermedias sin coincidencia literal, la mayor racha de escenas consecutivas con mención y la cobertura relativa (`sceneCoverageRatio`), calculada como escenas con mención divididas por el total de escenas explícitas y redondeada a tres decimales.
+
+Solo se incluyen identidades con al menos una mención literal detectada. Los perfiles se ordenan por número de escenas cubiertas, longitud de la mayor racha consecutiva e ID estable; se exponen como máximo 100. `characterCount` informa cuántas identidades tuvieron coincidencias y `omittedCharacterCount` cuántas quedaron fuera de esa muestra. Si no hay escenas explícitas o ninguna coincidencia válida, la colección queda vacía y los conteos correspondientes son cero.
+
+Los intervalos sin mención describen únicamente escenas sin coincidencia textual en el catálogo disponible. No demuestran que el personaje esté ausente, haya entrado o salido de la historia, ni permiten inferir protagonismo, importancia, participación, desarrollo psicológico o arco narrativo. La distribución no reemplaza las ocurrencias UTF-16 visibles en `explicitScenes`; facilita localizar recurrencias y discontinuidades para inspección editorial.
+
 
 ### Variaciones de diálogo entre escenas
 

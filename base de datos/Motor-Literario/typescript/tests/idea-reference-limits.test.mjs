@@ -50,3 +50,32 @@ test("IndexedDB rechaza más de 500 referencias explícitas por categoría", asy
     /transición de estado inválida/
   );
 });
+
+test("calcula marcas temporales de decisiones sin retroceder ante relojes desincronizados", async () => {
+  const { nextNarrativeIdeaStatusChangeAt } = await import("../dist/motor-literario.js");
+  const history = [
+    { status: "IDEA", reason: "initial", changedAt: 100 },
+    { status: "incorporated", reason: "writer", changedAt: 250 },
+    { status: "IDEA", reason: "text-revised" }
+  ];
+
+  assert.equal(nextNarrativeIdeaStatusChangeAt(history, 200), 250);
+  assert.equal(nextNarrativeIdeaStatusChangeAt(history, 300), 300);
+  assert.equal(nextNarrativeIdeaStatusChangeAt([], 0), 0);
+});
+
+test("rechaza historiales y relojes inválidos al calcular decisiones narrativas", async () => {
+  const { nextNarrativeIdeaStatusChangeAt } = await import("../dist/motor-literario.js");
+
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt(null, 1), /Historial o reloj/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([], Number.NaN), /Historial o reloj/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([], -1), /Historial o reloj/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([null], 1), /marca temporal inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([
+    { status: "IDEA", reason: "initial", changedAt: Number.POSITIVE_INFINITY }
+  ], 1), /marca temporal inválida/);
+  assert.throws(() => nextNarrativeIdeaStatusChangeAt([
+    { status: "IDEA", reason: "initial", changedAt: -1 }
+  ], 1), /marca temporal inválida/);
+});
+

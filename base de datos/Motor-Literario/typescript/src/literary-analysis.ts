@@ -3222,6 +3222,30 @@ function buildCharacterProjectEventTimeline(
   let unverifiedEventCount = 0;
   let staleEventCount = 0;
   let staleEvidenceCount = 0;
+  // Un mismo ID no puede ocupar dos posiciones temporales incompatibles
+  // dentro de la trayectoria de un personaje.
+  const temporalPositionsByEvent = new Map<string,Set<string>>();
+  for (const event of projectEvents) {
+    if (!Number.isFinite(event.timeReference?.orderValue)) continue;
+    const hasActiveEvidence = (event.evidenceCount ?? event.evidence.filter(
+      item => item.status !== "stale"
+    ).length) > 0;
+    if (!hasActiveEvidence) continue;
+    const key = JSON.stringify([
+      event.timelineTrackId ?? null,
+      event.timeReference!.basis,
+      event.timeReference!.precision,
+      event.timeReference!.orderValue
+    ]);
+    const positions = temporalPositionsByEvent.get(event.eventId) ?? new Set<string>();
+    positions.add(key);
+    temporalPositionsByEvent.set(event.eventId,positions);
+  }
+  const conflictingTemporalEventIds = new Set(
+    [...temporalPositionsByEvent]
+      .filter(([,positions]) => positions.size > 1)
+      .map(([eventId]) => eventId)
+  );
 
   for (const event of projectEvents) {
     if (!event.participants.includes(entityId)) continue;
@@ -3246,7 +3270,8 @@ function buildCharacterProjectEventTimeline(
     }
     // NaN e infinitos no representan posiciones cronológicas ordenables.
     // Se contabilizan como eventos no verificados y no contaminan los grupos.
-    if (!Number.isFinite(event.timeReference.orderValue)) {
+    if (!Number.isFinite(event.timeReference.orderValue) ||
+        conflictingTemporalEventIds.has(event.eventId)) {
       unverifiedEventCount++;
       continue;
     }

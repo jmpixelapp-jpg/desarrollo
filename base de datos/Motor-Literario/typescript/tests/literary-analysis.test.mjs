@@ -666,8 +666,16 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
           documentId: "chapter-old", revision: 1, start: 0, end: 12,
           excerpt: "La caída antigua", status: "stale"
         }]
+      },
+      {
+        projectId: "literary-analysis-test",
+        eventId: "unverified-event",
+        label: "El rumor",
+        participants: ["ana-id"],
+        evidence: []
       }
     ],
+    knownProjectEventsOmittedCount: 3,
     knownAssertions: [
       {
         projectId: "literary-analysis-test",
@@ -708,10 +716,12 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
   assert.equal(ana.causalRelations.length, 1);
   assert.equal(ana.causalRelations[0].characterRole, "both-events-participant");
   assert.equal(ana.scenes[0].causalCandidateIds[0], ana.causalRelations[0].candidateId);
-  assert.equal(ana.projectEventTimeline.sourceEventCount, 5);
+  assert.equal(ana.projectEventTimeline.sourceEventCount, 6);
   assert.equal(ana.projectEventTimeline.timedEventCount, 3);
   assert.equal(ana.projectEventTimeline.untimedEventCount, 1);
+  assert.equal(ana.projectEventTimeline.unverifiedEventCount, 1);
   assert.equal(ana.projectEventTimeline.staleEventCount, 1);
+  assert.equal(result.characterNarrativeTrajectories.omittedProjectEventCount, 3);
   assert.equal(ana.projectEventTimeline.pointCount, 3);
   assert.equal(ana.projectEventTimeline.transitionCount, 1,
     "solo una pista temporal declarada autoriza transiciones entre puntos");

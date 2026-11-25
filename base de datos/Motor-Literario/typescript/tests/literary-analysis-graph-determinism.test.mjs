@@ -367,3 +367,85 @@ test("el grafo distingue aristas explícitas repetidas, vecinos únicos y destin
     graph.includedReferenceCount
   );
 });
+
+
+test("la resolución de referencias respeta el alcance real del catálogo", () => {
+  const source = idea("source", ["included", "absent"]);
+  const included = idea("included");
+
+  const complete = analyze([source, included]);
+  assert.equal(complete.catalogScope, "project");
+  assert.equal(complete.projectCatalogComplete, true);
+  assert.equal(complete.missingFromProjectReferenceCount, 1);
+  assert.deepEqual(
+    complete.references.map(reference => reference.resolution),
+    ["included-in-snapshot", "missing-from-project"]
+  );
+
+  const partial = analyze([source, included], 3);
+  assert.equal(partial.catalogScope, "project");
+  assert.equal(partial.projectCatalogComplete, false);
+  assert.equal(partial.missingFromProjectReferenceCount, 0);
+  assert.deepEqual(
+    partial.references.map(reference => reference.resolution),
+    ["included-in-snapshot", "not-in-snapshot"]
+  );
+
+  const legacy = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-graph",
+    revision: 1,
+    text: "Escena 1\nLas ideas se conectan en distintas direcciones.",
+    knownIdeas: [source, included]
+  }).ideaGraph;
+  assert.equal(legacy.catalogScope, "character-linked-fallback");
+  assert.equal(legacy.projectCatalogComplete, false);
+  assert.equal(legacy.missingFromProjectReferenceCount, 0);
+  assert.deepEqual(
+    legacy.references.map(reference => reference.resolution),
+    ["included-in-snapshot", "not-in-snapshot"]
+  );
+});
+
+test("los perfiles por estado conservan los totales de nodos y referencias dirigidas", () => {
+  const graph = analyze([
+    {
+      ...idea("idea-a", ["idea-b", "idea-c"]),
+      status: "IDEA"
+    },
+    {
+      ...idea("idea-b", ["idea-c"]),
+      status: "incorporated"
+    },
+    {
+      ...idea("idea-c", ["idea-a"]),
+      status: "discarded"
+    },
+    {
+      ...idea("isolated"),
+      status: "discarded"
+    }
+  ]);
+
+  assert.equal(
+    graph.statusProfiles.reduce((sum, profile) => sum + profile.ideaCount, 0),
+    graph.ideaCount
+  );
+  assert.equal(
+    graph.statusTransitionProfiles.reduce((sum, profile) => sum + profile.referenceCount, 0),
+    graph.includedReferenceCount
+  );
+  assert.deepEqual(
+    graph.statusTransitionProfiles.map(profile => [
+      profile.fromStatus,
+      profile.toStatus,
+      profile.referenceCount
+    ]),
+    [
+      ["IDEA", "incorporated", 1],
+      ["IDEA", "discarded", 1],
+      ["incorporated", "discarded", 1],
+      ["discarded", "IDEA", 1]
+    ]
+  );
+});

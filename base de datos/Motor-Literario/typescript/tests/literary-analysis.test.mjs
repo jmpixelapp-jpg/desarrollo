@@ -1413,6 +1413,10 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     [{ status: "IDEA", reason: "writer", changedAt: 1 }],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
+      { status: "IDEA", reason: "writer", changedAt: 2 }
+    ],
+    [
+      { status: "IDEA", reason: "initial", changedAt: 1 },
       { status: "incorporated", reason: "writer", changedAt: 3 },
       { status: "discarded", reason: "writer", changedAt: 2 }
     ],
@@ -1434,6 +1438,22 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     );
   }
 
+  assert.throws(
+    () => analyzeLiteraryFragment({
+      ...input,
+      knownProjectIdeas: [{
+        ...idea,
+        status: "discarded",
+        statusHistory: [
+          { status: "incorporated", reason: "initial", changedAt: 1 },
+          { status: "discarded", reason: "text-revised", changedAt: 2 }
+        ],
+        writerDecisionCount: 0
+      }]
+    }),
+    /historial de decisiones del catálogo global/
+  );
+
   const truncated = analyzeLiteraryFragment({
     ...input,
     knownProjectIdeas: [{
@@ -1451,6 +1471,24 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
   assert.equal(truncated.ideaGraph.nodes[0].status, "incorporated");
   assert.equal(truncated.ideaGraph.nodes[0].statusHistory.length, 2);
   assert.equal(truncated.ideaGraph.nodes[0].omittedStatusHistoryCount, 3);
+
+  assert.throws(
+    () => analyzeLiteraryFragment({
+      ...input,
+      knownProjectIdeas: [{
+        ...idea,
+        ideaId: "impossible-decision-count",
+        status: "incorporated",
+        statusHistory: [
+          { status: "discarded", reason: "writer", changedAt: 10 },
+          { status: "incorporated", reason: "writer", changedAt: 20 }
+        ],
+        writerDecisionCount: 5,
+        omittedStatusHistoryCount: 3
+      }]
+    }),
+    /historial de decisiones del catálogo global/
+  );
 });
 
 test("distingue IDs Unicode distintos aunque el orden lingüístico los equipare", () => {

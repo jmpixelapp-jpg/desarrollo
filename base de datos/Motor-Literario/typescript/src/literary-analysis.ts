@@ -217,8 +217,44 @@ export interface LiterarySceneEventParticipant {
 export interface LiterarySceneEventLink {
   readonly eventId: string;
   readonly label: string;
+  /** Número total de rangos coincidentes antes de limitar las muestras UTF-16. */
+  readonly matchingEvidenceCount: number;
+  readonly matchingEvidenceTruncated: boolean;
   readonly matchingEvidence: readonly LiteraryAnalysisOccurrence[];
   readonly participants: readonly LiterarySceneEventParticipant[];
+}
+export interface LiteraryCharacterEventEvidenceScene {
+  readonly sceneIndex: number;
+  /** null indica que no hay evidencia enlazada para este acontecimiento en la escena. */
+  readonly evidenceRangeCount: number | null;
+  /** Solo se evalúa cuando existe evidencia del acontecimiento en esta escena. */
+  readonly participantMentionedByName: boolean | null;
+}
+export interface LiteraryCharacterEventEvidenceProfile {
+  readonly entityId: string;
+  /** Nombre canónico conocido en alguna escena del fragmento, o null si no está disponible. */
+  readonly canonicalName: string | null;
+  readonly eventId: string;
+  readonly eventLabel: string;
+  readonly sceneIndexes: readonly number[];
+  readonly eventEvidenceSceneCount: number;
+  readonly firstSceneIndex: number;
+  readonly lastSceneIndex: number;
+  readonly interveningSceneCount: number;
+  readonly totalEvidenceRangeCount: number;
+  /** Escenas con evidencia del acontecimiento en las que el nombre del participante también aparece. */
+  readonly participantMentionedByNameSceneCount: number;
+  /** Serie completa; null distingue ausencia de vínculo de una mención nominal negativa. */
+  readonly scenes: readonly LiteraryCharacterEventEvidenceScene[];
+}
+export interface LiteraryCharacterEventEvidenceAnalysis {
+  readonly explicitSceneCount: number;
+  readonly associationCount: number;
+  readonly omittedAssociationCount: number;
+  readonly characterCount: number;
+  readonly eventCount: number;
+  /** Asociaciones explícitas participante/acontecimiento, priorizadas por cobertura y evidencia. */
+  readonly profiles: readonly LiteraryCharacterEventEvidenceProfile[];
 }
 export type LiterarySceneCharacterContinuityStatus =
   | "mentioned-in-both-scenes"
@@ -650,6 +686,8 @@ export interface LiteraryAnalysisResult {
   readonly characterCoMentions: readonly LiteraryCharacterCoMentionPattern[];
   /** Distribución de menciones literales de personajes conocidos a lo largo de las escenas explícitas. */
   readonly characterMentionDistributions: LiteraryCharacterMentionDistributionAnalysis;
+  /** Evidencia de acontecimientos asociados explícitamente a participantes, desglosada por escena. */
+  readonly characterEventEvidenceProfiles: LiteraryCharacterEventEvidenceAnalysis;
   readonly voiceSignals: LiteraryVoiceSignal;
   readonly repeatedWords: readonly LiteraryRepeatedWord[];
   readonly repeatedPhrases: readonly LiteraryRepeatedPhrase[];
@@ -966,6 +1004,8 @@ function findSceneEventLinks(
     links.push({
       eventId:event.eventId,
       label:event.label,
+      matchingEvidenceCount:matchingEvidence.length,
+      matchingEvidenceTruncated:matchingEvidence.length>20,
       matchingEvidence:matchingEvidence.slice(0,20),
       participants:[...new Set(event.participants)].sort((a,b) => a.localeCompare(b,"en")).map(entityId => ({
         entityId,
@@ -1936,6 +1976,98 @@ function findCharacterCoMentionPatterns(
     }));
 }
 
+function buildCharacterEventEvidenceProfiles(
+  scenes: readonly LiteraryExplicitSceneSegment[]
+): LiteraryCharacterEventEvidenceAnalysis {
+  const canonicalNames = new Map<string,string>();
+  const groups = new Map<string,{
+    readonly entityId: string;
+    readonly eventId: string;
+    readonly eventLabel: string;
+    sceneIndexes: number[];
+    totalEvidenceRangeCount: number;
+    participantMentionedByNameSceneCount: number;
+    sceneEvidence: Map<number,{
+      readonly evidenceRangeCount: number;
+      readonly participantMentionedByName: boolean;
+    }>;
+  }>();
+
+  for (const scene of scenes) {
+    for (const mention of scene.characterMentions) {
+      if (!canonicalNames.has(mention.entityId)) {
+        canonicalNames.set(mention.entityId,mention.canonicalName);
+      }
+    }
+    for (const event of scene.eventLinks) {
+      for (const participant of event.participants) {
+        const key = JSON.stringify([participant.entityId,event.eventId]);
+        const group = groups.get(key) ?? {
+          entityId:participant.entityId,
+          eventId:event.eventId,
+          eventLabel:event.label,
+          sceneIndexes:[],
+          totalEvidenceRangeCount:0,
+          participantMentionedByNameSceneCount:0,
+          sceneEvidence:new Map<number,{
+            readonly evidenceRangeCount:number;
+            readonly participantMentionedByName:boolean;
+          }>()
+        };
+        group.sceneIndexes.push(scene.sceneIndex);
+        group.totalEvidenceRangeCount += event.matchingEvidenceCount;
+        if (participant.mentionedByName) group.participantMentionedByNameSceneCount++;
+        group.sceneEvidence.set(scene.sceneIndex,{
+          evidenceRangeCount:event.matchingEvidenceCount,
+          participantMentionedByName:participant.mentionedByName
+        });
+        groups.set(key,group);
+      }
+    }
+  }
+
+  const profiles = [...groups.values()].map(group => {
+    const sceneIndexes = [...group.sceneIndexes];
+    const firstSceneIndex = sceneIndexes[0] ?? 0;
+    const lastSceneIndex = sceneIndexes[sceneIndexes.length-1] ?? 0;
+    return {
+      entityId:group.entityId,
+      canonicalName:canonicalNames.get(group.entityId) ?? null,
+      eventId:group.eventId,
+      eventLabel:group.eventLabel,
+      sceneIndexes,
+      eventEvidenceSceneCount:sceneIndexes.length,
+      firstSceneIndex,
+      lastSceneIndex,
+      interveningSceneCount:Math.max(0,lastSceneIndex-firstSceneIndex+1-sceneIndexes.length),
+      totalEvidenceRangeCount:group.totalEvidenceRangeCount,
+      participantMentionedByNameSceneCount:group.participantMentionedByNameSceneCount,
+      scenes:scenes.map(scene => {
+        const evidence = group.sceneEvidence.get(scene.sceneIndex);
+        return {
+          sceneIndex:scene.sceneIndex,
+          evidenceRangeCount:evidence?.evidenceRangeCount ?? null,
+          participantMentionedByName:evidence?.participantMentionedByName ?? null
+        };
+      })
+    };
+  }).sort((a,b) =>
+    b.eventEvidenceSceneCount-a.eventEvidenceSceneCount ||
+    b.totalEvidenceRangeCount-a.totalEvidenceRangeCount ||
+    a.entityId.localeCompare(b.entityId,"en") ||
+    a.eventId.localeCompare(b.eventId,"en")
+  );
+
+  return {
+    explicitSceneCount:scenes.length,
+    associationCount:profiles.length,
+    omittedAssociationCount:Math.max(0,profiles.length-200),
+    characterCount:new Set(profiles.map(item => item.entityId)).size,
+    eventCount:new Set(profiles.map(item => item.eventId)).size,
+    profiles:profiles.slice(0,200)
+  };
+}
+
 function buildCharacterMentionDistributions(
   scenes: readonly LiteraryExplicitSceneSegment[]
 ): LiteraryCharacterMentionDistributionAnalysis {
@@ -2508,6 +2640,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sceneVoiceSequences = buildSceneVoiceSequences(explicitScenes);
   const characterCoMentions = findCharacterCoMentionPatterns(explicitScenes);
   const characterMentionDistributions = buildCharacterMentionDistributions(explicitScenes);
+  const characterEventEvidenceProfiles = buildCharacterEventEvidenceProfiles(explicitScenes);
   const dialogueSegmentWordCounts = countTokensPerRange(tokens,dialogueRanges);
   const sentenceWordCounts = countTokensPerRange(tokens,sentenceRanges).filter(Boolean);
   const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
@@ -2692,6 +2825,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     sceneVoiceSequences,
     characterCoMentions,
     characterMentionDistributions,
+    characterEventEvidenceProfiles,
     voiceSignals:classifyVoiceSignals(tokens,dialogueRanges,baseOffset),
     repeatedWords,
     repeatedPhrases:findRepeatedPhrases(text,tokens,sentenceRanges,baseOffset),

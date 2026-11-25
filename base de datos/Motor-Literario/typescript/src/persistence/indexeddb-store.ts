@@ -4614,6 +4614,8 @@ export class IndexedDbProjectStore implements ProjectStore {
             resolve(archived);
           } else {
             const receipt = existingReceipt;
+            const resolvedArchiveContentChecksum =
+              receipt?.archiveContentChecksum ?? archiveContentChecksum;
             resolve({
               writerId,
               sourceProjectId: projectId,
@@ -4624,8 +4626,8 @@ export class IndexedDbProjectStore implements ProjectStore {
               archiveChecksum: receipt?.archiveChecksum ?? checksumArchivedIdeaIds(
                 [...archivedIdeaIds].sort((first, second) => first.localeCompare(second))
               ),
-              ...(receipt?.archiveContentChecksum ?? archiveContentChecksum
-                ? { archiveContentChecksum: receipt?.archiveContentChecksum ?? archiveContentChecksum }
+              ...(resolvedArchiveContentChecksum !== undefined
+                ? { archiveContentChecksum: resolvedArchiveContentChecksum }
                 : {})
             });
           }

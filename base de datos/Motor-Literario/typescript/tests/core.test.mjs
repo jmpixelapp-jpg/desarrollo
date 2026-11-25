@@ -10281,7 +10281,7 @@ test("compara variaciones de señales gramaticales entre escenas contiguas", asy
     "***",
     "ESCENA 3",
     "La tormenta cubrió el valle."
-  ].join("\\n");
+  ].join("\n");
   const result = analyzeLiteraryFragment({
     projectId:"scene-voice-transitions",documentId:"chapter",revision:6,text,baseOffset:250
   });

@@ -10647,7 +10647,7 @@ test("traza evidencia de acontecimientos por participante sin inferir presencia 
   const text = [
     "ESCENA 1","Ana aguardó mientras la puerta cedía.","***",
     "ESCENA 2","Bruno vio las huellas.","***",
-    "ESCENA 3","Ana regresó cuando la puerta cedía.","***",
+    "ESCENA 3","Ana regresó cuando la puerta volvió a ceder.","***",
     "ESCENA 4","El patio quedó vacío."
   ].join("\n");
   const baseOffset = 900;
@@ -10669,7 +10669,7 @@ test("traza evidencia de acontecimientos por participante sin inferir presencia 
       {
         eventId:"gate",label:"La puerta cede",
         participants:["ana","bruno"],
-        evidence:[evidenceFor("la puerta cedía."),evidenceFor("la puerta cedía.",)]
+        evidence:[evidenceFor("la puerta cedía."),evidenceFor("la puerta volvió a ceder.")]
       },
       {
         eventId:"footprints",label:"Se descubren huellas",

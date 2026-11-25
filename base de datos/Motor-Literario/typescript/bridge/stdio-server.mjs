@@ -16,6 +16,8 @@ let lastObservedDataVersion;
 let knowledgeSyncTail = Promise.resolve();
 const lastNarrativeVersions = new Map();
 const pendingNarrativeSyncs = new Set();
+const lastWriterLibraryVersions = new Map();
+const pendingWriterLibrarySyncs = new Map();
 const KNOWLEDGE_SYNC_INTERVAL_MS = 500;
 
 const PUBLIC_API_METHODS = new Set([
@@ -26,6 +28,8 @@ const PUBLIC_API_METHODS = new Set([
   "getNarrativeEntities",
   "getNarrativeRelations",
   "getNarrativeEvents",
+  "getEventLifecycleHistory",
+  "updateNarrativeEvent",
   "setNarrativeEventTimelineTrack",
   "getNarrativeTimeline",
   "getNarrativeContradictions",
@@ -80,6 +84,7 @@ const PUBLIC_API_METHODS = new Set([
   "setNarrativeIdeaLink",
   "archiveUnincorporatedIdeas",
   "getPersonalIdeaLibrary",
+  "getPersonalIdeaLibraryPage",
   "getProjectFinalizationReceipt",
   "setNarrativeIdeaStatus"
 ]);
@@ -160,6 +165,9 @@ function openProject(params) {
             }
           }
         }).catch(writeError);
+      },
+      onPersonalIdeaLibraryChanged(writerId) {
+        notifyPersonalIdeaLibraryChanged(writerId);
       }
     }
   });
@@ -167,7 +175,28 @@ function openProject(params) {
   const record = { api, identity };
   projects.set(projectId, record);
   lastNarrativeVersions.set(projectId, store.getNarrativeVersion(projectId));
+  if (identity.writerId && store.getWriterLibraryVersion &&
+      ![...projects.values()].some(item => item !== record &&
+        item.identity.writerId === identity.writerId)) {
+    lastWriterLibraryVersions.set(identity.writerId, store.getWriterLibraryVersion(identity.writerId));
+  }
   return { projectId, alreadyOpen: false, capabilities: api.getCapabilities() };
+}
+
+function notifyPersonalIdeaLibraryChanged(writerId) {
+  if (typeof writerId !== "string" || !writerId.trim()) return;
+  if (store?.getWriterLibraryVersion) {
+    lastWriterLibraryVersions.set(writerId, store.getWriterLibraryVersion(writerId));
+    pendingWriterLibrarySyncs.delete(writerId);
+  }
+  for (const [projectId, record] of projects) {
+    if (record.identity.writerId !== writerId) continue;
+    void send({
+      jsonrpc: "2.0",
+      method: "engine.personalIdeaLibraryChanged",
+      params: { projectId, writerId }
+    }).catch(writeError);
+  }
 }
 
 function writeError(error) {
@@ -185,12 +214,62 @@ async function pollExternalNarrativeChanges() {
   for (const projectId of projects.keys()) {
     narrativeVersions.set(projectId, store.getNarrativeVersion(projectId));
   }
+  const writerLibraryVersions = new Map();
+  if (store.getWriterLibraryVersion) {
+    for (const record of projects.values()) {
+      const writerId = record.identity.writerId;
+      if (writerId && !writerLibraryVersions.has(writerId)) {
+        writerLibraryVersions.set(writerId, store.getWriterLibraryVersion(writerId));
+      }
+    }
+  }
   const dataVersionAfter = store.getDataVersion();
   if (dataVersionBefore !== dataVersionAfter) return;
 
   const externalCommit = lastObservedDataVersion !== undefined &&
     dataVersionAfter !== lastObservedDataVersion;
   lastObservedDataVersion = dataVersionAfter;
+
+  if (externalCommit) {
+    for (const [writerId, currentVersion] of writerLibraryVersions) {
+      const previousVersion = lastWriterLibraryVersions.get(writerId);
+      if (previousVersion !== undefined && currentVersion !== previousVersion) {
+        pendingWriterLibrarySyncs.set(writerId, currentVersion);
+      }
+    }
+  } else {
+    for (const [writerId, currentVersion] of writerLibraryVersions) {
+      if (!pendingWriterLibrarySyncs.has(writerId)) {
+        lastWriterLibraryVersions.set(writerId, currentVersion);
+      }
+    }
+  }
+
+  for (const [writerId, targetVersion] of pendingWriterLibrarySyncs) {
+    const currentVersion = writerLibraryVersions.get(writerId);
+    if (currentVersion === undefined) continue;
+    let delivered = true;
+    for (const [projectId, record] of projects) {
+      if (record.identity.writerId !== writerId) continue;
+      try {
+        await send({
+          jsonrpc: "2.0",
+          method: "engine.personalIdeaLibraryChanged",
+          params: { projectId, writerId }
+        });
+      } catch (error) {
+        delivered = false;
+        writeError(error);
+        break;
+      }
+    }
+    if (delivered) {
+      lastWriterLibraryVersions.set(writerId, currentVersion);
+      if (pendingWriterLibrarySyncs.get(writerId) === targetVersion) {
+        pendingWriterLibrarySyncs.delete(writerId);
+      }
+    }
+  }
 
   for (const [projectId, record] of projects) {
     const currentNarrativeVersion = narrativeVersions.get(projectId);
@@ -271,7 +350,7 @@ async function dispatch(method, rawParams) {
         storage: "sqlite-local",
         sqliteDatabase: store.databasePath,
         processIsolation: true,
-        notifications: ["engine.analysis", "engine.commit", "engine.knowledgeError", "engine.knowledgeChanged"],
+        notifications: ["engine.analysis", "engine.commit", "engine.knowledgeError", "engine.knowledgeChanged", "engine.personalIdeaLibraryChanged"],
         maxMessageBytes: MAX_LINE_BYTES
       };
 
@@ -294,6 +373,11 @@ async function dispatch(method, rawParams) {
       projects.delete(projectId);
       lastNarrativeVersions.delete(projectId);
       pendingNarrativeSyncs.delete(projectId);
+      const writerId = record.identity.writerId;
+      if (writerId && ![...projects.values()].some(item => item.identity.writerId === writerId)) {
+        lastWriterLibraryVersions.delete(writerId);
+        pendingWriterLibrarySyncs.delete(writerId);
+      }
       return { projectId, closed: true };
     }
 

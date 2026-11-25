@@ -4,7 +4,7 @@
 export type NarrativeEntityType = string;
 export type NarrativeKnowledgeKind = NarrativeEntityType | "event" | "relationship" | "idea";
 
-/** Máximo de vínculos explícitos por idea, tanto a fichas como a otras ideas. */
+/** Máximo de vínculos explícitos por idea y por categoría: fichas o ideas relacionadas. */
 export const MAX_NARRATIVE_IDEA_REFERENCES = 500;
 
 export interface TextEvidence {
@@ -172,7 +172,7 @@ export interface NarrativeIdea {
   readonly evidence: readonly TextEvidence[];
   /** Referencias explícitas a fichas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES por categoría. */
   readonly relatedEntityIds?: readonly string[];
-  /** Enlaces explícitos a otras ideas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES. */
+  /** Enlaces explícitos a otras ideas del mismo libro; máximo MAX_NARRATIVE_IDEA_REFERENCES por categoría. */
   readonly relatedIdeaIds?: readonly string[];
   /** Historial inmutable de transiciones de estado, separado de las revisiones del texto. */
   readonly statusHistory?: readonly NarrativeIdeaStatusChange[];

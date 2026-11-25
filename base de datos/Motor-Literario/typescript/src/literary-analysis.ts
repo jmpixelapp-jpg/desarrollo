@@ -206,26 +206,29 @@ function findDialogueRanges(text: string): LocalRange[] {
   }
   return mergeRanges(ranges);
 }
-function countTokensInRanges(tokens: readonly WordToken[], ranges: readonly LocalRange[]): number {
+function countTokensPerRange(tokens: readonly WordToken[], ranges: readonly LocalRange[]): number[] {
   let tokenIndex = 0;
-  let rangeIndex = 0;
-  let count = 0;
-  while (tokenIndex < tokens.length && rangeIndex < ranges.length) {
-    const token = tokens[tokenIndex]!;
-    const range = ranges[rangeIndex]!;
-    if (token.end <= range.start) tokenIndex++;
-    else if (token.start >= range.end) rangeIndex++;
-    else {
-      count++;
-      tokenIndex++;
+  const counts: number[] = [];
+  for (const range of ranges) {
+    while (tokenIndex < tokens.length && tokens[tokenIndex]!.end <= range.start) tokenIndex++;
+    let cursor = tokenIndex;
+    let count = 0;
+    while (cursor < tokens.length && tokens[cursor]!.start < range.end) {
+      if (tokens[cursor]!.end > range.start) count++;
+      cursor++;
     }
+    counts.push(count);
+    tokenIndex = cursor;
   }
-  return count;
+  return counts;
+}
+function countTokensInRanges(tokens: readonly WordToken[], ranges: readonly LocalRange[]): number {
+  return countTokensPerRange(tokens, ranges).reduce((total, count) => total + count, 0);
 }
 function classifyVoiceSignals(
   tokens: readonly WordToken[], dialogueRanges: readonly LocalRange[], baseOffset: number
 ): LiteraryVoiceSignal {
-  const counts: LiteraryVoiceSignalCounts = { firstPerson: 0, secondPerson: 0, thirdPerson: 0 };
+  const counts = { firstPerson: 0, secondPerson: 0, thirdPerson: 0 };
   const samples: LiteraryVoiceSignal["samples"][number][] = [];
   let rangeIndex = 0;
   for (const token of tokens) {
@@ -280,8 +283,8 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const sentenceRanges = findSentenceRanges(text);
   const paragraphRanges = findParagraphRanges(text);
   const dialogueRanges = findDialogueRanges(text);
-  const sentenceWordCounts = sentenceRanges.map(range => countTokensInRanges(tokens,[range])).filter(Boolean);
-  const paragraphWordCounts = paragraphRanges.map(range => countTokensInRanges(tokens,[range])).filter(Boolean);
+  const sentenceWordCounts = countTokensPerRange(tokens, sentenceRanges).filter(Boolean);
+  const paragraphWordCounts = countTokensPerRange(tokens, paragraphRanges).filter(Boolean);
 
   const wordGroups = new Map<string, WordToken[]>();
   for (const token of tokens) {
@@ -302,11 +305,13 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     .slice(0,12);
 
   const openingGroups = new Map<string, OccurrenceGroup>();
+  let openingTokenCursor = 0;
   for (const range of sentenceRanges) {
-    const words = tokens.filter(token => token.start >= range.start && token.end <= range.end);
-    if (words.length < 2) continue;
-    const first = words[0]!;
-    const second = words[1]!;
+    while (openingTokenCursor < tokens.length &&
+      tokens[openingTokenCursor]!.end <= range.start) openingTokenCursor++;
+    const first = tokens[openingTokenCursor];
+    const second = tokens[openingTokenCursor + 1];
+    if (!first || !second || first.start < range.start || second.end > range.end) continue;
     const key = first.normalized + " " + second.normalized;
     const group = openingGroups.get(key) ?? {
       key, label: first.text + " " + second.text, occurrences: []
@@ -328,8 +333,12 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
   const dialogueWordCount = countTokensInRanges(tokens,dialogueRanges);
   const averageWordsPerSentence = sentenceWordCounts.length > 0 ? wordCount / sentenceWordCounts.length : 0;
   const averageWordsPerParagraph = paragraphWordCounts.length > 0 ? wordCount / paragraphWordCounts.length : 0;
-  const shortestSentenceWords = sentenceWordCounts.length > 0 ? Math.min(...sentenceWordCounts) : 0;
-  const longestSentenceWords = sentenceWordCounts.length > 0 ? Math.max(...sentenceWordCounts) : 0;
+  const shortestSentenceWords = sentenceWordCounts.length > 0
+    ? sentenceWordCounts.reduce((minimum, count) => Math.min(minimum, count), Number.POSITIVE_INFINITY)
+    : 0;
+  const longestSentenceWords = sentenceWordCounts.length > 0
+    ? sentenceWordCounts.reduce((maximum, count) => Math.max(maximum, count), 0)
+    : 0;
 
   let rhythmProfile: LiteraryRhythmProfile = "insufficient-text";
   if (wordCount >= 20 && sentenceWordCounts.length >= 2) {

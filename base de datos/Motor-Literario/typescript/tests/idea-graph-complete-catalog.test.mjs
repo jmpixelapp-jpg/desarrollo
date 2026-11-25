@@ -18,8 +18,8 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
       statusHistory:[
         {status:"IDEA",reason:"initial",changedAt:1},
-        {status:"incorporated",reason:"writer",changedAt:3},
-        {status:"IDEA",reason:"writer",changedAt:2},
+        {status:"incorporated",reason:"writer",changedAt:2},
+        {status:"IDEA",reason:"writer",changedAt:3},
         {status:"discarded",reason:"text-revised"}
       ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
@@ -82,6 +82,39 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
   } finally {
     api.dispose();
   }
+});
+
+test("el analizador directo cuantifica marcas temporales no monotónicas", () => {
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter",
+    revision: 1,
+    text: "Fragmento para verificar el historial.",
+    knownProjectIdeas: [{
+      projectId,
+      ideaId: "non-monotonic",
+      status: "IDEA",
+      relatedIdeaIds: [],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 3 },
+        { status: "IDEA", reason: "writer", changedAt: 2 },
+        { status: "discarded", reason: "writer" }
+      ],
+      writerDecisionCount: 3,
+      omittedStatusHistoryCount: 0
+    }]
+  });
+
+  const node = result.ideaGraph.nodes[0];
+  assert.equal(node.currentStatusHistoryConsistency, "mismatch");
+  assert.equal(node.nonMonotonicStatusTimestampCount, 1);
+  assert.equal(node.comparableStatusTimestampPairCount, 2);
+  assert.equal(node.uncomparableStatusTimestampPairCount, 1);
+  assert.equal(node.earliestKnownStatusChangeAt, 1);
+  assert.equal(node.latestKnownStatusChangeAt, 3);
 });
 
 test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
@@ -160,7 +193,7 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(soloNode.earliestKnownStatusChangeAt, 1);
     assert.equal(soloNode.latestKnownStatusChangeAt, 7);
     assert.equal(soloNode.knownStatusHistorySpanMs, 6);
-    assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 1);
+    assert.equal(bridgeNode.nonMonotonicStatusTimestampCount, 0);
     assert.equal(bridgeNode.comparableStatusTimestampPairCount, 2);
     assert.equal(bridgeNode.uncomparableStatusTimestampPairCount, 1);
     assert.equal(bridgeNode.observedInitialStatusRecordCount, 1);
@@ -172,7 +205,7 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
         .nonMonotonicStatusTimestampCount,
-      1
+      0
     );
     assert.equal(
       result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")

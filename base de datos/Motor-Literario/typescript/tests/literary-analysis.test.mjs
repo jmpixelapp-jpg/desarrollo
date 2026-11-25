@@ -2104,3 +2104,46 @@ test("la cronología excluye IDs de acontecimiento con posiciones incompatibles"
   assert.equal(timeline.pointCount, 0);
   assert.equal(timeline.transitionCount, 0);
 });
+
+
+test("la cronología aísla IDs reutilizados con identidades narrativas distintas", () => {
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start: 0,
+    end: 5,
+    excerpt: "Ana."
+  };
+  const makeEvent = (label) => ({
+    projectId: "literary-analysis-test",
+    eventId: "reused-event",
+    label,
+    participants: ["ana-id"],
+    timelineTrackId: "main",
+    timeReference: {
+      basis: "calendar",
+      precision: "year",
+      raw: "2020",
+      orderValue: 2020
+    },
+    evidence: [evidence]
+  });
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nAna.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownProjectEvents: [
+      makeEvent("La tormenta"),
+      makeEvent("La coronación")
+    ]
+  });
+  const timeline = result.characterNarrativeTrajectories.trajectories[0].projectEventTimeline;
+
+  assert.equal(timeline.sourceEventCount, 2);
+  assert.equal(timeline.timedEventCount, 0);
+  assert.equal(timeline.unverifiedEventCount, 2);
+  assert.equal(timeline.pointCount, 0);
+  assert.equal(timeline.transitionCount, 0);
+});

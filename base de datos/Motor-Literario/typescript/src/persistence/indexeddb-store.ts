@@ -1919,57 +1919,65 @@ export class IndexedDbProjectStore implements ProjectStore {
     );
   }
 
+  async loadProjectRecords(projectId: string): Promise<readonly ProjectRecord[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para consultar fichas.");
+    }
+    return loadSimpleProjectRecords(
+      await this.open(), PROJECT_RECORDS, projectId, "fichas MLDB",
+      validateProjectRecord, cloneProjectRecord
+    );
+  }
+
+  async saveProjectRecord(record: ProjectRecord, expectedCurrent?: ProjectRecord): Promise<void> {
+    validateProjectRecord(record, record.projectId);
+    if (expectedCurrent) {
+      validateProjectRecord(expectedCurrent, record.projectId);
+      if (record.currentVersion !== expectedCurrent.currentVersion + 1) {
+        throw new Error("La versión de la ficha debe avanzar exactamente una unidad.");
+      }
+      if (record.createdAt !== expectedCurrent.createdAt || record.updatedAt < expectedCurrent.updatedAt) {
+        throw new Error("Las fechas de la ficha no pueden retroceder ni cambiar su creación.");
+      }
+    } else if (record.currentVersion !== 1) {
+      throw new Error("Una ficha nueva debe comenzar en versión 1.");
+    }
+    await saveProjectRecordWithParents(
+      await this.open(), PROJECT_RECORDS, record, expectedCurrent, [],
+      "ficha MLDB", validateProjectRecord, cloneProjectRecord
+    );
+  }
+
   async loadRecordNames(projectId: string, recordId?: string): Promise<readonly RecordName[]> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         (recordId !== undefined && (typeof recordId !== "string" || !recordId.trim()))) {
       throw new Error("Identidad de proyecto o ficha inválida para consultar nombres.");
     }
-    const db = await this.open();
-    const transaction = db.transaction([RECORD_NAMES, PROJECT_RECORDS], "readonly");
-    const namesStore = transaction.objectStore(RECORD_NAMES);
-    const request = recordId === undefined
-      ? namesStore.index("by-project").getAll(projectId)
-      : namesStore.index("by-record").getAll([projectId, recordId]);
-    const records = await readAfterTransaction(
-      transaction, request, "No se pudieron leer los nombres de fichas."
-    ) as RecordName[];
-    if (!Array.isArray(records)) throw new Error("La colección de nombres de fichas es inválida.");
+    const allNames = await loadSimpleProjectRecords(
+      await this.open(), RECORD_NAMES, projectId, "nombres de fichas",
+      validateRecordName, cloneRecordName
+    );
+    const records = await this.loadProjectRecords(projectId);
+    const parentById = new Map(records.map(record => [record.id, record]));
+    const result = allNames.filter(item => recordId === undefined || item.recordId === recordId);
     const ids = new Set<string>();
     const primaryByRecord = new Set<string>();
-    const recordRequests = new Map<string, IDBRequest>();
-    for (const item of records) {
-      validateRecordName(item, projectId);
+    for (const item of result) {
       if (ids.has(item.id)) throw new Error("Hay IDs duplicados de nombres de fichas.");
       ids.add(item.id);
+      const parent = parentById.get(item.recordId);
+      if (!parent) throw new Error("Un nombre persistido referencia una ficha inexistente.");
       if (item.isPrimary) {
         if (primaryByRecord.has(item.recordId)) {
           throw new Error("Una ficha no puede tener más de un nombre alternativo principal.");
         }
+        if (parent.primaryName !== item.name) {
+          throw new Error("El nombre marcado como principal no coincide con primaryName de la ficha.");
+        }
         primaryByRecord.add(item.recordId);
       }
-      if (!recordRequests.has(item.recordId)) {
-        recordRequests.set(item.recordId, transaction.objectStore(PROJECT_RECORDS)
-          .get([projectId, item.recordId]));
-      }
     }
-    // Verify parent rows in the same readonly transaction, including primary-name consistency.
-    const parents = await Promise.all([...recordRequests.entries()].map(async ([id, req]) => {
-      const value = await new Promise<unknown>((resolve, reject) => {
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error ?? new Error("No se pudo comprobar la ficha del nombre."));
-      });
-      if (!value) throw new Error("Un nombre persistido referencia una ficha inexistente.");
-      const record = value as ProjectRecord;
-      validateProjectRecord(record, projectId);
-      return [id, record] as const;
-    }));
-    const parentById = new Map(parents);
-    for (const item of records) {
-      if (item.isPrimary && parentById.get(item.recordId)?.primaryName !== item.name) {
-        throw new Error("El nombre marcado como principal no coincide con primaryName de la ficha.");
-      }
-    }
-    return records.map(cloneRecordName);
+    return result.map(cloneRecordName);
   }
 
   async saveRecordName(name: RecordName, expectedCurrent?: RecordName): Promise<void> {

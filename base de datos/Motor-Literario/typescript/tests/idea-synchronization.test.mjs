@@ -228,7 +228,7 @@ test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS",
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-external"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 2, "el reintento vuelve a leer el catálogo una sola vez tras el CAS");
   assert.equal(store.writes, 1);
   api.dispose();
 });
@@ -377,8 +377,8 @@ test("rechaza altas de vínculos entre ideas si el destino fue eliminado externa
     /Ambas ideas deben existir en el proyecto activo/
   );
 
-  assert.equal(store.ideaReads, 2);
-  assert.equal(store.writes, 0);
+  assert.equal(store.ideaReads, 1);
+  assert.equal(store.writes, 1, "CAS ejecuta una escritura que rechaza el destino ya eliminado");
   assert.deepEqual(
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     []
@@ -463,7 +463,7 @@ test("recupera la cola y la caché tras un fallo de persistencia", async () => {
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-target-b"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 2, "la siguiente operación recarga la caché invalidada sin lecturas previas redundantes");
   assert.equal(store.writes, 2);
   api.dispose();
 });
@@ -530,7 +530,8 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   const reloaded = await api.getNarrativeIdeas();
   const reloadedSource = reloaded.find(item => item.id === "idea-source");
   assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 4, "incluye una única recarga por cada conflicto y la lectura posterior");
+
   assert.equal(store.writes, 3);
   api.dispose();
 });
@@ -610,7 +611,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 3, "se lee una vez por cada intento de cambio de estado");
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"

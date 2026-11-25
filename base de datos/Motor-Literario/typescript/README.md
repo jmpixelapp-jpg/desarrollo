@@ -148,7 +148,7 @@ La fachada TypeScript valida los registros devueltos por el adaptador antes de i
 
 #### Límites actuales del cierre por cursor
 
-El recorrido por cursor de IndexedDB y el recorrido paginado SQLite mantienen la transferencia en una única transacción de escritura para conservar la atomicidad ya existente: ante un error o cierre antes de confirmar, no queda una biblioteca parcialmente publicada ni ideas eliminadas a medias. No son todavía un protocolo de checkpoints entre varias transacciones; el tiempo de bloqueo sigue creciendo con el trabajo total del libro. Además, `archiveUnincorporatedIdeas()` devuelve la lista completa de entradas y el recibo conserva la lista completa de IDs archivados. Por ello se han eliminado las grandes colecciones auxiliares del proceso, pero el tamaño de la respuesta y del recibo sigue siendo proporcional a las ideas transferidas. La salida paginada/streaming y la recuperación de una finalización dividida en lotes durables quedan pendientes; no deben darse por implementadas.
+El recorrido por cursor de IndexedDB y el recorrido paginado SQLite mantienen la transferencia en una única transacción de escritura para conservar la atomicidad ya existente: ante un error o cierre antes de confirmar, no queda una biblioteca parcialmente publicada ni ideas eliminadas a medias. No son todavía un protocolo de checkpoints entre varias transacciones; el tiempo de bloqueo sigue creciendo con el trabajo total del libro. Además, `archiveUnincorporatedIdeas()` devuelve la lista completa de entradas en su primera ejecución y el recibo conserva la lista completa de IDs archivados. Si se repite una finalización ya confirmada, el adaptador vuelve a validar el recibo y todas las entradas, pero devuelve una lista vacía: no vuelve a entregar al anfitrión ideas que ya fueron transferidas ni provoca que se procesen dos veces. Por ello se han eliminado las grandes colecciones auxiliares del proceso, pero el tamaño de la respuesta y del recibo sigue siendo proporcional a las ideas transferidas. La salida paginada/streaming y la recuperación de una finalización dividida en lotes durables quedan pendientes; no deben darse por implementadas.
 
 
 ## Coherencia de evidencias durante la escritura
@@ -324,7 +324,7 @@ Todos los vínculos se guardan en `dictionary-entry-entities`, con `linkKind`, `
 
 La migración DB21 materializa los vínculos heredados que solo contenían IDs: usa `RELATED` como tipo genérico, `MIGRATION` como procedencia explícita y la fecha real de migración como `createdAt`. No presenta esa fecha como si fuera la fecha histórica original. La tabla queda completamente implementada y las asociaciones anteriores no se pierden.
 
-\n\nLa auditoría física del manifiesto `MLDB/storage_mapping_v0.4.2.json` verifica las 25 tablas propiedad del motor, la tabla `projects` bajo control del anfitrión, la versión/nombre de IndexedDB y los 32 almacenes declarados, incluidos historiales de acontecimientos, diagnósticos y recibos operativos. Se ejecuta junto con la validación del esquema mediante `npm run validate:schema`.\n
+\n\nLa auditoría física del manifiesto `MLDB/storage_mapping_v0.4.2.json` verifica las 25 tablas propiedad del motor, la tabla `projects` bajo control del anfitrión, la versión/nombre de IndexedDB y los 33 almacenes declarados, incluidos historiales de acontecimientos, diagnósticos y recibos operativos. Se ejecuta junto con la validación del esquema mediante `npm run validate:schema`.\n
 
 ## Análisis literario descriptivo
 

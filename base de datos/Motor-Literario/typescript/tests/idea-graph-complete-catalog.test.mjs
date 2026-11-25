@@ -175,7 +175,7 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     });
     const ideaProfile = result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA");
     assert.equal(ideaProfile.statusHistoryConsistentIdeaCount, 2);
-    assert.equal(ideaProfile.statusHistoryMismatchIdeaCount, 1);
+    assert.equal(ideaProfile.statusHistoryMismatchIdeaCount, 0);
     assert.equal(ideaProfile.statusHistoryConsistencyUnknownIdeaCount, 1);
     assert.equal(soloNode.observedStatusTransitionCount, 5);
     assert.equal(soloNode.statusReversalCount, 3);

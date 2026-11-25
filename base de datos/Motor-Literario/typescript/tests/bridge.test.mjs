@@ -1153,6 +1153,64 @@ test("SQLite guarda cada cambio de acontecimiento junto con su historial append-
 
 
 
+test("el cliente TypeScript del puente lee y añade historiales versionados de relaciones", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-relation-history-client-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "bridge-relation-history";
+  const { child, client } = startBridge(databasePath);
+  try {
+    await client.hello();
+    await client.openProject({
+      projectId,
+      projectName: "Libro con relaciones versionadas",
+      writerId: "writer-relation-history"
+    });
+
+    const relation = await client.request("project.call", {
+      projectId,
+      method: "saveProjectRelation",
+      args: [{
+        id: "relation-ana-map",
+        relationType: "supports",
+        sourceRecordId: null,
+        targetRecordId: null,
+        label: "IDEA",
+        state: "abierto",
+        confirmationKind: "explicit",
+        provenanceKind: "writer",
+        confidence: "confirmed",
+        createdAt: 10,
+        updatedAt: 10
+      }]
+    });
+    assert.equal(relation.id, "relation-ana-map");
+
+    const first = await client.appendRelationLifecycle(projectId, {
+      id: "relation-ana-map:v1",
+      relationId: relation.id,
+      revision: 1,
+      previousLabel: null,
+      newLabel: "IDEA",
+      previousState: null,
+      newState: "abierto",
+      changedBy: "writer-relation-history",
+      changeReason: "Creación explícita del vínculo",
+      changedAt: 20
+    });
+    assert.equal(first.projectId, projectId);
+
+    const history = await client.getRelationLifecycleHistory(projectId, relation.id);
+    assert.deepEqual(history, [first]);
+
+    const exited = waitForExit(child);
+    await client.shutdown();
+    assert.equal(await exited, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
 test("sincroniza la biblioteca del escritor entre proyectos y procesos sin filtrar a otros escritores", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-writer-library-sync-"));
   const databasePath = resolve(directory, "motor.sqlite");

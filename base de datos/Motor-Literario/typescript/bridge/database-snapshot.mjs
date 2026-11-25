@@ -213,8 +213,9 @@ export async function restoreDatabaseBackup(backupPath, destinationPath) {
   const temporary = destination + ".restore-" + randomUUID();
   const recovery = destination + ".pre-restore-" + Date.now() + "-" + randomUUID();
   const sidecars = ["-wal", "-shm", "-journal"];
-  const movedSidecars = [];
   let destinationMoved = false;
+  const movedSidecars = [];
+  const movedSidecars = [];
 
   try {
     await copyFile(backup, temporary, fsConstants.COPYFILE_EXCL);
@@ -228,14 +229,16 @@ export async function restoreDatabaseBackup(backupPath, destinationPath) {
       }
       await rename(destination, recovery);
       destinationMoved = true;
-      for (const suffix of sidecars) {
-        const oldSidecar = destination + suffix;
-        if (await moveSidecar(oldSidecar, recovery + suffix)) {
-          movedSidecars.push(suffix);
-        }
-      }
     } catch (error) {
       if (!error || error.code !== "ENOENT") throw error;
+    }
+
+    // También aparta sidecars huérfanos si la ruta principal ya no existía.
+    for (const suffix of sidecars) {
+      const oldSidecar = destination + suffix;
+      if (await moveSidecar(oldSidecar, recovery + suffix)) {
+        movedSidecars.push(suffix);
+      }
     }
 
     await rename(temporary, destination);
@@ -243,15 +246,15 @@ export async function restoreDatabaseBackup(backupPath, destinationPath) {
 
     return {
       path: destination,
-      recoveryPath: destinationMoved ? recovery : null,
+      recoveryPath: destinationMoved || movedSidecars.length > 0 ? recovery : null,
       ...summary
     };
   } catch (error) {
     await rm(temporary, { force: true }).catch(() => undefined);
-    if (destinationMoved) {
+    if (destinationMoved || movedSidecars.length > 0) {
       try {
         await rm(destination, { force: true });
-        await rename(recovery, destination);
+        if (destinationMoved) await rename(recovery, destination);
         for (const suffix of movedSidecars) {
           await moveSidecar(recovery + suffix, destination + suffix);
         }

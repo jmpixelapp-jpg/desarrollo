@@ -480,6 +480,10 @@ export interface LiteraryEventDependencyCandidate {
   readonly secondEventLabel: string;
   readonly causeEventId: string;
   readonly consequenceEventId: string;
+  /** IDs declarados por el proyecto para cada acontecimiento y su intersección explícita. */
+  readonly firstEventParticipantIds: readonly string[];
+  readonly secondEventParticipantIds: readonly string[];
+  readonly sharedParticipantIds: readonly string[];
   readonly direction: "cause-before-consequence" | "consequence-before-cause";
   readonly connector: string;
   readonly connectorOccurrence: LiteraryAnalysisOccurrence;
@@ -2855,6 +2859,7 @@ function buildExplicitEventDependencyAnalysis(
   revision: number,
   baseOffset: number
 ): LiteraryEventDependencyAnalysis {
+  const eventById = new Map(events.map(event => [event.eventId,event]));
   const anchors: Array<{
     readonly eventId: string;
     readonly eventLabel: string;
@@ -2932,6 +2937,12 @@ function buildExplicitEventDependencyAnalysis(
         ? first.eventId : second.eventId;
       const consequenceEventId = causal.direction === "cause-before-consequence"
         ? second.eventId : first.eventId;
+      const firstEvent = eventById.get(first.eventId)!;
+      const secondEvent = eventById.get(second.eventId)!;
+      const firstEventParticipantIds = [...new Set(firstEvent.participants)].sort((a,b) => a.localeCompare(b,"en"));
+      const secondEventParticipantIds = [...new Set(secondEvent.participants)].sort((a,b) => a.localeCompare(b,"en"));
+      const secondParticipantSet = new Set(secondEventParticipantIds);
+      const sharedParticipantIds = firstEventParticipantIds.filter(id => secondParticipantSet.has(id));
       const scene = scenes.find(item =>
         first.start >= item.contentRange.start-baseOffset &&
         second.end <= item.contentRange.end-baseOffset
@@ -2944,6 +2955,9 @@ function buildExplicitEventDependencyAnalysis(
           secondEventLabel:second.eventLabel,
           causeEventId,
           consequenceEventId,
+          firstEventParticipantIds,
+          secondEventParticipantIds,
+          sharedParticipantIds,
           direction:causal.direction,
           connector:causal.connector,
           connectorOccurrence:{

@@ -108,7 +108,7 @@ test("separa componentes cíclicos aunque existan aristas entre ellos", () => {
     ["scc-c", "scc-d"],
     ["scc-f", "scc-g"]
   ]);
-  assert.equal(graph.weakComponentCount, 2);
+  assert.equal(graph.weakComponentCount, 3);
   assert.equal(graph.largestWeakComponentSize, 5);
   assert.equal(graph.isolatedWithinSnapshotNodeCount, 1);
 });

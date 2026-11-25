@@ -763,3 +763,43 @@ test("la resonancia léxica aplica el límite de términos por idea según frecu
     api.dispose();
   }
 });
+
+
+test("la resonancia léxica excluye stopwords en español, inglés y portugués", async () => {
+  const ideas = [
+    {
+      projectId, id: "lexical-stopwords-a",
+      text: "the and la de uma para memoria espejo",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    },
+    {
+      projectId, id: "lexical-stopwords-b",
+      text: "the la uma para memoria espejo",
+      status: "IDEA", originDocumentId: "chapter", sourceProjectName: "Book",
+      evidence: [], relatedIdeaIds: [], relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }
+  ];
+  const api = new HostEngineApi({
+    store: { ...store, documents: new Map(), ideas }
+  });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-lexical-stopwords" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nSe filtran palabras funcionales multilingües.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const lexical = (await api.analyzeLiteraryDocument("chapter")).ideaGraph.lexicalResonances;
+    assert.equal(lexical.candidatePairCount, 1);
+    assert.equal(lexical.resonances.length, 1);
+    assert.equal(lexical.resonances[0].leftTermCount, 2);
+    assert.equal(lexical.resonances[0].rightTermCount, 2);
+    assert.deepEqual(lexical.resonances[0].sharedTerms, ["espejo", "memoria"]);
+  } finally {
+    api.dispose();
+  }
+});

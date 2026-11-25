@@ -3,6 +3,13 @@ import { chmod, mkdir, open as openFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const TABLE = "bridge_records";
+const NARRATIVE_COLLECTIONS = new Set([
+  "narrative-entities",
+  "narrative-relations",
+  "narrative-events",
+  "narrative-ideas",
+  "narrative-assertions"
+]);
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -460,14 +467,52 @@ export class SqliteProjectStore {
       "project_id=excluded.project_id, writer_id=excluded.writer_id, document_id=excluded.document_id, " +
       "sequence=excluded.sequence, value_json=excluded.value_json"
     ).run(collection, key, projectId, writerId, documentId, sequence, JSON.stringify(value));
+    if (projectId && NARRATIVE_COLLECTIONS.has(collection)) this.bumpNarrativeVersion(projectId);
     return clone(value);
+  }
+
+  bumpNarrativeVersion(projectId) {
+    requireProject(projectId);
+    this.ensureOpen();
+    this.database.prepare(
+      "INSERT INTO bridge_metadata(key, value) VALUES(?, '1') " +
+      "ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1"
+    ).run("narrative-version:" + projectId);
+  }
+
+  getNarrativeVersion(projectId) {
+    requireProject(projectId);
+    this.ensureOpen();
+    const row = this.database.prepare(
+      "SELECT value FROM bridge_metadata WHERE key = ?"
+    ).get("narrative-version:" + projectId);
+    if (!row) return 0;
+    const version = Number(row.value);
+    if (!Number.isSafeInteger(version) || version < 0) {
+      throw new Error("La versión de conocimiento narrativo almacenada es inválida.");
+    }
+    return version;
+  }
+
+  getDataVersion() {
+    this.ensureOpen();
+    const row = this.database.prepare("PRAGMA data_version").get();
+    const version = Number(row?.data_version);
+    if (!Number.isSafeInteger(version) || version < 0) {
+      throw new Error("SQLite no devolvió una versión válida de la base de datos.");
+    }
+    return version;
   }
 
   remove(collection, parts) {
     this.ensureOpen();
-    this.database.prepare(
+    const result = this.database.prepare(
       "DELETE FROM " + TABLE + " WHERE collection = ? AND record_key = ?"
     ).run(collection, encodedKey(parts));
+    if (Number(result.changes) > 0 && NARRATIVE_COLLECTIONS.has(collection)) {
+      const projectId = Array.isArray(parts) ? parts[0] : undefined;
+      if (typeof projectId === "string" && projectId.trim()) this.bumpNarrativeVersion(projectId);
+    }
   }
 
   removeWhere(collection, predicate) {

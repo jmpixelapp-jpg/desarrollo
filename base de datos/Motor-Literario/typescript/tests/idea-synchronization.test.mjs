@@ -142,6 +142,31 @@ test("reaplica vínculos idea-ficha usando el catálogo recargado tras un confli
   api.dispose();
 });
 
+test("rechaza el vínculo a ficha si la entidad destino desaparece durante CAS", async () => {
+  const store = new RacingStore([idea("idea-source")], [
+    entity("character-local", "Ana"), entity("character-external", "Bruno")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => {
+    store.entities.delete(projectId + ":character-local");
+    return { ...current, relatedEntityIds: ["character-external"] };
+  };
+
+  await assert.rejects(
+    api.setNarrativeIdeaEntityLink("idea-source", "character-local", true),
+    /La idea y la entidad deben existir en el proyecto activo/
+  );
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedEntityIds,
+    ["character-external"]
+  );
+  assert.equal(store.entityReads, 2);
+  assert.equal(store.writes, 1);
+  api.dispose();
+});
+
 test("no reintenta errores de almacenamiento que no son conflictos CAS", async () => {
   const store = new RacingStore([idea("idea-source"), idea("idea-target")]);
   const api = createApi(store);

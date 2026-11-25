@@ -5758,7 +5758,6 @@ function isValidNarrativeIdeaStatusHistory(
   omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
-  let previousChangedAt: number | undefined;
   for (let index = 0; index < value.length; index++) {
     const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
     if (!change ||
@@ -5773,11 +5772,9 @@ function isValidNarrativeIdeaStatusHistory(
             change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
         (change.changedAt !== undefined &&
           (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-        (change.changedAt !== undefined && previousChangedAt !== undefined &&
-          change.changedAt < previousChangedAt)) {
+        false) {
       return false;
     }
-    if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
   }
   const visibleWriterDecisionCount = value.filter(
     (change: NarrativeIdeaStatusChange) => change.reason === "writer"

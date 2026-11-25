@@ -1438,13 +1438,14 @@ export class HostEngineApi {
       const candidate: ProjectSetting = {
         projectId: project.projectId,
         key,
-        value: structuredClone(value),
+        value,
         source,
         updatedAt: Date.now()
       };
       validateProjectSetting(candidate, project.projectId);
-      await saveSetting.call(this.store, candidate, current);
-      return cloneProjectSetting(candidate);
+      const safeCandidate = cloneProjectSetting(candidate);
+      await saveSetting.call(this.store, safeCandidate, current);
+      return cloneProjectSetting(safeCandidate);
     });
   }
 

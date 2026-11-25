@@ -159,7 +159,7 @@ test("HostEngineApi exige identidad de escritor para cambios declarados por WRIT
 
   await assert.rejects(
     api.setProjectSetting("editor.theme", "light", "WRITER"),
-    /writerId/
+    /identificador estable del escritor/
   );
   const saved = await api.setProjectSetting("editor.theme", "light", "HOST");
   assert.equal(saved.source, "HOST");

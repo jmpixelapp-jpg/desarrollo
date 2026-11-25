@@ -2709,13 +2709,17 @@ test("el grafo detecta convergencia indirecta a través de ramas distintas", () 
     text: "Escena 1\nUna bifurcación vuelve a converger.",
     knownProjectIdeas: [
       makeIdea("root", ["left", "right"]),
-      makeIdea("left", ["shared"]),
-      makeIdea("right", ["shared"]),
-      makeIdea("shared")
+      makeIdea("left", ["shared", "left-only"]),
+      makeIdea("right", ["shared", "right-only"]),
+      makeIdea("shared"),
+      makeIdea("left-only"),
+      makeIdea("right-only")
     ]
   }).ideaGraph;
   assert.equal(graph.twoHopConvergentSourceCount, 1);
   assert.equal(graph.twoHopSharedDestinationCount, 1);
+  assert.equal(graph.twoHopExclusiveDestinationCount, 2);
+  assert.equal(graph.twoHopIndependentBranchSourceCount, 1);
   assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
 });
 

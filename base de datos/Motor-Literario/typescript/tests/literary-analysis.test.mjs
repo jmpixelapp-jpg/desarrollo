@@ -993,3 +993,93 @@ test("mantiene el total de decisiones de escritor cuando el historial de una ide
   assert.equal(decision.omittedStatusHistoryCount, 5);
   assert.equal(result.characterNarrativeTrajectories.trajectories[0].writerDecisionCount, 104);
 });
+
+
+test("integra relaciones documentadas y decisiones explícitas del escritor en la trayectoria del personaje", () => {
+  const text = "Ana y Bruno compartieron el mapa.";
+  const excerpt = "Ana y Bruno";
+  const start = text.indexOf(excerpt);
+  const evidence = [{
+    documentId: "chapter-one",
+    revision: 1,
+    start,
+    end: start + excerpt.length,
+    excerpt
+  }];
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [
+      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "bruno-id", canonicalName: "Bruno" }
+    ],
+    knownRelations: [{
+      projectId: "literary-analysis-test",
+      relationId: "relation-ana-bruno",
+      fromEntityId: "ana-id",
+      toEntityId: "bruno-id",
+      relationType: "alliance",
+      evidenceCount: 3,
+      staleEvidenceCount: 2,
+      evidence
+    }],
+    knownRelationsOmittedCount: 2,
+    knownIdeas: [{
+      projectId: "literary-analysis-test",
+      ideaId: "idea-ana-map",
+      text: "Ana conservará el mapa.",
+      status: "incorporated",
+      originDocumentId: "chapter-one",
+      sourceProjectName: "La ciudad de los mapas",
+      relatedEntityIds: ["ana-id"],
+      relatedIdeaIds: ["idea-map-origin"],
+      evidenceCount: 2,
+      staleEvidenceCount: 1,
+      evidence,
+      writerDecisionCount: 1,
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 10 },
+        { status: "incorporated", reason: "writer", changedAt: 20 },
+        { status: "incorporated", reason: "text-revised", changedAt: 30 }
+      ],
+      omittedStatusHistoryCount: 4
+    }],
+    knownIdeasOmittedCount: 1
+  });
+
+  const trajectories = result.characterNarrativeTrajectories;
+  const ana = trajectories.trajectories.find(item => item.entityId === "ana-id");
+  const bruno = trajectories.trajectories.find(item => item.entityId === "bruno-id");
+  assert.ok(ana && bruno);
+
+  assert.equal(ana.relationships.length, 1);
+  assert.equal(ana.relationships[0].direction, "outgoing");
+  assert.equal(ana.relationships[0].otherEntityId, "bruno-id");
+  assert.equal(ana.relationships[0].otherCharacterName, "Bruno");
+  assert.equal(ana.relationships[0].relationType, "alliance");
+  assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
+  assert.equal(ana.relationships[0].evidenceCount, 3);
+  assert.equal(ana.relationships[0].staleEvidenceCount, 2);
+  assert.equal(ana.relationships[0].evidenceTruncated, true);
+  assert.equal(ana.relationships[0].historyStatus, "current-record-only");
+
+  assert.equal(bruno.relationships.length, 1);
+  assert.equal(bruno.relationships[0].direction, "incoming");
+  assert.equal(bruno.relationships[0].otherCharacterName, "Ana");
+
+  assert.equal(ana.documentedDecisions.length, 1);
+  assert.equal(ana.documentedDecisions[0].ideaId, "idea-ana-map");
+  assert.equal(ana.documentedDecisions[0].status, "incorporated");
+  assert.equal(ana.documentedDecisions[0].writerDecisionCount, 1);
+  assert.equal(ana.documentedDecisions[0].omittedStatusHistoryCount, 4);
+  assert.equal(ana.documentedDecisions[0].evidenceTruncated, true);
+  assert.deepEqual(ana.documentedDecisions[0].relatedIdeaIds, ["idea-map-origin"]);
+  assert.equal(bruno.documentedDecisions.length, 0);
+
+  assert.equal(trajectories.relationshipRecordCount, 3);
+  assert.equal(trajectories.omittedRelationshipCount, 2);
+  assert.equal(trajectories.linkedIdeaCount, 2);
+  assert.equal(trajectories.omittedIdeaCount, 1);
+});

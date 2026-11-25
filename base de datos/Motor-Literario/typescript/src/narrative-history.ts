@@ -34,7 +34,7 @@ export function extractNarrativeAssertions(
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
         typeof entity.normalizedName !== "string" || !entity.normalizedName.trim() ||
         !Array.isArray(entity.aliases) ||
-        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim())) {
+        entity.aliases.some((alias: unknown) => typeof alias !== "string" || !alias.trim())) {
       throw new Error("Colección de entidades inválida o perteneciente a otro proyecto.");
     }
   }
@@ -66,7 +66,7 @@ export function extractNarrativeAssertions(
   }
   if (definitions.length === 0) return [];
 
-  const characters = entities.filter(entity => entity.projectId === projectId && entity.kind === "character");
+  const characters = entities.filter((entity: NarrativeEntity) => entity.projectId === projectId && entity.kind === "character");
   const output: NarrativeAssertion[] = [];
   for (const entity of characters) {
     const names = [entity.canonicalName, ...entity.aliases];

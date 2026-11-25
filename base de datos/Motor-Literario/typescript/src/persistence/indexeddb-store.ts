@@ -3396,6 +3396,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       let didChange = false;
       const archived: PersonalIdeaLibraryEntry[] = [];
       const identityOwners = new Map<string, string>();
+      const legacyIdeaCache = new Map<string, NarrativeIdea>();
 
       const abortWith = (error: unknown): void => {
         if (finished) return;
@@ -3414,6 +3415,20 @@ export class IndexedDbProjectStore implements ProjectStore {
         ideaId: string,
         callback: (idea: NarrativeIdea | undefined) => void
       ): void => {
+        if (typeof ideas.get !== "function" && legacyIdeaCache.size > 0) {
+          const cached = legacyIdeaCache.get(ideaId);
+          if (cached) {
+            try {
+              validateNarrativeIdeaRecord(cached, "idea relacionada");
+              callback(cached);
+            } catch (error) {
+              abortWith(error);
+            }
+          } else {
+            callback(undefined);
+          }
+          return;
+        }
         const request = ideas.get([projectId, ideaId]);
         request.onsuccess = () => {
           try {
@@ -3674,8 +3689,59 @@ export class IndexedDbProjectStore implements ProjectStore {
         });
       };
 
+      const openProjectIdeaCursor = (): IDBRequest<IDBCursorWithValue | null> => {
+        const projectIndex = ideas.index("by-project") as unknown as {
+          openCursor?: (query?: IDBValidKey) => IDBRequest<IDBCursorWithValue | null>;
+          getAll?: (query?: IDBValidKey) => IDBRequest<unknown>;
+        };
+        if (typeof projectIndex.openCursor === "function") {
+          return projectIndex.openCursor(projectId);
+        }
+        // Compatibilidad para adaptadores antiguos de prueba que aún no simulan
+        // cursores. El runtime IndexedDB nativo siempre toma la ruta openCursor.
+        if (typeof projectIndex.getAll !== "function") {
+          throw new Error("El adaptador IndexedDB no admite recorridos por cursor.");
+        }
+        const sourceRequest = projectIndex.getAll(projectId);
+        const cursorRequest = {
+          result: null as IDBCursorWithValue | null,
+          onsuccess: null as ((event: Event) => unknown) | null,
+          onerror: null as ((event: Event) => unknown) | null,
+          error: null as DOMException | null
+        };
+        sourceRequest.onsuccess = () => {
+          try {
+            const values = sourceRequest.result;
+            if (!Array.isArray(values)) {
+              throw new Error("La colección de ideas del proyecto es inválida.");
+            }
+            legacyIdeaCache.clear();
+            for (const value of values as NarrativeIdea[]) {
+              if (value && typeof value.id === "string") legacyIdeaCache.set(value.id, value);
+            }
+            let index = 0;
+            const advance = (): void => {
+              const value = (values as NarrativeIdea[])[index++];
+              cursorRequest.result = value
+                ? ({ value, continue: advance } as unknown as IDBCursorWithValue)
+                : null;
+              cursorRequest.onsuccess?.({} as Event);
+            };
+            advance();
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+        sourceRequest.onerror = () => {
+          cursorRequest.error = sourceRequest.error;
+          cursorRequest.onerror?.({} as Event);
+          abortWith(sourceRequest.error ?? new Error("No se pudieron recuperar las ideas del proyecto."));
+        };
+        return cursorRequest as unknown as IDBRequest<IDBCursorWithValue | null>;
+      };
+
       const scanProjectIdeas = (): void => {
-        const cursorRequest = ideas.index("by-project").openCursor(projectId);
+        const cursorRequest = openProjectIdeaCursor();
         cursorRequest.onsuccess = () => {
           try {
             if (finished) return;
@@ -3697,7 +3763,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       };
 
       const scanExistingReceiptIdeas = (): void => {
-        const request = ideas.index("by-project").openCursor(projectId);
+        const request = openProjectIdeaCursor();
         request.onsuccess = () => {
           try {
             if (finished) return;

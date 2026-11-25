@@ -1,0 +1,277 @@
+export interface BridgeReadable {
+  on(event: "data" | "error", listener: (value: unknown) => void): unknown;
+  setEncoding?(encoding: "utf8"): unknown;
+}
+
+export interface BridgeWritable {
+  write(value: string): boolean;
+  end?(): void;
+}
+
+export interface BridgeChildProcess {
+  readonly stdin: BridgeWritable;
+  readonly stdout: BridgeReadable;
+  readonly stderr?: BridgeReadable;
+  on(event: "error", listener: (error: Error) => void): unknown;
+  on(event: "exit", listener: (code: number | null, signal: string | null) => void): unknown;
+}
+
+export interface JsonRpcError {
+  readonly code: number;
+  readonly message: string;
+  readonly data?: unknown;
+}
+
+export class MotorLiterarioBridgeError extends Error {
+  readonly code: number;
+  readonly data: unknown;
+
+  constructor(error: JsonRpcError) {
+    super(error.message);
+    this.name = "MotorLiterarioBridgeError";
+    this.code = error.code;
+    this.data = error.data;
+  }
+}
+
+interface PendingRequest {
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (error: Error) => void;
+  readonly timeout?: ReturnType<typeof setTimeout>;
+}
+
+export interface MotorLiterarioBridgeClientOptions {
+  readonly requestTimeoutMs?: number;
+  readonly maxMessageBytes?: number;
+  readonly onStderr?: (text: string) => void;
+  readonly onProtocolError?: (error: Error, line: string) => void;
+}
+
+type NotificationHandler = (params: unknown) => void;
+
+/**
+ * Cliente JSON-RPC 2.0 por stdio para hablar con el proceso compañero.
+ * Acepta un ChildProcess de Node/Electron sin importar tipos de Node en el núcleo.
+ */
+export class MotorLiterarioBridgeClient {
+  private readonly pending = new Map<string, PendingRequest>();
+  private readonly listeners = new Map<string, Set<NotificationHandler>>();
+  private buffer = "";
+  private nextId = 0;
+  private closed = false;
+  private readonly requestTimeoutMs: number;
+  private readonly maxMessageBytes: number;
+
+  constructor(
+    private readonly child: BridgeChildProcess,
+    private readonly options: MotorLiterarioBridgeClientOptions = {}
+  ) {
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 30_000;
+    this.maxMessageBytes = options.maxMessageBytes ?? 16 * 1024 * 1024;
+    if (!Number.isSafeInteger(this.requestTimeoutMs) || this.requestTimeoutMs < 1) {
+      throw new Error("requestTimeoutMs debe ser un entero positivo.");
+    }
+    if (!Number.isSafeInteger(this.maxMessageBytes) || this.maxMessageBytes < 1024) {
+      throw new Error("maxMessageBytes debe ser un entero de al menos 1024 bytes.");
+    }
+
+    child.stdout.setEncoding?.("utf8");
+    child.stdout.on("data", chunk => this.receiveChunk(String(chunk)));
+    child.stdout.on("error", error => this.failAll(this.asError(error)));
+    child.stderr?.setEncoding?.("utf8");
+    child.stderr?.on("data", chunk => options.onStderr?.(String(chunk)));
+    child.on("error", error => this.failAll(error));
+    child.on("exit", (code, signal) => {
+      this.closed = true;
+      this.failAll(new Error("El proceso Motor Literario terminó (código " +
+        String(code) + ", señal " + String(signal) + ")."));
+    });
+  }
+
+  private asError(value: unknown): Error {
+    return value instanceof Error ? value : new Error(String(value));
+  }
+
+  private byteLength(value: string): number {
+    return new TextEncoder().encode(value).byteLength;
+  }
+
+  private receiveChunk(chunk: string): void {
+    if (this.closed) return;
+    this.buffer += chunk;
+    if (this.byteLength(this.buffer) > this.maxMessageBytes * 2) {
+      this.failAll(new Error("El proceso puente envió un búfer sin delimitador superior al límite."));
+      return;
+    }
+
+    let newline = this.buffer.indexOf("\n");
+    while (newline >= 0) {
+      const line = this.buffer.slice(0, newline).replace(/\r$/u, "");
+      this.buffer = this.buffer.slice(newline + 1);
+      if (line.trim()) this.receiveLine(line);
+      newline = this.buffer.indexOf("\n");
+    }
+  }
+
+  private receiveLine(line: string): void {
+    if (this.byteLength(line) > this.maxMessageBytes) {
+      this.options.onProtocolError?.(new Error("La respuesta supera el límite del puente."), line);
+      return;
+    }
+    let message: unknown;
+    try {
+      message = JSON.parse(line);
+    } catch (error) {
+      this.options.onProtocolError?.(this.asError(error), line);
+      return;
+    }
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      this.options.onProtocolError?.(new Error("Mensaje JSON-RPC no es un objeto."), line);
+      return;
+    }
+    const record = message as Record<string, unknown>;
+    if (record.jsonrpc !== "2.0") {
+      this.options.onProtocolError?.(new Error("Versión JSON-RPC inesperada."), line);
+      return;
+    }
+
+    if (typeof record.method === "string") {
+      const handlers = this.listeners.get(record.method);
+      for (const handler of handlers ?? []) {
+        try { handler(record.params); } catch (error) {
+          this.options.onProtocolError?.(this.asError(error), line);
+        }
+      }
+      return;
+    }
+
+    if (typeof record.id !== "string" || !this.pending.has(record.id)) {
+      this.options.onProtocolError?.(new Error("Respuesta sin ID de solicitud pendiente."), line);
+      return;
+    }
+    const pending = this.pending.get(record.id)!;
+    this.pending.delete(record.id);
+    if (pending.timeout !== undefined) clearTimeout(pending.timeout);
+
+    if (record.error && typeof record.error === "object") {
+      pending.reject(new MotorLiterarioBridgeError(record.error as JsonRpcError));
+    } else if (Object.prototype.hasOwnProperty.call(record, "result")) {
+      pending.resolve(record.result);
+    } else {
+      pending.reject(new Error("Respuesta JSON-RPC sin result ni error."));
+    }
+  }
+
+  request<T = unknown>(method: string, params: Record<string, unknown> = {}, timeoutMs?: number): Promise<T> {
+    if (this.closed) return Promise.reject(new Error("El cliente del puente está cerrado."));
+    if (typeof method !== "string" || !method.trim()) {
+      return Promise.reject(new TypeError("El método JSON-RPC es obligatorio."));
+    }
+    const id = "ml-bridge-" + (++this.nextId);
+    const message = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
+    if (this.byteLength(message) > this.maxMessageBytes) {
+      return Promise.reject(new Error("La solicitud supera el límite de 16 MiB del puente."));
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      const duration = timeoutMs ?? this.requestTimeoutMs;
+      if (!Number.isSafeInteger(duration) || duration < 1) {
+        reject(new TypeError("El timeout debe ser un entero positivo."));
+        return;
+      }
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error("Tiempo de espera agotado para la solicitud " + method + "."));
+      }, duration);
+      this.pending.set(id, {
+        resolve: value => resolve(value as T),
+        reject,
+        timeout
+      });
+
+      try {
+        this.child.stdin.write(message);
+      } catch (error) {
+        clearTimeout(timeout);
+        this.pending.delete(id);
+        reject(this.asError(error));
+      }
+    });
+  }
+
+  onNotification(method: string, handler: NotificationHandler): () => void {
+    if (typeof method !== "string" || !method.trim() || typeof handler !== "function") {
+      throw new TypeError("Se requiere un método de notificación y un callback.");
+    }
+    const handlers = this.listeners.get(method) ?? new Set<NotificationHandler>();
+    handlers.add(handler);
+    this.listeners.set(method, handlers);
+    return () => {
+      handlers.delete(handler);
+      if (handlers.size === 0) this.listeners.delete(method);
+    };
+  }
+
+  async hello(): Promise<{
+    bridgeProtocolVersion: string;
+    motorApiVersion: string;
+    transport: string;
+    storage: string;
+  }> {
+    return this.request("bridge.hello");
+  }
+
+  openProject(identity: {
+    projectId: string;
+    projectName: string;
+    writerId?: string;
+  }): Promise<unknown> {
+    return this.request("project.open", identity);
+  }
+
+  openDocument(projectId: string, snapshot: {
+    documentId: string;
+    text: string;
+    revision: number;
+    sequence: number;
+  }): Promise<unknown> {
+    return this.request("document.open", { projectId, snapshot });
+  }
+
+  recoverDocument(projectId: string, documentId: string): Promise<unknown> {
+    return this.request("document.recover", { projectId, documentId });
+  }
+
+  submitChange(projectId: string, change: {
+    documentId: string;
+    sequence: number;
+    baseRevision: number;
+    start: number;
+    end: number;
+    replacement: string;
+  }): Promise<unknown> {
+    return this.request("document.change", { projectId, change });
+  }
+
+  async flushProject(projectId: string): Promise<void> {
+    await this.request("engine.flush", { projectId });
+  }
+
+  async closeProject(projectId: string): Promise<void> {
+    await this.request("project.close", { projectId });
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.closed) return;
+    await this.request("bridge.shutdown", {}, Math.max(this.requestTimeoutMs, 120_000));
+    this.child.stdin.end?.();
+  }
+
+  private failAll(error: Error): void {
+    for (const pending of this.pending.values()) {
+      if (pending.timeout !== undefined) clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
+}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LiveAuthorMonitor } from "../dist/motor-literario.js";
+import { LiveAuthorMonitor, subscribeLiveAuthorMonitorWithRefresh } from "../dist/motor-literario.js";
 
 function fixture(options = {}) {
   let time = 0;
@@ -147,4 +147,93 @@ test("valida secuencias, límite de documentos y retroceso del reloj", () => {
   assert.throws(() => monitor.recordAdmission(change(2, 0, 5, 5, "x"), queued("bad")), /no continúa la secuencia/);
   setTime(-1);
   assert.throws(() => monitor.getSnapshot("chapter-1"), /monotónico/);
+});
+
+test("refresca el estado de pausa sin nuevas pulsaciones y cancela el planificador", () => {
+  const { monitor, setTime, open, change, queued } = fixture({ idleAfterMs: 10 });
+  open();
+  const hostApi = {
+    getLiveAuthorMonitorSnapshot: documentId => monitor.getSnapshot(documentId),
+    getLiveAuthorMonitorSnapshots: () => monitor.getSnapshots(),
+    subscribeLiveAuthorMonitor: (listener, documentId) => monitor.subscribe(listener, documentId)
+  };
+  const received = [];
+  let refresh;
+  let cancelCalled = false;
+  const stop = subscribeLiveAuthorMonitorWithRefresh(hostApi, snapshot => received.push(snapshot), {
+    documentId: "chapter-1",
+    intervalMs: 250,
+    schedule(callback, intervalMs) {
+      assert.equal(intervalMs, 250);
+      refresh = callback;
+      return () => { cancelCalled = true; };
+    }
+  });
+
+  assert.equal(received.length, 1);
+  assert.equal(received[0].state, "idle");
+
+  setTime(5);
+  monitor.recordAdmission(change(1, 0, 5, 5, "a"), queued("t-1"));
+  assert.equal(received.at(-1).state, "active");
+
+  // No llega ninguna nueva edición: el pulso del panel debe detectar la pausa.
+  setTime(16);
+  refresh();
+  assert.equal(received.at(-1).state, "idle");
+  assert.equal(received.at(-1).currentIdleMs, 1);
+  assert.equal(received.at(-1).activeDurationMs, 10);
+  assert.equal(received.at(-1).idleDurationMs, 6);
+
+  const deliveredBeforeStop = received.length;
+  stop();
+  refresh();
+  assert.equal(received.length, deliveredBeforeStop);
+  assert.equal(cancelCalled, true);
+});
+
+test("el refresco global publica cada documento y aísla errores del panel", () => {
+  const { monitor, setTime, open } = fixture({ idleAfterMs: 10 });
+  open("chapter-1", "one");
+  open("chapter-2", "two");
+  const hostApi = {
+    getLiveAuthorMonitorSnapshot: documentId => monitor.getSnapshot(documentId),
+    getLiveAuthorMonitorSnapshots: () => monitor.getSnapshots(),
+    subscribeLiveAuthorMonitor: (listener, documentId) => monitor.subscribe(listener, documentId)
+  };
+  let refresh;
+  const received = [];
+  const stop = subscribeLiveAuthorMonitorWithRefresh(hostApi, snapshot => {
+    received.push(snapshot.documentId + ":" + snapshot.state);
+    if (snapshot.documentId === "chapter-1") throw new Error("panel no disponible");
+  }, {
+    intervalMs: 500,
+    schedule(callback) {
+      refresh = callback;
+      return () => {};
+    }
+  });
+
+  assert.deepEqual(received, ["chapter-1:idle", "chapter-2:idle"]);
+  setTime(20);
+  refresh();
+  assert.deepEqual(received.slice(2), ["chapter-1:idle", "chapter-2:idle"]);
+  stop();
+});
+
+test("valida el intervalo y el filtro documental antes de suscribirse", () => {
+  const { monitor } = fixture();
+  const hostApi = {
+    getLiveAuthorMonitorSnapshot: documentId => monitor.getSnapshot(documentId),
+    getLiveAuthorMonitorSnapshots: () => monitor.getSnapshots(),
+    subscribeLiveAuthorMonitor: (listener, documentId) => monitor.subscribe(listener, documentId)
+  };
+  assert.throws(() => subscribeLiveAuthorMonitorWithRefresh(hostApi, () => {}, {
+    intervalMs: 0,
+    schedule: () => () => {}
+  }), /intervalMs/);
+  assert.throws(() => subscribeLiveAuthorMonitorWithRefresh(hostApi, () => {}, {
+    documentId: "  ",
+    schedule: () => () => {}
+  }), /documentId/);
 });

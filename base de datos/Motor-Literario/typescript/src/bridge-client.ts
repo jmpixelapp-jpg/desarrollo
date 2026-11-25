@@ -2,8 +2,13 @@ import type {
   PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage,
   ProjectFinalizationSummary, StoredProjectFinalizationReceipt
 } from "./contracts";
-import type { NarrativeEntity, NarrativeIdea, PersonalIdeaLibraryEntry } from "./narrative-knowledge";
-import type { RecordLifecycle, RelationLifecycle } from "./project-data";
+import type {
+  NarrativeContradiction, NarrativeEntity, NarrativeEntityIdentityCandidate,
+  NarrativeEvent, NarrativeIdea, NarrativeRelation, PersonalIdeaLibraryEntry
+} from "./narrative-knowledge";
+import type { NarrativeAssertion } from "./narrative-history";
+import type { LiteraryAnalysisResult } from "./literary-analysis";
+import type { EventLifecycle, RecordLifecycle, RelationLifecycle } from "./project-data";
 
 export interface BridgeReadable {
   on(event: "data" | "error", listener: (value: unknown) => void): unknown;
@@ -301,6 +306,160 @@ export class MotorLiterarioBridgeClient {
     return this.request("document.change", { projectId, change });
   }
 
+  /** Extrae conocimiento explícito de un fragmento del libro y conserva su evidencia UTF-16. */
+  extractNarrativeKnowledge(
+    projectId: string,
+    documentId: string,
+    revision: number,
+    text: string,
+    baseOffset = 0
+  ): Promise<readonly NarrativeEntity[]> {
+    return this.request<readonly NarrativeEntity[]>("project.call", {
+      projectId,
+      method: "extractNarrativeKnowledge",
+      args: [documentId, revision, text, baseOffset]
+    });
+  }
+
+  /** Añade un alias confirmado por el escritor, sin fusionar identidades. */
+  addNarrativeEntityAlias(
+    projectId: string,
+    entityId: string,
+    alias: string
+  ): Promise<NarrativeEntity> {
+    return this.request<NarrativeEntity>("project.call", {
+      projectId,
+      method: "addNarrativeEntityAlias",
+      args: [entityId, alias]
+    });
+  }
+
+  /** Devuelve candidatos de identidad por nombres explícitos iguales; nunca fusiona automáticamente. */
+  getNarrativeEntityIdentityCandidates(
+    projectId: string
+  ): Promise<readonly NarrativeEntityIdentityCandidate[]> {
+    return this.request<readonly NarrativeEntityIdentityCandidate[]>("project.call", {
+      projectId,
+      method: "getNarrativeEntityIdentityCandidates",
+      args: []
+    });
+  }
+
+  /** Consolida dos fichas compatibles mediante la operación transaccional del almacenamiento. */
+  mergeNarrativeEntities(
+    projectId: string,
+    targetEntityId: string,
+    sourceEntityId: string
+  ): Promise<NarrativeEntity> {
+    return this.request<NarrativeEntity>("project.call", {
+      projectId,
+      method: "mergeNarrativeEntities",
+      args: [targetEntityId, sourceEntityId]
+    });
+  }
+
+  /** Lee las relaciones narrativas explícitas del libro. */
+  getNarrativeRelations(projectId: string): Promise<readonly NarrativeRelation[]> {
+    return this.request<readonly NarrativeRelation[]>("project.call", {
+      projectId,
+      method: "getNarrativeRelations",
+      args: []
+    });
+  }
+
+  /** Lee los acontecimientos narrativos del libro. */
+  getNarrativeEvents(projectId: string): Promise<readonly NarrativeEvent[]> {
+    return this.request<readonly NarrativeEvent[]>("project.call", {
+      projectId,
+      method: "getNarrativeEvents",
+      args: []
+    });
+  }
+
+  /** Lee las afirmaciones históricas explícitas y sus evidencias. */
+  getNarrativeAssertions(projectId: string): Promise<readonly NarrativeAssertion[]> {
+    return this.request<readonly NarrativeAssertion[]>("project.call", {
+      projectId,
+      method: "getNarrativeAssertions",
+      args: []
+    });
+  }
+
+  /** Lee el historial de atributos de una ficha, aceptando un ID histórico consolidado. */
+  getNarrativeEntityHistory(
+    projectId: string,
+    entityId: string
+  ): Promise<readonly NarrativeAssertion[]> {
+    return this.request<readonly NarrativeAssertion[]>("project.call", {
+      projectId,
+      method: "getNarrativeEntityHistory",
+      args: [entityId]
+    });
+  }
+
+  /** Resuelve un ID canónico o histórico sin alterar la identidad guardada. */
+  resolveNarrativeEntityId(projectId: string, entityId: string): Promise<string | undefined> {
+    return this.request<string | undefined>("project.call", {
+      projectId,
+      method: "resolveNarrativeEntityId",
+      args: [entityId]
+    });
+  }
+
+  /** Devuelve los acontecimientos ordenados solo por referencias temporales explícitas comparables. */
+  getNarrativeTimeline(projectId: string): Promise<readonly NarrativeEvent[]> {
+    return this.request<readonly NarrativeEvent[]>("project.call", {
+      projectId,
+      method: "getNarrativeTimeline",
+      args: []
+    });
+  }
+
+  /** Detecta contradicciones explícitas sin elegir una versión como verdadera. */
+  getNarrativeContradictions(projectId: string): Promise<readonly NarrativeContradiction[]> {
+    return this.request<readonly NarrativeContradiction[]>("project.call", {
+      projectId,
+      method: "getNarrativeContradictions",
+      args: []
+    });
+  }
+
+  /** Selecciona explícitamente la pista cronológica de un acontecimiento. */
+  setNarrativeEventTimelineTrack(
+    projectId: string,
+    eventId: string,
+    timelineTrackId?: string
+  ): Promise<NarrativeEvent> {
+    return this.request<NarrativeEvent>("project.call", {
+      projectId,
+      method: "setNarrativeEventTimelineTrack",
+      args: timelineTrackId === undefined ? [eventId] : [eventId, timelineTrackId]
+    });
+  }
+
+  /** Ejecuta el análisis descriptivo de una revisión abierta del documento. */
+  analyzeLiteraryDocument(
+    projectId: string,
+    documentId: string,
+    start = 0,
+    end?: number
+  ): Promise<LiteraryAnalysisResult> {
+    return this.request< LiteraryAnalysisResult>("project.call", {
+      projectId,
+      method: "analyzeLiteraryDocument",
+      args: end === undefined ? [documentId, start] : [documentId, start, end]
+    });
+  }
+
+  /** Invalida y recarga las cachés narrativas tras una actualización externa conocida. */
+  async refreshNarrativeKnowledge(projectId: string): Promise<void> {
+    await this.request("project.call", {
+      projectId,
+      method: "refreshNarrativeKnowledge",
+      args: []
+    });
+  }
+
   /** Lee las fichas narrativas del proyecto activo para resolver vínculos desde la interfaz. */
   getNarrativeEntities(projectId: string): Promise<readonly NarrativeEntity[]> {
     return this.request<readonly NarrativeEntity[]>("project.call", {
@@ -446,8 +605,8 @@ export class MotorLiterarioBridgeClient {
     });
   }
 
-  getEventLifecycleHistory(projectId: string, eventId: string): Promise<unknown> {
-    return this.request("project.call", {
+  getEventLifecycleHistory(projectId: string, eventId: string): Promise<readonly EventLifecycle[]> {
+    return this.request<readonly EventLifecycle[]>("project.call", {
       projectId,
       method: "getEventLifecycleHistory",
       args: [eventId]
@@ -461,8 +620,8 @@ export class MotorLiterarioBridgeClient {
     changedBy: string;
     changeReason?: string | null;
     changedAt?: number;
-  }): Promise<unknown> {
-    return this.request("project.call", {
+  }): Promise<NarrativeEvent> {
+    return this.request<NarrativeEvent>("project.call", {
       projectId,
       method: "updateNarrativeEvent",
       args: [input]

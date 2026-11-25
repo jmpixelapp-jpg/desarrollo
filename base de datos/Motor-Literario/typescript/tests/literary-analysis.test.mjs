@@ -1818,7 +1818,7 @@ test("cuenta co-menciones de personajes por escena sin confundirlas con relacion
     "Ana y Luis hablaron con Marta.",
     "Escena 3",
     "Marta caminó sola."
-  ].join("\\n");
+  ].join("\n");
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",

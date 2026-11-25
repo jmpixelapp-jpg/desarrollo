@@ -164,3 +164,23 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   assert.equal(store.writes, 3);
   api.dispose();
 });
+
+test("reconcilia dos altas concurrentes del mismo vínculo como una sola asociación", async () => {
+  const store = new RacingStore([idea("idea-source"), idea("idea-target")]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => ({
+    ...current,
+    relatedIdeaIds: [...current.relatedIdeaIds, "idea-target"]
+  });
+  const result = await api.setNarrativeIdeaLink("idea-source", "idea-target", true);
+
+  assert.deepEqual(result.relatedIdeaIds, ["idea-target"]);
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    ["idea-target"]
+  );
+  assert.equal(store.writes, 1);
+  api.dispose();
+});

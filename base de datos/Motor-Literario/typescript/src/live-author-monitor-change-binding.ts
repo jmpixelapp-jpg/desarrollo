@@ -119,8 +119,8 @@ export function bindLiveAuthorMonitorEditorChanges(
       : Object.freeze({
           status: "backpressured",
           pendingCount: pending.length,
-          firstPendingSequence: first?.sequence,
-          lastPendingSequence: last?.sequence,
+          ...(first ? { firstPendingSequence: first.sequence } : {}),
+          ...(last ? { lastPendingSequence: last.sequence } : {}),
           reason: pendingReason ?? "rejected"
         });
 

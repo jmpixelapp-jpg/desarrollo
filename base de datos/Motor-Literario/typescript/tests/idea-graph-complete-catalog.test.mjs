@@ -41,3 +41,42 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
     assert.equal(result.ideaGraph.largestWeakComponentSize,3);
   } finally { api.dispose(); }
 });
+
+test("limita la muestra del catálogo global sin alterar los totales del grafo", async () => {
+  const largeStore = {
+    ...store,
+    documents: new Map(),
+    ideas: Array.from({ length: 2_005 }, (_, index) => ({
+      projectId,
+      id: "idea-" + String(index).padStart(4, "0"),
+      text: "Idea independiente " + index,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: [],
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    }))
+  };
+  const api = new HostEngineApi({ store: largeStore });
+  api.initializeProject({ projectId, projectName: "Book", writerId: "writer-graph" });
+  await api.openDocument({
+    documentId: "chapter",
+    text: "Escena 1\\nLa tarde avanza.",
+    revision: 0,
+    sequence: 0
+  });
+  try {
+    const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
+    assert.equal(graph.ideaCount, 2_000);
+    assert.equal(graph.omittedIdeaCount, 5);
+    assert.equal(graph.weakComponentCount, 2_000);
+    assert.equal(graph.omittedWeakComponentCount, 1_900);
+    assert.equal(graph.weakComponents.length, 100);
+    assert.equal(graph.largestWeakComponentSize, 1);
+    assert.equal(graph.isolatedWithinSnapshotNodeCount, 2_000);
+  } finally {
+    api.dispose();
+  }
+});

@@ -341,7 +341,7 @@ test("aplica el presupuesto agregado del texto de ideas en el anfitrión sin rom
   api.initializeProject({ projectId, projectName: "Book", writerId: "writer-budget" });
   await api.openDocument({
     documentId: "chapter",
-    text: "Escena 1\\nEl manuscrito conserva todas las ideas.",
+    text: "Escena 1\nEl manuscrito conserva todas las ideas.",
     revision: 0,
     sequence: 0
   });

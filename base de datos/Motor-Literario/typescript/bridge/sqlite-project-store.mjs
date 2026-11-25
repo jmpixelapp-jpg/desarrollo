@@ -1598,6 +1598,42 @@ export class SqliteProjectStore {
     return clone(entry);
   }
 
+  loadPersonalIdeasByKeys(writerId, references) {
+    requireText(writerId, "writerId");
+    if (!Array.isArray(references) || references.length > 128) {
+      throw new Error("La lectura agrupada admite un máximo de 128 referencias.");
+    }
+    const seen = new Set();
+    const statement = this.database.prepare(
+      "SELECT value_json FROM " + TABLE +
+      " WHERE collection = 'personal-idea-library' AND record_key = ? AND writer_id = ?"
+    );
+    const entries = [];
+    for (const reference of references) {
+      if (!reference || typeof reference.sourceProjectId !== "string" ||
+          !reference.sourceProjectId.trim() ||
+          typeof reference.ideaId !== "string" || !reference.ideaId.trim()) {
+        throw new Error("La lectura agrupada recibió una referencia malformada.");
+      }
+      const key = JSON.stringify([reference.sourceProjectId, reference.ideaId]);
+      if (seen.has(key)) throw new Error("La lectura agrupada recibió referencias duplicadas.");
+      seen.add(key);
+      const row = statement.get(
+        encodedKey([writerId, reference.sourceProjectId, reference.ideaId]),
+        writerId
+      );
+      if (!row) continue;
+      const entry = JSON.parse(row.value_json);
+      if (!entry || entry.writerId !== writerId ||
+          entry.sourceProjectId !== reference.sourceProjectId ||
+          entry.idea?.id !== reference.ideaId) {
+        throw new Error("Biblioteca SQLite inconsistente: la lectura agrupada devolvió una entrada ajena.");
+      }
+      entries.push(entry);
+    }
+    return clone(entries);
+  }
+
   loadPersonalIdeas(writerId) {
     requireText(writerId, "writerId");
     return clone(this.find("personal-idea-library", item => item.writerId === writerId));

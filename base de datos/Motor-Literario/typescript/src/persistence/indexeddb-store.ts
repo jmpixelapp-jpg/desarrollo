@@ -1531,11 +1531,27 @@ function validatePersonalIdeaBackupIntegrity(
   const entryByKey = new Map<string, PersonalIdeaLibraryEntry>();
   const countByOwnerAndProject = new Map<string, number>();
   for (const value of rawEntries) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("El respaldo IndexedDB contiene una entrada de biblioteca malformada.");
+    }
     const entry = value as PersonalIdeaLibraryEntry;
-    if (typeof entry.writerId !== "string" || !entry.writerId.trim() ||
+    if (typeof entry.writerId !== "string" || !entry.writerId.trim() || entry.writerId.length > 256 ||
         typeof entry.sourceProjectId !== "string" || !entry.sourceProjectId.trim() ||
-        !entry.idea || typeof entry.idea.id !== "string" || !entry.idea.id.trim()) continue;
+        typeof entry.sourceProjectName !== "string" || !entry.sourceProjectName.trim() ||
+        entry.category !== entry.sourceProjectName ||
+        !entry.idea || entry.idea.projectId !== entry.sourceProjectId ||
+        typeof entry.idea.id !== "string" || !entry.idea.id.trim() ||
+        entry.idea.sourceProjectName !== entry.sourceProjectName || entry.idea.status !== "IDEA" ||
+        !Number.isFinite(entry.archivedAt) || entry.archivedAt < 0 ||
+        (entry.context !== undefined && (!entry.context || entry.context.version !== 1))) {
+      throw new Error("El respaldo IndexedDB contiene una entrada de biblioteca inválida.");
+    }
+    validateNarrativeIdeaRecord(entry.idea, "idea archivada del respaldo");
+    if (entry.context) {
+      validatePersonalIdeaLibraryContext(
+        entry.context, entry.sourceProjectId, entry.sourceProjectName, "contexto del respaldo"
+      );
+    }
     const key = JSON.stringify([entry.writerId, entry.sourceProjectId, entry.idea.id]);
     if (entryByKey.has(key)) {
       throw new Error("El respaldo IndexedDB contiene entradas de biblioteca duplicadas.");

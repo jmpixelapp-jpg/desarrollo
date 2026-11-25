@@ -75,6 +75,36 @@ test("conserva términos de alfabetos Unicode sin distinción de mayúsculas", (
   assert.ok(result.resonances[0].sharedTerms.includes("森林"));
 });
 
+test("normaliza Unicode compuesto y conserva las marcas diacríticas", () => {
+  const result = analyze([
+    idea("idea-a", "CAFÉ memoria energía bosque"),
+    idea("idea-b", "cafe\u0301 MEMORIA energia\u0301 BOSQUE")
+  ]);
+
+  assert.equal(result.candidatePairCount, 1);
+  assert.equal(result.resonances[0].sharedTermCount, 4);
+  assert.ok(result.resonances[0].sharedTerms.includes("café"));
+  assert.ok(result.resonances[0].sharedTerms.includes("energía"));
+});
+
+test("limita la muestra de términos sin alterar las métricas completas", () => {
+  const shared = [
+    "alborada","bruma","ceniza","destello","enigma",
+    "fragilidad","horizonte","instante","lumbre","memoria",
+    "nostalgia","origen","penumbra","quietud","refugio"
+  ].join(" ");
+  const result = analyze([
+    idea("idea-a", shared + " aurora"),
+    idea("idea-b", shared + " travesía")
+  ]);
+
+  assert.equal(result.candidatePairCount, 1);
+  assert.equal(result.resonances[0].sharedTermCount, 15);
+  assert.equal(result.resonances[0].sharedTerms.length, 12);
+  assert.equal(result.resonances[0].omittedSharedTermCount, 3);
+  assert.equal(result.resonances[0].jaccardSimilarity, 0.882);
+});
+
 test("ordena los candidatos de forma determinista aunque cambie el orden de entrada", () => {
   const ideas = [
     idea("idea-c", "La memoria y la luz permanecen"),

@@ -3098,13 +3098,19 @@ export class HostEngineApi {
         this.ideasLoaded = true;
       }
 
-      if (referenceKind === "relatedEntityIds" && !this.entitiesLoaded) {
-        const entityStore = this.requireKnowledgeStore();
+      if (referenceKind === "relatedEntityIds" && (linked || !this.entitiesLoaded)) {
+        // Una asociación nueva debe comprobar el destino contra el catálogo
+        // durable actual: otra instancia pudo eliminarlo desde la última lectura.
         const entities = requireProjectScopedRecords(
-          await entityStore.loadEntities(projectId), projectId, "entidades"
+          await this.requireKnowledgeReaderStore().loadEntities(projectId),
+          projectId,
+          "entidades"
         );
+        this.narrativeEntities.clear();
         for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
         this.entitiesLoaded = true;
+        this.entityEvidenceIndex = undefined;
+        this.entityNameIndex = undefined;
       }
 
       const idea = this.narrativeIdeas.get(ideaId);

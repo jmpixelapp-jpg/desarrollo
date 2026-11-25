@@ -263,10 +263,10 @@ function isValidPersonalIdeaContext(
         typeof entity.normalizedName !== "string" || !entity.normalizedName.trim() ||
         normalizeEntityName(entity.canonicalName) !== entity.normalizedName ||
         !Array.isArray(entity.aliases) ||
-        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim()) ||
+        entity.aliases.some((alias: unknown) => typeof alias !== "string" || !alias.trim()) ||
         (entity.mergedFromIds !== undefined &&
           (!Array.isArray(entity.mergedFromIds) ||
-            entity.mergedFromIds.some(id => typeof id !== "string" || !id.trim()))) ||
+            entity.mergedFromIds.some((id: unknown) => typeof id !== "string" || !id.trim()))) ||
         !Number.isFinite(entity.firstSeenAt) || entity.firstSeenAt < 0 ||
         !Number.isFinite(entity.lastSeenAt) || entity.lastSeenAt < entity.firstSeenAt ||
         entity.extractionVersion !== 1 || !Array.isArray(entity.evidence)) return false;
@@ -295,7 +295,7 @@ function isValidPersonalIdeaContext(
     }
   }
   for (const idea of context.relatedIdeas) {
-    if ((idea.relatedEntityIds ?? []).some(id => !entityIds.has(id))) return false;
+    if ((idea.relatedEntityIds ?? []).some((id: string) => !entityIds.has(id))) return false;
   }
   return true;
 }

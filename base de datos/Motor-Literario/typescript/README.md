@@ -310,7 +310,7 @@ Todos los vínculos se guardan en `dictionary-entry-entities`, con `linkKind`, `
 
 La migración DB21 materializa los vínculos heredados que solo contenían IDs: usa `RELATED` como tipo genérico, `MIGRATION` como procedencia explícita y la fecha real de migración como `createdAt`. No presenta esa fecha como si fuera la fecha histórica original. La tabla queda completamente implementada y las asociaciones anteriores no se pierden.
 
-\n\nLa auditoría física del manifiesto `MLDB/storage_mapping_v0.4.1.json` verifica las 24 tablas propiedad del motor, la tabla `projects` bajo control del anfitrión, la versión/nombre de IndexedDB y los 31 almacenes declarados, incluidos diagnósticos y recibos operativos. Se ejecuta junto con la validación del esquema mediante `npm run validate:schema`.\n
+\n\nLa auditoría física del manifiesto `MLDB/storage_mapping_v0.4.1.json` verifica las 24 tablas propiedad del motor, la tabla `projects` bajo control del anfitrión, la versión/nombre de IndexedDB y los 32 almacenes declarados, incluidos diagnósticos y recibos operativos. Se ejecuta junto con la validación del esquema mediante `npm run validate:schema`.\n
 
 ## Análisis literario descriptivo
 

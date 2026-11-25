@@ -3395,6 +3395,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       }
       const request = ideas.index("by-project").getAll(projectId);
       const archived: PersonalIdeaLibraryEntry[] = [];
+      let didChange = false;
       let finished = false;
       const abortWith = (error: unknown): void => {
         if (finished) return;
@@ -3422,6 +3423,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             personal.add(entry);
             ideas.delete([projectId, entry.idea.id]);
             archived.push(entry);
+            didChange = true;
           }
           const archivedIdeaIds = pending.map(item => item.idea.id).sort();
           if (supportsReceipts) receipts.add({
@@ -3645,6 +3647,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.oncomplete = () => {
         if (!finished) {
           finished = true;
+          if (didChange) this.publishNarrativeChange(projectId);
           resolve(archived);
         }
       };
@@ -4194,7 +4197,10 @@ export class IndexedDbProjectStore implements ProjectStore {
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
         };
       });
-      transaction.oncomplete = () => resolve();
+      transaction.oncomplete = () => {
+        this.publishNarrativeChange(projectId);
+        resolve();
+      };
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo consolidar la identidad narrativa."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Se canceló la consolidación de identidad."));
     });

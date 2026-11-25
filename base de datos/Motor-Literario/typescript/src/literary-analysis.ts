@@ -687,6 +687,11 @@ export interface LiteraryCharacterDocumentedIdeaReference {
   /** La referencia puede apuntar a una idea omitida del snapshot, no necesariamente inexistente. */
   readonly resolution: "included-in-analysis-snapshot" | "not-in-analysis-snapshot";
 }
+export interface LiteraryCharacterRelatedIdeaState {
+  readonly ideaId: string;
+  readonly status: NarrativeIdea["status"];
+  readonly resolution: "included-in-analysis-snapshot" | "not-in-analysis-snapshot";
+}
 export interface LiteraryCharacterIdeaStatusTransition {
   readonly fromStatus: NarrativeIdeaStatusChange["status"];
   readonly toStatus: NarrativeIdeaStatusChange["status"];
@@ -701,6 +706,15 @@ export interface LiteraryCharacterDocumentedDecision {
   readonly sourceProjectName: string;
   readonly relatedIdeaIds: readonly string[];
   readonly relatedIdeaReferences: readonly LiteraryCharacterDocumentedIdeaReference[];
+  /** Estados observados en las ideas relacionadas que sí están en la instantánea. */
+  readonly relatedIdeaStateProfiles: readonly LiteraryCharacterRelatedIdeaState[];
+  readonly relatedIdeaStateDivergenceCount: number;
+  readonly relatedIdeaStateStatus:
+    | "no-related-ideas"
+    | "same-status"
+    | "mixed-status"
+    | "unknown-due-to-incomplete-snapshot"
+    | "targets-not-in-snapshot";
   readonly evidenceCount: number;
   readonly staleEvidenceCount: number;
   readonly evidenceSamples: readonly LiteraryCharacterRelationshipEvidence[];
@@ -4461,6 +4475,7 @@ function buildCharacterNarrativeTrajectories(
   }
   const characterById = new Map(knownCharacters.map(character => [character.entityId,character]));
   const knownIdeaIds = new Set(knownIdeas.map(idea => idea.ideaId));
+  const knownIdeaById = new Map(knownIdeas.map(idea => [idea.ideaId,idea] as const));
   const ideaReferenceCount = knownIdeas.reduce(
     (total, idea) => total + idea.relatedIdeaIds.length, 0
   );
@@ -4601,6 +4616,29 @@ function buildCharacterNarrativeTrajectories(
             : omittedProjectEventCount > 0
               ? "unknown-due-to-incomplete-catalog" as const
               : "no-later-event-in-snapshot" as const;
+      const relatedIdeaStateProfiles = idea.relatedIdeaIds
+        .map(ideaId => {
+          const relatedIdea = knownIdeaById.get(ideaId);
+          return relatedIdea ? {
+            ideaId,
+            status:relatedIdea.status,
+            resolution:"included-in-analysis-snapshot" as const
+          } : null;
+        })
+        .filter((profile): profile is LiteraryCharacterRelatedIdeaState => profile !== null)
+        .sort((left,right) => left.ideaId.localeCompare(right.ideaId,"en"));
+      const relatedIdeaStatuses = new Set(relatedIdeaStateProfiles.map(profile => profile.status));
+      const relatedIdeaStateDivergenceCount = Math.max(0,relatedIdeaStatuses.size-1);
+      const hasUnresolvedRelatedIdeas = relatedIdeaStateProfiles.length < idea.relatedIdeaIds.length;
+      const relatedIdeaStateStatus = idea.relatedIdeaIds.length === 0
+        ? "no-related-ideas" as const
+        : relatedIdeaStateDivergenceCount > 0
+          ? "mixed-status" as const
+          : hasUnresolvedRelatedIdeas
+            ? omittedIdeaCount > 0
+              ? "unknown-due-to-incomplete-snapshot" as const
+              : "targets-not-in-snapshot" as const
+            : "same-status" as const;
       const statusTransitions = idea.statusHistory.slice(1)
         .flatMap((change,index) => {
           const previous = idea.statusHistory[index]!;
@@ -4638,6 +4676,9 @@ function buildCharacterNarrativeTrajectories(
             ? "included-in-analysis-snapshot" as const
             : "not-in-analysis-snapshot" as const
         })),
+        relatedIdeaStateProfiles,
+        relatedIdeaStateDivergenceCount,
+        relatedIdeaStateStatus,
         evidenceCount:idea.evidenceCount,
         staleEvidenceCount:idea.staleEvidenceCount,
         evidenceSamples:idea.evidence.slice(0,20).map(item => ({

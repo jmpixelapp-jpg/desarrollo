@@ -109,6 +109,14 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       );
       return;
     }
+    if (!before.inputType ||
+        (!before.inputType.startsWith("insert") && !before.inputType.startsWith("delete"))) {
+      this.fail(
+        "unsupported-input-type",
+        "El navegador no identificó una operación de inserción o eliminación compatible."
+      );
+      return;
+    }
 
     const value = this.element.value;
     const deltaLength = value.length - before.previousLength;

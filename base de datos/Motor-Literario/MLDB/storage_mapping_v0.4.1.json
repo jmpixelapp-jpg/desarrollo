@@ -571,10 +571,11 @@
         "project/narrative-events/timeline/"
       ],
       "representation": "embedded",
-      "contract": "NarrativeEvent.timeReference y participantes en narrative-events.",
-      "implementationStatus": "partial",
+      "contract": "NarrativeEvent.timeReference y timelineTrackId dentro de narrative-events; la pista se comprueba contra timeline-tracks en la misma transacción.",
+      "implementationStatus": "implemented",
       "objectStores": [
-        "narrative-events"
+        "narrative-events",
+        "timeline-tracks"
       ],
       "keyPath": [
         [

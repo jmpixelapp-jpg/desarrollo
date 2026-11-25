@@ -254,6 +254,8 @@ Las consultas públicas y las operaciones que devuelven entidades, ideas o entra
 Cada apertura reserva sincrónicamente el identificador del documento antes de iniciar lecturas o escrituras asíncronas. Mientras la reserva está activa, otra apertura/resincronización del mismo documento se rechaza y el editor no puede admitir deltas para una sesión que todavía no está publicada. La reserva se libera tanto al completar la apertura como ante cualquier error; un fallo de persistencia inicial no deja una sesión parcial ni impide reintentar. Documentos distintos conservan su independencia y pueden abrirse en paralelo.
 
 
+La tabla lógica `timeline_occurrences` está embebida en los acontecimientos: cada evento puede conservar su referencia temporal explícita y el `timelineTrackId` que el escritor le asigne. El vínculo se valida en la misma transacción de IndexedDB contra una pista del mismo proyecto. La API `setNarrativeEventTimelineTrack(eventId, trackId)` asocia una pista; enviar `undefined` retira la asociación. El motor no elige una pista por similitud ni transforma una fecha ausente en fecha inventada.
+
 ### Perfiles de estilo y pistas cronológicas
 
 Los perfiles de estilo guardan observaciones y preferencias de voz, punto de vista, diálogos y otros rasgos mediante JSON extensible y procedencia. No reescriben el manuscrito ni uniforman automáticamente la voz del escritor.

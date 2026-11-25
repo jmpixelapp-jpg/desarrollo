@@ -44,7 +44,7 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `relation_attributes` | Tipo/evidencia embebidos en relación | Parcial; sin atributos genéricos |
 | `evidences` | `TextEvidence` embebido en registros | Implementado |
 | `timeline_tracks` | `timeline-tracks` | Implementado; pistas temporales explícitas sin inferencia automática |
-| `timeline_occurrences` | `timeReference` embebida en `narrative-events` | Parcial; sin tracks configurables |
+| `timeline_occurrences` | `timeReference` y `timelineTrackId` embebidos en `narrative-events` | Implementado; asociación explícita validada transaccionalmente contra `timeline-tracks` |
 | `language_profiles` | `language-profiles` | Implementado; perfiles reales/ficticios, preferencias JSON y cobertura declarada |
 | `language_resource_refs` | `language-resource-refs` | Implementado; referencias ligadas opcionalmente a perfiles del mismo proyecto |
 | `style_profiles` | `style-profiles` | Implementado; perfil de voz y preferencias editoriales del libro |

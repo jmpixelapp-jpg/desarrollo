@@ -126,6 +126,11 @@ function validateNarrativeEventRecord(event: NarrativeEvent, label: string): voi
     throw new Error(`Registro de ${label} malformado: etiqueta o participantes inválidos.`);
   }
   validateNarrativeEvidenceList(event.evidence, label);
+  if (event.timelineTrackId !== undefined &&
+      (typeof event.timelineTrackId !== "string" || !event.timelineTrackId.trim() ||
+       event.timelineTrackId.length > 256)) {
+    throw new Error(`Registro de ${label} malformado: pista cronológica inválida.`);
+  }
   const time = event.timeReference;
   if (time !== undefined &&
       (!time || (time.basis !== "calendar" && time.basis !== "story-day") ||
@@ -688,6 +693,93 @@ async function saveNarrativeIdeaWithReferences(
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo guardar la idea."));
     transaction.onabort = () => reject(transaction.error ?? new Error("Se canceló el guardado de la idea."));
+  });
+}
+
+async function saveNarrativeEventWithReferences(
+  db: IDBDatabase,
+  event: NarrativeEvent
+): Promise<void> {
+  const requiredIds = [...new Set(event.participants)];
+  if (requiredIds.some(id => typeof id !== "string" || !id.trim())) {
+    throw new Error("El acontecimiento contiene participantes inválidos.");
+  }
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction([ENTITIES, TIMELINE_TRACKS, EVENTS], "readwrite");
+    let entitiesReady = false;
+    let trackReady = event.timelineTrackId === undefined;
+    let referenceConflict = false;
+    let failure: Error | undefined;
+    const abortWith = (error: unknown, conflict = false): void => {
+      failure = error instanceof Error ? error : new Error("No se pudieron validar las referencias del acontecimiento.");
+      referenceConflict = conflict;
+      try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    const saveIfReady = (): void => {
+      if (!entitiesReady || !trackReady || failure) return;
+      transaction.objectStore(EVENTS).put(event);
+    };
+
+    const entitiesRequest = transaction.objectStore(ENTITIES).index("by-project").getAll(event.projectId);
+    entitiesRequest.onsuccess = () => {
+      try {
+        const entities = entitiesRequest.result as NarrativeEntity[];
+        if (!Array.isArray(entities)) {
+          throw new Error("La colección de entidades del acontecimiento es inválida.");
+        }
+        const available = new Set<string>();
+        for (const entity of entities) {
+          if (entity && typeof entity.id === "string" && requiredIds.includes(entity.id)) {
+            validateNarrativeEntityRecord(entity, "entidad participante");
+            if (entity.projectId !== event.projectId) {
+              throw new Error("Una entidad participante pertenece a otro proyecto.");
+            }
+            available.add(entity.id);
+          }
+        }
+        if (requiredIds.some(id => !available.has(id))) {
+          throw new Error("Uno o más participantes no existen en el proyecto del acontecimiento.");
+        }
+        entitiesReady = true;
+        saveIfReady();
+      } catch (error) {
+        abortWith(error, true);
+      }
+    };
+    entitiesRequest.onerror = () => abortWith(
+      entitiesRequest.error ?? new Error("No se pudieron verificar los participantes del acontecimiento.")
+    );
+
+    if (event.timelineTrackId !== undefined) {
+      const trackRequest = transaction.objectStore(TIMELINE_TRACKS)
+        .get([event.projectId, event.timelineTrackId]);
+      trackRequest.onsuccess = () => {
+        try {
+          const track = trackRequest.result as TimelineTrack | undefined;
+          if (!track || track.projectId !== event.projectId || track.id !== event.timelineTrackId) {
+            throw new Error("La pista cronológica no existe en el mismo proyecto que el acontecimiento.");
+          }
+          validateTimelineTrack(track, event.projectId);
+          trackReady = true;
+          saveIfReady();
+        } catch (error) {
+          abortWith(error, true);
+        }
+      };
+      trackRequest.onerror = () => abortWith(
+        trackRequest.error ?? new Error("No se pudo verificar la pista cronológica del acontecimiento.")
+      );
+    }
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(
+      failure ?? transaction.error ?? new Error("No se pudo guardar el acontecimiento.")
+    );
+    transaction.onabort = () => reject(
+      failure ?? (referenceConflict
+        ? new Error("Referencia narrativa inválida: participante o pista cronológica fuera del proyecto.")
+        : transaction.error ?? new Error("Se canceló el guardado del acontecimiento."))
+    );
   });
 }
 
@@ -2127,21 +2219,68 @@ export class IndexedDbProjectStore implements ProjectStore {
   async saveEvent(event: NarrativeEvent): Promise<void> {
     validateNarrativeEventRecord(event, "acontecimiento");
     const db = await this.open();
-    await saveNarrativeRecordWithEntityReferences(
-      db, EVENTS, event, event.participants,
-      "No se pudo guardar el acontecimiento."
-    );
+    await saveNarrativeEventWithReferences(db, event);
   }
 
   async loadEvents(projectId: string): Promise<readonly NarrativeEvent[]> {
-    if (typeof projectId !== "string" || !projectId.trim()) throw new Error("Identificador de proyecto inválido.");
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido.");
+    }
     const db = await this.open();
-    const transaction = db.transaction(EVENTS, "readonly");
-    const request = transaction.objectStore(EVENTS).index("by-project").getAll(projectId);
-    const records = await readAfterTransaction(transaction, request, "No se pudieron leer los acontecimientos.") as NarrativeEvent[];
-    const scoped = validateProjectRecords(records, projectId, "acontecimiento");
-    for (const event of scoped) validateNarrativeEventRecord(event, "acontecimiento");
-    return scoped;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([EVENTS, TIMELINE_TRACKS], "readonly");
+      const eventsRequest = transaction.objectStore(EVENTS).index("by-project").getAll(projectId);
+      const tracksRequest = transaction.objectStore(TIMELINE_TRACKS).index("by-project").getAll(projectId);
+      let events: NarrativeEvent[] | undefined;
+      let tracks: TimelineTrack[] | undefined;
+      let failure: Error | undefined;
+      const abortWith = (error: unknown): void => {
+        failure = error instanceof Error ? error : new Error("No se pudieron validar los acontecimientos.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      eventsRequest.onsuccess = () => {
+        events = eventsRequest.result as NarrativeEvent[];
+        if (!Array.isArray(events)) abortWith(new Error("La colección de acontecimientos es inválida."));
+      };
+      tracksRequest.onsuccess = () => {
+        tracks = tracksRequest.result as TimelineTrack[];
+        if (!Array.isArray(tracks)) abortWith(new Error("La colección de pistas cronológicas es inválida."));
+      };
+      eventsRequest.onerror = () => abortWith(
+        eventsRequest.error ?? new Error("No se pudieron recuperar los acontecimientos.")
+      );
+      tracksRequest.onerror = () => abortWith(
+        tracksRequest.error ?? new Error("No se pudieron recuperar las pistas cronológicas.")
+      );
+      transaction.oncomplete = () => {
+        try {
+          if (failure) throw failure;
+          const scopedEvents = validateProjectRecords(events ?? [], projectId, "acontecimiento");
+          const scopedTracks = validateProjectRecords(tracks ?? [], projectId, "pista cronológica");
+          const trackIds = new Set<string>();
+          for (const track of scopedTracks) {
+            validateTimelineTrack(track, projectId);
+            if (trackIds.has(track.id)) throw new Error("Hay IDs de pistas cronológicas duplicados.");
+            trackIds.add(track.id);
+          }
+          for (const event of scopedEvents) {
+            validateNarrativeEventRecord(event, "acontecimiento");
+            if (event.timelineTrackId !== undefined && !trackIds.has(event.timelineTrackId)) {
+              throw new Error("Un acontecimiento referencia una pista cronológica inexistente o ajena al proyecto.");
+            }
+          }
+          resolve(scopedEvents);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      transaction.onerror = () => reject(
+        failure ?? transaction.error ?? new Error("No se pudieron leer los acontecimientos.")
+      );
+      transaction.onabort = () => reject(
+        failure ?? transaction.error ?? new Error("Se canceló la lectura de acontecimientos.")
+      );
+    });
   }
 
   async saveIdea(idea: NarrativeIdea): Promise<void> {

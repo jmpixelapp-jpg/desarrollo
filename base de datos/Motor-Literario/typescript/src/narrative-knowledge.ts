@@ -116,6 +116,8 @@ export interface NarrativeEvent {
   readonly label: string;
   readonly participants: readonly string[];
   readonly evidence: readonly TextEvidence[];
+  /** Pista cronológica elegida explícitamente por el escritor; nunca se infiere. */
+  readonly timelineTrackId?: string;
   /** Ausente cuando el texto no proporciona una referencia temporal explícita. */
   readonly timeReference?: NarrativeTimeReference;
 }
@@ -582,6 +584,7 @@ export function mergeNarrativeEvent(
     ...previous,
     label: incoming.label,
     participants: incoming.participants,
+    ...(incoming.timelineTrackId ? { timelineTrackId: incoming.timelineTrackId } : {}),
     ...(incoming.timeReference ? { timeReference: incoming.timeReference } : {}),
     evidence: [...evidence.values()]
   };

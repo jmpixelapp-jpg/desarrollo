@@ -1261,12 +1261,66 @@ export class HostEngineApi {
         for (const event of events) this.narrativeEvents.set(event.id, event);
         this.eventsLoaded = true;
       }
+      const events = [...this.narrativeEvents.values()];
       const entities = await this.loadNarrativeEntitiesFromStore();
       requireNarrativeEntityReferences(
-        [...this.narrativeEvents.values()], projectId, entities,
-        event => event.participants, "acontecimientos"
+        events, projectId, entities, event => event.participants, "acontecimientos"
       );
-      return cloneNarrativeRecords([...this.narrativeEvents.values()]);
+      await this.validateEventTimelineTracks(events, projectId);
+      return cloneNarrativeRecords(events);
+    });
+  }
+
+  /** Asocia un acontecimiento a una pista explícita del mismo libro, o retira la asociación. */
+  async setNarrativeEventTimelineTrack(
+    eventId: string,
+    timelineTrackId?: string
+  ): Promise<NarrativeEvent> {
+    if (typeof eventId !== "string" || !eventId.trim() ||
+        (timelineTrackId !== undefined &&
+          (typeof timelineTrackId !== "string" || !timelineTrackId.trim()))) {
+      throw new Error("La identidad del acontecimiento o de la pista cronológica es inválida.");
+    }
+    return this.enqueueKnowledgeOperation(async () => {
+      const projectId = this.requireProject().projectId;
+      if (!this.eventsLoaded) {
+        const events = requireProjectScopedRecords(
+          await this.requireEventStore().loadEvents(projectId), projectId, "acontecimientos"
+        );
+        const entities = await this.loadNarrativeEntitiesFromStore();
+        requireNarrativeEntityReferences(
+          events, projectId, entities, event => event.participants, "acontecimientos"
+        );
+        for (const event of events) this.narrativeEvents.set(event.id, event);
+        this.eventsLoaded = true;
+      }
+      const current = this.narrativeEvents.get(eventId);
+      if (!current) throw new Error("El acontecimiento no existe en el proyecto activo.");
+      if (timelineTrackId !== undefined) {
+        const tracks = this.store.loadTimelineTracks;
+        if (!tracks) throw new Error("El adaptador no admite pistas cronológicas.");
+        const available = await tracks.call(this.store, projectId);
+        if (!Array.isArray(available)) throw new Error("La colección de pistas cronológicas es inválida.");
+        const ids = new Set<string>();
+        for (const track of available) {
+          validateTimelineTrack(track, projectId);
+          if (ids.has(track.id)) throw new Error("Hay IDs duplicados de pistas cronológicas.");
+          ids.add(track.id);
+        }
+        if (!ids.has(timelineTrackId)) {
+          throw new Error("La pista cronológica no existe en el mismo proyecto que el acontecimiento.");
+        }
+      }
+      if (current.timelineTrackId === timelineTrackId) {
+        return cloneNarrativeRecords([current])[0]!;
+      }
+      const { timelineTrackId: previousTrackId, ...base } = current;
+      const updated: NarrativeEvent = timelineTrackId === undefined
+        ? base
+        : { ...base, timelineTrackId };
+      await this.requireEventStore().saveEvent(updated);
+      this.narrativeEvents.set(eventId, updated);
+      return cloneNarrativeRecords([updated])[0]!;
     });
   }
 
@@ -2086,6 +2140,31 @@ export class HostEngineApi {
       saveDictionaryEntry: store.saveDictionaryEntry.bind(store),
       loadDictionaryEntries: store.loadDictionaryEntries.bind(store)
     };
+  }
+
+  private async validateEventTimelineTracks(
+    events: readonly NarrativeEvent[],
+    projectId: string
+  ): Promise<void> {
+    const linkedEvents = events.filter(event => event.timelineTrackId !== undefined);
+    if (linkedEvents.length === 0) return;
+    const loadTracks = this.store.loadTimelineTracks;
+    if (!loadTracks) {
+      throw new Error("El adaptador no puede verificar las pistas cronológicas de los acontecimientos.");
+    }
+    const tracks = await loadTracks.call(this.store, projectId);
+    if (!Array.isArray(tracks)) throw new Error("La colección de pistas cronológicas es inválida.");
+    const trackIds = new Set<string>();
+    for (const track of tracks) {
+      validateTimelineTrack(track, projectId);
+      if (trackIds.has(track.id)) throw new Error("Hay IDs duplicados de pistas cronológicas.");
+      trackIds.add(track.id);
+    }
+    for (const event of linkedEvents) {
+      if (event.projectId !== projectId || !trackIds.has(event.timelineTrackId!)) {
+        throw new Error("Un acontecimiento referencia una pista cronológica inexistente o ajena al proyecto.");
+      }
+    }
   }
 
   private requireEventStore(): Required<Pick<import("./contracts").ProjectStore, "saveEvent" | "loadEvents">> {

@@ -165,6 +165,29 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   api.dispose();
 });
 
+test("rechaza un vínculo si el destino desaparece durante la relectura tras CAS", async () => {
+  const store = new RacingStore([idea("idea-source"), idea("idea-target")]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  store.onNextConflict = current => {
+    store.ideas.delete(projectId + ":idea-target");
+    return { ...current, text: "La idea de origen conserva su texto." };
+  };
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-target", true),
+    /Ambas ideas deben existir en el proyecto activo/
+  );
+  assert.deepEqual(
+    store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
+    []
+  );
+  assert.equal(store.ideas.has(projectId + ":idea-target"), false);
+  assert.equal(store.writes, 1);
+  api.dispose();
+});
+
 test("reconcilia dos altas concurrentes del mismo vínculo como una sola asociación", async () => {
   const store = new RacingStore([idea("idea-source"), idea("idea-target")]);
   const api = createApi(store);

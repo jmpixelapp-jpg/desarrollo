@@ -212,18 +212,19 @@ function validateNarrativeIdeaStatusHistory(idea) {
         !["initial", "writer", "text-revised"].includes(item.reason) ||
         (item.reason === "text-revised" && item.status !== "IDEA") ||
         (index === 0 ? item.reason !== "initial" : item.reason === "initial" ||
-          item.status === idea.statusHistory[index - 1]?.status) ||
+          (item.status === idea.statusHistory[index - 1]?.status && item.reason !== "writer")) ||
         (item.changedAt !== undefined &&
           (!Number.isFinite(item.changedAt) || item.changedAt < 0))) {
       throw new Error("Historial de estados de idea inválido.");
     }
   }
-  if (idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
-    throw new Error("El historial de estados no coincide con la idea actual.");
-  }
 }
 
 function validateMonotonicNarrativeIdeaStatusTimestamps(idea) {
+  if (idea.statusHistory?.length &&
+      idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
+    throw new Error("El historial de estados no coincide con la idea que se va a guardar.");
+  }
   let previousTime;
   for (const change of idea.statusHistory ?? []) {
     if (change.changedAt !== undefined) {

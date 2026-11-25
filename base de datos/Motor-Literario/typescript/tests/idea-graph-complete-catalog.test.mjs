@@ -10,7 +10,7 @@ const store = {
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["bridge"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"bridge", text:"Idea bridge", status:"IDEA", originDocumentId:"chapter",
-      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish"], relatedEntityIds:[],
+      sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
@@ -41,9 +41,10 @@ test("el grafo literario incluye ideas sin vínculos a personajes", async () => 
     assert.equal(result.ideaGraph.catalogScope,"project");
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
-    assert.equal(result.ideaGraph.referenceCount,4);
-    assert.equal(result.ideaGraph.includedReferenceCount,3);
+    assert.equal(result.ideaGraph.referenceCount,5);
+    assert.equal(result.ideaGraph.includedReferenceCount,4);
     assert.equal(result.ideaGraph.notIncludedReferenceCount,1);
+    assert.equal(result.ideaGraph.reciprocalReferencePairCount,1);
     assert.equal(result.ideaGraph.missingFromProjectReferenceCount,1);
     assert.equal(
       result.ideaGraph.references.find(reference => reference.toIdeaId === "ghost").resolution,

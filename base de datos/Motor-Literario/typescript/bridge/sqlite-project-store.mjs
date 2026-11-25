@@ -19,6 +19,43 @@ const NARRATIVE_COLLECTIONS = new Set([
   "event-lifecycles"
 ]);
 
+function createArchiveContentChecksumBuilder() {
+  let hash = 0xcbf29ce484222325n;
+  let count = 0;
+  let finished = false;
+  const update = value => {
+    for (let index = 0; index < value.length; index++) {
+      hash ^= BigInt(value.charCodeAt(index));
+      hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+    }
+  };
+  update("[");
+  return {
+    add(entry) {
+      if (finished) throw new Error("El checksum de la biblioteca ya fue cerrado.");
+      if (!entry || !entry.idea || typeof entry.idea.id !== "string" || !entry.idea.id.trim()) {
+        throw new Error("No se puede calcular el checksum de una entrada de biblioteca inválida.");
+      }
+      const serialized = JSON.stringify(entry);
+      if (typeof serialized !== "string") {
+        throw new Error("La entrada de biblioteca no se puede serializar para comprobar su integridad.");
+      }
+      if (count > 0) update(",");
+      update(serialized);
+      count++;
+    },
+    digest() {
+      if (finished) throw new Error("El checksum de la biblioteca ya fue cerrado.");
+      finished = true;
+      update("]");
+      return "fnv1a64:" + hash.toString(16).padStart(16, "0");
+    }
+  };
+}
+function isValidArchiveContentChecksum(value) {
+  return typeof value === "string" && /^fnv1a64:[0-9a-f]{16}$/u.test(value);
+}
+
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
@@ -1594,7 +1631,9 @@ export class SqliteProjectStore {
               existingReceipt.archivedIdeaIds.some(id => typeof id !== "string" || !id.trim()) ||
               new Set(existingReceipt.archivedIdeaIds).size !== existingReceipt.archivedIdeaIds.length ||
               [...existingReceipt.archivedIdeaIds].some((id,index,ids)=>index>0&&ids[index-1].localeCompare(id)>0) ||
-              existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds)) {
+              existingReceipt.archiveChecksum !== checksumFor(existingReceipt.archivedIdeaIds) ||
+              (existingReceipt.archiveContentChecksum !== undefined &&
+                !isValidArchiveContentChecksum(existingReceipt.archiveContentChecksum))) {
             throw new Error("El recibo de finalización está malformado o no pertenece al escritor y libro activos.");
           }
           if (validateIdeaReferences(true)) {
@@ -1612,6 +1651,7 @@ export class SqliteProjectStore {
           }
 
           const archivedIds = new Set(existingReceipt.archivedIdeaIds);
+          const contentChecksum = createArchiveContentChecksumBuilder();
           for (const id of existingReceipt.archivedIdeaIds) {
             const entry = this.get("personal-idea-library", [writerId, projectId, id]);
             if (!entry || entry.writerId !== writerId || entry.sourceProjectId !== projectId ||
@@ -1623,6 +1663,7 @@ export class SqliteProjectStore {
             }
             validateNarrativeIdea(entry.idea, projectId, "idea archivada");
             validatePersonalIdeaContext(entry.context, projectId, sourceProjectName);
+            contentChecksum.add(entry);
             const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
             const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
             for (const idea of [entry.idea, ...entry.context.relatedIdeas]) {
@@ -1632,12 +1673,20 @@ export class SqliteProjectStore {
               }
             }
           }
+          const calculatedContentChecksum = contentChecksum.digest();
+          if (existingReceipt.archiveContentChecksum !== undefined &&
+              calculatedContentChecksum !== existingReceipt.archiveContentChecksum) {
+            throw new Error("La biblioteca personal no coincide con el checksum del contenido archivado.");
+          }
           return collectEntries ? [] : {
             writerId, sourceProjectId: projectId, sourceProjectName,
             archivedCount: existingReceipt.archivedIdeaIds.length,
             finalizedAt: existingReceipt.finalizedAt,
             alreadyFinalized: true,
-            archiveChecksum: existingReceipt.archiveChecksum
+            archiveChecksum: existingReceipt.archiveChecksum,
+            ...(existingReceipt.archiveContentChecksum
+              ? { archiveContentChecksum: existingReceipt.archiveContentChecksum }
+              : {})
           };
         }
 
@@ -1759,16 +1808,28 @@ export class SqliteProjectStore {
         });
 
         archivedIdeaIds.sort((first, second) => first.localeCompare(second));
+        const contentChecksum = createArchiveContentChecksumBuilder();
+        for (const id of archivedIdeaIds) {
+          const entry = this.get("personal-idea-library", [writerId, projectId, id]);
+          if (!entry || entry.writerId !== writerId ||
+              entry.sourceProjectId !== projectId || entry.idea?.id !== id) {
+            throw new Error("La biblioteca personal no conserva una entrada recién archivada.");
+          }
+          contentChecksum.add(entry);
+        }
+        const archiveContentChecksum = contentChecksum.digest();
         this.put("writer-library-finalization-receipts", receiptKey, {
           writerId, sourceProjectId: projectId, receiptId, sourceProjectName,
-          finalizedAt: archivedAt, archivedIdeaIds, archiveChecksum: checksumFor(archivedIdeaIds)
+          finalizedAt: archivedAt, archivedIdeaIds, archiveChecksum: checksumFor(archivedIdeaIds),
+          archiveContentChecksum
         }, { insertOnly: true });
         return collectEntries ? clone(archived) : {
           writerId, sourceProjectId: projectId, sourceProjectName,
           archivedCount: archivedIdeaIds.length,
           finalizedAt: archivedAt,
           alreadyFinalized: false,
-          archiveChecksum: checksumFor(archivedIdeaIds)
+          archiveChecksum: checksumFor(archivedIdeaIds),
+          archiveContentChecksum
         };
       } finally {
         this.database.exec("DROP TABLE IF EXISTS temp." + pendingTable);

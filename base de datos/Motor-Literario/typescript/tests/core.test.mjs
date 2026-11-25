@@ -10558,9 +10558,11 @@ test("separa el conteo completo de menciones de las muestras limitadas por escen
     entityId:"ana",
     canonicalName:"Ana",
     totalMentionCount:38,
+    totalSceneWordCount:50,
+    mentionRatePer1000Words:760,
     mentionCountByScene:[
-      {sceneIndex:1,mentionCount:36},
-      {sceneIndex:2,mentionCount:2}
+      {sceneIndex:1,sceneWordCount:47,mentionCount:36,mentionRatePer1000Words:765.957},
+      {sceneIndex:2,sceneWordCount:3,mentionCount:2,mentionRatePer1000Words:666.667}
     ],
     sceneIndexes:[1,2],
     sceneCount:2,
@@ -10692,22 +10694,43 @@ test("resume la distribución de menciones literales de personajes entre escenas
     omittedCharacterCount:0,
     characters:[
       {
-        entityId:"ana",canonicalName:"Ana",sceneIndexes:[1,2,4,5],
-        sceneCount:4,firstSceneIndex:1,lastSceneIndex:5,
-        interveningSceneCount:1,longestConsecutiveSceneRun:2,
-        sceneCoverageRatio:0.8
+        entityId:"ana",canonicalName:"Ana",totalMentionCount:4,
+        totalSceneWordCount:21,mentionRatePer1000Words:190.476,
+        mentionCountByScene:[
+          {sceneIndex:1,sceneWordCount:4,mentionCount:1,mentionRatePer1000Words:250},
+          {sceneIndex:2,sceneWordCount:4,mentionCount:1,mentionRatePer1000Words:250},
+          {sceneIndex:3,sceneWordCount:5,mentionCount:0,mentionRatePer1000Words:0},
+          {sceneIndex:4,sceneWordCount:4,mentionCount:1,mentionRatePer1000Words:250},
+          {sceneIndex:5,sceneWordCount:4,mentionCount:1,mentionRatePer1000Words:250}
+        ],
+        sceneIndexes:[1,2,4,5],sceneCount:4,firstSceneIndex:1,lastSceneIndex:5,
+        interveningSceneCount:1,longestConsecutiveSceneRun:2,sceneCoverageRatio:0.8
       },
       {
-        entityId:"bruno",canonicalName:"Bruno",sceneIndexes:[2,4],
-        sceneCount:2,firstSceneIndex:2,lastSceneIndex:4,
-        interveningSceneCount:1,longestConsecutiveSceneRun:1,
-        sceneCoverageRatio:0.4
+        entityId:"bruno",canonicalName:"Bruno",totalMentionCount:2,
+        totalSceneWordCount:21,mentionRatePer1000Words:95.238,
+        mentionCountByScene:[
+          {sceneIndex:1,sceneWordCount:4,mentionCount:0,mentionRatePer1000Words:0},
+          {sceneIndex:2,sceneWordCount:4,mentionCount:1,mentionRatePer1000Words:250},
+          {sceneIndex:3,sceneWordCount:5,mentionCount:0,mentionRatePer1000Words:0},
+          {sceneIndex:4,sceneWordCount:4,mentionCount:1,mentionRatePer1000Words:250},
+          {sceneIndex:5,sceneWordCount:4,mentionCount:0,mentionRatePer1000Words:0}
+        ],
+        sceneIndexes:[2,4],sceneCount:2,firstSceneIndex:2,lastSceneIndex:4,
+        interveningSceneCount:1,longestConsecutiveSceneRun:1,sceneCoverageRatio:0.4
       },
       {
-        entityId:"carla",canonicalName:"Carla",sceneIndexes:[3],
-        sceneCount:1,firstSceneIndex:3,lastSceneIndex:3,
-        interveningSceneCount:0,longestConsecutiveSceneRun:1,
-        sceneCoverageRatio:0.2
+        entityId:"carla",canonicalName:"Carla",totalMentionCount:1,
+        totalSceneWordCount:21,mentionRatePer1000Words:47.619,
+        mentionCountByScene:[
+          {sceneIndex:1,sceneWordCount:4,mentionCount:0,mentionRatePer1000Words:0},
+          {sceneIndex:2,sceneWordCount:4,mentionCount:0,mentionRatePer1000Words:0},
+          {sceneIndex:3,sceneWordCount:5,mentionCount:1,mentionRatePer1000Words:200},
+          {sceneIndex:4,sceneWordCount:4,mentionCount:0,mentionRatePer1000Words:0},
+          {sceneIndex:5,sceneWordCount:4,mentionCount:0,mentionRatePer1000Words:0}
+        ],
+        sceneIndexes:[3],sceneCount:1,firstSceneIndex:3,lastSceneIndex:3,
+        interveningSceneCount:0,longestConsecutiveSceneRun:1,sceneCoverageRatio:0.2
       }
     ]
   });

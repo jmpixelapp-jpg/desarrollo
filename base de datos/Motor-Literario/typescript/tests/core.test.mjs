@@ -7578,6 +7578,15 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
   const legacyLibrary = await api.getPersonalIdeaLibrary();
   assert.equal(legacyLibrary.length, 1);
   assert.equal(legacyLibrary[0].contextStatus, "missing-legacy-context");
+
+  store.archiveUnincorporatedIdeas = async () => [structuredClone(entry)];
+  const legacyArchive = await api.archiveUnincorporatedIdeas();
+  assert.equal(legacyArchive.length, 1);
+  assert.equal(
+    legacyArchive[0].contextStatus,
+    "missing-legacy-context",
+    "un reintento de una finalización histórica debe exponer que faltan snapshots contextuales"
+  );
   store.loadPersonalIdeas = async () => [{
     ...structuredClone(entry),
     idea: {

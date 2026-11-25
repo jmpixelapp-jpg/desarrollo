@@ -60,3 +60,14 @@ El escenario concurrente procesó cuatro documentos en paralelo, con 40 edicione
 Las 24 tablas propiedad del motor están implementadas; `projects` permanece correctamente bajo propiedad del anfitrión. Los 31 almacenes, sus claves e índices coinciden con el manifiesto y el runtime, y la suite automatizada y el benchmark pasaron en el commit indicado.
 
 La CI no valida por sí sola la instalación final del programa anfitrión, el comportamiento de IndexedDB en todos los sistemas objetivo ni un ciclo de copia de seguridad/restauración desde la interfaz anfitriona. Esa validación externa sigue siendo necesaria antes de confiar manuscritos irremplazables a una instalación concreta.
+
+
+## Adaptador SQLite para integración entre procesos
+
+La auditoría anterior corresponde únicamente al adaptador IndexedDB del modo mismo-runtime: 31 object stores, claves e índices físicos versionados mediante IndexedDB versión 21.
+
+El puente entre procesos utiliza otro adaptador físico: `typescript/bridge/sqlite-project-store.mjs`. Su archivo local SQLite aplica WAL y mantiene `bridge_records`, `bridge_metadata` y `bridge_document_heads`; el esquema de este adaptador tiene versión 1. No equivale a 31 object stores IndexedDB y no importa automáticamente los datos ya guardados en `motor-literario-local`.
+
+Las pruebas del puente comprueban comunicación JSON-RPC real entre procesos, confirmación durable, reinicio/recuperación desde el mismo archivo SQLite, aislamiento entre proyectos y finalización de ideas en la biblioteca privada. Para el contrato de mensajes y el procedimiento de instalación, ver [BRIDGE_PROCESS_PROTOCOL_V1.md](../integration/BRIDGE_PROCESS_PROTOCOL_V1.md).
+
+El anfitrión debe seleccionar un modo de persistencia y administrar la ruta, los permisos y las copias de seguridad de ese almacén. No abrir el mismo libro simultáneamente desde las modalidades SQLite e IndexedDB esperando que se sincronicen; cualquier migración entre ellas requiere un exportador/importador explícito, validado y con copias de seguridad.

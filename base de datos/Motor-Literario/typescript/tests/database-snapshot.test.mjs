@@ -98,6 +98,7 @@ test("la copia SQLite restaura manuscrito, conocimiento, biblioteca e historial 
     target = undefined;
 
     const restoredSummary = await restoreDatabaseBackup(backupPath, destinationPath);
+    assert.equal(restoredSummary.path, destinationPath);
     assert.equal(restoredSummary.recordCount, created.recordCount);
     assert.ok(restoredSummary.recoveryPath, "debe conservar la base que existía antes de restaurar");
 

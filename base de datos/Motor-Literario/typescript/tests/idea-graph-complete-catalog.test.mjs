@@ -1706,8 +1706,8 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
     assert.equal(bridgeNode.status, "discarded");
     assert.equal(bridgeNode.currentStatusHistoryConsistency, "consistent");
     assert.equal(after.statusHistoryConsistency.mismatchIdeaCount, 0);
-    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 3);
-    assert.equal(after.statusHistoryConsistency.unknownIdeaCount, 1);
+    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 4);
+    assert.equal(after.statusHistoryConsistency.unknownIdeaCount, 0);
   } finally {
     api.dispose();
   }

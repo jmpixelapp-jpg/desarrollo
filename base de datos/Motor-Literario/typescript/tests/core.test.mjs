@@ -2172,7 +2172,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 18);
+      assert.equal(version, 19);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2208,6 +2208,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "active-suggestions", keyPath: ["projectId", "id"] },
       { name: "import-authorizations", keyPath: ["writerId", "sourceProjectId", "targetProjectId", "authorizationId"] },
       { name: "schema-migrations", keyPath: "migrationId" },
+      { name: "project-records", keyPath: ["projectId", "id"] },
+      { name: "record-names", keyPath: ["projectId", "id"] },
       { name: "project-dictionaries", keyPath: ["projectId", "id"] },
       { name: "dictionary-entries", keyPath: ["projectId", "id"] }
     ]);
@@ -2258,6 +2260,14 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["import-authorizations", "by-target"],
       ["schema-migrations", "by-to-version"],
       ["schema-migrations", "by-applied-at"],
+      ["project-records", "by-project"],
+      ["project-records", "by-project-type"],
+      ["project-records", "by-project-name"],
+      ["project-records", "by-project-label-state"],
+      ["project-records", "by-project-updated"],
+      ["record-names", "by-project"],
+      ["record-names", "by-record"],
+      ["record-names", "by-name"],
       ["project-dictionaries", "by-project"],
       ["project-dictionaries", "by-project-language-name"],
       ["dictionary-entries", "by-project"],
@@ -2378,7 +2388,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 18);
+    assert.equal(openedVersion, 19);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],

@@ -171,7 +171,8 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
         const change = item.statusHistory[index];
         if (!change || !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
-            (index === 0 ? change.reason !== "initial" : change.reason === "initial") ||
+            (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
+              change.status === item.statusHistory[index - 1]?.status) ||
             (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
             (change.changedAt !== undefined && previousChangedAt !== undefined && change.changedAt < previousChangedAt)) invalid();
         if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
@@ -304,7 +305,8 @@ function isValidPersonalIdeaContext(
         if (!change ||
             !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
-            (index === 0 ? change.reason !== "initial" : change.reason === "initial") ||
+            (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
+              change.status === idea.statusHistory[index - 1]?.status) ||
             (change.changedAt !== undefined &&
               (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
             (change.changedAt !== undefined && previousChangedAt !== undefined &&

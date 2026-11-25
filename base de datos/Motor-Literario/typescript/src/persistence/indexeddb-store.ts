@@ -5,10 +5,12 @@ import type { NarrativeAssertion } from "../narrative-history";
 import type { ProjectDictionary, DictionaryEntry } from "../dictionaries";
 import { validateProjectDictionary, validateDictionaryEntry } from "../dictionaries";
 import type { ProjectSetting } from "../project-data";
-import { cloneProjectSetting, validateProjectSetting } from "../project-data";
+import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type LanguageResourceRef,
+  cloneLanguageProfile, cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef
+} from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 14;
+const DATABASE_VERSION = 15;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -25,6 +27,8 @@ const DIAGNOSTICS = "document-diagnostics";
 const DICTIONARIES = "project-dictionaries";
 const DICTIONARY_ENTRIES = "dictionary-entries";
 const PROJECT_SETTINGS = "project-settings";
+const LANGUAGE_PROFILES = "language-profiles";
+const LANGUAGE_RESOURCE_REFS = "language-resource-refs";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -789,6 +793,22 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           settings.createIndex("by-project", "projectId", { unique: false });
         }
+        if (!db.objectStoreNames.contains(LANGUAGE_PROFILES)) {
+          const profiles = db.createObjectStore(LANGUAGE_PROFILES, {
+            keyPath: ["projectId", "id"]
+          });
+          profiles.createIndex("by-project", "projectId", { unique: false });
+          profiles.createIndex("by-project-language", ["projectId", "languageIdentifier"], { unique: false });
+          profiles.createIndex("by-project-active", ["projectId", "isActive"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(LANGUAGE_RESOURCE_REFS)) {
+          const resources = db.createObjectStore(LANGUAGE_RESOURCE_REFS, {
+            keyPath: ["projectId", "id"]
+          });
+          resources.createIndex("by-project", "projectId", { unique: false });
+          resources.createIndex("by-profile", ["projectId", "profileId"], { unique: false });
+          resources.createIndex("by-resource-database", ["projectId", "resourceDatabaseId"], { unique: false });
+        }
         if (!db.objectStoreNames.contains(DOCUMENTS)) {
           const store = db.createObjectStore(DOCUMENTS, { keyPath: ["projectId", "documentId"] });
           store.createIndex("by-project", "projectId", { unique: false });
@@ -897,6 +917,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           store.createIndex(indexName, keyPath, { unique });
         };
         ensureIndex(PROJECT_SETTINGS, "by-project", "projectId");
+        ensureIndex(LANGUAGE_PROFILES, "by-project", "projectId");
+        ensureIndex(LANGUAGE_PROFILES, "by-project-language", ["projectId", "languageIdentifier"]);
+        ensureIndex(LANGUAGE_PROFILES, "by-project-active", ["projectId", "isActive"]);
+        ensureIndex(LANGUAGE_RESOURCE_REFS, "by-project", "projectId");
+        ensureIndex(LANGUAGE_RESOURCE_REFS, "by-profile", ["projectId", "profileId"]);
+        ensureIndex(LANGUAGE_RESOURCE_REFS, "by-resource-database", ["projectId", "resourceDatabaseId"]);
         ensureIndex(DOCUMENTS, "by-project", "projectId");
         ensureIndex(CHANGES, CHANGE_INDEX, ["projectId", "documentId", "sequence"], true);
         ensureIndex(ENTITIES, "by-project", "projectId");
@@ -1028,6 +1054,206 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.onabort = () => reject(failure ?? (conflict
         ? new Error("Conflicto al guardar la configuración del proyecto.")
         : transaction.error ?? new Error("Se canceló el guardado de la configuración.")));
+    });
+  }
+
+  async loadLanguageProfiles(projectId: string): Promise<readonly LanguageProfile[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para recuperar perfiles lingüísticos.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(LANGUAGE_PROFILES, "readonly");
+    const request = transaction.objectStore(LANGUAGE_PROFILES).index("by-project").getAll(projectId);
+    const profiles = await readAfterTransaction(
+      transaction, request, "No se pudieron recuperar perfiles lingüísticos."
+    ) as LanguageProfile[];
+    if (!Array.isArray(profiles)) throw new Error("La colección de perfiles lingüísticos es inválida.");
+    const ids = new Set<string>();
+    for (const profile of profiles) {
+      validateLanguageProfile(profile, projectId);
+      if (ids.has(profile.id)) throw new Error("Hay IDs de perfil lingüístico duplicados en el proyecto.");
+      ids.add(profile.id);
+    }
+    return profiles.map(cloneLanguageProfile);
+  }
+
+  async saveLanguageProfile(
+    profile: LanguageProfile,
+    expectedCurrent?: LanguageProfile
+  ): Promise<void> {
+    validateLanguageProfile(profile);
+    if (expectedCurrent) {
+      validateLanguageProfile(expectedCurrent, profile.projectId);
+      if (expectedCurrent.id !== profile.id) {
+        throw new Error("Una actualización debe conservar la identidad del perfil lingüístico.");
+      }
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(LANGUAGE_PROFILES, "readwrite");
+      const store = transaction.objectStore(LANGUAGE_PROFILES);
+      const request = store.get([profile.projectId, profile.id]);
+      let failure: unknown;
+      request.onsuccess = () => {
+        try {
+          const current = request.result as LanguageProfile | undefined;
+          if (expectedCurrent) {
+            if (!current || current.projectId !== profile.projectId ||
+                current.id !== profile.id ||
+                JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+              throw new Error("El perfil lingüístico cambió en otra instancia; vuelve a leerlo antes de actualizar.");
+            }
+          } else if (current) {
+            throw new Error("El perfil lingüístico ya existe; vuelve a leerlo antes de actualizar.");
+          }
+          store.put(cloneLanguageProfile(profile));
+        } catch (error) {
+          failure = error;
+          try { transaction.abort(); } catch { /* ya abortada */ }
+        }
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo verificar el perfil lingüístico actual.");
+        try { transaction.abort(); } catch { /* ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar el perfil lingüístico."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado del perfil lingüístico."));
+    });
+  }
+
+  async loadLanguageResourceRefs(
+    projectId: string,
+    profileId?: string
+  ): Promise<readonly LanguageResourceRef[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        (profileId !== undefined && (typeof profileId !== "string" || !profileId.trim()))) {
+      throw new Error("Identidad de proyecto o perfil inválida para recuperar recursos lingüísticos.");
+    }
+    if (profileId !== undefined) {
+      const profiles = await this.loadLanguageProfiles(projectId);
+      if (!profiles.some(profile => profile.id === profileId)) {
+        throw new Error("El perfil lingüístico asociado no existe en el proyecto.");
+      }
+    }
+    const db = await this.open();
+    const transaction = db.transaction(LANGUAGE_RESOURCE_REFS, "readonly");
+    const index = transaction.objectStore(LANGUAGE_RESOURCE_REFS).index(
+      profileId === undefined ? "by-project" : "by-profile"
+    );
+    const request = index.getAll(
+      profileId === undefined ? projectId : [projectId, profileId]
+    );
+    const resources = await readAfterTransaction(
+      transaction, request, "No se pudieron recuperar las referencias de recursos lingüísticos."
+    ) as LanguageResourceRef[];
+    if (!Array.isArray(resources)) throw new Error("La colección de recursos lingüísticos es inválida.");
+    const ids = new Set<string>();
+    for (const resource of resources) {
+      validateLanguageResourceRef(resource, projectId);
+      if (ids.has(resource.id)) throw new Error("Hay IDs de recursos lingüísticos duplicados en el proyecto.");
+      ids.add(resource.id);
+      if (profileId !== undefined && resource.profileId !== profileId) {
+        throw new Error("Una referencia recuperada pertenece a otro perfil lingüístico.");
+      }
+    }
+    const profiles = await this.loadLanguageProfiles(projectId);
+    const profileIds = new Set(profiles.map(profile => profile.id));
+    for (const resource of resources) {
+      if (resource.profileId !== undefined && !profileIds.has(resource.profileId)) {
+        throw new Error("Una referencia de recurso apunta a un perfil lingüístico inexistente.");
+      }
+    }
+    return resources.map(cloneLanguageResourceRef);
+  }
+
+  async saveLanguageResourceRef(
+    resource: LanguageResourceRef,
+    expectedCurrent?: LanguageResourceRef
+  ): Promise<void> {
+    validateLanguageResourceRef(resource);
+    if (expectedCurrent) {
+      validateLanguageResourceRef(expectedCurrent, resource.projectId);
+      if (expectedCurrent.id !== resource.id) {
+        throw new Error("Una actualización debe conservar el ID de la referencia de recurso.");
+      }
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([LANGUAGE_PROFILES, LANGUAGE_RESOURCE_REFS], "readwrite");
+      const profiles = transaction.objectStore(LANGUAGE_PROFILES);
+      const resources = transaction.objectStore(LANGUAGE_RESOURCE_REFS);
+      const currentRequest = resources.get([resource.projectId, resource.id]);
+      const profileRequest = resource.profileId === undefined
+        ? undefined
+        : profiles.get([resource.projectId, resource.profileId]);
+      let currentReady = false;
+      let profileReady = profileRequest === undefined;
+      let current: LanguageResourceRef | undefined;
+      let profileExists = profileRequest === undefined;
+      let failure: unknown;
+      let finished = false;
+      const abortWith = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        failure = error;
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      const commitIfReady = (): void => {
+        if (finished || !currentReady || !profileReady) return;
+        try {
+          if (resource.profileId !== undefined && !profileExists) {
+            throw new Error("El perfil lingüístico asociado no existe en el proyecto.");
+          }
+          if (expectedCurrent) {
+            if (!current || current.projectId !== resource.projectId ||
+                current.id !== resource.id ||
+                JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+              throw new Error("La referencia de recurso cambió en otra instancia; vuelve a leerla antes de actualizar.");
+            }
+          } else if (current) {
+            throw new Error("La referencia de recurso ya existe; vuelve a leerla antes de actualizar.");
+          }
+          resources.put(cloneLanguageResourceRef(resource));
+        } catch (error) {
+          abortWith(error);
+        }
+      };
+      currentRequest.onsuccess = () => {
+        current = currentRequest.result as LanguageResourceRef | undefined;
+        currentReady = true;
+        commitIfReady();
+      };
+      currentRequest.onerror = () => abortWith(
+        currentRequest.error ?? new Error("No se pudo verificar la referencia de recurso actual.")
+      );
+      if (profileRequest) {
+        profileRequest.onsuccess = () => {
+          const profile = profileRequest.result as LanguageProfile | undefined;
+          if (profile) {
+            try {
+              validateLanguageProfile(profile, resource.projectId);
+              profileExists = profile.id === resource.profileId;
+            } catch (error) {
+              abortWith(error);
+              return;
+            }
+          }
+          profileReady = true;
+          commitIfReady();
+        };
+        profileRequest.onerror = () => abortWith(
+          profileRequest.error ?? new Error("No se pudo verificar el perfil asociado al recurso.")
+        );
+      }
+      transaction.oncomplete = () => {
+        if (!finished) {
+          finished = true;
+          resolve();
+        }
+      };
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar la referencia de recurso."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado de la referencia de recurso."));
     });
   }
 

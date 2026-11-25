@@ -1,4 +1,4 @@
-import type { ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion, ImportAuthorization, SchemaMigration } from "./mldb-records";
+import type { ProjectRecord, RecordName, ManuscriptFragment, RecordAttribute, RelationAttribute, ActiveSuggestion, ImportAuthorization, SchemaMigration } from "./mldb-records";
 import type { ProjectDictionary, DictionaryEntry } from "./dictionaries";
 import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle } from "./project-data";
 
@@ -101,6 +101,14 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Fichas genéricas MLDB; el nombre principal puede quedar vacío. */
+  loadProjectRecords(projectId: string): Promise<readonly ProjectRecord[]>;
+  saveProjectRecord(record: ProjectRecord, expectedCurrent?: ProjectRecord): Promise<void>;
+  /** Nombres principales, alias, títulos y nombres anteriores, siempre ligados a una ficha. */
+  loadRecordNames(projectId: string, recordId?: string): Promise<readonly RecordName[]>;
+  saveRecordName(name: RecordName, expectedCurrent?: RecordName): Promise<void>;
+
+
   /** Fragmentos estables con posiciones UTF-16 recalculables. */
   loadManuscriptFragments?(projectId: string, documentId?: string): Promise<readonly ManuscriptFragment[]>;
   saveManuscriptFragment?(fragment: ManuscriptFragment, expectedCurrent?: ManuscriptFragment): Promise<void>;

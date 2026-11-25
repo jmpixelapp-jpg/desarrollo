@@ -1,6 +1,102 @@
 /** Contratos de almacenamiento para las tablas MLDB de uso general. */
 import type { ProjectJsonValue } from "./project-data";
 
+
+export type ProjectRecordLabel = "IDEA" | "REGISTRADO EN LA OBRA";
+export type ProjectRecordState = "abierto" | "cerrado";
+
+/** Registro genérico MLDB. primaryName puede ser null: el motor no inventa nombres. */
+export interface ProjectRecord {
+  readonly projectId: string;
+  readonly id: string;
+  readonly recordType: string;
+  readonly primaryName: string | null;
+  readonly description: string | null;
+  readonly label: ProjectRecordLabel;
+  readonly state: ProjectRecordState;
+  readonly confidence: string;
+  readonly confirmationKind: string;
+  readonly provenanceKind: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+  readonly currentVersion: number;
+}
+
+export interface ProjectRecordInput {
+  readonly id: string;
+  readonly recordType: string;
+  readonly primaryName?: string | null;
+  readonly description?: string | null;
+  readonly label: ProjectRecordLabel;
+  readonly state: ProjectRecordState;
+  readonly confidence: string;
+  readonly confirmationKind: string;
+  readonly provenanceKind: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+export interface RecordName {
+  readonly projectId: string;
+  readonly id: string;
+  readonly recordId: string;
+  readonly name: string;
+  readonly nameKind: string;
+  readonly languageCode?: string | null;
+  readonly isPrimary: boolean;
+  readonly provenanceKind: string;
+}
+
+function finiteTimestamp(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+export function validateProjectRecord(item: ProjectRecord, expectedProjectId?: string): void {
+  if (!item || typeof item !== "object") throw new Error("Ficha MLDB inválida.");
+  projectId(item.projectId, expectedProjectId);
+  nonBlank(item.id, "El ID de ficha", 256);
+  nonBlank(item.recordType, "El tipo de ficha", 128);
+  if (item.primaryName !== null &&
+      (typeof item.primaryName !== "string" || !item.primaryName.trim() || item.primaryName.length > 1_024)) {
+    throw new Error("El nombre principal debe ser texto no vacío o null.");
+  }
+  if (item.description !== null &&
+      (typeof item.description !== "string" || item.description.length > 65_536)) {
+    throw new Error("La descripción de la ficha debe ser texto o null y no superar 64 KiB.");
+  }
+  if (item.label !== "IDEA" && item.label !== "REGISTRADO EN LA OBRA") {
+    throw new Error("La etiqueta de ficha debe ser IDEA o REGISTRADO EN LA OBRA.");
+  }
+  if (item.state !== "abierto" && item.state !== "cerrado") {
+    throw new Error("El estado de ficha debe ser abierto o cerrado.");
+  }
+  nonBlank(item.confidence, "La confianza de ficha", 128);
+  nonBlank(item.confirmationKind, "La clase de confirmación", 128);
+  nonBlank(item.provenanceKind, "La procedencia de ficha", 128);
+  if (!finiteTimestamp(item.createdAt) || !finiteTimestamp(item.updatedAt) ||
+      item.updatedAt < item.createdAt ||
+      !Number.isSafeInteger(item.currentVersion) || item.currentVersion < 1) {
+    throw new Error("Las fechas o la versión vigente de la ficha son inválidas.");
+  }
+}
+
+export function validateRecordName(item: RecordName, expectedProjectId?: string): void {
+  if (!item || typeof item !== "object") throw new Error("Nombre alternativo de ficha inválido.");
+  projectId(item.projectId, expectedProjectId);
+  nonBlank(item.id, "El ID del nombre", 256);
+  nonBlank(item.recordId, "La ficha del nombre", 256);
+  nonBlank(item.name, "El nombre alternativo", 1_024);
+  nonBlank(item.nameKind, "El tipo de nombre", 128);
+  if (item.languageCode !== undefined && item.languageCode !== null) {
+    nonBlank(item.languageCode, "El código de idioma", 64);
+  }
+  if (typeof item.isPrimary !== "boolean") throw new Error("El indicador de nombre principal debe ser booleano.");
+  nonBlank(item.provenanceKind, "La procedencia del nombre", 128);
+}
+
+export const cloneProjectRecord = (item: ProjectRecord): ProjectRecord => structuredClone(item);
+export const cloneRecordName = (item: RecordName): RecordName => structuredClone(item);
+
 export interface ManuscriptFragment {
   readonly projectId: string;
   readonly id: string;

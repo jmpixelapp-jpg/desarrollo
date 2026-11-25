@@ -129,7 +129,9 @@ function validateNarrativeEntityRecord(entity: NarrativeEntity, label: string): 
       !Array.isArray(entity.aliases) ||
       entity.aliases.some(alias => typeof alias !== "string" || !alias.trim()) ||
       (entity.mergedFromIds !== undefined &&
-        (!Array.isArray(entity.mergedFromIds) || entity.mergedFromIds.some(id => typeof id !== "string" || !id.trim()))) ||
+        (!Array.isArray(entity.mergedFromIds) ||
+          entity.mergedFromIds.some(id => typeof id !== "string" || !id.trim()) ||
+          new Set(entity.mergedFromIds).size !== entity.mergedFromIds.length)) ||
       !Number.isFinite(entity.firstSeenAt) || entity.firstSeenAt < 0 ||
       !Number.isFinite(entity.lastSeenAt) || entity.lastSeenAt < entity.firstSeenAt ||
       entity.extractionVersion !== 1) {

@@ -2656,3 +2656,41 @@ test("el grafo resume estados de referencias directas sin tratarlas como depende
   const accepted = graph.nodes.find(node => node.ideaId === "accepted");
   assert.equal(accepted.directReferenceStatusAlignment, "no-references");
 });
+
+
+
+test("cada nodo identifica su componente cíclico incluso cuando hay auto-referencias", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, relatedIdeaIds = []) => ({
+    projectId,
+    ideaId,
+    text: "Idea " + ideaId,
+    status: "IDEA",
+    relatedIdeaIds,
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  });
+  const graph = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\nUna idea permanece.",
+    knownProjectIdeas: [
+      makeIdea("alpha", ["beta"]),
+      makeIdea("beta", ["alpha"]),
+      makeIdea("self", ["self"]),
+      makeIdea("outside-cycle")
+    ]
+  }).ideaGraph;
+  const node = id => graph.nodes.find(item => item.ideaId === id);
+  assert.equal(node("alpha").cycleMembership, "cyclic-component");
+  assert.equal(node("alpha").cycleComponentSize, 2);
+  assert.equal(node("beta").cycleComponentSize, 2);
+  assert.equal(node("self").cycleMembership, "cyclic-component");
+  assert.equal(node("self").cycleComponentSize, 1);
+  assert.equal(node("outside-cycle").cycleMembership, "acyclic-within-snapshot");
+  assert.equal(node("outside-cycle").cycleComponentSize, 0);
+});

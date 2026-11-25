@@ -146,3 +146,14 @@ test("el recibo usa el mismo orden de IDs que el checksum en todos los idiomas",
   );
   api.dispose();
 });
+
+test("la API rechaza un recibo nulo sin provocar un error de acceso a propiedades", async () => {
+  const store = { async loadProjectFinalizationReceipt() { return null; } };
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId, projectName, writerId });
+  await assert.rejects(
+    () => api.getProjectFinalizationReceipt(),
+    /recibo de finalización inválido/
+  );
+  api.dispose();
+});

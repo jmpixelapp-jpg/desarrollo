@@ -1825,7 +1825,7 @@ test("cuenta co-menciones de personajes por escena sin confundirlas con relacion
     revision: 1,
     text,
     knownCharacters: [
-      { entityId: "ana-id", canonicalName: "Ana" },
+      { entityId: "ana-id", canonicalName: "Ana", aliases: ["Anita"] },
       { entityId: "luis-id", canonicalName: "Luis" },
       { entityId: "marta-id", canonicalName: "Marta" }
     ]

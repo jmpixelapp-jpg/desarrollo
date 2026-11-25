@@ -2396,7 +2396,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   const createdIndexes = [];
   const names = [
     "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
-    "record-lifecycles", "relation-lifecycles", "project-settings", "documents", "changes",
+    "record-lifecycles", "relation-lifecycles", "event-lifecycles", "project-settings", "documents", "changes",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
@@ -2452,7 +2452,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 21);
+    assert.equal(openedVersion, 22);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -2471,6 +2471,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["relation-lifecycles", "by-project"],
       ["relation-lifecycles", "by-subject"],
       ["relation-lifecycles", "by-subject-revision"],
+      ["event-lifecycles", "by-project"],
+      ["event-lifecycles", "by-subject"],
+      ["event-lifecycles", "by-subject-revision"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],
@@ -2545,7 +2548,7 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const names = [
     "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
-    "record-lifecycles", "relation-lifecycles", "project-settings", "documents", "changes",
+    "record-lifecycles", "relation-lifecycles", "event-lifecycles", "project-settings", "documents", "changes",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
@@ -5747,7 +5750,7 @@ test("IndexedDB rechaza vínculos de idea duplicados y autorreferenciales antes 
       originDocumentId: "chapter", sourceProjectName: "Libro", evidence: [] };
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-b", "idea-b"] }),
-      /referencias inválidas o duplicadas/i
+      /referencias inválidas, duplicadas/i
     );
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-a"] }),
@@ -9824,10 +9827,25 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     originDocumentId: "chapter",
     sourceProjectName: projectName,
     evidence: [],
-    relatedIdeaIds: Array.from({ length: wideCount }, (_, index) =>
-      `wide-leaf-${String(index).padStart(4, "0")}`
+    relatedIdeaIds: Array.from({ length: 3 }, (_, index) =>
+      `wide-branch-${String(index).padStart(3, "0")}`
     )
   };
+  // El catálogo limita cada idea a 500 vínculos. Repartimos 1.200 hojas
+  // entre tres ramas para probar el recorrido de contexto a través de la red
+  // completa sin crear un registro inválido con 1.200 salidas.
+  const wideBranches = Array.from({ length: 3 }, (_, branchIndex) => ({
+    projectId,
+    id: `wide-branch-${String(branchIndex).padStart(3, "0")}`,
+    text: `Rama contextual ${branchIndex}`,
+    status: "incorporated",
+    originDocumentId: "chapter",
+    sourceProjectName: projectName,
+    evidence: [],
+    relatedIdeaIds: Array.from({ length: wideCount / 3 }, (_, leafIndex) =>
+      `wide-leaf-${String(branchIndex * (wideCount / 3) + leafIndex).padStart(4, "0")}`
+    )
+  }));
   const wideLeaves = Array.from({ length: wideCount }, (_, index) => ({
     projectId,
     id: `wide-leaf-${String(index).padStart(4, "0")}`,
@@ -9837,7 +9855,7 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     sourceProjectName: projectName,
     evidence: []
   }));
-  const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideLeaves];
+  const projectIdeas = [...pendingIdeas, ...smallContexts, wideRoot, ...wideBranches, ...wideLeaves];
   const entries = [];
   const deleted = [];
   const transaction = {
@@ -9913,10 +9931,10 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
     }
     const wideEntry = entries.find(item => item.idea.id === "pending-wide");
     assert.ok(wideEntry);
-    assert.equal(wideEntry.context.relatedIdeas.length, wideCount + 1);
+    assert.equal(wideEntry.context.relatedIdeas.length, wideCount + wideBranches.length + 1);
     assert.deepEqual(
       wideEntry.context.relatedIdeas.map(idea => idea.id),
-      [...["context-wide-root"], ...wideLeaves.map(idea => idea.id)].sort()
+      ["context-wide-root", ...wideBranches.map(idea => idea.id), ...wideLeaves.map(idea => idea.id)].sort()
     );
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);

@@ -106,8 +106,9 @@ Las siguientes son ejecuciones observadas, no estimaciones:
 | [45721420996](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721420996) | Procesamiento y estado coherente ante reentrada | Build correcto; 76 pruebas aprobadas, 0 fallidas, 0 omitidas |
 | [45721545786](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721545786) | Cola reentrante limitada | Build correcto; 76 pruebas aprobadas, 0 fallidas, 0 omitidas |
 | [45721556577](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721556577) | Prueba de desbordamiento de cola | Build correcto; 77 pruebas aprobadas, 0 fallidas, 0 omitidas |
+| [45721703791](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703791) | Validación de configuración de la cola | Build correcto; 78 pruebas aprobadas, 0 fallidas, 0 omitidas |
 
-**Nueva cobertura en curso:** commit `4f74096c8ce17e70a3c88aa1519ec2be81585d38` añade validación del rango de `maxQueuedTransactions` (valores inválidos, límites 1 y 65536 y valor predeterminado). La ejecución correspondiente debe registrarse aquí cuando termine; no se marca como aprobada antes de consultar CI.
+**Cobertura más reciente:** el commit `4f74096c8ce17e70a3c88aa1519ec2be81585d38` añade validación del rango de `maxQueuedTransactions` (valores inválidos, límites 1 y 65536 y valor predeterminado). La CI específica [45721703791](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703791) terminó correctamente con 78/78 pruebas aprobadas.
 
 ## 5. Estado y limitaciones conocidas
 
@@ -142,3 +143,24 @@ La ejecución general [45721556553](https://github.com/jmpixelapp-jpg/desarrollo
 
 ---
 **Regla de mantenimiento:** toda entrega futura del monitor debe actualizar esta bitácora en el mismo avance que el código y las pruebas, indicar el commit exacto y registrar el enlace/resultado de CI.
+
+
+## 7. Nueva entrega — validación y registro acumulativo (25 de noviembre de 2026)
+
+**Objetivo:** que el nuevo límite de cola no dependa solo de que el caso de desbordamiento funcione, sino que también rechace de forma temprana cualquier configuración inválida.
+
+**Cambio implementado:** se añadió una prueba que comprueba `0`, negativos, fracciones, valores superiores a 65536, `NaN` e infinito. Los límites 1 y 65536 y el valor predeterminado también se construyen correctamente. La prueba verifica que un constructor rechazado no deje listeners instalados.
+
+**Archivos:**
+- `typescript/tests/live-author-monitor-editor-transaction-source.test.mjs`
+- `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`, sección 22
+- `docs/README.md`, índice de documentación
+- Este registro acumulativo
+
+**Commits:** [4f74096 — prueba de validación](https://github.com/jmpixelapp-jpg/desarrollo/commit/4f74096c8ce17e70a3c88aa1519ec2be81585d38), [8420a7b — especificación](https://github.com/jmpixelapp-jpg/desarrollo/commit/8420a7beef44d7197d78c9382b5e6b86a7989628), [b46fc0c — creación de bitácora](https://github.com/jmpixelapp-jpg/desarrollo/commit/b46fc0ce0384e54322f51339d1a4b4bddbea609e), [5a9a70a — índice](https://github.com/jmpixelapp-jpg/desarrollo/commit/5a9a70acc5a64137fd2c0689b7e1409d3f35ba2b).
+
+**Resultado verificado:** la ejecución [45721703791](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703791) terminó con build Vite correcto, 78 pruebas aprobadas, 0 fallidas y 0 omitidas.
+
+**CI general:** la ejecución [45721703703](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45721703703) sigue fallando antes de las pruebas generales por errores de TypeScript en `src/literary-analysis.ts`; no son errores reportados en el monitor y ese archivo no se modificó.
+
+A partir de esta entrega, cualquier avance nuevo del monitor debe actualizar esta bitácora en el mismo lote de trabajo que el código y la especificación.

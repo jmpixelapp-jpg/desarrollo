@@ -687,6 +687,47 @@ test("SQLite rechaza una escritura de entidad narrativa basada en una versión o
   }
 });
 
+test("SQLite rechaza más de 500 vínculos por idea incluso sin pasar por HostEngineApi", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-sqlite-idea-link-limit-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const projectId = "sqlite-idea-link-limit";
+  const store = await SqliteProjectStore.open(databasePath);
+  const tooManyIds = Array.from({ length: 501 }, (_, index) => "reference-" + index);
+  const base = {
+    projectId,
+    id: "idea-limited",
+    text: "Una idea con demasiados vínculos no debe persistirse.",
+    status: "IDEA",
+    originDocumentId: "chapter-limit",
+    sourceProjectName: "Libro de límite",
+    evidence: [],
+    relatedIdeaIds: [],
+    relatedEntityIds: []
+  };
+  try {
+    assert.throws(
+      () => store.saveIdea({ ...base, relatedIdeaIds: tooManyIds }),
+      /más de 500 vínculos por categoría/
+    );
+    assert.throws(
+      () => store.saveIdeaIfUnchanged({
+        ...base,
+        relatedEntityIds: tooManyIds
+      }, base),
+      /más de 500 vínculos por categoría/
+    );
+    assert.deepEqual(
+      await store.loadIdeas(projectId),
+      [],
+      "ninguna de las dos escrituras rechazadas puede dejar un registro parcial"
+    );
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
 test("SQLite protege relaciones, acontecimientos, ideas y afirmaciones frente a escrituras obsoletas", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-narrative-cas-"));
   const databasePath = resolve(directory, "motor.sqlite");

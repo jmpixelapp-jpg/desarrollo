@@ -903,6 +903,14 @@ export interface LiteraryIdeaGraphAnalysis {
   readonly ideaCount: number;
   /** Distribución estructural de los nodos por estado editorial explícito. */
   readonly statusProfiles: readonly LiteraryIdeaGraphStatusProfile[];
+  /** Resumen global de sincronización entre etiquetas actuales e historiales visibles. */
+  readonly statusHistoryConsistency: {
+    readonly consistentIdeaCount: number;
+    readonly mismatchIdeaCount: number;
+    readonly unknownIdeaCount: number;
+    readonly verifiableIdeaCount: number;
+    readonly verificationCoverage: number;
+  };
   /** Ideas omitidas del alcance indicado por catalogScope. */
   readonly omittedIdeaCount: number;
   /** Aristas declaradas por nodos incluidos en el snapshot, antes de limitar las muestras. */
@@ -3956,6 +3964,14 @@ function buildLiteraryIdeaGraph(
     projectCatalogComplete,
     ideaCount: orderedIdeas.length,
     statusProfiles,
+    statusHistoryConsistency: {
+      consistentIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency === "consistent").length,
+      mismatchIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency === "mismatch").length,
+      unknownIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency === "unknown").length,
+      verifiableIdeaCount: nodes.filter(node => node.currentStatusHistoryConsistency !== "unknown").length,
+      verificationCoverage: nodes.length === 0 ? 0 :
+        nodes.filter(node => node.currentStatusHistoryConsistency !== "unknown").length / nodes.length
+    },
     omittedIdeaCount,
     referenceCount,
     includedReferenceCount,

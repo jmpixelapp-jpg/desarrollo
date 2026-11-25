@@ -6,11 +6,13 @@ import type { ProjectDictionary, DictionaryEntry } from "../dictionaries";
 import { validateProjectDictionary, validateDictionaryEntry } from "../dictionaries";
 import type { ProjectSetting } from "../project-data";
 import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type LanguageResourceRef,
-  cloneLanguageProfile, cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef
+  cloneLanguageProfile, cloneLanguageResourceRef, validateLanguageProfile, validateLanguageResourceRef,
+  type StyleProfile, type TimelineTrack, cloneStyleProfile, cloneTimelineTrack,
+  validateStyleProfile, validateTimelineTrack
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 15;
+const DATABASE_VERSION = 16;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -29,6 +31,8 @@ const DICTIONARY_ENTRIES = "dictionary-entries";
 const PROJECT_SETTINGS = "project-settings";
 const LANGUAGE_PROFILES = "language-profiles";
 const LANGUAGE_RESOURCE_REFS = "language-resource-refs";
+const STYLE_PROFILES = "style-profiles";
+const TIMELINE_TRACKS = "timeline-tracks";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -742,6 +746,78 @@ async function saveNarrativeRecordWithEntityReferences<T extends { readonly proj
   });
 }
 
+async function loadSimpleProjectRecords<T extends { readonly projectId: string; readonly id: string }>(
+  db: IDBDatabase,
+  storeName: string,
+  projectId: string,
+  label: string,
+  validate: (record: T, expectedProjectId: string) => void,
+  clone: (record: T) => T
+): Promise<readonly T[]> {
+  const transaction = db.transaction(storeName, "readonly");
+  const request = transaction.objectStore(storeName).index("by-project").getAll(projectId);
+  const records = await readAfterTransaction(
+    transaction, request, `No se pudieron leer ${label}.`
+  ) as T[];
+  if (!Array.isArray(records)) throw new Error(`La colección de ${label} es inválida.`);
+  const ids = new Set<string>();
+  for (const record of records) {
+    validate(record, projectId);
+    if (ids.has(record.id)) throw new Error(`Hay IDs duplicados en ${label}.`);
+    ids.add(record.id);
+  }
+  return records.map(clone);
+}
+
+async function saveSimpleProjectRecord<T extends { readonly projectId: string; readonly id: string }>(
+  db: IDBDatabase,
+  storeName: string,
+  record: T,
+  expectedCurrent: T | undefined,
+  label: string,
+  validate: (value: T, expectedProjectId?: string) => void,
+  clone: (value: T) => T
+): Promise<void> {
+  validate(record);
+  if (expectedCurrent) {
+    validate(expectedCurrent, record.projectId);
+    if (expectedCurrent.id !== record.id) {
+      throw new Error(`Una actualización de ${label} debe conservar su ID original.`);
+    }
+  }
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readwrite");
+    const store = transaction.objectStore(storeName);
+    const request = store.get([record.projectId, record.id]);
+    let failure: unknown;
+    request.onsuccess = () => {
+      try {
+        const current = request.result as T | undefined;
+        if (expectedCurrent) {
+          if (!current || current.projectId !== record.projectId ||
+              current.id !== record.id ||
+              JSON.stringify(current) !== JSON.stringify(expectedCurrent)) {
+            throw new Error(`El registro de ${label} cambió en otra instancia; vuelve a leerlo antes de actualizar.`);
+          }
+        } else if (current) {
+          throw new Error(`El registro de ${label} ya existe; vuelve a leerlo antes de actualizar.`);
+        }
+        store.put(clone(record));
+      } catch (error) {
+        failure = error;
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      }
+    };
+    request.onerror = () => {
+      failure = request.error ?? new Error(`No se pudo verificar el registro actual de ${label}.`);
+      try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(failure ?? transaction.error ?? new Error(`No se pudo guardar ${label}.`));
+    transaction.onabort = () => reject(failure ?? transaction.error ?? new Error(`Se canceló el guardado de ${label}.`));
+  });
+}
+
 /**
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
@@ -808,6 +884,20 @@ export class IndexedDbProjectStore implements ProjectStore {
           resources.createIndex("by-project", "projectId", { unique: false });
           resources.createIndex("by-profile", ["projectId", "profileId"], { unique: false });
           resources.createIndex("by-resource-database", ["projectId", "resourceDatabaseId"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(STYLE_PROFILES)) {
+          const profiles = db.createObjectStore(STYLE_PROFILES, {
+            keyPath: ["projectId", "id"]
+          });
+          profiles.createIndex("by-project", "projectId", { unique: false });
+          profiles.createIndex("by-project-name", ["projectId", "profileName"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(TIMELINE_TRACKS)) {
+          const tracks = db.createObjectStore(TIMELINE_TRACKS, {
+            keyPath: ["projectId", "id"]
+          });
+          tracks.createIndex("by-project", "projectId", { unique: false });
+          tracks.createIndex("by-project-name", ["projectId", "trackName"], { unique: false });
         }
         if (!db.objectStoreNames.contains(DOCUMENTS)) {
           const store = db.createObjectStore(DOCUMENTS, { keyPath: ["projectId", "documentId"] });
@@ -923,6 +1013,10 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(LANGUAGE_RESOURCE_REFS, "by-project", "projectId");
         ensureIndex(LANGUAGE_RESOURCE_REFS, "by-profile", ["projectId", "profileId"]);
         ensureIndex(LANGUAGE_RESOURCE_REFS, "by-resource-database", ["projectId", "resourceDatabaseId"]);
+        ensureIndex(STYLE_PROFILES, "by-project", "projectId");
+        ensureIndex(STYLE_PROFILES, "by-project-name", ["projectId", "profileName"]);
+        ensureIndex(TIMELINE_TRACKS, "by-project", "projectId");
+        ensureIndex(TIMELINE_TRACKS, "by-project-name", ["projectId", "trackName"]);
         ensureIndex(DOCUMENTS, "by-project", "projectId");
         ensureIndex(CHANGES, CHANGE_INDEX, ["projectId", "documentId", "sequence"], true);
         ensureIndex(ENTITIES, "by-project", "projectId");
@@ -1255,6 +1349,42 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar la referencia de recurso."));
       transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado de la referencia de recurso."));
     });
+  }
+
+  async loadStyleProfiles(projectId: string): Promise<readonly StyleProfile[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) throw new Error("Identificador de proyecto inválido.");
+    return loadSimpleProjectRecords(
+      await this.open(), STYLE_PROFILES, projectId, "perfiles de estilo",
+      validateStyleProfile, cloneStyleProfile
+    );
+  }
+
+  async saveStyleProfile(
+    profile: StyleProfile,
+    expectedCurrent?: StyleProfile
+  ): Promise<void> {
+    await saveSimpleProjectRecord(
+      await this.open(), STYLE_PROFILES, profile, expectedCurrent,
+      "perfil de estilo", validateStyleProfile, cloneStyleProfile
+    );
+  }
+
+  async loadTimelineTracks(projectId: string): Promise<readonly TimelineTrack[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) throw new Error("Identificador de proyecto inválido.");
+    return loadSimpleProjectRecords(
+      await this.open(), TIMELINE_TRACKS, projectId, "pistas cronológicas",
+      validateTimelineTrack, cloneTimelineTrack
+    );
+  }
+
+  async saveTimelineTrack(
+    track: TimelineTrack,
+    expectedCurrent?: TimelineTrack
+  ): Promise<void> {
+    await saveSimpleProjectRecord(
+      await this.open(), TIMELINE_TRACKS, track, expectedCurrent,
+      "pista cronológica", validateTimelineTrack, cloneTimelineTrack
+    );
   }
 
   async saveDictionary(

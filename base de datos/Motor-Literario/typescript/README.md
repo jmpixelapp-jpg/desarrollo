@@ -88,7 +88,7 @@ Al abrir un documento, el motor compara el snapshot local con el snapshot autori
 - Si `getDocumentSyncState` indica `needsResync`, detener el envío de deltas y reabrir con el snapshot completo actual del editor.
 - Para recuperar una sesión ya guardada después de reiniciar la aplicación, inicializar la identidad del proyecto y llamar `await api.recoverDocument(documentId)`. El método recupera el snapshot local y reproduce los deltas durables; no requiere volver a enviar el texto completo. Solo funciona cuando existe una base durable válida.
 
-## Esquema lógico MLDB 0.4.1 y correspondencia física
+## Esquema lógico MLDB 0.4.2 y correspondencia física
 
 El contrato lógico de la base se versiona como JSON declarativo en `../MLDB/`, y se valida con JavaScript puro mediante `scripts/validate-mldb-schema.mjs`. La versión vigente define 25 tablas lógicas, claves compuestas, ámbitos `global`, `project` y `writer`, propiedad de proyectos y referencias que no pueden cruzar libros o escritores.
 

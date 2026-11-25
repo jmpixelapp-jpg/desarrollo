@@ -74,6 +74,7 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
       changedAt: 4
     });
     bridge.status = "IDEA";
+    await api.refreshNarrativeKnowledge();
 
     const after = await api.analyzeLiteraryDocument("chapter");
     const afterBridge = after.ideaGraph.nodes.find(node => node.ideaId === "bridge");

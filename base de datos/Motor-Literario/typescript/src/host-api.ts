@@ -1143,7 +1143,7 @@ export class HostEngineApi {
       const loadEntities = async () => requireProjectScopedRecords(
         await store.loadEntities(projectId), projectId, "entidades"
       );
-      const entities = this.entitiesLoaded ? [...this.narrativeEntities.values()] : await loadEntities();
+      const entities = await loadEntities();
       const target = entities.find(item => item.id === targetEntityId);
       const source = entities.find(item => item.id === sourceEntityId);
       if (!target || !source || target.projectId !== projectId || source.projectId !== projectId) {
@@ -1160,56 +1160,21 @@ export class HostEngineApi {
       if (thirdPartyCollision) {
         throw new Error("La consolidación produciría un alias ambiguo con otra entidad del proyecto.");
       }
-      const mergedEvidence = [...target.evidence];
-      const evidenceKeys = new Set(mergedEvidence.map(item =>
-        [item.documentId, item.revision, item.start, item.end, item.excerpt, item.status ?? ""].join("\u0000")
-      ));
-      for (const item of source.evidence) {
-        const key = [item.documentId, item.revision, item.start, item.end, item.excerpt, item.status ?? ""].join("\u0000");
-        if (!evidenceKeys.has(key)) { mergedEvidence.push(item); evidenceKeys.add(key); }
+      try {
+        await this.store.mergeNarrativeEntityIdentity!(
+          projectId, targetEntityId, sourceEntityId, project.writerId
+        );
+      } catch (error) {
+        this.invalidateNarrativeKnowledgeCaches();
+        throw error;
       }
-      const aliases = [...new Map(
-        [...target.aliases, source.canonicalName, ...source.aliases]
-          .map(alias => [normalizeEntityName(alias), alias] as const)
-      ).values()].filter(alias => alias && normalizeEntityName(alias) !== target.normalizedName);
-      const merged: NarrativeEntity = {
-        ...target, aliases, evidence: mergedEvidence,
-        mergedFromIds: [...new Set([...(target.mergedFromIds ?? []), source.id, ...(source.mergedFromIds ?? [])])],
-        firstSeenAt: Math.min(target.firstSeenAt, source.firstSeenAt),
-        lastSeenAt: Math.max(target.lastSeenAt, source.lastSeenAt)
-      };
-      await this.store.mergeNarrativeEntityIdentity!(
-        projectId, targetEntityId, sourceEntityId, project.writerId
-      );
-      if (this.ideasLoaded) {
-        for (const [ideaId, idea] of this.narrativeIdeas) {
-          if (!idea.relatedEntityIds?.includes(sourceEntityId)) continue;
-          this.narrativeIdeas.set(ideaId, {
-            ...idea,
-            relatedEntityIds: [...new Set(idea.relatedEntityIds.map(id =>
-              id === sourceEntityId ? targetEntityId : id
-            ))]
-          });
-        }
-      }
-      this.narrativeEntities.set(targetEntityId, merged);
-      this.narrativeEntities.delete(sourceEntityId);
-      this.entityEvidenceIndex = undefined;
-      this.entityNameIndex = undefined;
-      this.relationEvidenceIndex = undefined;
-      this.eventEvidenceIndex = undefined;
-      this.ideaEvidenceIndex = undefined;
-      this.eventLineIndex = undefined;
-      this.ideaLineIndex = undefined;
-      this.assertionEvidenceIndex = undefined;
-      // La transacción puede haber fusionado relaciones duplicadas o eliminado
-      // autorrelaciones; invalida estas cachés para recargarlas desde el almacén atómico.
-      this.narrativeRelations.clear();
-      this.relationsLoaded = false;
-      this.narrativeEvents.clear();
-      this.eventsLoaded = false;
-      this.narrativeAssertions.clear();
-      this.assertionsLoaded = false;
+      // La transacción consolida todas las referencias del libro y las ideas
+      // archivadas. Recarga el resultado confirmado en vez de devolver una
+      // fusión calculada desde una caché potencialmente antigua.
+      this.invalidateNarrativeKnowledgeCaches();
+      const reloaded = await this.loadNarrativeEntitiesFromStore();
+      const merged = reloaded.find(entity => entity.id === targetEntityId);
+      if (!merged) throw new Error("La entidad consolidada no pudo recuperarse del almacenamiento.");
       return cloneNarrativeRecord(merged);
     });
     this.knowledgeTail = work.then(() => undefined, () => undefined);

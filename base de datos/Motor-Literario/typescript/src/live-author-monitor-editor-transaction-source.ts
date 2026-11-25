@@ -84,7 +84,9 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   private readonly duplicateWindowSize: number;
   private readonly listeners = new Set<(change: EditorChange) => void>();
   private readonly dispatchQueue: EditorChange[] = [];
+  private readonly pendingTransactions: LiveAuthorMonitorEditorTransaction[] = [];
   private dispatching = false;
+  private processingTransactions = false;
   private readonly seenTransactions = new Map<string, number>();
   private revision: number;
   private sequence: number;
@@ -229,10 +231,31 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.detachProvider();
     this.listeners.clear();
     this.dispatchQueue.length = 0;
+    this.pendingTransactions.length = 0;
     this.seenTransactions.clear();
   }
 
   private readonly handleTransaction = (transaction: LiveAuthorMonitorEditorTransaction): void => {
+    if (this.disposed || this.needsResync) return;
+    this.pendingTransactions.push(transaction);
+    this.drainTransactionQueue();
+  };
+
+  private drainTransactionQueue(): void {
+    if (this.processingTransactions || this.disposed) return;
+    this.processingTransactions = true;
+    try {
+      while (this.pendingTransactions.length > 0 && !this.disposed && !this.needsResync) {
+        const transaction = this.pendingTransactions.shift();
+        if (transaction) this.processTransaction(transaction);
+      }
+    } finally {
+      this.processingTransactions = false;
+      if (this.disposed || this.needsResync) this.pendingTransactions.length = 0;
+    }
+  }
+
+  private processTransaction(transaction: LiveAuthorMonitorEditorTransaction): void {
     if (this.disposed || this.needsResync) return;
 
     if (!transaction || typeof transaction.transactionId !== "string" ||
@@ -327,7 +350,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     // para los demás suscriptores.
     this.dispatchQueue.push(normalized);
     this.drainDispatchQueue();
-  };
+  }
 
   private drainDispatchQueue(): void {
     if (this.dispatching || this.disposed) return;

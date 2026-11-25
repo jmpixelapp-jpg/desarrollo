@@ -616,6 +616,7 @@ export class HostEngineApi {
   private diagnosticsPersistenceTail: Promise<void> = Promise.resolve();
   private readonly documentDiagnostics = new Map<string, StoredDiagnostics>();
   private readonly liveSubmissionTimes = new Map<string, number>();
+  private readonly liveMonitorCheckpointTails = new Map<string, Promise<void>>();
   private readonly liveMetrics = {
     completedAnalyses: 0,
     failedAnalyses: 0,
@@ -678,7 +679,10 @@ export class HostEngineApi {
       },
       onCommit: result => {
         this.liveSubmissionTimes.delete(result.ticketId);
-        try { this.liveAuthorMonitor.recordCommit(result); } catch { /* El monitor nunca debe detener la cola durable. */ }
+        try {
+          const monitored = this.liveAuthorMonitor.recordCommit(result);
+          if (monitored) this.scheduleLiveAuthorMonitorCheckpoint(result.documentId);
+        } catch { /* El monitor nunca debe detener la cola durable. */ }
         try { options.callbacks?.onCommit?.(result); } catch { /* El callback del anfitrión no debe detener la cola. */ }
       }
     });
@@ -3878,10 +3882,28 @@ export class HostEngineApi {
     if (recoveredSnapshot) {
       const projectId = this.requireProject().projectId;
       const monitored = this.liveAuthorMonitor.getSnapshot(documentId);
-      if (!monitored) this.liveAuthorMonitor.openDocument(recoveredSnapshot, projectId);
-      else if (monitored.latestRevision !== recoveredSnapshot.revision || monitored.latestSequence !== recoveredSnapshot.sequence) {
+      if (!monitored) {
+        let restored = false;
+        if (this.store.loadLiveAuthorMonitorCheckpoint) {
+          try {
+            const checkpoint = await this.store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
+            if (checkpoint) {
+              this.liveAuthorMonitor.restoreCheckpoint(checkpoint, recoveredSnapshot, projectId);
+              restored = true;
+            }
+          } catch (error) {
+            // Un checkpoint obsoleto no bloquea la recuperación del manuscrito.
+            try { await this.store.deleteLiveAuthorMonitorCheckpoint?.(projectId, documentId); } catch {
+              // La sesión nueva puede continuar aunque no se pueda limpiar el registro inválido.
+            }
+            this.reportKnowledgeError(error);
+          }
+        }
+        if (!restored) this.liveAuthorMonitor.openDocument(recoveredSnapshot, projectId);
+      } else if (monitored.latestRevision !== recoveredSnapshot.revision || monitored.latestSequence !== recoveredSnapshot.sequence) {
         try { this.liveAuthorMonitor.resynchronizeDocument(recoveredSnapshot); } catch { /* La sesión conserva su estado si aún hay commits pendientes. */ }
       }
+      this.scheduleLiveAuthorMonitorCheckpoint(documentId);
       const recovery = this.diagnosticsPersistenceTail.then(async () => {
         await this.restoreDocumentDiagnostics(recoveredSnapshot);
       });
@@ -3908,7 +3930,10 @@ export class HostEngineApi {
       this.liveSubmissionTimes.set(admission.ticketId, performance.now());
     }
     if (this.liveAuthorMonitor.getSnapshot(change.documentId)) {
-      try { this.liveAuthorMonitor.recordAdmission(change, admission); } catch { /* La observabilidad no altera la admisión del motor. */ }
+      try {
+        this.liveAuthorMonitor.recordAdmission(change, admission);
+        this.scheduleLiveAuthorMonitorCheckpoint(change.documentId);
+      } catch { /* La observabilidad no altera la admisión del motor. */ }
     }
     return admission;
   }
@@ -3970,12 +3995,68 @@ export class HostEngineApi {
 
   /** Resincroniza las métricas con un snapshot autoritativo tras resolver un conflicto externo. */
   resynchronizeLiveAuthorMonitor(snapshot: DocumentSnapshot): LiveAuthorMonitorSnapshot {
-    return this.liveAuthorMonitor.resynchronizeDocument(snapshot);
+    const monitored = this.liveAuthorMonitor.resynchronizeDocument(snapshot);
+    this.scheduleLiveAuthorMonitorCheckpoint(snapshot.documentId);
+    return monitored;
   }
 
-  /** Cierra la sesión de métricas después de vaciar la cola durable del documento. */
+  /** Cierra la sesión en memoria; para garantizar su checkpoint use el método asíncrono seguro. */
   closeLiveAuthorMonitorDocument(documentId: string): LiveAuthorMonitorSnapshot {
     return this.liveAuthorMonitor.closeDocument(documentId);
+  }
+
+  /**
+   * Vacía la cola durable, verifica la identidad/sincronización y persiste métricas
+   * antes de cerrar la sesión del monitor. No altera el ciclo de vida del documento.
+   */
+  async closeLiveAuthorMonitorDocumentSafely(documentId: string): Promise<LiveAuthorMonitorSnapshot> {
+    await this.flushPendingChanges();
+    const snapshot = this.engine.getSnapshot(documentId);
+    const sync = this.engine.getSyncState(documentId);
+    if (!snapshot || !sync || sync.needsResync || sync.pendingSequence !== sync.sequence) {
+      throw new Error("No se puede cerrar el monitor mientras el documento no sea durable y esté sincronizado.");
+    }
+    const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
+    if (!checkpoint) {
+      throw new Error("No se puede cerrar el monitor con cambios pendientes o métricas que requieren resincronización.");
+    }
+    if (!this.store.saveLiveAuthorMonitorCheckpoint) {
+      throw new Error("El almacén no implementa persistencia de checkpoints del monitor.");
+    }
+    await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
+    return this.liveAuthorMonitor.closeDocument(documentId);
+  }
+
+  /** Espera los guardados de checkpoints ya programados antes de disponer el HostEngineApi. */
+  async disposeSafely(): Promise<void> {
+    await this.flushPendingChanges();
+    await Promise.all([...this.liveMonitorCheckpointTails.values()]);
+    this.dispose();
+  }
+
+  private scheduleLiveAuthorMonitorCheckpoint(documentId: string): void {
+    if (!this.store.saveLiveAuthorMonitorCheckpoint) return;
+    const previous = this.liveMonitorCheckpointTails.get(documentId) ?? Promise.resolve();
+    const queued = previous.then(async () => {
+      const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
+      if (checkpoint) await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
+    }).catch(error => {
+      this.reportKnowledgeError(error);
+    });
+    this.liveMonitorCheckpointTails.set(documentId, queued);
+    void queued.finally(() => {
+      if (this.liveMonitorCheckpointTails.get(documentId) === queued) {
+        this.liveMonitorCheckpointTails.delete(documentId);
+      }
+    });
+  }
+
+  private async enqueueLiveAuthorMonitorCheckpoint(
+    checkpoint: import("./contracts").StoredLiveAuthorMonitorCheckpoint
+  ): Promise<void> {
+    const save = this.store.saveLiveAuthorMonitorCheckpoint;
+    if (!save) throw new Error("El almacén no implementa persistencia de checkpoints del monitor.");
+    await save.call(this.store, checkpoint);
   }
 
   /** Permite al anfitrión esperar la persistencia de todos los cambios admitidos. */

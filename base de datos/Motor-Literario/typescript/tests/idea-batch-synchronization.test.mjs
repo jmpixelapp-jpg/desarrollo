@@ -531,3 +531,48 @@ test("permite sincronizaciones simultáneas de ideas distintas sin mezclar sus v
     apiB.dispose();
   }
 });
+
+
+test("dos lotes concurrentes sobre la misma idea no se sobrescriben entre sí", async () => {
+  const store = new AtomicIdeaStore(
+    [
+      idea("source"),
+      idea("target-a"),
+      idea("target-b")
+    ],
+    []
+  );
+  const apiA = createApi(store);
+  const apiB = createApi(store);
+
+  try {
+    const results = await Promise.allSettled([
+      apiA.synchronizeNarrativeIdeaLinks(
+        "source",
+        links([], []),
+        links(["target-a"], [])
+      ),
+      apiB.synchronizeNarrativeIdeaLinks(
+        "source",
+        links([], []),
+        links(["target-b"], [])
+      )
+    ]);
+
+    const fulfilled = results.filter(result => result.status === "fulfilled");
+    const rejected = results.filter(result => result.status === "rejected");
+    assert.equal(fulfilled.length, 1);
+    assert.equal(rejected.length, 1);
+    assert.match(rejected[0].reason.message, /cambió en otra instancia/);
+
+    const persisted = store.ideas.get(projectId + ":source");
+    assert.ok(
+      JSON.stringify(persisted.relatedIdeaIds) === JSON.stringify(["target-a"]) ||
+      JSON.stringify(persisted.relatedIdeaIds) === JSON.stringify(["target-b"])
+    );
+    assert.equal(store.writes, 2);
+  } finally {
+    apiA.dispose();
+    apiB.dispose();
+  }
+});

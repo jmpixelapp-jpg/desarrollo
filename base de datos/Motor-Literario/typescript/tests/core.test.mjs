@@ -2172,7 +2172,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 16);
+      assert.equal(version, 17);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2190,6 +2190,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "language-resource-refs", keyPath: ["projectId", "id"] },
       { name: "style-profiles", keyPath: ["projectId", "id"] },
       { name: "timeline-tracks", keyPath: ["projectId", "id"] },
+      { name: "record-lifecycles", keyPath: ["projectId", "id"] },
+      { name: "relation-lifecycles", keyPath: ["projectId", "id"] },
       { name: "documents", keyPath: ["projectId", "documentId"] },
       { name: "changes", keyPath: ["projectId", "documentId", "sequence"] },
       { name: "narrative-entities", keyPath: ["projectId", "id"] },
@@ -2215,6 +2217,12 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["style-profiles", "by-project-name"],
       ["timeline-tracks", "by-project"],
       ["timeline-tracks", "by-project-name"],
+      ["record-lifecycles", "by-project"],
+      ["record-lifecycles", "by-subject"],
+      ["record-lifecycles", "by-subject-revision"],
+      ["relation-lifecycles", "by-project"],
+      ["relation-lifecycles", "by-subject"],
+      ["relation-lifecycles", "by-subject-revision"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],
@@ -2293,7 +2301,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const createdIndexes = [];
   const names = [
-    "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks", "project-settings", "documents", "changes", "narrative-entities", "narrative-relations",
+    "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
+    "record-lifecycles", "relation-lifecycles", "project-settings", "documents", "changes",
+    "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
     "project-dictionaries", "dictionary-entries"
@@ -2345,7 +2355,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 16);
+    assert.equal(openedVersion, 17);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -2358,6 +2368,12 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["style-profiles", "by-project-name"],
       ["timeline-tracks", "by-project"],
       ["timeline-tracks", "by-project-name"],
+      ["record-lifecycles", "by-project"],
+      ["record-lifecycles", "by-subject"],
+      ["record-lifecycles", "by-subject-revision"],
+      ["relation-lifecycles", "by-project"],
+      ["relation-lifecycles", "by-subject"],
+      ["relation-lifecycles", "by-subject-revision"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
       ["narrative-entities", "by-project"],
@@ -2393,7 +2409,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
 test("IndexedDB reemplaza índices existentes con definición incompatible", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const names = [
-    "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks", "project-settings", "documents", "changes", "narrative-entities", "narrative-relations",
+    "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
+    "record-lifecycles", "relation-lifecycles", "project-settings", "documents", "changes",
+    "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
     "project-dictionaries", "dictionary-entries"

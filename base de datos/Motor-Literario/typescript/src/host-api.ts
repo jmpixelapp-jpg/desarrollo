@@ -218,6 +218,16 @@ function requireNarrativeEntityReferences<T extends { readonly projectId: string
 }
 
 
+function checksumArchivedPersonalIdeaIds(ids: readonly string[]): string {
+  const serialized = JSON.stringify([...ids].sort());
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < serialized.length; index++) {
+    hash ^= BigInt(serialized.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
+
 function requireUniquePersonalIdeaEntries(
   entries: unknown,
   writerId: string,
@@ -3384,14 +3394,17 @@ export class HostEngineApi {
       const ids = receipt.archivedIdeaIds;
       if (!receipt || receipt.writerId !== writerId ||
           receipt.sourceProjectId !== project.projectId ||
-          typeof receipt.receiptId !== "string" || !receipt.receiptId.trim() ||
+          receipt.receiptId !== "finalization-v1" ||
+          typeof receipt.sourceProjectName !== "string" || !receipt.sourceProjectName.trim() ||
           receipt.sourceProjectName !== project.projectName ||
           !Number.isFinite(receipt.finalizedAt) || receipt.finalizedAt < 0 ||
           !Array.isArray(ids) ||
           ids.some(id => typeof id !== "string" || !id.trim()) ||
           new Set(ids).size !== ids.length ||
-          typeof receipt.archiveChecksum !== "string" || !receipt.archiveChecksum.trim()) {
-        throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos.");
+          [...ids].some((id, index, values) => index > 0 && values[index - 1]!.localeCompare(id) > 0) ||
+          typeof receipt.archiveChecksum !== "string" ||
+          receipt.archiveChecksum !== checksumArchivedPersonalIdeaIds(ids)) {
+        throw new Error("Violación de aislamiento: el recibo de finalización no pertenece al libro y escritor activos o su checksum es inválido.");
       }
       return cloneNarrativeRecord(receipt);
     });

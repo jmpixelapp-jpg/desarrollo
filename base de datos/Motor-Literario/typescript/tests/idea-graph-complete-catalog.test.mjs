@@ -16,7 +16,11 @@ const store = {
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
     { projectId, id:"bridge", text:"El espejo conserva la memoria y la luz", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["finish","origin"], relatedEntityIds:[],
-      statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
+      statusHistory:[
+        {status:"IDEA",reason:"initial",changedAt:1},
+        {status:"incorporated",reason:"writer",changedAt:2},
+        {status:"IDEA",reason:"writer",changedAt:3}
+      ] },
     { projectId, id:"finish", text:"Idea finish", status:"IDEA", originDocumentId:"chapter",
       sourceProjectName:"Book", evidence:[], relatedIdeaIds:["origin"], relatedEntityIds:[],
       statusHistory:[{status:"IDEA",reason:"initial",changedAt:1}] },
@@ -46,6 +50,13 @@ test("el grafo incluye ideas independientes y reutiliza texto de ideas vinculada
     assert.equal(result.ideaGraph.catalogScope,"project");
     assert.equal(result.ideaGraph.projectCatalogComplete,true);
     assert.equal(result.ideaGraph.ideaCount,4);
+    const bridgeNode = result.ideaGraph.nodes.find(node => node.ideaId === "bridge");
+    assert.equal(bridgeNode.observedStatusTransitionCount, 2);
+    assert.equal(
+      result.ideaGraph.statusProfiles.find(profile => profile.status === "IDEA")
+        .observedStatusTransitionCount,
+      2
+    );
     assert.equal(result.ideaGraph.lexicalResonances.analyzedIdeaCount,4);
     assert.equal(result.ideaGraph.lexicalResonances.ideasWithoutTextCount,0);
     assert.equal(result.ideaGraph.lexicalResonances.candidatePairCount,1);

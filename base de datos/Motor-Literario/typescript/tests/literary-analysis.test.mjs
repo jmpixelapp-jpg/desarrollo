@@ -2696,6 +2696,29 @@ test("cada nodo identifica su componente cíclico incluso cuando hay auto-refere
 });
 
 
+test("el grafo detecta convergencia indirecta a través de ramas distintas", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, relatedIdeaIds = []) => ({
+    projectId, ideaId, text: "Idea " + ideaId, status: "IDEA", relatedIdeaIds,
+    evidenceCount: 0, staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0, omittedStatusHistoryCount: 0
+  });
+  const graph = analyzeLiteraryFragment({
+    projectId, documentId: "chapter-diamond", revision: 1,
+    text: "Escena 1\\nUna bifurcación vuelve a converger.",
+    knownProjectIdeas: [
+      makeIdea("root", ["left", "right"]),
+      makeIdea("left", ["shared"]),
+      makeIdea("right", ["shared"]),
+      makeIdea("shared")
+    ]
+  }).ideaGraph;
+  assert.equal(graph.twoHopConvergentSourceCount, 1);
+  assert.equal(graph.twoHopSharedDestinationCount, 1);
+  assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
+});
+
 test("el grafo identifica puntos de articulación en cadenas de referencias", () => {
   const projectId = "literary-analysis-test";
   const makeIdea = (ideaId, relatedIdeaIds = []) => ({

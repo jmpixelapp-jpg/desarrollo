@@ -1,0 +1,17 @@
+{
+  "name": "motor-literario-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Núcleo propio de Motor Literario en TypeScript",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "bench": "npm run build && node bench/live-edit-benchmark.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}

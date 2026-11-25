@@ -2838,7 +2838,10 @@ export class HostEngineApi {
   private requireDictionaryStore(): Required<Pick<
     import("./contracts").ProjectStore,
     "saveDictionary" | "loadDictionaries" | "saveDictionaryEntry" | "loadDictionaryEntries"
-  >> {
+  >> & Pick<
+    import("./contracts").ProjectStore,
+    "loadDictionaryEntryEntityLinks" | "setDictionaryEntryEntityLink"
+  > {
     const store = this.store;
     if (!store.saveDictionary || !store.loadDictionaries ||
         !store.saveDictionaryEntry || !store.loadDictionaryEntries) {
@@ -2848,7 +2851,13 @@ export class HostEngineApi {
       saveDictionary: store.saveDictionary.bind(store),
       loadDictionaries: store.loadDictionaries.bind(store),
       saveDictionaryEntry: store.saveDictionaryEntry.bind(store),
-      loadDictionaryEntries: store.loadDictionaryEntries.bind(store)
+      loadDictionaryEntries: store.loadDictionaryEntries.bind(store),
+      ...(store.loadDictionaryEntryEntityLinks
+        ? { loadDictionaryEntryEntityLinks: store.loadDictionaryEntryEntityLinks.bind(store) }
+        : {}),
+      ...(store.setDictionaryEntryEntityLink
+        ? { setDictionaryEntryEntityLink: store.setDictionaryEntryEntityLink.bind(store) }
+        : {})
     };
   }
 

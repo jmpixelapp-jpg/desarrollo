@@ -262,6 +262,16 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     });
     await client.flushProject("compact-finalization-project");
 
+    const libraryNotifications = [];
+    let resolveLibraryNotification;
+    const libraryChanged = new Promise(resolveNotice => {
+      resolveLibraryNotification = resolveNotice;
+    });
+    client.onNotification("engine.personalIdeaLibraryChanged", params => {
+      libraryNotifications.push(params);
+      resolveLibraryNotification(params);
+    });
+
     const summary = await client.request("project.call", {
       projectId: "compact-finalization-project",
       method: "finalizeProjectToIdeaLibrary",
@@ -275,6 +285,10 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     assert.equal(typeof summary.archiveChecksum, "string");
     assert.equal(Array.isArray(summary), false);
     assert.equal(Object.hasOwn(summary, "items"), false);
+    assert.deepEqual(await libraryChanged, {
+      projectId: "compact-finalization-project",
+      writerId: "writer-compact"
+    });
 
     const page = await client.request("project.call", {
       projectId: "compact-finalization-project",
@@ -302,6 +316,11 @@ test("la finalización compacta devuelve un recibo y permite recuperar ideas por
     });
     assert.equal(unchangedPage.libraryVersion, page.libraryVersion,
       "el reintento idempotente no incrementa la generación de la biblioteca");
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.deepEqual(libraryNotifications, [{
+      projectId: "compact-finalization-project",
+      writerId: "writer-compact"
+    }], "un reintento idempotente no duplica la notificación entre procesos");
 
     const exited = waitForExit(child);
     await client.shutdown();

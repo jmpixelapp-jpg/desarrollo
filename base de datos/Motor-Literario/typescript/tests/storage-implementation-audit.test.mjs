@@ -64,22 +64,22 @@ test("detecta una versión IndexedDB distinta entre manifiesto y adaptador", () 
   ));
 });
 
-test("exige que cada almacén lógico tenga una definición física y viceversa", () => {
+test("cada almacén lógico tiene descriptor y los almacenes operativos también se verifican", () => {
   const copy = structuredClone(mapping);
   copy.runtime.object_stores = copy.runtime.object_stores.filter(
-    (store) => store.name !== "dictionary-entry-entities"
+    (store) => store.name !== "writer-library-finalization-receipts"
   );
   assert.ok(auditStorageImplementation(copy, runtimeSource).some(
     (issue) => issue.code === "MISSING_RUNTIME_STORE_DESCRIPTOR"
   ));
 
-  const withOrphan = structuredClone(mapping);
-  withOrphan.runtime.object_stores.push({
+  const withUnknownStore = structuredClone(mapping);
+  withUnknownStore.runtime.object_stores.push({
     name: "orphan-store",
     keyPath: "id",
     indexes: []
   });
-  assert.ok(auditStorageImplementation(withOrphan, runtimeSource).some(
-    (issue) => issue.code === "UNMAPPED_RUNTIME_STORE_DESCRIPTOR"
+  assert.ok(auditStorageImplementation(withUnknownStore, runtimeSource).some(
+    (issue) => issue.code === "RUNTIME_DESCRIPTOR_CONSTANT_MISSING"
   ));
 });

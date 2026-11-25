@@ -2484,7 +2484,22 @@ export class HostEngineApi {
           entry => entry.relatedEntityIds, "entradas de diccionario"
         );
       }
-      await store.saveDictionaryEntry(candidate, current);
+      const existingLinks = store.loadDictionaryEntryEntityLinks
+        ? await store.loadDictionaryEntryEntityLinks(projectId, candidate.id)
+        : [];
+      const linksByRecord = new Map(existingLinks.map(link => [link.recordId, link]));
+      const linkRecords: DictionaryEntryEntityLink[] = candidate.relatedEntityIds.map(recordId => {
+        const existingLink = linksByRecord.get(recordId);
+        return existingLink ?? {
+          projectId,
+          entryId: candidate.id,
+          recordId,
+          linkKind: "RELATED",
+          provenanceKind: input.provenanceKind,
+          createdAt: input.createdAt
+        };
+      });
+      await store.saveDictionaryEntry(candidate, current, linkRecords);
       return cloneNarrativeRecord(candidate);
     });
   }
@@ -2517,6 +2532,10 @@ export class HostEngineApi {
           throw new Error("El almacenamiento devolvió un vínculo duplicado o ajeno a la entrada.");
         }
         ids.add(link.recordId);
+      }
+      if (ids.size !== entry.relatedEntityIds.length ||
+          entry.relatedEntityIds.some(id => !ids.has(id))) {
+        throw new Error("Faltan metadatos persistidos para uno o más vínculos de la entrada.");
       }
       return links.map(link => structuredClone(link));
     });

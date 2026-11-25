@@ -1365,10 +1365,20 @@ export class IndexedDbProjectStore implements ProjectStore {
     if (typeof listener !== "function") throw new TypeError("Se requiere un suscriptor de cambios narrativos.");
     if (!this.ensureNarrativeChangeChannel()) return () => undefined;
     this.narrativeChangeListeners.add(listener);
-    return () => this.narrativeChangeListeners.delete(listener);
+    return () => {
+      this.narrativeChangeListeners.delete(listener);
+      if (this.narrativeChangeListeners.size === 0 && this.narrativeChangeChannel) {
+        this.narrativeChangeChannel.onmessage = null;
+        this.narrativeChangeChannel.close();
+        this.narrativeChangeChannel = undefined;
+      }
+    };
   }
 
   private publishNarrativeChange(projectId: string): void {
+    // No crea un canal en procesos sin suscriptores; conserva el carácter
+    // opcional del mecanismo y evita mantener recursos abiertos en Node.
+    if (this.narrativeChangeListeners.size === 0) return;
     const channel = this.ensureNarrativeChangeChannel();
     if (!channel) return;
     try {

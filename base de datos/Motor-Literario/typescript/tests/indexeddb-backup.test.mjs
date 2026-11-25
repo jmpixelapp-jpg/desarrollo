@@ -430,6 +430,7 @@ test("sincroniza otra instancia tras restaurar y difunde solo identidades, nunca
     assert.deepEqual(observedProjects.sort(), ["backup-project", "old-sync-project"]);
     assert.deepEqual(observedWriters.sort(), ["backup-writer", "old-sync-writer"]);
     assert.ok(SharedBroadcastChannel.messages.length >= 4);
+    assert.equal(SharedBroadcastChannel.channels.size, 1, "solo la instancia suscrita debe retener un canal");
     for (const message of SharedBroadcastChannel.messages) {
       assert.ok(
         message.type === "motor-literario:narrative-change" ||
@@ -518,6 +519,7 @@ test("una restauración abortada no notifica cambios ni invalida otras instancia
     assert.deepEqual(currentDatabase.state.get("personal-idea-library"), []);
     assert.deepEqual(observedProjects, []);
     assert.deepEqual(AbortBroadcastChannel.messages, []);
+    assert.equal(AbortBroadcastChannel.channels.size, 1, "la instancia publicadora sin suscriptores no debe retener un canal");
   } finally {
     off();
     source.database = undefined;

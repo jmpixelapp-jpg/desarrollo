@@ -920,3 +920,73 @@ test("SQLite rechaza historiales de identidad con IDs de origen duplicados sin m
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("SQLite finaliza libros grandes por páginas sin materializar todas las ideas ni entidades", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "motor-literario-library-paged-finalization-"));
+  const databasePath = resolve(directory, "motor.sqlite");
+  const store = await SqliteProjectStore.open(databasePath);
+  const projectId = "paged-library-project";
+  const writerId = "writer-paged-library";
+  const sourceProjectName = "Libro paginado";
+  const total = 300;
+
+  try {
+    for (let index = 0; index < total; index++) {
+      const suffix = String(index).padStart(4, "0");
+      const entityId = "entity:" + suffix;
+      const canonicalName = "Personaje " + suffix;
+      store.saveEntity({
+        id: entityId,
+        projectId,
+        kind: "character",
+        canonicalName,
+        normalizedName: canonicalName.toLocaleLowerCase("es"),
+        aliases: [],
+        evidence: [],
+        firstSeenAt: index,
+        lastSeenAt: index,
+        extractionVersion: 1
+      });
+      store.saveIdea({
+        id: "idea:" + suffix,
+        projectId,
+        text: "Idea narrativa " + suffix,
+        status: "IDEA",
+        originDocumentId: "chapter-paged",
+        sourceProjectName,
+        evidence: [],
+        relatedEntityIds: [entityId],
+        relatedIdeaIds: [],
+        statusHistory: [{ status: "IDEA", changedAt: index, reason: "initial" }]
+      });
+    }
+
+    const aggregateIdeaLoader = store.loadIdeas;
+    const aggregateEntityLoader = store.loadEntities;
+    store.loadIdeas = () => { throw new Error("No debe materializar la colección completa de ideas."); };
+    store.loadEntities = () => { throw new Error("No debe materializar la colección completa de entidades."); };
+
+    let archived;
+    try {
+      archived = store.archiveUnincorporatedIdeas(projectId, writerId, sourceProjectName, 500);
+    } finally {
+      store.loadIdeas = aggregateIdeaLoader;
+      store.loadEntities = aggregateEntityLoader;
+    }
+
+    assert.equal(archived.length, total);
+    assert.equal(archived[0].context.relatedEntities.length, 1);
+    assert.equal(archived[0].context.relatedEntities[0].id, "entity:0000");
+    assert.equal(archived[total - 1].context.relatedEntities[0].id, "entity:0299");
+    assert.equal(store.loadIdeas(projectId).length, 0);
+
+    const receipt = store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.equal(receipt.archivedIdeaIds.length, total);
+    assert.equal(receipt.archivedIdeaIds[0], "idea:0000");
+    assert.equal(receipt.archivedIdeaIds[total - 1], "idea:0299");
+    assert.equal(store.loadPersonalIdeas(writerId).length, total);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

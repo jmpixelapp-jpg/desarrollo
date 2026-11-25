@@ -1718,8 +1718,9 @@ export class HostEngineApi {
       knownAssertions,
       knownRelations,
       knownIdeas,
-      knownProjectIdeas,
-      knownProjectIdeasOmittedCount,
+      ...(knownProjectIdeas !== undefined
+        ? { knownProjectIdeas, knownProjectIdeasOmittedCount }
+        : {}),
       knownRelationsOmittedCount,
       knownIdeasOmittedCount
     });

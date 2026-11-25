@@ -10623,6 +10623,59 @@ test("compara cambios de evidencia y menciones nominales de participantes entre 
   ]);
 });
 
+test("no interpreta como discontinuidad una escena con vínculos de eventos truncados", async () => {
+  const { analyzeLiteraryFragment } = await import("../dist/motor-literario.js");
+  const text = [
+    "ESCENA 1","La alarma sonó.","***",
+    "ESCENA 2","Ana escuchó la señal."
+  ].join("\\n");
+  const firstStart=text.indexOf("La alarma sonó.");
+  const secondStart=text.indexOf("Ana escuchó la señal.");
+  const knownEvents=Array.from({length:101},(_,index)=>({
+    eventId:"event-"+String(index).padStart(3,"0"),
+    label:"Evento "+index,
+    participants:["ana"],
+    evidence:[
+      {
+        documentId:"chapter",revision:19,
+        start:firstStart,end:firstStart+"La alarma sonó.".length,
+        excerpt:"La alarma sonó."
+      },
+      ...(index===100?[{
+        documentId:"chapter",revision:19,
+        start:secondStart,end:secondStart+"Ana escuchó la señal.".length,
+        excerpt:"Ana escuchó la señal."
+      }]:[])
+    ]
+  }));
+  const result=analyzeLiteraryFragment({
+    projectId:"event-association-source-truncation",
+    documentId:"chapter",revision:19,text,
+    knownCharacters:[{entityId:"ana",canonicalName:"Ana"}],
+    knownEvents
+  });
+
+  assert.equal(result.explicitScenes[0].eventLinksTruncated,true);
+  assert.equal(result.explicitScenes[1].eventLinksTruncated,false);
+  const transition=result.sceneEventAssociationTransitions.find(item=>item.eventId==="event-100");
+  assert.deepEqual(transition,{
+    fromSceneIndex:1,toSceneIndex:2,
+    eventId:"event-100",label:"Evento 100",
+    status:"source-truncated-in-previous-scene",
+    previousEvidenceRangeCount:null,
+    nextEvidenceRangeCount:1,
+    evidenceRangeCountDelta:null,
+    participants:[
+      {
+        entityId:"ana",
+        previousMentionedByName:null,
+        nextMentionedByName:true,
+        status:"source-truncated-in-previous-scene"
+      }
+    ]
+  });
+});
+
 test("la API publica comparaciones de continuidad con evidencia narrativa persistida", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({store});

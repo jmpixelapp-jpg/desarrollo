@@ -1635,12 +1635,14 @@ export class HostEngineApi {
     return this.project;
   }
 
-  private requireKnowledgeStore(): Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "loadEntities">> {
+  private requireKnowledgeStore(): import("./contracts").ProjectStore &
+    Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "loadEntities">> {
     const store = this.store;
     if (!store.saveEntity || !store.loadEntities) {
       throw new Error("El adaptador de almacenamiento no admite conocimiento narrativo.");
     }
-    return { saveEntity: store.saveEntity.bind(store), loadEntities: store.loadEntities.bind(store) };
+    return store as import("./contracts").ProjectStore &
+      Required<Pick<import("./contracts").ProjectStore, "saveEntity" | "loadEntities">>;
   }
 
   getCapabilities(): Readonly<Record<string, unknown>> {

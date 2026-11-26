@@ -517,6 +517,17 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Documentación de rangos de contexto en `8758fd8`.
 - Runs 2880–2882 están en curso/cola para validar la restauración del objeto, las relaciones dirigidas, la validación de evidencia y el contexto de varias oraciones. No declarar la tanda final aprobada antes de CI completa.
 
+
+
+### Trayectorias de objetos entre capítulos — 26-11-2026
+
+- Runs 2881 (`303cc32b`) y 2882 (`648df19c`) terminaron con Type-check, compilación/pruebas y benchmark aprobados. Esto valida la corrección de offsets del contexto de observación y la prueba de varias oraciones en una misma línea.
+- Se añadió `narrative-object-trajectory.ts` (`972f2a34`) y su exportación pública (`af875b99`). La función `buildNarrativeObjectTrajectories` agrupa por ID de objeto y ordena mediante `documentOrder` editorial explícito; usa offsets para ordenar acontecimientos dentro del capítulo.
+- La salida conserva cada transición original y enumera documentos intermedios sin transición candidata. No afirma que el objeto esté ausente de esos documentos ni deduce posesión, causalidad, custodia o ubicación.
+- Validaciones: orden editorial con IDs y posiciones únicas, evidencia literal con rango UTF-16 consistente, contexto de documento/revisión y rechazo de revisiones mezcladas por capítulo.
+- Pruebas añadidas en `55488058`; documentación funcional en `353f78de`.
+- Runs 2885 (`5a89371d`) y 2886 (`cdd84419`) ya habían superado Type-check al momento de la consulta; el primero seguía en benchmark y el segundo en pruebas. La validación de la nueva trayectoria y sus pruebas queda pendiente de CI completa.
+
 ### Trayectoria de objetos: primera capa funcional — 26-11-2026
 
 - Run 2859 (commit `7f514c7`) completó correctamente Type-check, build/pruebas automatizadas y benchmark. La corrección de la prueba BOM quedó validada.

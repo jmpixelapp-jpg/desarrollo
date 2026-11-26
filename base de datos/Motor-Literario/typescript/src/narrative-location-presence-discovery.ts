@@ -146,7 +146,7 @@ function findMentions(
   );
 }
 
-const LOCATION_ASSERTION = /(?<marker>ya\s+no\s+|no\s+|nunca\s+|jam[aá]s\s+)?(?<copula>parec[ií]a?\s+estar|podr[ií]a\s+estar|estar[ií]a|est[aá](?:n|s)?|estaba(?:n)?|estuv(?:o|ieron)|estar[aá]n?|se\s+encuentra|se\s+encontraba|se\s+encontrar[aá]|permanece|permanec[ií]a|permanecer[aá]|vive|viv[ií]a|vivir[aá]|habita|habitaba|habitar[aá])\s+(?<relation>en|dentro\s+de|dentro\s+del|sobre|bajo|cerca\s+de|junto\s+a|al\s+lado\s+de|frente\s+a|lejos\s+de)\s+(?:(?:el|la|los|las|un|una|unos|unas)\s+)?/iu;
+const LOCATION_ASSERTION = /(?<marker>ya\s+no\s+|no\s+|nunca\s+|jam[aá]s\s+)?(?<copula>parece\s+estar|parecía\s+estar|podr[ií]a\s+estar|estar[ií]a|est[aá](?:n|s)?|estaba(?:n)?|estuv(?:o|ieron)|estar[aá]n?|se\s+encuentra|se\s+encontraba|se\s+encontrar[aá]|permanece|permanec[ií]a|permanecer[aá]|vive|viv[ií]a|vivir[aá]|habita|habitaba|habitar[aá])\s+(?<relation>en|dentro\s+de|dentro\s+del|sobre|bajo|cerca\s+de|junto\s+a|al\s+lado\s+de|frente\s+a|lejos\s+de)\s+(?:(?:el|la|los|las|un|una|unos|unas)\s+)?/iu;
 
 function tenseOf(copula: string): NarrativeLocationPresenceTense {
   const value = copula.toLocaleLowerCase("es");

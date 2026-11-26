@@ -196,3 +196,20 @@ Correcciones:
 **Criterio de precisión:** es preferible conservar una afirmación sin fecha antes que inventar una asociación temporal. La falta de fecha no significa que el hecho carezca de tiempo; significa que el texto analizado no permite asignárselo con seguridad.
 
 **Límite pendiente:** el extractor de afirmaciones continúa cubriendo solo edad, ubicación y determinados cargos explícitos. No debe confundirse esta mejora de atribución temporal con una cobertura completa de hechos narrativos, ni con una comprensión semántica general.
+
+
+## Fase N: alcance independiente de la negación en afirmaciones atribuidas
+
+Se corrigió una ambigüedad semántica importante en el modelo de afirmaciones:
+
+- `attributionPolarity` representa si el personaje realiza o niega el acto de creer, afirmar, recordar, temer o decir.
+- `contentPolarity` representa si la proposición atribuida contiene un marcador explícito inicial de negación (`no`, `nunca`, `jamás`, `tampoco`).
+- `polarity` se conserva por compatibilidad y mantiene el significado histórico de negación del verbo atributivo.
+
+Ejemplos:
+- «Mara no cree que Elian sea culpable»: atribución negada; contenido afirmado.
+- «Mara cree que Elian no es culpable»: atribución afirmada; contenido negado.
+
+Esto impide tratar ambas frases como si expresaran la misma estructura lógica.
+
+**Límites deliberados:** el detector de polaridad proposicional es léxico y reconoce marcadores al comienzo del contenido extraído. No resuelve todavía alcance de negación subordinada, doble negación, ironía, litotes, presuposiciones ni negación implícita. Los resultados siguen siendo candidatos y requieren revisión contextual.

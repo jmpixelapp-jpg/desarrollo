@@ -80,8 +80,20 @@ function validateOperation(operation: SyncOperation, projectId: string): void {
       !Number.isSafeInteger(operation.sequence) || operation.sequence < 1 ||
       !Number.isFinite(operation.createdAt) || operation.createdAt < 0 ||
       !Number.isSafeInteger(operation.attemptCount) || operation.attemptCount < 0 ||
-      typeof operation.payload !== "string") {
+      typeof operation.payload !== "string" || operation.payload.length > 2_000_000 ||
+      operation.operationId.length > 256 || operation.deviceId.length > 256 ||
+      operation.kind.length > 128 ||
+      (operation.lastAttemptAt !== undefined &&
+        (!Number.isFinite(operation.lastAttemptAt) || operation.lastAttemptAt < 0)) ||
+      (operation.lastError !== undefined &&
+        (typeof operation.lastError !== "string" || operation.lastError.length > 2048))) {
     throw new TypeError("La bandeja devolvió una operación fuera de contrato o de otro proyecto.");
+  }
+  let payload: unknown;
+  try { payload = JSON.parse(operation.payload); }
+  catch { throw new TypeError("La bandeja devolvió un payload que no es JSON válido."); }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TypeError("El payload de sincronización debe ser un objeto JSON.");
   }
 }
 

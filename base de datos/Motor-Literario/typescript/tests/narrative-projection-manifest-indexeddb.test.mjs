@@ -22,6 +22,7 @@ test("manifiesto documental: CAS monotónico, aislamiento por proyecto y tombsto
     const first = manifest(project, doc, 1);
     await store.saveNarrativeDocumentProjectionManifestIfUnchanged(first);
     assert.deepEqual(await store.loadNarrativeDocumentProjectionManifest(project, doc), first);
+    assert.deepEqual(await store.loadNarrativeDocumentProjectionManifests(project), [first]);
     await assert.rejects(
       store.saveNarrativeDocumentProjectionManifestIfUnchanged(manifest(project, doc, 2), 0),
       /CAS|aborto/u
@@ -36,6 +37,7 @@ test("manifiesto documental: CAS monotónico, aislamiento por proyecto y tombsto
     });
     await store.saveNarrativeDocumentProjectionManifestIfUnchanged(tombstone, 2);
     assert.deepEqual(await store.loadNarrativeDocumentProjectionManifest(project, doc), tombstone);
+    assert.deepEqual(await store.loadNarrativeDocumentProjectionManifests(project), [tombstone]);
     await assert.rejects(
       store.saveNarrativeDocumentProjectionManifestIfUnchanged(
         manifest(project, doc, 4, { status: "deleted", entityIds: ["entity-a"] }), 3

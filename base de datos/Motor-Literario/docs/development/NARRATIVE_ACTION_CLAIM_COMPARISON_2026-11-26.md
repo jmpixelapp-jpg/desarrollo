@@ -36,3 +36,10 @@ La implementación no contiene todavía una resolución temporal de estas accion
 ## Pruebas añadidas
 
 Se cubren discrepancia afirmada/negada, diferencia de marco epistémico, sujetos ambiguos, objetos no equivalentes y validación de identidad/evidencia. La ejecución de CI no se da por confirmada hasta disponer de un resultado de workflow.
+
+
+## Conservación de evidencia por cada versión contrapuesta
+
+El comparador mantiene las dos evidencias de la afirmación y ahora conserva también, de forma independiente, la evidencia del marco epistémico, la negación y la mención del emisor de cada lado. Los campos son opcionales porque no todos los textos tienen marcadores explícitos y el comparador no debe fabricarlos.
+
+La validación rechaza evidencias auxiliares malformadas o desactualizadas. La discrepancia continúa siendo una señal candidata: no decide cuál versión es verdadera ni fusiona voces narrativas. Esto prepara el terreno para comparar versiones de un mismo acontecimiento con trazabilidad completa hasta el fragmento de origen.

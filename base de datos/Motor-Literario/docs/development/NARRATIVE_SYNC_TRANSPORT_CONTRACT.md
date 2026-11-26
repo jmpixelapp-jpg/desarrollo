@@ -75,7 +75,7 @@ El servidor puede haber aceptado un lote completo aunque el cliente se interrump
 
 La coalescencia `inFlight` del coordinador evita envíos simultáneos del mismo proyecto únicamente dentro de una misma instancia JavaScript. No constituye un bloqueo compartido entre pestañas, workers o instancias del coordinador. Dos contextos pueden leer y enviar la misma operación antes de que cualquiera retire su acuse local. Por tanto, el transporte y el servidor deben admitir entregas duplicadas y deduplicar de forma atómica por `(projectId, operationId)`; una clave de idempotencia aislada en memoria no es suficiente.
 
-La bandeja actual no implementa leases distribuidos ni reclamación exclusiva de operaciones. No se debe afirmar exclusión mutua entre contextos. Una futura reclamación durable requiere una migración de esquema, vencimiento recuperable tras cierre abrupto y pruebas multi-contexto; no se añade implícitamente a la versión 25 de IndexedDB.
+La bandeja de sincronización dispone ahora de un adaptador opcional de lease compartido respaldado por el almacén IndexedDB de leases ya existente. No requiere una migración adicional de esquema. La exclusión entre contextos solo se activa cuando cada coordinador inyecta un adaptador y cada contexto usa un `ownerId` distinto. Sin esa configuración, `inFlight` sigue protegiendo únicamente una instancia.
 
 
 ## Bloqueo compartido del coordinador
@@ -90,3 +90,20 @@ El núcleo no depende de APIs del navegador. El anfitrión puede adaptar este pu
 La implementación `IndexedDbSyncExecutionLock` conecta el puerto `SyncExecutionLock` con el almacén de leases existente. Usa una identidad de documento reservada por proyecto, adquisición transaccional, propietario por contexto, renovación periódica, liberación condicionada por propietario y fencing token, y espera con sondeo cuando otro contexto mantiene el lease. También serializa las llamadas concurrentes dentro de la misma instancia del adaptador para impedir la reentrada del mismo propietario.
 
 Configuración: cada pestaña/worker debe construir su propio adaptador con un `ownerId` distinto y compartir la misma base IndexedDB. Debe inyectarse como `executionLock` al `NarrativeSyncCoordinator`. El mecanismo es un lease: una pestaña suspendida más allá del vencimiento puede perder la titularidad; para efectos remotos irreversibles el servidor debe seguir deduplicando `operationId` y, cuando proceda, validar fencing tokens. La exclusión compartida reduce duplicados normales, pero no sustituye idempotencia del servidor.
+
+
+### Integración recomendada
+
+```ts
+const store = new IndexedDbProjectStore();
+const executionLock = new IndexedDbSyncExecutionLock(store, {
+  ownerId: createUniqueContextId()
+});
+const coordinator = new NarrativeSyncCoordinator(store, transport, {
+  executionLock
+});
+```
+
+El identificador debe ser único por contexto de ejecución y mantenerse estable durante la vida de ese adaptador. No compartir el mismo `ownerId` entre pestañas: el almacén considera que el mismo propietario puede renovar su lease activo. Cerrar el contexto debe cerrar también su conexión al almacén. Si el contexto desaparece sin liberar el lease, otro propietario puede adquirirlo después de `expiresAt`, recibiendo un fencing token superior.
+
+Las tareas que pierdan el lease se consideran de resultado incierto: el transporte puede haber sido aceptado antes de detectar la pérdida. Se debe reconciliar mediante deduplicación remota por `operationId`; nunca asumir exactamente una vez.

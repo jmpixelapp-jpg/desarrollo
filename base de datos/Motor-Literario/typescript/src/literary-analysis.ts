@@ -2176,7 +2176,8 @@ function analyzeExplicitScenes(
     localRanges.push(contentRange);
     sceneDrafts.push({marker,contentRange});
   }
-  const boundedScenes = sceneDrafts.slice(0,100);
+  // El análisis admite hasta 2.000 escenas explícitas por fragmento.
+  const boundedScenes = sceneDrafts.slice(0,2_000);
   const boundedRanges = boundedScenes.map(scene => scene.contentRange);
   const wordCounts = countTokensPerRange(tokens,boundedRanges);
   const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,boundedRanges,dialogueRanges);

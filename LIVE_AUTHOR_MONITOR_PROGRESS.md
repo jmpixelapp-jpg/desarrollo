@@ -1905,3 +1905,19 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Bloqueo externo separado:** el workflow general `Motor Literario TypeScript` continúa fallando solo en el paso de typecheck por errores preexistentes fuera del monitor: `narrative-action-claim-comparison.ts` (propiedad `polarityEvidence` inexistente en el tipo), `narrative-character-knowledge-discovery.ts`, `narrative-evidence-context-expansion.ts`, `narrative-information-concealment-discovery.ts`, `narrative-information-exposure-discovery.ts`, `narrative-information-reception-discovery.ts`, `narrative-knowledge-dialogue-link.ts` (`exactOptionalPropertyTypes`) y `narrative-relationship-transition-discovery.ts` (parámetros `any`). En ese job, el build/tests del paquete completo quedan omitidos por el typecheck; no se atribuye ese fallo al Live Author Monitor. El bundle runtime del monitor y su integración sí aprobaron el run 45813045173.
 
 **Alcance pendiente:** la prueba CDP no sustituye validación con IME físico en Windows/macOS/Linux y los eventos de `compositionend` de CDP pueden ser no confiables. El repositorio sigue sin contener el editor enriquecido final de producción; debe conectarse el adaptador transaccional al editor real antes de afirmar cobertura de historial/undo/redo de producción.
+
+## 123. Integridad de cada delta intermedio de composición IME (26 de noviembre de 2026)
+
+**Objetivo:** fortalecer la prueba Chromium existente para no validar únicamente que el replay final vuelve a `abc` después de cancelar la composición. Cada candidato IME aplicado debe reconstruir el valor real del textarea en el instante exacto en que se emite su delta.
+
+**Cambio de prueba:** `tests/live-author-monitor-ime-composition-browser.test.mjs` mantiene un replay independiente en memoria. En cada callback de delta aplica `start/end/replacement` y compara inmediatamente el resultado con `textarea.value`. La aserción registra solo booleanos e identidad de secuencia/revisión; no exporta ni imprime el texto del manuscrito.
+
+**Invariantes nuevos:**
+- Todos los deltas intermedios, incluidos reemplazos sucesivos de candidatos, deben reproducir exactamente el estado aplicado del editor.
+- La secuencia debe ser consecutiva desde 1 y cada `baseRevision` debe coincidir con el índice previo.
+- La comprobación se ejecuta tanto después de los candidatos como después de la cancelación; el replay final continúa contrastándose con el valor del textarea.
+- La prueba mantiene separada la confianza de los eventos CDP: un `compositionend` no confiable sigue provocando suspensión y recuperación solo mediante snapshot explícito.
+
+**Alcance:** es una regresión automatizada de Chromium/CDP; no demuestra IME físico por sistema operativo/idioma ni integración con el editor enriquecido final. La ejecución CI del nuevo commit debe aprobarse antes de considerar verificada esta tanda.
+
+**Rama de trabajo:** `test/ime-delta-intermediate-integrity`, basada en el HEAD observado de `main` `9e230795240fdcd7efab7f5965700d3722e0f4d6`. Se mantiene aislada para no interferir con las actualizaciones concurrentes de `main`.

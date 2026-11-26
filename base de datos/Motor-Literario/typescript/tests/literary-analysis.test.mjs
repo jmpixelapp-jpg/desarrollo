@@ -298,6 +298,7 @@ test("ubica afirmaciones de atributo entre muchas escenas sin recorrer el catál
     };
     cursor = start + phrase.length;
   }
+  knownAssertions.reverse();
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",

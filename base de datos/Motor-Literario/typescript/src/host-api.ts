@@ -53,8 +53,9 @@ import {
   type NarrativeIdeaContinuityIndex
 } from "./narrative-idea-continuity-index";
 
-const MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS = 20_000_000;
 import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
+
+const MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS = 20_000_000;
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
 /**

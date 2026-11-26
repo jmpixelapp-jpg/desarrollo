@@ -797,4 +797,4 @@ La prueba abre dos capítulos, verifica dos leases/checkpoints, cierra A y despu
 
 Al volver la página a primer plano, el host revalida todas las claves de documento que mantienen heartbeat. La expiración puede afectar solo a uno de ellos: ese documento compite por un nuevo fencing token; los demás renuevan su lease existente, conservando propietario y token.
 
-La prueba abre dos documentos, simula la suspensión expirando únicamente A y dispara `visibilitychange`. Comprueba que A avanza exactamente un token, B conserva el suyo y ambos preservan la sesión y el heartbeat. El ciclo no debe provocar un takeover innecesario para documentos que mantuvieron una titularidad válida.
+La prueba abre dos documentos, simula la suspensión expirando A y reduciendo el vencimiento de B a un segundo sin perder su validez, y dispara `visibilitychange`. B debe recibir una extensión real de expiración sin cambiar owner/token. Comprueba que A avanza exactamente un token, B conserva el suyo y ambos preservan la sesión y el heartbeat. El ciclo no debe provocar un takeover innecesario para documentos que mantuvieron una titularidad válida.

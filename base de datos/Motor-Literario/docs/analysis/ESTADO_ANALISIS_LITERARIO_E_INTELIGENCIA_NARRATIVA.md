@@ -625,3 +625,8 @@ El módulo `src/narrative-action-link-discovery.ts` amplía el inventario de mar
 **Garantías de interpretación:** cada resultado sigue siendo un vínculo candidato; el tipo del marcador describe la señal textual y no establece por sí solo la dirección de causa/efecto, la simultaneidad real ni la cronología objetiva. La evidencia conserva offsets UTF-16 y el fragmento exacto del texto. No se generan vínculos si falta un marcador explícito, si las acciones se solapan o si el espacio entre ellas supera el límite configurado.
 
 **Cobertura de pruebas añadida:** conectores temporales, causales y concesivos compuestos; comprobación de evidencia literal; y comprobación de que los marcadores causales no crean campos automáticos de causa o efecto. La ejecución efectiva de CI debe verificarse en GitHub Actions y no se presume por el mero hecho de añadir los casos.
+
+
+### Corrección de límites Unicode en el reconocimiento verbal
+
+Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, `pasar` y `recorrer`) que tenían escapado incorrectamente el límite Unicode dentro de literales de expresión regular. La corrección evita que una forma verbal se extraiga como subcadena pegada a letras de otra palabra, incluidas letras acentuadas o caracteres como «ñ». Se añadieron pruebas positivas para formas verbales completas y negativas para coincidencias incrustadas en palabras. Esta mejora afecta directamente a la precisión de la adquisición de acciones; no amplía ni confirma roles semánticos.

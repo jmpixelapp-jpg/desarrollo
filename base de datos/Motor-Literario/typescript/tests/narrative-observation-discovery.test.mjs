@@ -49,7 +49,21 @@ test("detecta pronombres narrativos y conserva candidatos de antecedente sin res
   assert.equal(pronounAction.unresolvedReferences?.[0]?.antecedentEvidence?.excerpt,
     "Ana entró en la habitación.");
   assert.equal(pronounAction.unresolvedReferences?.[0]?.evidence.excerpt,
-    "Ella corrió hacia la ventana.");
+    "Ella");
+});
+
+test("reconoce pronombre con espacios iniciales y conserva offsets UTF-16 exactos", () => {
+  const prefix = "😀 Prólogo.\n";
+  const text = "   Ella cruzó el puente.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text, baseOffset: prefix.length
+  });
+  assert.equal(found.length, 1);
+  const reference = found[0].unresolvedReferences?.[0];
+  assert.equal(reference?.pronoun, "Ella");
+  assert.equal(reference?.evidence.start, prefix.length + 3);
+  assert.equal(reference?.evidence.end, prefix.length + 7);
+  assert.equal(reference?.evidence.excerpt, "Ella");
 });
 
 test("no inventa un antecedente cuando el pronombre aparece sin contexto previo", () => {

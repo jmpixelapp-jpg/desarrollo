@@ -1,3 +1,10 @@
+import type { NarrativeEntity } from "./narrative-knowledge";
+import {
+  discoverNarrativeObservationCandidates,
+  MAX_NARRATIVE_OBSERVATION_TEXT_UNITS,
+  type NarrativeObservationCandidate
+} from "./narrative-observation-discovery";
+
 /**
  * Ingesta estructural de texto de libros para el Motor Literario.
  *
@@ -121,7 +128,7 @@ function validate(input: NarrativeBookIngestionInput): void {
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
          input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) ||
       (input.title !== undefined && typeof input.title !== "string") ||
-      (input.language !== undefined && typeof input.language !== "string")) {
+      (input.language !== undefined && typeof input.language !== "string") ||\n      (input.entities !== undefined && !Array.isArray(input.entities))) {
     throw new Error("Entrada inválida para la ingesta del libro.");
   }
 }

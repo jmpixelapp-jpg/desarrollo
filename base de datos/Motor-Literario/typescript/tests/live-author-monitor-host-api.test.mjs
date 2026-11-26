@@ -475,6 +475,66 @@ test("dispose durante una adquisición pendiente libera el lease y no inicia hea
 });
 
 
+test("una renovación genérica tardía no restaura el lease después del cierre seguro", async () => {
+  class DelayedRenewStore extends MemoryDocumentStore {
+    delayNextRenew = false;
+    resolveDelayedRenewal;
+
+    async renewLiveAuthorMonitorLease(lease, now, durationMs) {
+      const renewed = await super.renewLiveAuthorMonitorLease(lease, now, durationMs);
+      if (this.delayNextRenew && renewed) {
+        this.delayNextRenew = false;
+        return await new Promise(resolve => {
+          this.resolveDelayedRenewal = () => resolve(renewed);
+        });
+      }
+      return renewed;
+    }
+  }
+
+  const store = new DelayedRenewStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "monitor-generic-lease-race", projectName: "Generic lease race" });
+  await api.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  const pendingCheckpoint = api.liveMonitorCheckpointTails.get("chapter-1");
+  if (pendingCheckpoint) await pendingCheckpoint;
+
+  store.delayNextRenew = true;
+  // Esta ruta es usada también por guardados y adquisiciones, no solo heartbeat.
+  const renewal = api.acquireOrRenewLiveAuthorMonitorLease("chapter-1");
+  for (let attempt = 0; attempt < 20 && !store.resolveDelayedRenewal; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(typeof store.resolveDelayedRenewal, "function");
+
+  await api.closeLiveAuthorMonitorDocumentSafely("chapter-1");
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1"), undefined);
+  assert.equal(api.liveMonitorLeases.has("chapter-1"), false);
+  assert.equal(api.liveMonitorLeaseHeartbeats.has("chapter-1"), false);
+
+  store.resolveDelayedRenewal();
+  const staleResult = await renewal;
+  assert.equal(staleResult, undefined,
+    "una respuesta de una generación invalidada no debe devolver titularidad");
+  assert.equal(api.liveMonitorLeases.has("chapter-1"), false,
+    "la respuesta atrasada no debe restaurar el lease local");
+  assert.equal(api.liveMonitorLeaseHeartbeats.has("chapter-1"), false,
+    "la respuesta atrasada no debe reactivar el heartbeat");
+  assert.equal(
+    store.monitorLeases.get("monitor-generic-lease-race:chapter-1").expiresAt <= Date.now(),
+    true,
+    "el lease persistido debe continuar liberado"
+  );
+
+  await api.disposeSafely();
+});
+
 test("una pestaña observadora toma el lease expirado sin necesitar una nueva edición", async () => {
   const store = new MemoryDocumentStore();
   const owner = new HostEngineApi({ store });

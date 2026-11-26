@@ -45,6 +45,8 @@ Cuando el anfitrión todavía no aporta fichas de entidades, la ingesta reconoce
 
 En patrones acotados como «Ana encontró a Bruno», la extracción puede señalar a Bruno como `personalObjectCandidate` cuando el nombre coincide exactamente con una entidad conocida y aparece inmediatamente después del verbo con la marca personal `a`. Se registra solo el complemento personal candidato, el marcador y la evidencia literal. No se afirma que el personaje sea ayudado, atacado, acompañado ni que exista otra relación semántica concreta: el verbo y el contexto completo siguen disponibles para revisión. La regla no intenta resolver complementos con nombres desconocidos, pronombres o construcciones más complejas.
 
+La comprobación del límite entre el nombre conocido y el texto siguiente usa límites Unicode de letras, marcas y números. Esto evita aceptar un prefijo como «Ana» dentro de «Anabel» como sujeto. La regresión está cubierta junto con un segundo personaje mencionado en la misma frase.
+
 ### Roles gramaticales y agente explícito en voz pasiva
 
 Las observaciones pueden conservar un sujeto gramatical candidato cuando el patrón local es inequívoco. En una pasiva como «Ana fue encontrada por Bruno», Ana es el sujeto gramatical paciente; no se etiqueta como quien ejecutó la acción. Si Bruno figura entre las entidades conocidas y coincide exactamente con el complemento «por Bruno», se expone `passiveAgentCandidate` con evidencia del nombre y el marcador `por`. La propuesta no se convierte en hecho confirmado. Si el agente no coincide con una entidad registrada, queda sin resolver. La construcción «por» no se interpreta fuera de este patrón pasivo.

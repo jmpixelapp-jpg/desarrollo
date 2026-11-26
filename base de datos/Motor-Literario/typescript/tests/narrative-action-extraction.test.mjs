@@ -44,16 +44,9 @@ test("reconoce acciones entre personajes y conserva la negación", () => {
   const found = extractNarrativeActionCandidates({
     ...context, text: "Mara no salvó a Elian."
   });
-  assert.equal(found.length, 0);
-  const extendedEntities = [
-    ...entities,
-    { ...entities[1], kind: "object", id: "object:elian-target" }
-  ];
-  const negated = extractNarrativeActionCandidates({
-    ...context, entities: extendedEntities, text: "Mara no salvó a Elian."
-  });
-  assert.equal(negated.length, 1);
-  assert.equal(negated[0].polarity, "negated");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].targetEntityId, "character:elian");
+  assert.equal(found[0].polarity, "negated");
 });
 
 test("usa alias y respeta offsets absolutos", () => {

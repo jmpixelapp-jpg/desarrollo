@@ -88,6 +88,10 @@ export interface NarrativeObservationCandidate {
     readonly entityKind: NarrativeEntity["kind"];
     readonly evidence: TextEvidence;
   }[];
+  /** Marco epistémico textual más próximo; no convierte el contenido en hecho objetivo. */
+  readonly epistemicFrame: "narrator-asserted" | "character-belief" | "character-memory" | "character-desire" | "reported-speech" | "hypothetical";
+  /** Evidencia literal del disparador del marco, cuando existe. */
+  readonly epistemicFrameEvidence?: TextEvidence;
   readonly polarity: "affirmed" | "negated";
   readonly confidence: "medium";
   readonly reviewStatus: "candidate";
@@ -184,6 +188,33 @@ const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "ver", expression: /(?<![\p{L}\p{M}\p{N}_])(?:vio|vieron|vi|viste|vimos|veía|veían|ve|ven|ver|visto|viendo)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "poner", expression: /(?<![\p{L}\p{M}\p{N}_])(?:puso|pusieron|puse|pusiste|pusimos|ponía|ponían|pone|ponen|poner|puesto|poniendo)(?![\p{L}\p{M}\p{N}_])/giu }
 ];
+
+const EPISTEMIC_FRAME_SIGNALS: readonly {
+  readonly frame: Exclude<NarrativeObservationCandidate["epistemicFrame"], "narrator-asserted">;
+  readonly expression: RegExp;
+}[] = [
+  { frame: "character-belief", expression: /\\b(?:creyó|creía|creyeron|pensó|pensaba|imag[iní]ó|imaginaba|supuso|suponía)\\s+que\\s+/giu },
+  { frame: "character-memory", expression: /\\b(?:recordó|recordaba|rememoró|rememoraba|olvidó|olvidaba)\\s+que\\s+/giu },
+  { frame: "character-desire", expression: /\\b(?:deseó|deseaba|quería|quiso|esperaba|esperó|anhelaba|anheló)\\s+que\\s+/giu },
+  { frame: "reported-speech", expression: /\\b(?:dijo|decía|afirmó|afirmaba|aseguró|aseguraba|contó|relató|advirtió|anunció)\\s+que\\s+/giu },
+  { frame: "hypothetical", expression: /\\b(?:si|quizá|quizás|tal vez|acaso|como si)\\s+/giu }
+];
+
+function classifyEpistemicFrame(
+  sentence: string,
+  actionStart: number
+): { frame: NarrativeObservationCandidate["epistemicFrame"]; cue?: { start: number; end: number; excerpt: string } } {
+  let selected: { frame: NarrativeObservationCandidate["epistemicFrame"]; start: number; end: number; excerpt: string } | undefined;
+  for (const signal of EPISTEMIC_FRAME_SIGNALS) {
+    signal.expression.lastIndex = 0;
+    for (const match of sentence.matchAll(signal.expression)) {
+      if (match.index! >= actionStart) break;
+      const candidate = { frame: signal.frame, start: match.index!, end: match.index! + match[0].length, excerpt: match[0] };
+      if (!selected || candidate.start > selected.start) selected = candidate;
+    }
+  }
+  return selected ? { frame: selected.frame, cue: selected } : { frame: "narrator-asserted" };
+}
 
 function classifyGrammaticalTense(surface: string): NarrativeObservationCandidate["grammaticalTense"] {
   const form = surface.toLocaleLowerCase("es");
@@ -500,6 +531,14 @@ export function discoverNarrativeObservationCandidates(
             }
           };
         })();
+        const epistemic = classifyEpistemicFrame(sentence, match.index);
+        const epistemicFrameEvidence = epistemic.cue ? {
+          documentId: input.documentId,
+          revision: input.revision,
+          start: baseOffset + segment.start + epistemic.cue.start,
+          end: baseOffset + segment.start + epistemic.cue.end,
+          excerpt: epistemic.cue.excerpt
+        } : undefined;
         const isNegated = hasNegationBeforeAction(sentence, match.index);
         const directedRelationCandidate = signal.action === "entregar" &&
           !isNegated &&
@@ -573,6 +612,8 @@ export function discoverNarrativeObservationCandidates(
           ...(unresolvedReferences.length > 0 ? { unresolvedReferences } : {}),
           mentionedEntityIds: mentionedOthers.map(entity => entity.id).sort(),
           entityMentionEvidence,
+          epistemicFrame: epistemic.frame,
+          ...(epistemicFrameEvidence ? { epistemicFrameEvidence } : {}),
           polarity: isNegated ? "negated" : "affirmed",
           confidence: "medium",
           reviewStatus: "candidate",

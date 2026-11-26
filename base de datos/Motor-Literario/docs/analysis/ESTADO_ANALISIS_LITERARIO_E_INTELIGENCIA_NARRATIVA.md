@@ -264,3 +264,22 @@ La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualiza
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.
+
+
+## 10. Coordinador de sincronización narrativa y correcciones de monitor (26 de noviembre de 2026)
+
+Se trasladó la implementación a `feat/narrative-sync-coordinator-v3`, basada en el `main` actualizado (`6747a93e3a88a52d6ef089543d39eeea0472bfaf)), porque la rama anterior había quedado cuatro commits detrás.
+
+La tanda incluye:
+- Coordinador `NarrativeSyncCoordinator` y puertos `SyncOutboxPort` / `SyncTransport`, desacoplados del proveedor remoto.
+- Lotes acotados, aislamiento por proyecto, coalescencia por proyecto y concurrencia entre proyectos.
+- Validación estricta de cada operación y payload JSON antes del envío.
+- Respuesta remota exhaustiva y disjunta: cada operación debe quedar aceptada, en conflicto o reintentable; solo los acuses explícitos permiten retirar datos.
+- Ocho pruebas para acuses, conflictos, reintentos, aislamiento, concurrencia, fallos y payload malformado.
+- Reparación de la declaración vacía/malformada de `NarrativeAssertion` y de los acumuladores de actividad del monitor y IndexedDB.
+- Corrección de una condición de carrera del heartbeat: las revalidaciones que llegan mientras existe otra operación activa comparten una promesa de seguimiento y esperan su resultado.
+- Corrección de la causa raíz del fencing: se preserva `undefined` al capturar la generación del lease, en lugar de sustituirlo por `0`. La comparación anterior `undefined !== 0` descartaba la respuesta válida de renovación antes de detectar pérdida o recuperar el lease.
+
+**Estado de validación:** la ejecución anterior confirmó que el typecheck pasa, pero falló en dos pruebas de lease. La cola de seguimiento, por sí sola, no resolvió esas pruebas; la corrección de generación en `1cfe39d` aborda el origen confirmado. Se trasladaron los cambios a esta rama nueva para incorporar el `main` reciente. Aún falta una ejecución CI sobre el nuevo HEAD para validar conjuntamente typecheck, suite y pruebas de navegador.
+
+**Límite funcional:** la bandeja durable de IndexedDB del PR #52 todavía no está integrada en `main`. El coordinador define el puerto compatible con ella, pero la integración final exige incorporar esa bandeja y un transporte remoto real. Siguen pendientes autenticación/autorización, API versionada, idempotencia del servidor, backoff y resolución explícita de conflictos. No se declara sincronización multidispositivo terminada.

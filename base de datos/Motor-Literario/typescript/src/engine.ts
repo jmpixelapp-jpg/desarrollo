@@ -96,10 +96,17 @@ export class LiteraryEngine {
         !identity.projectId.trim() || !identity.projectName.trim()) {
       throw new Error("El anfitrión debe proporcionar projectId y projectName.");
     }
+    if ((identity.writerId !== undefined &&
+          (typeof identity.writerId !== "string" || !identity.writerId.trim() || identity.writerId.length > 256)) ||
+        (identity.deviceId !== undefined &&
+          (typeof identity.deviceId !== "string" || !identity.deviceId.trim() || identity.deviceId.length > 256))) {
+      throw new Error("La identidad del escritor o del dispositivo es inválida.");
+    }
     if (this.project && (this.project.projectId !== identity.projectId ||
         this.project.projectName !== identity.projectName ||
-        this.project.writerId !== identity.writerId)) {
-      throw new Error("La identidad de esta instancia es inmutable; cree otra instancia para otro proyecto o escritor.");
+        this.project.writerId !== identity.writerId ||
+        this.project.deviceId !== identity.deviceId)) {
+      throw new Error("La identidad de esta instancia es inmutable; cree otra instancia para otro proyecto, escritor o dispositivo.");
     }
     this.project = Object.freeze({ ...identity });
   }
@@ -502,40 +509,37 @@ export class LiteraryEngine {
     nextBuffer.replace(change.start, change.end, change.replacement);
     const nextRevision = document.revision + 1;
     try {
-      if (this.options.store.appendChange) {
-        const journalEntry: StoredChange = {
-          ...change,
-          projectId: project.projectId,
-          committedRevision: nextRevision,
-          committedAt: Date.now()
-        };
-        // Con deviceId, el delta y la operación saliente deben quedar
-        // confirmados en la misma transacción. Nunca degradar a appendChange
-        // porque dejaría una edición local que los demás dispositivos no verán.
-        if (project.deviceId) {
-          const appendAtomic = this.options.store.appendChangeAndEnqueueSyncOperation;
-          if (!this.options.store.supportsAtomicNarrativeSyncOutbox ||
-              typeof appendAtomic !== "function") {
-            throw new Error(
-              "Este adaptador no confirma el journal y la outbox en una sola transacción; no se guardará una edición no sincronizable."
-            );
-          }
-          const operationId = globalThis.crypto?.randomUUID?.();
-          if (!operationId) {
-            throw new Error("No hay un generador criptográfico UUID disponible para identificar la edición.");
-          }
-          const operation: SyncOperationDraft = {
-            operationId,
-            projectId: project.projectId,
-            deviceId: project.deviceId,
-            kind: "document.change",
-            payload: JSON.stringify({ change: journalEntry }),
-            createdAt: journalEntry.committedAt
-          };
-          await appendAtomic.call(this.options.store, journalEntry, operation);
-        } else {
-          await this.options.store.appendChange(journalEntry);
+      const journalEntry: StoredChange = {
+        ...change,
+        projectId: project.projectId,
+        committedRevision: nextRevision,
+        committedAt: Date.now()
+      };
+      if (project.deviceId) {
+        // Con identidad de dispositivo, journal y outbox son una sola unidad
+        // durable. Nunca degradar a appendChange o saveDocument sin outbox.
+        const appendAtomic = this.options.store.appendChangeAndEnqueueSyncOperation;
+        if (!this.options.store.supportsAtomicNarrativeSyncOutbox ||
+            typeof appendAtomic !== "function") {
+          throw new Error(
+            "Este adaptador no confirma el journal y la outbox en una sola transacción; no se guardará una edición no sincronizable."
+          );
         }
+        const operationId = globalThis.crypto?.randomUUID?.();
+        if (!operationId) {
+          throw new Error("No hay un generador criptográfico UUID disponible para identificar la edición.");
+        }
+        const operation: SyncOperationDraft = {
+          operationId,
+          projectId: project.projectId,
+          deviceId: project.deviceId,
+          kind: "document.change",
+          payload: JSON.stringify({ change: journalEntry }),
+          createdAt: journalEntry.committedAt
+        };
+        await appendAtomic.call(this.options.store, journalEntry, operation);
+      } else if (this.options.store.appendChange) {
+        await this.options.store.appendChange(journalEntry);
       } else {
         // Compatibilidad con adaptadores antiguos que solo guardan snapshots.
         await this.options.store.saveDocument({

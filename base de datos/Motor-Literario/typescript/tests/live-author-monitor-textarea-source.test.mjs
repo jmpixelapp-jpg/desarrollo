@@ -207,7 +207,12 @@ test("exige resincronización para undo/redo y no emite deltas inventados", () =
 
 test("libera after-dispatch un beforeinput cancelado por un listener posterior", async () => {
   const f = fixture("abc", 0, 0);
-  const cancelLater = event => { event.defaultPrevented = true; };
+  const cancelLater = event => {
+    event.defaultPrevented = true;
+    // Simula el caso reentrante: el mismo listener que cancela cambia el foco
+    // antes de que termine la propagación de beforeinput.
+    f.element.emitBlur();
+  };
   f.element.addEventListener("beforeinput", cancelLater);
   f.element.selectionStart = 3;
   f.element.selectionEnd = 3;
@@ -384,7 +389,7 @@ test("visibilitychange oculta suspende una composición abierta sin reanudar al 
   f.source.dispose();
 });
 
-test("blur suspende operaciones incompletas pero no interrumpe un editor inactivo", () => {
+test("blur suspende operaciones incompletas pero no interrumpe un editor inactivo", async () => {
   const idle = fixture("abc", 0, 0);
   idle.element.emitBlur();
   assert.equal(idle.source.getState().needsResync, false,
@@ -407,6 +412,7 @@ test("blur suspende operaciones incompletas pero no interrumpe un editor inactiv
   pending.element.selectionEnd = 3;
   pending.element.emitBeforeInput("insertText");
   pending.element.emitBlur();
+  await Promise.resolve();
   assert.equal(pending.source.getState().needsResync, true);
   assert.equal(pending.errors[0].code, "missing-input");
   assert.equal(pending.source.pendingInput, undefined,

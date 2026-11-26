@@ -610,3 +610,18 @@ Se añadieron pruebas para el caso de objeto compartido y para listas de persona
 
 
 La clasificación de IDs de personajes se calcula una sola vez por extracción de eventos y se reutiliza al construir cada acontecimiento, evitando repetir el recorrido del catálogo para cada oración. La prueba de extracción de eventos verifica explícitamente que los personajes se separen de los objetos.
+
+
+### Fase AJ: procedencia doble y explicación de relaciones narrativas
+
+Las relaciones entre acontecimientos ahora conservan la evidencia de ambos extremos, no solo el texto del conector. Cada candidato incluye:
+- `supportingEvidence.sourceEvent`: documento, revisión, rango UTF-16 y fragmento literal del acontecimiento de origen.
+- `supportingEvidence.consequenceEvent`: los mismos datos para el acontecimiento posterior.
+- `hypothesisBasis`: distingue `explicit-linguistic-connector` de `temporal-marker-and-shared-character`.
+- `sharedCharacterEntityIds`: personajes concretos que sustentan una asociación temporal débil; para conectores explícitos se mantiene vacío, porque la señal principal es el conector escrito.
+
+La evidencia original se conserva sin reconstruir ni parafrasear. Esto permite que una interfaz explique por qué se propuso una relación, muestre los dos fragmentos y permita al escritor aceptar, rechazar o corregir el candidato sin perder su procedencia.
+
+La validación rechaza identidades duplicadas en los conjuntos de participantes y exige que los personajes pertenezcan al conjunto general de participantes. Se añadieron pruebas para la procedencia exacta de ambos acontecimientos y para participantes duplicados.
+
+**Límite:** ni un conector explícito ni una marca temporal prueban causalidad objetiva. Los dos tipos siguen siendo candidatos revisables; el campo `hypothesisBasis` explica la señal detectada, no una conclusión sobre el mundo narrativo.

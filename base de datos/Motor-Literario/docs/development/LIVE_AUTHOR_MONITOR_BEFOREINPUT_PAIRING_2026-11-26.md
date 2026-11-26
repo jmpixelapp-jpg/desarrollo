@@ -544,3 +544,11 @@ Se amplió la semántica de continuidad para reflejar el procesamiento de tareas
 Si llega otro beforeinput primero, se confirma missing-input sin publicar delta especulativo. Si la página entra en pagehide/freeze o se retira la última suscripción, se invalida la continuidad y se exige snapshot. La pérdida de foco u ocultación mientras compositionActive=true sí suspende de inmediato con resync-required.
 
 La regresión unitaria cubre tanto input tardío tras blur como input tardío tras ocultar/mostrar la pestaña. La prueba no simula que el sistema operativo entregue un IME físico; valida el estado del adaptador bajo una secuencia de eventos controlada.
+
+## Segunda edición sincrónica después de cancelar beforeinput — 26 de noviembre de 2026
+
+Una cancelación tardía puede resolverse antes de que se ejecute la microtarea de limpieza: otro listener puede llamar preventDefault() al primer beforeinput y generar sincrónicamente un segundo beforeinput durante la misma propagación. Antes de considerar que existe un input perdido, handleBeforeInput consulta la referencia efímera del evento pendiente; si su defaultPrevented final ya es true, descarta ese primer estado y procesa el segundo como una operación nueva.
+
+La microtarea del primer evento conserva además la protección por identidad de pending: cuando se ejecute, no puede borrar la segunda operación. Se aplica la misma liberación sincrónica antes de aceptar compositionstart, de modo que un evento de inicio de composición no quede bloqueado por un beforeinput ordinario ya cancelado.
+
+La nueva regresión unitaria reproduce el orden anidado: primer beforeinput cancelado, segundo beforeinput síncrono no cancelado, microtareas encoladas y un único input para la segunda operación. Se comprueba que solo se publica el segundo delta, con su replacement correcto y sin errores ni resync.

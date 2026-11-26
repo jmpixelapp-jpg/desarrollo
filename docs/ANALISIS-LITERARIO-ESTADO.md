@@ -152,3 +152,14 @@ Métricas observadas en esta ejecución de CI; son mediciones de ese runner y no
 Escenario concurrente: 4 documentos, 10 ediciones por documento, 40 ediciones totales; P95 extremo a extremo de 1,68 ms y máximo de 4 documentos activos.
 
 **Estado de esta fase:** todas las pruebas configuradas en el workflow se ejecutaron y aprobaron en el commit citado. No quedaron pruebas omitidas en esa ejecución.
+
+
+### Ampliación de límites y estado del HEAD posterior
+
+Se añadieron pruebas de frontera para el límite de **12.000 ideas** y el máximo de **2.000 escenas explícitas**. Ambas pruebas pasan en la validación del commit `124067748796bdbc015068ed8a1b1488bfff607c`.
+
+La ejecución del workflow en ese HEAD contabilizó **716 pruebas: 715 aprobadas, 1 fallida y 0 omitidas**. El único fallo registrado pertenece a la prueba de navegador del monitor de escritura multiproyecto (`live-author-monitor-writing-browser.test.mjs`): al cambiar al segundo capítulo, el montaje informa que el documento sigue pendiente o requiere resincronización. No corresponde a las suites de análisis literario, grafos ni sincronización de ideas.
+
+Ejecución: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45735421770
+
+En ese HEAD, TypeScript y la compilación completan; el paso de pruebas falla por ese escenario de navegador y, por ello, el benchmark queda omitido. La validación integral verde anterior sigue registrada en el commit `bf6d3f5`; la siguiente tarea de integración global es resolver ese único fallo del monitor y repetir el workflow completo.

@@ -1694,3 +1694,14 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Alcance real:** Playwright Chromium, dos páginas en el mismo contexto/origen, IndexedDB real del navegador, cierre abrupto de una página y recarga real de la página superviviente. No simula todavía un cierre de proceso completo del perfil ni dos dispositivos físicos.
 
 **Validación CI dedicada:** [Live Author Monitor — run 45766901884](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766901884), checkout `cfcd63966dbddd636ecd2973e609b648d0b6f890`, terminó `success`. La prueba de dos páginas Chromium con dos documentos pasó; la suite host/editor/browser completó **182/182**, monitor aislado 167/167, diagnósticos 17/17 y Page Lifecycle Chromium 1/1. El benchmark procesó 100.000 commits en **495,01 ms** (~202.015 commits/s), heap estable en 4,39 MiB entre mitad y final, 0,50 MiB retenidos y cero tickets pendientes.
+
+
+## 111. Coalescencia de eventos visibilitychange/pageshow en varios documentos (26 de noviembre de 2026)
+
+**Objetivo:** evitar tormentas de renovación cuando el navegador dispara eventos de reanudación próximos entre sí.
+
+**Regresión:** dos documentos tienen leases activos. Se demoran las primeras renovaciones de ambos y se disparan `visibilitychange` y `pageshow` repetidamente antes de resolverlas. Cada documento debe crear un único follow-up; al liberar las renovaciones suspendidas, debe ejecutar exactamente dos renovaciones por documento (la inicial y un follow-up), conservar propietario/fencing token y mantener un único heartbeat por documento.
+
+**Invariante:** el coalescing es por `documentId`; un evento de uno o varios tipos no puede multiplicar solicitudes ni fusionar la renovación de documentos distintos.
+
+**Validación:** pendiente de GitHub Actions.

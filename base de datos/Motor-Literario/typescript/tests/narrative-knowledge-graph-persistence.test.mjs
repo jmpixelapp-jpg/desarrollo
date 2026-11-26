@@ -5,7 +5,8 @@ import {
   persistNarrativeKnowledgeGraphSnapshot,
   createNarrativeDocumentProjectionManifest,
   createNarrativeDocumentProjectionTombstone,
-  commitNarrativeDocumentProjectionManifest
+  commitNarrativeDocumentProjectionManifest,
+  validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
 function createMemoryStore() {
@@ -167,4 +168,23 @@ test("commit de manifiestos rechaza revisiones antiguas y divergencias", async (
   });
   assert.equal(next.manifest.generation, 2);
   assert.equal(next.manifest.revision, 2);
+});
+
+
+test("valida inventarios únicos y tombstones sin referencias activas", () => {
+  const valid = {
+    projectId: "novel-a", documentId: "chapter-a", revision: 2,
+    generation: 1, status: "active", entityIds: ["entity-1"],
+    relationIds: [], eventIds: [], ideaIds: [], assertionIds: [], updatedAt: 100
+  };
+  assert.doesNotThrow(() => validateNarrativeDocumentProjectionManifest(valid));
+  assert.throws(() => validateNarrativeDocumentProjectionManifest({
+    ...valid, entityIds: ["entity-1", "entity-1"]
+  }), /IDs duplicados/u);
+  assert.throws(() => validateNarrativeDocumentProjectionManifest({
+    ...valid, status: "deleted"
+  }), /inventarios vacíos/u);
+  assert.throws(() => validateNarrativeDocumentProjectionManifest({
+    ...valid, generation: 0
+  }), /Manifiesto/u);
 });

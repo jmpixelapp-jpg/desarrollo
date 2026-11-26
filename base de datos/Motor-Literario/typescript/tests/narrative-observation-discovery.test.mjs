@@ -512,3 +512,37 @@ test("no reconoce un verbo como subcadena pegada a letras Unicode", () => {
     assert.equal(found.length, 0, text);
   }
 });
+
+test("reconoce formas irregulares frecuentes sin depender de raíces regulares", () => {
+  const forms = [
+    ["Ana hizo una señal.", "hacer", "hizo"],
+    ["Ana vino al refugio.", "venir", "vino"],
+    ["Ana vio la señal.", "ver", "vio"],
+    ["Ana puso la llave sobre la mesa.", "poner", "puso"],
+    ["Ana habían visto la señal.", "ver", "visto"]
+  ];
+  for (const [text, action, surface] of forms) {
+    const found = discoverNarrativeObservationCandidates({ ...context, text });
+    const candidate = found.find(item => item.action === action);
+    assert.ok(candidate, text);
+    assert.equal(candidate.surface, surface, text);
+    assert.equal(text.slice(candidate.actionEvidence.start, candidate.actionEvidence.end), surface);
+    if (["hizo", "vino", "vio", "puso"].includes(surface)) {
+      assert.equal(candidate.grammaticalTense, "past-preterite", text);
+    }
+  }
+});
+
+test("no convierte auxiliares y verbos modales excluidos en acciones nuevas", () => {
+  for (const text of [
+    "Ana fue valiente.",
+    "Ana estaba cansada.",
+    "Ana había llegado.",
+    "Ana pudo escapar.",
+    "Ana quiso marcharse."
+  ]) {
+    const found = discoverNarrativeObservationCandidates({ ...context, text });
+    assert.equal(found.length, 0, text);
+  }
+});
+

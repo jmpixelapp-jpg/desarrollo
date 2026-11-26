@@ -112,7 +112,8 @@ export function buildNarrativeCharacterKnowledgeStates(
     const items = information.map(record => {
       const interpretations = (input.interpretations ?? []).filter(item =>
         item.interpreterEntityId === character.id &&
-        normalize(item.interpretedContent) === normalize(record.content)
+        (item.priorInformationId === record.id ||
+          (!item.priorInformationId && normalize(item.interpretedContent) === normalize(record.content)))
       );
       const evaluations = (input.evaluations ?? []).filter(item =>
         item.evaluatorEntityId === character.id &&

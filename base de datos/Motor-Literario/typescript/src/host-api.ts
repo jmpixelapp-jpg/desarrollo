@@ -882,7 +882,7 @@ export class HostEngineApi {
       }
       const seenDocuments = new Set<string>();
       const candidatesByDocument = new Map<string, readonly NarrativeIdeaCandidate[]>();
-      const documentsToDiscover: typeof metadata[number][] = [];
+      const documentsToDiscover: Array<(typeof metadata)[number]> = [];
       const sourceRevisions: Array<{
         documentId: string;
         revision: number;

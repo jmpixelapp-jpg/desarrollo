@@ -239,6 +239,7 @@ test("presenta las siete categorías de actividad en el panel de capítulo", () 
   let length = "contenido privado".length;
   const operations = [
     { activityKind: "typing", start: () => [length, length], replacement: "x" },
+    { activityKind: "composition", start: () => [length, length], replacement: "に" },
     { activityKind: "paste", start: () => [length, length], replacement: "yy" },
     { activityKind: "deletion", start: () => [length - 1, length], replacement: "" },
     { activityKind: "correction", start: () => [0, 1], replacement: "Z" },
@@ -267,7 +268,7 @@ test("presenta las siete categorías de actividad en el panel de capítulo", () 
     schedule: () => () => {}
   });
   const panel = f.container.children[0];
-  for (const key of ["typing", "paste", "deletion", "correction", "undo", "redo", "other"]) {
+  for (const key of ["typing", "composition", "paste", "deletion", "correction", "undo", "redo", "other"]) {
     assert.equal(metric(panel, key).textContent, "1", "el panel debe presentar el contador " + key);
   }
   assert.equal(panel.textContent.includes("contenido privado"), false);

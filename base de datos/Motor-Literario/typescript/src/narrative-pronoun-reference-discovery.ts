@@ -84,20 +84,18 @@ function findLastNameMention(
   return best;
 }
 
-function sentenceSpans(text: string): readonly { start: number; end: number }[] {
-  const spans: { start: number; end: number }[] = [];
-  const expression = /[^.!?\n]+(?:[.!?]+|$)/gu;
+function* sentenceSpans(text: string): Iterable<{ start: number; end: number }> {
+  const expression = /[^.!?\\n]+(?:[.!?]+|$)/gu;
   for (const match of text.matchAll(expression)) {
     const raw = match[0];
-    const leading = raw.search(/\S/u);
+    const leading = raw.search(/\\S/u);
     const trailing = raw.trimEnd().length;
     if (leading < 0 || trailing <= leading) continue;
-    spans.push({
+    yield {
       start: match.index! + leading,
       end: match.index! + trailing
-    });
+    };
   }
-  return spans;
 }
 
 function validate(input: NarrativePronounReferenceDiscoveryInput): void {

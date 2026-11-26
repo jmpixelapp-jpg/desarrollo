@@ -68,3 +68,27 @@ test("no inventa una motivación a partir de una acción sin marcador causal",()
     []
   );
 });
+
+test("reconoce otras causas expresas y conserva el texto causal exacto",()=>{
+  for (const [text,expected] of [
+    ["Mara luchó por lealtad a Elian.","lealtad a Elian"],
+    ["Mara atacó por venganza contra el rey.","venganza contra el rey"],
+    ["Mara actuó porque teme perder su hogar.","teme perder su hogar"]
+  ]) {
+    const found=extractNarrativeCharacterIntentCandidates(input(text));
+    assert.equal(found.length,1,text);
+    assert.equal(found[0].kind,"motivation",text);
+    assert.equal(found[0].text,expected,text);
+    assert.equal(text.slice(found[0].evidence.start,found[0].evidence.end),expected,text);
+  }
+});
+test("reconoce propósitos con marcadores compuestos",()=>{
+  for (const marker of ["a fin de","con el fin de"]) {
+    const text="Mara viajó "+marker+" encontrar la cura.";
+    const found=extractNarrativeCharacterIntentCandidates(input(text));
+    assert.equal(found.length,1,text);
+    assert.equal(found[0].kind,"goal",text);
+    assert.equal(found[0].evidenceBasis,"explicit-purpose",text);
+    assert.equal(found[0].text,"encontrar la cura",text);
+  }
+});

@@ -247,7 +247,7 @@ export class NarrativeSyncCoordinator {
     const ids = new Set<string>();
     const lastSequenceByDevice = new Map<string, number>();
     const pending: SyncOperation[] = [];
-    let blockedByBackoff = false;
+    const devicesBlockedByBackoff = new Set<string>();
     for (const operation of loaded) {
       validateOperation(operation, projectId);
       if (ids.has(operation.operationId)) {
@@ -260,12 +260,13 @@ export class NarrativeSyncCoordinator {
       }
       lastSequenceByDevice.set(operation.deviceId, operation.sequence);
 
-      // Conserva el orden durable: no adelanta operaciones posteriores a una
-      // operación que todavía está esperando su próxima ventana de reintento.
-      if (!blockedByBackoff && (operation.nextAttemptAt ?? 0) <= attemptedAt) {
+      // El backoff bloquea solo el flujo causal de su dispositivo.
+      // Otros dispositivos son escritores independientes y pueden progresar.
+      if (!devicesBlockedByBackoff.has(operation.deviceId) &&
+          (operation.nextAttemptAt ?? 0) <= attemptedAt) {
         pending.push(operation);
       } else {
-        blockedByBackoff = true;
+        devicesBlockedByBackoff.add(operation.deviceId);
       }
     }
 

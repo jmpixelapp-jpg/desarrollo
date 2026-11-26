@@ -187,7 +187,19 @@ La ejecución CI observada para esa rama completó el type-check, pero falló la
 5. Continuar con relaciones/motivaciones y, después, biblioteca de ideas.
 6. Actualizar este documento con cada cambio real, pruebas y límites observados.
 
-## 8. Cómo informar el progreso
+## 8. Avance de la Fase A: señales de intención y modalidad
+
+La primera implementación ya no se limita a tema/premisa/conflicto declarados. Se amplió el descubrimiento de prosa natural para reconocer:
+- objetivos expresados mediante verbos como querer, desear, pretender, intentar y buscar;
+- motivaciones declaradas mediante “su motivación/razón es…” o construcciones “lo hace porque…”;
+- dilemas expresados mediante elecciones entre alternativas;
+- modalidad lingüística: afirmada, negada, condicional o hipotética.
+
+La propiedad `polarity` describe la forma lingüística detectada; no certifica que el contenido sea verdad ni que sea canon. En particular, una negación no debe convertirse en un deseo afirmado y una hipótesis no debe convertirse en hecho. Los detectores siguen siendo conservadores y no resuelven por sí solos quién es el sujeto de cada intención ni si el deseo pertenece al autor o a un personaje. Esa atribución contextual corresponde a la Fase B.
+
+Se añadieron pruebas para objetivos, motivaciones, dilemas, negación y modalidad hipotética. Las pruebas deben ejecutarse junto con toda la suite; no se considera validada esta ampliación hasta que CI termine sin fallos.
+
+## 9. Cómo informar el progreso
 
 Cada entrega debe indicar claramente:
 - archivos y funciones modificados;

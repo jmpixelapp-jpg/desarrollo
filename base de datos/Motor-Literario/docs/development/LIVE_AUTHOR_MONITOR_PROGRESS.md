@@ -824,3 +824,20 @@ El monitor y los tests del panel, workspace y benchmark siguen sin una ejecució
 **Coordinación:** revisión del PR #56 confirma que no incluye ninguno de los cinco archivos de esta entrega; el cambio de workspace en ese PR se limita a su prueba preexistente. Se mantiene la separación de áreas. `main` conserva el commit de implementación como ancestro directo.
 
 **Validación:** pendiente de CI. El baseline documentado sigue bloqueado antes de las pruebas del monitor por el error sintáctico externo `src/narrative-history.ts(7,41): TS1002`. No se modifica ese módulo ni se atribuye aprobación a tests que el workflow no haya ejecutado.
+
+
+## 45. Lane independiente de compilación y regresión del monitor (25 de noviembre de 2026)
+
+**Objetivo:** evitar que un error sintáctico en un módulo ajeno bloquee todas las pruebas focalizadas del monitor.
+
+**Cambios:**
+- Se crea `src/live-author-monitor-test-entry.ts`, que exporta únicamente motor de métricas, panel y workspace.
+- Se crea `tsconfig.live-author-monitor.json` con TypeScript estricto y alcance limitado al punto de entrada del monitor y sus imports.
+- Se crea `vite.monitor.config.ts`, que genera `dist-monitor/live-author-monitor.js` sin limpiar el bundle general `dist/`.
+- La suite `live-author-monitor-diagnostics-isolation.test.mjs` importa el bundle aislado.
+- El workflow ejecuta typecheck, build aislado y las tres regresiones antes de intentar el build general.
+- Los filtros de `push` y `pull_request` incluyen los tres archivos nuevos para que la lane se dispare ante cambios en su configuración.
+
+**Límites:** la lane aislada verifica tipos del monitor y sus módulos importados, más las regresiones DOM del aislamiento de diagnósticos. No reemplaza las pruebas de host, IndexedDB, leases multi-pestaña, editor real ni benchmark prolongado. La compilación general sigue siendo obligatoria y conserva el reporte de cualquier bloqueo externo.
+
+**Validación:** pendiente de CI para este commit. Se conserva como antecedente el bloqueo de compilación general por `src/narrative-history.ts(7,41): TS1002`; la lane aislada debe ejecutarse antes de ese paso y reportar su resultado por separado.

@@ -4,7 +4,7 @@ import {
   LiveAuthorMonitor,
   mountLiveAuthorMonitorPanel,
   mountLiveAuthorMonitorWorkspace
-} from "../dist/motor-literario.js";
+} from "../dist-monitor/live-author-monitor.js";
 
 class FakeElement {
   constructor(tagName, ownerDocument) {

@@ -146,6 +146,12 @@ Desde `base de datos/Motor-Literario/typescript`:
 npm install
 npm run validate:schema
 npm run typecheck
+# Validación aislada del monitor (no depende de src/index.ts ni del módulo narrativo)
+npx tsc --project tsconfig.live-author-monitor.json
+npx vite build --config vite.monitor.config.ts
+node --test tests/live-author-monitor-diagnostics-isolation.test.mjs
+
+# Validación general del motor y suites completas
 npx vite build
 node --test tests/live-author-monitor*.test.mjs tests/storage-implementation-audit.test.mjs
 ```
@@ -247,3 +253,15 @@ El panel y cada tarjeta del workspace usan `readLiveAuthorMonitorPersistenceDiag
 - permite recuperar la visualización normal cuando vuelve a funcionar el proveedor, sin desmontar el panel.
 
 La regresión `tests/live-author-monitor-diagnostics-isolation.test.mjs` cubre excepciones, recuperación, aislamiento entre documentos y rechazo de diagnósticos cruzados. No valida por sí sola la persistencia durable del checkpoint ni sustituye las pruebas de IndexedDB y leases.
+
+
+## 14. Validación aislada del monitor
+
+El workflow dedicado ejecuta una lane específica del monitor antes de compilar el bundle general:
+
+1. `tsc --project tsconfig.live-author-monitor.json` aplica TypeScript estricto únicamente al punto de entrada del monitor y sus dependencias importadas.
+2. `vite.monitor.config.ts` construye `src/live-author-monitor-test-entry.ts` en `dist-monitor/`, sin limpiar ni sobrescribir `dist/`.
+3. `tests/live-author-monitor-diagnostics-isolation.test.mjs` ejecuta las regresiones de aislamiento de telemetría sobre ese bundle.
+4. Después se intenta la compilación general del motor y, si esta termina correctamente, se ejecutan las demás suites y el benchmark.
+
+Esta separación permite obtener una señal de compilación y regresión del monitor aun cuando un módulo independiente del bundle general esté roto. No certifica la integración completa del monitor con `HostEngineApi`, la persistencia real IndexedDB ni el editor de producción; esas validaciones continúan en el workflow general y en las suites de integración.

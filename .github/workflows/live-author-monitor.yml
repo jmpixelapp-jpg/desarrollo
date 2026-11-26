@@ -14,6 +14,9 @@ on:
       - "base de datos/Motor-Literario/typescript/tests/browser/**"
       - "base de datos/Motor-Literario/typescript/examples/live-author-monitor/**"
       - "base de datos/Motor-Literario/typescript/tests/storage-implementation-audit.test.mjs"
+      - "base de datos/Motor-Literario/typescript/src/live-author-monitor-test-entry.ts"
+      - "base de datos/Motor-Literario/typescript/tsconfig.live-author-monitor.json"
+      - "base de datos/Motor-Literario/typescript/vite.monitor.config.ts"
       - "base de datos/Motor-Literario/typescript/bench/**"
       - "base de datos/Motor-Literario/typescript/package.json"
       - ".github/workflows/live-author-monitor.yml"
@@ -29,6 +32,9 @@ on:
       - "base de datos/Motor-Literario/typescript/tests/browser/**"
       - "base de datos/Motor-Literario/typescript/examples/live-author-monitor/**"
       - "base de datos/Motor-Literario/typescript/tests/storage-implementation-audit.test.mjs"
+      - "base de datos/Motor-Literario/typescript/src/live-author-monitor-test-entry.ts"
+      - "base de datos/Motor-Literario/typescript/tsconfig.live-author-monitor.json"
+      - "base de datos/Motor-Literario/typescript/vite.monitor.config.ts"
       - "base de datos/Motor-Literario/typescript/bench/**"
       - "base de datos/Motor-Literario/typescript/package.json"
       - ".github/workflows/live-author-monitor.yml"
@@ -57,6 +63,12 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Validate MLDB schema and physical storage mapping
         run: npm run validate:schema
+      - name: Type-check isolated live author monitor
+        run: npx tsc --project tsconfig.live-author-monitor.json
+      - name: Build isolated live author monitor test bundle
+        run: npx vite build --config vite.monitor.config.ts
+      - name: Run isolated diagnostic recovery regressions
+        run: node --test tests/live-author-monitor-diagnostics-isolation.test.mjs
       - name: Build runtime bundle
         run: npx vite build
       - name: Run monitor-specific tests

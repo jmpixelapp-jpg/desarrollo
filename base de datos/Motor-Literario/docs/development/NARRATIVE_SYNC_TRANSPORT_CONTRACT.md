@@ -83,3 +83,10 @@ La bandeja actual no implementa leases distribuidos ni reclamación exclusiva de
 El coordinador admite ahora un puerto opcional `SyncExecutionLock` en sus opciones. Su método `runExclusive(key, task)` recibe una clave estable por proyecto (`narrative-sync:<projectId>`) y debe ejecutar la tarea en exclusión mutua entre todas las instancias que compartan el proveedor. La coalescencia local `inFlight` se mantiene para llamadas repetidas dentro de una instancia.
 
 El núcleo no depende de APIs del navegador. El anfitrión puede adaptar este puerto a Web Locks o a un lease IndexedDB durable. Si no se inyecta un proveedor compartido, se conserva el comportamiento anterior: exclusión solo por instancia. El puerto no convierte por sí solo la entrega en exactamente-una-vez; el servidor sigue obligado a deduplicar `operationId`. Los proveedores de lease deben contemplar vencimiento, liberación condicionada por propietario/fencing token y operaciones que superen la duración inicial del lease.
+
+
+## Adaptador IndexedDB para bloqueo compartido
+
+La implementación `IndexedDbSyncExecutionLock` conecta el puerto `SyncExecutionLock` con el almacén de leases existente. Usa una identidad de documento reservada por proyecto, adquisición transaccional, propietario por contexto, renovación periódica, liberación condicionada por propietario y fencing token, y espera con sondeo cuando otro contexto mantiene el lease. También serializa las llamadas concurrentes dentro de la misma instancia del adaptador para impedir la reentrada del mismo propietario.
+
+Configuración: cada pestaña/worker debe construir su propio adaptador con un `ownerId` distinto y compartir la misma base IndexedDB. Debe inyectarse como `executionLock` al `NarrativeSyncCoordinator`. El mecanismo es un lease: una pestaña suspendida más allá del vencimiento puede perder la titularidad; para efectos remotos irreversibles el servidor debe seguir deduplicando `operationId` y, cuando proceda, validar fencing tokens. La exclusión compartida reduce duplicados normales, pero no sustituye idempotencia del servidor.

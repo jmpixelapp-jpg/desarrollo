@@ -449,7 +449,9 @@ export class LiveAuthorMonitor {
     const validClassifiedCounts = classifiedActivityCounts.every(
       value => value !== undefined && integerNonNegative(value)
     );
-    const classifiedCountTotal = classifiedActivityCounts.reduce((sum, value) => sum + (value ?? 0), 0);
+    const classifiedCountTotal = classifiedActivityCounts.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    const activityCountTotal = classifiedCountTotal +
+      (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedCountTotal);
     const validActivityCounts = !hasActivityCounts || (validClassifiedCounts &&
       (checkpoint.otherChanges === undefined || integerNonNegative(checkpoint.otherChanges)) &&
       classifiedCountTotal <= checkpoint.acceptedChanges &&

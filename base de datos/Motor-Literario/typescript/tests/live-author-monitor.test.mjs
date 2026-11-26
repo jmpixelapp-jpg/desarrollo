@@ -140,6 +140,81 @@ test("aísla documentos y notifica sin permitir que un suscriptor interrumpa la 
   assert.equal(monitor.getSnapshots().length, 2);
 });
 
+test("serializa snapshots FIFO cuando un suscriptor provoca otra edición reentrante", () => {
+  const { monitor, open, change, queued } = fixture();
+  open();
+
+  let nested = false;
+  const observed = [];
+  monitor.subscribe(snapshot => {
+    if (snapshot.acceptedChanges !== 1 || nested) return;
+    nested = true;
+    monitor.recordAdmission(change(2, 1, 6, 6, "b"), queued("t-2"));
+  });
+  monitor.subscribe(snapshot => {
+    observed.push([
+      snapshot.latestSequence,
+      snapshot.acceptedChanges,
+      snapshot.insertedCharacters
+    ]);
+  });
+
+  const first = monitor.recordAdmission(change(1, 0, 5, 5, "a"), queued("t-1"));
+  assert.equal(first.latestSequence, 1);
+  assert.deepEqual(observed, [[1, 1, 1], [2, 2, 2]]);
+});
+
+test("fija destinatarios por snapshot y respeta altas y bajas durante reentrancia", () => {
+  const { monitor, open, change, queued } = fixture();
+  open();
+
+  const removedDeliveries = [];
+  const stableDeliveries = [];
+  const addedDeliveries = [];
+  let unsubscribeRemoved = () => {};
+
+  monitor.subscribe(snapshot => {
+    if (snapshot.acceptedChanges !== 1) return;
+    unsubscribeRemoved();
+    monitor.subscribe(next => addedDeliveries.push(next.latestSequence), "chapter-1");
+    monitor.recordAdmission(change(2, 1, 6, 6, "b"), queued("t-2"));
+  });
+  unsubscribeRemoved = monitor.subscribe(
+    snapshot => removedDeliveries.push(snapshot.latestSequence),
+    "chapter-1"
+  );
+  monitor.subscribe(
+    snapshot => stableDeliveries.push(snapshot.latestSequence),
+    "chapter-1"
+  );
+
+  monitor.recordAdmission(change(1, 0, 5, 5, "a"), queued("t-1"));
+
+  assert.deepEqual(removedDeliveries, []);
+  assert.deepEqual(stableDeliveries, [1, 2]);
+  assert.deepEqual(addedDeliveries, [2]);
+});
+
+test("dispose descarta notificaciones reentrantes y no invoca listeners retirados", () => {
+  const { monitor, open, change, queued } = fixture();
+  open();
+
+  let disposed = false;
+  const laterNotifications = [];
+  monitor.subscribe(snapshot => {
+    if (snapshot.acceptedChanges !== 1 || disposed) return;
+    disposed = true;
+    monitor.recordAdmission(change(2, 1, 6, 6, "b"), queued("t-2"));
+    monitor.dispose();
+  });
+  monitor.subscribe(snapshot => laterNotifications.push(snapshot.latestSequence));
+
+  monitor.recordAdmission(change(1, 0, 5, 5, "a"), queued("t-1"));
+
+  assert.deepEqual(laterNotifications, []);
+  assert.equal(monitor.getSnapshot("chapter-1"), undefined);
+});
+
 test("valida secuencias, límite de documentos y retroceso del reloj", () => {
   const { monitor, open, change, queued, setTime } = fixture({ maxOpenDocuments: 1 });
   open();

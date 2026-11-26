@@ -168,4 +168,10 @@ test("la etiqueta admite mayúscula inicial pero el nombre propio conserva requi
   assert.equal(extractNarrativeEntities(
     "unicode-event-boundaries", "capitalized-name", 1, "personaje Ana", 100, 0
   ).length, 1);
+  assert.equal(extractNarrativeEntities(
+    "unicode-event-boundaries", "lowercase-place", 1, "Ciudad londres", 100, 0
+  ).length, 0);
+  assert.equal(extractNarrativeEntities(
+    "unicode-event-boundaries", "lowercase-object", 1, "Objeto espada", 100, 0
+  ).length, 0);
 });

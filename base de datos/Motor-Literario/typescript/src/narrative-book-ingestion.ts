@@ -259,7 +259,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
       pending = undefined;
     };
     for (const line of chapterLines) {
-      if (pending && line.start - pending.end > 2) flush();
+      if (pending && /(?:\\r?\\n)[ \\t]*(?:\\r?\\n)/u.test(input.text.slice(pending.end, line.start))) flush();
       if (!pending) pending = { ...line };
       else pending = { start: pending.start, end: line.end, text: pending.text + "\n" + line.text };
     }

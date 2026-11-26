@@ -71,6 +71,23 @@ test("lee archivos TXT y Markdown UTF-8 mediante APIs estándar", async () => {
   assert.ok(parsed.signals.some(signal => signal.label === "arrival"));
 });
 
+test("reconoce encabezados tras BOM UTF-8 y conserva offsets del texto original", async () => {
+  const text = "\uFEFF# Capítulo I\n\nAna llegó al puerto.";
+  const bytes = new TextEncoder().encode(text);
+  const source = await readNarrativeBookFile({
+    name: "con-bom.md", type: "text/markdown", size: bytes.byteLength,
+    arrayBuffer: async () => bytes.buffer
+  });
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "bom-book", revision: 1, text: source.text
+  });
+  assert.equal(result.chapters[0].heading, "Capítulo I");
+  const arrival = result.signals.find(signal => signal.surface === "llegó");
+  assert.ok(arrival);
+  assert.equal(arrival.evidence.start, text.indexOf("llegó"));
+  assert.equal(text.slice(arrival.evidence.start, arrival.evidence.end), "llegó");
+});
+
 test("rechaza extensiones no admitidas, MIME incompatibles y UTF-8 inválido", async () => {
   const validBytes = new TextEncoder().encode("texto");
   await assert.rejects(() => readNarrativeBookFile({

@@ -1632,4 +1632,15 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Privacidad:** el mensaje del error incluye un sentinel privado, pero el diagnóstico expuesto solo contiene el nombre de clase. El test verifica que no se presenta el texto interno al consumidor.
 
-**Validación:** pendiente de GitHub Actions.
+**Suite general:** [Motor Literario TypeScript — run 45765718749](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765718749) terminó 953/954. El único fallo fue el test independiente de marcas combinantes del extractor narrativo en `tests/narrative-unicode-boundaries.test.mjs:107`; no toca la persistencia ni el anfitrión del monitor. Type-check general aprobó.
+
+**Validación CI dedicada:** [Live Author Monitor — run 45765718734](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765718734), checkout `8ef77a1ca346f9e11acd44ff62a8ed6079b63994`, terminó `success`. El test de recuperación pasó como test 108; el test de privacidad de cuota pasó como test 107. Type-check, bundle aislado, diagnósticos 17/17, auditoría MLDB/almacenamiento, monitor aislado 167/167, Page Lifecycle Chromium 1/1 e integración host/editor/browser **178/178** aprobaron. Benchmark de 100.000 commits en **650,30 ms** (~153.776 commits/s), heap de 4,39 MiB a mitad y final, crecimiento medido 0 MiB, 0,50 MiB retenidos y cero tickets pendientes.
+
+
+## Sincronización saliente durable DB28 — 26 de noviembre de 2026
+
+La integración propuesta eleva IndexedDB DB27→DB28 sin retirar los almacenes de reparación de referencias ni los datos narrativos existentes. Las ediciones del editor, mutaciones narrativas CAS y secuencia por dispositivo se confirman en una transacción local compartida con la outbox. Los sobres de salida incluyen digest SHA-256; un acuse remoto durable debe coincidir en proyecto, operación, dispositivo, secuencia y digest antes de poder retirar la operación pendiente.
+
+El despachador conserva la entrega al menos una vez y usa Web Locks por proyecto cuando están disponibles para evitar ciclos simultáneos entre pestañas. El runtime anfitrión debe proporcionar un transporte autenticado y el servidor debe deduplicar por identidad de operación/digest. La descarga remota incremental y la resolución automática de conflictos entre escritores no se consideran implementadas en esta etapa.
+
+La migración DB28 tiene pruebas para base nueva y actualización desde DB27, preservación de documentos y cola de reparación, atomicidad de biblioteca personal/outbox, concurrencia del despachador y rechazo de acuses no coincidentes.

@@ -762,3 +762,6 @@ Estas pruebas deterministas no equivalen a un apagado forzado de sistema operati
 Un error de persistencia no debe dejar el panel en estado de error después de que una escritura posterior se complete correctamente. El anfitrión conserva el código de la última falla mientras no haya un checkpoint guardado; al confirmar una escritura durable, elimina el error previo y registra el nuevo `lastCheckpointAt`.
 
 La regresión simula una cuota llena en el primer intento y una recuperación del almacenamiento antes de la siguiente edición. Debe observarse la transición `error / QuotaExceededError → saved / sin error`, con la misma sesión del monitor y la revisión durable nueva. La ruta no borra el diagnóstico solo por reintentar ni al programar el checkpoint; lo hace cuando el almacén confirma la escritura.
+
+
+**Validación CI:** [run 45765718734](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765718734) aprobó la recuperación observable como test 108, junto a la prueba de privacidad de error como test 107; 178/178 integraciones host/editor/browser y benchmark de 100.000 commits también aprobaron.

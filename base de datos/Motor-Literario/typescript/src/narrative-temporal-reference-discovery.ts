@@ -144,6 +144,8 @@ function discoverMatches(text: string): readonly Match[] {
   }[] = [
     { expression: /\b(?:al\s+d[ií]a\s+siguiente|a\s+la\s+ma[nñ]ana\s+siguiente|el\s+d[ií]a\s+despu[eé]s)\b/giu, relation: "next-day-after", kind: "relative-order", priority: 85 },
     { expression: /\b(?:una|dos|tres|cuatro|cinco|varios?)\s+(?:d[ií]as?|semanas?|meses?|a[nñ]os?)\s+(?:despu[eé]s|m[aá]s\s+tarde|antes)\b/giu, relation: "duration", kind: "relative-duration", priority: 80 },
+    { expression: /\b(?:durante|por)\s+(?:un|una|dos|tres|cuatro|cinco|varios?|\d+)\s+(?:d[ií]as?|semanas?|meses?|a[nñ]os?)\b/giu, relation: "duration", kind: "relative-duration", priority: 75 },
+    { expression: /\b(?:al\s+cabo\s+de|hace)\s+(?:un|una|dos|tres|cuatro|cinco|varios?|\d+)\s+(?:d[ií]as?|semanas?|meses?|a[nñ]os?)\b/giu, relation: "after", kind: "relative-duration", priority: 75 },
     { expression: /\b(?:antes|previamente|con\s+anterioridad)\b/giu, relation: "before", kind: "relative-order", priority: 50 },
     { expression: /\b(?:despu[eé]s|luego|posteriormente|m[aá]s\s+tarde)\b/giu, relation: "after", kind: "relative-order", priority: 50 },
     { expression: /\b(?:mientras|al\s+mismo\s+tiempo|simult[aá]neamente)\b/giu, relation: "simultaneous", kind: "relative-order", priority: 50 },
@@ -153,7 +155,8 @@ function discoverMatches(text: string): readonly Match[] {
     add(item.expression, match => [{
       kind: item.kind,
       relation: item.kind === "relative-duration"
-        ? /antes$/iu.test(match[0]) ? "before" : "after"
+        ? /^(?:durante|por)\s+/iu.test(match[0]) ? "duration"
+          : /(?:antes|hace)$/iu.test(match[0]) ? "before" : "after"
         : item.relation,
       anchorRequired: true, absoluteResolution: "unresolved-relative", priority: item.priority
     }]);

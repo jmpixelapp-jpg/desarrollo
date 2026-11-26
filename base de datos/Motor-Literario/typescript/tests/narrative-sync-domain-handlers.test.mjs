@@ -10,8 +10,10 @@ import {
 
 function createIdeaStore() {
   const ideas = new Map();
+  let saveCount = 0;
   return {
     ideas,
+    get saveCount() { return saveCount; },
     async loadIdeas(projectId) {
       return [...ideas.values()].filter(idea => idea.projectId === projectId)
         .map(idea => structuredClone(idea));
@@ -19,6 +21,7 @@ function createIdeaStore() {
     async saveIdeaIfUnchanged(next, expected) {
       const current = ideas.get(next.id);
       assert.deepEqual(current, expected, "la escritura de idea debe respetar CAS");
+      saveCount++;
       ideas.set(next.id, structuredClone(next));
     }
   };
@@ -179,4 +182,29 @@ test("idea-upsert no permite que un sobre escriba en un proyecto distinto", asyn
     digest: "sha256:" + "0".repeat(64)
   }), /otro proyecto/u);
   assert.equal(store.ideas.size, 0);
+});
+
+
+test("idea-upsert reconoce snapshots JSON equivalentes aunque cambie el orden de sus propiedades", async () => {
+  const store = createIdeaStore();
+  const existing = idea();
+  store.ideas.set(existing.id, structuredClone(existing));
+  const reordered = Object.fromEntries(Object.entries(existing).reverse());
+  const handler = createNarrativeIdeaUpsertHandler(store);
+
+  await handler.apply({
+    projectId: "project-ideas",
+    operationId: "idea-operation-reordered",
+    writerId: "writer-remote",
+    sequence: 1,
+    schemaVersion: 1,
+    algorithm: "SHA-256",
+    createdAt: 200,
+    kind: "idea-upsert",
+    payload: { idea: reordered },
+    digest: "sha256:" + "0".repeat(64)
+  });
+
+  assert.equal(store.saveCount, 0, "un replay equivalente no debe escribir ni avanzar una revisión");
+  assert.deepEqual(store.ideas.get(existing.id), existing);
 });

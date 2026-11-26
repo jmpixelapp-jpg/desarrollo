@@ -53,6 +53,8 @@ La detección de futuro en observaciones de personajes se generalizó al inventa
 
 Cada observación conserva ahora `entityMentionEvidence`: para cada personaje, objeto, lugar u otra entidad detectada en la frase, registra el ID, el tipo de entidad y la primera coincidencia literal con offsets UTF-16 exactos. La evidencia de mención no asigna por sí sola el papel de agente, paciente, destino ni propietario; solo permite verificar dónde aparece la entidad y sirve como base para un análisis sintáctico posterior.
 
+En construcciones pasivas, el extractor puede conservar por separado el sujeto paciente y un candidato a agente explícito introducido por «por». El agente solo se propone cuando el nombre propio coincide exactamente con una entidad conocida; el fragmento y sus offsets se guardan como evidencia. La ausencia de una entidad coincidente no se completa por inferencia.
+
 ## Garantías y límites
 
 1. La ingesta no modifica el manuscrito.

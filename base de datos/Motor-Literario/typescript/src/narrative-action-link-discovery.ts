@@ -34,15 +34,15 @@ const MARKERS: readonly {
 }[] = [
   {
     kind: "temporal",
-    expression: /\b(?:despu[eé]s|luego|entonces|mientras|antes|posteriormente|a\s+continuaci[oó]n|acto\s+seguido|poco\s+despu[eé]s|mucho\s+despu[eé]s|al\s+instante|de\s+inmediato|al\s+mismo\s+tiempo|simult[aá]neamente|al\s+d[ií]a\s+siguiente|esa\s+noche|esa\s+misma\s+tarde|a\s+la\s+ma[nñ]ana\s+siguiente|una\s+semana\s+despu[eé]s)\b/iu
+    expression: /(?<![\p{L}\p{M}\p{N}_])(?:despu[eé]s|luego|entonces|mientras|antes|posteriormente|a\s+continuaci[oó]n|acto\s+seguido|poco\s+despu[eé]s|mucho\s+despu[eé]s|al\s+instante|de\s+inmediato|al\s+mismo\s+tiempo|simult[aá]neamente|al\s+d[ií]a\s+siguiente|esa\s+noche|esa\s+misma\s+tarde|a\s+la\s+ma[nñ]ana\s+siguiente|una\s+semana\s+despu[eé]s)(?![\p{L}\p{M}\p{N}_])/iu
   },
   {
     kind: "causal",
-    expression: /\b(?:porque|ya\s+que|puesto\s+que|debido\s+a|a\s+causa\s+de|por\s+culpa\s+de|gracias\s+a|a\s+ra[ií]z\s+de|por\s+esta\s+raz[oó]n|por\s+esa\s+raz[oó]n|por\s+eso|por\s+lo\s+tanto|por\s+consiguiente|as[ií]\s+que|de\s+ah[ií]\s+que|de\s+modo\s+que|como\s+resultado|en\s+consecuencia)\b/iu
+    expression: /(?<![\p{L}\p{M}\p{N}_])(?:porque|ya\s+que|puesto\s+que|debido\s+a|a\s+causa\s+de|por\s+culpa\s+de|gracias\s+a|a\s+ra[ií]z\s+de|por\s+esta\s+raz[oó]n|por\s+esa\s+raz[oó]n|por\s+eso|por\s+lo\s+tanto|por\s+consiguiente|as[ií]\s+que|de\s+ah[ií]\s+que|de\s+modo\s+que|como\s+resultado|en\s+consecuencia)(?![\p{L}\p{M}\p{N}_])/iu
   },
   {
     kind: "contrast",
-    expression: /\b(?:pero|sin\s+embargo|no\s+obstante|aunque|a[uú]n\s+as[ií]|a\s+pesar\s+de\s+ello|pese\s+a\s+ello|con\s+todo|en\s+cambio|por\s+el\s+contrario)\b/iu
+    expression: /(?<![\p{L}\p{M}\p{N}_])(?:pero|sin\s+embargo|no\s+obstante|aunque|a[uú]n\s+as[ií]|a\s+pesar\s+de\s+ello|pese\s+a\s+ello|con\s+todo|en\s+cambio|por\s+el\s+contrario)(?![\p{L}\p{M}\p{N}_])/iu
   }
 ];
 

@@ -171,6 +171,79 @@ export async function commitNarrativeDocumentProjectionManifest(
   return { manifest, reused: false };
 }
 
+/**
+ * Persiste el grafo y después publica el inventario durable por documento.
+ *
+ * El orden es deliberado: nunca se publica un manifiesto activo antes de que
+ * sus registros hayan sido guardados. No es una transacción distribuida; si
+ * falla un CAS de manifiesto, el grafo queda reintentable y el manifiesto
+ * anterior sigue siendo la referencia durable hasta reconciliación.
+ */
+export async function persistNarrativeKnowledgeGraphSnapshotWithManifests(
+  store: ProjectStore,
+  snapshot: NarrativeKnowledgeGraphSnapshot,
+  updatedAt = Date.now()
+): Promise<{
+  readonly persistence: NarrativeKnowledgeGraphPersistenceResult;
+  readonly manifests: readonly {
+    readonly manifest: NarrativeDocumentProjectionManifest;
+    readonly reused: boolean;
+  }[];
+}> {
+  if (!store || typeof store.loadNarrativeDocumentProjectionManifest !== "function" ||
+      typeof store.saveNarrativeDocumentProjectionManifestIfUnchanged !== "function") {
+    throw new Error("El almacenamiento no implementa manifiestos documentales CAS.");
+  }
+  if (!Number.isFinite(updatedAt) || updatedAt < 0) {
+    throw new Error("Marca temporal inválida para publicar manifiestos documentales.");
+  }
+  const persistence = await persistNarrativeKnowledgeGraphSnapshot(store, snapshot);
+  const manifests: Array<{
+    manifest: NarrativeDocumentProjectionManifest;
+    reused: boolean;
+  }> = [];
+  for (const documentId of snapshotDocumentIds(snapshot)) {
+    const current = await store.loadNarrativeDocumentProjectionManifest!(
+      snapshot.projectId, documentId
+    );
+    const generation = (current?.generation ?? 0) + 1;
+    const candidate = createNarrativeDocumentProjectionManifest(
+      snapshot, documentId, generation, updatedAt
+    );
+    manifests.push(await commitNarrativeDocumentProjectionManifest(store, candidate));
+  }
+  return { persistence, manifests };
+}
+
+/**
+ * Retira un documento mediante tombstone CAS. La revisión debe ser posterior
+ * a la última revisión activa: un borrado obsoleto nunca puede retirar una
+ * proyección más reciente.
+ */
+export async function retireNarrativeDocumentProjection(
+  store: ProjectStore,
+  projectId: string,
+  documentId: string,
+  deletionRevision: number,
+  updatedAt = Date.now()
+): Promise<{ readonly manifest: NarrativeDocumentProjectionManifest; readonly reused: boolean }> {
+  if (!store || typeof store.loadNarrativeDocumentProjectionManifest !== "function" ||
+      typeof store.saveNarrativeDocumentProjectionManifestIfUnchanged !== "function") {
+    throw new Error("El almacenamiento no implementa manifiestos documentales CAS.");
+  }
+  const current = await store.loadNarrativeDocumentProjectionManifest(projectId, documentId);
+  if (current?.status === "deleted" && current.revision === deletionRevision) {
+    return { manifest: current, reused: true };
+  }
+  if (current && deletionRevision <= current.revision) {
+    throw new Error("La retirada documental debe usar una revisión posterior al manifiesto vigente.");
+  }
+  const candidate = createNarrativeDocumentProjectionTombstone(
+    projectId, documentId, deletionRevision, (current?.generation ?? 0) + 1, updatedAt
+  );
+  return commitNarrativeDocumentProjectionManifest(store, candidate);
+}
+
 export interface NarrativeKnowledgeGraphPersistenceResult {
   readonly projectId: string;
   readonly saved: {

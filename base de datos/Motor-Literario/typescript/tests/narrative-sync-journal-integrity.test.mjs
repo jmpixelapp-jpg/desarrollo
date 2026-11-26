@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createNarrativeSyncOperationEnvelope,
+  IndexedDbNarrativeSyncJournal,
   inspectNarrativeSyncJournalIntegrity,
   planNarrativeSyncJournalCursorRecovery
 } from "../dist/motor-literario.js";
@@ -282,4 +283,63 @@ test("el planificador solo propone corregir identidad final cuando la secuencia 
   assert.equal(plan.items[0].action, "rebuild-cursor-from-complete-journal");
   assert.equal(plan.items[0].proposal.lastOperationId, "identity-plan-2");
   assert.deepEqual(plan.items[0].issueCodes, ["cursor-last-operation-mismatch"]);
+});
+
+
+test("la recuperación acepta snapshots idénticos aunque IndexedDB reordene las propiedades", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-recovery-canonical-" + Math.random().toString(36).slice(2);
+  const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+  try {
+    const operation = await createNarrativeSyncOperationEnvelope({
+      operationId: "canonical-recovery-op",
+      projectId: "canonical-recovery-project",
+      writerId: "writer-canonical",
+      sequence: 1,
+      createdAt: 100,
+      kind: "note",
+      payload: { text: "La forma no altera el contenido." }
+    });
+    await journal.accept(operation);
+
+    // Simula un snapshot estructuralmente idéntico con distinto orden de claves.
+    const database = await journal.database;
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction("operations", "readwrite");
+      const store = transaction.objectStore("operations");
+      const request = store.get([operation.projectId, operation.operationId]);
+      request.onsuccess = () => {
+        const current = request.result;
+        store.put(Object.fromEntries(Object.entries(current).reverse()));
+      };
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+
+    assert.deepEqual(
+      await journal.applyCursorRecoveryProposal({
+        projectId: operation.projectId,
+        writerId: operation.writerId,
+        lastSequence: operation.sequence,
+        lastOperationId: operation.operationId
+      }),
+      {
+        status: "already-consistent",
+        writerId: operation.writerId,
+        lastSequence: operation.sequence,
+        lastOperationId: operation.operationId
+      }
+    );
+  } finally {
+    journal.close();
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
 });

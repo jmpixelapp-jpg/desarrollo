@@ -4,7 +4,7 @@ import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
-const { IndexedDbProjectStore } = await import("../dist/motor-literario.js");
+const { IndexedDbProjectStore, HostEngineApi } = await import("../dist/motor-literario.js");
 
 const operation = (overrides = {}) => ({
   operationId: "op-1",
@@ -81,6 +81,72 @@ test("la outbox es idempotente, rechaza colisiones y aísla secuencias por dispo
   assert.equal((await store.loadPendingSyncOperations("project-a")).length, 2);
 });
 
+test("el journal y la outbox se confirman o revierten juntos ante una colisión", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "atomic-outbox-project";
+  await store.saveDocument({
+    projectId, documentId: "chapter", text: "", revision: 0, sequence: 0, updatedAt: 1
+  });
+  const firstChange = {
+    projectId, documentId: "chapter", sequence: 1, baseRevision: 0,
+    start: 0, end: 0, replacement: "a", committedRevision: 1, committedAt: 10
+  };
+  const reusedOperation = {
+    operationId: "atomic-operation", projectId, deviceId: "device-atomic",
+    kind: "document.change", payload: JSON.stringify({ change: firstChange }), createdAt: 10
+  };
+  await store.appendChangeAndEnqueueSyncOperation(firstChange, reusedOperation);
+
+  const secondChange = {
+    projectId, documentId: "chapter", sequence: 2, baseRevision: 1,
+    start: 1, end: 1, replacement: "b", committedRevision: 2, committedAt: 20
+  };
+  await assert.rejects(
+    store.appendChangeAndEnqueueSyncOperation(secondChange, reusedOperation)
+  );
+  assert.deepEqual(await store.loadChanges(projectId, "chapter", 0), [firstChange]);
+  assert.equal(await store.loadLastSyncOperationSequence(projectId, "device-atomic"), 1);
+  assert.equal((await store.loadPendingSyncOperations(projectId)).length, 1);
+
+  await store.appendChangeAndEnqueueSyncOperation(secondChange, {
+    ...reusedOperation,
+    operationId: "atomic-operation-2",
+    payload: JSON.stringify({ change: secondChange }),
+    createdAt: 20
+  });
+  assert.deepEqual((await store.loadChanges(projectId, "chapter", 0)).map(item => item.sequence), [1, 2]);
+  assert.equal(await store.loadLastSyncOperationSequence(projectId, "device-atomic"), 2);
+});
+
+test("HostEngineApi conecta cada edición confirmada a la outbox con secuencia por dispositivo", async () => {
+  const store = new IndexedDbProjectStore();
+  const api = new HostEngineApi({ store });
+  const projectId = "editor-outbox-bridge-project";
+  api.initializeProject({
+    projectId, projectName: "Libro sincronizable", deviceId: "stable-installation-id"
+  });
+  await api.openDocument({ documentId: "chapter-a", text: "A", revision: 0, sequence: 0 });
+  await api.openDocument({ documentId: "chapter-b", text: "X", revision: 0, sequence: 0 });
+
+  assert.equal(api.onEditorChange({
+    documentId: "chapter-a", sequence: 1, baseRevision: 0, start: 1, end: 1, replacement: "B"
+  }).status, "queued");
+  assert.equal(api.onEditorChange({
+    documentId: "chapter-b", sequence: 1, baseRevision: 0, start: 1, end: 1, replacement: "Y"
+  }).status, "queued");
+  await api.flushPendingChanges();
+
+  const pending = [...await store.loadPendingSyncOperations(projectId)]
+    .sort((left, right) => left.sequence - right.sequence);
+  assert.equal(pending.length, 2);
+  assert.deepEqual(pending.map(item => item.sequence), [1, 2]);
+  assert.deepEqual(new Set(pending.map(item => item.deviceId)), new Set(["stable-installation-id"]));
+  assert.deepEqual(new Set(pending.map(item => JSON.parse(item.payload).change.documentId)),
+    new Set(["chapter-a", "chapter-b"]));
+  assert.ok(pending.every(item => item.kind === "document.change"));
+  assert.equal((await store.loadChanges(projectId, "chapter-a", 0)).length, 1);
+  assert.equal((await store.loadChanges(projectId, "chapter-b", 0)).length, 1);
+});
 test("la outbox pagina por proyecto, conserva pendientes y registra reintentos", async () => {
   const store = new IndexedDbProjectStore();
   await store.enqueueSyncOperation(operation({ operationId: "op-first", projectId: "project-b", deviceId: "device-b", sequence: 1, createdAt: 100 }));

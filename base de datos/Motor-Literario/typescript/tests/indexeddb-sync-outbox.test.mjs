@@ -273,3 +273,53 @@ test("el despachador conserva pendientes si falla el transporte o el acuse no es
   assert.equal(pending[0].lastErrorCode, "TRANSPORT_ERROR");
   assert.equal(await store.loadLastSyncOperationSequence(projectId, "device-retry"), 1);
 });
+
+test("el CAS de entidad y su outbox se confirman juntos y una colisión revierte ambos", async () => {
+  const store = new IndexedDbProjectStore();
+  assert.equal(store.supportsAtomicNarrativeSyncOutbox, true);
+  const projectId = "atomic-entity-outbox-project";
+  const deviceId = "atomic-entity-device";
+  const original = {
+    projectId, id: "entity-ada", kind: "character",
+    canonicalName: "Ada", normalizedName: "ada", aliases: [],
+    evidence: [{ documentId: "chapter-1", revision: 1, start: 0, end: 3, excerpt: "Ada" }],
+    firstSeenAt: 10, lastSeenAt: 10, extractionVersion: 1
+  };
+  await store.saveEntity(original);
+  const updated = {
+    ...original, lastSeenAt: 20,
+    evidence: [{ documentId: "chapter-1", revision: 2, start: 0, end: 3, excerpt: "Ada" }]
+  };
+  const draft = {
+    operationId: "entity-outbox-op-1", projectId, deviceId,
+    kind: "entity-upsert", payload: JSON.stringify({ entity: updated }), createdAt: 20
+  };
+  await store.saveEntityIfUnchanged(updated, original, draft);
+  assert.deepEqual(await store.loadEntities(projectId), [updated]);
+  let pending = await store.loadPendingSyncOperations(projectId);
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].kind, "entity-upsert");
+  assert.equal(pending[0].sequence, 1);
+  assert.deepEqual(JSON.parse(pending[0].payload), { entity: updated });
+
+  await store.enqueueSyncOperation({
+    operationId: "entity-outbox-collision", projectId, deviceId, sequence: 999,
+    kind: "entity-upsert", payload: JSON.stringify({ entity: updated }),
+    createdAt: 21, attemptCount: 0
+  });
+  const rejected = {
+    ...updated, lastSeenAt: 30,
+    evidence: [{ documentId: "chapter-1", revision: 3, start: 0, end: 3, excerpt: "Ada" }]
+  };
+  await assert.rejects(store.saveEntityIfUnchanged(rejected, updated, {
+    operationId: "entity-outbox-collision", projectId, deviceId,
+    kind: "entity-upsert", payload: JSON.stringify({ entity: rejected }), createdAt: 30
+  }));
+  assert.deepEqual(await store.loadEntities(projectId), [updated]);
+  assert.equal(await store.loadLastSyncOperationSequence(projectId, deviceId), 2);
+  pending = await store.loadPendingSyncOperations(projectId);
+  assert.equal(pending.length, 2);
+  assert.deepEqual(pending.map(item => item.operationId).sort(), [
+    "entity-outbox-collision", "entity-outbox-op-1"
+  ]);
+});

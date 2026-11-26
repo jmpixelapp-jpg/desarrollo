@@ -8,6 +8,7 @@
 import type { NarrativeEntity } from "./narrative-knowledge";
 import { discoverNarrativeIdeaCandidates } from "./narrative-idea-discovery";
 import { extractNarrativeActionCandidates } from "./narrative-action-extraction";
+import { extractNarrativeAttributedClaims } from "./narrative-claim-extraction";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
@@ -64,6 +65,7 @@ export interface NarrativeUnderstandingResult {
   readonly analyzedRange: { readonly start: number; readonly end: number };
   readonly ideas: ReturnType<typeof discoverNarrativeIdeaCandidates>;
   readonly actions: ReturnType<typeof extractNarrativeActionCandidates>;
+  readonly attributedClaims: ReturnType<typeof extractNarrativeAttributedClaims>;
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -185,6 +187,7 @@ export function understandNarrativeFragment(
     revision: input.revision, text: input.text, baseOffset
   });
   const actions = extractNarrativeActionCandidates(extractionContext);
+  const attributedClaims = extractNarrativeAttributedClaims(extractionContext);
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,
@@ -247,7 +250,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

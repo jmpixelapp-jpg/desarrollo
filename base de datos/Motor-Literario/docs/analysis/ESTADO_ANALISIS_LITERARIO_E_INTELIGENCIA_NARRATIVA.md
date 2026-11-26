@@ -657,3 +657,15 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Límite conocido:** no se pretende resolver todavía el alcance de negación en coordinaciones complejas, discurso indirecto libre, dobles negaciones dialectales ni construcciones como «no llegó a abrir». Esos casos requieren análisis de cláusulas y perífrasis más profundo; no deben resolverse ampliando indiscriminadamente una expresión regular.
 
+## Ampliación de estados de personaje y construcciones perceptuales
+
+**Frente trabajado:** se amplió el módulo existente `narrative-character-state-discovery.ts`, separado del extractor de acciones. Esta separación es deliberada: «Ana abrió la puerta» es una acción; «Ana estaba herida» es una afirmación de estado. No deben convertirse en el mismo tipo de dato.
+
+**Vocabulario añadido:** se incorporaron estados cognitivos `confused` y `disoriented`, y estados emocionales `worried`, `hopeful`, `sad`, `happy` y `surprised`, con variantes de género y número cuando corresponde. Se conserva la categoría del estado para permitir análisis posterior por dimensión física, vital, cognitiva, emocional, social o locativa.
+
+**Nuevas construcciones de atribución:** además de cópulas como «estar» y «permanecer», se reconocen «se siente», «se sentía», «se sintió», «se ve», «se veía» y «se mostraba». Estas formas se registran como afirmaciones perceptuales, no como observaciones objetivas confirmadas. Se conserva la forma temporal gramatical disponible y la evidencia literal del predicado.
+
+**Pruebas añadidas:** estados nuevos en construcciones copulativas y perceptuales; comprobación de categoría, tiempo, modo de afirmación y fragmentos de evidencia; regresiones negativas para adjetivos aislados o asociados a acciones sin cópula.
+
+**Límite de interpretación:** «se siente preocupada» es una atribución textual del estado emocional, no una verdad psicológica externa. El extractor no deduce emociones a partir de diálogo, acciones, signos de puntuación ni contexto implícito. Los candidatos continúan sujetos a revisión y no sustituyen el texto fuente.
+

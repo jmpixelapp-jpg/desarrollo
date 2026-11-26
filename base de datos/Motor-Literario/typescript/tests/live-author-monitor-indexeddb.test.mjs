@@ -408,3 +408,48 @@ test("el fencing token invalida escrituras del propietario anterior tras expirar
     await store.close();
   }
 });
+
+
+test("un snapshot de lease anterior sigue válido mientras el fencing token persista y el lease se haya renovado", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-renewed-lease-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const now = Date.now();
+
+  try {
+    const originalLease = await acquireLease(
+      store,
+      projectId,
+      documentId,
+      "same-tab",
+      now,
+      30_000
+    );
+    const renewedLease = await store.renewLiveAuthorMonitorLease(
+      originalLease,
+      now + 15_000,
+      30_000
+    );
+    assert.ok(renewedLease);
+    assert.equal(renewedLease.fencingToken, originalLease.fencingToken);
+
+    // El snapshot original ya expiró según su expiresAt, pero el registro fue
+    // renovado por el mismo propietario sin cambiar el fencing token.
+    const renewedAgain = await store.renewLiveAuthorMonitorLease(
+      originalLease,
+      now + 31_000,
+      30_000
+    );
+    assert.ok(renewedAgain);
+    assert.equal(renewedAgain.fencingToken, originalLease.fencingToken);
+
+    const currentCheckpoint = checkpoint(projectId, documentId, now + 32_000);
+    await store.saveLiveAuthorMonitorCheckpoint(currentCheckpoint, originalLease);
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      currentCheckpoint
+    );
+  } finally {
+    await store.close();
+  }
+});

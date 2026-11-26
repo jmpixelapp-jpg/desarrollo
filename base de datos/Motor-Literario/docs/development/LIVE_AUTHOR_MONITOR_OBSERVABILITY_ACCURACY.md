@@ -157,3 +157,19 @@ Ya existen contratos y pruebas para deltas transaccionales, revisión/secuencia,
 Sigue siendo necesario conectar el proveedor de transacciones del editor enriquecido de producción. La aplicación de referencia demuestra el flujo con textarea y navegador; no demuestra por sí misma que todos los editores, IME, operaciones de arrastre o historiales nativos estén cubiertos.
 
 Esta matriz es una guía de aceptación. Cada fila debe marcarse como verificada solo después de añadir una prueba reproducible y enlazar el resultado de CI. No se debe declarar «100 % de precisión» en abstracto: la precisión se acredita por operación, fuente, navegador y escenario.
+
+## 11. Composición IME: estados provisionales frente a texto confirmado
+
+Una composición puede aplicar varios candidatos al mismo rango. Cada actualización puede ser un cambio real del control de edición y debe conservarse en la secuencia textual cuando el objetivo sea mantener el snapshot sincronizado. Sin embargo, esas actualizaciones no equivalen a varias piezas de texto final escritas por el autor.
+
+La fuente textarea identifica estos deltas como `activityKind: "composition"`. El motor los conserva como operaciones aplicadas, pero los acumulados actuales `insertedCharacters` y `deletedCharacters` suman el reemplazo de cada candidato. Por tanto:
+
+- Las métricas de composición describen cambios/candidatos aplicados, no el contenido final confirmado.
+- Reemplazar varias veces un candidato puede inflar las unidades insertadas y eliminadas respecto al texto final.
+- Una cancelación puede devolver el documento a su texto inicial después de haber generado varios deltas.
+- `estimatedWordsPerMinute` no debe interpretarse como velocidad de palabras finales confirmadas durante una sesión con actividad IME.
+- La longitud y los rangos siguen expresados en unidades UTF-16, no en grafemas o palabras lingüísticas.
+
+Para producir una métrica exacta de composición confirmada hace falta un contrato de grupo con identidad de composición, rango inicial, actualizaciones provisionales y resultado final (commit/cancel). Ese cierre debe proceder del editor anfitrión o de una secuencia nativa validada; no se debe deducir solo de un temporizador ni de un `compositionend` aislado.
+
+**Evidencia Chromium:** `tests/live-author-monitor-ime-composition-browser.test.mjs` usa CDP para aplicar dos candidatos y cancelar. Las actualizaciones `compositionstart/update/beforeinput/input` se observaron confiables; el `compositionend` producido por CDP llegó con `isTrusted=false`, por lo que la fuente suspende y exige snapshot. Esto valida la política conservadora, no un IME físico del sistema operativo.

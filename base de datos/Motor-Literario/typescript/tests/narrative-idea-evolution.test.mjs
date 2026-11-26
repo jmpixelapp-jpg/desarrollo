@@ -242,3 +242,39 @@ test("rechaza la modalidad declarada cuando no coincide con las dos apariciones"
     }
   }));
 });
+
+
+test("conserva evidencia original con espacios repetidos al reconstruir una recurrencia", () => {
+  const firstText = "la memoria de la ciudad";
+  const secondText = "la memoria de la ciudad";
+  const firstExcerpt = "La idea expresada es la memoria   de la ciudad.";
+  const secondExcerpt = "La idea expresada es la memoria de   la ciudad.";
+  const firstStart = 10 + firstExcerpt.indexOf("la memoria");
+  const secondStart = 10 + secondExcerpt.indexOf("la memoria");
+  const result = evolve([
+    {
+      ...idea("space-first", "chapter-1", firstText),
+      evidence: {
+        documentId: "chapter-1",
+        revision: 1,
+        start: firstStart,
+        end: firstStart + "la memoria   de la ciudad".length,
+        excerpt: firstExcerpt
+      }
+    },
+    {
+      ...idea("space-second", "chapter-2", secondText),
+      evidence: {
+        documentId: "chapter-2",
+        revision: 1,
+        start: secondStart,
+        end: secondStart + "la memoria de   la ciudad".length,
+        excerpt: secondExcerpt
+      }
+    }
+  ], ["chapter-1", "chapter-2"]);
+
+  assert.equal(result.summary.reappearedCount, 1);
+  assert.equal(result.events[0].earlierOccurrence.evidence.excerpt, firstExcerpt);
+  assert.equal(result.events[0].laterOccurrence.evidence.excerpt, secondExcerpt);
+});

@@ -71,3 +71,14 @@ test("no convierte la proximidad entre oraciones en causalidad", () => {
   assert.equal(result.memoryActionLinks.length, 1);
   assert.equal(result.memoryActionLinks[0].relation, "unresolved");
 });
+
+test("conserva varios recuerdos posibles como relación ambigua", () => {
+  const text = "Mara recordó que Elian estaba preso y Mara recordó que Elian había escapado; por eso Mara rescató a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"memory-ambiguous", revision:1, text, entities
+  });
+  assert.equal(result.memoryEvents.length, 2);
+  assert.equal(result.memoryActionLinks.length, 1);
+  assert.equal(result.memoryActionLinks[0].relation, "unresolved");
+  assert.equal(result.memoryActionLinks[0].memoryEventIds.length, 2);
+});

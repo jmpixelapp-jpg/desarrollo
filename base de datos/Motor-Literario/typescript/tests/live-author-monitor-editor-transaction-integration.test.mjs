@@ -369,3 +369,28 @@ test("pausa el editor nativo al desbordarse y reanuda tras reconciliar el snapsh
   assert.equal(f.editor.listeners.size, 0);
   assert.equal(f.retryListeners.size, 0);
 });
+
+
+test("rechaza un límite inválido antes de consultar el motor o suscribir el editor", () => {
+  const initial = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(initial);
+  let hostApiCalls = 0;
+  const hostApi = {
+    getSnapshot() { hostApiCalls++; return { ...initial }; },
+    getDocumentSyncState() { hostApiCalls++; return { sequence: 0, pendingSequence: 0, needsResync: false }; },
+    onEditorChange() { throw new Error("must_not_submit"); },
+    getLiveAuthorMonitorSnapshot() { hostApiCalls++; return undefined; },
+    ensureLiveAuthorMonitorDocument() { throw new Error("must_not_initialize_monitor"); },
+    subscribeLiveAuthorMonitor() { throw new Error("must_not_subscribe"); },
+    resynchronizeLiveAuthorMonitor() { throw new Error("must_not_resynchronize"); }
+  };
+
+  assert.throws(() => mountLiveAuthorMonitorEditorTransactions({
+    documentId: initial.documentId,
+    editor,
+    hostApi,
+    maxPendingChanges: 0
+  }), /maxPendingChanges/);
+  assert.equal(hostApiCalls, 0);
+  assert.equal(editor.listeners.size, 0);
+});

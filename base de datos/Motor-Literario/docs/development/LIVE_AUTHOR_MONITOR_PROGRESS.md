@@ -522,13 +522,15 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 **Límite importante:** el evento que excede el buffer ya fue aplicado por el editor y no se conserva como delta individual; se recupera desde el snapshot común. El código no afirma que ese delta se haya admitido ni se haya persistido de forma incremental.
 
 
-## 25. Configuración pública y recuperación extremo a extremo del backlog (26 de noviembre de 2026)
+## 25. Configuración pública y recuperación extremo a extremo del backlog (25 de noviembre de 2026)
 
 **Cambio de API:** `maxPendingChanges` queda expuesto en las opciones de montaje de ambos adaptadores públicos: `mountLiveAuthorMonitorEditorTransactions()` y `mountLiveAuthorMonitorTextArea()`. El valor se propaga al enlace FIFO común; el predeterminado sigue siendo 4096.
 
 **Regresión transaccional de extremo a extremo:** se fuerza `queue_full` en la primera edición y se produce un segundo delta mientras el buffer está ocupado. Al llegar el siguiente límite, el source nativo se pausa y retira el listener del editor. Después de reconciliar motor y editor desde el snapshot durable que ya contiene ambos cambios, `resynchronize()` limpia la generación anterior, vuelve a suscribir el editor y admite una edición nueva en la secuencia siguiente.
 
 **Regresión textarea:** el mismo límite se configura desde la API pública; la captura se suspende durante el desbordamiento y vuelve a funcionar después de reconciliar el texto y la revisión del motor.
+
+**Regresiones de configuración:** ambos montajes rechazan `maxPendingChanges: 0` antes de consultar HostEngineApi o instalar listeners, evitando inicializaciones parciales.
 
 **Archivos:** integraciones pública transaccional y textarea, pruebas de integración respectivas y guía del adaptador; especificación sección 39.
 

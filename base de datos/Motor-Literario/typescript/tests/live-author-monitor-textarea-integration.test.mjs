@@ -316,3 +316,28 @@ test("limita el backlog del textarea y reanuda tras reconciliar el texto durable
   assert.equal(f.monitor.getSnapshot("chapter-1").durableSequence, 3);
   f.integration.dispose();
 });
+
+
+test("rechaza un límite inválido antes de inicializar el monitor o instalar eventos DOM", () => {
+  const element = new FakeTextArea("hello");
+  const initial = { documentId: "chapter-1", text: "hello", revision: 0, sequence: 0 };
+  let hostApiCalls = 0;
+  const hostApi = {
+    getSnapshot() { hostApiCalls++; return { ...initial }; },
+    getDocumentSyncState() { hostApiCalls++; return { sequence: 0, pendingSequence: 0, needsResync: false }; },
+    onEditorChange() { throw new Error("must_not_submit"); },
+    getLiveAuthorMonitorSnapshot() { hostApiCalls++; return undefined; },
+    ensureLiveAuthorMonitorDocument() { throw new Error("must_not_initialize_monitor"); },
+    subscribeLiveAuthorMonitor() { throw new Error("must_not_subscribe"); },
+    resynchronizeLiveAuthorMonitor() { throw new Error("must_not_resynchronize"); }
+  };
+
+  assert.throws(() => mountLiveAuthorMonitorTextArea({
+    element,
+    documentId: initial.documentId,
+    hostApi,
+    maxPendingChanges: 0
+  }), /maxPendingChanges/);
+  assert.equal(hostApiCalls, 0);
+  assert.equal(element.listeners.size, 0);
+});

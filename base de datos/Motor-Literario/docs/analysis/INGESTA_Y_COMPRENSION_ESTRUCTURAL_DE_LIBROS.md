@@ -79,7 +79,7 @@ En construcciones pasivas, el extractor puede conservar por separado el sujeto p
 
 ### Decodificación y BOM UTF-8
 
-El lector acepta TXT y Markdown UTF-8 estricto. Si el texto comienza con BOM UTF-8 (`U+FEFF`), la segmentación lo omite al reconocer el primer encabezado, pero conserva el desplazamiento de una unidad UTF-16 para que las evidencias posteriores sigan apuntando al texto original sin desplazar offsets. No se modifica el contenido fuente devuelto por el lector.
+El lector acepta TXT y Markdown UTF-8 estricto. La decodificación conserva explícitamente un BOM UTF-8 inicial (`U+FEFF`) en el texto devuelto (`ignoreBOM: true`). La segmentación lo omite al reconocer el primer encabezado, pero conserva el desplazamiento de una unidad UTF-16 para que las evidencias posteriores sigan apuntando al texto decodificado original. Así, los offsets son coherentes con la cadena exacta que devuelve el lector.
 
 ### Complemento personal explícito
 

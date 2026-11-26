@@ -201,7 +201,7 @@ test("rechaza cargas combinadas de entidades, alias y ventana antes de explorar 
     aliases: Array.from({ length: 100 }, (_, aliasIndex) =>
       "Alias" + index + " " + aliasIndex)
   }));
-  assert.throws(() => discover("Ella corrió.", {
+  assert.throws(() => discover("x".repeat(50_000) + " Ella corrió.", {
     entities,
     maxAntecedentDistance: 50_000
   }), /presupuesto operativo de exploración/);

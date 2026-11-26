@@ -715,3 +715,21 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Límite semántico:** el módulo identifica una asociación textual con marcador causal, no demuestra causalidad real ni decide si el narrador informa un hecho, expresa una hipótesis o reproduce la creencia de un personaje. Tampoco asigna agente, paciente o beneficiario por mera mención. La revisión humana y la atribución de enunciador siguen siendo necesarias.
 
+## Cadenas de acontecimientos entre párrafos
+
+**Nuevo módulo:** `typescript/src/narrative-event-chain-discovery.ts`. Amplía la reconstrucción de vínculos entre acciones sucesivas para no limitarla a los conectores encontrados a corta distancia. Examina el puente textual entre observaciones consecutivas y admite una separación máxima de 5.000 unidades UTF-16.
+
+**Criterio de enlace:** solo considera acciones consecutivas en el orden textual y exige encontrar un marcador explícito temporal, causal o adversativo entre sus evidencias verbales. No salta acciones intermedias para fabricar una relación entre acciones no adyacentes. El límite de salida es de 500 enlaces por llamada.
+
+**Información conservada:** IDs de las dos acciones, tipo y forma literal del marcador, evidencia exacta del marcador, evidencia íntegra del texto intermedio, cantidad de saltos de párrafo, longitud del puente, revisión y documento. También informa qué personajes aparecen nombrados en ambas acciones, pero esa coincidencia se presenta como mención compartida y nunca como papel sintáctico o participante semántico confirmado.
+
+**Marcadores:** temporales (`después`, `luego`, `posteriormente`, `al día siguiente`, entre otros), causales (`porque`, `debido a`, `por eso`, `como resultado`, etc.) y de contraste (`sin embargo`, `aunque`, `en cambio`, etc.). Se conserva la categoría: un conector causal no equivale a causalidad demostrada.
+
+**Validación:** se rechazan observaciones de otro proyecto/documento/revisión, IDs repetidos y evidencias cuyo fragmento no coincide exactamente con el texto. Los offsets absolutos UTF-16 se validan con `baseOffset`, incluidos prefijos con emoji.
+
+**Pruebas añadidas:** enlaces temporales entre párrafos, clasificación causal y adversativa, ausencia de enlace por mera proximidad, no saltar una acción intermedia, personajes no compartidos, offsets absolutos y rechazo de evidencias manipuladas o revisiones ajenas.
+
+**Límites:** el módulo reconstruye continuidad textual explícita, no una cronología absoluta del mundo narrado. El orden de aparición es orden del discurso; puede diferir del orden de los hechos en analepsis, prolepsis, recuerdos o relatos insertos. Los marcadores se registran como señales del texto y requieren validación narrativa.
+
+**Exportación:** el módulo y el extractor de enlaces entre acciones se exportan desde `src/index.ts` para que estén disponibles en el punto público de entrada del motor.
+

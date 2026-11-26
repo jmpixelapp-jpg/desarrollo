@@ -199,3 +199,8 @@ La auditoría del diario también lee los cursores durables por proyecto y contr
 ### Detección de cursores huérfanos y malformados
 
 La auditoría también verifica la relación en ambos sentidos: no solo que cada cursor tenga operaciones, sino que cada escritor con operaciones conservadas tenga su cursor durable. Se informan `cursor-missing-for-operations` cuando faltan cursores y `invalid-cursor` cuando la secuencia, identidad, proyecto o marca temporal del cursor no cumple el contrato. Esto cubre escenarios de pérdida parcial de stores o corrupción del registro de cursor. La inspección continúa siendo de solo lectura; no recrea cursores ni reescribe operaciones.
+
+
+### Integridad bidireccional de cursores
+
+La comprobación de cursores es bidireccional: un cursor sin operaciones se informa como `cursor-without-operations`, y un escritor con operaciones pero sin cursor se informa como `cursor-missing-for-operations`. También se valida que cada cursor tenga secuencia positiva segura, identidad de última operación no vacía, proyecto correcto y marca temporal válida (`invalid-cursor`). Estos hallazgos se mantienen como diagnósticos de solo lectura: no se reconstruyen cursores ni se reescriben operaciones sin una política de reparación explícita y evidencia verificable.

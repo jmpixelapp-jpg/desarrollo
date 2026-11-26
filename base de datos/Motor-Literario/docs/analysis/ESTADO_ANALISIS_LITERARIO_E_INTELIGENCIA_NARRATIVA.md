@@ -531,12 +531,14 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 **Auditoría de cobertura ampliada:** `extractionAudit` ahora recibe evidencias adicionales de estados de personajes y transiciones de ubicación. Separa el subtotal de acciones/acontecimientos del subtotal de otros extractores y calcula `coverageRatio` sobre la unión de evidencias, evitando marcar como pendiente una frase ya cubierta por otro tipo de extracción. La cola de revisión solo incluye frases sin evidencia de ningún extractor integrado. Añadida prueba específica de esta distinción. Cambios pendientes de CI.
 
+**Cobertura espacial ampliada:** se reconocen además los verbos explícitos `pasar por`, `atravesar` y `recorrer`, junto con `cruzar`; se admiten artículos y contracciones del español (`del`, `de la`, `por el`). Las pruebas detectaron y corrigieron un escape incorrecto en el patrón de espacios para complementos directos. La corrección está incluida en run 2985 aprobado.
+
 ### Trayectorias espaciales entre capítulos — 26-11-2026
 
 - Nuevo módulo `typescript/src/narrative-location-trajectory.ts`: agrupa movimientos por personaje, ordena por secuencia editorial explícita y señala secuencias candidatas de salida seguida de llegada.
 - Conserva referencias de origen/destino, evidencias de ambos movimientos y capítulos intermedios sin candidatos. No inventa rutas, distancias, continuidad de viaje ni ubicación actual.
-- Añadidas pruebas de orden editorial, secuencias, exclusión de negación/futuro, evidencia fuera de contexto y órdenes duplicados.
-- Exportación pública añadida. Type-check de run 2986 superado; pruebas y benchmark seguían en ejecución al registrar esta nota.
+- Añadidas pruebas de orden editorial, secuencias, exclusión de negación/futuro, identidades distintas, evidencia fuera de contexto y órdenes duplicados.
+- Exportación pública añadida. Run 2987 (`4429e2ba`) completó Type-check, build/pruebas y benchmark con éxito; run 2988 (`359268a8`) validó la exportación pública con el mismo flujo.
 
 **Validación de la capa anterior:** run 2985 (`6bfdc887`) completó Type-check, build/pruebas y benchmark con éxito. Incluye auditoría de cobertura global, extracción de movimientos y sus controles de evidencia. La auditoría usa la mención exacta del lugar, no el contexto completo de línea, para no marcar frases vecinas como cubiertas indebidamente.
 

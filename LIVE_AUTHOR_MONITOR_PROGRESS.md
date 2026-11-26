@@ -1786,3 +1786,20 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Límite:** esta prueba valida teclado y eventos DOM confiables en Chromium headless; no es una prueba de IME físico ni demuestra compatibilidad universal. La validación con IME del sistema operativo, idiomas y versiones de navegador sigue pendiente.
 
 **CI:** el archivo usa el patrón incluido en el workflow `Live Author Monitor`. Resultado pendiente de la ejecución disparada por este commit; no se marca la prueba como aprobada antes de consultar GitHub Actions.
+
+## 116. Alinear la regresión FIFO con el contrato de onAdmission (26 de noviembre de 2026)
+
+**Hallazgo de CI:** la ejecución Live Author Monitor `45805734080` aprobó 190/191 pruebas aisladas. La única falla estaba en la expectativa de `tests/live-author-monitor-change-binding.test.mjs`: el test esperaba solo la admisión recuperada de secuencia 3, aunque el contrato exige llamar `onAdmission` por cada intento, incluido el rechazo `queue_full` de secuencia 1.
+
+**Diagnóstico del flujo:**
+- Secuencia 1: el sink responde `rejected/queue_full`; el enlace retiene el cambio y notifica esa admisión.
+- Secuencia 2: el buffer externo ya está lleno; se activa overflow, se detiene la fuente y se exige snapshot común. Esta secuencia no se envía al sink.
+- Tras reconciliar con snapshot de secuencia 2, secuencia 3 se envía y recibe `queued`; también se notifica.
+
+**Corrección:** se actualizó la expectativa para comprobar `[[1, "rejected"], [3, "queued"]]`. No se cambió la lógica del enlace ni se debilitó FIFO, contrapresión o diagnóstico.
+
+**Documento:** `docs/development/LIVE_AUTHOR_MONITOR_FIFO_ADMISSION_CALLBACK_REGRESSION_2026-11-26.md`.
+
+**Incidencia independiente observada en esa ejecución:** el build runtime también falló por una cadena sin cerrar en `src/narrative-observation-discovery.ts:373`. Está fuera del módulo Live Author Monitor y no se modificó en esta entrega. La rama recibió después commits de corrección en esa zona; la nueva ejecución es la que determina el estado actual.
+
+**CI posterior a la corrección:** pendiente de consulta. No se declara suite aprobada hasta observar el resultado del workflow disparado por el cambio de test.

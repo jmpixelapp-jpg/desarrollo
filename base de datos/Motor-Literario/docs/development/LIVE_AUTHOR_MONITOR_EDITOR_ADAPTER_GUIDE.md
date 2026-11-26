@@ -197,18 +197,29 @@ En el commit `d728593bd4f9758e85a4b16ce5ab1480d330f4bc`, la CI específica [4573
 
 La suite general [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738) también quedó verde: Type-check, build, **718/718 pruebas** y benchmark completos. Las mediciones de CI no sustituyen el benchmark en el equipo final del autor.
 
-## 9. Clasificación de operaciones para estadísticas
+## 9. Clasificación y procedencia nativa de operaciones
 
-`EditorChange.activityKind` es metadato opcional para enriquecer las métricas; el motor sigue validando y aplicando el delta textual autoritativo.
+`EditorChange.activityKind` es una categoría opcional para las métricas agregadas. `EditorChange.inputType` conserva, cuando existe, el identificador exacto de `InputEvent.inputType` (máximo 128 caracteres y sin caracteres de control). Este segundo campo es metadato efímero de procedencia: no copia `InputEvent.data`, no contiene el manuscrito y no forma parte de snapshots ni checkpoints.
 
-- `typing`: escritura normal; también se infiere para inserciones simples.
-- `paste`: pegado desde portapapeles; textarea lo reconoce por `InputEvent.inputType` y el editor nativo puede asignarlo.
-- `deletion`: borrado sin texto de reemplazo; también se infiere por el delta.
-- `correction`: reemplazo de un rango por texto; también se infiere cuando el delta elimina e inserta contenido.
-- `undo` / `redo`: únicamente desde la transacción real del historial del editor, nunca desde atajos de teclado.
-- `other`: operación textual no clasificable.
+La fuente textarea clasifica conservadoramente:
 
-Los seis contadores se conservan en checkpoints versión 1 como campos opcionales compatibles con checkpoints anteriores. Los checkpoints antiguos restauran los nuevos contadores a cero; los nuevos validan que la suma de categorías coincida con las ediciones admitidas. Las métricas no guardan texto del manuscrito.
+| `InputEvent.inputType` | `activityKind` | Regla |
+|---|---|---|
+| `insertText` | `typing` | Inserción de texto informada por el navegador; no demuestra teclado físico ni intención humana. |
+| `insertLineBreak`, `insertParagraph` | `typing` | Inserciones de salto/línea informadas por el navegador. |
+| `insertFromPaste`, `insertFromPasteAsQuotation` | `paste` | El navegador identifica explícitamente la ruta de pegado. |
+| `insertReplacementText` | `correction` | El navegador identifica explícitamente una sustitución/autocorrección. |
+| `delete*` | `deletion` | Se conserva además el subtipo exacto, por ejemplo `deleteContentBackward` o `deleteContentForward`. |
+| `insertCompositionText` | `composition` | Candidato IME aplicado; puede ser provisional y repetirse en el mismo rango. |
+| `insertFromDrop`, `insertFromYank`, `insertFromDictation` | `other` | Se conserva el tipo exacto, pero no se equipara sin evidencia a escritura manual, pegado o corrección. |
+| Otro tipo no vacío | `other` | Se conserva el token nativo para auditoría; no se eleva a `typing`. |
+| Tipo vacío/ausente | Sin categoría | El delta de texto puede seguir siendo exacto, pero la cobertura de procedencia pasa a parcial. |
+
+`historyUndo` / `historyRedo` no se reconstruyen desde el textarea: se necesita el delta inverso/reenviado del historial real del editor. El adaptador textarea suspende y solicita snapshot cuando no puede determinar el rango. El adaptador transaccional del editor marca `undo` / `redo` por el tipo de transacción nativa, nunca por atajos de teclado.
+
+El monitor conserva ocho contadores categóricos (`typingChanges`, `compositionChanges`, `pasteChanges`, `deletionChanges`, `correctionChanges`, `undoChanges`, `redoChanges` y `otherChanges`). Su suma coincide con `acceptedChanges`. Las métricas de unidades `typingInsertedCharacters`, `compositionInsertedCharacters` y `compositionDeletedCharacters` se explican en `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+Los checkpoints versión 1 mantienen compatibilidad: los campos nuevos son opcionales y no se reconstruye clasificación histórica sin evidencia. `activityUnitMetricsComplete` queda en `false` después de restaurar checkpoints históricos sin desglose, resincronizar con snapshot o admitir un delta sin categoría explícita reconocida. Una categoría explícita `other` sí es conocida y no invalida por sí sola esa cobertura.
 
 ## 10. Retención local de checkpoints
 
@@ -220,7 +231,7 @@ La limpieza automática se programa al inicializar un proyecto y puede invocarse
 
 La guía consolidada de operación es `docs/development/LIVE_AUTHOR_MONITOR_OPERATIONS.md`. Describe los estados de checkpoint y lease, las métricas clasificadas, la política de retención local, las pruebas disponibles y las limitaciones de CI/medición.
 
-El adaptador debe entregar `activityKind` cuando conozca el tipo real de operación. Para deshacer y rehacer debe utilizar las transacciones reales del historial; no debe inferirlas de los atajos de teclado. Si no dispone de ese dato, el monitor aplica una clasificación por delta y registra la operación residual como `other`.
+El adaptador debe entregar `activityKind` cuando conozca la categoría real y puede adjuntar `inputType` si dispone del identificador nativo. No debe copiar `InputEvent.data` ni el texto del manuscrito al metadato. Para deshacer y rehacer debe utilizar las transacciones reales del historial; no debe inferirlas de los atajos de teclado. Cuando falte `activityKind`, el contador categórico residual será `other`, pero la cobertura de unidades se marcará parcial en vez de suponer que fue escritura normal.
 
 El anfitrión puede configurar `liveAuthorMonitorCheckpointRetentionMs`: 90 días por defecto, `0` para desactivar la limpieza y un máximo de 3650 días. La limpieza automática y manual no inspecciona el manuscrito; conserva checkpoints con leases activos o malformados y nunca elimina el registro de fencing.
 

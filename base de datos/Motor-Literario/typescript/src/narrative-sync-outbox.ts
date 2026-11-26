@@ -89,7 +89,6 @@ export interface NarrativeSyncOutboxOptions {
 const OPERATIONS = "outbox-operations";
 const WRITER_CURSORS = "outbox-writer-cursors";
 const PROJECT_CURSORS = "outbox-project-cursors";
-const MAX_BATCH_SIZE = 100;
 const MAX_WRITER_ID_UNITS = 256;
 const MAX_ERROR_UNITS = 1_024;
 
@@ -310,17 +309,17 @@ export class IndexedDbNarrativeSyncOutbox {
   }
 
   /**
-   * Reclama una tanda corta en transacción. Una caída deja vencer el lease y
-   * otra instancia puede reenviar la misma operationId sin perder la entrada.
+   * Reclama únicamente la siguiente generación. Una caída deja vencer el lease
+   * y otra instancia puede reenviar la misma operationId sin saltar snapshots.
    */
   async claimPending(input: ClaimNarrativeSyncOutboxInput): Promise<readonly NarrativeSyncOutboxEntry[]> {
     validateIdentifier(input?.projectId, "projectId");
     validateIdentifier(input?.workerId, "workerId", MAX_WRITER_ID_UNITS);
     const now = input.now ?? Date.now();
-    const limit = input.limit ?? 20;
+    const limit = input.limit ?? 1;
     const leaseMs = input.leaseMs ?? 30_000;
     if (!Number.isFinite(now) || now < 0 ||
-        !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_BATCH_SIZE ||
+        limit !== 1 ||
         !Number.isFinite(leaseMs) || leaseMs < 1_000 || leaseMs > 3_600_000) {
       throw new RangeError("Parámetros de reclamación del outbox fuera de rango.");
     }
@@ -338,11 +337,13 @@ export class IndexedDbNarrativeSyncOutbox {
               validateStoredEntry(entry);
               return entry;
             })
-            .sort((left, right) =>
-              left.createdAt - right.createdAt ||
-              left.writerId.localeCompare(right.writerId) ||
-              left.sequence - right.sequence
-            );
+            .sort((left, right) => left.generation - right.generation);
+          for (let index = 1; index < entries.length; index++) {
+            if (entries[index]!.generation !== entries[index - 1]!.generation + 1 ||
+                entries[index]!.envelope.payload.expectedGeneration !== entries[index - 1]!.generation) {
+              throw new Error("El outbox perdió la continuidad entre generaciones; se requiere reconciliación.");
+            }
+          }
           // Una generación depende de la anterior. Solo se reclama la primera
           // que aún no está entregada; nunca se adelanta mientras exista un
           // lease activo o un retry pendiente de una generación más antigua.
@@ -433,6 +434,9 @@ export class IndexedDbNarrativeSyncOutbox {
         !Number.isFinite(input.retryAfterMs) || input.retryAfterMs < 0 ||
         input.retryAfterMs > 86_400_000) {
       throw new TypeError("Datos inválidos para devolver una operación al outbox.");
+    }
+    if (!Number.isFinite(now + input.retryAfterMs)) {
+      throw new RangeError("La próxima fecha de reintento excede el rango numérico.");
     }
     const lastError = typeof input.error === "string"
       ? input.error.slice(0, MAX_ERROR_UNITS)

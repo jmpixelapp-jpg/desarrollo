@@ -162,7 +162,7 @@ function splitSentences(text: string): readonly { start: number; end: number }[]
 
 function includesName(sentence: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(String.raw\`(?<![\p{L}\p{M}\p{N}_])\${escaped}(?![\p{L}\p{M}\p{N}_])\`, "iu").test(sentence);
+  return new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escaped + "(?![\\p{L}\\p{M}\\p{N}_])", "iu").test(sentence);
 }
 
 /**

@@ -45,7 +45,7 @@ test("rechaza rangos inválidos y mantiene explícitos los separadores sintétic
 
 
 test("resuelve evidencias persistidas del conocimiento narrativo con verificación exacta de cita", async () => {
-  const book = await ingestBookReaderBlocks({ sourceId: "novela", sourceFormat: "fixture" }, [
+  const book = await ingestBookReaderBlocks({ sourceId: "novela", sourceFormat: "fixture", revision: 3 }, [
     { blockId: "p", sequence: 1, kind: "paragraph", text: "La puerta se abrió.", location: { locator: "chapter.xhtml#p" } }
   ]);
   const chapter = book.chapters[0];
@@ -61,6 +61,9 @@ test("resuelve evidencias persistidas del conocimiento narrativo con verificaci�
   assert.throws(() => resolveNarrativeTextEvidence(book, {
     documentId: chapter.documentId, revision: 2, start, end: start + 6, excerpt: "puerta", status: "stale"
   }), /obsoleta/u);
+  assert.throws(() => resolveNarrativeTextEvidence(book, {
+    documentId: chapter.documentId, revision: 2, start, end: start + 6, excerpt: "puerta"
+  }), /no coincide/u);
   assert.throws(() => resolveNarrativeTextEvidence(book, {
     documentId: "otro-documento", revision: 3, start: 0, end: 2, excerpt: "La"
   }), /no pertenece/u);

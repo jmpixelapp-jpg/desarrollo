@@ -342,3 +342,23 @@ La comparación con la memoria previa del personaje produce:
 El módulo se integra en el pipeline como `informationInterpretations` y recibe los antecedentes mediante `priorInformationProvenance`. Se añadieron seis pruebas unitarias y una de integración.
 
 **Precaución epistemológica:** una diferencia de texto no demuestra por sí misma una interpretación falsa. Incluso la señal explícita de malentendido se registra como lo que el texto declara, no como una verdad objetiva. No se infieren paráfrasis equivalentes, intención de engañar, motivos ni fiabilidad del personaje.
+
+
+## Fase U: estado de conocimiento individual por personaje
+
+Se añadió `narrative-character-knowledge-state.ts` con `buildNarrativeCharacterKnowledgeStates`. El módulo construye una vista revisable por personaje a partir de procedencias, interpretaciones y evaluaciones explícitas.
+
+Cada elemento conserva:
+- Identificador de la información y su contenido.
+- Canal de adquisición, estado y fuente comunicadora si está explícita.
+- Evidencia original.
+- Interpretaciones asociadas, incluso cuando el personaje interpreta algo distinto, siempre que exista un enlace explícito a la información previa.
+- Evaluaciones del personaje asociadas por coincidencia textual conservadora.
+
+El resumen separa información registrada, interpretaciones, malentendidos expresamente calificados y evaluaciones. No transforma estos recuentos en un indicador de verdad ni de fiabilidad.
+
+La cronología entre documentos solo se ordena cuando el proyecto proporciona `orderedDocumentIds`. Sin ese dato, los documentos distintos se marcan como `cross-document-order-unknown`; dentro de un mismo documento se conserva la posición textual. Los rumores impersonales no se asignan artificialmente a ningún personaje y las entidades que no son personajes no bloquean la construcción.
+
+Integración: el pipeline devuelve `characterKnowledgeStates` y acepta `priorInformationInterpretations` y `orderedDocumentIds`. Se añadieron cuatro pruebas unitarias y una de integración.
+
+**Límites:** un registro de información no demuestra que el personaje lo acepte, lo recuerde indefinidamente o lo comprenda. La ausencia de registro no demuestra ignorancia. El estado es una reconstrucción de lo que el texto documenta, no una simulación omnisciente de la mente del personaje.

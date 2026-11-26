@@ -124,7 +124,9 @@ test("emite candidatos narrativos con evidencia durante cada revisión del autor
   assert.equal(update.candidates[0].kind, "theme");
   assert.equal(update.candidates[0].text, "la memoria perdida");
   assert.equal(update.candidates[0].reviewStatus, "candidate");
-  assert.equal(update.candidates[0].evidence.start, text.indexOf("la memoria perdida"));
+  assert.equal(update.candidates[0].mention.start, text.indexOf("la memoria perdida"));
+  assert.equal(update.candidates[0].evidence.start, 0,
+    "la evidencia contextual debe comenzar al inicio de la oración que contiene la mención");
   assert.equal(update.candidates[0].evidence.excerpt, text);
 
   const revisedText = "La lluvia golpeaba los cristales.";

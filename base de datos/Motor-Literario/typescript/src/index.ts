@@ -41,3 +41,5 @@ export * from "./narrative-sync-domain-handlers";
 export * from "./narrative-idea-discovery";
 
 export * from "./narrative-claim-extraction";
+
+export * from "./narrative-action-extraction";

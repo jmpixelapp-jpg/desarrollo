@@ -371,7 +371,9 @@ test("IndexedDB reabre tras el evento close externo e intacta el checkpoint dura
     // se usa aquí para simular la conexión cerrada por el navegador/entorno.
     const connection = await store.open();
     connection.close();
-    connection.dispatchEvent(new Event("close"));
+    assert.equal(typeof connection.onclose, "function",
+      "el adaptador debe registrar el handler de cierre externo");
+    connection.onclose.call(connection, new Event("close"));
 
     assert.deepEqual(
       await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),

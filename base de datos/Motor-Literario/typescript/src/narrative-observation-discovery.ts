@@ -10,6 +10,10 @@ import type { NarrativeEntity, TextEvidence } from "./narrative-knowledge";
 
 export const MAX_NARRATIVE_OBSERVATION_TEXT_UNITS = 2_000_000;
 export const MAX_NARRATIVE_OBSERVATION_CANDIDATES = 200;
+export const MAX_NARRATIVE_OBSERVATION_ENTITIES = 10_000;
+export const MAX_NARRATIVE_OBSERVATION_ALIASES_PER_ENTITY = 100;
+export const MAX_NARRATIVE_OBSERVATION_NAME_LENGTH = 256;
+export const MAX_NARRATIVE_OBSERVATION_SEGMENTS = 20_000;
 
 export interface NarrativeObservationCandidate {
   readonly id: string;
@@ -208,20 +212,26 @@ function validateInput(input: NarrativeObservationDiscoveryInput): void {
       !Number.isSafeInteger(input.revision) || input.revision < 0 ||
       typeof input.text !== "string" ||
       input.text.length > MAX_NARRATIVE_OBSERVATION_TEXT_UNITS ||
-      !Array.isArray(input.entities) ||
+      !Array.isArray(input.entities) || input.entities.length > MAX_NARRATIVE_OBSERVATION_ENTITIES ||
       (input.baseOffset !== undefined &&
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
           input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {
     throw new Error("Contexto inválido para descubrir observaciones narrativas.");
   }
+  const ids = new Set<string>();
   for (const entity of input.entities) {
     if (!entity || entity.projectId !== input.projectId ||
-        typeof entity.id !== "string" || !entity.id.trim() ||
-        typeof entity.kind !== "string" ||
+        typeof entity.id !== "string" || !entity.id.trim() || ids.has(entity.id) ||
+        typeof entity.kind !== "string" || !entity.kind.trim() ||
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
-        !Array.isArray(entity.aliases)) {
-      throw new Error("La lista de entidades contiene registros inválidos o de otro proyecto.");
+        entity.canonicalName.length > MAX_NARRATIVE_OBSERVATION_NAME_LENGTH ||
+        !Array.isArray(entity.aliases) ||
+        entity.aliases.length > MAX_NARRATIVE_OBSERVATION_ALIASES_PER_ENTITY ||
+        entity.aliases.some((alias: unknown) => typeof alias !== "string" || !alias.trim() ||
+          alias.length > MAX_NARRATIVE_OBSERVATION_NAME_LENGTH)) {
+      throw new Error("La lista de entidades debe contener registros únicos, válidos y del mismo proyecto.");
     }
+    ids.add(entity.id);
   }
 }
 
@@ -229,8 +239,10 @@ function splitSentences(text: string): readonly { start: number; end: number }[]
   const result: { start: number; end: number }[] = [];
   const expression = /[^\n]+/gu;
   for (const line of text.matchAll(expression)) {
+    if (result.length >= MAX_NARRATIVE_OBSERVATION_SEGMENTS) break;
     const sentenceExpression = /[^.!?]+(?:[.!?]+|$)/gu;
     for (const sentence of line[0].matchAll(sentenceExpression)) {
+      if (result.length >= MAX_NARRATIVE_OBSERVATION_SEGMENTS) break;
       const leading = sentence[0].search(/\S/u);
       const end = sentence[0].trimEnd().length;
       if (leading < 0 || end <= leading) continue;

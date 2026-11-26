@@ -827,12 +827,20 @@ export async function inspectNarrativeReferenceRepairPending(
     ];
     const safeOperationId = typeof entry?.operationId === "string" ? entry.operationId : "";
     const safeRecordId = typeof entry?.recordId === "string" ? entry.recordId : "";
+    const fieldMatchesRecord =
+      (entry?.recordType === "relation" &&
+        (entry.referenceField === "fromEntityId" || entry.referenceField === "toEntityId")) ||
+      (entry?.recordType === "event" && entry.referenceField === "participants") ||
+      (entry?.recordType === "assertion" && entry.referenceField === "entityId") ||
+      (entry?.recordType === "idea" && entry.referenceField === "relatedEntityIds");
     if (!entry || entry.projectId !== projectId ||
         !validRecordTypes.includes(entry.recordType) ||
-        !validReferenceFields.includes(entry.referenceField) ||
+        !validReferenceFields.includes(entry.referenceField) || !fieldMatchesRecord ||
+        typeof entry.issueCode !== "string" || !entry.issueCode.trim() ||
         typeof entry.recordId !== "string" || !entry.recordId.trim() ||
         typeof entry.missingReferenceId !== "string" || !entry.missingReferenceId.trim() ||
-        typeof entry.replacementEntityId !== "string" || !entry.replacementEntityId.trim()) {
+        typeof entry.replacementEntityId !== "string" || !entry.replacementEntityId.trim() ||
+        !Number.isFinite(entry.appliedAt) || entry.appliedAt < 0) {
       return { operationId: safeOperationId, recordType: entry?.recordType ?? "relation",
         recordId: safeRecordId, status: "invalid-intent",
         detail: "La identidad o los datos de la intención no son válidos." };

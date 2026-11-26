@@ -105,3 +105,21 @@ test("el BOM inicial y CRLF se normalizan sin quitar guiones ni notas", async ()
   ]);
   assert.equal(result.chapters[0].text, "línea-\nnota al pie¹");
 });
+
+test("rechaza encabezados de capítulo vacíos e identidades de capítulo reutilizadas", async () => {
+  await assert.rejects(
+    ingestBookReaderBlocks({ sourceId: "b", sourceFormat: "fixture" }, [
+      { blockId: "h", sequence: 1, kind: "chapter-heading", text: "   " }
+    ]),
+    /encabezado de capítulo vacío/
+  );
+  await assert.rejects(
+    ingestBookReaderBlocks({ sourceId: "b", sourceFormat: "fixture" }, [
+      { blockId: "h1", sequence: 1, kind: "chapter-heading", chapterId: "same", text: "Uno" },
+      { blockId: "p1", sequence: 2, kind: "paragraph", chapterId: "same", text: "Texto" },
+      { blockId: "h2", sequence: 3, kind: "chapter-heading", chapterId: "same", text: "Dos" }
+    ]),
+    /reutilizó el identificador de capítulo/
+  );
+});
+

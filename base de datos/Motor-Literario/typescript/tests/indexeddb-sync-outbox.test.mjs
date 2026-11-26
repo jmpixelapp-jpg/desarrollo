@@ -239,3 +239,29 @@ test("el adaptador IndexedDB serializa coordinadores con propietarios distintos"
     await deleteDatabase();
   }
 });
+
+
+test("un mismo adaptador no permite reentrada concurrente del mismo propietario", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const lock = new IndexedDbSyncExecutionLock(store, {
+    ownerId: "single-tab-owner", leaseDurationMs: 1_000, pollIntervalMs: 25
+  });
+  let active = 0;
+  let maximumActive = 0;
+  try {
+    await Promise.all(["a", "b"].map(label => lock.runExclusive(
+      "narrative-sync:local-queue-project",
+      async () => {
+        active++;
+        maximumActive = Math.max(maximumActive, active);
+        await new Promise(resolve => setTimeout(resolve, 35));
+        active--;
+        return label;
+      }
+    )));
+    assert.equal(maximumActive, 1);
+  } finally {
+    await deleteDatabase();
+  }
+});

@@ -765,7 +765,13 @@ export class HostEngineApi {
       onAnalysis: result => {
         try { options.callbacks?.onAnalysis?.(result); } catch { /* La UI no debe detener el análisis. */ }
         void this.persistLiveDiagnostics(result).catch(error => this.reportKnowledgeError(error));
-        if (this.store.saveEntity && this.store.loadEntities) {
+        const supportsNarrativeExtraction = Boolean(this.store.saveEntity && this.store.loadEntities);
+        const supportsContinuityProjection = Boolean(
+          this.store.loadDocumentMetadata && this.store.loadDocument &&
+          this.store.loadNarrativeIdeaContinuityIndex &&
+          this.store.saveNarrativeIdeaContinuityIndexIfUnchanged
+        );
+        if (supportsNarrativeExtraction || supportsContinuityProjection) {
           void this.processLiveAnalysis(result).catch(error => {
             this.reportKnowledgeError(error);
           });
@@ -1079,9 +1085,11 @@ export class HostEngineApi {
       );
       try {
         await this.reconcileNarrativeEvidence(result);
-        await this.extractNarrativeKnowledge(
-          result.documentId, result.revision, result.affectedText, result.affectedStart
-        );
+        if (this.store.saveEntity && this.store.loadEntities) {
+          await this.extractNarrativeKnowledge(
+            result.documentId, result.revision, result.affectedText, result.affectedStart
+          );
+        }
         await this.refreshNarrativeIdeaContinuityIndex();
       } finally {
         const analysisExecutionMs = Math.max(0, performance.now() - executionStartedAt);

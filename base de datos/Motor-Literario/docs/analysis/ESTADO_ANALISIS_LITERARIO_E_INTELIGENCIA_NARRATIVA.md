@@ -531,6 +531,15 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 **Auditoría de cobertura ampliada:** `extractionAudit` ahora recibe evidencias adicionales de estados de personajes y transiciones de ubicación. Separa el subtotal de acciones/acontecimientos del subtotal de otros extractores y calcula `coverageRatio` sobre la unión de evidencias, evitando marcar como pendiente una frase ya cubierta por otro tipo de extracción. La cola de revisión solo incluye frases sin evidencia de ningún extractor integrado. Añadida prueba específica de esta distinción. Cambios pendientes de CI.
 
+### Trayectorias espaciales entre capítulos — 26-11-2026
+
+- Nuevo módulo `typescript/src/narrative-location-trajectory.ts`: agrupa movimientos por personaje, ordena por secuencia editorial explícita y señala secuencias candidatas de salida seguida de llegada.
+- Conserva referencias de origen/destino, evidencias de ambos movimientos y capítulos intermedios sin candidatos. No inventa rutas, distancias, continuidad de viaje ni ubicación actual.
+- Añadidas pruebas de orden editorial, secuencias, exclusión de negación/futuro, evidencia fuera de contexto y órdenes duplicados.
+- Exportación pública añadida. Type-check de run 2986 superado; pruebas y benchmark seguían en ejecución al registrar esta nota.
+
+**Validación de la capa anterior:** run 2985 (`6bfdc887`) completó Type-check, build/pruebas y benchmark con éxito. Incluye auditoría de cobertura global, extracción de movimientos y sus controles de evidencia. La auditoría usa la mención exacta del lugar, no el contexto completo de línea, para no marcar frases vecinas como cubiertas indebidamente.
+
 ### Estados explícitos de personajes y movimientos espaciales — 26-11-2026
 
 - Añadido `narrative-character-state-discovery.ts`: propone estados copulativos explícitos de personajes, con polaridad, tiempo verbal, aspecto, modo de afirmación y evidencias separadas para identidad, predicado y afirmación.

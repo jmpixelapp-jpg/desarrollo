@@ -4217,12 +4217,14 @@ function buildLiteraryIdeaGraph(
         if (soleIntermediary !== undefined) exclusiveIntermediaryCount.add(soleIntermediary);
       }
     }
+    // Las métricas de independencia describen fuentes que realmente convergen.
+    // Una bifurcación sin destino compartido no se mezcla con este análisis.
     if (sourceSharedDestinationCount > 0) {
       twoHopConvergentSourceCount++;
       twoHopSharedDestinationCount += sourceSharedDestinationCount;
+      twoHopExclusiveDestinationCount += sourceExclusiveDestinationCount;
+      if (exclusiveIntermediaryCount.size > 1) twoHopIndependentBranchSourceCount++;
     }
-    twoHopExclusiveDestinationCount += sourceExclusiveDestinationCount;
-    if (exclusiveIntermediaryCount.size > 1) twoHopIndependentBranchSourceCount++;
   }
   let terminalReachableNodeCount = 0;
   let directedBranchNodeCount = 0;
@@ -5453,7 +5455,8 @@ function buildCharacterMentionDistributions(
 function findExplicitEventDependencyConnector(
   textBetweenEvents: string
 ): { readonly connector: string; readonly index: number; readonly direction: LiteraryEventDependencyCandidate["direction"] } | undefined {
-  const expression = /\b(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)\b/giu;
+  // Límites Unicode: \b no considera las vocales acentuadas como letras.
+  const expression = /(?<![\p{L}\p{N}_])(por eso|por lo tanto|así que|de modo que|en consecuencia|como resultado|por consiguiente|provocó|provocaron|causó|causaron|desencadenó|desencadenaron|originó|originaron|produjo|produjeron|porque|debido a|a causa de|gracias a|por culpa de|como consecuencia de)(?![\p{L}\p{N}_])/giu;
   const matches = [...textBetweenEvents.matchAll(expression)];
   if (matches.length === 0) return undefined;
   const match = matches[0]!;
@@ -6642,7 +6645,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
             !["calendar","story-day"].includes(event.timeReference.basis) ||
             !["date","year","day-index"].includes(event.timeReference.precision) ||
             typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim() ||
-            !Number.isFinite(event.timeReference.orderValue)))) {
+            typeof event.timeReference.orderValue !== "number"))) {
       throw new Error("El catálogo global de acontecimientos del análisis literario es inválido.");
     }
     for (const evidence of event.evidence) {

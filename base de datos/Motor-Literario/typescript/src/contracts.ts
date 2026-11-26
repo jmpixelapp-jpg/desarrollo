@@ -22,9 +22,6 @@ export interface DocumentSnapshot {
   readonly sequence: number;
 }
 
-export type EditorChangeActivityKind =
-  | "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
-
 export interface EditorChange {
   readonly documentId: string;
   readonly sequence: number;
@@ -33,8 +30,6 @@ export interface EditorChange {
   readonly start: number;
   readonly end: number;
   readonly replacement: string;
-  /** Optional operation metadata from native editor events. */
-  readonly activityKind?: EditorChangeActivityKind;
 }
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
@@ -115,14 +110,6 @@ export interface StoredLiveAuthorMonitorCheckpoint {
   readonly lastCommitLatencyMs: number;
   readonly totalCommitLatencyMs: number;
   readonly commitLatencies: readonly number[];
-  /** Optional v1 counters; absent in historic checkpoints means zero. */
-  readonly typingChanges?: number;
-  readonly pasteChanges?: number;
-  readonly deletionChanges?: number;
-  readonly correctionChanges?: number;
-  readonly undoChanges?: number;
-  readonly redoChanges?: number;
-  readonly otherChanges?: number;
 }
 
 /** Lease temporal de titularidad del monitor, con fencing token monotónico por documento. */
@@ -159,6 +146,11 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Bandeja de salida durable para sincronización; no implica transporte remoto. */
+  enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
+  loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
+  recordSyncOperationAttempt?(operationId: string, attemptedAt: number, error?: string): Promise<void>;
+  acknowledgeSyncOperation?(operationId: string): Promise<boolean>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */
@@ -298,8 +290,6 @@ export interface ProjectStore {
     documentId: string
   ): Promise<StoredLiveAuthorMonitorCheckpoint | undefined>;
   deleteLiveAuthorMonitorCheckpoint?(projectId: string, documentId: string): Promise<void>;
-  /** Elimina checkpoints antiguos sin lease vigente; nunca elimina los tombstones de lease. */
-  cleanupLiveAuthorMonitorCheckpoints?(projectId: string, olderThan: number, now: number): Promise<number>;
   /** Guarda y recupera diagnósticos asociados a una revisión exacta. */
   saveDiagnostics?(diagnostics: StoredDiagnostics): Promise<void>;
   loadDiagnostics?(projectId: string, documentId: string): Promise<StoredDiagnostics | undefined>;
@@ -452,6 +442,21 @@ export interface StoredChange extends EditorChange {
   readonly projectId: string;
   readonly committedRevision: number;
   readonly committedAt: number;
+}
+
+
+/** Operación durable pendiente de transmitir a un proveedor de sincronización externo. */
+export interface StoredSyncOperation {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  readonly sequence: number;
+  readonly kind: string;
+  readonly payload: string;
+  readonly createdAt: number;
+  readonly attemptCount: number;
+  readonly lastAttemptAt?: number;
+  readonly lastError?: string;
 }
 
 

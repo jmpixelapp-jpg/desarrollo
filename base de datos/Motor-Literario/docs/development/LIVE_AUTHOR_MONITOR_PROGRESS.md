@@ -1513,3 +1513,16 @@ El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a 
 **Validación automatizada:** [Motor Literario TypeScript — run 45762277077](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762277077), checkout `319aa56970c68e9ebac341e6a040508457ee91fd`, terminó `success` con **940/940 pruebas**, cero fallos y cero cancelaciones. La regresión `rechaza checkpoints con más pausas que admisiones registradas` aprobó como test 756. Type-check, build general y benchmark finalizaron correctamente; el benchmark del monitor procesó 100.000 commits en 520,76 ms (~192.026 commits/s), con heap de 4,39 MiB a mitad y al final, crecimiento de 0 MiB, 0,50 MiB retenidos y cero tickets pendientes.
 
 La lane dedicada del monitor para el código fuente con este guard, [run 45762234186](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762234186), también terminó `success`: 165/165 pruebas, Page Lifecycle Chromium 1/1, host/editor/browser 168/168 y benchmark de 100.000 commits en 495,39 ms (~201.862 commits/s). Esa ejecución es anterior a la incorporación del nuevo test de pausa. La ejecución dedicada que sí incluye la nueva regresión, [run 45762250404](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762250404), ya aprobó type-check, build aislado, diagnósticos, auditoría MLDB, runtime build y la suite aislada del monitor; al redactar esta nota todavía estaba en curso la instalación de Chromium, por lo que no se declara como pipeline dedicado completo.
+
+
+## 98. Consistencia del balance de caracteres en checkpoints (26 de noviembre de 2026)
+
+**Hallazgo:** la recuperación verificaba que `insertedCharacters`, `deletedCharacters` y `currentDocumentLength` fueran enteros seguros no negativos, pero no comprobaba que pudieran corresponder a una longitud inicial real del documento. Un checkpoint alterado podía declarar más caracteres borrados que la suma de los caracteres actualmente presentes y los insertados durante la sesión, lo que implicaría una longitud inicial negativa.
+
+**Invariante:** la longitud inicial implícita es `currentDocumentLength + deletedCharacters - insertedCharacters`. Debe ser no negativa; de forma equivalente, `deletedCharacters <= currentDocumentLength + insertedCharacters`.
+
+**Corrección:** `restoreCheckpoint()` rechaza los registros que violan el balance, junto con las validaciones existentes de tipo, rango y correspondencia del snapshot. No cambia los contadores de escritura ni el formato v1.
+
+**Regresión:** se crea un checkpoint válido para un documento de cinco caracteres sin ediciones; se altera `deletedCharacters` a seis. La restauración debe rechazarlo sin crear una sesión parcial.
+
+**Validación:** pendiente de GitHub Actions para el commit de esta sección.

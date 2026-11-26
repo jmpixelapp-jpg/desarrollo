@@ -1,6 +1,8 @@
 import {
   replayPendingNarrativeSyncOperations,
+  inspectNarrativeSyncJournalIntegrity,
   type IndexedDbNarrativeSyncJournal,
+  type NarrativeSyncJournalIntegrityReport,
   type NarrativeSyncReplayResult
 } from "./narrative-sync-journal";
 import { recoverNarrativeReferenceRepairs, type NarrativeReferenceRepairRecoveryResult } from "./narrative-knowledge-graph-persistence";
@@ -51,6 +53,8 @@ export function createNarrativeSyncJournalConsumer(
 export interface RecoveryFirstNarrativeSyncResult {
   readonly recovery: NarrativeReferenceRepairRecoveryResult;
   readonly blockedByPendingRepairs: boolean;
+  readonly blockedByJournalIntegrity: boolean;
+  readonly journalIntegrity: NarrativeSyncJournalIntegrityReport;
   readonly replay?: NarrativeSyncReplayResult;
 }
 
@@ -75,9 +79,23 @@ export function createRecoveryFirstNarrativeSyncConsumer(
   return async (projectId, writerId) => {
     const recovery = await recoverNarrativeReferenceRepairs(store, projectId);
     if (recovery.pending.length > 0) {
-      return { recovery, blockedByPendingRepairs: true };
+      return {
+        recovery,
+        blockedByPendingRepairs: true,
+        blockedByJournalIntegrity: false,
+        journalIntegrity: await inspectNarrativeSyncJournalIntegrity(journal, projectId)
+      };
+    }
+    const journalIntegrity = await inspectNarrativeSyncJournalIntegrity(journal, projectId);
+    if (!journalIntegrity.intact) {
+      return {
+        recovery,
+        blockedByPendingRepairs: false,
+        blockedByJournalIntegrity: true,
+        journalIntegrity
+      };
     }
     const replay = await consume(projectId, writerId);
-    return { recovery, blockedByPendingRepairs: false, replay };
+    return { recovery, blockedByPendingRepairs: false, blockedByJournalIntegrity: false, journalIntegrity, replay };
   };
 }

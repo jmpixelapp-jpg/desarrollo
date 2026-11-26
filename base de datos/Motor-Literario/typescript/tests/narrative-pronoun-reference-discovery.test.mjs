@@ -206,3 +206,43 @@ test("rechaza cargas combinadas de entidades, alias y ventana antes de explorar 
     maxAntecedentDistance: 50_000
   }), /presupuesto operativo de exploración/);
 });
+
+test("reconoce una descripción nominal confirmada y conserva su procedencia", () => {
+  const described = { ...ana, descriptions: ["la joven", "la heredera"] };
+  const [reference] = discover("La joven llegó al refugio. Ella cerró la puerta.", {
+    entities: [described]
+  });
+  assert.equal(reference.status, "single-candidate");
+  assert.equal(reference.antecedentCandidates[0].entityId, ana.id);
+  assert.equal(reference.antecedentCandidates[0].mentionType, "description");
+  assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt, "La joven");
+});
+
+test("conserva ambigüedad cuando una descripción confirmada pertenece a dos entidades", () => {
+  const anaDescribed = { ...ana, descriptions: ["la joven"] };
+  const brunoDescribed = { ...bruno, descriptions: ["la joven"] };
+  const [reference] = discover("La joven llegó. Ella esperó.", {
+    entities: [anaDescribed, brunoDescribed]
+  });
+  assert.equal(reference.status, "ambiguous");
+  assert.deepEqual(
+    reference.antecedentCandidates.map(candidate => candidate.entityId),
+    [ana.id, bruno.id]
+  );
+  assert.ok(reference.antecedentCandidates.every(candidate =>
+    candidate.mentionType === "description"));
+});
+
+test("rechaza descripciones vacías o demasiado largas", () => {
+  assert.throws(() => discover("Ella llegó.", {
+    entities: [{ ...ana, descriptions: [" "] }]
+  }), /únicas, válidas/);
+  assert.throws(() => discover("Ella llegó.", {
+    entities: [{ ...ana, descriptions: ["x".repeat(257)] }]
+  }), /únicas, válidas/);
+});
+
+test("no inventa asociaciones a partir de descripciones no registradas", () => {
+  const [reference] = discover("La joven llegó. Ella esperó.", { entities: [ana] });
+  assert.equal(reference.status, "no-antecedent");
+});

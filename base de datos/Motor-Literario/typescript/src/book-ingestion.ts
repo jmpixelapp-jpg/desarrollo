@@ -64,6 +64,7 @@ export interface IngestedBookChapter {
   readonly heading?: string;
   readonly text: string;
   readonly sourceSpans: readonly BookSourceSpan[];
+  readonly headingSource?: BookSourceSpan;
   readonly firstSequence: number;
   readonly lastSequence: number;
 }
@@ -75,8 +76,7 @@ export interface IngestedBook {
     readonly blocksRead: number;
     readonly charactersRead: number;
     readonly chaptersCreated: number;
-    readonly duplicateBlocksRejected: number;
-  };
+    };
 }
 
 const DEFAULT_MAX_BLOCKS = 200_000;
@@ -118,6 +118,7 @@ interface MutableChapter {
   heading?: string;
   chunks: string[];
   sourceSpans: BookSourceSpan[];
+  headingSource?: BookSourceSpan;
   length: number;
   firstSequence: number;
   lastSequence: number;
@@ -229,6 +230,11 @@ export async function ingestBookReaderBlocks(
       const documentId = "chapter:" + encodeURIComponent(chapterId);
       const heading = block.kind === "chapter-heading" ? text.trim() : undefined;
       current = makeChapter(documentId, heading || "Capítulo " + (chapters.length + 1), heading, block.sequence);
+      if (heading !== undefined) current.headingSource = {
+        blockId: block.blockId, sequence: block.sequence, kind: block.kind,
+        start: 0, end: 0,
+        ...(block.location ? { location: structuredClone(block.location) } : {})
+      };
       chapters.push(current);
     }
     if (block.chapterId !== undefined && current.documentId !== "chapter:" + encodeURIComponent(block.chapterId)) {
@@ -252,6 +258,7 @@ export async function ingestBookReaderBlocks(
       ...(chapter.heading ? { heading: chapter.heading } : {}),
       text: chapter.chunks.join(""),
       sourceSpans: chapter.sourceSpans.map(span => structuredClone(span)),
+      ...(chapter.headingSource ? { headingSource: structuredClone(chapter.headingSource) } : {}),
       firstSequence: chapter.firstSequence,
       lastSequence: chapter.lastSequence
     }));
@@ -262,8 +269,7 @@ export async function ingestBookReaderBlocks(
     statistics: {
       blocksRead,
       charactersRead,
-      chaptersCreated: finalized.length,
-      duplicateBlocksRejected: 0
+      chaptersCreated: finalized.length
     }
   };
 }

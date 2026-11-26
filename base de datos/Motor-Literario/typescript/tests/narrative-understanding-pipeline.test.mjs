@@ -245,3 +245,21 @@ test("integra afirmaciones atribuidas y separa negación del hablante y del cont
   assert.equal(result.attributedClaims[1].contentPolarity, "negated");
   assert.equal(result.attributedClaims[1].evidence.documentId, "chapter-claims");
 });
+
+
+test("integra atribución de hablantes de diálogo en el pipeline coordinado", () => {
+  const text = "—No volveré —dijo Mara. Elian respondió: «Te esperaré».";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-dialogue-pipeline", revision:2,
+    text, entities
+  });
+  assert.equal(result.dialogueAttributions.length, 2);
+  assert.deepEqual(
+    result.dialogueAttributions.map(item => item.speakerEntityId),
+    ["mara", "elian"]
+  );
+  assert.deepEqual(
+    result.dialogueAttributions.map(item => item.speech),
+    ["No volveré", "Te esperaré"]
+  );
+});

@@ -779,3 +779,12 @@ Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace
 - La lectura de heap se hace con GC explícito en el proceso Node del runner. No se fija un presupuesto global no calibrado; el reporte servirá para establecer una línea base y detectar regresiones relativas. No sustituye una medición de heap de Chromium.
 
 **Validación:** el commit que incorpora el benchmark quedó sujeto a CI; el resultado debe registrarse cuando termine el workflow.
+
+## 42. Resultado de CI para el benchmark de heap y estado de pruebas (25 de noviembre de 2026)
+
+La ejecución del commit `b2ef1ecc48b9d30e02634755c125e3adbf7eb810` confirma:
+
+- [Live Author Monitor — run 45743414420](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743414420): setup, instalación de Chromium y auditoría de esquema físico aprobados; `Build runtime bundle` bloqueado por `src/narrative-history.ts:7:40 — Unterminated string literal`. Los tests y `bench:monitor` quedaron omitidos.
+- [Motor Literario TypeScript — run 45743414450](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743414450): `Type-check` bloqueado por `src/narrative-history.ts(7,41): TS1002`.
+
+Por este motivo no existe todavía una cifra medida por `live-author-monitor-memory-benchmark.mjs`. El benchmark quedó enlazado al workflow específico y al comando `npm run bench`, pero debe ejecutarse una vez que el build previo pueda completarse. El archivo externo que bloquea la compilación no se modifica para no intervenir en el módulo narrativo paralelo.

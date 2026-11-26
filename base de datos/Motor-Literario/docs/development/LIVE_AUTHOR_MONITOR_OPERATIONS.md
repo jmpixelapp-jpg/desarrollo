@@ -162,6 +162,7 @@ Suite completa y benchmark:
 ```bash
 npm test
 npm run bench
+npm run bench:monitor
 ```
 
 El workflow específico del monitor valida esquema físico, build, Chromium y tests `live-author-monitor*.test.mjs`. El workflow general ejecuta typecheck, build, suite completa y benchmark.
@@ -173,12 +174,14 @@ La última validación integral verde anterior a la fase 3 corresponde al baseli
 - [Live Author Monitor — run 45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764): 141 pruebas aprobadas, 0 fallidas, 0 omitidas.
 - [Motor Literario TypeScript — run 45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738): 718 pruebas aprobadas, 0 fallidas, 0 omitidas.
 
-Las nuevas entregas no tienen aún validación verde. Las ejecuciones más recientes verificadas:
+Las nuevas entregas siguen sin validación verde. La última pareja completada consultada corresponde al commit `b2ef1ecc`:
 
-- [Motor Literario TypeScript — run 45742493582](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45742493582), commit `481b0dde`: fallo en typecheck por `src/narrative-history.ts(7,41): TS1002 — Unterminated string literal`.
-- [Live Author Monitor — run 45742415506](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45742415506), commit `f992787`: fallo en Build runtime bundle por el mismo literal sin cerrar en `src/narrative-history.ts:7:40`.
+- [Live Author Monitor — run 45743414420](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743414420): terminó en `Build runtime bundle`; esquema físico e instalación de Chromium terminaron correctamente, pero el build se detuvo antes de ejecutar tests y benchmark.
+- [Motor Literario TypeScript — run 45743414450](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743414450): terminó en `Type-check`.
 
-Ambos fallos se producen antes de ejecutar las pruebas nuevas. No indican que las pruebas del monitor hayan pasado ni que hayan fallado. El archivo `src/narrative-history.ts` pertenece a otro módulo y no se cambia desde este trabajo. El workflow específico ahora incluye `tests/browser/**` en sus filtros para que la modificación del harness HTML vuelva a dispararlo.
+El error de ambas ejecuciones es `src/narrative-history.ts(7,41): TS1002 — Unterminated string literal`. Se origina en un archivo de otro módulo y no se modifica desde este trabajo. No demuestra ni aprobación ni fallo de las pruebas del monitor ni del benchmark de heap: ambos quedan sin ejecutar tras el bloqueo de compilación.
+
+El workflow específico incluye ahora `tests/browser/**`, `bench/**` y `package.json` en sus filtros de `push` y `pull_request`. Así los tests del harness, el benchmark y los comandos de validación disparan la suite dedicada cuando cambian.
 
 ## 10. Regla de cierre de entregas
 
@@ -227,3 +230,5 @@ El escenario predeterminado crea ocho sesiones con documentos de 1.048.576 unida
 Las dimensiones pueden variarse con `MONITOR_BENCH_DOCUMENTS`, `MONITOR_BENCH_CHANGES_PER_DOCUMENT`, `MONITOR_BENCH_DOCUMENT_CODE_UNITS` y `MONITOR_BENCH_SAMPLE_WINDOW`. Los rangos admitidos están validados por el script.
 
 Este benchmark mide el heap del proceso Node del runner, no memoria de Chromium ni consumo de la aplicación de producción. Reporta la medición sin umbral universal fijo para evitar fallos por diferencias de V8/runner. El job del monitor lo ejecuta después de la suite automatizada, y el benchmark general lo incluye como parte de `npm run bench`.
+
+El benchmark `bench:monitor` requiere que `npm run build` haya generado `dist/`; emite un único JSON con longitudes UTF-16, total de commits, heap/RSS, throughput y la ventana acotada. El campo de tamaño es `initialCodeUnitsPerDocument`, no una afirmación de bytes físicos por documento.

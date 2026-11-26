@@ -405,8 +405,25 @@ export function validateNarrativeIdeaContinuityIndex(
       value.summary.lineCount !== value.lines.length ||
       value.summary.occurrenceCount !== value.occurrences.length ||
       value.summary.relationCount !== value.events.length ||
-      value.summary.sourceAnalysisTruncated !== value.summary.sourceAnalysisTruncated) {
+      typeof value.summary.sourceAnalysisTruncated !== "boolean") {
     throw new Error("Los totales del índice de continuidad son inconsistentes.");
+  }
+
+  const expectedCounts = {
+    exactOnlyLineCount: value.lines.filter(line => line.lineType === "exact-recurrence-line").length,
+    lexicalOnlyLineCount: value.lines.filter(line => line.lineType === "lexical-resonance-line").length,
+    mixedSignalLineCount: value.lines.filter(line => line.lineType === "mixed-signal-line").length,
+    chronologyCompleteCount: value.lines.filter(line => line.chronology === "complete").length,
+    chronologyPartialCount: value.lines.filter(line => line.chronology === "partial").length,
+    chronologyUnknownCount: value.lines.filter(line => line.chronology === "unknown").length,
+    branchingEvidenceCount: value.lines.filter(line => line.hasBranchingEvidence).length,
+    convergingEvidenceCount: value.lines.filter(line => line.hasConvergingEvidence).length,
+    networkTopologyCount: value.lines.filter(line => line.topology === "network").length
+  };
+  for (const [key, expected] of Object.entries(expectedCounts)) {
+    if (value.summary[key as keyof typeof expectedCounts] !== expected) {
+      throw new Error("Los contadores de clasificación del índice no coinciden: " + key);
+    }
   }
 
   const hydrated = hydrateCompactIndex(value);

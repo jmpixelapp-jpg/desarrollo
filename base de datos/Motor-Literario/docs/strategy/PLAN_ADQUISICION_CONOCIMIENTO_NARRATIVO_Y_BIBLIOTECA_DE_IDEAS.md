@@ -293,3 +293,12 @@ Se incorpora un extractor separado de relaciones de consecuencia. Solo crea cand
 La relación se etiqueta como `explicit-consequence-marker` y permanece en revisión. No se genera por conectores de mera sucesión como «después», no se resuelven causas implícitas y se rechazan eventos de otro documento o revisión. El marcador textual constituye evidencia de una formulación causal del narrador, no una verdad objetiva ni una confirmación automática.
 
 Se añaden pruebas para conectores simples y compuestos, ausencia de inferencia ante mera sucesión y aislamiento de documento/revisión. Las pruebas requieren ejecución CI antes de considerar validada esta ampliación.
+
+
+### Fase C: objetivos y motivaciones vinculados a personajes
+
+Se incorpora extracción de objetivos y motivaciones vinculados a una ficha de personaje del mismo proyecto cuando el nombre canónico o un alias aparece explícitamente en la misma oración. Reconoce formulaciones como «Mara desea encontrar…», «Mara busca…» y «Mara actúa porque…».
+
+Si aparecen dos personajes en la oración, el extractor se abstiene para evitar atribuciones ambiguas. No infiere sujetos tácitos, mantiene el aislamiento entre proyectos y conserva evidencia literal, revisión y offsets UTF-16. Los resultados permanecen como candidatos revisables: una intención expresada no se convierte automáticamente en verdad psicológica ni canon.
+
+Se añaden pruebas para objetivos, motivaciones, alias, ambigüedad entre personajes, sujetos tácitos, aislamiento de proyecto y offsets de ventanas.

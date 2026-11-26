@@ -1637,21 +1637,20 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     );
   }
 
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{
-        ...idea,
-        status: "discarded",
-        statusHistory: [
-          { status: "incorporated", reason: "initial", changedAt: 1 },
-          { status: "discarded", reason: "text-revised", changedAt: 2 }
-        ],
-        writerDecisionCount: 0
-      }]
-    }),
-    /historial de decisiones del catálogo global/
-  );
+  const divergentLegacyHistory = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      status: "discarded",
+      statusHistory: [
+        { status: "incorporated", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "text-revised", changedAt: 2 }
+      ],
+      writerDecisionCount: 0
+    }]
+  }).ideaGraph.nodes[0];
+  assert.equal(divergentLegacyHistory.status, "discarded");
+  assert.equal(divergentLegacyHistory.statusHistory.length, 2);
 
   const truncated = analyzeLiteraryFragment({
     ...input,

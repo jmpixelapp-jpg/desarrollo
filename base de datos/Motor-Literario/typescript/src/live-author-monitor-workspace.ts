@@ -46,11 +46,11 @@ interface WorkspaceCard {
 }
 
 const WORKSPACE_METRICS: readonly { readonly key: CompactMetricKey; readonly label: string }[] = [
-  { key: "wordsPerMinute", label: "Palabras/min (solo typing)" },
+  { key: "wordsPerMinute", label: "Palabras/min (typing / tiempo activo total)" },
   { key: "inserted", label: "Inserciones brutas (UTF-16; incluye IME)" },
   { key: "typingUnits", label: "Unidades typing (UTF-16)" },
-  { key: "compositionInserted", label: "Unidades insertadas IME (UTF-16)" },
-  { key: "compositionDeleted", label: "Unidades sustituidas IME (UTF-16)" },
+  { key: "compositionInserted", label: "Unidades en deltas IME insertados (UTF-16)" },
+  { key: "compositionDeleted", label: "Unidades reemplazadas en deltas IME (UTF-16)" },
   { key: "unitCoverage", label: "Cobertura de métricas por unidad" },
   { key: "typing", label: "Escritura" },
   { key: "composition", label: "Composición IME" },

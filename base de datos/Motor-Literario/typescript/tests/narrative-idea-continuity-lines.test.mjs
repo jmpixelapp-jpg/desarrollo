@@ -249,7 +249,7 @@ test("rechaza relaciones y eventos duplicados en la misma colección", () => {
 
   assert.throws(() => linesFromEvolution({
     ...base,
-    summary: { ...base.summary, eventCount: 2 },
+    summary: { ...base.summary, eventCount: 2, relationCount: 2 },
     events: [...base.events, ...base.events]
   }));
 });
@@ -314,4 +314,33 @@ test("rechaza un ciclo cronológico imposible en una colección de eventos manip
   });
 
   assert.throws(() => linesFromEvolution({ ...base, events }), /ciclo imposible/);
+});
+
+
+test("devuelve una proyección vacía cuando no existen relaciones entre ideas", () => {
+  const result = linesFromEvolution(evolution([
+    idea("isolated-a", "chapter-1", "memoria de la ciudad"),
+    idea("isolated-b", "chapter-2", "destino del reino")
+  ], ["chapter-1", "chapter-2"]));
+
+  assert.equal(result.summary.lineCount, 0);
+  assert.equal(result.summary.occurrenceCount, 0);
+  assert.equal(result.summary.relationCount, 0);
+  assert.deepEqual(result.lines, []);
+});
+
+test("rechaza resúmenes incoherentes y eventos con extremos ausentes", () => {
+  const base = evolution([
+    idea("one", "chapter-1", "memoria de la ciudad"),
+    idea("two", "chapter-2", "memoria de la ciudad")
+  ], ["chapter-1", "chapter-2"]);
+
+  assert.throws(() => linesFromEvolution({
+    ...base,
+    summary: { ...base.summary, relationCount: 99 }
+  }));
+  assert.throws(() => linesFromEvolution({
+    ...base,
+    events: [{ ...base.events[0], firstOccurrence: undefined }]
+  }));
 });

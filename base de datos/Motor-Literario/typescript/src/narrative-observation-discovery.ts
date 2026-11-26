@@ -436,7 +436,7 @@ export function discoverNarrativeObservationCandidates(
             const names = [entity.canonicalName, ...entity.aliases];
             return names.flatMap(name => {
               const mention = findNameMatch(afterVerb, name);
-              if (!mention || !/(?:^|\s)a\s+$/iu.test(afterVerb.slice(0, mention.start))) return [];
+              if (!mention || !/^\s+(?:(?:el|la|los|las|un|una|unos|unas)\s+)?$/iu.test(afterVerb.slice(0, mention.start))) return [];
               return [{ entity, mention }];
             });
           });

@@ -82,7 +82,7 @@ Los acumulados brutos `insertedCharacters` y `deletedCharacters` siguen contando
 - `typingInsertedCharacters`: unidades UTF-16 de operaciones clasificadas explícitamente como escritura normal.
 - `compositionInsertedCharacters`: suma de las unidades insertadas por todos los deltas IME aplicados, incluidos candidatos provisionales.
 - `compositionDeletedCharacters`: suma de los rangos reemplazados por esos deltas IME.
-- `activityUnitMetricsComplete`: indica si las unidades por procedencia cubren el historial observado. Es `false` tras restaurar un checkpoint histórico sin estas métricas y tras cualquier resincronización con snapshot, porque el snapshot confirma el texto pero no reconstruye la clasificación de deltas que pudieron faltar.
+- `activityUnitMetricsComplete`: indica si las unidades por procedencia cubren el historial observado. Es `false` tras restaurar un checkpoint histórico sin estas métricas, después de cualquier resincronización con snapshot y cuando se admite un delta sin `activityKind` reconocido explícitamente. El snapshot confirma el texto, pero no reconstruye la clasificación de deltas que pudieron faltar; una operación no clasificada tampoco puede atribuirse honestamente a `typing` o composición.
 
 Los campos nuevos son opcionales en checkpoints v1 para conservar compatibilidad. La restauración no reclasifica unidades históricas brutas como `typing` sin evidencia. Los paneles muestran la cobertura como completa o parcial.
 

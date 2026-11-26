@@ -912,7 +912,9 @@
       "implementationStatus": "implemented",
       "objectStores": [
         "documents",
-        "changes"
+        "changes",
+        "document-diagnostics",
+        "live-author-monitor-checkpoints"
       ],
       "keyPath": [
         [

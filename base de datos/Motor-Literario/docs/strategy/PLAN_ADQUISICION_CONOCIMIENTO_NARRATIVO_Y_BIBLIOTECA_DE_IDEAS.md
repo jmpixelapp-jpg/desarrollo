@@ -219,7 +219,7 @@ Cada candidato conserva:
 - fragmento literal, documento, revisión y offsets UTF-16;
 - estado `candidate`, pendiente de revisión.
 
-La primera cobertura incluye formas frecuentes en español (por ejemplo, ayudar, salvar, proteger, atacar, buscar, encontrar, entregar, rescatar, abrir y destruir). Los nombres y alias ambiguos se excluyen para evitar atribuciones inventadas. Se limita la entrada a 2 millones de unidades UTF-16 y la salida a 200 candidatos.
+La primera cobertura incluye formas frecuentes en español (por ejemplo, ayudar, salvar, proteger, atacar, buscar, encontrar, entregar, rescatar, abrir y destruir). Los nombres y alias ambiguos se excluyen para evitar atribuciones inventadas. Se limita la entrada a 2 millones de unidades UTF-16, a 500 entidades, 20 alias por entidad y 120 unidades por nombre; la salida se limita a 200 candidatos. La búsqueda se agrupa por personaje y conjunto de objetivos para evitar recorrer todas las parejas de entidades.
 
 **Límites deliberados:** todavía no interpreta pronombres, sujetos tácitos, voz pasiva, coordinación compleja ni objetos implícitos. No deduce causalidad a partir del orden de las frases. Una acción detectada es una propuesta basada en evidencia, no un hecho confirmado.
 

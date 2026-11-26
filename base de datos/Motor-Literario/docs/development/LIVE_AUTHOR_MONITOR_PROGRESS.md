@@ -1606,6 +1606,9 @@ La suite general del motor se valida por separado; este resultado certifica la l
 La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001099) terminó 950/951 por el mismo fallo aislado de extracción de marcas combinantes en `tests/narrative-unicode-boundaries.test.mjs:107`. Type-check general aprobó. No se alteró el código Unicode paralelo.
 
 
+
+**Validación del aborto:** [Live Author Monitor — run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154), checkout `7ccf5f74df0081818df0f868b9c69dff540b42ab`, terminó `success`. La regresión de aborto después de encolar el put pasó como test 115; host/editor/browser 176/176, monitor aislado 167/167, diagnósticos 17/17 y Page Lifecycle Chromium 1/1. El benchmark de 100.000 commits terminó en 653,43 ms, con heap estable de 4,38 MiB desde mitad hasta el final y cero tickets pendientes.
+
 ## 104. Recuperación tras abortar transacciones y cerrar conexiones externamente (26 de noviembre de 2026)
 
 **Objetivo:** verificar el comportamiento después de validar el lease y comenzar la escritura, cuando el navegador aborta la transacción o cierra la conexión IndexedDB fuera del ciclo normal del almacén.
@@ -1616,4 +1619,4 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Alcance:** ambas pruebas usan `fake-indexeddb` para controlar de forma determinista abortos/eventos. No sustituyen las pruebas de crash real de proceso o pérdida física del perfil en Chromium/OS.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación de la regresión A (aborto):** aprobada en [run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154), test 115. **Validación de la regresión B (evento close externo):** pendiente en la ejecución que incluye el commit `6734780a`.

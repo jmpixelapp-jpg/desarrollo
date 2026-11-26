@@ -382,3 +382,13 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **CI general:** [45726594065](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726594065) sigue señalando únicamente errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`; no reporta errores de monitor ni de IndexedDB.
 
 **Límite de producción:** el harness E2E no es una UI de escritura. El repositorio no contiene un editor anfitrión concreto ni su historial de transacciones, de modo que aún no se puede conectar `LiveAuthorMonitorEditorTransactionProvider` a eventos nativos de edición/undo/redo. Mantener la fuente textarea en modo resync para `historyUndo/historyRedo` sigue siendo más seguro que inferir deltas desde DOM.
+
+
+
+## 18. Ampliación E2E — persistencia tras recargar la página (26 de noviembre de 2026)
+
+Se amplió `live-author-monitor-browser.test.mjs`: tras el takeover y guardado del checkpoint en la segunda página, esta página se recarga. El reload elimina su contexto JavaScript y crea un nuevo IndexedDbProjectStore; el test vuelve a leer el checkpoint compartido y verifica que los datos permanecen intactos. Así se cubre la continuidad del almacenamiento entre instancias del adaptador en una misma sesión/perfil Chromium.
+
+**Commit:** [702846e — probar checkpoint tras reload](https://github.com/jmpixelapp-jpg/desarrollo/commit/702846e433654611343fbfc143b0b0ea2475d2a5).
+
+**CI:** ejecución [45726777208](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726777208) en curso. La ampliación no se da por aprobada hasta revisar el resultado.

@@ -502,6 +502,6 @@ live-author-monitor-textarea-source.test.mjs cubre:
 8. aceptación de una edición posterior con sequence y baseRevision consecutivos;
 9. retirada de listeners blur, visibilitychange, pagehide y freeze al cerrar la suscripción.
 
-Las pruebas de esta máquina usan EventTargets controlados. No simulan un congelamiento físico de Chromium, una salida real a BFCache ni un proveedor IME del sistema operativo. La prueba Chromium existente del scheduler de visibilidad/ciclo de vida sigue siendo una validación separada de la capa visual.
+Las pruebas unitarias de esta máquina usan EventTargets controlados. Además, live-author-monitor-browser.test.mjs ahora ejecuta una regresión en Chromium con automatización de teclado: observa un beforeinput confiable, un listener posterior cancela la acción por defecto, verifica que no aparece input y luego provoca blur real del textarea. El adaptador debe emitir missing-input, conservar cero deltas y suspenderse. Esta prueba acredita el pipeline DOM de Chromium bajo automatización, no un teclado físico ni un proveedor IME del sistema operativo. Tampoco simula un congelamiento físico del proceso ni una entrada real en BFCache; pagehide/freeze siguen cubiertos por pruebas de estado separadas.
 
 **Estado de validación:** el código y la regresión se publicaron en main; la ejecución CI sobre estos commits no está confirmada todavía. No se extrapolan aquí los resultados de CI de revisiones anteriores.

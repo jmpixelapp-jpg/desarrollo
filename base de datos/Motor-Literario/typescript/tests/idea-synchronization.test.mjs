@@ -821,7 +821,7 @@ test("agota los tres intentos CAS sin perder cambios concurrentes y refresca la 
 });
 
 test("el presupuesto léxico del anfitrión incluye texto enlazado y limita el total a dos millones de unidades UTF-16", async () => {
-  const text = "narrativeterm".repeat(7_692) + "narrativ";
+  const text = "narrativeterm".repeat(7_692) + "narr";
   assert.equal(text.length, 100_000);
   const projectIdeas = Array.from({ length: 21 }, (_, index) =>
     idea(index === 0 ? "a-linked" : "idea-" + String(index).padStart(2, "0"), {

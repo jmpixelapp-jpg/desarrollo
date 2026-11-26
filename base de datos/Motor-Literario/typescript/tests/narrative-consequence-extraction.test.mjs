@@ -62,3 +62,24 @@ test("rechaza acontecimientos de otro documento o revisión", () => {
   ];
   assert.throws(() => extractNarrativeConsequenceCandidates(input(text, events)), /mismo documento y revisión/);
 });
+
+test("no enlaza acontecimientos separados por un salto de párrafo", () => {
+  const text = "Mara abrió la puerta.\\n\\nPor eso Elian escapó.";
+  const a = text.indexOf("Mara"), b = text.indexOf("Por eso");
+  const events = [
+    event("e1", a, text.indexOf(".") + 1, "Mara abrió la puerta."),
+    event("e2", b, text.length, "Por eso Elian escapó.")
+  ];
+  assert.deepEqual(extractNarrativeConsequenceCandidates(input(text, events)), []);
+});
+
+test("rechaza evidencia cuyo fragmento no coincide con el documento", () => {
+  const text = "Mara abrió la puerta. Por eso Elian escapó.";
+  const a = text.indexOf("Mara"), b = text.indexOf("Por eso");
+  const events = [
+    event("e1", a, text.indexOf(".") + 1, "Mara abrió la puerta."),
+    event("e2", b, text.length, "Por eso Elian escapó.")
+  ];
+  events[1].evidence.excerpt = "Por eso Mara escapó.";
+  assert.throws(() => extractNarrativeConsequenceCandidates(input(text, events)), /mismo documento y revisión/);
+});

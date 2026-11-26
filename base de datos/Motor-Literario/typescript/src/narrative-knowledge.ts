@@ -270,8 +270,8 @@ export function extractNarrativeEntities(
   const suffix = String.raw`(?=$|[^\p{L}\p{M}\p{N}_])`;
   const patterns: readonly { kind: NarrativeEntityType; expression: RegExp }[] = [
     { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "gu") },
-    { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "giu") },
-    { kind: "object", expression: new RegExp(prefixObject + "(" + name + ")" + suffix, "giu") }
+    { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "gu") },
+    { kind: "object", expression: new RegExp(prefixObject + "(" + name + ")" + suffix, "gu") }
   ];
   const scanText = text + " ";
   const grouped = new Map<string, { kind: NarrativeEntityType; name: string; evidence: TextEvidence[] }>();

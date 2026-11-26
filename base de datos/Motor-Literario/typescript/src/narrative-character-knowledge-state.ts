@@ -19,6 +19,8 @@ export interface NarrativeCharacterKnowledgeItem {
   readonly evidence: TextEvidence;
   readonly interpretations: readonly NarrativeInformationInterpretation[];
   readonly evaluations: readonly NarrativeKnowledgeEvolution[];
+  /** Evaluación más reciente solo cuando la secuencia puede establecerse. */
+  readonly currentAssessment: "unassessed" | "confirmed-by-character" | "refuted-by-character" | "uncertain" | "concealed" | "chronology-unresolved";
   readonly chronology: "explicit-document-order" | "same-document-position" | "cross-document-order-unknown";
 }
 export interface NarrativeCharacterKnowledgeState {
@@ -119,6 +121,18 @@ export function buildNarrativeCharacterKnowledgeStates(
         item.evaluatorEntityId === character.id &&
         normalize(item.content) === normalize(record.content)
       );
+      const assessmentEvents = [
+        { evidence: record.evidence, evaluation: undefined as NarrativeKnowledgeEvolution["evaluation"] | undefined },
+        ...evaluations.map(item => ({ evidence: item.evidence, evaluation: item.evaluation }))
+      ];
+      const eventDocuments = new Set(assessmentEvents.map(event => event.evidence.documentId));
+      const comparable = eventDocuments.size === 1 ||
+        [...eventDocuments].every(documentId => order.has(documentId));
+      const orderedEvaluations = comparable ? [...evaluations].sort((a, b) => {
+        const aOrder = order.get(a.evidence.documentId) ?? 0;
+        const bOrder = order.get(b.evidence.documentId) ?? 0;
+        return aOrder - bOrder || a.evidence.start - b.evidence.start;
+      }) : [];
       return {
         informationId: record.id,
         content: record.content,
@@ -128,6 +142,10 @@ export function buildNarrativeCharacterKnowledgeStates(
         evidence: record.evidence,
         interpretations,
         evaluations,
+        currentAssessment: !evaluations.length ? "unassessed" as const :
+          !comparable ? "chronology-unresolved" as const :
+          ({ confirmed: "confirmed-by-character", refuted: "refuted-by-character",
+            uncertain: "uncertain", concealed: "concealed" } as const)[orderedEvaluations[orderedEvaluations.length - 1]!.evaluation],
         chronology: order.has(record.evidence.documentId)
           ? "explicit-document-order" as const
           : (input.information.some(other => other.informationHolderEntityId === character.id &&

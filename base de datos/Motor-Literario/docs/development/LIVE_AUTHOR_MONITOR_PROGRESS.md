@@ -1451,3 +1451,14 @@ La lane global continúa en `failure` por los controles compartidos de IndexedDB
 
 El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a mitad y al 100 % de la carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes. La prueba Chromium de Page Lifecycle y las pruebas de dos pestañas/IndexedDB con fencing de lease también pasaron.
 
+
+
+## 93. Continuidad de métricas entre recuperaciones sucesivas (26 de noviembre de 2026)
+
+**Objetivo:** comprobar que varios ciclos consecutivos de cierre abrupto y recuperación mantienen una única sesión lógica, sin duplicar métricas históricas ni contar dos veces el tiempo de inactividad. La prueba se limita al núcleo del monitor y a snapshots/checkpoints deterministas; no modifica almacenamiento, leases ni la lógica de persistencia compartida.
+
+**Regresión añadida:** tests/live-author-monitor.test.mjs crea una sesión, confirma una edición y genera un checkpoint durable; restaura en una segunda instancia, deja transcurrir inactividad, registra y confirma una segunda edición y genera otro checkpoint; finalmente restaura en una tercera instancia. Se verifica identidad de sesión, secuencia/revisión durable, categorías, caracteres, número de commits, ausencia de pendientes y la suma exacta de tiempo activo/inactivo en ambos handoffs. La interrupción se suma a inactividad una sola vez por cada intervalo entre checkpoints.
+
+**Cambio publicado:** commit [04632f8b](https://github.com/jmpixelapp-jpg/desarrollo/commit/04632f8b1e454a9c951ae8f6de58dbc9979c8fbf), sobre main. Solo se modificó la suite de pruebas del monitor.
+
+**Validación CI:** pendiente al registrar esta sección. La prueba no se marcará como aprobada hasta que el workflow dedicado ejecute el commit o un descendiente que contenga este archivo y termine con éxito. Esta regresión no simula IndexedDB real, pérdida de fencing ni cierres físicos del navegador; comprueba el contrato puro de continuidad entre checkpoints durables.

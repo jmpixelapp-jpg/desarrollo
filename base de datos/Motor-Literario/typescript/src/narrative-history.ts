@@ -117,7 +117,7 @@ export function extractNarrativeAssertions(
 }
 
 function explicitTimeReference(
-  text: string, anchorOffset = 0
+  text: string, _anchorOffset = 0
 ): NarrativeTimeReference | undefined {
   const candidates: { readonly index: number; readonly reference: NarrativeTimeReference }[] = [];
   const addCalendarDate = (raw: string, index: number, year: number, month: number, day: number) => {
@@ -165,10 +165,9 @@ function explicitTimeReference(
     }
   }
 
-  candidates.sort((a, b) =>
-    Math.abs(a.index - anchorOffset) - Math.abs(b.index - anchorOffset) ||
-    Number(b.index <= anchorOffset) - Number(a.index <= anchorOffset) ||
-    a.index - b.index
-  );
+  // Si una oración contiene varias referencias temporales, no elegimos
+  // una por mera proximidad: podría pertenecer a otra cláusula o acontecimiento.
+  // La ambigüedad temporal se conserva como ausencia de atribución automática.
+  if (candidates.length !== 1) return undefined;
   return candidates[0]?.reference;
 }

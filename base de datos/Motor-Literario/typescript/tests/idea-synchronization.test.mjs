@@ -933,15 +933,21 @@ test("reconcilia escrituras simultáneas desde dos instancias independientes del
     assert.equal(store.writes, 3);
     assert.equal(store.ideaReads, 3);
 
-    const [firstRefresh, secondRefresh] = await Promise.all([
-      firstApi.getNarrativeIdeas(),
-      secondApi.getNarrativeIdeas()
-    ]);
-    for (const snapshot of [firstRefresh, secondRefresh]) {
-      const source = snapshot.find(item => item.id === "idea-source");
-      assert.deepEqual(source.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
-    }
-    assert.equal(store.ideaReads, 3);
+    // La primera instancia conserva una instantánea anterior a la escritura
+    // de la segunda. Su siguiente mutación debe detectar CAS, recargar y
+    // preservar ambos vínculos antes de aplicar el cambio editorial.
+    const statusResult = await firstApi.setNarrativeIdeaStatus(
+      "idea-source", "incorporated"
+    );
+    assert.equal(statusResult.status, "incorporated");
+    assert.deepEqual(statusResult.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+
+    const refreshed = await firstApi.getNarrativeIdeas();
+    const refreshedSource = refreshed.find(item => item.id === "idea-source");
+    assert.equal(refreshedSource.status, "incorporated");
+    assert.deepEqual(refreshedSource.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+    assert.equal(store.writes, 5);
+    assert.equal(store.ideaReads, 4);
   } finally {
     firstApi.dispose();
     secondApi.dispose();

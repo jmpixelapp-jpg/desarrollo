@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 14,
+  "mapping_version": 15,
   "schema_version": "0.4.2",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 24,
+    "database_version": 25,
     "object_stores": [
       {
         "name": "project-settings",
@@ -857,6 +857,20 @@
             false
           ]
         ]
+      },
+      {
+        "name": "narrative-document-projection-manifests",
+        "keyPath": [
+          "projectId",
+          "documentId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
       }
     ]
   },
@@ -1442,6 +1456,28 @@
         [
           "projectId",
           "id"
+        ]
+      ]
+    },
+    {
+      "table": "narrative_document_projection_manifests",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/narrative-document-projection-manifests/"
+      ],
+      "representation": "record",
+      "contract": "NarrativeDocumentProjectionManifest; generación CAS por documento, inventario de IDs y tombstone explícito.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "narrative-document-projection-manifests"
+      ],
+      "keyPath": [
+        [
+          "projectId",
+          "documentId"
         ]
       ]
     }

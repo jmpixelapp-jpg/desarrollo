@@ -44,3 +44,12 @@ La operación actual sigue siendo secuencial: si falla a mitad, puede quedar una
 ### Enumeración de manifiestos documentales
 
 `ProjectStore.loadNarrativeDocumentProjectionManifests(projectId)` permite recuperar el inventario completo de proyecciones de un libro, incluidos los tombstones. La implementación IndexedDB consulta el índice `by-project`, espera a que finalice la transacción de lectura y valida el aislamiento del proyecto, la identidad documental y la ausencia de duplicados. Esta lectura habilita la reconciliación tras reinicio y la detección de documentos retirados; por sí sola no elimina contribuciones ni sustituye la futura transacción atómica de reemplazo.
+
+
+## Envolturas de operaciones de sincronización (SHA-256)
+
+`narrative-sync-integrity.ts` añade `createNarrativeSyncOperationEnvelope` y `verifyNarrativeSyncOperationEnvelope`. Cada operación transporta versión de esquema, algoritmo, ID de operación, proyecto, escritor declarado, secuencia positiva, instante de creación, tipo, payload JSON y digest SHA-256 calculado sobre la representación canónica de todos los campos salvo el propio digest. La canonicalización mantiene orden de claves determinista, orden de arrays y límites de profundidad, nodos y bytes.
+
+El digest se calcula mediante Web Crypto (`crypto.subtle`) y la creación falla explícitamente si SHA-256 no está disponible: no degrada silenciosamente a FNV. Las huellas FNV existentes siguen disponibles para comparaciones locales no criptográficas y no deben confundirse con este digest.
+
+**Límite de seguridad:** SHA-256 sin clave detecta corrupción o modificaciones no acompañadas de un nuevo digest, pero no autentica al escritor: cualquier actor que pueda modificar el payload puede recalcular el digest. Tampoco evita replay ni garantiza orden global. El receptor debe autenticar y autorizar al escritor, persistir IDs de operación ya aplicados y validar secuencias por escritor/proyecto antes de aceptar efectos. La envoltura es un contrato de integridad de transporte, no un protocolo completo de replicación.

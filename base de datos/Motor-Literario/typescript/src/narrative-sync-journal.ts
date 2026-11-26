@@ -311,6 +311,7 @@ export interface NarrativeSyncReplayResult {
   readonly processed: number;
   readonly remaining: number;
   readonly stoppedAtOperationId?: string;
+  readonly failure?: "invalid-envelope" | "apply-or-ack-failed";
 }
 
 /**
@@ -331,13 +332,23 @@ export async function replayPendingNarrativeSyncOperations(
   const pending = await journal.loadPendingOperations(projectId, writerId);
   let processed = 0;
   for (const operation of pending) {
+    if (!(await verifyNarrativeSyncOperationEnvelope(operation))) {
+      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+      return {
+        processed, remaining, stoppedAtOperationId: operation.operationId,
+        failure: "invalid-envelope"
+      };
+    }
     try {
       await apply(operation);
       await journal.markApplied(projectId, operation.operationId, operation.digest);
       processed++;
     } catch {
       const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
-      return { processed, remaining, stoppedAtOperationId: operation.operationId };
+      return {
+        processed, remaining, stoppedAtOperationId: operation.operationId,
+        failure: "apply-or-ack-failed"
+      };
     }
   }
   return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };

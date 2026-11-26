@@ -43,3 +43,4 @@ export * from "./narrative-idea-discovery";
 export * from "./narrative-claim-extraction";
 
 export * from "./narrative-action-extraction";
+export * from "./narrative-event-extraction";

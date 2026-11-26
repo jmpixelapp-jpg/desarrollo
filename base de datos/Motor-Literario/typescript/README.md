@@ -363,3 +363,6 @@ Los perfiles de ritmo son umbrales descriptivos de longitud de oración, no juic
 
 El análisis acepta hasta 2.000.000 de unidades UTF-16 por operación. Los documentos mayores deben analizarse por rangos y conservar su revisión al comparar resultados.
 
+## Adquisición de información narrativa en tiempo real
+
+El monitor no se limita a registrar actividad: extrae señales narrativas con evidencia textual. Consulta [la estrategia de adquisición, los límites de interpretación y las próximas fases](docs/NARRATIVE_INFORMATION_ACQUISITION.md). Las salidas automáticas son candidatos revisables, nunca hechos confirmados.

@@ -150,13 +150,22 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     };
     this.pendingInput = pending;
 
-    // Este listener puede ejecutarse antes que otros listeners del editor.
-    // Si uno posterior cancela el beforeinput, la acción por defecto no se
-    // aplicará y no debe quedar una pareja pendiente ficticia. La microtarea
-    // observa defaultPrevented al terminar toda la propagación síncrona.
-    queueMicrotask(() => {
+    // En eventos nativos, el navegador puede ejecutar un checkpoint de
+    // microtareas entre callbacks de listeners. Por eso una microtarea creada
+    // aquí no garantiza que ya hayan corrido los listeners posteriores (por
+    // ejemplo, un listener anfitrión que cancele beforeinput en bubbling).
+    // Primero intentamos limpiar sincrónicamente en la siguiente microtarea;
+    // si el evento sigue pendiente y es cancelable, comprobamos otra vez en la
+    // tarea siguiente, cuando terminó toda la propagación y el default action.
+    const clearIfCancelled = (): void => {
       if (this.disposed || this.needsResync || this.pendingInput !== pending) return;
       if (input.defaultPrevented) this.pendingInput = undefined;
+    };
+    queueMicrotask(() => {
+      clearIfCancelled();
+      if (this.disposed || this.needsResync || this.pendingInput !== pending ||
+          input.defaultPrevented || input.cancelable !== true) return;
+      globalThis.setTimeout(clearIfCancelled, 0);
     });
   };
 

@@ -434,3 +434,12 @@ La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto 
 
 
 Para fichas con varias citas se ofrece `resolveNarrativeEvidenceCollection(book, evidences)`: resuelve todos los pasajes contra el mismo snapshot y falla como conjunto si alguna evidencia no es verificable. No entrega una lista parcial que pudiera aparentar respaldo completo.
+
+
+## Registro técnico y estado de validación
+
+El documento [Registro técnico de lectura y trazabilidad narrativa](../docs/analysis/REGISTRO_TECNICO_LECTURA_Y_TRAZABILIDAD_NARRATIVA.md) describe la arquitectura actual, los contratos de los adaptadores, el lector EPUB, la resolución de evidencia versionada, las pruebas, las limitaciones y el plan de trabajo.
+
+La API de evidencia versionada requiere que el snapshot declare `revision` y que coincida con la revisión de cada evidencia; además compara exactamente el texto citado. La resolución de colecciones falla de forma integral si una evidencia no puede verificarse.
+
+Las pruebas mencionadas en esta documentación son pruebas **escritas**. No se debe interpretar su presencia como ejecución satisfactoria: typecheck, build, suite completa y validación con corpus real deben registrarse por separado cuando se ejecuten.

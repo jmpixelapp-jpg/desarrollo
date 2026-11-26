@@ -275,3 +275,23 @@ La extracción solo atribuye identidades resueltas de forma única. Un rumor imp
 **Límites:** catálogo limitado a construcciones explícitas en español; no identifica todavía fuentes implícitas, narrador, documentos citados como entidades, fuentes múltiples, ironía, mentira, fiabilidad del testigo ni contradicción entre percepción y realidad. «Vio» se registra como canal de observación, no como garantía de que la interpretación del personaje sea correcta. Los resultados son candidatos revisables, no hechos canónicos.
 
 Se añadieron pruebas para observación visual/auditiva, lectura, transmisión entre personajes, rumor impersonal, offsets, ambigüedad de nombres y la integración en el pipeline.
+
+
+## Fase R: evolución explícita del conocimiento y evaluación de afirmaciones
+
+Se incorporó `narrative-knowledge-evolution.ts` para detectar cuándo un personaje confirma, comprueba, verifica, desmiente, refuta, descarta, duda, cuestiona u oculta explícitamente una proposición.
+
+El modelo registra:
+- personaje que evalúa la información;
+- evaluación explícita (`confirmed`, `refuted`, `uncertain`, `concealed`);
+- contenido de la proposición;
+- evidencia del capítulo/revisión actual;
+- vínculo a una afirmación previa y su evidencia original, si existe una coincidencia textual exacta y única.
+
+La asociación entre capítulos es intencionalmente estricta: compara el contenido normalizado, sin inferir paráfrasis. Si no hay antecedente o existen varios antecedentes con el mismo contenido, conserva `no-prior-match` o `ambiguous-prior-match`; no elige arbitrariamente.
+
+Se integra en `understandNarrativeFragment` mediante `priorClaims` y devuelve `knowledgeEvolution`. Las afirmaciones previas se mantienen intactas; una confirmación o refutación es un nuevo registro de evolución, no una edición destructiva del historial.
+
+**Límites importantes:** esta fase detecta señales lingüísticas explícitas, no determina verdad objetiva ni fiabilidad. «Mara confirmó que X» se registra como evaluación de Mara, no como validación del narrador. «Ocultó que X» indica ocultamiento explícito, pero no permite inferir por qué, a quién ni si X es verdadero. No se resuelven todavía paráfrasis, contradicciones semánticas, mentiras, ironía, cambios de opinión implícitos ni cadena de transmisión de una fuente a otra.
+
+Se añadieron pruebas de confirmación, refutación, paráfrasis no enlazada, antecedentes duplicados, ausencia de señal, offsets y validación de proyecto, además de integración en el pipeline.

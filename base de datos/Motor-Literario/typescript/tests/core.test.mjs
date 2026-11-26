@@ -5105,6 +5105,20 @@ test("las afirmaciones sobre personajes conservan offsets UTF-16 tras emojis y C
   ), phrase);
 });
 
+test("las afirmaciones no reconocen nombres parciales antes de una marca combinante", async () => {
+  const { extractNarrativeAssertions } = await import("../dist/motor-literario.js");
+  const entity = {
+    projectId: "assertion-combining-mark", id: "entity:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const text = "Ana\\u0301 tiene 30 años.";
+  const assertions = extractNarrativeAssertions(
+    "assertion-combining-mark", "chapter", 1, text, [entity], 0, 1234
+  );
+  assert.equal(assertions.length, 0);
+});
+
 test("rechaza consolidaciones que crearían alias ambiguos con una tercera entidad", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({ store });

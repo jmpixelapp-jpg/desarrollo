@@ -20,7 +20,7 @@ export interface NarrativeObservationCandidate {
   readonly action: string;
   readonly surface: string;
   /** Forma verbal morfológica; no equivale a una fecha ni fija cronología global. */
-  readonly grammaticalTense: "past-preterite" | "past-imperfect" | "present" | "infinitive" | "gerund" | "participle" | "unknown";
+  readonly grammaticalTense: "past-preterite" | "past-imperfect" | "present" | "future" | "infinitive" | "gerund" | "participle" | "unknown";
   /** Único personaje mencionado, si lo hay; nunca equivale a sujeto o agente confirmado. */
   readonly singleMentionedCharacterId?: string;
   /** Sujeto gramatical candidato solo ante un patrón local inequívoco; no implica agente semántico. */
@@ -63,13 +63,13 @@ interface ActionSignal {
 }
 
 const ACTION_SIGNALS: readonly ActionSignal[] = [
-  { action: "cruzar", expression: /(?<![\p{L}\p{M}\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando))(?![\p{L}\p{M}\p{N}_])/giu },
-  { action: "entrar", expression: /(?<![\p{L}\p{M}\p{N}_])entr(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "cruzar", expression: /(?<![\p{L}\p{M}\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando|aré|arás|ará|aremos|arán))(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "entrar", expression: /(?<![\p{L}\p{M}\p{N}_])entr(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "salir", expression: /(?<![\p{L}\p{M}\p{N}_])sal(?:ió|ía|ieron|e|en|ir|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
-  { action: "llegar", expression: /(?<![\p{L}\p{M}\p{N}_])lleg(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "llegar", expression: /(?<![\p{L}\p{M}\p{N}_])lleg(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "huir", expression: /(?<![\p{L}\p{M}\p{N}_])hu(?:yó|ía|yeron|ye|yen|ir|ido|endo)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "correr", expression: /(?<![\p{L}\p{M}\p{N}_])corr(?:ió|ía|ieron|e|en|er|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
-  { action: "caminar", expression: /(?<![\p{L}\p{M}\p{N}_])camin(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "caminar", expression: /(?<![\p{L}\p{M}\p{N}_])camin(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "mirar", expression: /(?<![\p{L}\p{M}\p{N}_])mir(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "decir", expression: /(?<![\p{L}\p{M}\p{N}_])(?:dijo|decía|dijeron|dice|dicen|decir|dicho)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "responder", expression: /(?<![\p{L}\p{M}\p{N}_])respond(?:ió|ía|ieron|e|en|er|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
@@ -112,6 +112,7 @@ function classifyGrammaticalTense(surface: string): NarrativeObservationCandidat
   if (/(?:ando|iendo|yendo)$/u.test(form)) return "gerund";
   if (/(?:ar|er|ir)$/u.test(form)) return "infinitive";
   if (/(?:aba|abas|ábamos|aban|ía|ías|íamos|ían)$/u.test(form)) return "past-imperfect";
+  if (/(?:aré|arás|ará|aremos|aréis|arán|eré|erás|erá|eremos|eréis|erán|iré|irás|irá|iremos|iréis|irán)$/u.test(form)) return "future";
   if (/(?:ó|ió|aron|ieron|yó|yeron|dijo|dijeron)$/u.test(form)) return "past-preterite";
   if (/(?:ad[oa]s?|id[oa]s?|to|cho|so|abiert[oa]s?|muert[oa]s?|vist[oa]s?|puest[oa]s?|hech[oa]s?|escrit[oa]s?)$/u.test(form)) return "participle";
   if (/(?:a|an|e|en|o|es)$/u.test(form)) return "present";

@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Live Author Monitor Page Lifecycle Harness</title></head>
+<body><main id="status">Page lifecycle harness ready</main>
+<script type="module">
+  import { scheduleLiveAuthorMonitorWhileVisible } from "../../src/live-author-monitor-visibility.ts";
+  window.__liveAuthorMonitorVisibility = scheduleLiveAuthorMonitorWhileVisible;
+  window.__liveAuthorMonitorVisibilityReady = true;
+</script></body></html>

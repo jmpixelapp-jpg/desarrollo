@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createNarrativeEntityMergeHandler } from "../dist/motor-literario.js";
+import "fake-indexeddb/auto";
+import {
+  createNarrativeEntityMergeHandler,
+  IndexedDbProjectStore
+} from "../dist/motor-literario.js";
 
 test("entity-merge delega la consolidación en la primitiva atómica del store", async () => {
   const calls = [];
@@ -46,4 +50,37 @@ test("entity-merge exige soporte atómico explícito del ProjectStore", () => {
     () => createNarrativeEntityMergeHandler({}),
     /mergeNarrativeEntityIdentity atómico/
   );
+});
+
+
+test("entity-merge tolera replay tras confirmar la transacción IndexedDB", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "merge-replay-" + Math.random().toString(36).slice(2);
+  const makeEntity = (id, canonicalName, evidenceStart) => ({
+    projectId, id, kind: "character", canonicalName,
+    normalizedName: canonicalName.toLocaleLowerCase("es"),
+    aliases: [], evidence: [{
+      documentId: "chapter-1", revision: 1, start: evidenceStart,
+      end: evidenceStart + canonicalName.length, excerpt: canonicalName
+    }],
+    firstSeenAt: evidenceStart, lastSeenAt: evidenceStart,
+    extractionVersion: 1
+  });
+  await store.saveEntityIfUnchanged(makeEntity("entity:main", "Ana", 0));
+  await store.saveEntityIfUnchanged(makeEntity("entity:duplicate", "Ana María", 10));
+  const handler = createNarrativeEntityMergeHandler(store);
+  const operation = {
+    projectId,
+    payload: {
+      targetEntityId: "entity:main",
+      sourceEntityId: "entity:duplicate"
+    }
+  };
+  await handler.apply(operation);
+  await assert.doesNotReject(() => handler.apply(operation));
+  const entities = await store.loadEntities(projectId);
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].id, "entity:main");
+  assert.deepEqual(entities[0].mergedFromIds, ["entity:duplicate"]);
+  await store.close();
 });

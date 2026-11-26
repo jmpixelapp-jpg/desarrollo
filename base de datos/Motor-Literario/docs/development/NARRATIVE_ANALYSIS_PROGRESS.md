@@ -584,3 +584,25 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - Se añadieron pruebas de acuse desde dos instancias `IndexedDbNarrativeSyncJournal` que comparten el mismo nombre de base de datos. El primer `appliedAt` durable se conserva ante acuses repetidos y un digest incorrecto se rechaza.
 - Esto no convierte el sistema en exactly-once: el efecto y el acuse siguen siendo dos escrituras separadas. Cada handler debe ofrecer idempotencia/CAS o una bandeja durable de deduplicación atómica con su efecto.
 - El archivo de pruebas del consumidor pasa a contener 14 pruebas declaradas. No se han ejecutado en este entorno; typecheck, build y suite completa continúan pendientes.
+
+
+## Corrección de compilación y contrato físico IndexedDB DB27
+
+- Se corrigió una aserción de tipo que interrumpía el parseo de `indexeddb-store.ts` al cargar la cola de reparaciones pendientes.
+- Se corrigieron los tipos estrictos de la reconciliación del grafo: `relatedIdeaIds` forma parte de los campos diagnosticables; los IDs de auditoría se estrechan antes de usar `.includes()`; `mergedFromIds` se trata como campo opcional.
+- La recuperación de cursores rechaza explícitamente un snapshot vacío antes de consultar su última operación.
+- El adaptador IndexedDB está en DB27. El manifiesto físico `storage_mapping_v0.4.2.json` declara `database_version: 27`, mapping version 16 y los almacenes `narrative-reference-repair-audits` y `narrative-reference-repair-pending` con clave compuesta e índice `by-project`.
+- La creación/reconciliación de esos índices usa `ensureIndex`, de modo que el auditor físico comprueba también los dos almacenes nuevos.
+- La prueba de migración parte de DB22, exige que DB27 cree los almacenes de reparación y verifica sus claves e índices, además de preservar el documento previo.
+
+**Evidencia de CI observada:** el workflow Live Author Monitor terminó con éxito en `d92f092`: type-check aislado, bundle, regresiones de recuperación, auditoría física DB27, pruebas aisladas, Page Lifecycle en Chromium, integración host/editor/browser y benchmark. La validación general de TypeScript terminó con éxito en `dfdfab9`: `npm run typecheck`, build, 924 pruebas automatizadas (924 pasaron, 0 fallaron) y benchmark de edición en vivo. La medición de monitor procesó 100.000 commits en 494,79 ms (202.107 commits/s), retuvo 0,50 MiB por sesiones abiertas y mantuvo el heap en 4,39 MiB desde media carga hasta carga completa; los ocho documentos terminaron con 12.500 commits confirmados y cero pendientes. El manifiesto DB27 y sus 37 almacenes se validaron en los workflows del monitor. El HEAD actual añade únicamente documentación de estos resultados respecto al commit validado.
+
+## Integración de sincronización saliente y biblioteca personal — DB28
+
+- IndexedDB avanzó de DB27 a DB28 sin retirar almacenes previos. El inventario físico conserva los 37 almacenes heredados de DB27 (incluidas las colas de recuperación de reparaciones) y añade `sync-outbox` y `sync-device-sequences`: 39 almacenes en total, mapping version 17.
+- Las ediciones del editor ahora guardan el delta de `changes`, la operación `document.change` y la secuencia del dispositivo en una sola transacción. Con `deviceId` activo no se permite degradar a una escritura de journal sin outbox; los adaptadores sin capacidad atómica rechazan la edición antes de confirmarla.
+- Las mutaciones CAS de entidades, ideas, afirmaciones, relaciones, acontecimientos y fusiones pueden incluir la operación saliente en la misma transacción que el registro de dominio. Las colisiones abortan el conjunto completo.
+- El cierre de un libro y la transferencia de ideas `IDEA` a la biblioteca personal también se incorporaron a la outbox. La transacción confirma el traslado, la eliminación de ideas del proyecto, el recibo durable y la secuencia. La operación replica IDs ordenados y checksum, no confía en una nueva selección libre de ideas en el receptor.
+- El handler entrante de biblioteca se habilita únicamente cuando el anfitrión proporciona un resolvedor del escritor autenticado; compara cada entrada, el conjunto exacto de IDs y el recibo durable. No toma `writerId` del sobre del dispositivo como identidad personal.
+- El despachador saliente entrega al menos una vez, conserva pendientes ante errores de transporte y retira solo tras un acuse durable exacto. SHA-256 aporta integridad de la envoltura, no autenticación.
+- La validación remota completa sigue dependiendo de un servidor y transporte aportados por el anfitrión. No están incluidos la descarga incremental, el protocolo de sesión/credenciales del servicio remoto ni la resolución automática de conflictos editoriales entre dispositivos.

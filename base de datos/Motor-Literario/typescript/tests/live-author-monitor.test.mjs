@@ -650,6 +650,50 @@ test("rechaza checkpoints que no coinciden con el snapshot durable o contienen m
   ), /no corresponde/);
 });
 
+test("rechaza checkpoints con commits sin resultado o latencias incoherentes", () => {
+  const first = fixture({ commitSampleWindow: 2 });
+  first.open();
+  first.setTime(1);
+  first.monitor.recordAdmission(
+    first.change(1, 0, 5, 5, "!"),
+    first.queued("latency-integrity")
+  );
+  first.setTime(3);
+  first.monitor.recordCommit({
+    ticketId: "latency-integrity",
+    status: "applied",
+    revision: 1
+  });
+  first.setTime(4);
+  const checkpoint = first.monitor.createCheckpoint("chapter-1", 100);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.acceptedChanges, 1);
+  assert.equal(checkpoint.committedChanges, 1);
+  assert.equal(checkpoint.commitLatencies.at(-1), checkpoint.lastCommitLatencyMs);
+
+  const second = fixture({ commitSampleWindow: 2 });
+  const snapshot = { documentId: "chapter-1", text: "hello!", revision: 1, sequence: 1 };
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    { ...checkpoint, committedChanges: 0 },
+    snapshot,
+    "book-1",
+    101
+  ), /métricas o tiempos inválidos/);
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    { ...checkpoint, lastCommitLatencyMs: checkpoint.lastCommitLatencyMs + 1 },
+    snapshot,
+    "book-1",
+    101
+  ), /métricas o tiempos inválidos/);
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    { ...checkpoint, commitLatencies: [] },
+    snapshot,
+    "book-1",
+    101
+  ), /métricas o tiempos inválidos/);
+  assert.equal(second.monitor.getSnapshot("chapter-1"), undefined);
+});
+
 test("rechaza timestamps de restauración anteriores al checkpoint", () => {
   const first = fixture();
   first.open();

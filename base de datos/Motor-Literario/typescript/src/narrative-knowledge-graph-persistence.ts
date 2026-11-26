@@ -25,7 +25,7 @@ function withoutDocumentEvidence<T extends { readonly evidence: readonly { reado
 }
 
 function snapshotDocumentIds(snapshot: NarrativeKnowledgeGraphSnapshot): readonly string[] {
-  const ids = snapshot.documents.map(document => document.documentId);
+  const ids = snapshot.documents.map(document => document.input.documentId);
   if (ids.some(id => typeof id !== "string" || !id.trim()) || new Set(ids).size !== ids.length) {
     throw new Error("El snapshot contiene documentos duplicados o inválidos.");
   }
@@ -84,6 +84,7 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
 
   const projectId = snapshot.projectId;
   const graph = snapshot.graph;
+  const documentIds = snapshotDocumentIds(snapshot);
   const saved = { entities: 0, relations: 0, events: 0, ideas: 0, assertions: 0 };
   const reused = { entities: 0, relations: 0, events: 0, ideas: 0, assertions: 0 };
 
@@ -166,21 +167,19 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
   const existingAssertions = await store.loadAssertions!(projectId);
   const assertionMap = new Map(existingAssertions.map(item => [item.id, item]));
   const incomingAssertions = new Map(graph.assertions.map(item => [item.id, item]));
-  for (const current of existingAssertions) {
-    const incoming = incomingAssertions.get(current.id);
-    const base = documentIds.reduce((record, documentId) => withoutDocumentEvidence(record, documentId), current);
-    const next = incoming ? { ...incoming, evidence: [...base.evidence, ...incoming.evidence] } : base;
-    if (JSON.stringify(current) === JSON.stringify(next)) { reused.assertions++; continue; }
-    await store.saveAssertionIfUnchanged!(next, current);
-    assertionMap.set(next.id, next);
-    saved.assertions++;
-    incomingAssertions.delete(current.id);
-  }
+  // Las afirmaciones tienen una sola evidencia (no una colección). Sin una API
+  // transaccional de borrado no es seguro convertirlas en registros sin evidencia.
   for (const incoming of incomingAssertions.values()) {
-    await store.saveAssertionIfUnchanged!(incoming);
+    const current = assertionMap.get(incoming.id);
+    if (current && JSON.stringify(current) === JSON.stringify(incoming)) {
+      reused.assertions++;
+      continue;
+    }
+    await store.saveAssertionIfUnchanged!(incoming, current);
     assertionMap.set(incoming.id, incoming);
     saved.assertions++;
   }
+  reused.assertions += existingAssertions.filter(item => !incomingAssertions.has(item.id)).length;
 
   return { projectId, saved, reused };
 }

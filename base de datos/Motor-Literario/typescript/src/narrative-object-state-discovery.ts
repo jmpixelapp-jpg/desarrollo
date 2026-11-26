@@ -62,6 +62,7 @@ function validEvidence(
     Number.isSafeInteger(evidence.end) && evidence.end > evidence.start &&
     typeof evidence.excerpt === "string" &&
     evidence.excerpt.length > 0 &&
+    evidence.end - evidence.start === evidence.excerpt.length &&
     evidence.status !== "stale";
 }
 
@@ -85,6 +86,14 @@ function validateInput(input: NarrativeObjectStateDiscoveryInput): void {
       throw new Error("La lista contiene observaciones duplicadas, ajenas o sin evidencia válida.");
     }
     ids.add(observation.id);
+    if (typeof observation.action !== "string" || !observation.action.trim() ||
+        typeof observation.surface !== "string" || !observation.surface.trim() ||
+        observation.actionEvidence.excerpt !== observation.surface ||
+        observation.actionEvidence.end - observation.actionEvidence.start !== observation.surface.length ||
+        observation.actionEvidence.start < observation.evidence.start ||
+        observation.actionEvidence.end > observation.evidence.end) {
+      throw new Error("La evidencia de acción no coincide con el contexto de la observación.");
+    }
     if (observation.grammaticalObjectCandidate &&
         !validEvidence(observation.grammaticalObjectCandidate.evidence, input)) {
       throw new Error("La evidencia del objeto gramatical no es válida.");

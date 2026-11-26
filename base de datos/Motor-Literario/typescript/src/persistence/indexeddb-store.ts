@@ -4838,6 +4838,13 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
   }
 
+  async appendChangeAndEnqueueSyncOperation(
+    change: StoredChange,
+    syncDraft: Omit<StoredSyncOperation, "sequence">
+  ): Promise<void> {
+    return this.appendChange(change, syncDraft);
+  }
+
   async appendChange(change: StoredChange, syncDraft?: Omit<StoredSyncOperation, "sequence">): Promise<void> {
     if (!change || typeof change.projectId !== "string" || !change.projectId.trim() ||
         typeof change.documentId !== "string" || !change.documentId.trim() ||

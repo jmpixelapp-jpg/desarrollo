@@ -289,3 +289,10 @@ Durante la inspección de CI se detectó en `src/narrative-history.ts` una decla
 La primera ejecución de CI sobre esta rama ya superó el bloqueo sintáctico de `NarrativeAssertion`, pero reveló errores estrictos de TypeScript en acumuladores de actividad del monitor y del validador IndexedDB. Se sustituyeron los `reduce` inferidos con acumuladores opcionales por bucles con acumuladores numéricos explícitos. En la restauración del monitor también se eliminó una referencia inexistente a `activityCountTotal` y se dejó la validación de consistencia centralizada en `validActivityCounts`, que contempla correctamente el contador residual `otherChanges`.
 
 La siguiente ejecución de CI debe confirmar estas correcciones. La ejecución de la suite completa continúa pendiente mientras el paso de typecheck no finalice correctamente.
+
+
+### Corrección de revalidación de lease durante heartbeat activo
+
+Las dos pruebas de ciclo de vida que fallaron en el workflow anterior compartían una condición de carrera: una llamada explícita o el evento `visibilitychange` podía coincidir con un heartbeat ya activo. La guarda anterior devolvía inmediatamente y descartaba la petición, por lo que el diagnóstico conservaba la titularidad vieja o no adquiría el nuevo fencing token hasta el siguiente intervalo.
+
+Se añadió `liveMonitorLeaseHeartbeatRequested`: cuando llega una revalidación durante un heartbeat activo, queda marcada y se ejecuta mediante `queueMicrotask` al finalizar el trabajo actual. La solicitud pendiente se limpia también en los caminos de cierre/dispose, sin iniciar nuevas operaciones si el monitor ya se está liberando. La nueva ejecución CI debe verificar las dos regresiones; no se considera validado hasta que pasen.

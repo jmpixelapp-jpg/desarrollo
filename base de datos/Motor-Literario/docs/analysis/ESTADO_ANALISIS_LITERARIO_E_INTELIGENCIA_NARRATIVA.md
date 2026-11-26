@@ -735,3 +735,20 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Exportación:** el módulo y el extractor de enlaces entre acciones se exportan desde `src/index.ts` para que estén disponibles en el punto público de entrada del motor.
 
+## Recuperación de antecedentes pronominales a larga distancia
+
+**Nuevo módulo:** `typescript/src/narrative-pronoun-reference-discovery.ts`. Complementa la detección local de pronombres que ya existía en el extractor de observaciones. La capa nueva examina el contexto textual anterior hasta 5.000 unidades UTF-16 por defecto (configurable hasta 50.000) para recuperar menciones nominales previas de entidades conocidas, incluso si están separadas por varios párrafos.
+
+**Pronombres cubiertos en esta primera etapa:** `él`, `ella`, `ellos`, `ellas`, `usted` y `ustedes` cuando aparecen al inicio de una oración. Se limita deliberadamente a formas personales inequívocas en esa posición para no confundir determinantes posesivos, artículos o usos de otras categorías.
+
+**Candidatos:** se recupera la última mención explícita de cada entidad dentro de la ventana y se ordenan por distancia al pronombre. El resultado distingue `single-candidate`, `ambiguous` y `no-antecedent`. Un candidato único no significa correferencia demostrada: la cercanía solo ordena la inspección. No se inventa concordancia de género o número porque el modelo actual de entidades no contiene atributos gramaticales validados para ello. Tampoco se fusionan entidades ni se reescriben observaciones originales.
+
+**Evidencia:** cada pronombre y antecedente conserva su fragmento literal, documento, revisión y offsets absolutos UTF-16. Se admiten alias explícitos; no se usan similitud ortográfica ni nombres posteriores al pronombre.
+
+**Pruebas añadidas:** antecedente a través de varios párrafos, candidatos múltiples ordenados por recencia, prohibición de resolución automática por proximidad, ausencia de antecedente fuera de ventana, exclusión de menciones posteriores, offsets con emoji, alias y validación de entidades duplicadas o de otro proyecto.
+
+**Límites pendientes:** esta etapa no resuelve pronombres oblicuos (`lo/la/le`), reflexivos (`se`), posesivos, relativos ni referencias implícitas sin pronombre. Tampoco interpreta diálogos, cambios de hablante, género gramatical, número, sujeto elíptico, perspectiva narrativa ni entidades fuera del catálogo conocido. Esas señales requieren análisis sintáctico, discursivo y de voz narrativa antes de cualquier resolución automática.
+
+**Validación CI:** la ejecución de integración de este módulo queda pendiente de resultado. No debe contabilizarse como aprobada hasta completar comprobación de tipos, pruebas y compilación.
+
+

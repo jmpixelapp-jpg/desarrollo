@@ -369,3 +369,6 @@ Se añadieron pruebas de persistencia y consulta de la auditoría usando el alma
 Se corrigió una ambigüedad importante del flujo de reparación: un hallazgo ahora conserva el campo exacto donde se detectó la referencia ausente. Las propuestas exigen ese campo y la aplicación valida exclusivamente la referencia correspondiente. Una relación ya no se considera reparada sólo porque la entidad candidata aparezca en el extremo contrario. El ID de operación de auditoría incorpora el campo para distinguir reparaciones independientes; las relaciones reflexivas pueden producir dos propuestas separadas.
 
 Se ampliaron las pruebas para comprobar el campo emitido por el reconciliador, rechazar un falso replay en el extremo opuesto y distinguir ambos extremos de una relación reflexiva. **Pendiente de validación:** typecheck, suite completa y pruebas de IndexedDB real; no se dispone de resultados CI para este lote.
+
+
+La prueba de relación reflexiva ahora también aplica ambas propuestas, verifica que los dos extremos quedan reparados y comprueba que cada operación genera una auditoría distinta. Se confirma en GitHub el código y las pruebas modificadas; el estado de CI sigue sin reportar ejecuciones para el commit actual.

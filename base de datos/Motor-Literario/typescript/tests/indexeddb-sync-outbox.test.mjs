@@ -4,7 +4,7 @@ import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
-const { IndexedDbProjectStore, HostEngineApi } = await import("../dist/motor-literario.js");
+const { IndexedDbProjectStore, HostEngineApi, dispatchPendingNarrativeSyncOperations } = await import("../dist/motor-literario.js");
 
 const operation = (overrides = {}) => ({
   operationId: "op-1",
@@ -202,4 +202,74 @@ test("el acuse elimina únicamente la operación confirmada y valida el payload"
     store.enqueueSyncOperation(operation({ operationId: "op-4", projectId: "project-d", deviceId: "device-c" })),
     /Secuencia fuera de orden/
   );
+});
+
+test("el despachador envuelve y envía la outbox en orden de secuencia por dispositivo", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "outbox-dispatch-project";
+  const make = (operationId, deviceId, sequence, createdAt) => ({
+    operationId, projectId, deviceId, sequence, kind: "document.change",
+    payload: JSON.stringify({ version: 1, change: { documentId: "chapter", sequence } }),
+    createdAt, attemptCount: 0
+  });
+  await store.enqueueSyncOperation(make("dispatch-a-1", "device-a", 1, 300));
+  await store.enqueueSyncOperation(make("dispatch-a-2", "device-a", 2, 100));
+  await store.enqueueSyncOperation(make("dispatch-b-1", "device-b", 1, 200));
+
+  const sent = [];
+  const result = await dispatchPendingNarrativeSyncOperations({
+    store, projectId, batchSize: 10, now: () => 500,
+    transport: {
+      async send(envelope) {
+        sent.push(envelope);
+        return {
+          status: "accepted", durable: true, projectId: envelope.projectId,
+          operationId: envelope.operationId, writerId: envelope.writerId,
+          sequence: envelope.sequence, digest: envelope.digest
+        };
+      }
+    }
+  });
+
+  assert.deepEqual(result, { processed: 3, remaining: 0, hasMore: false });
+  assert.deepEqual(sent.map(item => [item.writerId, item.sequence]), [
+    ["device-a", 1], ["device-a", 2], ["device-b", 1]
+  ]);
+  assert.ok(sent.every(item => /^sha256:[a-f0-9]{64}$/.test(item.digest)));
+  assert.equal((await store.loadPendingSyncOperations(projectId)).length, 0);
+  assert.equal(await store.loadLastSyncOperationSequence(projectId, "device-a"), 2);
+  assert.equal(await store.loadLastSyncOperationSequence(projectId, "device-b"), 1);
+});
+
+test("el despachador conserva pendientes si falla el transporte o el acuse no es durable y exacto", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "outbox-dispatch-failure-project";
+  await store.enqueueSyncOperation(operation({
+    operationId: "dispatch-retry-1", projectId, deviceId: "device-retry",
+    sequence: 1, createdAt: 100, attemptCount: 0
+  }));
+  const invalidAck = await dispatchPendingNarrativeSyncOperations({
+    store, projectId, now: () => 200,
+    transport: { async send(envelope) {
+      return { status: "accepted", durable: true, projectId,
+        operationId: envelope.operationId, writerId: envelope.writerId,
+        sequence: envelope.sequence, digest: "sha256:" + "0".repeat(64) };
+    } }
+  });
+  assert.equal(invalidAck.failure, "invalid-remote-acknowledgement");
+  let pending = await store.loadPendingSyncOperations(projectId);
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].attemptCount, 1);
+  assert.equal(pending[0].lastErrorCode, "INVALID_REMOTE_ACK");
+
+  const transportFailure = await dispatchPendingNarrativeSyncOperations({
+    store, projectId, now: () => 300,
+    transport: { async send() { throw new Error("secreto de transporte que no debe persistirse"); } }
+  });
+  assert.equal(transportFailure.failure, "transport-error");
+  pending = await store.loadPendingSyncOperations(projectId);
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].attemptCount, 2);
+  assert.equal(pending[0].lastErrorCode, "TRANSPORT_ERROR");
+  assert.equal(await store.loadLastSyncOperationSequence(projectId, "device-retry"), 1);
 });

@@ -24,7 +24,7 @@ class NativeEditorState {
     } : undefined;
   }
 
-  apply(kind, transactionId, { start, end, replacement }) {
+  apply(kind, transactionId, { start, end, replacement, activityKind, inputType }) {
     const previous = this.snapshot;
     const transaction = {
       transactionId,
@@ -35,7 +35,9 @@ class NativeEditorState {
         baseRevision: previous.revision,
         start,
         end,
-        replacement
+        replacement,
+        ...(activityKind === undefined ? {} : { activityKind }),
+        ...(inputType === undefined ? {} : { inputType })
       }
     };
     this.snapshot = {
@@ -63,7 +65,7 @@ test("conecta snapshot y metadatos nativos y entrega edit/undo/redo en el orden 
   const stop = source.subscribeChanges(change => changes.push(change));
 
   const edit = native.apply("edit", "native-edit", {
-    start: 3, end: 3, replacement: "!"
+    start: 3, end: 3, replacement: "!", activityKind: "typing", inputType: "insertText"
   });
   assert.equal(bridge.publishAppliedTransaction("chapter-1", edit), 1);
 
@@ -78,6 +80,8 @@ test("conecta snapshot y metadatos nativos y entrega edit/undo/redo en el orden 
   assert.equal(bridge.publishAppliedTransaction("chapter-1", redo), 1);
 
   assert.deepEqual(changes.map(change => change.sequence), [1, 2, 3]);
+  assert.equal(changes[0].inputType, "insertText",
+    "el puente debe conservar el identificador nativo exacto sin leer el payload del evento");
   assert.equal(source.getState().lastTransactionKind, "redo");
   assert.equal(native.snapshot.text, "abc!");
   assert.equal(source.getState().documentLength, native.snapshot.text.length);

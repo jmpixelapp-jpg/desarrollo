@@ -72,3 +72,12 @@ test("rechaza referencias duplicadas, proyectos ajenos y relaciones mal formadas
     intentActionConsistency:[consistency()]
   }));
 });
+
+test("rechaza dos evidencias incompatibles para el mismo ID de acción",()=>{
+  assert.throws(()=>buildNarrativeDecisionContexts({
+    projectId:"book-1",knowledgeActionLinks:[knowledge()],
+    intentActionConsistency:[consistency({
+      actionEvidence:evidence("Mara abrió otra puerta.",120)
+    })]
+  }),/evidencia idéntica/);
+});

@@ -82,8 +82,14 @@ export interface NarrativeObservationCandidate {
   readonly mentionedCharacterIds: readonly string[];
   /** Otras entidades mencionadas; no se interpreta su papel semántico. */
   readonly mentionedEntityIds: readonly string[];
-  /** Primera mención literal de cada entidad de la frase; no asigna roles semánticos. */
+  /** Primera mención literal de cada entidad; se conserva por compatibilidad. */
   readonly entityMentionEvidence: readonly {
+    readonly entityId: string;
+    readonly entityKind: NarrativeEntity["kind"];
+    readonly evidence: TextEvidence;
+  }[];
+  /** Todas las menciones literales no solapadas por entidad dentro de la frase; las colisiones entre entidades se conservan como ambigüedad. */
+  readonly entityMentionOccurrences: readonly {
     readonly entityId: string;
     readonly entityKind: NarrativeEntity["kind"];
     readonly evidence: TextEvidence;
@@ -340,6 +346,20 @@ function findNameMatch(sentence: string, name: string): { start: number; end: nu
   return { start: match.index, end: match.index + match[0].length, excerpt: match[0] };
 }
 
+function findAllNameMatches(sentence: string, name: string): { start: number; end: number; excerpt: string }[] {
+  const escaped = name.replace(/[|\\{}()[\]^$+*?.]/g, "\\function includesName(sentence: string, name: string): boolean {");
+  const expression = new RegExp(
+    "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
+    "(?![\\p{L}\\p{M}\\p{N}_])",
+    "giu"
+  );
+  return [...sentence.matchAll(expression)].map(match => ({
+    start: match.index!,
+    end: match.index! + match[0].length,
+    excerpt: match[0]
+  }));
+}
+
 function includesName(sentence: string, name: string): boolean {
   return findNameMatch(sentence, name) !== undefined;
 }
@@ -413,6 +433,31 @@ export function discoverNarrativeObservationCandidates(
     if (mentionedCharacters.length === 0 && unresolvedReferences.length === 0) continue;
     const mentionedOthers = otherEntities.filter(entity =>
       [entity.canonicalName, ...entity.aliases].some(name => includesName(sentence, name))
+    );
+    const entityMentionOccurrences = input.entities.flatMap(entity => {
+      const bySpan = new Map<string, { start: number; end: number; excerpt: string }>();
+      for (const name of [entity.canonicalName, ...entity.aliases]) {
+        for (const match of findAllNameMatches(sentence, name)) {
+          const key = match.start + ":" + match.end;
+          const previous = bySpan.get(key);
+          if (!previous || match.excerpt.length > previous.excerpt.length) bySpan.set(key, match);
+        }
+      }
+      return [...bySpan.values()].map(match => ({
+        entityId: entity.id,
+        entityKind: entity.kind,
+        evidence: {
+          documentId: input.documentId,
+          revision: input.revision,
+          start: baseOffset + segment.start + match.start,
+          end: baseOffset + segment.start + match.end,
+          excerpt: match.excerpt
+        }
+      }));
+    }).sort((a, b) =>
+      a.evidence.start - b.evidence.start ||
+      a.evidence.end - b.evidence.end ||
+      a.entityId.localeCompare(b.entityId)
     );
     const entityMentionEvidence = input.entities.flatMap(entity => {
       const matches = [entity.canonicalName, ...entity.aliases]
@@ -664,6 +709,7 @@ export function discoverNarrativeObservationCandidates(
           ...(unresolvedReferences.length > 0 ? { unresolvedReferences } : {}),
           mentionedEntityIds: mentionedOthers.map(entity => entity.id).sort(),
           entityMentionEvidence,
+          entityMentionOccurrences,
           epistemicFrame: epistemic.frame,
           ...(epistemicFrameEvidence ? { epistemicFrameEvidence } : {}),
           ...(epistemicSourceCandidate ? { epistemicSourceCandidate } : {}),

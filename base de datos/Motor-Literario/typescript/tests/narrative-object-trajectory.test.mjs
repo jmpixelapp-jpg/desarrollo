@@ -17,7 +17,8 @@ function evidence(documentId, revision, start, excerpt) {
 
 function transition({
   id, documentId, revision = 1, start = 0, action = "encontrar",
-  kind = "discovered", objectId = objectEntityId
+  kind = "discovered", objectId = objectEntityId, recipientId,
+  polarity = "affirmed", effectStatus = "candidate"
 }) {
   const actionEvidence = evidence(documentId, revision, start, action);
   const objectEvidence = evidence(documentId, revision, start + action.length + 1, "Espada Solar");
@@ -26,8 +27,12 @@ function transition({
   return {
     id, projectId, documentId, revision, observationId: "observation:" + id,
     objectEntityId: objectId, transition: kind,
-    actorEntityId: "character:ana", polarity: "affirmed",
-    grammaticalTense: "past-preterite", effectStatus: "candidate",
+    actorEntityId: "character:ana", polarity,
+    ...(recipientId ? {
+      recipientEntityId: recipientId,
+      recipientEvidence: evidence(documentId, revision, start + action.length + 20, "Bruno")
+    } : {}),
+    grammaticalTense: "past-preterite", effectStatus,
     actionEvidence, objectEvidence, contextEvidence,
     reviewStatus: "candidate"
   };
@@ -116,4 +121,75 @@ test("rechaza mezclar revisiones de un mismo capítulo", () => {
       transition({ id: "revision-2", documentId: "chapter-1", revision: 2, start: 30 })
     ]
   }));
+});
+
+test("vincula entrega y recepción consecutivas del mismo objeto y destinatario como corroboración candidata", () => {
+  const [trajectory] = buildNarrativeObjectTrajectories({
+    projectId, documentOrder,
+    transitions: [
+      transition({
+        id: "delivered", documentId: "chapter-1", action: "entregar",
+        kind: "transferred", recipientId: "character:bruno"
+      }),
+      transition({
+        id: "received", documentId: "chapter-2", action: "recibir",
+        kind: "received", recipientId: "character:bruno"
+      })
+    ]
+  });
+  assert.equal(trajectory.continuitySignals.length, 1);
+  assert.deepEqual(trajectory.continuitySignals[0], {
+    id: "continuity:delivered:received",
+    kind: "transfer-reception-corroboration",
+    fromTransitionId: "delivered",
+    toTransitionId: "received",
+    participantEntityId: "character:bruno",
+    evidence: [
+      trajectory.entries[0].transition.recipientEvidence,
+      trajectory.entries[1].transition.recipientEvidence
+    ],
+    status: "corroboration-candidate"
+  });
+});
+
+test("no vincula entregas negadas, futuras ni destinatarios diferentes", () => {
+  const cases = [
+    [
+      transition({
+        id: "negated-delivery", documentId: "chapter-1", action: "entregar",
+        kind: "transferred", recipientId: "character:bruno", polarity: "negated",
+        effectStatus: "not-applied"
+      }),
+      transition({
+        id: "later-receipt", documentId: "chapter-2", action: "recibir",
+        kind: "received", recipientId: "character:bruno"
+      })
+    ],
+    [
+      transition({
+        id: "future-delivery", documentId: "chapter-1", action: "entregar",
+        kind: "transferred", recipientId: "character:bruno", effectStatus: "prospective"
+      }),
+      transition({
+        id: "later-receipt-2", documentId: "chapter-2", action: "recibir",
+        kind: "received", recipientId: "character:bruno"
+      })
+    ],
+    [
+      transition({
+        id: "delivery-other", documentId: "chapter-1", action: "entregar",
+        kind: "transferred", recipientId: "character:bruno"
+      }),
+      transition({
+        id: "receipt-other", documentId: "chapter-2", action: "recibir",
+        kind: "received", recipientId: "character:ana"
+      })
+    ]
+  ];
+  for (const transitions of cases) {
+    const [trajectory] = buildNarrativeObjectTrajectories({
+      projectId, documentOrder, transitions
+    });
+    assert.equal(trajectory.continuitySignals.length, 0);
+  }
 });

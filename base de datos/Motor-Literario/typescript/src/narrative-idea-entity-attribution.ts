@@ -129,7 +129,7 @@ export function attributeNarrativeIdeasToEntities(
       revision: idea.revision,
       ideaCandidateId: idea.id,
       status,
-      ...(status === "attributed" ? { entityId: candidateEntityIds[0] } : {}),
+      ...(status === "attributed" ? { entityId: candidateEntityIds[0]! } : {}),
       candidateEntityIds,
       matchedNames,
       evidence: idea.evidence

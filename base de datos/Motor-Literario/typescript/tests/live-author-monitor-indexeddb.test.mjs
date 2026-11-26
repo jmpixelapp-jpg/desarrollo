@@ -115,7 +115,7 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
 });
 
 
-test("migra IndexedDB v22 a v24 creando checkpoints y leases sin perder documentos", async () => {
+test("migra IndexedDB v22 a v25 creando stores narrativos y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";
   const projectId = "monitor-migration-" + randomUUID();
@@ -178,7 +178,7 @@ test("migra IndexedDB v22 a v24 creando checkpoints y leases sin perder document
       request.onerror = () => reject(request.error);
     });
     try {
-      assert.equal(migratedDatabase.version, 24);
+      assert.equal(migratedDatabase.version, 25);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
 

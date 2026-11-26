@@ -130,3 +130,7 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Actualizado el mapa físico MLDB y agregadas pruebas de CAS, aislamiento, tombstone y concurrencia.
 
 **Alcance real:** el manifiesto es durable y su propia escritura es atómica, pero aún no coordina automáticamente las cinco colecciones del grafo. No se afirma reemplazo transaccional integral ni borrado de proyecciones; ese es el siguiente bloque.
+
+- Añadidas funciones puras para construir manifiestos a partir de la contribución de un documento y generar tombstones explícitos; pruebas cubren sus inventarios y validación de documento ausente.
+
+- Registrada la tabla lógica `narrative_document_projection_manifests` en el esquema declarativo MLDB 0.4.2; se detectó y resolvió el requisito del validador de no declarar tablas físicas fuera del esquema lógico.

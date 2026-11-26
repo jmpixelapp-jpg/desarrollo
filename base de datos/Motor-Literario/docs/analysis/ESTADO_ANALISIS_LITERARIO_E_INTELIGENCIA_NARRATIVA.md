@@ -421,3 +421,13 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Las ejecuciones 2802, 2803 y 2804 estaban en curso/cola durante la última consulta; no se declara aún validada esta ampliación.
 
 **Próxima tarea técnica:** extender la extracción de formas futuras a los verbos de mayor frecuencia con pruebas morfológicas, y separar explícitamente futuro, condicional, obligación, deseo y predicción cuando la evidencia lingüística lo permita. Después, reforzar los vínculos entre acciones para que un marcador explícito no baste por sí solo para afirmar causalidad.
+
+
+### Verificación de futuro gramatical y endurecimiento de vínculos — 26-11-2026
+
+- La ejecución 2803 (commit `06e6de5`) terminó correctamente: Type-check, build, pruebas automatizadas y benchmark de edición en vivo aprobados para la ampliación del futuro en observaciones.
+- La ejecución 2804 (commit `4e903ad`) terminó correctamente para la documentación correspondiente.
+- Se endureció la validación de `discoverNarrativeActionLinks`: ahora comprueba que cada observación tenga evidencia de acción presente, offsets enteros y coherentes, fragmento literal coincidente, documento/revisión correctos e ID único.
+- Se añadió una prueba para entradas con `actionEvidence` ausente y para IDs duplicados. El contrato es devolver un error de validación controlado, no una excepción interna de acceso a propiedades.
+- Commits de endurecimiento: `213bdc5` (validación), `fa23b37` (pruebas), `c56a1df` (documentación).
+- Las ejecuciones 2809 y 2810, para el endurecimiento y su prueba, seguían en curso en la última consulta. No se declara todavía validado ese último cambio.

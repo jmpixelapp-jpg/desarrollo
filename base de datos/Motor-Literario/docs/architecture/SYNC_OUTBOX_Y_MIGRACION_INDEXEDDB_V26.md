@@ -26,8 +26,23 @@ DB26 incorpora una bandeja local de salida (`sync-outbox`) y un cursor monotóni
 
 El identificador de dispositivo debe ser único y estable por instalación. Las secuencias son globales para ese proyecto/dispositivo, incluso cuando las ediciones pertenecen a capítulos distintos.
 
-`loadPendingSyncOperations` devuelve pendientes paginados por proyecto sin borrarlos. `recordSyncOperationAttempt` conserva contador, hora y código de error no sensible. `acknowledgeSyncOperation` retira únicamente la operación indicada; el cursor no retrocede, de modo que un acuse no permite reutilizar secuencias.
+`loadPendingSyncOperations` devuelve pendientes paginados por proyecto, ordenados por dispositivo y secuencia, sin borrarlos. `recordSyncOperationAttempt` conserva contador, hora y código de error no sensible. `acknowledgeSyncOperation` retira únicamente la operación indicada; el cursor no retrocede, de modo que un acuse no permite reutilizar secuencias.
 
+## Despacho saliente y acuses
+
+`dispatchPendingNarrativeSyncOperations` conecta la outbox con el transporte que proporciona el anfitrión. Para cada registro:
+
+1. convierte el payload JSON en una envoltura `NarrativeSyncOperationEnvelope` versionada;
+2. calcula la huella SHA-256 del contenido canónico;
+3. envía el mismo `operationId`, proyecto, stream de dispositivo y secuencia;
+4. valida el acuse del servidor: `status` accepted/duplicate, `durable: true`, mismo proyecto, operationId, writerId, secuencia y digest;
+5. registra el intento y elimina localmente solo la operación confirmada.
+
+El `writerId` de la envoltura identifica aquí el stream de origen y coincide con `deviceId`, porque el cursor de secuencia es por instalación. No autentica a una persona. El transporte debe autenticar al anfitrión y el servidor debe verificar que el dispositivo está autorizado para el escritor/proyecto correspondiente. La huella SHA-256 detecta alteraciones; tampoco autentica al emisor.
+
+La función no incorpora un cliente HTTP ni envía datos automáticamente: el anfitrión proporciona `transport.send`. Si el envío falla, el acuse no coincide o el resultado es ambiguo, el registro sigue pendiente y se reenvía con la misma identidad. La entrega es al menos una vez; el receptor debe deduplicar por `operationId` y digest.
+
+La lectura de outbox usa el índice compuesto proyecto/dispositivo/secuencia, no el reloj del equipo, para mantener el orden FIFO incluso si `createdAt` coincide o el reloj retrocede. Los lotes se limitan y pueden drenarse en llamadas sucesivas.
 ## Reglas del anfitrión/transporte
 
 - El anfitrión debe asignar y persistir un `deviceId` estable por instalación (UUID aleatorio; no regenerarlo en cada sesión ni derivarlo de datos personales).
@@ -39,8 +54,8 @@ El identificador de dispositivo debe ser único y estable por instalación. Las 
 
 ## Límites conocidos
 
-La integración automática cubre las ediciones de texto confirmadas mediante IndexedDB y un `ProjectIdentity.deviceId`. Las mutaciones de fichas, relaciones, acontecimientos e ideas todavía no se registran automáticamente en la outbox. Tampoco están implementados autenticación/autorización remotas, endpoint de transporte, cursor de descarga, aplicación del diario remoto, reconciliación ni resolución de conflictos entre escritores. El adaptador SQLite usado por el puente entre procesos todavía no implementa esta operación atómica; no configurar `deviceId` en esa modalidad hasta que exista ese soporte. No se declara sincronización multidispositivo completa.
+La integración automática de salida cubre las ediciones de texto confirmadas mediante IndexedDB y un `ProjectIdentity.deviceId`; el anfitrión debe proporcionar el transporte y autenticarlo. Las mutaciones de fichas, relaciones, acontecimientos e ideas todavía no se registran automáticamente en la outbox. `main` ya incluye el diario de recepción, el dispatcher y el consumidor genérico de operaciones entrantes; los handlers de aplicación deben ser idempotentes y coordinar sus escrituras con CAS/atomicidad. No existe aún un cliente HTTP predeterminado, cursor incremental de descarga por proyecto, reconciliación automática de snapshots ni resolución de conflictos entre escritores. El adaptador SQLite del puente entre procesos no implementa la escritura atómica de journal/outbox; no configurar `deviceId` en esa modalidad. No se declara sincronización multidispositivo completa.
 
 ## Validación
 
-El workflow `Motor Literario TypeScript` ejecuta TypeScript typecheck, build, validación del esquema y auditoría del mapeo físico, suite completa y benchmark. `indexeddb-sync-outbox.test.mjs` cubre la migración DB25→DB26, idempotencia, colisiones, aislamiento de secuencia, paginación, reintentos, validación del payload, acuses, atomicidad journal/outbox y conexión desde `HostEngineApi`.
+El workflow `Motor Literario TypeScript` ejecuta TypeScript typecheck, build, validación del esquema y auditoría del mapeo físico, suite completa y benchmark. `indexeddb-sync-outbox.test.mjs` cubre la migración DB25→DB26, idempotencia, colisiones, aislamiento de secuencia, paginación FIFO por dispositivo, reintentos, validación del payload, acuses, atomicidad journal/outbox, conexión desde `HostEngineApi` y despacho saliente con digest/acuse remoto.

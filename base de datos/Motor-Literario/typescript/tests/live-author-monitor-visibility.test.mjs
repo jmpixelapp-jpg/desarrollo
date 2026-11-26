@@ -205,3 +205,40 @@ test("completa la limpieza y cancela el intervalo aunque falle un removeEventLis
   assert.equal(refreshes, 0);
   dispose();
 });
+
+
+test("usa polling básico si Page Visibility no está disponible y lo invalida al desmontar", () => {
+  const document = { hidden: undefined };
+  const { entries, schedule } = createScheduler();
+  let refreshes = 0;
+  const dispose = scheduleLiveAuthorMonitorWhileVisible(
+    document, () => { refreshes++; }, 750, schedule
+  );
+
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].intervalMs, 750);
+  entries[0].callback();
+  assert.equal(refreshes, 1);
+  dispose();
+  assert.equal(entries[0].cancellations, 1);
+  entries[0].callback();
+  dispose();
+  assert.equal(refreshes, 1);
+});
+
+test("revierte el montaje e invalida el primer tick si el scheduler lanza", () => {
+  const document = new FakeDocument();
+  let queuedCallback;
+  const schedule = callback => {
+    queuedCallback = callback;
+    throw new Error("scheduler setup failed");
+  };
+
+  assert.throws(() => scheduleLiveAuthorMonitorWhileVisible(
+    document, () => assert.fail("un tick parcial no puede sobrevivir al rollback"), 1_000, schedule
+  ), /scheduler setup failed/);
+
+  assert.equal(document.listenerCount(), 0);
+  assert.equal(document.defaultView.listenerCount(), 0);
+  queuedCallback();
+});

@@ -21,6 +21,10 @@ import {
   discoverNarrativeCharacterStateCandidates,
   type NarrativeCharacterStateCandidate
 } from "./narrative-character-state-discovery";
+import {
+  discoverNarrativeLocationTransitionCandidates,
+  type NarrativeLocationTransitionCandidate
+} from "./narrative-location-transition-discovery";
 import { auditNarrativeExtractionCoverage, type NarrativeExtractionAudit } from "./narrative-extraction-audit";
 
 /**
@@ -113,6 +117,8 @@ export interface NarrativeBookIngestionResult {
   readonly objectTransitionCandidates: readonly NarrativeObjectTransitionCandidate[];
   /** Afirmaciones explícitas de condición de personajes; no son estados consolidados. */
   readonly characterStateCandidates: readonly NarrativeCharacterStateCandidate[];
+  /** Movimientos espaciales candidatos respaldados por lugar y preposición explícitos. */
+  readonly locationTransitionCandidates: readonly NarrativeLocationTransitionCandidate[];
   /** Pasajes no cubiertos por las extracciones actuales, expuestos para revisión humana. */
   readonly extractionAudit: NarrativeExtractionAudit;
   readonly observationStatus: "extracted" | "no-entities" | "omitted-text-budget";
@@ -467,6 +473,15 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
         baseOffset: input.baseOffset ?? 0
       })
     : [];
+  const locationTransitionCandidates = observations.length > 0
+    ? discoverNarrativeLocationTransitionCandidates({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        revision: input.revision,
+        observations
+      })
+    : [];
+
   // Los acontecimientos se extraen solo cuando el escritor usa una etiqueta explícita.
   // Las entidades locales sirven para sugerir participantes, nunca para confirmar roles.
   const eventCandidates = input.text.length <= MAX_NARRATIVE_BOOK_TEXT_UNITS
@@ -511,6 +526,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     actionLinks,
     objectTransitionCandidates,
     characterStateCandidates,
+    locationTransitionCandidates,
     eventCandidates,
     extractionAudit,
     observationStatus,

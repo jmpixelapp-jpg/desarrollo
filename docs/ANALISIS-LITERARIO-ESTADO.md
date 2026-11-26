@@ -103,3 +103,18 @@ npm run bench
 ```
 
 No se marca ninguna de estas suites como aprobada por ejecución en este registro: el estado consultable de CI para los commits recientes no contiene checks.
+
+### Primera validación integral en GitHub Actions
+
+Ejecución real del workflow **Motor Literario TypeScript** sobre el commit `0c935de034c211cef90468d17db65ae6bffd2bbc`:
+
+- Instalación de dependencias y Chromium: aprobadas.
+- `npm run typecheck`: aprobado.
+- `npm test`: falló en la suite general; el comando alcanzó la ejecución de pruebas tras completar compilación y validación de esquemas.
+- Resultado de Node Test Runner: **707 pruebas, 680 aprobadas, 18 fallidas y 9 omitidas**.
+- Benchmark: no se ejecutó porque la suite de pruebas devolvió código de error.
+- Las tres pruebas de `indexeddb-idea-transaction.test.mjs` que antes podían omitirse se ejecutaron y aprobaron usando `fake-indexeddb`.
+
+Ejecución: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45732604278
+
+**Lectura del resultado:** el chequeo de tipos está verde y el adaptador IndexedDB dispone ahora de pruebas de transacción activas en CI. El producto aún no supera la validación integral: los 18 fallos restantes incluyen contratos de integridad de ideas, expectativas de sincronización CAS, límites del catálogo y varios escenarios del análisis de grafos/cronología. No se deben ocultar ni rebajar estos fallos para conseguir un verde artificial. La siguiente fase debe resolverlos por grupos, empezando por reproducir y clasificar cada fallo contra el contrato vigente.

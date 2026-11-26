@@ -156,3 +156,20 @@ test("no interpreta una motivación diferente como sustitución sin marcador exp
   });
   assert.equal(result.transition,"coexisting");
 });
+
+test("rechaza IDs repetidos entre intenciones actuales e históricas", () => {
+  const prior = intent("same-id","proteger a Elian","affirmed","chapter-1",10);
+  const current = intent("same-id","buscar el trono","affirmed","chapter-2",20);
+  assert.throws(() => evolveNarrativeCharacterIntents({
+    projectId:"novel",entities,priorIntents:[prior],currentIntents:[current],
+    orderedDocumentIds:["chapter-1","chapter-2"]
+  }),/IDs únicos/i);
+});
+
+test("rechaza un orden documental con capítulos duplicados", () => {
+  assert.throws(() => evolveNarrativeCharacterIntents({
+    projectId:"novel",entities,priorIntents:[],
+    currentIntents:[intent("new","proteger a Elian","affirmed","chapter-1",10)],
+    orderedDocumentIds:["chapter-1","chapter-1"]
+  }));
+});

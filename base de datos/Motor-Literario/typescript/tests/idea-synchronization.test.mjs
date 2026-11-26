@@ -819,3 +819,48 @@ test("agota los tres intentos CAS sin perder cambios concurrentes y refresca la 
   assert.equal(store.ideaReads, 4);
   api.dispose();
 });
+
+test("no crea vínculos colgantes si el destino desaparece durante un conflicto CAS", async () => {
+  for (const targetKind of ["idea", "entity"]) {
+    const store = new RacingStore(
+      [idea("idea-source"), ...(targetKind === "idea" ? [idea("idea-target")] : [])],
+      targetKind === "entity" ? [entity("entity-target", "Ana")] : []
+    );
+    const api = createApi(store);
+    await api.getNarrativeIdeas();
+
+    store.onNextConflict = current => {
+      if (targetKind === "idea") {
+        store.ideas.delete(projectId + ":idea-target");
+      } else {
+        store.entities.delete(projectId + ":entity-target");
+      }
+      return {
+        ...current,
+        status: "incorporated",
+        statusHistory: [
+          ...current.statusHistory,
+          { status: "incorporated", reason: "writer", changedAt: 2 }
+        ]
+      };
+    };
+
+    await assert.rejects(
+      targetKind === "idea"
+        ? api.setNarrativeIdeaLink("idea-source", "idea-target", true)
+        : api.setNarrativeIdeaEntityLink("idea-source", "entity-target", true),
+      targetKind === "idea"
+        ? /Ambas ideas deben existir en el proyecto activo/
+        : /La idea y la entidad deben existir en el proyecto activo/
+    );
+
+    const persisted = store.ideas.get(projectId + ":idea-source");
+    assert.equal(persisted.status, "incorporated");
+    assert.deepEqual(persisted.relatedIdeaIds, []);
+    assert.deepEqual(persisted.relatedEntityIds, []);
+    assert.equal(store.writes, 1);
+    assert.equal(store.ideaReads, targetKind === "idea" ? 3 : 2);
+    if (targetKind === "entity") assert.equal(store.entityReads, 2);
+    api.dispose();
+  }
+});

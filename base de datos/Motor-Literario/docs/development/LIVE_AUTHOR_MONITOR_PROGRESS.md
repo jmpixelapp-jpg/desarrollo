@@ -391,4 +391,4 @@ Se amplió `live-author-monitor-browser.test.mjs`: tras el takeover y guardado d
 
 **Commit:** [702846e — probar checkpoint tras reload](https://github.com/jmpixelapp-jpg/desarrollo/commit/702846e433654611343fbfc143b0b0ea2475d2a5).
 
-**CI:** ejecución [45726777208](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726777208) en curso. La ampliación no se da por aprobada hasta revisar el resultado.
+**Resultado CI verificado:** [45726777208](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726777208), commit `702846e433654611343fbfc143b0b0ea2475d2a5`: build Vite correcto, MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 34 almacenes) y **108/108 pruebas aprobadas, 0 fallidas, 0 omitidas**. Incluye la recarga real de una página Chromium y recuperación del checkpoint tras instanciar de nuevo el adaptador.

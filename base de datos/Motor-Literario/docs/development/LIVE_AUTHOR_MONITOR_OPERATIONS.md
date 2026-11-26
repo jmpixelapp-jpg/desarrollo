@@ -613,3 +613,8 @@ El paso Chromium independiente debe considerarse validado solo cuando `Run isola
 La ejecución integral verde [45759321606](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759321606) aprobó los 17 diagnósticos, 161 tests aislados y 167 tests host/editor/browser; además, Chromium aprobó Page Lifecycle y las pruebas de dos pestañas/IndexedDB, y el benchmark de 100.000 commits dejó heap estable de 4,39 MiB y cero pendientes. Los SHA de núcleo, panel, workspace, visibility scheduler, entrypoint, suites de integración editor y workflow se compararon con `main` y son idénticos al checkout `e951f9a` usado por ese run.
 
 La validación general posterior del HEAD actual falla por una aserción de `tests/core.test.mjs:2163` que aún espera el esquema inicial anterior a los dos almacenes DB27; después de esa primera falla el runner cancela 235 tests. Esto no es un error del monitor y no se parchea desde este módulo. La prueba aislada de Page Lifecycle también pasó de manera independiente en el run 45758203803, pese a que aquel checkout sí tenía el runtime general bloqueado.
+
+
+## 53. Ráfagas reentrantes del puente de eventos del editor
+
+`LiveAuthorMonitorEditorTransactionBridge` serializa publicaciones reentrantes mediante una cola FIFO y un guard `dispatching`, evitando recursión y reordenamientos. La prueba de estrés crea 1.000 transacciones: el primer listener genera 999 emisiones adicionales al recibir la primera; ambos observadores deben ver las mismas secuencias y en el mismo orden. La prueba se ejecuta dentro de la suite aislada del editor y no requiere el runtime narrativo completo.

@@ -1866,3 +1866,14 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Commits:** implementación `13024db`; test de instrumentación `40ef9f0`; documento de causa/corrección `f233e3d`.
 
 **CI posterior al cambio de producción:** pendiente. Los runs anteriores demuestran que la regresión existía; solo un nuevo resultado exitoso de la prueba Chromium permitirá marcarla resuelta.
+## 121. Cancelación tardía validada en CI focalizada e integrada (26 de noviembre de 2026)
+
+**Validación focalizada:** [run 45808557947](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45808557947), commit `b52e8d2130197b7656da01ce6033652a15556ca9`, concluyó `success`. Chromium ejecutó 1/1 prueba; el test esperó explícitamente a que `pendingInput` quedara resuelto y a observar la tarea del navegador posterior al listener.
+
+**Validación en el workflow habitual:** [run 45808558036](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45808558036), mismo commit, terminó con el paso `Run trusted beforeinput cancellation regression in Chromium` en `success` (1/1). En esa ejecución también aprobaron type-check aislado, build aislado, diagnósticos 17/17, schema MLDB, monitor unitario/diagnóstico **191/191**, Page Lifecycle Chromium 1/1 y benchmark de heap.
+
+**Benchmark de esa ejecución:** 100.000 commits en 510,48 ms (~195.893 commits/s), ocho documentos, crecimiento de heap entre media y carga completa de 0 MiB, 0,5 MiB retenidos por sesiones abiertas y cero cambios pendientes al finalizar.
+
+**Fallo global restante:** ambos workflows siguen concluyendo `failure` por el build runtime general, que informa `src/narrative-observation-discovery.ts:373:67: Unterminated string literal`. El paso nuevo de Chromium sí se ejecuta y pasa antes de la suite completa host/editor/browser, que queda omitida por depender del bundle runtime. El archivo del fallo es ajeno a Live Author Monitor y no se modificó aquí.
+
+**Conclusión técnica:** la carrera de cancelación tardía quedó corregida y cubierta por dos ejecuciones Chromium independientes sobre el mismo commit. Sigue pendiente la validación de IME físico por sistema operativo y la conexión del puente transaccional al editor enriquecido concreto; la página de referencia textarea no equivale a esa integración de producción.

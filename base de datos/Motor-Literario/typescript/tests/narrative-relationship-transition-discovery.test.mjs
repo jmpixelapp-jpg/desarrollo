@@ -24,3 +24,21 @@ test("solo admite entidades de tipo personaje",()=>{
  const object={...bruno,kind:"object"};
  assert.throws(()=>run("Ana y Bruno se hicieron amigos.",[ana,object]),/únicos y válidos/);
 });
+
+test("detecta reconciliación aunque el disparador aparezca después de los dos nombres",()=>{
+ const [c]=run("Bruno y Ana se reconciliaron al amanecer.");
+ assert.equal(c.transition,"reconciled");
+ assert.equal(c.firstEntityId,"bruno"); assert.equal(c.secondEntityId,"ana");
+});
+test("detecta transición cuando el verbo aparece antes de la segunda entidad",()=>{
+ const [c]=run("Ana se casó con Bruno.");
+ assert.equal(c.family,"marriage"); assert.equal(c.transition,"formed");
+});
+test("detecta transición con nombres en orden inverso al sujeto gramatical",()=>{
+ const [c]=run("Bruno y Ana se hicieron amigos.");
+ assert.equal(c.family,"friendship"); assert.equal(c.transition,"formed");
+});
+test("omite nombres compartidos entre fichas distintas para no resolver identidad arbitrariamente",()=>{
+ const duplicate={...ana,id:"ana-2"};
+ assert.deepEqual(run("Ana y Bruno se hicieron amigos.",[ana,duplicate,bruno]),[]);
+});

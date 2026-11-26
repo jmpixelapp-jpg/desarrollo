@@ -784,14 +784,14 @@ export async function updateNarrativeIdeaContinuityIndexIncrementally(
 
   const current = await store.loadNarrativeIdeaContinuityIndex(input.projectId);
   if (current) {
-    const previousByDocument = new Map(current.sourceRevisions.map(item => [
-      item.documentId,
-      { revision: item.revision, status: item.status }
-    ]));
-    const nextByDocument = new Map(nextRevisions.map(item => [
-      item.documentId,
-      { revision: item.revision, status: item.status }
-    ]));
+    const previousByDocument = new Map<string, { revision: number; status: "active" | "deleted" }>();
+    const nextByDocument = new Map<string, { revision: number; status: "active" | "deleted" }>();
+    for (const item of current.sourceRevisions) {
+      previousByDocument.set(item.documentId, { revision: item.revision, status: item.status });
+    }
+    for (const item of nextRevisions) {
+      nextByDocument.set(item.documentId, { revision: item.revision, status: item.status });
+    }
     const allDocumentIds = new Set([
       ...previousByDocument.keys(),
       ...nextByDocument.keys()

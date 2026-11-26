@@ -433,3 +433,16 @@ Se añaden pruebas de integración para causalidad explícita, secuencia tempora
 **Límites:** no se deduce causalidad a partir de la mera sucesión. Una relación temporal o una coincidencia en la misma oración no prueba que el recuerdo haya motivado la acción. La detección depende de conectores españoles explícitos y del extractor actual de acciones actor → verbo → objetivo; no cubre acciones intransitivas ni sujetos omitidos. La salida sigue siendo candidata y revisable.
 
 **Validación:** los cambios y pruebas están publicados en la rama. No se afirma que TypeScript, build o suite hayan pasado sin ejecutar comprobaciones reales sobre el head actualizado.
+
+## Fase Z: integración de objetivos y motivaciones en el pipeline
+
+Se detectó que el extractor `narrative-character-intent-extraction.ts` existía, pero no se ejecutaba desde `understandNarrativeFragment`. Se integró para que la comprensión coordinada incluya `characterIntents` sin requerir una llamada separada.
+
+- Se devuelven objetivos y motivaciones explícitos atribuidos a personajes nombrados inequívocamente.
+- Se conserva la polaridad `affirmed`, `negated` o `conditional`, el texto capturado y la evidencia con offsets UTF-16 absolutos.
+- Los candidatos se asignan a escenas solo cuando su evidencia queda dentro de una escena explícita; los demás quedan sin asignar.
+- Se añadieron pruebas de integración para objetivo afirmado, objetivo negado, offsets absolutos y asignación de escena.
+
+**Límites:** el extractor sigue usando patrones léxicos españoles acotados y exige el personaje nombrado en la misma oración. No interpreta automáticamente deseos implícitos, objetivos compartidos, contradicciones entre metas, jerarquías de objetivos ni cambios de motivación. La detección de un objetivo no demuestra que el personaje actúe para cumplirlo.
+
+**Validación:** los cambios y pruebas están publicados en la rama. No se afirma que el build, type-check o suite se hayan ejecutado correctamente; se requiere CI sobre el head actualizado.

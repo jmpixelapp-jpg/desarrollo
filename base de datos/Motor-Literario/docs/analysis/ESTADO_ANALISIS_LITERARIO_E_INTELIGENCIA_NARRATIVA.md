@@ -659,3 +659,5 @@ El registro técnico detallado se encuentra en `docs/analysis/REGISTRO_TECNICO_L
 **Estado de evidencia:** además de resolver rangos a bloques, la API acepta snapshots con `metadata.revision`, valida coincidencia de revisión y cita exacta para evidencias persistidas y resuelve colecciones completas sin resultados parciales. La integración automática en las consultas y salidas del conocimiento narrativo sigue pendiente.
 
 **Validación:** las pruebas están escritas, pero no se ha ejecutado typecheck, build ni suite completa en esta tanda. No se declara CI aprobado. El lector EPUB sigue siendo una implementación inicial pendiente de corpus real y de cierre de compatibilidad.
+
+**Hallazgo de integración documentado:** `TextEvidence.excerpt` conserva la línea completa y `start/end` delimitan la ocurrencia dentro de ella. El resolver ahora verifica esa línea contextual. También se identificó que los IDs sintéticos de capítulo de la ingesta no son automáticamente equivalentes a los `documentId` del anfitrión; el mapeo y la base de offsets deben definirse explícitamente antes de integrar las evidencias al conocimiento narrativo.

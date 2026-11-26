@@ -38,6 +38,28 @@ test("no atribuye un sujeto cuando aparecen varios personajes", () => {
   assert.deepEqual(found[0].mentionedCharacterIds.sort(), [character.id, bruno.id].sort());
 });
 
+test("detecta pronombres narrativos y conserva candidatos de antecedente sin resolverlos", () => {
+  const text = "Ana entró en la habitación. Ella corrió hacia la ventana.";
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  const pronounAction = found.find(item => item.action === "correr");
+  assert.ok(pronounAction);
+  assert.deepEqual(pronounAction.mentionedCharacterIds, []);
+  assert.equal(pronounAction.unresolvedReferences?.[0]?.pronoun, "Ella");
+  assert.deepEqual(pronounAction.unresolvedReferences?.[0]?.candidateEntityIds, [character.id]);
+  assert.equal(pronounAction.unresolvedReferences?.[0]?.antecedentEvidence?.excerpt,
+    "Ana entró en la habitación.");
+  assert.equal(pronounAction.unresolvedReferences?.[0]?.evidence.excerpt,
+    "Ella corrió hacia la ventana.");
+});
+
+test("no inventa un antecedente cuando el pronombre aparece sin contexto previo", () => {
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text: "Ella corrió hacia la ventana."
+  });
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0].unresolvedReferences?.[0]?.candidateEntityIds, []);
+});
+
 test("no presenta al único personaje mencionado como agente gramatical", () => {
   const text = "Ana fue encontrada por el guardia.";
   const found = discoverNarrativeObservationCandidates({ ...context, text });

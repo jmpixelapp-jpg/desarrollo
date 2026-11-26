@@ -39,3 +39,8 @@ Este manifiesto establece un punto de recuperación y permite identificar qué r
 - Las decisiones manuales sobre el estado de las ideas se conservan mediante `mergeNarrativeIdea`; la persistencia no sustituye decisiones editoriales.
 
 La operación actual sigue siendo secuencial: si falla a mitad, puede quedar una proyección parcial hasta reintentar. La siguiente evolución necesaria es conectar los manifiestos con una operación de reemplazo por documento que actualice en una sola transacción el manifiesto y todas las colecciones afectadas.
+
+
+### Enumeración de manifiestos documentales
+
+`ProjectStore.loadNarrativeDocumentProjectionManifests(projectId)` permite recuperar el inventario completo de proyecciones de un libro, incluidos los tombstones. La implementación IndexedDB consulta el índice `by-project`, espera a que finalice la transacción de lectura y valida el aislamiento del proyecto, la identidad documental y la ausencia de duplicados. Esta lectura habilita la reconciliación tras reinicio y la detección de documentos retirados; por sí sola no elimina contribuciones ni sustituye la futura transacción atómica de reemplazo.

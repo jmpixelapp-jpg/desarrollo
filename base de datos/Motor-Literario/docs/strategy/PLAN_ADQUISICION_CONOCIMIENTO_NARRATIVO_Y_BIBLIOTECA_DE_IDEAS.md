@@ -295,3 +295,24 @@ Se integra en `understandNarrativeFragment` mediante `priorClaims` y devuelve `k
 **Límites importantes:** esta fase detecta señales lingüísticas explícitas, no determina verdad objetiva ni fiabilidad. «Mara confirmó que X» se registra como evaluación de Mara, no como validación del narrador. «Ocultó que X» indica ocultamiento explícito, pero no permite inferir por qué, a quién ni si X es verdadero. No se resuelven todavía paráfrasis, contradicciones semánticas, mentiras, ironía, cambios de opinión implícitos ni cadena de transmisión de una fuente a otra.
 
 Se añadieron pruebas de confirmación, refutación, paráfrasis no enlazada, antecedentes duplicados, ausencia de señal, offsets y validación de proyecto, además de integración en el pipeline.
+
+
+## Fase S: reconstrucción de cadenas explícitas de transmisión de información
+
+Se añadió `narrative-information-chain.ts` para enlazar adquisiciones y transmisiones entre capítulos o dentro de un mismo fragmento.
+
+Ejemplo de cadena:
+1. Elian ve que el puente cayó: el conocimiento queda asociado a Elian como titular, sin inventar un emisor.
+2. Elian le cuenta a Mara que el puente cayó: la transmisión se enlaza con la adquisición anterior si el titular anterior es Elian y el contenido coincide exactamente.
+3. Mara le cuenta a Ivo lo mismo: puede enlazarse con la transmisión anterior porque Mara pasa a ser titular y luego emisor.
+
+Cada paso conserva emisor, receptor, canal, contenido y evidencia. La relación entre pasos requiere identidad coincidente y contenido normalizado exacto. La búsqueda dentro del fragmento respeta el orden textual; la memoria de capítulos anteriores se recibe explícitamente por `priorInformationProvenance`.
+
+Estados de enlace:
+- `linked`: existe un único antecedente compatible.
+- `no-predecessor`: no existe antecedente demostrable o el emisor no está identificado.
+- `ambiguous-predecessor`: más de un antecedente coincide; no se elige arbitrariamente.
+
+El pipeline devuelve `informationChain`; el módulo se exporta desde `src/index.ts`. Se añadieron pruebas para dos transmisiones sucesivas, enlaces en el mismo capítulo, paráfrasis no enlazadas, antecedentes duplicados, rumores sin fuente inventada, procedencia y proyecto.
+
+**Límites:** esta reconstrucción no infiere paráfrasis, fuentes implícitas, intención de engañar, confianza, comprensión correcta ni verdad objetiva. La coincidencia literal solo demuestra compatibilidad textual e identitaria, no que el receptor haya entendido o aceptado la información. Los registros previos deben suministrarse desde la biblioteca/persistencia; el pipeline no consulta el almacén por sí solo.

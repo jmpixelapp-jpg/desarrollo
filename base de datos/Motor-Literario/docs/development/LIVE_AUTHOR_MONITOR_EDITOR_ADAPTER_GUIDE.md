@@ -221,6 +221,8 @@ El monitor conserva ocho contadores categóricos (`typingChanges`, `compositionC
 
 Los checkpoints versión 1 mantienen compatibilidad: los campos nuevos son opcionales y no se reconstruye clasificación histórica sin evidencia. `activityUnitMetricsComplete` queda en `false` después de restaurar checkpoints históricos sin desglose, resincronizar con snapshot o admitir un delta sin categoría explícita reconocida. Una categoría explícita `other` sí es conocida y no invalida por sí sola esa cobertura.
 
+La fuente textarea exige además que `beforeinput.inputType` e `input.inputType` coincidan cuando ambos tokens están presentes. Un conflicto produce `input-type-mismatch`, suspende la captura y requiere snapshot; no se publica el delta aunque las longitudes o los datos textuales pudieran coincidir. Si el evento `input` no informa `inputType`, se usa el token capturado en `beforeinput`, pero la traza lo deja como `paired-inputtype-unavailable`.
+
 ## 10. Retención local de checkpoints
 
 La retención de métricas del monitor se configura al crear `HostEngineApi` mediante `liveAuthorMonitorCheckpointRetentionMs`. El valor predeterminado es 90 días; `0` desactiva la limpieza. El máximo configurable es 3650 días.

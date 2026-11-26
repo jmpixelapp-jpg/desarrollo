@@ -182,7 +182,7 @@ test("el presupuesto léxico reserva también el texto enlazado que se incorpora
 
 test("la cronología conserva solo una muestra acotada de evidencia durante la agregación", () => {
   const start = literaryAnalysisSource.indexOf("function buildCharacterProjectEventTimeline(");
-  const end = literaryAnalysisSource.indexOf("\\nfunction ", start + 10);
+  const end = literaryAnalysisSource.indexOf("\nfunction ", start + 10);
   assert.notEqual(start, -1, "debe existir el constructor de cronología de personaje");
   assert.ok(end > start, "el constructor debe delimitarse para auditar su acumulación");
   const builder = literaryAnalysisSource.slice(start, end);

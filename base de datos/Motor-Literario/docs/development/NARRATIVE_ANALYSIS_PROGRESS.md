@@ -268,3 +268,18 @@ Handlers implementados para `idea-upsert`, `assertion-upsert`, `relation-upsert`
 **Límites:** estas operaciones siguen siendo entrega al menos una vez; CAS protege cada registro, no forma una transacción entre varias entidades. Los IDs referenciados deben validarse también contra el proyecto en la capa de aplicación o store, antes de habilitar el transporte remoto. La validación SHA-256 no sustituye autenticación.
 
 **Validación automatizada:** se añadieron pruebas de integración, pero GitHub no ha reportado todavía workflow runs ni estados para los commits nuevos. No se declara build/typecheck/suite en verde.
+
+
+## Continuación: handler de entidades narrativas (2026-11-26)
+
+### Frente G — fichas de identidad
+
+- Añadido `createNarrativeEntityUpsertHandler` para la operación `entity-upsert`.
+- Usa `loadEntities` y `saveEntityIfUnchanged`; comprueba el aislamiento por proyecto y la idempotencia del replay.
+- Valida tipo de entidad, ID, nombre canónico, coherencia con `normalizeEntityName`, alias no duplicados, evidencia, marcas de primera/última aparición y versión de extracción.
+- Añadidas pruebas de aplicación CAS, caída antes del acuse y rechazo de payloads incoherentes en `tests/narrative-sync-entity-handler.test.mjs`.
+- Actualizado el contrato de handlers para incluir `entity-upsert`.
+
+**Límite deliberado:** el upsert no consolida identidades ni redirige referencias. La consolidación requiere el flujo atómico ya definido por el store, pues una fusión afecta relaciones, afirmaciones, vínculos y snapshots archivados. No se sustituye esa operación compleja por un merge superficial.
+
+**Validación automatizada:** commits recientes aún sin workflow runs ni estados de CI reportados. No se declara typecheck/build/tests ejecutados.

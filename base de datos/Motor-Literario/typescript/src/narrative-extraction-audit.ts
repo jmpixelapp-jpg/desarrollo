@@ -134,14 +134,22 @@ export function auditNarrativeExtractionCoverage(
   const allSpans = sentenceSpans(input.text);
   const sentenceCount = allSpans.length;
   const sentenceSpansTruncated = sentenceCount >= MAX_NARRATIVE_AUDIT_SENTENCES;
+  const orderedEvidence = [...evidence].sort((a, b) =>
+    a.start - b.start || a.end - b.end
+  );
   const uncovered: NarrativeUncoveredSentenceCandidate[] = [];
   let coveredCount = 0;
+  let evidenceCursor = 0;
   for (const span of allSpans) {
     const absoluteStart = baseOffset + span.start;
     const absoluteEnd = baseOffset + span.end;
-    const covered = evidence.some(item =>
-      item.start < absoluteEnd && item.end > absoluteStart
-    );
+    while (evidenceCursor < orderedEvidence.length &&
+        orderedEvidence[evidenceCursor]!.end <= absoluteStart) {
+      evidenceCursor += 1;
+    }
+    const nextEvidence = orderedEvidence[evidenceCursor];
+    const covered = !!nextEvidence &&
+      nextEvidence.start < absoluteEnd && nextEvidence.end > absoluteStart;
     if (covered) {
       coveredCount += 1;
       continue;

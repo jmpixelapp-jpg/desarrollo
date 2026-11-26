@@ -463,6 +463,86 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           "el candidato confirmado debe permanecer en el documento");
         assert.ok(committedResult.events.some(event => event.type === "compositionend"),
           "la confirmación debe cerrar la composición en Chromium");
+
+        // Comprueba una interrupción con eventos DOM confiables de teclado:
+        // el adaptador observa beforeinput, un listener posterior cancela la
+        // acción por defecto y no se produce input; al perder el foco debe
+        // suspenderse sin inventar el delta.
+        await page.evaluate(async () => {
+          const { LiveAuthorMonitorTextAreaSource } =
+            await import("/src/live-author-monitor-textarea-source.ts");
+          const element = document.createElement("textarea");
+          element.id = "blur-recovery-textarea";
+          element.value = "abc";
+          document.body.append(element);
+          const errors = [];
+          const changes = [];
+          const observed = [];
+          let inputEvents = 0;
+          const source = new LiveAuthorMonitorTextAreaSource({
+            element,
+            initialSnapshot: {
+              documentId: "browser-blur-recovery",
+              text: "abc",
+              revision: 0,
+              sequence: 0
+            },
+            onError: error => errors.push(error.code)
+          });
+          source.subscribeChanges(change => changes.push(change));
+          element.addEventListener("beforeinput", event => {
+            observed.push({
+              inputType: event.inputType,
+              data: event.data,
+              isTrusted: event.isTrusted,
+              cancelable: event.cancelable
+            });
+            if (event.inputType === "insertText") event.preventDefault();
+          });
+          element.addEventListener("input", () => { inputEvents += 1; });
+          window.__blurRecoveryHarness = { element, source, errors, changes, observed, get inputEvents() { return inputEvents; } };
+        });
+
+        const blurTextarea = page.locator("#blur-recovery-textarea");
+        await blurTextarea.focus();
+        await page.keyboard.type("X");
+        const beforeBlur = await page.evaluate(() => ({
+          observed: [...window.__blurRecoveryHarness.observed],
+          inputEvents: window.__blurRecoveryHarness.inputEvents,
+          value: window.__blurRecoveryHarness.element.value,
+          state: window.__blurRecoveryHarness.source.getState()
+        }));
+        assert.equal(beforeBlur.observed.length, 1);
+        assert.equal(beforeBlur.observed[0].inputType, "insertText");
+        assert.equal(beforeBlur.observed[0].isTrusted, true,
+          "beforeinput debe proceder del teclado real del navegador");
+        assert.equal(beforeBlur.observed[0].cancelable, true);
+        assert.equal(beforeBlur.inputEvents, 0,
+          "preventDefault posterior debe impedir el input correspondiente");
+        assert.equal(beforeBlur.value, "abc");
+        assert.equal(beforeBlur.state.needsResync, false,
+          "la fuente espera la resolución del beforeinput todavía no completado");
+
+        await blurTextarea.evaluate(element => element.blur());
+        const afterBlur = await page.evaluate(() => {
+          const harness = window.__blurRecoveryHarness;
+          const result = {
+            errors: [...harness.errors],
+            changes: [...harness.changes],
+            inputEvents: harness.inputEvents,
+            state: harness.source.getState()
+          };
+          harness.source.dispose();
+          harness.element.remove();
+          delete window.__blurRecoveryHarness;
+          return result;
+        });
+        assert.deepEqual(afterBlur.errors, ["missing-input"]);
+        assert.equal(afterBlur.changes.length, 0,
+          "un beforeinput cancelado no debe convertirse en un delta");
+        assert.equal(afterBlur.inputEvents, 0);
+        assert.equal(afterBlur.state.needsResync, true);
+        assert.equal(afterBlur.state.compositionActive, false);
       } finally {
         await cdp.detach();
       }

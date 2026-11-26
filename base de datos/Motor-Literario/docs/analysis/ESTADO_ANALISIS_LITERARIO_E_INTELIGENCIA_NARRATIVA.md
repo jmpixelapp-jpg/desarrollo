@@ -799,4 +799,4 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Pruebas añadidas:** etiqueta literal única, descriptor compartido ambiguo, ausencia de etiqueta registrada, coincidencia parcial, offsets con emoji, evidencia obsoleta, exclusión de entidades no-personaje, proyecto/perfiles duplicados, evidencia inválida, límites de salida y preservación de procedencia.
 
-**Validación CI:** pendiente de type-check, compilación, pruebas automatizadas y benchmark tras la exportación. No marcar como aprobada hasta que la ejecución correspondiente finalice correctamente.
+**Validación CI:** aprobada en GitHub Actions, ejecución `45789179406`, commit `8d45f091`: instalación de Chromium, type-check, compilación, conjunto completo de pruebas automatizadas y benchmark finalizaron correctamente.

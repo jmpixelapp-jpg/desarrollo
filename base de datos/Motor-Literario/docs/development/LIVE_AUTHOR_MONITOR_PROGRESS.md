@@ -663,3 +663,12 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 - Compatibilidad adicional: los checkpoints v1 anteriores a las categorías restauran sus ediciones históricas como `otherChanges`; así, los nuevos totales siguen cuadrando al volver a guardar.
 
 - La restauración también admite checkpoints intermedios con los seis contadores clasificados pero todavía sin `otherChanges`; el residual se infiere como `acceptedChanges - suma(clasificados)`.
+
+## 11. Entrega — recuperación inmediata al volver de suspensión (25 de noviembre de 2026)
+
+- HostEngineApi escucha `visibilitychange` y `pageshow`; al regresar una pestaña a estado visible, revalida de inmediato los leases de documentos monitoreados.
+- Si el lease expiró mientras el navegador suspendió o limitó los temporizadores, intenta adquirirlo de nuevo en ese mismo ciclo. Si otra pestaña gana la carrera, el heartbeat periódico conserva los reintentos.
+- Los listeners se retiran en `dispose()`; el listener no interviene cuando la página pasa a segundo plano.
+- Se añade una prueba determinista que expira el lease mientras la pestaña está oculta, dispara el regreso a visible y verifica la adquisición con el siguiente fencing token.
+
+**Validación:** pendiente de CI.

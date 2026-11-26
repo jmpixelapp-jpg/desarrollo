@@ -628,6 +628,18 @@ export class HostEngineApi {
   private readonly liveMonitorLeaseGenerations = new Map<string, object>();
   private readonly liveMonitorLeaseReleasing = new Set<string>();
   private readonly liveMonitorLeaseHeartbeatInFlight = new Set<string>();
+  private readonly liveMonitorLifecycleDocument: Document | undefined;
+  private readonly liveMonitorLifecycleWindow: Window | undefined;
+  private readonly onLiveMonitorVisibilityChange = (): void => {
+    if (this.liveMonitorLifecycleDocument?.visibilityState === "visible") {
+      this.resumeLiveAuthorMonitorLeases();
+    }
+  };
+  private readonly onLiveMonitorPageShow = (): void => {
+    if (this.liveMonitorLifecycleDocument?.visibilityState === "visible") {
+      this.resumeLiveAuthorMonitorLeases();
+    }
+  };
   private readonly liveMonitorOwnerId = globalThis.crypto?.randomUUID?.() ??
     `monitor-owner:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   private static readonly LIVE_MONITOR_LEASE_DURATION_MS = 30_000;
@@ -670,6 +682,10 @@ export class HostEngineApi {
   private entityNameIndex: Map<string, Set<string>> | undefined;
 
   constructor(options: HostEngineOptions) {
+    this.liveMonitorLifecycleDocument = typeof document === "undefined" ? undefined : document;
+    this.liveMonitorLifecycleWindow = typeof window === "undefined" ? undefined : window;
+    this.liveMonitorLifecycleDocument?.addEventListener("visibilitychange", this.onLiveMonitorVisibilityChange);
+    this.liveMonitorLifecycleWindow?.addEventListener("pageshow", this.onLiveMonitorPageShow);
     this.store = options.store;
     this.liveAuthorMonitor = new LiveAuthorMonitor(options.liveAuthorMonitor);
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
@@ -3882,6 +3898,8 @@ export class HostEngineApi {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.liveMonitorLifecycleDocument?.removeEventListener("visibilitychange", this.onLiveMonitorVisibilityChange);
+    this.liveMonitorLifecycleWindow?.removeEventListener("pageshow", this.onLiveMonitorPageShow);
     this.unsubscribeNarrativeChanges?.();
     this.unsubscribeNarrativeChanges = undefined;
     for (const documentId of this.liveMonitorLeases.keys()) {
@@ -4207,6 +4225,17 @@ export class HostEngineApi {
     return next;
   }
 
+  /** Revalida titularidad inmediatamente al volver desde suspensión/background. */
+  private resumeLiveAuthorMonitorLeases(): void {
+    if (this.disposed) return;
+    for (const documentId of this.liveMonitorLeaseHeartbeats.keys()) {
+      void this.renewLiveAuthorMonitorLeaseFromHeartbeat(documentId).catch(error => {
+        this.liveMonitorLeaseErrors.set(documentId, error);
+        this.reportKnowledgeError(error);
+      });
+    }
+  }
+
   private startLiveAuthorMonitorLeaseHeartbeat(documentId: string): void {
     if (this.disposed || this.liveMonitorLeaseHeartbeats.has(documentId) ||
         this.liveMonitorLeaseReleasing.has(documentId)) return;
@@ -4263,8 +4292,10 @@ export class HostEngineApi {
         if (this.liveMonitorLeaseGenerations.get(documentId) === invalidatedGeneration) {
           this.liveMonitorLeaseGenerations.delete(documentId);
         }
-        // Se conserva el timer: en el siguiente heartbeat esta pestaña intentará
-        // adquirir un lease expirado, sin esperar a que el autor vuelva a escribir.
+        // Intentar adquirir el lease en el mismo ciclo de reanudación. Si otra
+        // pestaña gana la carrera, el heartbeat periódico seguirá reintentando.
+        const reacquired = await this.acquireOrRenewLiveAuthorMonitorLease(documentId);
+        if (reacquired && !this.disposed) this.scheduleLiveAuthorMonitorCheckpoint(documentId);
         return;
       }
       this.liveMonitorLeases.set(documentId, {

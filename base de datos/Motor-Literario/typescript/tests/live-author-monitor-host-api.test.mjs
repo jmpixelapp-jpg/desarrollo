@@ -621,3 +621,70 @@ test("informa pérdida del lease cuando otra pestaña sustituye el fencing token
   assert.equal(diagnostics.fencingToken, undefined);
   api.dispose();
 });
+
+test("al volver a visible recupera de inmediato un lease expirado durante suspensión", async () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const documentListeners = new Map();
+  const windowListeners = new Map();
+  const fakeDocument = {
+    visibilityState: "hidden",
+    addEventListener(type, listener) {
+      const set = documentListeners.get(type) ?? new Set();
+      set.add(listener);
+      documentListeners.set(type, set);
+    },
+    removeEventListener(type, listener) {
+      documentListeners.get(type)?.delete(listener);
+    }
+  };
+  const fakeWindow = {
+    addEventListener(type, listener) {
+      const set = windowListeners.get(type) ?? new Set();
+      set.add(listener);
+      windowListeners.set(type, set);
+    },
+    removeEventListener(type, listener) {
+      windowListeners.get(type)?.delete(listener);
+    }
+  };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: fakeDocument });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+
+  const store = new MemoryDocumentStore();
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId: "monitor-resume-lease", projectName: "Monitor resume lease" });
+    await api.openDocument({
+      documentId: "chapter-1",
+      text: "resume",
+      revision: 0,
+      sequence: 0
+    });
+    const key = "monitor-resume-lease:chapter-1";
+    const originalLease = store.monitorLeases.get(key);
+    assert.ok(originalLease);
+    const expiredAt = Date.now() - 1;
+    store.monitorLeases.set(key, {
+      ...originalLease,
+      acquiredAt: expiredAt - 60_000,
+      expiresAt: expiredAt,
+      updatedAt: expiredAt
+    });
+
+    fakeDocument.visibilityState = "visible";
+    for (const listener of [...(documentListeners.get("visibilitychange") ?? [])]) listener();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const diagnostics = api.getLiveAuthorMonitorPersistenceDiagnostics("chapter-1");
+    assert.equal(diagnostics.leaseState, "owner");
+    assert.equal(diagnostics.fencingToken, originalLease.fencingToken + 1);
+    assert.equal(documentListeners.get("visibilitychange")?.size, 1);
+  } finally {
+    api.dispose();
+    if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+    else delete globalThis.document;
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete globalThis.window;
+  }
+});

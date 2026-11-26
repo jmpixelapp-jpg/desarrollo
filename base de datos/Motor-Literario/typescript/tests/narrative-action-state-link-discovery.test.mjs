@@ -38,7 +38,7 @@ test("vincula acción y estado con marcador causal explícito cuando el estado a
   assert.equal(found[0].marker, "porque");
   assert.equal(found[0].position, "state-before-action");
   assert.equal(found[0].entityId, ana.id);
-  assert.equal(found[0].basis, "shared-character-mention");
+  assert.equal(found[0].basis, "grammatical-subject");
   assert.equal(found[0].reviewStatus, "candidate");
   assert.equal(text.slice(found[0].markerEvidence.start, found[0].markerEvidence.end), "porque");
   assert.equal(text.slice(found[0].actionEvidence.start, found[0].actionEvidence.end), found[0].actionEvidence.excerpt);

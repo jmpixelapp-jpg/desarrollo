@@ -379,6 +379,7 @@ export async function inspectNarrativeSyncJournalIntegrity(
   projectId: string
 ): Promise<NarrativeSyncJournalIntegrityReport> {
   if (!journal || typeof journal.loadOperations !== "function" ||
+      typeof journal.loadWriterCursors !== "function" ||
       typeof projectId !== "string" || !projectId.trim()) {
     throw new TypeError("Se requiere un diario y un proyecto válidos para auditar sincronización.");
   }
@@ -434,7 +435,9 @@ export async function inspectNarrativeSyncJournalIntegrity(
     }
   }
   const cursors = await journal.loadWriterCursors(projectId);
-  const cursorWriters = new Set(cursors.map(cursor => cursor.writerId));
+  const cursorWriters = new Set(cursors.map(cursor =>
+    typeof cursor.writerId === "string" ? cursor.writerId : ""
+  ));
   for (const writerId of writers.keys()) {
     if (!cursorWriters.has(writerId)) {
       issues.push({
@@ -446,13 +449,15 @@ export async function inspectNarrativeSyncJournalIntegrity(
     }
   }
   for (const cursor of cursors) {
-    const entries = writers.get(cursor.writerId) ?? [];
+    const writerId = typeof cursor.writerId === "string" ? cursor.writerId : "";
+    const lastOperationId = typeof cursor.lastOperationId === "string" ? cursor.lastOperationId : "";
+    const entries = writers.get(writerId) ?? [];
     const last = entries.reduce<NarrativeSyncJournalEntry | undefined>(
       (current, entry) => !current || entry.sequence > current.sequence ? entry : current,
       undefined
     );
     const addCursorIssue = (code: NarrativeSyncJournalIntegrityIssueCode, detail: string): void => {
-      issues.push({ code, operationId: cursor.lastOperationId, writerId: cursor.writerId, detail });
+      issues.push({ code, operationId: lastOperationId, writerId, detail });
     };
     if (!Number.isSafeInteger(cursor.lastSequence) || cursor.lastSequence < 1 ||
         !Number.isFinite(cursor.updatedAt) || cursor.updatedAt < 0 ||
@@ -468,7 +473,7 @@ export async function inspectNarrativeSyncJournalIntegrity(
       } else if (cursor.lastSequence < last.sequence) {
         addCursorIssue("cursor-behind-journal", "El diario contiene una operación posterior al cursor durable.");
       }
-      if (cursor.lastSequence === last.sequence && cursor.lastOperationId !== last.operationId) {
+      if (cursor.lastSequence === last.sequence && lastOperationId !== last.operationId) {
         addCursorIssue("cursor-last-operation-mismatch", "El cursor no identifica la última operación de su secuencia.");
       }
     }

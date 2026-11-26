@@ -383,8 +383,8 @@ test("el fencing token invalida escrituras del propietario anterior tras expirar
       store.saveLiveAuthorMonitorCheckpoint(
         checkpoint(projectId, documentId, Date.now() + 1, {
           sessionId: "stale-session",
-          revision: 0,
-          sequence: 0
+          revision: 1,
+          sequence: 1
         }),
         firstLease
       ),
@@ -393,8 +393,8 @@ test("el fencing token invalida escrituras del propietario anterior tras expirar
 
     const nextCheckpoint = checkpoint(projectId, documentId, Date.now() + 2, {
       sessionId: "fresh-session",
-      revision: 0,
-      sequence: 0
+      revision: 1,
+      sequence: 1
     });
     await store.saveLiveAuthorMonitorCheckpoint(nextCheckpoint, takeover);
     assert.deepEqual(

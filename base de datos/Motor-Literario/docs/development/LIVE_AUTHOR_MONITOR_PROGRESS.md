@@ -1595,7 +1595,7 @@ La suite general del motor se valida por separado; este resultado certifica la l
 
 **Corrección:** se conserva el request devuelto por `checkpointStore.put()` y se instala su handler `onerror`. El error original (por ejemplo, `QuotaExceededError` o `DataCloneError`) se captura y se aborta la transacción; `onabort` rechaza con ese mismo error en vez de sustituirlo por uno genérico. Las excepciones síncronas siguen pasando por el guard existente.
 
-**Regresión:** una solicitud de escritura simulada entrega un `QuotaExceededError` asíncrono. La transacción debe abortarse, la promesa debe rechazar conservando `error.name`, y el checkpoint durable anterior debe permanecer intacto. El test no llena físicamente el disco ni pretende medir el límite real de cuota del navegador; simula la interfaz de error del request para verificar la ruta de propagación.
+**Regresión:** una solicitud de escritura simulada entrega un `QuotaExceededError` asíncrono. La transacción debe abortarse, la promesa debe rechazar conservando `error.name`, y el checkpoint durable anterior debe permanecer intacto. El test no llena físicamente el disco ni pretende medir el límite real de cuota del navegador; simula la interfaz de error del request para verificar la ruta de propagación. Una segunda regresión encola el put y aborta la transacción antes del commit; comprueba que el snapshot anterior sobrevive y que la misma instancia vuelve a persistir tras el aborto.
 
 **Diagnóstico de host:** la prueba existente `publica el error de cuota del checkpoint sin exponer el texto interno` verifica que el anfitrión muestre `checkpointState: error` y `checkpointErrorCode: QuotaExceededError` sin serializar el mensaje privado ni contenido del manuscrito.
 

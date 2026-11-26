@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { IndexedDbProjectStore } from "../dist/motor-literario.js";
 
-globalThis.indexedDB ??= new IDBFactory();
+globalThis.indexedDB = new IDBFactory();
 
 const DATABASE_NAME = "motor-literario-local";
 const projectId = "indexeddb-idea-transaction";

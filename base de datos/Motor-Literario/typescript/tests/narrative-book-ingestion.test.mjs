@@ -251,6 +251,20 @@ test("la ingesta extrae presencia locativa explícita y la incluye en la cobertu
   assert.deepEqual(result.extractionAudit.uncoveredSentences, []);
 });
 
+test("la ingesta extrae fechas y referencias temporales sin resolver anclas relativas", () => {
+  const text = "Ana llegó el 1945-03-12 al puerto. Al día siguiente salió.";
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "temporal-scene", revision: 3, text
+  });
+  const date = result.temporalReferences.find(item => item.kind === "calendar-date");
+  const relative = result.temporalReferences.find(item => item.relation === "next-day-after");
+  assert.equal(date.normalizedDate, "1945-03-12");
+  assert.equal(relative.anchorRequired, true);
+  assert.equal(relative.absoluteResolution, "unresolved-relative");
+  assert.equal(result.temporalReferenceStatus, "extracted");
+  assert.equal(result.extractionAudit.sentencesWithAnyExtractedEvidence, 2);
+});
+
 test("no infiere entidades de nombres propios sin etiqueta explícita", () => {
   const result = ingestNarrativeBookText({
     projectId: "p", documentId: "no-name-guess", revision: 1,

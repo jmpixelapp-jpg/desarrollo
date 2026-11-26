@@ -69,7 +69,8 @@ const book = ingestNarrativeBookText({
 
 1. Adaptadores de lectura para EPUB, PDF y DOCX, preservando el mapa entre texto extraído y ubicación original; TXT/Markdown ya dispone de lector estándar.
 2. Resolución de capítulos y secciones con encabezados no convencionales, numeración y metadatos.
-3. Resolución de menciones a entidades con alias, pronombres y referencias entre párrafos, manteniendo candidatos y evidencia.
+3. Ampliar progresivamente el inventario verbal por idioma y variedad lingüística, validando cada forma con casos positivos y negativos para evitar prefijos espurios.
+4. Resolución de menciones a entidades con alias, pronombres y referencias entre párrafos, manteniendo candidatos y evidencia.
 4. Extracción de acontecimientos con participantes y roles gramaticales separados de los personajes meramente mencionados.
 5. Normalización temporal por línea narrativa, distinguiendo tiempo del discurso, tiempo de la historia, duración e incertidumbre.
 6. Relaciones causales tipadas (causa, condición, consecuencia, motivación) con soporte textual y estado de revisión.
@@ -78,7 +79,7 @@ const book = ingestNarrativeBookText({
 
 ## Verificación
 
-La suite `tests/narrative-book-ingestion.test.mjs` cubre segmentación, offsets, señales, cautela semántica, alcance de negación entre oraciones, límites y determinismo. Ejecutar desde esta carpeta:
+La suite `tests/narrative-book-ingestion.test.mjs` cubre segmentación, offsets, señales, cautela semántica, alcance de negación entre oraciones, formas verbales de llegada/movimiento en presente y futuro, límites y determinismo. Ejecutar desde esta carpeta:
 
 ```sh
 npm test

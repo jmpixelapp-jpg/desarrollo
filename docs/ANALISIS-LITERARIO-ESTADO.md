@@ -163,3 +163,8 @@ La ejecución del workflow en ese HEAD contabilizó **716 pruebas: 715 aprobadas
 Ejecución: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45735421770
 
 En ese HEAD, TypeScript y la compilación completan; el paso de pruebas falla por ese escenario de navegador y, por ello, el benchmark queda omitido. La validación integral verde anterior sigue registrada en el commit `bf6d3f5`; la siguiente tarea de integración global es resolver ese único fallo del monitor y repetir el workflow completo.
+
+
+### Integración del monitor multipdocumento
+
+La restauración de checkpoints de sesiones muy recientes conserva ahora la edad real de la última actividad y suma el tiempo fuera del proceso a la inactividad, sin fabricar actividad anterior al inicio de la sesión. Esta corrección quedó incorporada en `main` mediante `fix(live-author-monitor): preserve activity age on immediate recovery`.

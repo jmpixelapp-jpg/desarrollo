@@ -1,4 +1,5 @@
 import type { ProjectStore } from "./contracts";
+import { areNarrativeSyncPayloadsEquivalent } from "./narrative-sync-integrity";
 import {
   MAX_NARRATIVE_IDEA_REFERENCES,
   normalizeEntityName,
@@ -89,7 +90,7 @@ export function createNarrativeIdeaUpsertHandler(
       }
       const existing = (await store.loadIdeas!(operation.projectId))
         .find(item => item.id === idea.id);
-      if (existing && JSON.stringify(existing) === JSON.stringify(idea)) return;
+      if (existing && areNarrativeSyncPayloadsEquivalent(existing, idea)) return;
       await store.saveIdeaIfUnchanged!(idea, existing);
     }
   };
@@ -157,7 +158,7 @@ export function createNarrativeAssertionUpsertHandler(
       }
       const existing = (await store.loadAssertions!(operation.projectId))
         .find(item => item.id === assertion.id);
-      if (existing && JSON.stringify(existing) === JSON.stringify(assertion)) return;
+      if (existing && areNarrativeSyncPayloadsEquivalent(existing, assertion)) return;
       await store.saveAssertionIfUnchanged!(assertion, existing);
     }
   };
@@ -243,7 +244,7 @@ export function createNarrativeRelationUpsertHandler(
       }
       const existing = (await store.loadRelations!(operation.projectId))
         .find(item => item.id === relation.id);
-      if (existing && JSON.stringify(existing) === JSON.stringify(relation)) return;
+      if (existing && areNarrativeSyncPayloadsEquivalent(existing, relation)) return;
       await store.saveRelationIfUnchanged!(relation, existing);
     }
   };
@@ -269,7 +270,7 @@ export function createNarrativeEventUpsertHandler(
       }
       const existing = (await store.loadEvents!(operation.projectId))
         .find(item => item.id === event.id);
-      if (existing && JSON.stringify(existing) === JSON.stringify(event)) return;
+      if (existing && areNarrativeSyncPayloadsEquivalent(existing, event)) return;
       await store.saveEventIfUnchanged!(event, existing);
     }
   };
@@ -334,7 +335,7 @@ export function createNarrativeEntityUpsertHandler(
       }
       const existing = (await store.loadEntities!(operation.projectId))
         .find(item => item.id === entity.id);
-      if (existing && JSON.stringify(existing) === JSON.stringify(entity)) return;
+      if (existing && areNarrativeSyncPayloadsEquivalent(existing, entity)) return;
       await store.saveEntityIfUnchanged!(entity, existing);
     }
   };

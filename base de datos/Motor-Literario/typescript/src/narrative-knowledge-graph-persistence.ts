@@ -1,4 +1,4 @@
-import type { ProjectStore } from "./contracts";
+import type { ProjectStore, NarrativeReferenceRepairAuditEntry } from "./contracts";
 import {
   mergeNarrativeEntity,
   mergeNarrativeRelation,
@@ -567,7 +567,7 @@ export async function proposeNarrativeReferenceRepairs(
 }
 
 
-export interface NarrativeReferenceRepairAudit {
+export interface NarrativeReferenceRepairAudit extends NarrativeReferenceRepairAuditEntry {
   readonly operation: "narrative-reference-repair";
   readonly projectId: string;
   readonly recordType: NarrativeReferenceRepairProposal["recordType"];
@@ -591,7 +591,7 @@ export interface NarrativeReferenceRepairResult {
  * de fusión y lee el registro inmediatamente antes de escribir mediante CAS.
  * El evento de auditoría se devuelve al llamador para su persistencia durable.
  */
-export async function applyNarrativeReferenceRepair(
+async function applyNarrativeReferenceRepairWithoutAudit(
   store: ProjectStore,
   proposal: NarrativeReferenceRepairProposal,
   approved: boolean,
@@ -699,6 +699,27 @@ export async function applyNarrativeReferenceRepair(
   await store.saveIdeaIfUnchanged!(next, current);
   return { changed: true, replayed: false, audit: { ...auditBase,
     referenceField: "relatedEntityIds", before: related, after: next.relatedEntityIds! } };
+}
+
+/** Aplica la reparación y persiste su auditoría append-only antes de devolver éxito. */
+export async function applyNarrativeReferenceRepair(
+  store: ProjectStore,
+  proposal: NarrativeReferenceRepairProposal,
+  approved: boolean,
+  appliedAt = Date.now()
+): Promise<NarrativeReferenceRepairResult> {
+  if (!store || typeof store.appendNarrativeReferenceRepairAudit !== "function") {
+    throw new Error("El almacenamiento debe ofrecer auditoría durable antes de aplicar reparaciones.");
+  }
+  const result = await applyNarrativeReferenceRepairWithoutAudit(store, proposal, approved, appliedAt);
+  const operationId = [
+    "reference-repair", result.audit.projectId, result.audit.recordType,
+    result.audit.recordId, result.audit.referenceField,
+    result.audit.missingReferenceId, result.audit.replacementEntityId
+  ].join("|");
+  const audit: NarrativeReferenceRepairAudit = { ...result.audit, operationId };
+  await store.appendNarrativeReferenceRepairAudit(audit);
+  return { ...result, audit };
 }
 
 export interface NarrativeKnowledgeGraphPersistenceResult {

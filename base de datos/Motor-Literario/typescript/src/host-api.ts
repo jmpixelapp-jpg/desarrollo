@@ -4168,7 +4168,8 @@ export class HostEngineApi {
   private async acquireOrRenewLiveAuthorMonitorLease(
     documentId: string
   ): Promise<StoredLiveAuthorMonitorLease | undefined> {
-    if (!this.supportsLiveAuthorMonitorLeases()) return undefined;
+    if (!this.supportsLiveAuthorMonitorLeases() ||
+        this.liveMonitorLeaseReleasing.has(documentId)) return undefined;
     const now = Date.now();
     const current = this.liveMonitorLeases.get(documentId);
     const renew = this.store.renewLiveAuthorMonitorLease;

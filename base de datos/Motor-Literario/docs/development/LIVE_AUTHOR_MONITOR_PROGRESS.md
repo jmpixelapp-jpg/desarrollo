@@ -1331,3 +1331,18 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Prueba:** el primer suscriptor genera 999 admisiones adicionales durante la notificación de la secuencia 1. El segundo debe recibir exactamente 1.000 snapshots, desde secuencia 1 hasta secuencia 1.000, sin saltos ni retrocesos. Se verifican también 1.000 admisiones aceptadas y 1.000 tickets pendientes al terminar; el test no simula commits ni limpieza que pudieran esconder pérdidas de eventos.
 
 **Validación en [Live Author Monitor — run 45755953392](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45755953392):** aprobada. El nuevo caso terminó en 2,31 ms y recibió exactamente las 1.000 secuencias esperadas en orden. La suite combinada terminó con 38/38 pruebas aprobadas. El benchmark ejecutó 100.000 commits en 355,86 ms (~281.013 commits/s), con heap de 4,26 MiB a mitad y al final de la carga, 0 MiB de crecimiento entre ambas mediciones, 0,49 MiB retenidos por sesiones abiertas y cero tickets pendientes. La lane completa conserva fallo ajeno al monitor: la auditoría física detecta versión IndexedDB distinta y dos almacenes de reparación no declarados; el bundle general falla al analizar `indexeddb-store.ts` en `NarrativeReferenceRepairPendingEntry`.
+
+
+## 83. Diagnóstico visible de errores de suscriptores y vistas (26 de noviembre de 2026)
+
+**Hallazgo:** el monitor aislaba excepciones de suscriptores para proteger la escritura, pero las descartaba silenciosamente. En el panel, el helper de refresco también aislaba fallos de renderizado sin ofrecer una señal visible. Esto impedía distinguir un monitor sano de una vista que había dejado de actualizarse.
+
+**Corrección:** se añade el contador efímero `listenerErrors` al snapshot y a la sesión por documento. Cada excepción de un suscriptor directo incrementa únicamente el documento cuyo snapshot se estaba entregando; no se conserva el mensaje de error. `subscribeLiveAuthorMonitorWithRefresh` acepta `onListenerError(snapshot)` como callback seguro y no entrega el objeto Error. El panel y el workspace muestran el diagnóstico en un nodo `data-diagnostic="listeners"`.
+
+**Privacidad y ciclo de vida:** los contadores no se persisten en checkpoints, no incluyen mensajes internos ni texto del manuscrito y comienzan en cero al abrir/restaurar una sesión. Siguen siendo contadores de observabilidad local, no errores del motor de edición.
+
+**Regresiones:** se cubren errores directos por documento, validación de suscriptores, callbacks de vista durante evento y polling, advertencia accesible en el panel y aislamiento por capítulo en el workspace. El workflow específico incluye ahora los tests del núcleo, panel y workspace en su lane aislada.
+
+**Corrección tras primera ejecución:** CI detectó un separador `;` accidental en la inicialización del contador de sesión nueva, en `live-author-monitor.ts:222`. Se corrigió en el commit `29c0b351`; la validación se está repitiendo con ese ajuste.
+
+**Validación:** pendiente de la nueva ejecución de GitHub Actions.

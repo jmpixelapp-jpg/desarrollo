@@ -837,7 +837,7 @@ Se conecta el índice de continuidad con el anfitrión del motor. La aplicación
 - `flushPendingChanges()` espera también la cola de continuidad, de modo que al regresar no queda una actualización local pendiente.
 
 **Consistencia y eficiencia**
-- Los candidatos se conservan en caché por documento y se reutilizan mientras coincidan revisión, secuencia y updatedAt. También se detectan cambios de snapshot aunque un adaptador conserve accidentalmente revisión y secuencia; una edición solo obliga a redescubrir el documento afectado.
+- Los candidatos se conservan en caché por documento y se reutilizan mientras coincidan revisión, secuencia, updatedAt y presupuesto de texto asignado al documento. El presupuesto es estable para el tamaño actual del proyecto; al añadir o retirar documentos se redistribuye el límite y se revalidan las cachés antiguas. También se detectan cambios de snapshot aunque un adaptador conserve accidentalmente revisión y secuencia.
 - Después de leer los cuerpos, se vuelve a enumerar el inventario. Si cambió el conjunto, la revisión o la secuencia durante el análisis, se aborta esa generación y se conserva el índice anterior.
 - El muestreo de hasta 200 candidatos se distribuye a lo largo del inventario documental, en lugar de favorecer siempre los primeros IDs. El descubrimiento limita el texto agregado a 20 millones de unidades UTF-16 por reconciliación y reparte el presupuesto entre los documentos que deben releerse. Los candidatos cacheados se conservan por revisión, secuencia y `updatedAt`; una relectura valida los tres valores antes de aceptarla. Si se alcanza el límite por documento, el presupuesto total o el límite de tamaño del texto, se propaga `sourceAnalysisTruncated`.
 - Sin una lista editorial explícita suministrada por `HostEngineOptions.getOrderedDocumentIds`, la cronología entre documentos queda desconocida. No se infiere a partir de nombres, IDs, fechas de guardado ni orden alfabético.
@@ -845,7 +845,7 @@ Se conecta el índice de continuidad con el anfitrión del motor. La aplicación
 - Los cambios de la proyección no crean, confirman ni modifican registros `NarrativeIdea`; los candidatos siguen siendo señales analíticas revisables.
 
 **Pruebas añadidas**
-- 11 pruebas de actualización automática: apertura y extracción entre capítulos, actualización tras edición, cronología desconocida, inventario sin cuerpo textual, adaptador sin extracción de entidades, muestreo truncado en un proyecto de 201 documentos, rechazo de revisiones concurrentes, reutilización de caché ante cambios externos sin cambios documentales, detección de cambios de snapshot con revisión/secuencia reutilizadas, recuperación de una inserción de outbox fallida y presupuesto agregado ante once documentos grandes.
-- Total: 11 pruebas nuevas de Fase AU.
+- 12 pruebas de actualización automática: apertura y extracción entre capítulos, actualización tras edición, cronología desconocida, inventario sin cuerpo textual, adaptador sin extracción de entidades, muestreo truncado en un proyecto de 201 documentos, límite de 16 lecturas en paralelo, rechazo de revisiones concurrentes, reutilización de caché ante cambios externos sin cambios documentales, detección de cambios de snapshot con revisión/secuencia reutilizadas, recuperación de una inserción de outbox fallida, presupuesto agregado ante once documentos grandes y redistribución del presupuesto al cambiar el tamaño del proyecto.
+- Total: 12 pruebas nuevas de Fase AU.
 
 La actualización local de la proyección queda automatizada. La entrega a otros dispositivos utiliza el callback/outbox del anfitrión; no se afirma que exista un transporte de red universal integrado en el motor.

@@ -279,7 +279,7 @@ export function extractNarrativeEntities(
     expression.lastIndex = 0;
     for (const match of scanText.matchAll(expression)) {
       const name = match[1]?.trim();
-      if (!name) continue;
+      if (!name || !/^[A-ZÁÉÍÓÚÜÑ]/u.test(name)) continue;
       const relativeStart = match.index + match[0].lastIndexOf(name);
       const start = baseOffset + relativeStart;
       const end = start + name.length;

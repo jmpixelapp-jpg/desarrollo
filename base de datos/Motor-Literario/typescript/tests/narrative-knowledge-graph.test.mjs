@@ -80,7 +80,8 @@ test("reconoce marcadores de entidad sin distinguir mayúsculas", () => {
       "PERSONAJE Mara.",
       "personaje Leo.",
       "LUGAR Puerto Azul.",
-      "OBJETO Espada Solar."
+      "OBJETO Espada Solar.",
+      "personaje mara."
     ].join("\n")
   }]);
 

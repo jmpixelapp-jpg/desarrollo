@@ -66,6 +66,7 @@ export * from "./narrative-action-link-discovery";
 export * from "./narrative-action-state-link-discovery";
 export * from "./narrative-event-chain-discovery";
 export * from "./narrative-pronoun-reference-discovery";
+export * from "./narrative-evidence-context-expansion";
 export * from "./narrative-pronoun-knowledge-discovery";
 
 export * from "./narrative-dialogue-speaker-discovery";

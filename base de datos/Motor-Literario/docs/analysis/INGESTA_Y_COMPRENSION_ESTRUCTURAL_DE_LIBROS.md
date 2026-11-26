@@ -43,6 +43,8 @@ const book = ingestNarrativeBookText({
 // book.observationStatus: declara si el análisis de observaciones fue completo.
 ```
 
+La búsqueda de menciones de entidades usa límites de palabra basados en propiedades Unicode reales; no debe reconocer un nombre como subcadena de otra palabra (por ejemplo, «Ana» dentro de «ventana»). Las referencias pronominales permanecen sin resolver y solo proponen antecedentes locales con evidencia.
+
 ## Garantías y límites
 
 1. La ingesta no modifica el manuscrito.

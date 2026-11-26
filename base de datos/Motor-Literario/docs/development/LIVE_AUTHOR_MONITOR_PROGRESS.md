@@ -1788,9 +1788,9 @@ La pausa temporal sigue invalidando continuidad y exige snapshot; el cierre defi
 
 ## Regresión Chromium de beforeinput cancelado y pérdida de foco — 26 de noviembre de 2026
 
-Se amplió live-author-monitor-browser.test.mjs con una prueba sobre Chromium real: Playwright genera una pulsación de teclado y el adaptador observa el beforeinput confiable. Un listener registrado después cancela la acción por defecto, por lo que no debe aparecer input; al desenfocar el textarea, la fuente debe informar missing-input, liberar el estado pendiente, exigir snapshot y no publicar deltas.
+Se amplió live-author-monitor-browser.test.mjs con una prueba sobre Chromium real: Playwright genera una pulsación de teclado y el adaptador observa el beforeinput confiable. Un listener registrado después cancela la acción por defecto, por lo que no debe aparecer input. Una microtarea comprueba el estado final defaultPrevented y libera la pareja provisional; al desenfocar después el textarea, no se debe emitir missing-input ni suspender una fuente que permanece sincronizada.
 
-Esta regresión distingue el evento nativo confiable generado por el pipeline DOM de los eventos dispatchEvent sintéticos. No equivale a teclado físico ni a proveedor IME de sistema operativo; esas matrices siguen pendientes. La prueba de browser quedó publicada, pero aún no hay confirmación de CI para esta revisión.
+Esta regresión distingue un beforeinput realmente cancelado (no hubo edición esperada) de un par no cancelado cuyo input se perdió. Usa automatización del pipeline DOM de Chromium; no equivale a teclado físico ni a proveedor IME de sistema operativo. La prueba de browser quedó publicada, pero aún no hay confirmación de CI para esta revisión.
 
 ## Recuperación de binding, teardown terminal y prueba Chromium de blur — 26 de noviembre de 2026
 
@@ -1808,3 +1808,11 @@ Se cerró el ciclo de recuperación entre adaptador, cola FIFO e integración:
 **Archivos:** live-author-monitor-textarea-source.ts, live-author-monitor-textarea-integration.ts, live-author-monitor-browser.test.mjs, live-author-monitor-textarea-source.test.mjs, live-author-monitor-textarea-integration.test.mjs y live-author-monitor-change-binding.test.mjs.
 
 **Validación:** los commits están publicados en main; no se ha confirmado todavía una ejecución CI sobre esta revisión.
+
+## Cancelación final de beforeinput por listeners posteriores — 26 de noviembre de 2026
+
+El adaptador ahora vuelve a comprobar defaultPrevented en una microtarea después de que termine la propagación síncrona. Si otro listener cancela la acción por defecto después de que el monitor haya visto el evento, se libera el estado beforeinput provisional. Esto impide confundir una operación cancelada con una edición cuyo input se perdió.
+
+Se añadieron regresiones unitarias y Chromium: no hay delta ni error por la cancelación; el blur posterior no exige snapshot; una edición posterior válida continúa con secuencia/revisión correctas. La protección de missing-input permanece para operaciones no canceladas sin input correspondiente.
+
+**Validación:** cambios y pruebas publicados en main; CI de esta revisión aún pendiente de confirmación.

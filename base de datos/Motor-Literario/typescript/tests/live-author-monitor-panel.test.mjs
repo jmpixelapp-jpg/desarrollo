@@ -167,6 +167,35 @@ test("rechaza un documento inválido antes de insertar elementos DOM", () => {
   assert.equal(f.container.children.length, 0);
 });
 
+test("muestra fallos de actualización del panel sin interrumpir la escritura", () => {
+  const f = fixture();
+  let refresh;
+  let failSnapshot = true;
+  f.api.getLiveAuthorMonitorSnapshot = id => failSnapshot
+    ? { documentId: id, state: "invalid-private-state" }
+    : f.monitor.getSnapshot(id);
+  const unmount = mountLiveAuthorMonitorPanel(f.container, f.api, {
+    documentId: "chapter-1",
+    schedule(callback) { refresh = callback; return () => {}; }
+  });
+  const panel = f.container.children[0];
+  const diagnostic = findNode(panel, node => node.getAttribute("data-diagnostic") === "listeners");
+  assert.match(diagnostic.textContent, /fallo.*actualización de panel/i);
+  assert.equal(panel.textContent.includes("invalid-private-state"), false);
+
+  failSnapshot = false;
+  refresh();
+  assert.match(diagnostic.textContent, /1 fallo/);
+
+  f.monitor.recordAdmission({
+    documentId: "chapter-1", sequence: 1, baseRevision: 0,
+    start: "contenido privado".length, end: "contenido privado".length, replacement: "!"
+  }, { status: "queued", ticketId: "panel-listener-error" });
+  assert.equal(f.monitor.getSnapshot("chapter-1").acceptedChanges, 1);
+  assert.equal(panel.textContent.includes("contenido privado"), false);
+  unmount();
+});
+
 test("presenta el estado del checkpoint y del lease sin revelar mensajes internos", () => {
   const f = fixture();
   let refresh;

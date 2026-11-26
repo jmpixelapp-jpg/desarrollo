@@ -332,7 +332,21 @@ export async function replayPendingNarrativeSyncOperations(
   const pending = await journal.loadPendingOperations(projectId, writerId);
   let processed = 0;
   for (const operation of pending) {
-    if (!(await verifyNarrativeSyncOperationEnvelope(operation))) {
+    // El registro añade receivedAt/appliedAt, que son metadatos locales y no
+    // forman parte del digest original de la envoltura recibida.
+    const envelope: NarrativeSyncOperationEnvelope = {
+      schemaVersion: operation.schemaVersion,
+      algorithm: operation.algorithm,
+      operationId: operation.operationId,
+      projectId: operation.projectId,
+      writerId: operation.writerId,
+      sequence: operation.sequence,
+      createdAt: operation.createdAt,
+      kind: operation.kind,
+      payload: operation.payload,
+      digest: operation.digest
+    };
+    if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
       const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
       return {
         processed, remaining, stoppedAtOperationId: operation.operationId,

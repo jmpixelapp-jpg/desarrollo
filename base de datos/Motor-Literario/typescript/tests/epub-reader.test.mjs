@@ -71,6 +71,8 @@ test("lee EPUB, metadatos, orden spine, encabezados y párrafos conservando loca
     language: "es", identifier: "urn:test:book"
   });
   assert.equal(inspection.spineItems, 2);
+  assert.ok(inspection.extractedBlocks >= 6);
+  assert.deepEqual(inspection.emptySpineItems, []);
   const ingested = await ingestBookWithReader(reader, bytes, { sourceId: "epub-test" });
   assert.equal(ingested.metadata.title, "La novela & el viaje");
   assert.equal(ingested.chapters.length, 2);
@@ -127,5 +129,18 @@ test("aplica límites de tamaño y número de entradas del contenedor", async ()
   const bytes = sampleEpub();
   await assert.rejects(new EpubBookReader({ maxArchiveBytes: 32 }).inspect(bytes), /tamaño del archivo/);
   await assert.rejects(new EpubBookReader({ maxEntries: 2 }).inspect(bytes), /directorio central inválido o excesivo/);
+});
+
+
+test("la inspección identifica documentos del spine sin contenido textual", async () => {
+  const bytes = storedZip([
+    ["mimetype", "application/epub+zip"],
+    ["META-INF/container.xml", '<container><rootfile full-path="book.opf"/></container>'],
+    ["book.opf", '<package><metadata><dc:title>Vacío</dc:title></metadata><manifest><item id="a" href="a.xhtml"/></manifest><spine><itemref idref="a"/></spine></package>'],
+    ["a.xhtml", "<html><body><img src='cover.jpg'/></body></html>"]
+  ]);
+  const report = await new EpubBookReader().inspect(bytes);
+  assert.deepEqual(report.emptySpineItems, ["a.xhtml"]);
+  assert.ok(report.warnings.some(warning => warning.includes("no produjo bloques")));
 });
 

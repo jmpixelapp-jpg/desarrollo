@@ -63,3 +63,15 @@ test("distingue la dirección parental de la filiación",()=>{
  assert.equal(r.toEntityId,"bruno");
  assert.equal(r.relationType,"parent-of");
 });
+
+test("asigna IDs únicos y deterministas a candidatos ambiguos",()=>{
+ const text="El hermano de Ana llegó.";
+ const profiles=[
+  {entityId:"bruno",labels:[label]},
+  {entityId:"carla",labels:[label]}
+ ];
+ const first=run(text,[ana,bruno,carla],profiles);
+ const second=run(text,[carla,ana,bruno],profiles);
+ assert.equal(new Set(first.map(item=>item.id)).size,first.length);
+ assert.deepEqual(first.map(item=>item.id),second.map(item=>item.id));
+});

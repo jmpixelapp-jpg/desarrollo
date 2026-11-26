@@ -390,6 +390,24 @@ test("reconstruye exactamente deltas con límites UTF-16, incluidos pares sustit
   f.source.dispose();
 });
 
+test("exige resincronización si llega otro beforeinput sin completar el input anterior", () => {
+  const f = fixture("abc");
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+  f.element.emitBeforeInput("insertText");
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+  f.element.emitBeforeInput("insertText");
+  f.element.value = "abcx";
+  f.element.emitInput(false, "insertText");
+
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors[0].code, "missing-input");
+  f.stop();
+  f.source.dispose();
+});
+
 test("rechaza input cuyo inputType no coincide con el beforeinput asociado", () => {
   const f = fixture("abc");
   f.element.selectionStart = 3;

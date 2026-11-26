@@ -100,7 +100,8 @@ test("convierte escritura y reemplazo de selección en deltas UTF-16 consecutivo
       start: 5,
       end: 5,
       replacement: "!",
-      activityKind: "typing"
+      activityKind: "typing",
+      inputType: "insertText"
     },
     {
       documentId: "chapter-1",
@@ -109,7 +110,8 @@ test("convierte escritura y reemplazo de selección en deltas UTF-16 consecutivo
       start: 1,
       end: 3,
       replacement: "X",
-      activityKind: "typing"
+      activityKind: "typing",
+      inputType: "insertText"
     }
   ]);
   assert.deepEqual(f.source.getState(), {
@@ -165,6 +167,7 @@ test("maneja reemplazo de selección por pegado y conserva longitudes UTF-16", (
   assert.equal(f.changes[0].end, 3);
   assert.equal(f.changes[0].replacement, "é");
   assert.equal(f.changes[0].activityKind, "paste");
+  assert.equal(f.changes[0].inputType, "insertFromPaste");
   assert.equal(f.source.getState().documentLength, 3);
   f.stop();
   f.source.dispose();
@@ -204,6 +207,41 @@ test("exige resincronización para undo/redo y no emite deltas inventados", () =
   assert.equal(f.changes[0].baseRevision, 3);
   f.stop();
   f.source.dispose();
+});
+
+test("conserva inputType nativo exacto sin exportar InputEvent.data", () => {
+  const f = fixture("abcd", 0, 0);
+  f.element.edit({
+    start: 4,
+    end: 4,
+    nextValue: "abcddictated",
+    inputType: "insertFromDictation",
+    data: "dictated"
+  });
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].inputType, "insertFromDictation");
+  assert.equal(f.changes[0].activityKind, "other");
+  assert.equal(Object.prototype.hasOwnProperty.call(f.changes[0], "data"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(f.changes[0], "inputData"), false);
+  assert.equal(JSON.stringify(f.changes[0]).includes("dictated"), false,
+    "el delta conserva solo el tipo de operación, no el payload enviado por el evento");
+  f.stop();
+  f.source.dispose();
+});
+
+test("rechaza inputType nativo excesivo o con caracteres de control", () => {
+  for (const inputType of ["x".repeat(129), "insertText" + String.fromCharCode(0) + "suffix"]) {
+    const f = fixture("abc", 0, 0);
+    f.element.selectionStart = 3;
+    f.element.selectionEnd = 3;
+    f.element.emitBeforeInput(inputType);
+    assert.equal(f.changes.length, 0);
+    assert.equal(f.source.getState().needsResync, true);
+    assert.equal(f.errors[0].code, "unsupported-input-type");
+    f.stop();
+    f.source.dispose();
+  }
 });
 
 test("libera after-dispatch un beforeinput cancelado por un listener posterior", async () => {
@@ -669,7 +707,8 @@ test("captura actualizaciones IME sucesivas como deltas consecutivos y cierra el
       start: 3,
       end: 3,
       replacement: "に",
-      activityKind: "composition"
+      activityKind: "composition",
+      inputType: "insertCompositionText"
     },
     {
       documentId: "chapter-1",
@@ -678,7 +717,8 @@ test("captura actualizaciones IME sucesivas como deltas consecutivos y cierra el
       start: 3,
       end: 4,
       replacement: "日本",
-      activityKind: "composition"
+      activityKind: "composition",
+      inputType: "insertCompositionText"
     }
   ]);
   assert.equal(f.source.getState().compositionActive, true);

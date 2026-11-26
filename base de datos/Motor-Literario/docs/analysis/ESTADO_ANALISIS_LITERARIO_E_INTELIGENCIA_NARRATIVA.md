@@ -784,3 +784,19 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Validación CI:** pendiente de la ejecución del módulo, sus pruebas y exportación. No declarar aprobada hasta que finalicen type-check, compilación, pruebas automatizadas y benchmark.
 
+
+## Descubrimiento de referencias descriptivas de personajes
+
+**Nuevo módulo:** `typescript/src/narrative-descriptive-reference-discovery.ts`. Recupera menciones literales como «el anciano», «la viajera» o «el guardián» únicamente cuando esa descripción ya está registrada en un perfil de personaje y dispone de evidencia de procedencia. No crea descripciones a partir de rasgos inferidos ni decide que un descriptor genérico pertenece al personaje más cercano.
+
+**Entrada:** perfiles descriptivos explícitos por ID de personaje. Cada etiqueta incluye su texto literal y una `TextEvidence` de origen (documento, revisión, rango y fragmento). Los perfiles solo pueden apuntar a personajes del mismo proyecto; una etiqueta sustentada por evidencia marcada `stale` se omite.
+
+**Resultado:** cada aparición literal incluye su evidencia en el documento actual, las fichas candidatas y la evidencia que respalda cada etiqueta. Si una misma expresión está registrada para dos personajes, el estado es `ambiguous`; nunca se escoge uno por proximidad, género gramatical o frecuencia. El resultado permanece en `candidate` y no fusiona identidades ni modifica las fichas.
+
+**Alcance semántico:** la capa reconoce coincidencias exactas de etiquetas registradas, con límites Unicode y sin aceptar coincidencias parciales dentro de otras palabras. No deduce parentescos a partir de «su hermano», posesión, edad, género, aspecto, profesión ni relaciones sociales. Esas expresiones requieren que el descriptor o relación esté registrado y respaldado previamente. La variación morfológica (por ejemplo, «anciano/anciana») debe declararse como etiquetas distintas; no se genera por heurística.
+
+**Presupuesto:** texto máximo 2.000.000 unidades UTF-16; hasta 2.000 perfiles; 100 etiquetas por perfil; 120 unidades por etiqueta; 5.000 resultados como máximo y 2.000 por defecto. Los offsets de las menciones son absolutos UTF-16 y aceptan `baseOffset`.
+
+**Pruebas añadidas:** etiqueta literal única, descriptor compartido ambiguo, ausencia de etiqueta registrada, coincidencia parcial, offsets con emoji, evidencia obsoleta, exclusión de entidades no-personaje, proyecto/perfiles duplicados, evidencia inválida, límites de salida y preservación de procedencia.
+
+**Validación CI:** pendiente de type-check, compilación, pruebas automatizadas y benchmark tras la exportación. No marcar como aprobada hasta que la ejecución correspondiente finalice correctamente.

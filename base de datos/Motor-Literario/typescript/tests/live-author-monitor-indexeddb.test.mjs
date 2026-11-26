@@ -199,6 +199,79 @@ test("IndexedDB rechaza balances imposibles de pausas, caracteres, commits y lat
   }
 });
 
+test("IndexedDB propaga QuotaExceededError del request y aborta sin reemplazar el checkpoint anterior", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-quota-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const lease = await acquireLease(store, projectId, documentId);
+  const durable = checkpoint(projectId, documentId, Date.now());
+  await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
+
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open("motor-literario-local");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const probeTransaction = database.transaction("live-author-monitor-checkpoints", "readonly");
+  const storePrototype = Object.getPrototypeOf(
+    probeTransaction.objectStore("live-author-monitor-checkpoints")
+  );
+  probeTransaction.oncomplete = () => undefined;
+  probeTransaction.onabort = () => undefined;
+
+  const originalPut = storePrototype.put;
+  const quotaError = new Error("simulated quota exhaustion");
+  quotaError.name = "QuotaExceededError";
+  try {
+    storePrototype.put = function(value, ...keys) {
+      if (this.name === "live-author-monitor-checkpoints" &&
+          value?.projectId === projectId && value?.documentId === documentId) {
+        // Emula el error asíncrono del IDBRequest sin introducir escrituras
+        // parciales: el handler instalado por el store debe abortar la tx.
+        const failedRequest = { error: quotaError, onerror: null };
+        Object.defineProperty(failedRequest, "onerror", {
+          configurable: true,
+          set(handler) {
+            queueMicrotask(() => handler.call(failedRequest, new Event("error")));
+          }
+        });
+        return failedRequest;
+      }
+      return originalPut.call(this, value, ...keys);
+    };
+
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(
+        checkpoint(projectId, documentId, durable.savedAt + 1, {
+          sessionDurationMs: 150,
+          activeDurationMs: 75,
+          idleDurationMs: 75,
+          acceptedChanges: 2,
+          committedChanges: 2,
+          insertedCharacters: 6,
+          currentDocumentLength: 6,
+          revision: 2,
+          sequence: 2,
+          totalCommitLatencyMs: 10,
+          lastCommitLatencyMs: 5,
+          commitLatencies: [5, 5]
+        }),
+        lease
+      ),
+      error => error?.name === "QuotaExceededError"
+    );
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "el checkpoint anterior debe conservarse si IndexedDB agota la cuota"
+    );
+  } finally {
+    storePrototype.put = originalPut;
+    database.close();
+    await store.close();
+  }
+});
+
 test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";

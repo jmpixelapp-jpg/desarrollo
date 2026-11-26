@@ -87,3 +87,16 @@ test("no interpreta menciones parciales dentro de palabras como personajes inter
   const second = observation("o2", 21, text.length, undefined, []);
   assert.equal(discover(text, [first, second]).length, 1);
 });
+
+test("rechaza evidencia de sujeto antecedente de otro documento", () => {
+  const first = {
+    ...observation("o1", 0, 20, ana.id, [ana.id]),
+    grammaticalSubjectCandidate: {
+      entityId: ana.id, voice: "active",
+      evidence: { documentId: "other", revision: 2, start: 0, end: 3, excerpt: "Ana" }
+    }
+  };
+  const second = observation("o2", 21, 35, undefined, []);
+  assert.throws(() => discover("Ana abrió la puerta. Después salió.", [first, second]),
+    /mismo documento/);
+});

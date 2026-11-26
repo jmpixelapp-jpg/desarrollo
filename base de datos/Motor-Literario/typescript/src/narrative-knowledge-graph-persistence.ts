@@ -11,6 +11,7 @@ import {
 } from "./narrative-knowledge";
 import type { NarrativeAssertion } from "./narrative-history";
 import type { NarrativeKnowledgeGraphSnapshot } from "./narrative-knowledge-graph-incremental";
+import type { NarrativeDocumentProjectionManifest } from "./contracts";
 
 
 /** Sustituye únicamente la contribución del documento; nunca descarta evidencia ajena. */
@@ -30,6 +31,64 @@ function snapshotDocumentIds(snapshot: NarrativeKnowledgeGraphSnapshot): readonl
     throw new Error("El snapshot contiene documentos duplicados o inválidos.");
   }
   return ids;
+}
+
+/**
+ * Construye el manifiesto de una contribución documental del snapshot.
+ * La generación debe proceder de la lectura CAS del manifiesto anterior.
+ */
+export function createNarrativeDocumentProjectionManifest(
+  snapshot: NarrativeKnowledgeGraphSnapshot,
+  documentId: string,
+  generation: number,
+  updatedAt = Date.now()
+): NarrativeDocumentProjectionManifest {
+  if (!snapshot || !Array.isArray(snapshot.documents) ||
+      typeof documentId !== "string" || !documentId.trim() ||
+      !Number.isSafeInteger(generation) || generation < 1 ||
+      !Number.isFinite(updatedAt) || updatedAt < 0) {
+    throw new Error("Contexto inválido para construir el manifiesto documental.");
+  }
+  const contribution = snapshot.documents.find(item => item.input.documentId === documentId);
+  if (!contribution) throw new Error("El documento no forma parte del snapshot: " + documentId);
+  const ids = <T extends { readonly id: string; readonly evidence: readonly { readonly documentId: string }[] }>(items: readonly T[]) =>
+    [...new Set(items.filter(item => item.evidence.some(evidence => evidence.documentId === documentId))
+      .map(item => item.id))].sort();
+  const assertions = contribution.graph.assertions.map(item => item.id).sort();
+  return {
+    projectId: snapshot.projectId,
+    documentId,
+    revision: contribution.input.revision,
+    generation,
+    status: "active",
+    entityIds: ids(contribution.graph.entities),
+    relationIds: ids(contribution.graph.relations),
+    eventIds: ids(contribution.graph.events),
+    ideaIds: ids(contribution.graph.ideas),
+    assertionIds: assertions,
+    updatedAt
+  };
+}
+
+/** Crea el tombstone explícito de un documento retirado del proyecto. */
+export function createNarrativeDocumentProjectionTombstone(
+  projectId: string,
+  documentId: string,
+  revision: number,
+  generation: number,
+  updatedAt = Date.now()
+): NarrativeDocumentProjectionManifest {
+  if (typeof projectId !== "string" || !projectId.trim() ||
+      typeof documentId !== "string" || !documentId.trim() ||
+      !Number.isSafeInteger(revision) || revision < 0 ||
+      !Number.isSafeInteger(generation) || generation < 1 ||
+      !Number.isFinite(updatedAt) || updatedAt < 0) {
+    throw new Error("Contexto inválido para crear tombstone documental.");
+  }
+  return {
+    projectId, documentId, revision, generation, status: "deleted",
+    entityIds: [], relationIds: [], eventIds: [], ideaIds: [], assertionIds: [], updatedAt
+  };
 }
 
 export interface NarrativeKnowledgeGraphPersistenceResult {

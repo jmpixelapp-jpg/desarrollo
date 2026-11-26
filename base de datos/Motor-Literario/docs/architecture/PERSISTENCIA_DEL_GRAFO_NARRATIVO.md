@@ -25,11 +25,17 @@ Antes de fusionar, la persistencia retira de cada registro la evidencia de los d
 
 El anfitrión puede recuperar los documentos con `ProjectStore.loadDocument` (y su propia lista de IDs documentales), reconstruir un snapshot mediante `createNarrativeKnowledgeGraphSnapshot` y volver a ejecutar esta persistencia. La proyección se deriva de los manuscritos; el snapshot incremental en memoria no se serializa como autoridad durable.
 
+## Manifiestos documentales y tombstones (IndexedDB v25)
+
+`ProjectStore` incorpora `loadNarrativeDocumentProjectionManifest` y `saveNarrativeDocumentProjectionManifestIfUnchanged`. El adaptador IndexedDB guarda un manifiesto por `(projectId, documentId)` con revisión, generación monotónica, inventario de IDs por colección y estado `active`/`deleted`. La escritura se realiza en una transacción `readwrite` y compara la generación observada dentro de esa misma transacción; dos escritores que compiten por la misma generación no pueden confirmarse ambos. Un tombstone requiere inventarios vacíos y permanece como registro durable.
+
+Este manifiesto establece un punto de recuperación y permite identificar qué registros derivan de cada documento. **No convierte todavía `persistNarrativeKnowledgeGraphSnapshot` en una operación atómica**: las cinco colecciones del grafo siguen guardándose secuencialmente y el manifiesto no se actualiza automáticamente desde esa función. El anfitrión debe coordinar ambas operaciones hasta que se implemente el reemplazo transaccional integral.
+
 ## Garantías y límites
 
-- No hay transacción global para las cinco colecciones. Un error puede ocurrir después de guardar algunos registros; reintentar es seguro para las mismas entradas, pero no es una escritura atómica.
-- El contrato actual no expone borrado de entidades, relaciones, acontecimientos, ideas o afirmaciones. Por tanto, esta versión no elimina registros que hayan dejado de aparecer en una revisión ni retira evidencia antigua del documento modificado.
+- No hay transacción global para las cinco colecciones. Un error puede ocurrir después de guardar algunos registros; reintentar es seguro para las mismas entradas, pero no es una escritura atómica. La transacción CAS del manifiesto solo protege su propia generación.
+- El contrato actual no expone borrado de entidades, relaciones, acontecimientos, ideas o afirmaciones. El tombstone registra la retirada documental, pero todavía no elimina sus contribuciones de las cinco colecciones.
 - La fusión preserva evidencia cruzada, pero puede conservar evidencia obsoleta de revisiones anteriores. No se debe presentar el resultado persistido como una reconstrucción autoritativa: faltan tombstones, borrado seguro y reconciliación de afirmaciones.
 - Las decisiones manuales sobre el estado de las ideas se conservan mediante `mergeNarrativeIdea`; la persistencia no sustituye decisiones editoriales.
 
-La operación actual sigue siendo secuencial: si falla a mitad, puede quedar una proyección parcial hasta reintentar. La siguiente evolución necesaria es una operación de reemplazo por documento, con tombstones explícitos, manifiesto de documentos y actualización transaccional de todas las colecciones afectadas.
+La operación actual sigue siendo secuencial: si falla a mitad, puede quedar una proyección parcial hasta reintentar. La siguiente evolución necesaria es conectar los manifiestos con una operación de reemplazo por documento que actualice en una sola transacción el manifiesto y todas las colecciones afectadas.

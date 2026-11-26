@@ -20,7 +20,7 @@ La salida contiene:
 ## Reglas de integridad
 
 - Todos los extractores reciben el mismo `projectId`; no se mezclan datos de otros proyectos.
-- Se rechaza repetir la misma pareja documento/revisión en una entrada, porque no se puede decidir cuál contenido prevalece.
+- Se exige una única revisión seleccionada por `documentId` en cada construcción. Si se entregan dos revisiones del mismo documento, se rechaza la entrada: no se mezclan snapshots ni se adivina cuál es la versión vigente.
 - Los offsets siguen siendo UTF-16 absolutos y respetan `baseOffset`.
 - El tiempo de extracción se calcula una vez por construcción y se propaga a las ideas, evitando marcas temporales distintas entre documentos de una misma ejecución.
 - Los resultados se ordenan por identidad para facilitar comparación y pruebas.

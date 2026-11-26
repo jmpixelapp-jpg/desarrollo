@@ -108,3 +108,8 @@ La operación devuelve un registro de auditoría con campo, valor anterior, valo
 El contrato `ProjectStore` incorpora `appendNarrativeReferenceRepairAudit` y `loadNarrativeReferenceRepairAudits`. IndexedDB almacena los registros en `narrative-reference-repair-audits`, aislados por proyecto y operación, con inserción append-only e idempotente. La base avanza a la versión 26; las bases existentes crean el almacén durante la migración sin alterar los registros previos.
 
 La API pública de aplicación exige que el almacenamiento ofrezca auditoría durable antes de iniciar una reparación. Después del CAS del registro, añade la auditoría antes de devolver éxito. Si la escritura de auditoría falla tras el CAS, el llamador puede reintentar la misma propuesta: la aplicación reconoce el estado ya actualizado y completa el registro pendiente. La mutación del grafo y la escritura de auditoría son dos transacciones, no una transacción IndexedDB conjunta.
+
+
+### Reparación vinculada al campo de referencia exacto
+
+Los hallazgos de referencias cruzadas incluyen ahora `referenceField`: `fromEntityId`, `toEntityId`, `participants`, `entityId` o `relatedEntityIds`. Las propuestas conservan ese campo y la aplicación lo vuelve a validar antes del CAS. En relaciones se modifica exclusivamente el extremo indicado; el hecho de que la entidad candidata aparezca en el otro extremo no se considera replay. Las relaciones reflexivas pueden producir dos propuestas independientes, una por extremo. El identificador determinista de auditoría incorpora también el campo.

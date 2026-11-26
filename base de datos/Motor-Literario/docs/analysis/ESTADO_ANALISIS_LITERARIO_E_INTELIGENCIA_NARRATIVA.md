@@ -648,3 +648,14 @@ La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto 
 - Se amplió la batería de pruebas de procedencia con casos de revisión, cita exacta y colección completa.
 
 Esto deja una interfaz utilizable para enlazar evidencias de personajes, relaciones, acontecimientos e ideas al libro importado. Todavía no se han modificado las entidades persistidas ni la salida de análisis para incluir automáticamente los fragmentos; esa integración debe respetar el versionado de cada documento y no mezclar revisiones.
+
+
+## Estado consolidado y documentación técnica
+
+El registro técnico detallado se encuentra en `docs/analysis/REGISTRO_TECNICO_LECTURA_Y_TRAZABILIDAD_NARRATIVA.md`. Ese documento es la referencia operativa para arquitectura, contratos, límites, archivos, pruebas, riesgos y plan de trabajo.
+
+**Corrección del estado EPUB:** ya están implementadas la navegación EPUB 3 `nav` y EPUB 2 `NCX`, la conservación de saltos XHTML `br`, el reconocimiento de elementos XML con prefijo y controles adicionales del ZIP. Las menciones anteriores que las enumeraban como pendientes corresponden a etapas históricas y no al estado actual.
+
+**Estado de evidencia:** además de resolver rangos a bloques, la API acepta snapshots con `metadata.revision`, valida coincidencia de revisión y cita exacta para evidencias persistidas y resuelve colecciones completas sin resultados parciales. La integración automática en las consultas y salidas del conocimiento narrativo sigue pendiente.
+
+**Validación:** las pruebas están escritas, pero no se ha ejecutado typecheck, build ni suite completa en esta tanda. No se declara CI aprobado. El lector EPUB sigue siendo una implementación inicial pendiente de corpus real y de cierre de compatibilidad.

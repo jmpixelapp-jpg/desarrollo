@@ -104,6 +104,13 @@ function validate(input: NarrativeUnderstandingInput): void {
   }
   const baseOffset = input.baseOffset ?? 0;
   const endOffset = baseOffset + input.text.length;
+  // Validar primero la colección: las comprobaciones de menciones la recorren.
+  for (const entity of input.entities) {
+    if (!entity || entity.projectId !== input.projectId ||
+        typeof entity.id !== "string" || !entity.id.trim()) {
+      throw new Error("Las entidades deben pertenecer al proyecto analizado.");
+    }
+  }
   for (const mention of input.characterMentions ?? []) {
     if (!mention || !Number.isSafeInteger(mention.start) || !Number.isSafeInteger(mention.end) ||
         mention.start < baseOffset || mention.end > endOffset ||
@@ -123,12 +130,6 @@ function validate(input: NarrativeUnderstandingInput): void {
   if ((input.pronounReferences?.length ?? 0) > 500 ||
       (input.characterMentions?.length ?? 0) > 2000) {
     throw new Error("Se superó el límite de menciones o referencias pronominales.");
-  }
-  for (const entity of input.entities) {
-    if (!entity || entity.projectId !== input.projectId ||
-        typeof entity.id !== "string" || !entity.id.trim()) {
-      throw new Error("Las entidades deben pertenecer al proyecto analizado.");
-    }
   }
 }
 

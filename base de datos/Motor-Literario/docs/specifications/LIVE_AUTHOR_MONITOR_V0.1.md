@@ -733,6 +733,6 @@ Cuando llega un delta que excedería el límite:
 
 El anfitrión debe reconciliar el editor y el motor desde el mismo snapshot durable. Solo entonces debe llamar a `discardPendingAfterResynchronization()`, que limpia los deltas de la generación anterior y vuelve a suscribir la fuente. Este método no sustituye la reconciliación y no debe usarse para resolver un `queue_full` temporal.
 
-**Pruebas de regresión:** buffer estrictamente limitado; ausencia de admisiones posteriores al desbordamiento; notificación de secuencia excedente; pausa del source; retry bloqueado; re-suscripción tras snapshot común; validación de configuración.
+**Pruebas de regresión:** buffer estrictamente limitado; ausencia de admisiones posteriores al desbordamiento; notificación de secuencia excedente; pausa del source; retry bloqueado; re-suscripción tras snapshot común; validación de configuración; proveedor que emite sincrónicamente durante la suscripción y debe quedar desconectado al desbordarse.
 
 **Estado:** implementación incluida en TypeScript puro y pruebas añadidas. Pendiente verificar la ejecución automática de GitHub Actions para este commit.

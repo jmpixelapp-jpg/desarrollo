@@ -453,6 +453,56 @@ test("acota el backlog y pausa la fuente al desbordarse hasta resincronizar el s
   assert.equal(f.listeners.size, 0);
 });
 
+test("retira la suscripción si el buffer se desborda por emisiones síncronas durante el montaje", () => {
+  const listeners = new Set();
+  const resynchronizationRequests = [];
+  let subscriptionCount = 0;
+  const source = {
+    subscribeChanges(listener) {
+      listeners.add(listener);
+      subscriptionCount += 1;
+      if (subscriptionCount === 1) {
+        // El proveedor emite antes de devolver la función unsubscribe.
+        listener(change(1));
+        listener(change(2));
+      }
+      return () => listeners.delete(listener);
+    },
+    requireResynchronization(reason) {
+      resynchronizationRequests.push(reason);
+    }
+  };
+  const attempts = [];
+  const states = [];
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        return { status: "rejected", reason: "queue_full" };
+      }
+    },
+    maxPendingChanges: 1,
+    onAdmission: () => {},
+    onBackpressure: state => states.push(state),
+    onError: () => {}
+  });
+
+  assert.deepEqual(attempts, [1]);
+  assert.equal(stop.getPendingChanges().length, 1);
+  assert.equal(states.at(-1).status, "resync-required");
+  assert.equal(states.at(-1).overflowSequence, 2);
+  assert.equal(resynchronizationRequests.length, 1);
+  assert.equal(listeners.size, 0,
+    "attachSource debe cerrar el listener que todavía no había recibido su disposer");
+
+  // Tras aplicar el snapshot común, la segunda suscripción no emite eventos históricos.
+  stop.discardPendingAfterResynchronization();
+  assert.equal(listeners.size, 1);
+  stop();
+  assert.equal(listeners.size, 0);
+});
+
 test("valida maxPendingChanges antes de instalar listeners", () => {
   const f = sourceFixture();
   for (const maxPendingChanges of [0, -1, 1.5, 65537, Number.NaN, Number.POSITIVE_INFINITY]) {

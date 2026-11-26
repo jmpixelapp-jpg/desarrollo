@@ -509,7 +509,7 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 - Después de que el anfitrión reconcilia editor y motor con el mismo snapshot durable, `discardPendingAfterResynchronization()` limpia el backlog anterior y vuelve a suscribir la fuente.
 - La interfaz conserva compatibilidad con fuentes antiguas: `requireResynchronization` es opcional, pero la cancelación y la reanudación tras snapshot común siguen aplicándose.
 
-**Pruebas:** buffer de tamaño dos sin crecimiento adicional; evento excedente identificado; pausa/desuscripción; retry bloqueado durante la resincronización; limpieza y re-suscripción tras snapshot común; validación de límites antes de instalar listeners.
+**Pruebas:** buffer de tamaño dos sin crecimiento adicional; evento excedente identificado; pausa/desuscripción; retry bloqueado durante la resincronización; limpieza y re-suscripción tras snapshot común; validación de límites antes de instalar listeners; emisión síncrona durante el montaje sin dejar un listener residual.
 
 **Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, `docs/development/LIVE_AUTHOR_MONITOR_EDITOR_ADAPTER_GUIDE.md`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
 

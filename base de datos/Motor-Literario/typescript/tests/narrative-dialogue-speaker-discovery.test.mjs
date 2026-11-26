@@ -21,6 +21,7 @@ test("atribuye una cita a un personaje cuando nombre y verbo de habla son explí
   const [segment] = discover(text, [ana]);
   assert.equal(segment.format, "guillemets");
   assert.equal(segment.utteranceEvidence.excerpt, "Volveré mañana");
+  assert.equal(segment.segmentEvidence.excerpt, "«Volveré mañana»");
   assert.equal(segment.speakerStatus, "explicit-single");
   assert.equal(segment.speakerCandidates[0].entityId, ana.id);
   assert.equal(segment.speakerCandidates[0].speechVerbEvidence.excerpt, "dijo");
@@ -55,6 +56,7 @@ test("reconoce intervención con raya y etiqueta explícita al cierre de línea"
   const [segment] = discover(text, [ana]);
   assert.equal(segment.format, "em-dash");
   assert.equal(segment.utteranceEvidence.excerpt, "¿Vienes conmigo?");
+  assert.equal(segment.segmentEvidence.excerpt, "—¿Vienes conmigo? —preguntó Ana.");
   assert.equal(segment.speakerStatus, "explicit-single");
   assert.equal(segment.speakerCandidates[0].entityId, ana.id);
 });

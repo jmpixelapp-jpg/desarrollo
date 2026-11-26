@@ -15,11 +15,14 @@ export type NarrativeIdeaCandidateKind =
   | "premise"
   | "conflict"
   | "goal"
+  | "motivation"
+  | "dilemma"
   | "question"
   | "hypothesis"
   | "motif";
 
 export type NarrativeIdeaCandidateConfidence = "high" | "medium";
+export type NarrativeIdeaCandidatePolarity = "affirmed" | "negated" | "conditional" | "hypothetical";
 
 export interface NarrativeIdeaCandidate {
   readonly id: string;
@@ -31,6 +34,8 @@ export interface NarrativeIdeaCandidate {
   readonly text: string;
   /** La confianza mide la claridad de la señal lingüística, no la verdad. */
   readonly confidence: NarrativeIdeaCandidateConfidence;
+  /** Forma lingüística observada; no equivale a verdad ni a canon narrativo. */
+  readonly polarity: NarrativeIdeaCandidatePolarity;
   readonly reviewStatus: "candidate";
   readonly evidence: {
     readonly start: number;
@@ -83,6 +88,26 @@ const DISCOVERY_PATTERNS: readonly DiscoveryPattern[] = [
     kind: "goal",
     confidence: "high",
     expression: /\b(?:objetivo|meta|prop[oó]sito)\s+(?:de\s+[^,:;.!?]{1,100}\s+)?(?:es|consiste\s+en|:)?\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "goal",
+    confidence: "medium",
+    expression: /\b(?:quiere|desea|pretende|intenta|busca)\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "motivation",
+    confidence: "high",
+    expression: /\b(?:su\s+)?(?:motivaci[oó]n|raz[oó]n)\s+(?:principal\s+)?(?:es|consiste\s+en|:)?\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "motivation",
+    confidence: "medium",
+    expression: /\b(?:lo\s+hace|act[uú]a|decide\s+hacerlo)\s+porque\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "dilemma",
+    confidence: "high",
+    expression: /\b(?:debe\s+elegir|tiene\s+que\s+elegir|se\s+debate)\s+entre\s+(.+?)(?=[.!?;]|$)/iu
   },
   {
     kind: "question",
@@ -159,6 +184,11 @@ export function discoverNarrativeIdeaCandidates(
       const value = captured.trim().replace(/\s+/gu, " ");
       if (!value || value.length > MAX_NARRATIVE_IDEA_CANDIDATE_TEXT_UNITS) continue;
 
+      const prefix = excerpt.slice(0, match.index + match[0].indexOf(captured));
+      const polarity: NarrativeIdeaCandidatePolarity =
+        /\b(?:no|nunca|jam[aá]s|tampoco)\s*$/iu.test(prefix) ? "negated" :
+        /\b(?:si|cuando|en\s+caso\s+de)\s*$/iu.test(prefix) ? "conditional" :
+        pattern.kind === "hypothesis" || pattern.kind === "question" ? "hypothetical" : "affirmed";
       const captureOffset = match.index + match[0].lastIndexOf(captured);
       const leadingTrim = captured.search(/\S/u);
       const trailingTrim = captured.trimEnd().length;
@@ -173,6 +203,7 @@ export function discoverNarrativeIdeaCandidates(
         kind: pattern.kind,
         text: value,
         confidence: pattern.confidence,
+        polarity,
         reviewStatus: "candidate",
         evidence: { start, end, excerpt }
       });

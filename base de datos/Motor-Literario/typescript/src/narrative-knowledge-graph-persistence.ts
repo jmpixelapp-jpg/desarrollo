@@ -806,9 +806,10 @@ export async function verifyNarrativeReferenceRepairAuditIntegrity(
       integrityIssues.push({ code: "invalid-entry", operationId, detail: "La entrada no cumple el contrato de auditoría." });
       continue;
     }
+    const safeEntry = entry as NarrativeReferenceRepairAuditEntry;
     const expectedOperationId = [
-      "reference-repair", projectId, entry.recordType, entry.recordId,
-      entry.referenceField, entry.missingReferenceId, entry.replacementEntityId
+      "reference-repair", projectId, safeEntry.recordType, safeEntry.recordId,
+      safeEntry.referenceField, safeEntry.missingReferenceId, safeEntry.replacementEntityId
     ].join("|");
     if (operationId !== expectedOperationId) {
       integrityIssues.push({ code: "operation-id-mismatch", operationId, detail: "El ID no corresponde a los datos de la operación." });
@@ -820,24 +821,24 @@ export async function verifyNarrativeReferenceRepairAuditIntegrity(
     seen.add(duplicateKey);
 
     let status: NarrativeReferenceRepairAuditRecordCheck["status"] = "record-missing";
-    if (entry.recordType === "relation") {
-      const record = relations.find(item => item.projectId === projectId && item.id === entry.recordId);
-      if (record) status = record[entry.referenceField as "fromEntityId" | "toEntityId"] === entry.replacementEntityId
+    if (safeEntry.recordType === "relation") {
+      const record = relations.find(item => item.projectId === projectId && item.id === safeEntry.recordId);
+      if (record) status = record[safeEntry.referenceField as "fromEntityId" | "toEntityId"] === safeEntry.replacementEntityId
         ? "matches-current-state" : "record-state-changed";
-    } else if (entry.recordType === "event") {
-      const record = events.find(item => item.projectId === projectId && item.id === entry.recordId);
-      if (record) status = record.participants.includes(entry.replacementEntityId)
+    } else if (safeEntry.recordType === "event") {
+      const record = events.find(item => item.projectId === projectId && item.id === safeEntry.recordId);
+      if (record) status = record.participants.includes(safeEntry.replacementEntityId)
         ? "matches-current-state" : "record-state-changed";
-    } else if (entry.recordType === "assertion") {
-      const record = assertions.find(item => item.projectId === projectId && item.id === entry.recordId);
-      if (record) status = record.entityId === entry.replacementEntityId
+    } else if (safeEntry.recordType === "assertion") {
+      const record = assertions.find(item => item.projectId === projectId && item.id === safeEntry.recordId);
+      if (record) status = record.entityId === safeEntry.replacementEntityId
         ? "matches-current-state" : "record-state-changed";
     } else {
-      const record = ideas.find(item => item.projectId === projectId && item.id === entry.recordId);
-      if (record) status = (record.relatedEntityIds ?? []).includes(entry.replacementEntityId)
+      const record = ideas.find(item => item.projectId === projectId && item.id === safeEntry.recordId);
+      if (record) status = (record.relatedEntityIds ?? []).includes(safeEntry.replacementEntityId)
         ? "matches-current-state" : "record-state-changed";
     }
-    recordChecks.push({ operationId, recordType: entry.recordType, recordId: entry.recordId, status });
+    recordChecks.push({ operationId, recordType: safeEntry.recordType, recordId: safeEntry.recordId, status });
   }
   return {
     projectId,

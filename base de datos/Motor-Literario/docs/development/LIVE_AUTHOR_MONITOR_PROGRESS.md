@@ -647,7 +647,9 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 
 **Limitaciones de la prueba de soak:** simula el tiempo y el volumen de eventos de forma determinista; verifica límites de las muestras y ausencia de retención del manuscrito en snapshots. No se presenta como una medición de consumo de memoria del navegador ni como una sesión física de ocho horas.
 
-**Validación:** pendiente de GitHub Actions. El workflow vigente también está bloqueado por un error de sintaxis ajeno al monitor en `src/narrative-history.ts` (TS1002); no se modifica ese archivo porque pertenece a trabajo paralelo.
+**Validación en [Live Author Monitor — run 45756749489](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756749489):** aprobada para la comprobación aislada. `npx tsc --noEmit --project tsconfig.live-author-monitor.json` terminó correctamente; también pasaron el build Vite reducido, 17/17 regresiones diagnósticas y 59/59 pruebas del núcleo, panel, workspace y diagnósticos. El benchmark completó 100.000 commits en 580,44 ms (~172.282 commits/s), con heap de 4,26 MiB al 50 % y 100 % de carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes. Node.js 22.23.5, ocho documentos de 1.048.576 unidades UTF-16 cada uno.
+
+La lane completa permanece en `failure` por la auditoría de persistencia y el bundle general ajenos al monitor: desajuste de versión IndexedDB, dos almacenes de reparación no declarados y error de sintaxis en `indexeddb-store.ts:2560`. Las integraciones que requieren el bundle completo/editor/navegador siguen omitidas; la comprobación estricta independiente del monitor queda aprobada. El workflow vigente también está bloqueado por un error de sintaxis ajeno al monitor en `src/narrative-history.ts` (TS1002); no se modifica ese archivo porque pertenece a trabajo paralelo.
 
 ## 33. Nueva entrega — clasificación de actividad de escritura (25 de noviembre de 2026)
 

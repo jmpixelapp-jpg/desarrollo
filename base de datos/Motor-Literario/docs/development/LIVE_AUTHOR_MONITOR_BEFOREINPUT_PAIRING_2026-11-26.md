@@ -84,3 +84,21 @@ Regresiones añadidas:
 - inserción legítima entre caracteres repetidos: debe aceptarse.
 
 **Límite conocido:** esta comprobación detecta cambios fuera del rango declarado, pero no puede demostrar la intención humana ni diferenciar una modificación programática que ocurra exactamente dentro del rango seleccionado. Para esa garantía, el anfitrión debe controlar las mutaciones del editor y proporcionar transacciones/origen de operación verificables.
+
+## Clasificación de actividad basada en inputType observable
+
+Se corrigió una atribución de métricas: una sustitución normal de selección hecha con `insertText` podía terminar como `correction`, porque el monitor infería la categoría a partir de que el rango anterior fuera reemplazado. La geometría del delta no demuestra una autocorrección.
+
+El adaptador ahora establece siempre una categoría explícita para los eventos aceptados:
+
+- `insertText`, `insertLineBreak`, `insertParagraph` e `insertCompositionText` → `typing` (entrada de texto declarada por el navegador);
+- `insertFromPaste` y `insertFromPasteAsQuotation` → `paste`;
+- `insertReplacementText` → `correction` (señal específica de reemplazo del navegador);
+- los tipos `delete*` → `deletion`;
+- `insertFromDrop`, `insertFromYank` y tipos no reconocidos → `other`.
+
+La categoría `typing` no prueba que se haya usado un teclado físico, y `correction` no prueba la intención subjetiva del autor. Son clasificaciones técnicas del evento declarado por el navegador. Para mayor precisión, no se deduce una categoría a partir de la longitud o forma del delta.
+
+Se añadió una regresión que compara tres casos: sustitución de selección con `insertText` (typing), sustitución con `insertReplacementText` (correction) y mecanismo de inserción no reconocido (other).
+
+También se corrigió la documentación del adaptador: la copia sombra completa introducida para comprobar prefijo/sufijo es efímera y reside en memoria mientras la instancia está montada. No se guarda en IndexedDB ni se envía en diagnósticos; la memoria se libera al disponer la instancia.

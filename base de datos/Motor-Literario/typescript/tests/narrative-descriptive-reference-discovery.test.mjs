@@ -100,3 +100,17 @@ test("respeta el límite de resultados y la procedencia de cada etiqueta", () =>
   assert.equal(matches.length, 1);
   assert.equal(matches[0].candidates[0].labelEvidence.documentId, "chapter-profile");
 });
+
+test("detiene el análisis cuando las etiquetas exceden el presupuesto agregado de exploración", () => {
+  const longText = "x".repeat(2_000_000);
+  const profiles = Array.from({ length: 13 }, (_, index) => ({
+    entityId: ana.id + ":" + index,
+    labels: [label("descriptor-" + index)]
+  }));
+  const entities = profiles.map((profile, index) => ({
+    ...ana, id: profile.entityId, canonicalName: "Personaje " + index,
+    normalizedName: "personaje " + index
+  }));
+  assert.throws(() => discover(longText, profiles, entities),
+    /presupuesto operativo de exploración/);
+});

@@ -85,3 +85,28 @@ test("acepta formato de fecha numérica español cuando el calendario es válido
     orderValue: Math.floor(Date.UTC(2024, 1, 29) / 86400000)
   });
 });
+
+
+test("reconoce fechas escritas en español y variantes de septiembre", () => {
+  const march = extractNarrativeEventCandidates({
+    ...context, text: "El 12 de marzo de 1842 Mara encontró la Espada Solar."
+  });
+  assert.deepEqual(march[0].timeReference, {
+    basis: "calendar", precision: "date", raw: "12 de marzo de 1842",
+    orderValue: Math.floor(Date.UTC(1842, 2, 12) / 86400000)
+  });
+  const september = extractNarrativeEventCandidates({
+    ...context, text: "El 12 de setiembre de 1842 Mara encontró la Espada Solar."
+  });
+  assert.deepEqual(september[0].timeReference, {
+    basis: "calendar", precision: "date", raw: "12 de setiembre de 1842",
+    orderValue: Math.floor(Date.UTC(1842, 8, 12) / 86400000)
+  });
+});
+
+test("rechaza fechas escritas imposibles y no las degrada a año aislado", () => {
+  const events = extractNarrativeEventCandidates({
+    ...context, text: "El 31 de febrero de 1842 Mara encontró la Espada Solar."
+  });
+  assert.equal(events[0].timeReference, undefined);
+});

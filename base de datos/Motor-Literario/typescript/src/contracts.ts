@@ -33,8 +33,14 @@ export interface EditorChange {
   readonly start: number;
   readonly end: number;
   readonly replacement: string;
-  /** Optional operation metadata from native editor events. */
+  /** Optional operation category used by aggregate monitor metrics. */
   readonly activityKind?: EditorChangeActivityKind;
+  /**
+   * Exact native InputEvent.inputType when the source has one (for example
+   * insertText, insertFromPaste, insertReplacementText or insertCompositionText).
+   * Metadata only: it never contains InputEvent.data or manuscript text.
+   */
+  readonly inputType?: string;
 }
 
 export type DiagnosticSeverity = "error" | "warning" | "info";

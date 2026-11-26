@@ -1359,3 +1359,12 @@ La conclusión global de la lane sigue siendo `failure` por controles compartido
 **Cambio:** se añade `tsconfig.live-author-monitor.json`, que extiende las opciones estrictas del proyecto y limita `include` al entrypoint `live-author-monitor-test-entry.ts`. Sus importaciones transitivas incluyen el núcleo, el panel y el workspace. La lane de Live Author Monitor ejecuta `npx tsc --noEmit --project tsconfig.live-author-monitor.json` antes del build Vite.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+## 85. Los errores de suscriptores no forman parte del checkpoint durable (26 de noviembre de 2026)
+
+**Motivación:** `listenerErrors` describe fallos de vistas de la instancia actual, no fallos de edición ni estado durable del manuscrito. Debe sobrevivir mientras una sesión está viva para ayudar al diagnóstico, pero no convertirse en deuda de observabilidad heredada después de una recuperación.
+
+**Regresión:** el test de checkpoint instala un suscriptor que falla durante una admisión y un commit; comprueba que la sesión informa dos errores, que el checkpoint no contiene la propiedad `listenerErrors` y que `restoreCheckpoint()` comienza en cero. Las métricas de escritura y durabilidad se restauran sin contaminar la sesión nueva con fallos antiguos de UI.
+
+**Validación:** pendiente de GitHub Actions.

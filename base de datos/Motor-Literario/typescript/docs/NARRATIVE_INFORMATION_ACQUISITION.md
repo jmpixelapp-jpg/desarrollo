@@ -57,6 +57,14 @@ Reglas de prudencia:
 
 Callback: `onNarrativeObservationCandidates(analysis, candidates)`.
 
+### Relaciones candidatas entre acciones
+
+Módulo: `src/narrative-action-link-discovery.ts`
+
+Relaciona únicamente dos observaciones consecutivas del mismo documento y revisión cuando entre sus verbos aparece un marcador textual explícito temporal, causal o de contraste. Conserva los IDs de ambas acciones y el tramo exacto del conector. Limita la distancia entre verbos y valida que cada evidencia del verbo coincida con el texto fuente.
+
+Un marcador como «porque» se registra como `markerKind: "causal"`, pero el módulo no decide qué acción es causa o consecuencia. Sin conector explícito no crea vínculo, aunque las acciones aparezcan próximas. Los resultados permanecen como candidatos para revisión.
+
 ## Limitaciones conocidas que deben guiar el siguiente trabajo
 
 - El vocabulario verbal es deliberadamente finito y debe ampliarse con pruebas por idioma y morfología. Se han cubierto algunas formas de imperfecto plural y participios irregulares («abierta/abierto»), pero no existe todavía conjugación completa ni análisis morfológico general.

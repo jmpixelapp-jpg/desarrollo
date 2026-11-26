@@ -3415,7 +3415,14 @@ export class HostEngineApi {
     // La transferencia entra en la misma cola que las demás mutaciones narrativas:
     // una actualización manual no puede intercalarse con el movimiento a biblioteca.
     const work = this.knowledgeTail.then(async () => {
-      const entries = await archive.call(this.store, project.projectId, writerId, project.projectName, Date.now());
+      const archivedAt = Date.now();
+      const syncOperation = this.createNarrativeSyncDraft(
+        "personal-idea-archive", "archive",
+        { projectId: project.projectId, writerId, sourceProjectName: project.projectName, archivedAt }
+      );
+      const entries = await archive.call(
+        this.store, project.projectId, writerId, project.projectName, archivedAt, syncOperation
+      );
       try {
         const validatedEntries = requireUniquePersonalIdeaEntries(entries, writerId, project.projectId);
         if (validatedEntries.some(entry =>

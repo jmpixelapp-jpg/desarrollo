@@ -106,8 +106,12 @@ export function compareNarrativeActionClaims(
   }
 
   const findings: NarrativeActionClaimDisagreement[] = [];
-  let pairChecks = 0;
   const orderedGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const pairChecks = orderedGroups.reduce((total, [, group]) =>
+    total + group.length * (group.length - 1) / 2, 0);
+  if (pairChecks > MAX_NARRATIVE_ACTION_CLAIM_PAIR_CHECKS) {
+    throw new Error("La comparación supera el límite de parejas; divide el manuscrito por bloques o capítulos.");
+  }
   for (const [, group] of orderedGroups) {
     group.sort((a, b) =>
       a.evidence.documentId.localeCompare(b.evidence.documentId) ||
@@ -117,10 +121,6 @@ export function compareNarrativeActionClaims(
     for (let i = 0; i < group.length; i++) {
       const first = group[i]!;
       for (let j = i + 1; j < group.length; j++) {
-        pairChecks++;
-        if (pairChecks > MAX_NARRATIVE_ACTION_CLAIM_PAIR_CHECKS) {
-          return findings.sort((a, b) => a.id.localeCompare(b.id));
-        }
         const second = group[j]!;
         if (first.polarity === second.polarity ||
             (first.evidence.documentId === second.evidence.documentId &&
@@ -136,6 +136,9 @@ export function compareNarrativeActionClaims(
         const left = ordered[0]!;
         const right = ordered[1]!;
         const samePerspective = sameEpistemicPerspective(left, right);
+        if (findings.length >= MAX_NARRATIVE_ACTION_CLAIM_FINDINGS) {
+          throw new Error("La comparación supera el límite de discrepancias; divide el manuscrito por bloques o capítulos.");
+        }
         findings.push({
           id: "action-claim-disagreement:" + JSON.stringify([
             left.id, right.id, left.grammaticalSubjectCandidate!.entityId,
@@ -161,9 +164,6 @@ export function compareNarrativeActionClaims(
           classification: "polarity-disagreement-candidate",
           reviewStatus: "candidate"
         });
-        if (findings.length >= MAX_NARRATIVE_ACTION_CLAIM_FINDINGS) {
-          return findings.sort((a, b) => a.id.localeCompare(b.id));
-        }
       }
     }
   }

@@ -1,6 +1,11 @@
 import { entityMatchesName } from "./narrative-knowledge";
 import type { NarrativeTimeReference, TextEvidence, NarrativeEntity } from "./narrative-knowledge";
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\import type { NarrativeTimeReference, TextEvidence, NarrativeEntity } from "./narrative-knowledge";
+");
+}
+
 export interface NarrativeAssertion {
   readonly projectId: string;
   readonly id: string;
@@ -73,8 +78,8 @@ export function extractNarrativeAssertions(
     const names = [entity.canonicalName, ...entity.aliases];
     for (const definition of definitions) {
       for (const name of names) {
-      const escapedName = name.split("").map(character => "\\^$.*+?()[]{}|".includes(character) ? "\\" + character : character).join("");
-      const expression = new RegExp("(?<![\\p{L}\\p{N}_])" + escapedName + "(?![\\p{L}\\p{N}_])" + definition.suffix, "giu");
+      const escapedName = escapeRegExp(name);
+      const expression = new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escapedName + "(?![\\p{L}\\p{M}\\p{N}_])" + definition.suffix, "giu");
       for (const match of text.matchAll(expression)) {
         const value = definition.capture(match);
         if (typeof value === "string" && !value) continue;

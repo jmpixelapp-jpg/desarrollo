@@ -147,6 +147,51 @@ test("emite candidatos narrativos con evidencia durante cada revisión del autor
   await api.disposeSafely();
 });
 
+test("publica acciones narrativas candidatas tras reconocer personajes del proyecto", async () => {
+  const store = new MemoryDocumentStore();
+  store.entities = new Map();
+  store.saveEntity = async entity => {
+    store.entities.set(entity.id, structuredClone(entity));
+  };
+  store.loadEntities = async projectId => [...store.entities.values()]
+    .filter(entity => entity.projectId === projectId)
+    .map(entity => structuredClone(entity));
+
+  const observations = [];
+  const api = new HostEngineApi({
+    store,
+    callbacks: {
+      onNarrativeObservationCandidates(analysis, candidates) {
+        observations.push({ analysis, candidates });
+      }
+    }
+  });
+  api.initializeProject({ projectId: "monitor-action-observation", projectName: "Action observation" });
+  await api.openDocument({ documentId: "chapter-live", text: "", revision: 0, sequence: 0 });
+  await api.extractNarrativeKnowledge("chapter-live", 0, "personaje Ana", 0);
+
+  const text = "Ana cruzó el puente.";
+  const admission = api.onEditorChange({
+    documentId: "chapter-live",
+    sequence: 1,
+    baseRevision: 0,
+    start: 0,
+    end: 0,
+    replacement: text,
+    activityKind: "typing"
+  });
+  assert.equal(admission.status, "queued");
+  await api.flushPendingChanges();
+
+  const update = observations.find(item => item.analysis.revision === 1);
+  assert.ok(update, "la integración debe publicar observaciones tras el análisis");
+  assert.equal(update.candidates.length, 1);
+  assert.equal(update.candidates[0].action, "cruzar");
+  assert.equal(update.candidates[0].actorEntityId, "entity:character:ana");
+  assert.equal(update.candidates[0].evidence.excerpt, text);
+  await api.disposeSafely();
+});
+
 test("reanuda las métricas desde el snapshot durable sin reabrir el documento del motor", async () => {
   const api = new HostEngineApi({ store: new MemoryDocumentStore() });
   api.initializeProject({ projectId: "monitor-reopen", projectName: "Monitor reopen" });

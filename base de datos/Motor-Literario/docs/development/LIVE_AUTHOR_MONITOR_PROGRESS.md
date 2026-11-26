@@ -1038,3 +1038,15 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Archivos:** `src/live-author-monitor-visibility.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, guía operativa y progreso.
 
 **Validación:** pendiente de CI para esta entrega.
+
+## 59. Integración de Page Lifecycle en Chromium (25 de noviembre de 2026)
+
+**Cobertura nueva:** se añade un harness HTML servido por Vite y una prueba Playwright dedicada que importa el módulo TypeScript real en Chromium. Se prueban `pagehide/pageshow`, `freeze/resume` y `visibilitychange` sobre EventTarget nativos, con intervalos inyectados deterministas.
+
+**Invariantes probadas:** `pagehide` detiene el intervalo; `pageshow` refresca exactamente una vez; `freeze/resume` comparte la misma máquina de estados; una señal de reanudación no inicia el polling mientras el documento sigue oculto; ticks anteriores y callbacks posteriores al desmontaje se descartan.
+
+**Alcance:** la prueba despacha las señales del navegador de forma controlada. No equivale a forzar una congelación física del proceso ni garantiza BFCache real en todos los entornos.
+
+**Archivos:** `tests/live-author-monitor-lifecycle-browser.test.mjs`, `tests/browser/live-author-monitor-lifecycle.html` y documentación operativa.
+
+**Validación:** pendiente de CI para esta entrega.

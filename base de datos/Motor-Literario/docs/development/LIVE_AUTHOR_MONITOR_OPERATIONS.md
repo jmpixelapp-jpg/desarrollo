@@ -327,3 +327,11 @@ Además de `visibilitychange`, el scheduler escucha `pagehide`/`pageshow` en `do
 El estado activo evita dobles reanudaciones cuando el navegador emite varios eventos para una transición. Un evento `pageshow`/`resume` no puede reactivar el polling mientras el documento siga oculto. Los callbacks de intervalos anteriores se mantienen protegidos por la comprobación `active`.
 
 Las pruebas deterministas simulan pagehide/pageshow, freeze/resume, ticks encolados, eventos duplicados y la condición hidden durante una señal de reanudación. No se modifica la actividad del motor ni la persistencia.
+
+## 23. Prueba de ciclo de vida con Chromium real
+
+`tests/live-author-monitor-lifecycle-browser.test.mjs` abre un Chromium real contra `tests/browser/live-author-monitor-lifecycle.html`. El harness importa el scheduler transformado por Vite desde TypeScript y lo conecta a los `EventTarget` nativos de `document` y `window`.
+
+La prueba despacha `PageTransitionEvent` (`pagehide/pageshow`) y `Event` (`freeze/resume`, `visibilitychange`). Usa un scheduler de intervalos inyectado para observar programaciones y cancelaciones sin depender de cronómetros reales. Comprueba callbacks antiguos, eventos duplicados, señal de reanudación mientras `document.hidden` es verdadero, refresco inmediato al volver y que después del desmontaje no se producen reactivaciones.
+
+Esta prueba verifica integración con DOM/EventTarget de Chromium, pero los eventos se despachan desde el harness: no afirma que el runner haya congelado físicamente el proceso ni que haya provocado una entrada real en BFCache.

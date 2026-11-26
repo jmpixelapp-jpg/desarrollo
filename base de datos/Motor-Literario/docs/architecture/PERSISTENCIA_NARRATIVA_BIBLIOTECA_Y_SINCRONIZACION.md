@@ -1,6 +1,6 @@
 # Persistencia narrativa, biblioteca de ideas y sincronización
 
-**Versión documental:** 1.2  
+**Versión documental:** 1.3  
 **Revisión de código de referencia:** `main` en `f99278768abb4fd0ad2fbb01dcc4bf4c49f1ed1f`  
 **Ámbito:** núcleo `base de datos/Motor-Literario/typescript`  
 **Lenguaje de implementación:** TypeScript/JavaScript puro  
@@ -194,7 +194,7 @@ Nombre propuesto: `sync-outbox`.
 
 La escritura del cambio de dominio y la inserción de su operación outbox deben ser atómicas. Si no pueden escribirse en la misma transacción, no se debe anunciar garantía de sincronización sin pérdida. La bandeja no debe poblarse de forma eventual después de confirmar la mutación: un cierre entre ambos pasos perdería el cambio remoto.
 
-**Implementación local de esta rama:** el almacén `sync-outbox` ya se crea en la migración v25, con clave `operationId`, índice de proyecto/fecha e índice único de proyecto/dispositivo/secuencia. El adaptador implementa encolar idempotentemente, leer pendientes paginadas sin borrarlas, registrar intentos y retirar una operación por acuse explícito. La implementación todavía no integra automáticamente las escrituras de documentos/fichas/ideas con la outbox, por lo que aún no garantiza sincronización de todas las mutaciones.
+**Implementación local de esta rama:** el almacén `sync-outbox` ya se crea en la migración v25, con clave `operationId`, índice de proyecto/fecha e índice único de proyecto/dispositivo/secuencia. El adaptador implementa lectura del cursor, encolado idempotente con secuencia estrictamente creciente en la misma transacción, lectura paginada sin borrar, registro de intentos y retirada por acuse explícito. La implementación todavía no integra automáticamente las escrituras de documentos/fichas/ideas con la outbox, por lo que aún no garantiza sincronización de todas las mutaciones.
 
 ### 7.3 Cobertura de mutaciones
 

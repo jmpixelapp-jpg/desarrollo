@@ -16,6 +16,7 @@ import {
   inspectNarrativeReferenceRepairPending,
   loadNarrativeProjectAfterRepairRecovery,
   verifyNarrativeReferenceRepairAuditIntegrity,
+  reconcileNarrativeRepairAndSyncState,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
@@ -848,4 +849,57 @@ test("usa Web Locks para serializar la recuperación por proyecto entre pestaña
     if (previous) Object.defineProperty(globalThis, "navigator", previous);
     else delete globalThis.navigator;
   }
+});
+
+
+test("reconcilia cola de reparación, auditoría y diario remoto sin mutar sus fuentes", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "reconcile-project", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:pending", {
+    projectId: "reconcile-project", id: "relation:pending",
+    fromEntityId: "entity:legacy", toEntityId: "entity:other",
+    relationType: "knows", evidence: []
+  });
+  const pending = {
+    projectId: "reconcile-project",
+    operationId: ["reference-repair", "reconcile-project", "relation", "relation:pending",
+      "fromEntityId", "entity:legacy", "entity:canonical"].join("|"),
+    issueCode: "missing-relation-entity",
+    recordType: "relation",
+    recordId: "relation:pending",
+    referenceField: "fromEntityId",
+    missingReferenceId: "entity:legacy",
+    replacementEntityId: "entity:canonical",
+    appliedAt: 42
+  };
+  await store.saveNarrativeReferenceRepairPending(pending);
+  const journal = {
+    loadOperations: async projectId => {
+      assert.equal(projectId, "reconcile-project");
+      return [
+        { operationId: "sync:pending", writerId: "writer-a", sequence: 1, digest: "sha256:" + "a".repeat(64) },
+        { operationId: "sync:applied", writerId: "writer-a", sequence: 2, digest: "sha256:" + "b".repeat(64), appliedAt: 80 }
+      ];
+    }
+  };
+
+  const report = await reconcileNarrativeRepairAndSyncState(store, "reconcile-project", journal);
+  assert.equal(report.pendingRepairs.length, 1);
+  assert.equal(report.pendingRepairs[0].status, "ready-to-recover");
+  assert.equal(report.pendingRepairs[0].auditAlreadyRecorded, false);
+  assert.equal(report.auditIntegrity.intact, true);
+  assert.deepEqual(report.syncJournal, {
+    checkedOperations: 2,
+    pendingCount: 1,
+    appliedCount: 1,
+    pendingOperationIds: ["sync:pending"]
+  });
+  assert.equal(report.repairQueueConsistent, true);
+  assert.equal(tables.pendingRepairs.size, 1);
+  assert.equal(tables.audits.size, 0);
 });

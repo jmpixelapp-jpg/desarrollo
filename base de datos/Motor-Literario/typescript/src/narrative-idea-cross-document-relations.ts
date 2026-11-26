@@ -77,14 +77,14 @@ interface NormalizedIdeaText {
 
 function normalizeText(value: string): NormalizedIdeaText {
   const phrase = value.normalize("NFKD")
-    .replace(/\\p{M}/gu, "")
+    .replace(/\p{M}/gu, "")
     .toLocaleLowerCase("es")
-    .replace(/[\\p{P}\\p{S}]+/gu, " ")
-    .replace(/\\s+/gu, " ")
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .replace(/\s+/gu, " ")
     .trim()
     .normalize("NFKC");
   const tokens = new Set(
-    (phrase.match(/[\\p{L}\\p{N}]{3,}/gu) ?? [])
+    (phrase.match(/[\p{L}\p{N}]{3,}/gu) ?? [])
       .filter(token => !STOP_WORDS.has(token))
   );
   return { phrase, tokens };

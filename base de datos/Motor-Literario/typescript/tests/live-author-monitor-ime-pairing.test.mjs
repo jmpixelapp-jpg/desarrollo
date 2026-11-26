@@ -99,6 +99,23 @@ test("detecta inputType discordante aunque pueda comparar los datos", () => {
   assert.equal(summary.pendingBeforeInputCount, 0);
 });
 
+test("conserva una pareja cuando input no informa inputType", () => {
+  const tracker = new LiveAuthorMonitorImePairing();
+  const before = beforeInput("insertText", "TEXT_VALUE");
+  const after = input("", "TEXT_VALUE");
+
+  tracker.recordBeforeInput(before.entry, before.event);
+  tracker.recordInput(after.entry, after.event);
+
+  const summary = tracker.snapshot();
+  assert.equal(before.entry.pairId, after.entry.pairId);
+  assert.equal(before.entry.pairStatus, "paired-inputtype-unavailable");
+  assert.equal(after.entry.pairStatus, "paired-inputtype-unavailable");
+  assert.equal(summary.pairedInputCount, 1);
+  assert.equal(summary.pairedWithoutInputTypeCount, 1);
+  assert.equal(summary.inputTypeMismatchCount, 0);
+});
+
 test("marca beforeinput cancelado y input huérfano sin abrir una pareja pendiente", () => {
   const tracker = new LiveAuthorMonitorImePairing();
   const prevented = beforeInput("insertText", "CANCELLED_VALUE", true);

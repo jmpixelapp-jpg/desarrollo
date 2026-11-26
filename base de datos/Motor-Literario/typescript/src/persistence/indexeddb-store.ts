@@ -4883,9 +4883,13 @@ export class IndexedDbProjectStore implements ProjectStore {
       // El snapshot y el último delta se comprueban en la misma transacción
       // que inserta el nuevo registro. Así dos instancias no pueden crear
       // ramas divergentes con secuencias distintas.
-      const transaction = db.transaction([DOCUMENTS, CHANGES], "readwrite");
+      const transaction = db.transaction(
+        syncDraft ? [DOCUMENTS, CHANGES, SYNC_OUTBOX] : [DOCUMENTS, CHANGES],
+        "readwrite"
+      );
       const documents = transaction.objectStore(DOCUMENTS);
       const changes = transaction.objectStore(CHANGES);
+      const outbox = syncDraft ? transaction.objectStore(SYNC_OUTBOX) : undefined;
       let snapshotReady = false;
       let journalReady = false;
       let snapshot: StoredDocument | undefined;

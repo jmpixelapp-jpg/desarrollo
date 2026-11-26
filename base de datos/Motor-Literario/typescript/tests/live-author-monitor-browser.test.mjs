@@ -710,7 +710,7 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       const serialized = Buffer.concat(chunks).toString("utf8");
       const report = JSON.parse(serialized);
 
-      assert.equal(report.format, "live-author-monitor-ime-trace-v2");
+      assert.equal(report.format, "live-author-monitor-ime-trace-v3");
       assert.equal(report.privacy.manuscriptContentIncluded, false);
       assert.equal(report.privacy.inputEventDataIncluded, false);
       assert.equal(report.privacy.keystrokesIncluded, false);

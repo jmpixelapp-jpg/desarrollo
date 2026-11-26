@@ -14,6 +14,7 @@ export const MAX_NARRATIVE_OBSERVATION_ENTITIES = 10_000;
 export const MAX_NARRATIVE_OBSERVATION_ALIASES_PER_ENTITY = 100;
 export const MAX_NARRATIVE_OBSERVATION_NAME_LENGTH = 256;
 export const MAX_NARRATIVE_OBSERVATION_SEGMENTS = 20_000;
+export const MAX_NARRATIVE_ENTITY_MENTION_OCCURRENCES = 20_000;
 
 export interface NarrativeObservationCandidate {
   readonly id: string;
@@ -447,6 +448,7 @@ export function discoverNarrativeObservationCandidates(
     const mentionedOthers = otherEntities.filter(entity =>
       [entity.canonicalName, ...entity.aliases].some(name => includesName(sentence, name))
     );
+    let mentionOccurrenceCount = 0;
     const entityMentionOccurrences = input.entities.flatMap(entity => {
       const bySpan = new Map<string, { start: number; end: number; excerpt: string }>();
       for (const name of [entity.canonicalName, ...entity.aliases]) {
@@ -456,7 +458,12 @@ export function discoverNarrativeObservationCandidates(
           if (!previous || match.excerpt.length > previous.excerpt.length) bySpan.set(key, match);
         }
       }
-      return [...bySpan.values()].map(match => ({
+      const entityMatches = [...bySpan.values()];
+      mentionOccurrenceCount += entityMatches.length;
+      if (mentionOccurrenceCount > MAX_NARRATIVE_ENTITY_MENTION_OCCURRENCES) {
+        throw new Error("La frase supera el límite de menciones de entidades; procesa el texto en fragmentos menores.");
+      }
+      return entityMatches.map(match => ({
         entityId: entity.id,
         entityKind: entity.kind,
         evidence: {

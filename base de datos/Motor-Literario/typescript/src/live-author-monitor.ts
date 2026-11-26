@@ -293,6 +293,12 @@ export class LiveAuthorMonitor {
 
     session.acceptedChanges++;
     const activityKind = classifyActivityKind(change);
+    if (change.activityKind === undefined ||
+        (activityKind === "other" && change.activityKind !== "other")) {
+      // Sin procedencia explícita no se puede afirmar que las unidades de
+      // escritura y composición cubran toda la sesión.
+      session.activityUnitMetricsComplete = false;
+    }
     switch (activityKind) {
       case "typing":
         session.typingChanges++;

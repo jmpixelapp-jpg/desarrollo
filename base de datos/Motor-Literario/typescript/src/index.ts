@@ -27,6 +27,7 @@ export * from "./narrative-location-presence-discovery";
 export * from "./narrative-temporal-reference-discovery";
 export * from "./narrative-location-trajectory";
 export * from "./narrative-object-trajectory";
+export * from "./narrative-object-mention-audit";
 export * from "./narrative-book-ingestion";
 export * from "./narrative-extraction-audit";
 export * from "./narrative-domain-extraction-audit";

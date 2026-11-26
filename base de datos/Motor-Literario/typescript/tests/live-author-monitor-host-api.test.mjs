@@ -760,6 +760,7 @@ test("limpia el diagnóstico QuotaExceededError cuando una escritura posterior s
     assert.equal(admission.status, "queued");
     await api.flushPendingChanges();
     await recoveredAttempt;
+    await new Promise(resolve => setImmediate(resolve));
 
     const recovered = api.getLiveAuthorMonitorPersistenceDiagnostics("chapter-1");
     assert.equal(recovered.checkpointState, "saved");

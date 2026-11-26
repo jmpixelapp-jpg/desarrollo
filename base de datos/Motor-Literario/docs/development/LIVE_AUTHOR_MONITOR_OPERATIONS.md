@@ -563,3 +563,8 @@ La conclusión global de la lane sigue siendo fallo por la auditoría IndexedDB 
 ## 45. Restauración sin heredar fallos de vistas de la instancia anterior
 
 La ejecución [Live Author Monitor — run 45756913002](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756913002) aprobó la regresión de checkpoint: tras provocar dos fallos de suscriptor, el snapshot local cuenta ambos; el checkpoint durable no declara ni serializa `listenerErrors`; y `restoreCheckpoint()` inicia el documento recuperado con cero fallos de vistas. La suite completa aislada terminó en 59/59 y el type-check estricto independiente pasó. Esto evita que un error de DOM o de un panel antes de un cierre forzado se arrastre como alerta de la sesión recuperada.
+
+
+## 46. Fallos de renderización y reconciliación por capítulo
+
+El workspace no deja que una excepción de actualización de una tarjeta detenga la reconciliación de las demás. Los fallos locales del renderer se cuentan por documento en memoria y se presentan junto al diagnóstico de listeners, con mensajes genéricos. El contador se elimina cuando desaparece el documento o se desmonta el workspace; no se guarda en checkpoints y no altera los contadores del motor. La prueba fuerza un `getDocumentLabel()` que falla una vez, comprueba la alerta en la tarjeta correcta y verifica que el siguiente refresco recupera la etiqueta sin borrar el aviso histórico de esa instancia.

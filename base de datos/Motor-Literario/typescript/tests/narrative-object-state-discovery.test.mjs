@@ -104,6 +104,57 @@ test("el futuro queda como cambio prospectivo, no como estado actual", () => {
   assert.equal(transitions[0].effectStatus, "prospective");
 });
 
+test("detecta cambios explícitos de condición del objeto con roles y evidencia exactos", () => {
+  const cases = [
+    ["Ana abrió la Espada Solar.", "abrir", "opened", "abrió"],
+    ["Ana cerró la Espada Solar.", "cerrar", "closed", "cerró"],
+    ["Ana rompió la Espada Solar.", "romper", "broken", "rompió"],
+    ["Ana reparó la Espada Solar.", "reparar", "repaired", "reparó"],
+    ["Ana destruyó la Espada Solar.", "destruir", "destroyed", "destruyó"],
+    ["Ana activó la Espada Solar.", "activar", "activated", "activó"],
+    ["Ana desactivó la Espada Solar.", "desactivar", "deactivated", "desactivó"]
+  ];
+  for (const [text, action, transition, verb] of cases) {
+    const observations = observe(text);
+    const observation = observations.find(item => item.action === action);
+    assert.ok(observation, text);
+    const [candidate] = discoverNarrativeObjectTransitionCandidates({
+      projectId: context.projectId, documentId: context.documentId,
+      revision: context.revision, observations
+    });
+    assert.ok(candidate, text);
+    assert.equal(candidate.transition, transition);
+    assert.equal(candidate.objectEntityId, sword.id);
+    assert.equal(candidate.actorEntityId, ana.id);
+    assert.equal(candidate.actionEvidence.excerpt, verb);
+    assert.equal(candidate.objectEvidence.excerpt, "Espada Solar");
+    assert.equal(candidate.effectStatus, "candidate");
+    for (const evidence of [candidate.actionEvidence, candidate.objectEvidence, candidate.actorEvidence]) {
+      assert.ok(evidence);
+      assert.equal(text.slice(evidence.start, evidence.end), evidence.excerpt);
+    }
+  }
+});
+
+test("conserva negación y futuro en cambios de condición sin aplicarlos al estado actual", () => {
+  const cases = [
+    ["Ana no rompió la Espada Solar.", "broken", "not-applied", "negated"],
+    ["Ana reparará la Espada Solar.", "repaired", "prospective", "affirmed"],
+    ["Ana no activará la Espada Solar.", "activated", "not-applied", "negated"]
+  ];
+  for (const [text, transition, effectStatus, polarity] of cases) {
+    const observations = observe(text);
+    const candidates = discoverNarrativeObjectTransitionCandidates({
+      projectId: context.projectId, documentId: context.documentId,
+      revision: context.revision, observations
+    });
+    assert.equal(candidates.length, 1, text);
+    assert.equal(candidates[0].transition, transition);
+    assert.equal(candidates[0].effectStatus, effectStatus);
+    assert.equal(candidates[0].polarity, polarity);
+  }
+});
+
 test("no propone transición si faltan objeto o participante activo", () => {
   const observations = observe("Ana perdió el recuerdo.");
   const transitions = discoverNarrativeObjectTransitionCandidates({

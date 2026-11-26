@@ -165,7 +165,7 @@ export function discoverNarrativeObservationCandidates(
     const mentionedCharacters = characters.filter(entity =>
       [entity.canonicalName, ...entity.aliases].some(name => includesName(sentence, name))
     );
-    const pronounMatch = sentence.match(/^\\s*(él|ella|ellos|ellas)\\b/iu);
+    const pronounMatch = sentence.match(/^\s*(él|ella|ellos|ellas)\b/iu);
     let unresolvedReferences: NonNullable<NarrativeObservationCandidate["unresolvedReferences"]> = [];
     if (mentionedCharacters.length === 0 && pronounMatch) {
       // Solo se inspecciona la frase inmediatamente anterior. Incluso con un único
@@ -183,9 +183,9 @@ export function discoverNarrativeObservationCandidates(
           evidence: {
             documentId: input.documentId,
             revision: input.revision,
-            start: baseOffset + segment.start,
-            end: baseOffset + segment.start + pronounMatch[0].trimStart().length,
-            excerpt: sentence
+            start: baseOffset + segment.start + sentence.indexOf(pronounMatch[1]!),
+            end: baseOffset + segment.start + sentence.indexOf(pronounMatch[1]!) + pronounMatch[1]!.length,
+            excerpt: pronounMatch[1]!
           },
           ...(possibleAntecedents.length > 0 ? {
             antecedentEvidence: {

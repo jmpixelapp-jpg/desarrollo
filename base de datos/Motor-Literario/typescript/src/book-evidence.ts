@@ -124,9 +124,18 @@ export function resolveNarrativeTextEvidence(
   }
   if (!Number.isSafeInteger(evidence.start) || !Number.isSafeInteger(evidence.end) ||
       evidence.start < 0 || evidence.end <= evidence.start ||
-      evidence.end > chapter.text.length ||
-      chapter.text.slice(evidence.start, evidence.end) !== evidence.excerpt) {
-    throw new Error("La cita no coincide con el rango de texto de la fuente importada.");
+      evidence.end > chapter.text.length) {
+    throw new Error("El rango de evidencia no pertenece al texto del capítulo importado.");
+  }
+  // En el conocimiento narrativo, start/end identifican la ocurrencia concreta,
+  // mientras excerpt conserva la línea completa como contexto legible.
+  const lineStart = chapter.text.lastIndexOf("\\n", evidence.start - 1) + 1;
+  const nextLineBreak = chapter.text.indexOf("\\n", evidence.end);
+  const lineEnd = nextLineBreak < 0 ? chapter.text.length : nextLineBreak;
+  const sourceLine = chapter.text.slice(lineStart, lineEnd);
+  if (sourceLine !== evidence.excerpt ||
+      chapter.text.slice(evidence.start, evidence.end).length === 0) {
+    throw new Error("La cita contextual no coincide con la línea de texto de la fuente importada.");
   }
   return resolveBookEvidence(book, chapter, evidence.start, evidence.end);
 }

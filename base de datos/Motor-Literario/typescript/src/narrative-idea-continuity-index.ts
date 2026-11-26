@@ -731,23 +731,6 @@ export interface UpdateNarrativeIdeaContinuityIndexIncrementallyResult {
   readonly reusedLineCount: number;
 }
 
-function emptyContinuityLines(projectId: string): NarrativeIdeaContinuityLinesResult {
-  const evolution = {
-    summary: {
-      projectId,
-      relationCount: 0,
-      eventCount: 0,
-      reappearedCount: 0,
-      echoedCount: 0,
-      withoutOrderCount: 0,
-      modalityChangeCount: 0,
-      ideaKindChangeCount: 0,
-      sourceAnalysisTruncated: false
-    },
-    events: []
-  } satisfies import("./narrative-idea-evolution").NarrativeIdeaEvolutionResult;
-  return buildNarrativeIdeaContinuityLines({ projectId, evolution });
-}
 
 /**
  * Actualiza y confirma el índice en una sola operación de aplicación:

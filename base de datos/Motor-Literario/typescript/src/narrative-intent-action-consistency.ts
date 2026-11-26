@@ -22,7 +22,9 @@ export interface NarrativeIntentActionConsistencyInput {
   readonly projectId: string;
   readonly entities: readonly NarrativeEntity[];
   readonly intents: readonly NarrativeCharacterIntentCandidate[];
+  readonly priorIntents?: readonly NarrativeCharacterIntentCandidate[];
   readonly actions: readonly NarrativeActionCandidate[];
+  readonly orderedDocumentIds?: readonly string[];
 }
 const MAX_ITEMS = 5000;
 const SUPPORTS: Readonly<Record<string, readonly string[]>> = {
@@ -53,13 +55,16 @@ function validate(input: NarrativeIntentActionConsistencyInput): void {
       typeof input.projectId !== "string" || !input.projectId.trim() ||
       !Array.isArray(input.entities) || !Array.isArray(input.intents) ||
       !Array.isArray(input.actions) ||
-      input.intents.length + input.actions.length > MAX_ITEMS) {
+      (input.priorIntents !== undefined && !Array.isArray(input.priorIntents)) ||
+      (input.orderedDocumentIds !== undefined && (!Array.isArray(input.orderedDocumentIds) ||
+        input.orderedDocumentIds.some(id => typeof id !== "string" || !id.trim()))) ||
+      input.intents.length + (input.priorIntents?.length ?? 0) + input.actions.length > MAX_ITEMS) {
     throw new Error("Contexto inválido para comparar intenciones y acciones.");
   }
   const characters = new Set(input.entities
     .filter(entity => entity && entity.projectId === input.projectId && entity.kind === "character")
     .map(entity => entity.id));
-  for (const intent of input.intents) {
+  for (const intent of [...(input.priorIntents ?? []), ...input.intents]) {
     if (!intent || intent.projectId !== input.projectId ||
         !characters.has(intent.characterEntityId) ||
         !["goal", "motivation"].includes(intent.kind) ||
@@ -106,17 +111,28 @@ export function compareNarrativeIntentsWithActions(
     .filter(entity => entity && entity.projectId === input.projectId)
     .map(entity => [entity.id, entity] as const));
   const results: NarrativeIntentActionConsistency[] = [];
-  for (const intent of input.intents) {
+  const allIntents = [...(input.priorIntents ?? []), ...input.intents];
+  const seenIntentIds = new Set<string>();
+  for (const intent of allIntents) {
+    if (seenIntentIds.has(intent.id)) continue;
+    seenIntentIds.add(intent.id);
     const verb = goalVerb(intent.text);
     const targetEntities = [...entities.values()].filter(entity =>
       entity.id !== intent.characterEntityId && targetMatches(intent.text, entity)
     );
-    const sameActorActions = input.actions.filter(action =>
-      action.actorEntityId === intent.characterEntityId &&
-      action.evidence.documentId === intent.evidence.documentId &&
-      action.evidence.revision === intent.evidence.revision &&
-      action.evidence.start >= intent.evidence.end
-    );
+    const sameActorActions = input.actions.filter(action => {
+      if (action.actorEntityId !== intent.characterEntityId) return false;
+      if (action.evidence.documentId === intent.evidence.documentId) {
+        return action.evidence.revision === intent.evidence.revision &&
+          action.evidence.start >= intent.evidence.end;
+      }
+      if (intent.evidence.status === "stale" || action.evidence.status === "stale") return false;
+      const ordered = input.orderedDocumentIds;
+      if (!ordered) return false;
+      const intentOrder = ordered.indexOf(intent.evidence.documentId);
+      const actionOrder = ordered.indexOf(action.evidence.documentId);
+      return intentOrder >= 0 && actionOrder > intentOrder;
+    });
     for (const action of sameActorActions) {
       const target = entities.get(action.targetEntityId);
       const targetIsNamed = !!target && targetMatches(intent.text, target);

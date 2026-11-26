@@ -358,3 +358,27 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **CI general:** [45726102624](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726102624) sigue fallando exclusivamente por errores TypeScript en `src/literary-analysis.ts` (TS2322, TS2677, TS18047 y TS2345); no reporta errores en el monitor, contratos, HostEngineApi o IndexedDB.
 
 **Límites:** el lease coordina checkpoints de métricas, no bloquea ni sincroniza la edición del manuscrito. La prueba usa `fake-indexeddb` en memoria; la validación E2E en navegador real sigue pendiente. Los almacenes de anfitrión antiguos sin los métodos de lease mantienen compatibilidad, pero carecen de fencing multi-pestaña.
+
+
+
+## 17. Nueva entrega — E2E real de dos pestañas Chromium (26 de noviembre de 2026)
+
+**Objetivo:** verificar la contienda, liberación, takeover y fencing del lease sobre IndexedDB real del navegador, no solo sobre el polyfill de Node.
+
+**Harness y test:**
+- `typescript/tests/browser/live-author-monitor-lease.html`: fixture exclusiva de tests que carga `IndexedDbProjectStore` desde Vite. No forma parte de la UI ni del bundle de producción.
+- `typescript/tests/live-author-monitor-browser.test.mjs`: inicia Vite, lanza Chromium con Playwright y abre dos páginas del mismo origen, con instancias independientes del store.
+- Las páginas compiten por el mismo lease; exactamente una gana. La página perdedora no puede adquirir mientras el lease está activo. Tras la liberación, esa página recibe un fencing token superior; el token anterior es rechazado y la página antigua puede leer el checkpoint que guardó la nueva titular.
+- El workflow `.github/workflows/live-author-monitor.yml` instala Chromium usando `npx playwright install --with-deps chromium` antes de ejecutar las pruebas.
+
+**Dependencia:** Playwright `1.65.1` añadida en `typescript/package.json` como dependencia de desarrollo.
+
+**Archivos:** `typescript/package.json`, `.github/workflows/live-author-monitor.yml`, `typescript/tests/browser/live-author-monitor-lease.html`, `typescript/tests/live-author-monitor-browser.test.mjs`, sección 32 de la especificación.
+
+**Commits:** [6dc6e2d — Playwright para E2E](https://github.com/jmpixelapp-jpg/desarrollo/commit/6dc6e2de0a95afc7baa31a340e579e39b8daac41), [1aced3d — instalar Chromium en CI](https://github.com/jmpixelapp-jpg/desarrollo/commit/1aced3d1053a74b1a09123bf129b25ed53287848), [42b8e9d — fixture de navegador](https://github.com/jmpixelapp-jpg/desarrollo/commit/42b8e9df2eeb13a04b62da1b737e957f9c89a31c), [0d1448e — prueba E2E de dos pestañas](https://github.com/jmpixelapp-jpg/desarrollo/commit/0d1448e8aa1d635cdd4cee8568c4b19e74738729).
+
+**Resultado verificado:** CI específica [45726598052](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726598052), build Vite correcto, esquema MLDB 0.4.2 válido, auditoría física de 25 tablas y 34 almacenes y **108/108 pruebas aprobadas, 0 fallidas, 0 omitidas**. Incluye la prueba Chromium sobre dos páginas con IndexedDB del navegador.
+
+**CI general:** [45726594065](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726594065) sigue señalando únicamente errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`; no reporta errores de monitor ni de IndexedDB.
+
+**Límite de producción:** el harness E2E no es una UI de escritura. El repositorio no contiene un editor anfitrión concreto ni su historial de transacciones, de modo que aún no se puede conectar `LiveAuthorMonitorEditorTransactionProvider` a eventos nativos de edición/undo/redo. Mantener la fuente textarea en modo resync para `historyUndo/historyRedo` sigue siendo más seguro que inferir deltas desde DOM.

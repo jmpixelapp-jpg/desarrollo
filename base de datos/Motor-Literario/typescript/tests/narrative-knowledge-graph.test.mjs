@@ -24,6 +24,7 @@ test("integra entidades, relaciones, eventos, ideas y afirmaciones con evidencia
   assert.equal(graph.events[0].timeReference.basis, "story-day");
   assert.equal(graph.ideas.length, 1);
   assert.equal(graph.ideas[0].sourceProjectName, "La novela");
+  assert.equal(graph.ideas[0].statusHistory[0].changedAt, 1234);
   assert.ok(graph.assertions.some(x => x.attribute === "age" && x.value === 24));
   assert.ok(graph.assertions.some(x => x.attribute === "location" && x.value === "Puerto Azul"));
   assert.equal(graph.consistency.length, 0);
@@ -40,6 +41,7 @@ test("consolida evidencia de una misma entidad entre documentos y ordena el resu
   ], { now: 100 });
   assert.equal(graph.entities.length, 1);
   assert.equal(graph.entities[0].evidence.length, 2);
+  assert.equal(graph.entities[0].evidence[0].documentId, "a");
   assert.deepEqual(graph.documents.map(x => x.documentId), ["a", "b"]);
 });
 

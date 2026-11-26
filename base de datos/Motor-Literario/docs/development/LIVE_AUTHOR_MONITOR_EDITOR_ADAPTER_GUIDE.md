@@ -213,7 +213,7 @@ La fuente textarea clasifica conservadoramente:
 | `insertCompositionText` | `composition` | Candidato IME aplicado; puede ser provisional y repetirse en el mismo rango. |
 | `insertFromDrop`, `insertFromYank`, `insertFromDictation` | `other` | Se conserva el tipo exacto, pero no se equipara sin evidencia a escritura manual, pegado o corrección. |
 | Otro tipo no vacío | `other` | Se conserva el token nativo para auditoría; no se eleva a `typing`. |
-| Tipo vacío/ausente | Sin categoría | El delta de texto puede seguir siendo exacto, pero la cobertura de procedencia pasa a parcial. |
+| Tipo vacío/ausente | Sin categoría | La fuente textarea suspende porque no puede validar el tipo de operación; un proveedor transaccional puede entregar un delta exacto sin categoría y la cobertura queda parcial. |
 
 `historyUndo` / `historyRedo` no se reconstruyen desde el textarea: se necesita el delta inverso/reenviado del historial real del editor. El adaptador textarea suspende y solicita snapshot cuando no puede determinar el rango. El adaptador transaccional del editor marca `undo` / `redo` por el tipo de transacción nativa, nunca por atajos de teclado.
 

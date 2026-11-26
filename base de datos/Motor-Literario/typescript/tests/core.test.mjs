@@ -2212,7 +2212,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 22);
+      assert.equal(version, 25);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2241,6 +2241,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "narrative-ideas", keyPath: ["projectId", "id"] },
       { name: "personal-idea-library", keyPath: ["writerId", "sourceProjectId", "idea.id"] },
       { name: "writer-library-finalization-receipts", keyPath: ["writerId", "sourceProjectId", "receiptId"] },
+      { name: "writer-library-versions", keyPath: "writerId" },
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
       { name: "document-diagnostics", keyPath: ["projectId", "documentId"] },
       { name: "manuscript-fragments", keyPath: ["projectId", "id"] },
@@ -2399,7 +2400,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "record-lifecycles", "relation-lifecycles", "event-lifecycles", "project-settings", "documents", "changes",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
-    "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
+    "writer-library-finalization-receipts", "writer-library-versions", "narrative-assertions", "document-diagnostics",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
@@ -2452,7 +2453,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 22);
+    assert.equal(openedVersion, 25);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -3409,6 +3410,7 @@ test("transfiere ideas no incorporadas a una biblioteca aislada por escritor y c
   const api = new HostEngineApi({ store });
   api.initializeProject({ projectId: "finished-book", projectName: "El faro de invierno", writerId: "writer-17" });
   assert.equal(api.getCapabilities().personalIdeaLibrary, true);
+  assert.equal(api.getCapabilities().personalIdeaLibraryKeysetPagination, false);
   assert.equal(api.getCapabilities().explicitIdeaLinks, true);
   assert.equal(api.getCapabilities().explicitIdeaEntityLinks, true);
   await api.extractNarrativeKnowledge("chapter-1", 1,

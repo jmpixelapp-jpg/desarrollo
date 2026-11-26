@@ -1,0 +1,52 @@
+name: Personal idea library pagination
+
+on:
+  push:
+    branches:
+      - work/personal-library-keyset-latest-20261126
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/personal-library-pagination.yml"
+      - "base de datos/Motor-Literario/MLDB/storage_mapping_v0.4.2.json"
+      - "base de datos/Motor-Literario/MLDB/PHYSICAL_STORAGE_MAPPING_v0.4.2.md"
+      - "base de datos/Motor-Literario/typescript/package.json"
+      - "base de datos/Motor-Literario/typescript/src/contracts.ts"
+      - "base de datos/Motor-Literario/typescript/src/host-api.ts"
+      - "base de datos/Motor-Literario/typescript/src/persistence/indexeddb-store.ts"
+      - "base de datos/Motor-Literario/typescript/tests/indexeddb-personal-library-pagination.test.mjs"
+      - "base de datos/Motor-Literario/typescript/scripts/audit-storage-implementation.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  personal-library-pagination:
+    name: Versioned personal idea library pagination
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "base de datos/Motor-Literario/typescript"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install development tools
+        run: npm install --no-audit --no-fund
+
+      - name: Validate MLDB schema and physical storage
+        run: npm run validate:schema
+
+      # Keep persistence tests independent from unrelated type errors in literary-analysis.ts.
+      - name: Build runtime bundle
+        run: npx vite build
+
+      - name: Test versioned library pagination and isolation
+        run: node --import fake-indexeddb/auto --test tests/indexeddb-personal-library-pagination.test.mjs

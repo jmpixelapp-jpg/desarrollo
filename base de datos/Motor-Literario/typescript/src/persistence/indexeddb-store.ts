@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 24;
+const DATABASE_VERSION = 25;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -42,6 +42,7 @@ const PERSONAL_IDEAS = "personal-idea-library";
 const PERSONAL_IDEA_SOURCE_INDEX = "by-source-project";
 const FINALIZATION_RECEIPTS = "writer-library-finalization-receipts";
 const FINALIZATION_RECEIPT_ID = "finalization-v1";
+const WRITER_LIBRARY_VERSIONS = "writer-library-versions";
 const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
 const LIVE_AUTHOR_MONITOR_CHECKPOINTS = "live-author-monitor-checkpoints";
@@ -98,6 +99,25 @@ function validateFinalizationReceipt(
       receipt.archiveChecksum !== checksumArchivedIdeaIds(receipt.archivedIdeaIds)) {
     throw new Error("Recibo de finalización inconsistente: propietario, procedencia, IDs o checksum inválidos.");
   }
+}
+
+/** Comparación lexicográfica de claves compuestas IndexedDB (string/number). */
+function indexedDbKeyCompare(first: IDBValidKey, second: IDBValidKey): number {
+  if (Array.isArray(first) && Array.isArray(second)) {
+    const length = Math.min(first.length, second.length);
+    for (let index = 0; index < length; index++) {
+      const result = indexedDbKeyCompare(first[index]!, second[index]!);
+      if (result !== 0) return result;
+    }
+    return first.length === second.length ? 0 : first.length < second.length ? -1 : 1;
+  }
+  if (typeof first === "string" && typeof second === "string") {
+    return first === second ? 0 : first < second ? -1 : 1;
+  }
+  if (typeof first === "number" && typeof second === "number") {
+    return first === second ? 0 : first < second ? -1 : 1;
+  }
+  throw new TypeError("La clave de biblioteca contiene componentes no comparables.");
 }
 
 function validateProjectRecord(
@@ -1529,6 +1549,43 @@ function validateLiveAuthorMonitorLeaseRequest(
 }
 
 /**
+ * Incrementa la generación de la biblioteca dentro de la misma transacción
+ * que modifica sus entradas. Así, una página posterior puede detectar
+ * cualquier cambio confirmado desde que se emitió su cursor.
+ */
+function advanceWriterLibraryVersion(transaction: IDBTransaction, writerId: string): void {
+  const names = transaction.objectStoreNames as DOMStringList | undefined;
+  // Adaptadores legacy y fixtures antiguos pueden no exponer generaciones.
+  // El IndexedDB nativo de la versión 25 siempre incluye este almacén.
+  if (!names || typeof names.contains !== "function" ||
+      !names.contains(WRITER_LIBRARY_VERSIONS)) return;
+  const versions = transaction.objectStore(WRITER_LIBRARY_VERSIONS);
+  const request = versions.get(writerId);
+  request.onsuccess = () => {
+    const current = request.result as {
+      readonly writerId?: unknown;
+      readonly version?: unknown;
+    } | undefined;
+    const version = current === undefined ? 0 : current.version;
+    if ((current !== undefined && current.writerId !== writerId) ||
+        !Number.isSafeInteger(version) || (version as number) < 0 ||
+        (version as number) >= Number.MAX_SAFE_INTEGER) {
+      try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+      return;
+    }
+    try {
+      versions.put({ writerId, version: (version as number) + 1 });
+    } catch {
+      try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+    }
+  };
+  request.onerror = () => {
+    try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+  };
+}
+
+
+/**
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
@@ -1744,6 +1801,9 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           receipts.createIndex("by-writer", "writerId", { unique: false });
           receipts.createIndex("by-writer-source", ["writerId", "sourceProjectId"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(WRITER_LIBRARY_VERSIONS)) {
+          db.createObjectStore(WRITER_LIBRARY_VERSIONS, { keyPath: "writerId" });
         }
         if (!db.objectStoreNames.contains(ASSERTIONS)) {
           const assertions = db.createObjectStore(ASSERTIONS, { keyPath: ["projectId", "id"] });
@@ -3657,9 +3717,11 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(
-        [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS], "readwrite"
-      );
+      const archiveStores = [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS];
+      if (db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS)) {
+        archiveStores.push(WRITER_LIBRARY_VERSIONS);
+      }
+      const transaction = db.transaction(archiveStores, "readwrite");
       const ideas = transaction.objectStore(IDEAS);
       const personal = transaction.objectStore(PERSONAL_IDEAS);
       const entities = transaction.objectStore(ENTITIES);
@@ -3717,6 +3779,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             archived.push(entry);
             didChange = true;
           }
+          if (pending.length > 0) advanceWriterLibraryVersion(transaction, writerId);
           const archivedIdeaIds = pending.map(item => item.idea.id).sort();
           if (supportsReceipts) receipts.add({
             writerId,
@@ -3970,6 +4033,250 @@ export class IndexedDbProjectStore implements ProjectStore {
     ) as StoredProjectFinalizationReceipt | undefined;
     if (receipt) validateFinalizationReceipt(receipt, writerId, projectId);
     return receipt;
+  }
+
+  /**
+   * Lee la biblioteca con cursor keyset y versión durable.
+   * No materializa el resto de la biblioteca y detecta escrituras confirmadas
+   * entre páginas antes de devolver datos de una generación distinta.
+   */
+  async loadPersonalIdeasPage(
+    writerId: string,
+    cursor: PersonalIdeaLibraryCursor | null,
+    limit: number
+  ): Promise<PersonalIdeaLibraryPage> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
+        !Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+        (cursor !== null && (!cursor || cursor.writerId !== writerId ||
+          typeof cursor.sourceProjectId !== "string" || !cursor.sourceProjectId.trim() ||
+          typeof cursor.ideaId !== "string" || !cursor.ideaId.trim() ||
+          !Number.isSafeInteger(cursor.libraryVersion) || (cursor.libraryVersion as number) < 0))) {
+      throw new Error("Parámetros inválidos para paginar la biblioteca personal.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(
+      [PERSONAL_IDEAS, WRITER_LIBRARY_VERSIONS], "readonly"
+    );
+    const items: PersonalIdeaLibraryEntry[] = [];
+    let libraryVersion = 0;
+    let nextCursor: PersonalIdeaLibraryCursor | null = null;
+    let restartRequired = false;
+
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+
+      const versionRequest = transaction.objectStore(WRITER_LIBRARY_VERSIONS).get(writerId);
+      versionRequest.onsuccess = () => {
+        if (finished) return;
+        try {
+          const stored = versionRequest.result as {
+            readonly writerId?: unknown;
+            readonly version?: unknown;
+          } | undefined;
+          if (stored && (stored.writerId !== writerId ||
+              !Number.isSafeInteger(stored.version) || (stored.version as number) < 0)) {
+            throw new Error("La generación durable de la biblioteca está malformada.");
+          }
+          libraryVersion = stored ? stored.version as number : 0;
+          if (cursor && cursor.libraryVersion !== libraryVersion) {
+            restartRequired = true;
+            return;
+          }
+
+          const request = transaction.objectStore(PERSONAL_IDEAS).index("by-writer").openCursor(writerId);
+          let seekPending = cursor !== null;
+          request.onsuccess = () => {
+            if (finished || restartRequired) return;
+            try {
+              const current = request.result as IDBCursorWithValue | null;
+              if (!current) return;
+
+              if (seekPending && cursor) {
+                const primaryKey = current.primaryKey;
+                if (!Array.isArray(primaryKey) || primaryKey.length !== 3 ||
+                    primaryKey[0] !== writerId ||
+                    typeof primaryKey[1] !== "string" ||
+                    typeof primaryKey[2] !== "string") {
+                  throw new Error("La biblioteca devolvió una clave primaria malformada.");
+                }
+                const target: IDBValidKey = [writerId, cursor.sourceProjectId, cursor.ideaId];
+                const comparison = indexedDbKeyCompare(primaryKey, target);
+                if (comparison < 0) {
+                  // Mantiene seekPending hasta alcanzar el cursor exacto o
+                  // el siguiente registro; así nunca se devuelve la última
+                  // entrada de la página anterior como primer elemento nuevo.
+                  current.continuePrimaryKey(writerId, target);
+                  return;
+                }
+                seekPending = false;
+                if (comparison === 0) {
+                  current.continue();
+                  return;
+                }
+              }
+
+              if (items.length >= limit) {
+                const last = items[items.length - 1]!;
+                nextCursor = {
+                  writerId,
+                  sourceProjectId: last.sourceProjectId,
+                  ideaId: last.idea.id,
+                  libraryVersion
+                };
+                return;
+              }
+
+              const entry = current.value as PersonalIdeaLibraryEntry;
+              if (!entry || entry.writerId !== writerId ||
+                  typeof entry.sourceProjectId !== "string" || !entry.sourceProjectId.trim() ||
+                  !entry.idea || entry.idea.projectId !== entry.sourceProjectId ||
+                  typeof entry.idea.id !== "string" || !entry.idea.id.trim()) {
+                throw new Error("La biblioteca personal contiene una entrada ajena o malformada.");
+              }
+              items.push(entry);
+              current.continue();
+            } catch (error) {
+              fail(error);
+            }
+          };
+          request.onerror = () => fail(
+            request.error ?? new Error("No se pudo recorrer la página de la biblioteca personal.")
+          );
+        } catch (error) {
+          fail(error);
+        }
+      };
+      versionRequest.onerror = () => fail(
+        versionRequest.error ?? new Error("No se pudo leer la generación de la biblioteca personal.")
+      );
+
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        resolve({
+          items,
+          nextCursor,
+          libraryVersion,
+          ...(restartRequired ? { restartRequired: true } : {})
+        });
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? new Error("No se pudo leer la página de la biblioteca personal.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? new Error("Se canceló la lectura de la biblioteca personal.")
+      );
+    });
+  }
+
+  /** Resuelve hasta 128 ideas archivadas por clave compuesta, sin cargar la biblioteca completa. */
+  async loadPersonalIdeasByKeys(
+    writerId: string,
+    references: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[],
+    expectedLibraryVersion?: number
+  ): Promise<readonly PersonalIdeaLibraryEntry[]> {
+    if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
+        !Array.isArray(references) || references.length > 128 ||
+        (expectedLibraryVersion !== undefined &&
+          (!Number.isSafeInteger(expectedLibraryVersion) || expectedLibraryVersion < 0))) {
+      throw new Error("Parámetros inválidos para la lectura agrupada de la biblioteca personal.");
+    }
+    const seen = new Set<string>();
+    for (const reference of references) {
+      if (!reference || typeof reference.sourceProjectId !== "string" ||
+          !reference.sourceProjectId.trim() ||
+          typeof reference.ideaId !== "string" || !reference.ideaId.trim()) {
+        throw new Error("La lectura agrupada recibió una referencia malformada.");
+      }
+      const key = JSON.stringify([reference.sourceProjectId, reference.ideaId]);
+      if (seen.has(key)) throw new Error("La lectura agrupada recibió referencias duplicadas.");
+      seen.add(key);
+    }
+    if (references.length === 0) return [];
+
+    const db = await this.open();
+    const transaction = db.transaction(
+      [PERSONAL_IDEAS, WRITER_LIBRARY_VERSIONS], "readonly"
+    );
+    const store = transaction.objectStore(PERSONAL_IDEAS);
+    const versionRequest = transaction.objectStore(WRITER_LIBRARY_VERSIONS).get(writerId);
+    const requests = references.map(reference =>
+      store.get([writerId, reference.sourceProjectId, reference.ideaId])
+    );
+    const results: (PersonalIdeaLibraryEntry | undefined)[] = new Array(references.length);
+    let actualLibraryVersion: number | undefined;
+    let requestError: Error | undefined;
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      const fail = (error: unknown): void => {
+        if (finished) return;
+        finished = true;
+        try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      versionRequest.onsuccess = () => {
+        const stored = versionRequest.result as {
+          readonly writerId?: unknown;
+          readonly version?: unknown;
+        } | undefined;
+        if (stored && (stored.writerId !== writerId ||
+            !Number.isSafeInteger(stored.version) || (stored.version as number) < 0)) {
+          fail(new Error("La generación durable de la biblioteca está malformada."));
+          return;
+        }
+        actualLibraryVersion = stored ? stored.version as number : 0;
+      };
+      versionRequest.onerror = () => {
+        requestError = versionRequest.error ?? new Error("No se pudo leer la generación de la biblioteca.");
+        try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+      };
+      requests.forEach((request, index) => {
+        request.onsuccess = () => {
+          results[index] = request.result as PersonalIdeaLibraryEntry | undefined;
+        };
+        request.onerror = () => {
+          requestError = request.error ?? new Error("No se pudo recuperar una idea relacionada.");
+          try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+        };
+      });
+      transaction.oncomplete = () => {
+        if (finished) return;
+        finished = true;
+        if (requestError) {
+          reject(requestError);
+          return;
+        }
+        if (actualLibraryVersion === undefined) {
+          reject(new Error("La lectura agrupada no pudo establecer la generación de biblioteca."));
+          return;
+        }
+        if (expectedLibraryVersion !== undefined &&
+            actualLibraryVersion !== expectedLibraryVersion) {
+          reject(new Error("La biblioteca cambió durante la resolución de vínculos; reinicia la paginación."));
+          return;
+        }
+        const entries = results.filter(
+          (entry): entry is PersonalIdeaLibraryEntry => entry !== undefined
+        );
+        if (entries.some(entry => entry.writerId !== writerId)) {
+          reject(new Error("La lectura agrupada devolvió una idea de otro escritor."));
+          return;
+        }
+        resolve(entries);
+      };
+      transaction.onerror = () => fail(
+        transaction.error ?? requestError ?? new Error("No se pudieron recuperar las ideas relacionadas.")
+      );
+      transaction.onabort = () => fail(
+        transaction.error ?? requestError ?? new Error("Se canceló la lectura agrupada de ideas relacionadas.")
+      );
+    });
   }
 
   async loadPersonalIdeas(writerId: string): Promise<readonly PersonalIdeaLibraryEntry[]> {
@@ -4282,6 +4589,9 @@ export class IndexedDbProjectStore implements ProjectStore {
       // La biblioteca se incluye incluso sin writerId para detectar
       // entradas archivadas que no podríamos mantener coherentes sin identidad.
       const stores = [ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS];
+      if (db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS)) {
+        stores.push(WRITER_LIBRARY_VERSIONS);
+      }
       const transaction = db.transaction(stores, "readwrite");
       const entityStore = transaction.objectStore(ENTITIES);
       const relationStore = transaction.objectStore(RELATIONS);
@@ -4477,9 +4787,14 @@ export class IndexedDbProjectStore implements ProjectStore {
               ))];
               ideaStore.put({ ...idea, relatedEntityIds });
             }
+            let personalLibraryChanged = false;
             personalEntries.forEach((entry, index) => {
-              if (entry !== originalPersonalEntries[index]) personalIdeaStore.put(entry);
+              if (entry !== originalPersonalEntries[index]) {
+                personalIdeaStore.put(entry);
+                personalLibraryChanged = true;
+              }
             });
+            if (personalLibraryChanged) advanceWriterLibraryVersion(transaction, writerId!);
           } catch (error) {
             try { transaction.abort(); } catch { /* transacción ya finalizada */ }
             reject(error);

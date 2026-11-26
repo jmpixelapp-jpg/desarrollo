@@ -140,6 +140,12 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
       !Number.isFinite(value.nextAttemptAt) || value.nextAttemptAt < 0) {
     throw new Error("Una entrada del outbox tiene metadatos inválidos.");
   }
+  if (value.attempts === 0
+    ? value.lastAttemptAt !== undefined
+    : (!Number.isFinite(value.lastAttemptAt) ||
+       (value.lastAttemptAt ?? -1) < value.createdAt)) {
+    throw new Error("El contador de intentos del outbox no coincide con su fecha de último intento.");
+  }
   if (value.status === "leased" &&
       (typeof value.leaseOwner !== "string" || !value.leaseOwner.trim() ||
        !Number.isFinite(value.leaseExpiresAt) || (value.leaseExpiresAt ?? -1) < 0 ||
@@ -153,6 +159,7 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
   }
   if (value.status === "delivered" &&
       (!Number.isFinite(value.deliveredAt) || (value.deliveredAt ?? -1) < value.createdAt ||
+       value.attempts < 1 ||
        (value.lastAttemptAt !== undefined && (value.deliveredAt ?? -1) < value.lastAttemptAt) ||
        value.leaseOwner !== undefined || value.leaseExpiresAt !== undefined)) {
     throw new Error("Una entrada entregada tiene fechas o metadatos de lease inconsistentes.");

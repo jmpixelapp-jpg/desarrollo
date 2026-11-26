@@ -76,13 +76,12 @@ function classifyStateEpistemicFrame(
     }
   }
   if (!selected) return { epistemicFrame: "narrator-asserted" };
-  const base = input.baseOffset ?? 0;
   const frameEvidence = evidence(input, sentenceStart + selected.start, sentenceStart + selected.end, selected.excerpt);
   if (selected.frame !== "reported-speech") {
     return { epistemicFrame: selected.frame, epistemicFrameEvidence: frameEvidence };
   }
   const possible = characters.flatMap(entity => [entity.canonicalName, ...entity.aliases].flatMap(name => {
-    const escaped = name.replace(/[.*+?^$()|[\]{}\\]/gu, "\\export const MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES = 200;
+    const escaped = escapeRegExp(name);
 ");
     const expression = new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escaped + "(?![\\p{L}\\p{M}\\p{N}_])", "giu");
     return [...sentence.slice(0, selected!.start).matchAll(expression)].map(match => ({

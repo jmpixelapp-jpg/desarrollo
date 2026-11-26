@@ -33,6 +33,9 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Type-check
         run: npm run typecheck
+      - name: Run broadcast channel lifecycle regression independently
+        if: always()
+        run: npm run test:sync-lifecycle
       - name: Build and run automated tests
         run: npm test
       - name: Run live-edit benchmark

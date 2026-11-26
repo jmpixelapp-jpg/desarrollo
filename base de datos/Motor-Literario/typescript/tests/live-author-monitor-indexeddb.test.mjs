@@ -58,6 +58,34 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
     const first = checkpoint(projectId, documentId, Date.now());
     await store.saveLiveAuthorMonitorCheckpoint(first, lease);
 
+    const health = await store.inspectStorageHealth();
+    assert.equal(health.databaseName, "motor-literario-local");
+    assert.equal(health.databaseVersion, 25);
+    assert.equal(health.recordCounts["sync-outbox"], 0);
+    assert.equal(health.recordCounts["sync-device-sequences"], 0);
+    assert.equal(health.recordCounts["live-author-monitor-checkpoints"], 1);
+    const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    try {
+      Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+          storage: {
+            estimate: async () => ({ usage: 128, quota: 1024 }),
+            persisted: async () => false,
+            persist: async () => true
+          }
+        }
+      });
+      const estimated = await store.inspectStorageHealth();
+      assert.equal(estimated.usageBytes, 128);
+      assert.equal(estimated.quotaBytes, 1024);
+      assert.equal(estimated.persistentStorage, false);
+      assert.equal(await store.requestPersistentStorage(), true);
+    } finally {
+      if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+      else delete globalThis.navigator;
+    }
+
     const loaded = await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
     assert.deepEqual(loaded, first);
     assert.notEqual(loaded, first);

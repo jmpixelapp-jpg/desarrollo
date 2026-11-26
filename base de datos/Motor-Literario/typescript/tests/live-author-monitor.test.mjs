@@ -75,10 +75,10 @@ test("separa unidades typing de candidatos IME provisionales sin alterar los del
   admit(2, 5, 5, "候", "composition", "units-2");
   admit(3, 5, 6, "候補", "composition", "units-3");
   admit(4, 5, 7, "", "composition", "units-4");
-  admit(5, 3, 3, "paste", "paste", "units-5");
+  admit(5, 3, 3, "!", "paste", "units-5");
 
   const snapshot = monitor.getSnapshot("chapter-1");
-  assert.equal(snapshot.insertedCharacters, 8,
+  assert.equal(snapshot.insertedCharacters, 6,
     "the legacy raw total still counts every replacement applied, including provisional candidates");
   assert.equal(snapshot.deletedCharacters, 3);
   assert.equal(snapshot.typingInsertedCharacters, 2);
@@ -86,7 +86,7 @@ test("separa unidades typing de candidatos IME provisionales sin alterar los del
   assert.equal(snapshot.compositionDeletedCharacters, 3);
   assert.equal(snapshot.activityUnitMetricsComplete, true);
   assert.equal(snapshot.compositionChanges, 3);
-  assert.equal(snapshot.currentDocumentLength, 9);
+  assert.equal(snapshot.currentDocumentLength, 6);
 
   setTime(5_000);
   const timed = monitor.getSnapshot("chapter-1");
@@ -105,7 +105,7 @@ test("separa unidades typing de candidatos IME provisionales sin alterar los del
   const restoredMonitor = fixture().monitor;
   const restored = restoredMonitor.restoreCheckpoint(
     checkpoint,
-    { documentId: "chapter-1", text: "abcpaste", revision: 5, sequence: 5 },
+    { documentId: "chapter-1", text: "abc!xy", revision: 5, sequence: 5 },
     "book-1",
     10_001
   );

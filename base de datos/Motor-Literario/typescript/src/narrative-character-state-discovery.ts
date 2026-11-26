@@ -167,7 +167,9 @@ export function discoverNarrativeCharacterStateCandidates(
       matches.sort((a, b) => a.index - b.index || (b.end - b.index) - (a.end - a.index));
       for (const match of matches) {
         const tail = sentence.slice(match.end);
-        const predicate = COPULA.exec(tail);
+        const leadingWhitespace = tail.match(/^\\s*/u)?.[0].length ?? 0;
+        const predicateTail = tail.slice(leadingWhitespace);
+        const predicate = COPULA.exec(predicateTail);
         if (!predicate?.groups) continue;
         const adjective = predicate.groups.adjective!;
         const stateMatch = STATE_PATTERNS
@@ -181,14 +183,17 @@ export function discoverNarrativeCharacterStateCandidates(
 
         const marker = predicate.groups.marker ?? "";
         const copula = predicate.groups.copula!;
-        const adjectiveOffset = tail.indexOf(adjective);
-        const predicateStart = span.start + match.end + predicate.index;
-        const predicateEnd = span.start + match.end + adjectiveOffset + adjective.length;
+        const adjectiveOffset = predicateTail.indexOf(adjective);
+        const predicateStart = span.start + match.end + leadingWhitespace + predicate.index;
+        const predicateEnd = span.start + match.end + leadingWhitespace + adjectiveOffset + adjective.length;
         const nameStart = span.start + match.index;
         const nameEnd = span.start + match.end;
         const assertionEnd = predicateEnd;
-        const predicateText = sentence.slice(match.end + predicate.index, match.end + adjectiveOffset + adjective.length);
-        const stateStart = span.start + match.end + adjectiveOffset;
+        const predicateText = sentence.slice(
+          match.end + leadingWhitespace + predicate.index,
+          match.end + leadingWhitespace + adjectiveOffset + adjective.length
+        );
+        const stateStart = span.start + match.end + leadingWhitespace + adjectiveOffset;
         const stateEnd = stateStart + adjective.length;
         const polarity = /(?:\bno\b|dej[oó]\s+de)/iu.test(marker) ? "negated" : "affirmed";
         const aspect = /volvi[oó]\s+a/iu.test(marker) ? "recurrent"

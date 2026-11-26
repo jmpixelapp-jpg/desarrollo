@@ -452,3 +452,8 @@ Los getters fallidos y proxies hostiles se convierten en un error `invalid-trans
 ## 28. Categorías de actividad admitidas por el editor
 
 El proveedor puede omitir `activityKind`, o usar exactamente una de las siete etiquetas del contrato: `typing`, `paste`, `deletion`, `correction`, `undo`, `redo` u `other`. Cualquier valor distinto (incluidos objetos o números) se rechaza como `invalid-transaction`; el source se pausa para que el anfitrión no mezcle categorías arbitrarias en las métricas de escritura. Para transacciones nativas `undo` y `redo`, el tipo de transacción sigue teniendo precedencia sobre la metadata opcional.
+
+
+## 29. Cierre reintentable del proveedor transaccional
+
+El handle de cancelación del proveedor se conserva hasta que `unsubscribe()` termina correctamente. Si falla, no se crea una segunda suscripción sobre la anterior y `attachProvider()` exige completar primero la retirada pendiente. Las llamadas repetidas a `source.dispose()` y a `integration.dispose()` reintentan la limpieza. Esto evita ocultar listeners todavía activos y evita que una reanudación abra duplicados tras un fallo transitorio del proveedor.

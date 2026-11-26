@@ -525,3 +525,15 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - No se modifican datos persistidos durante estas comprobaciones.
 
 **Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado localmente; no hay resultados de CI asociados al HEAD comprobado.
+
+
+## Planificador conservador de recuperación de cursores
+
+- Se añadió `planNarrativeSyncJournalCursorRecovery`, una operación de solo lectura que clasifica cursores por escritor.
+- Cursor coherente: `no-action`.
+- Cursor ausente o `lastOperationId` divergente: solo propone reconstrucción cuando el diario está completo desde la secuencia 1, todas las envolturas y metadatos pasan auditoría y no existen otras incidencias.
+- Huecos, secuencias duplicadas, digest/metadatos inválidos, cursor adelantado/retrasado o cursor sin operaciones: `manual-review`.
+- El resultado contiene la propuesta tipada, códigos de incidencia, contadores y `requiresManualReview`; no incluye una operación de escritura.
+- Pruebas verifican propuesta por cursor ausente, discrepancia de identidad final, diario discontinuo, cursor adelantado, estado coherente y ausencia de mutaciones.
+
+**Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` localmente; comprobar CI antes de dar esta tanda por validada.

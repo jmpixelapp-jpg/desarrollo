@@ -127,6 +127,24 @@ test("no atribuye sujeto cuando el personaje aparece después del verbo o como c
   assert.equal(found[0]?.grammaticalSubjectCandidate, undefined);
 });
 
+test("reconoce imperfecto plural y participios irregulares de abrir", () => {
+  const plural = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana y Bruno cruzaban el puente."
+  });
+  assert.equal(plural.length, 1);
+  assert.equal(plural[0]?.surface, "cruzaban");
+  assert.equal(plural[0]?.grammaticalTense, "past-imperfect");
+  assert.equal(plural[0]?.grammaticalSubjectCandidate, undefined);
+
+  const passive = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana fue abierta paso a paso."
+  });
+  assert.equal(passive.length, 1);
+  assert.equal(passive[0]?.action, "abrir");
+  assert.equal(passive[0]?.surface, "abierta");
+  assert.equal(passive[0]?.grammaticalTense, "participle");
+});
+
 test("reconoce participios pasivos sin atribuir el papel de agente al personaje", () => {
   const found = discoverNarrativeObservationCandidates({
     ...context, text: "Ana fue encontrada por el guardia."

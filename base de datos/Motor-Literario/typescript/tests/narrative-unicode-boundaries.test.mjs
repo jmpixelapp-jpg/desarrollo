@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectExplicitStateContradictions, extractNarrativeEvents } from "../dist/motor-literario.js";
+import { detectExplicitStateContradictions, extractNarrativeEntities, extractNarrativeEvents, extractNarrativeRelations } from "../dist/motor-literario.js";
 
 function character(id, canonicalName) {
   return {
@@ -101,4 +101,50 @@ test("los diagnósticos vitales reconocen nombres canónicos completos con marca
   assert.equal(contradictions.length, 1);
   assert.equal(contradictions[0].entityId, "ana-decomposed");
   assert.equal(contradictions[0].predicate, "life-state");
+});
+
+
+test("el extractor de entidades conserva marcas combinantes dentro del nombre y de la evidencia", () => {
+  const decomposedName = "Ana" + String.fromCodePoint(0x0301);
+  const text = "Personaje " + decomposedName + " llega al puerto.";
+  const entities = extractNarrativeEntities(
+    "unicode-event-boundaries", "chapter-entities", 1, text, 100, 0
+  );
+
+  assert.equal(entities.length, 1);
+  assert.equal(entities[0].canonicalName, decomposedName);
+  assert.equal(
+    text.slice(entities[0].evidence[0].start, entities[0].evidence[0].end),
+    decomposedName
+  );
+});
+
+test("el extractor de relaciones admite nombres descompuestos completos", () => {
+  const decomposedName = "Ana" + String.fromCodePoint(0x0301);
+  const entities = [
+    character("ana-decomposed", decomposedName),
+    character("bruno", "Bruno")
+  ];
+  const text = decomposedName + " ayudó a Bruno.";
+  const relations = extractNarrativeRelations(
+    "unicode-event-boundaries", "chapter-relations", 1, text, entities
+  );
+
+  assert.equal(relations.length, 1);
+  assert.equal(relations[0].fromEntityId, "ana-decomposed");
+  assert.equal(relations[0].toEntityId, "bruno");
+});
+
+test("el extractor de relaciones no acepta un nombre base como prefijo antes de una marca", () => {
+  const combiningMark = String.fromCodePoint(0x0301);
+  const entities = [
+    character("ana", "Ana"),
+    character("bruno", "Bruno")
+  ];
+  const text = "Ana" + combiningMark + " ayudó a Bruno.";
+  const relations = extractNarrativeRelations(
+    "unicode-event-boundaries", "chapter-relations-prefix", 1, text, entities
+  );
+
+  assert.deepEqual(relations, []);
 });

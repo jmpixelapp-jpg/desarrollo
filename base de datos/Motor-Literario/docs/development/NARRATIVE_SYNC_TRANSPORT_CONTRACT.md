@@ -44,7 +44,7 @@ Este módulo **no completa la sincronización multidispositivo**. Todavía falta
 - Política de backoff, jitter, límites de frecuencia y reanudación.
 - Pruebas de integración contra un servidor y pruebas entre dos dispositivos.
 
-El anfitrión no debe borrar una operación por timeout, respuesta ambigua o conflicto. Solo un acuse explícito y validado permite retirarla.
+El coordinador también valida el tamaño y la estructura JSON de cada payload antes de entregarlo al transporte. El anfitrión no debe borrar una operación por timeout, respuesta ambigua o conflicto. Solo un acuse explícito y validado permite retirarla.
 
 ## Pruebas añadidas
 

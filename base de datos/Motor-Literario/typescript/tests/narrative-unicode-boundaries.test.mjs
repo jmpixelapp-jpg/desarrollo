@@ -160,3 +160,12 @@ test("extrae entidades cuando la etiqueta está capitalizada y el nombre termina
     "Ana"
   );
 });
+
+test("la etiqueta admite mayúscula inicial pero el nombre propio conserva requisito de mayúscula", () => {
+  assert.equal(extractNarrativeEntities(
+    "unicode-event-boundaries", "lowercase-name", 1, "Personaje ana", 100, 0
+  ).length, 0);
+  assert.equal(extractNarrativeEntities(
+    "unicode-event-boundaries", "capitalized-name", 1, "personaje Ana", 100, 0
+  ).length, 1);
+});

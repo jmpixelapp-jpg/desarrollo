@@ -350,7 +350,9 @@ export type NarrativeSyncJournalIntegrityIssueCode =
   | "cursor-without-operations"
   | "cursor-ahead-of-journal"
   | "cursor-behind-journal"
-  | "cursor-last-operation-mismatch";
+  | "cursor-last-operation-mismatch"
+  | "cursor-missing-for-operations"
+  | "invalid-cursor";
 
 export interface NarrativeSyncJournalIntegrityIssue {
   readonly code: NarrativeSyncJournalIntegrityIssueCode;
@@ -432,6 +434,17 @@ export async function inspectNarrativeSyncJournalIntegrity(
     }
   }
   const cursors = await journal.loadWriterCursors(projectId);
+  const cursorWriters = new Set(cursors.map(cursor => cursor.writerId));
+  for (const writerId of writers.keys()) {
+    if (!cursorWriters.has(writerId)) {
+      issues.push({
+        code: "cursor-missing-for-operations",
+        operationId: writers.get(writerId)?.[0]?.operationId ?? "",
+        writerId,
+        detail: "Hay operaciones persistidas, pero falta el cursor durable del escritor."
+      });
+    }
+  }
   for (const cursor of cursors) {
     const entries = writers.get(cursor.writerId) ?? [];
     const last = entries.reduce<NarrativeSyncJournalEntry | undefined>(
@@ -441,6 +454,12 @@ export async function inspectNarrativeSyncJournalIntegrity(
     const addCursorIssue = (code: NarrativeSyncJournalIntegrityIssueCode, detail: string): void => {
       issues.push({ code, operationId: cursor.lastOperationId, writerId: cursor.writerId, detail });
     };
+    if (!Number.isSafeInteger(cursor.lastSequence) || cursor.lastSequence < 1 ||
+        !Number.isFinite(cursor.updatedAt) || cursor.updatedAt < 0 ||
+        typeof cursor.lastOperationId !== "string" || !cursor.lastOperationId.trim() ||
+        cursor.projectId !== projectId || !cursor.writerId.trim()) {
+      addCursorIssue("invalid-cursor", "El cursor contiene identidad, secuencia o marca temporal inválida.");
+    }
     if (!last) {
       addCursorIssue("cursor-without-operations", "Existe un cursor durable, pero no hay operaciones en el diario.");
     } else {

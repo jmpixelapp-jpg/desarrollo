@@ -274,3 +274,51 @@ test("no dispone el HostEngineApi cuando un checkpoint automático falla al pers
   assert.ok(api.getLiveAuthorMonitorSnapshot("chapter-1"));
   api.dispose();
 });
+
+
+test("solo una pestaña publica métricas compartidas y la siguiente toma el lease al liberarse", async () => {
+  const store = new MemoryDocumentStore();
+  const first = new HostEngineApi({ store });
+  first.initializeProject({ projectId: "monitor-multitab", projectName: "Monitor multitab" });
+  await first.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  const key = "monitor-multitab:chapter-1";
+  const initialCheckpoint = store.monitorCheckpoints.get(key);
+  assert.ok(initialCheckpoint);
+  const firstLease = store.monitorLeases.get(key);
+  assert.ok(firstLease);
+
+  const second = new HostEngineApi({ store });
+  second.initializeProject({ projectId: "monitor-multitab", projectName: "Monitor multitab" });
+  await second.recoverDocument("chapter-1");
+
+  const secondSession = second.getLiveAuthorMonitorSnapshot("chapter-1");
+  assert.ok(secondSession);
+  assert.notEqual(secondSession.sessionId, initialCheckpoint.sessionId);
+  await assert.rejects(
+    second.closeLiveAuthorMonitorDocumentSafely("chapter-1"),
+    /no posee el lease/
+  );
+  assert.equal(store.monitorCheckpoints.get(key).sessionId, initialCheckpoint.sessionId);
+  assert.equal(store.monitorLeases.get(key).fencingToken, firstLease.fencingToken);
+
+  await first.closeLiveAuthorMonitorDocumentSafely("chapter-1");
+  const releasedLease = store.monitorLeases.get(key);
+  assert.equal(releasedLease.expiresAt <= Date.now(), true);
+
+  // La pestaña que estaba en espera puede adquirir un nuevo token al cerrar de forma segura.
+  await second.closeLiveAuthorMonitorDocumentSafely("chapter-1");
+  const handedOffCheckpoint = store.monitorCheckpoints.get(key);
+  const handedOffLease = store.monitorLeases.get(key);
+  assert.equal(handedOffCheckpoint.sessionId, secondSession.sessionId);
+  assert.equal(handedOffLease.fencingToken, firstLease.fencingToken + 1);
+  assert.equal(handedOffLease.expiresAt <= Date.now(), true);
+
+  await first.disposeSafely();
+  await second.disposeSafely();
+});

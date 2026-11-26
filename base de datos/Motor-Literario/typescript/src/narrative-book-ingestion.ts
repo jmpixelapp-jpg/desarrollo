@@ -282,7 +282,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     ? chapterStarts.map((line, index) => ({ line, index })).map(({ line, index }) => ({
         start: line.start,
         end: chapterStarts[index + 1]?.start ?? input.text.length,
-        heading: line.text.trim(),
+        heading: line.text.trim().replace(/^#{1,6}\\s*/u, ""),
         contentStart: line.end
       }))
     : [{ start: 0, end: input.text.length, heading: "", contentStart: 0 }];

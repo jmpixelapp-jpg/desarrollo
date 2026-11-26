@@ -1559,6 +1559,39 @@ function validateLiveAuthorMonitorCheckpoint(
         checkpoint.currentDocumentLength + checkpoint.deletedCharacters) {
     invalid.push("character-balance");
   }
+  const hasAnyUnitMetrics = checkpoint.typingInsertedCharacters !== undefined ||
+    checkpoint.compositionInsertedCharacters !== undefined ||
+    checkpoint.compositionDeletedCharacters !== undefined;
+  const hasAllUnitMetrics = checkpoint.typingInsertedCharacters !== undefined &&
+    checkpoint.compositionInsertedCharacters !== undefined &&
+    checkpoint.compositionDeletedCharacters !== undefined;
+  if (checkpoint.activityUnitMetricsComplete !== undefined &&
+      typeof checkpoint.activityUnitMetricsComplete !== "boolean") {
+    invalid.push("activityUnitMetricsComplete");
+  }
+  if (checkpoint.activityUnitMetricsComplete === true && !hasAllUnitMetrics) {
+    invalid.push("activity-unit-metrics.missing");
+  }
+  if (hasAnyUnitMetrics && !hasAllUnitMetrics) {
+    invalid.push("activity-unit-metrics.partial");
+  }
+  if (hasAllUnitMetrics) {
+    const typingUnitsValid = integerNonNegative(checkpoint.typingInsertedCharacters as number);
+    const compositionInsertedValid = integerNonNegative(checkpoint.compositionInsertedCharacters as number);
+    const compositionDeletedValid = integerNonNegative(checkpoint.compositionDeletedCharacters as number);
+    if (!typingUnitsValid || !compositionInsertedValid || !compositionDeletedValid) {
+      invalid.push("activity-unit-metrics.values");
+    } else if (integerNonNegative(checkpoint.insertedCharacters) &&
+        integerNonNegative(checkpoint.deletedCharacters)) {
+      const classifiedInsertedUnits = checkpoint.typingInsertedCharacters! +
+        checkpoint.compositionInsertedCharacters!;
+      if (!Number.isSafeInteger(classifiedInsertedUnits) ||
+          classifiedInsertedUnits > checkpoint.insertedCharacters ||
+          checkpoint.compositionDeletedCharacters! > checkpoint.deletedCharacters) {
+        invalid.push("activity-unit-metrics.balance");
+      }
+    }
+  }
   if (!integerNonNegative(checkpoint.revision)) invalid.push("revision");
   if (!integerNonNegative(checkpoint.sequence)) invalid.push("sequence");
   if (!integerNonNegative(checkpoint.resynchronizations)) invalid.push("resynchronizations");

@@ -131,3 +131,23 @@ test("la sucesión temporal no se eleva a causalidad explícita",()=>{
   assert.equal(result.causalStatus,"unproven-hypothesis");
   assert.notEqual(result.relationType,"explicit-consequence-marker");
 });
+
+test("no crea hipótesis temporal a través de un límite entre párrafos",()=>{
+  const text="Mara abrió la puerta.\\n\\nPoco después, Mara escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Poco después");
+  const events=[
+    event("source-paragraph",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"]),
+    event("result-paragraph",b,text.length,text.slice(b),["mara"])
+  ];
+  assert.deepEqual(extractNarrativeConsequenceCandidates(input(text,events)),[]);
+});
+test("rechaza participantes mal formados y eventos duplicados",()=>{
+  const text="Mara abrió la puerta. Después, Mara escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Después");
+  const first=event("duplicate",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"]);
+  const second=event("duplicate",b,text.length,text.slice(b),["mara"]);
+  assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[first,second])),/únicos, válidos/);
+  const malformed=event("malformed",a,text.indexOf(".")+1,"Mara abrió la puerta.");
+  malformed.participantEntityIds=null;
+  assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[malformed])),/únicos, válidos/);
+});

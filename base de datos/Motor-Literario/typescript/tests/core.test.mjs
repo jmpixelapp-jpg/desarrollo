@@ -2550,10 +2550,10 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["sync-outbox", "by-project-created-at"],
       ["sync-outbox", "by-project-device-sequence"]
     ];
-    const indexPairs = createdIndexes.map(([storeName, indexName]) => [storeName, indexName]);
-    const byStoreAndName = (left, right) =>
-      `${left[0]}/${left[1]}`.localeCompare(`${right[0]}/${right[1]}`);
-    assert.deepEqual(indexPairs.sort(byStoreAndName), expected.sort(byStoreAndName));
+    const indexPairs = createdIndexes.map(([storeName, indexName]) => `${storeName}/${indexName}`);
+    const expectedIndexPairs = expected.map(([storeName, indexName]) => `${storeName}/${indexName}`);
+    assert.equal(new Set(indexPairs).size, indexPairs.length, "la migración no debe crear índices duplicados");
+    assert.deepEqual([...new Set(indexPairs)].sort(), [...new Set(expectedIndexPairs)].sort());
     assert.equal(
       createdIndexes.find(([, indexName]) => indexName === "by-document-sequence")?.[3]?.unique,
       true,

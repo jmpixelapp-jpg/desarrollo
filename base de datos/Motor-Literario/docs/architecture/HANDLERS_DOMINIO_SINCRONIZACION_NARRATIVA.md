@@ -204,3 +204,8 @@ La auditoría también verifica la relación en ambos sentidos: no solo que cada
 ### Integridad bidireccional de cursores
 
 La comprobación de cursores es bidireccional: un cursor sin operaciones se informa como `cursor-without-operations`, y un escritor con operaciones pero sin cursor se informa como `cursor-missing-for-operations`. También se valida que cada cursor tenga secuencia positiva segura, identidad de última operación no vacía, proyecto correcto y marca temporal válida (`invalid-cursor`). Estos hallazgos se mantienen como diagnósticos de solo lectura: no se reconstruyen cursores ni se reescriben operaciones sin una política de reparación explícita y evidencia verificable.
+
+
+### Tolerancia ante registros de cursor malformados
+
+La auditoría normaliza de forma defensiva los campos de identidad de los cursores antes de agruparlos o emitir incidencias. Un `writerId` o `lastOperationId` corrupto no debe provocar una excepción durante el diagnóstico: se informa `invalid-cursor` y la inspección continúa. Además, el contrato de auditoría exige explícitamente ambos lectores (`loadOperations` y `loadWriterCursors`) antes de consultar el diario.

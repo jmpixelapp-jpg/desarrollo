@@ -405,6 +405,7 @@ export function validateNarrativeIdeaContinuityIndex(
   }
 
   const eventById = new Map<string, StoredNarrativeIdeaContinuityEvent>();
+  const relationIds = new Set<string>();
   for (const event of value.events) {
     if (!event || typeof event.id !== "string" || !event.id.trim() || event.id.length > 1024 ||
         event.projectId !== value.projectId ||
@@ -419,6 +420,7 @@ export function validateNarrativeIdeaContinuityIndex(
         !event.supportingRelation ||
         typeof event.supportingRelation.relationId !== "string" ||
         !event.supportingRelation.relationId.trim() || event.supportingRelation.relationId.length > 1024 ||
+        relationIds.has(event.supportingRelation.relationId) ||
         !["exact-recurrence", "lexical-resonance"].includes(event.supportingRelation.relationType) ||
         !Array.isArray(event.supportingRelation.sharedTerms) ||
         event.supportingRelation.sharedTerms.length > 500 ||
@@ -464,6 +466,7 @@ export function validateNarrativeIdeaContinuityIndex(
     } else if (event.earlierOccurrenceId !== undefined || event.laterOccurrenceId !== undefined) {
       throw new Error("Una relación sin orden no puede conservar extremos cronológicos.");
     }
+    relationIds.add(event.supportingRelation.relationId);
     eventById.set(event.id, event);
   }
 
@@ -692,7 +695,8 @@ export interface NarrativeIdeaContinuityIndexSyncPayload {
 export function createNarrativeIdeaContinuityIndexSyncEnvelope(
   input: Omit<CreateNarrativeSyncOperationEnvelopeInput<NarrativeIdeaContinuityIndexSyncPayload>, "kind"> 
 ): Promise<NarrativeSyncOperationEnvelope<NarrativeIdeaContinuityIndexSyncPayload>> {
-  if (!input || !input.payload ||
+  if (!input || typeof input !== "object" || !input.payload ||
+      !input.payload.index || typeof input.projectId !== "string" ||
       input.payload.index.projectId !== input.projectId) {
     throw new Error("La envoltura de continuidad debe usar el mismo proyecto que el índice.");
   }

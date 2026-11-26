@@ -95,3 +95,30 @@ test("rechaza grupos que exceden el presupuesto de comparaciones", () => {
     projectId: "book-1", observations: oversized
   }), /límite de parejas/);
 });
+
+test("preserva evidencia de perspectiva, fuente y negación en cada lado de la discrepancia",()=>{
+ const narrator=discoverNarrativeObservationCandidates({
+  ...context,text:"Ana abrió la puerta."
+ });
+ const belief=discoverNarrativeObservationCandidates({
+  ...context,documentId:"chapter-2",text:"Ana dijo que Ana no abrió la puerta."
+ });
+ const [finding]=compareNarrativeActionClaims({
+  projectId:"book-1",observations:[...narrator,...belief]
+ });
+ assert.equal(finding.interpretation,"different-epistemic-frame");
+ assert.equal(finding.firstEpistemicEvidence,undefined);
+ assert.equal(finding.secondEpistemicEvidence.excerpt,"dijo que ");
+ assert.equal(finding.secondSourceEntityId,"ana");
+ assert.equal(finding.secondSourceEvidence.excerpt,"Ana");
+ assert.equal(finding.secondPolarityEvidence.excerpt,"no ");
+});
+test("rechaza evidencia epistémica malformada aunque la afirmación principal sea válida",()=>{
+ const observations=discoverNarrativeObservationCandidates({
+  ...context,text:"Ana abrió la puerta."
+ });
+ assert.throws(()=>compareNarrativeActionClaims({
+  projectId:"book-1",
+  observations:[{...observations[0],epistemicFrameEvidence:{...observations[0].evidence,excerpt:"falso"}}]
+ }),/Observación inválida/);
+});

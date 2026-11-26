@@ -1586,12 +1586,20 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
   }).ideaGraph;
   assert.equal(selfReferenceGraph.selfReferenceCount, 1);
   assert.equal(selfReferenceGraph.cycleCount, 1);
+  const importedLargeReferenceSet = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      relatedIdeaIds: Array.from({ length: 501 }, (_, index) => "linked-" + index)
+    }]
+  }).ideaGraph.nodes[0];
+  assert.equal(importedLargeReferenceSet.relatedIdeaIds.length, 501);
   assert.throws(
     () => analyzeLiteraryFragment({
       ...input,
       knownProjectIdeas: [{
         ...idea,
-        relatedIdeaIds: Array.from({ length: 501 }, (_, index) => "linked-" + index)
+        relatedIdeaIds: Array.from({ length: 20_001 }, (_, index) => "linked-" + index)
       }]
     }),
     /catálogo global de ideas/

@@ -830,3 +830,20 @@ La regresión abre cuatro capítulos, admite una edición en cada uno y llama a 
 
 
 **Validación general:** [run 45767527107](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45767527107) aprobó el nuevo test `disposeSafely` multi-documento (test 677); el único fallo de las 960 pruebas fue la prueba Unicode narrativa ajena al monitor. La lane dedicada permanece pendiente de completar Chromium.
+
+## 25. Orden obligatorio para recuperar el adaptador nativo después de overflow
+
+El binding FIFO y LiveAuthorMonitorTextAreaSource tienen estados de recuperación distintos. discardPendingAfterResynchronization() vuelve a conectar la suscripción del binding, pero no debe interpretarse como una autorización para que el adaptador nativo vuelva a capturar. El adaptador conserva needsResync hasta validar explícitamente el snapshot recibido.
+
+Para una fuente LiveAuthorMonitorTextAreaSource, el anfitrión debe completar este orden síncrono:
+
+1. Obtener un snapshot autoritativo del motor y reconciliar el textarea visible con ese mismo texto, revisión y secuencia.
+2. Llamar a discardPendingAfterResynchronization() una vez confirmada la reconciliación común. El binding limpia el backlog y vuelve a suscribir la fuente, que continúa suspendida.
+3. Llamar inmediatamente a source.resynchronize(snapshot) con ese mismo snapshot y con la suscripción ya activa. La API comprueba que el valor visible coincida exactamente y que exista un observador; solo entonces restablece revision, sequence, longitud y copia sombra.
+4. Rehabilitar la edición normal únicamente después de que resynchronize() termine correctamente.
+
+No se debe llamar a source.resynchronize(snapshot) antes de discardPendingAfterResynchronization(): el adaptador rechaza la recuperación sin observador activo. Tampoco se debe asumir que discardPendingAfterResynchronization() reanuda por sí solo la captura. Entre el paso 2 y el 3, los eventos se ignoran de forma deliberada; si el contenido visible cambia y deja de coincidir con el snapshot, resynchronize() falla con document-mismatch y el anfitrión debe repetir la reconciliación.
+
+La regresión integrada en live-author-monitor-change-binding.test.mjs utiliza el adaptador de textarea real: provoca queue_full y overflow, confirma la liberación de la copia sombra, rearma el binding, comprueba que el adaptador continúa bloqueado, aplica el snapshot común mediante resynchronize() y verifica que el siguiente delta admitido conserva la secuencia/revisión esperadas.
+
+**Evidencia:** prueba automatizada añadida al repositorio. La ejecución CI correspondiente a este cambio permanece pendiente de confirmación.

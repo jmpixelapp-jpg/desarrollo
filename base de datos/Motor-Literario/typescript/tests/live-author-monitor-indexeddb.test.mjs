@@ -311,6 +311,99 @@ test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timest
   }
 });
 
+test("rechaza retrocesos en la clasificación de actividad aunque el total aceptado no cambie", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-activity-regression-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+
+  try {
+    const lease = await acquireLease(store, projectId, documentId);
+    const durable = checkpoint(projectId, documentId, Date.now(), {
+      acceptedChanges: 5,
+      committedChanges: 5,
+      typingChanges: 3,
+      pasteChanges: 2,
+      deletionChanges: 0,
+      correctionChanges: 0,
+      undoChanges: 0,
+      redoChanges: 0,
+      otherChanges: 0
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
+
+    // El total sigue siendo cinco, pero un checkpoint de la misma sesión
+    // reclasifica retroactivamente un cambio de tecleo como "other".
+    const regressed = checkpoint(projectId, documentId, durable.savedAt + 1, {
+      sessionId: durable.sessionId,
+      acceptedChanges: 5,
+      committedChanges: 5,
+      typingChanges: 2,
+      pasteChanges: 2,
+      deletionChanges: 0,
+      correctionChanges: 0,
+      undoChanges: 0,
+      redoChanges: 0,
+      otherChanges: 1
+    });
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(regressed, lease),
+      /hace retroceder la métrica typingChanges/
+    );
+
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "la clasificación durable anterior debe permanecer intacta"
+    );
+  } finally {
+    await store.close();
+  }
+});
+
+test("actualiza checkpoints v1 históricos sin desglose preservando su contador other implícito", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-legacy-activity-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+
+  try {
+    const lease = await acquireLease(store, projectId, documentId);
+    const legacy = checkpoint(projectId, documentId, Date.now());
+    assert.equal(Object.hasOwn(legacy, "typingChanges"), false);
+    assert.equal(Object.hasOwn(legacy, "otherChanges"), false);
+    await store.saveLiveAuthorMonitorCheckpoint(legacy, lease);
+
+    const upgraded = checkpoint(projectId, documentId, legacy.savedAt + 1, {
+      sessionId: legacy.sessionId,
+      sessionDurationMs: 150,
+      activeDurationMs: 75,
+      idleDurationMs: 75,
+      acceptedChanges: 2,
+      committedChanges: 2,
+      insertedCharacters: 6,
+      currentDocumentLength: 6,
+      revision: 2,
+      sequence: 2,
+      totalCommitLatencyMs: 10,
+      lastCommitLatencyMs: 5,
+      commitLatencies: [5, 5],
+      typingChanges: 1,
+      pasteChanges: 0,
+      deletionChanges: 0,
+      correctionChanges: 0,
+      undoChanges: 0,
+      redoChanges: 0,
+      otherChanges: 1
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(upgraded, lease);
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      upgraded
+    );
+  } finally {
+    await store.close();
+  }
+});
+
 test("permite iniciar una nueva identidad de sesión en el mismo snapshot durable", async () => {
   const store = new IndexedDbProjectStore();
   const projectId = "live-author-monitor-new-session-" + randomUUID();

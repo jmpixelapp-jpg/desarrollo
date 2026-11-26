@@ -1260,3 +1260,16 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresión:** el mismo transactionId, secuencia y texto retransmitidos con `activityKind: "paste"` después de la transacción original sin categoría dejan de pasar como duplicado; el source pausa con `transaction-id-reused`.
 
 **Validación:** aprobada en [Live Author Monitor — run 45753916861](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753916861), que completó build, suite específica, Chromium y benchmark. [Motor Literario TypeScript — run 45753916798](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753916798) pasó type-check; la suite general mantiene los dos fallos ajenos al monitor indicados en la sección 75.
+
+
+## 77. Presupuesto de texto para la cola reentrante del editor (26 de noviembre de 2026)
+
+**Hallazgo:** el source limitaba la cantidad de transacciones reentrantes (4096), pero no la cantidad total de unidades de reemplazo que podía retener. Una ráfaga de pocos pegados muy grandes podía ocupar una cantidad desproporcionada de memoria mientras esperaba a que terminara el callback que estaba procesando una transacción anterior.
+
+**Corrección:** se añade `maxQueuedTextUnits` (predeterminado `4_194_304`, alineado con `EngineOptions.maxQueuedTextUnits`). El contador solo aplica a deltas realmente reentrantes en espera; un pegado grande que llega con el source en reposo sigue procesándose y no se rechaza por un límite de backlog que no está usando. Si un evento reentrante excede el presupuesto restante, el source pausa el proveedor y exige un snapshot común con `transaction-backlog-overflow`. El contador se reduce al sacar cada evento de la cola y se reinicia al disponer o al limpiar una resincronización fallida.
+
+**Configuración:** el límite se puede fijar tanto en `LiveAuthorMonitorEditorTransactionSourceOptions` como en `LiveAuthorMonitorEditorTransactionIntegrationOptions`; se valida antes de consultar o suscribir el anfitrión/editor.
+
+**Regresiones:** una prueba provoca un pegado reentrante de dos unidades con un presupuesto de una, verifica que el delta no llega al monitor y que el source se pausa. Otra comprueba que un pegado de cinco unidades en reposo se admite pese al presupuesto de backlog igual a uno. La integración rechaza un límite cero antes de consultar el anfitrión.
+
+**Validación:** pendiente de CI para este cambio.

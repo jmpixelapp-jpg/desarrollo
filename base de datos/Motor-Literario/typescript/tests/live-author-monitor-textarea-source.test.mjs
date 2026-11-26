@@ -145,10 +145,24 @@ test("reconstruye eliminaciones hacia atrás y hacia delante", () => {
   assert.deepEqual(f.changes.map(change => ({
     start: change.start,
     end: change.end,
-    replacement: change.replacement
+    replacement: change.replacement,
+    activityKind: change.activityKind,
+    inputType: change.inputType
   })), [
-    { start: 2, end: 3, replacement: "" },
-    { start: 1, end: 2, replacement: "" }
+    {
+      start: 2,
+      end: 3,
+      replacement: "",
+      activityKind: "deletion",
+      inputType: "deleteContentBackward"
+    },
+    {
+      start: 1,
+      end: 2,
+      replacement: "",
+      activityKind: "deletion",
+      inputType: "deleteContentForward"
+    }
   ]);
   f.stop();
   f.source.dispose();

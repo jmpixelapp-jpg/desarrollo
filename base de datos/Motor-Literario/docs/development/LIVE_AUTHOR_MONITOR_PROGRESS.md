@@ -1718,3 +1718,6 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Importancia:** prueba el flujo global de cierre ordenado tras una sesión multi-documento y comprueba que no quedan recursos locales activos ni checkpoints sin confirmar.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+**Validación en suite general:** [Motor Literario TypeScript — run 45767527107](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45767527107) ejecutó 960 pruebas: 959 pasaron y una falló en el extractor Unicode narrativo (`tests/narrative-unicode-boundaries.test.mjs:107`). La nueva regresión `disposeSafely persiste y libera todos los leases de varios documentos` aprobó como test 677. Type-check general aprobado. **Validación CI dedicada del monitor:** el run 45767498753 sigue en curso durante la instalación de Chromium; no se declara todavía completada la integración específica para este test.

@@ -162,7 +162,7 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
         !validEvidence(item.evidence)) invalid();
     for (const links of [item.relatedEntityIds, item.relatedIdeaIds]) {
       if (links !== undefined && (!Array.isArray(links) ||
-          links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+          links.length > 20_000 ||
           links.some((value: unknown) => typeof value !== "string" || !value.trim()))) invalid();
     }
     // Los catálogos leídos pueden contener ciclos y aristas repetidas importadas.
@@ -290,7 +290,7 @@ function isValidPersonalIdeaContext(
     }
     for (const references of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
       if (references !== undefined &&
-          (!Array.isArray(references) || references.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+          (!Array.isArray(references) || references.length > 20_000 ||
             references.some(id => typeof id !== "string" || !id.trim()))) return false;
     }
     if (idea.statusHistory !== undefined) {

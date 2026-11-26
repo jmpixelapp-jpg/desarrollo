@@ -1745,3 +1745,20 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Validación:** documentación añadida en `main`. La CI dedicada aún debe ejecutar una validación posterior; este cambio no modifica código ejecutable y no se declara una nueva suite aprobada por este commit.
 
 **Próximo trabajo técnico:** convertir los criterios de esta matriz en pruebas de navegador de operaciones concretas (IME, pegar/cortar, reemplazos y undo/redo) y después conectar el adaptador transaccional al editor anfitrión real. Mantener separados los eventos observados, los inferidos y las discontinuidades.
+
+
+## Continuidad de captura ante pérdida de foco y ciclo de vida — 26 de noviembre de 2026
+
+Se amplió el adaptador nativo de textarea para no dar por completa una operación que queda interrumpida cuando el documento se oculta, la página entra en BFCache/congelación o el editor pierde el foco.
+
+**Código:** LiveAuthorMonitorTextAreaSource escucha blur en el textarea, visibilitychange en el documento y pagehide/freeze en los objetivos propietarios. Un blur o una ocultación solo suspenden cuando existe una pareja beforeinput/input pendiente o una composición activa; pagehide y freeze invalidan siempre la continuidad. Pageshow/resume no reanudan la captura automáticamente.
+
+**Recuperación:** la fuente pasa a needsResync, libera el payload pendiente y previousText, y espera a que el anfitrión conecte un observador y proporcione un snapshot autoritativo que coincida con el valor visible. La reanudación sin observador activo está prohibida.
+
+**Pruebas añadidas:** pérdida de foco con operación abierta, blur sin operación, ocultación durante IME, pagehide/freeze duplicados, edición ignorada en suspensión, recuperación con snapshot actualizado, secuencias/revisiones consecutivas y retirada de listeners.
+
+**Límite de evidencia:** las nuevas pruebas unitarias usan EventTargets controlados. No representan un congelamiento físico de Chromium, una restauración BFCache real ni IME físicos de Windows/macOS/Linux. La validación de CI de estos commits está pendiente de confirmación.
+
+**Documentación detallada:** LIVE_AUTHOR_MONITOR_BEFOREINPUT_PAIRING_2026-11-26.md, sección “Suspensión de captura ante Page Lifecycle y restauración BFCache”.
+
+**Próxima prioridad:** conectar el estado needsResync y el motivo de discontinuidad con el diagnóstico operativo del anfitrión/editor, y verificar que el ciclo de vida de la suscripción del host solicita y aplica el snapshot autoritativo antes de volver a admitir deltas.

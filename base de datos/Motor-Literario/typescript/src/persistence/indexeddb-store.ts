@@ -2465,7 +2465,9 @@ export class IndexedDbProjectStore implements ProjectStore {
       request.onsuccess = () => {
         const current = request.result as NarrativeReferenceRepairAuditEntry | undefined;
         if (current) {
-          if (JSON.stringify(current) !== JSON.stringify(entry)) {
+          const { appliedAt: _currentAt, ...currentOperation } = current;
+          const { appliedAt: _entryAt, ...newOperation } = entry;
+          if (JSON.stringify(currentOperation) !== JSON.stringify(newOperation)) {
             failure = new Error("El ID de operación de auditoría ya existe con contenido diferente.");
             transaction.abort();
           }

@@ -521,3 +521,52 @@ test("una pestaña observadora toma el lease expirado sin necesitar una nueva ed
   assert.equal(store.monitorLeases.get(key).expiresAt <= Date.now(), true);
   await observer.disposeSafely();
 });
+
+
+test("dispose durante la lectura de checkpoint no restaura métricas después del cierre", async () => {
+  class DelayedCheckpointLoadStore extends MemoryDocumentStore {
+    delayNextLoad = false;
+    resolvePendingLoad;
+
+    async loadLiveAuthorMonitorCheckpoint(projectId, documentId) {
+      const checkpoint = await super.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
+      if (this.delayNextLoad) {
+        this.delayNextLoad = false;
+        return await new Promise(resolve => {
+          this.resolvePendingLoad = () => resolve(checkpoint);
+        });
+      }
+      return checkpoint;
+    }
+  }
+
+  const store = new DelayedCheckpointLoadStore();
+  const first = new HostEngineApi({ store });
+  first.initializeProject({ projectId: "monitor-dispose-read-race", projectName: "Dispose read race" });
+  await first.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+  await first.closeLiveAuthorMonitorDocumentSafely("chapter-1");
+  await first.disposeSafely();
+
+  store.delayNextLoad = true;
+  const second = new HostEngineApi({ store });
+  second.initializeProject({ projectId: "monitor-dispose-read-race", projectName: "Dispose read race" });
+  const recovery = second.recoverDocument("chapter-1");
+
+  for (let attempt = 0; attempt < 20 && !store.resolvePendingLoad; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(typeof store.resolvePendingLoad, "function");
+  second.dispose();
+  store.resolvePendingLoad();
+  await recovery;
+
+  assert.equal(second.getLiveAuthorMonitorSnapshot("chapter-1"), undefined);
+  assert.equal(second.liveMonitorLeases.size, 0);
+  assert.equal(second.liveMonitorLeaseHeartbeats.size, 0);
+  second.dispose();
+});

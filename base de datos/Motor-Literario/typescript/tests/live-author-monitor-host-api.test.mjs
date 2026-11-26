@@ -322,3 +322,43 @@ test("solo una pestaña publica métricas compartidas y la siguiente toma el lea
   await first.disposeSafely();
   await second.disposeSafely();
 });
+
+
+test("conserva la titularidad local y permite reintentar si falla la liberación del lease", async () => {
+  class FailingReleaseStore extends MemoryDocumentStore {
+    failRelease = true;
+
+    async releaseLiveAuthorMonitorLease(lease, now) {
+      if (this.failRelease) {
+        this.failRelease = false;
+        throw new Error("lease_release_temporarily_failed");
+      }
+      return super.releaseLiveAuthorMonitorLease(lease, now);
+    }
+  }
+
+  const store = new FailingReleaseStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "monitor-release-retry", projectName: "Lease release retry" });
+  await api.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  await assert.rejects(
+    api.closeLiveAuthorMonitorDocumentSafely("chapter-1"),
+    /lease_release_temporarily_failed/
+  );
+  assert.ok(api.getLiveAuthorMonitorSnapshot("chapter-1"));
+  assert.ok(store.monitorLeases.get("monitor-release-retry:chapter-1").expiresAt > Date.now());
+
+  await api.closeLiveAuthorMonitorDocumentSafely("chapter-1");
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1"), undefined);
+  assert.equal(
+    store.monitorLeases.get("monitor-release-retry:chapter-1").expiresAt <= Date.now(),
+    true
+  );
+  await api.disposeSafely();
+});

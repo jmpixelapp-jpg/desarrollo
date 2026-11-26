@@ -466,3 +466,16 @@ test("integra evolución de objetivos previos con cronología documental explíc
   assert.equal(result.characterIntentEvolution[0].transition, "maintained");
   assert.deepEqual(result.characterIntentEvolution[0].priorIntentIds, ["prior-goal"]);
 });
+
+test("detecta oposición entre un objetivo explícito y una acción posterior del mismo personaje", () => {
+  const text = "Mara quiere proteger a Elian. Mara traicionó a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-intent-action", revision:1, text, entities
+  });
+  assert.equal(result.characterIntents.length, 1);
+  assert.equal(result.actions.length, 1);
+  assert.equal(result.intentActionConsistency.length, 1);
+  assert.equal(result.intentActionConsistency[0].relation, "opposes-intent");
+  assert.equal(result.intentActionConsistency[0].characterEntityId, "mara");
+  assert.equal(result.intentActionConsistency[0].matchedTargetEntityId, "elian");
+});

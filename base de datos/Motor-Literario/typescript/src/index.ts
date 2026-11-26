@@ -56,3 +56,4 @@ export * from "./narrative-pronoun-action-link";
 export * from "./narrative-character-interaction-evolution";
 export * from "./narrative-understanding-pipeline";
 export * from "./narrative-pronoun-detection";
+export * from "./narrative-pronoun-target-link";

@@ -11,6 +11,8 @@ import {
 } from "./narrative-knowledge";
 import type { NarrativeAssertion } from "./narrative-history";
 import type { NarrativeSyncOperationHandler } from "./narrative-sync-dispatcher";
+import type { NarrativeDocumentProjectionManifest } from "./contracts";
+import { validateNarrativeDocumentProjectionManifest } from "./narrative-knowledge-graph-persistence";
 
 export interface NarrativeIdeaUpsertPayload {
   readonly idea: NarrativeIdea;
@@ -297,7 +299,7 @@ function isNarrativeEntity(value: unknown): value is NarrativeEntity {
     item.normalizedName === normalizeEntityName(item.canonicalName) &&
     validNames(item.aliases) &&
     !item.aliases.some(alias => normalizeEntityName(alias) === item.normalizedName) &&
-    (item.mergedFromIds === undefined || validNames(item.mergedFromIds)) &&
+    (item.mergedFromIds === undefined || isBoundedIdentifierList(item.mergedFromIds)) &&
     validEvidence &&
     typeof item.firstSeenAt === "number" && Number.isFinite(item.firstSeenAt) && item.firstSeenAt >= 0 &&
     typeof item.lastSeenAt === "number" && Number.isFinite(item.lastSeenAt) &&
@@ -332,6 +334,47 @@ export function createNarrativeEntityUpsertHandler(
         .find(item => item.id === entity.id);
       if (existing && JSON.stringify(existing) === JSON.stringify(entity)) return;
       await store.saveEntityIfUnchanged!(entity, existing);
+    }
+  };
+}
+
+
+export interface NarrativeEntityMergePayload {
+  readonly targetEntityId: string;
+  readonly sourceEntityId: string;
+  readonly writerId?: string;
+}
+
+/**
+ * La consolidación delega en la primitiva transaccional del ProjectStore.
+ * Nunca se emula con varios upserts: deben redirigirse todas las referencias
+ * y conservarse los snapshots archivados en una sola transacción.
+ */
+export function createNarrativeEntityMergeHandler(
+  store: ProjectStore
+): NarrativeSyncOperationHandler<NarrativeEntityMergePayload> {
+  if (!store || typeof store.mergeNarrativeEntityIdentity !== "function") {
+    throw new TypeError("El store debe implementar mergeNarrativeEntityIdentity atómico.");
+  }
+  return {
+    kind: "entity-merge",
+    validate(payload: unknown): payload is NarrativeEntityMergePayload {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const item = payload as Partial<NarrativeEntityMergePayload>;
+      return typeof item.targetEntityId === "string" && !!item.targetEntityId.trim() &&
+        item.targetEntityId.length <= 512 &&
+        typeof item.sourceEntityId === "string" && !!item.sourceEntityId.trim() &&
+        item.sourceEntityId.length <= 512 && item.targetEntityId !== item.sourceEntityId &&
+        (item.writerId === undefined ||
+          (typeof item.writerId === "string" && !!item.writerId.trim() && item.writerId.length <= 256));
+    },
+    async apply(operation): Promise<void> {
+      await store.mergeNarrativeEntityIdentity!(
+        operation.projectId,
+        operation.payload.targetEntityId,
+        operation.payload.sourceEntityId,
+        operation.payload.writerId
+      );
     }
   };
 }

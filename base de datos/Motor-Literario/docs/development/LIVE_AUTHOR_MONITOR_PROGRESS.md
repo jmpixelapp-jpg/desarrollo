@@ -1528,3 +1528,14 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 **Validación CI dedicada:** [Live Author Monitor — run 45762924927](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924927), checkout exacto `fcb4ebca52dd43105f170d7b1621fd66da13c76e`, terminó `success`. Type-check estricto, bundle aislado, 17/17 diagnósticos, auditoría MLDB/almacenamiento y runtime build aprobados; suite monitor/panel/workspace/adaptadores **167/167**, incluida la nueva regresión (test 164); Page Lifecycle Chromium 1/1; host/editor/browser **168/168**. El benchmark procesó 100.000 commits en **502,47 ms** (~199.016 commits/s), heap 4,39 MiB a mitad y al final, crecimiento medido 0 MiB, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
 
 **Estado separado de la suite general:** [Motor Literario TypeScript — run 45762924925](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924925), sobre el mismo commit, terminó con 943/944. El único fallo fue `tests/narrative-unicode-boundaries.test.mjs:107` (test de extracción de entidades y marcas combinantes), fuera del módulo del monitor y perteneciente a cambios paralelos. Type-check aprobó. No se modificaron esos archivos ni se atribuye ese fallo al monitor.
+
+
+## 99. Respuestas asíncronas de lease cercadas por generación (26 de noviembre de 2026)
+
+**Hallazgo:** el heartbeat ya protegía sus respuestas tardías con una generación y comprobaba si seguía siendo titular. Sin embargo, la ruta compartida `acquireOrRenewLiveAuthorMonitorLease()`, utilizada también por guardados automáticos y cierres seguros, podía recibir una renovación después de que otro flujo hubiera liberado el lease. Al no comprobar la generación, podía volver a insertar en memoria el lease anterior y reactivar el heartbeat después del cierre.
+
+**Corrección:** cada operación genérica de adquisición/renovación obtiene una generación al comenzar. Antes de publicar el resultado o informar un error, verifica que la generación siga vigente y que no haya comenzado una liberación. Una respuesta invalidada devuelve `undefined` y no restaura la titularidad local.
+
+**Regresión:** un almacén determinista confirma la renovación, pero demora la entrega de su respuesta. Mientras tanto, el cierre seguro completa el checkpoint y libera el lease. Al desbloquear la respuesta antigua, se exige que no se repongan el lease local ni el heartbeat y que el registro persistido permanezca vencido.
+
+**Validación:** pendiente de GitHub Actions para la nueva regresión.

@@ -77,7 +77,7 @@ test("lee EPUB, metadatos, orden spine, encabezados y párrafos conservando loca
   assert.equal(ingested.metadata.title, "La novela & el viaje");
   assert.equal(ingested.chapters.length, 2);
   assert.equal(ingested.chapters[0].heading, "Capítulo primero");
-  assert.equal(ingested.chapters[0].text, "Una historia & su comienzo.\n\nSegunda línea.");
+  assert.equal(ingested.chapters[0].text, "Una historia & su comienzo.\\n\\nSegunda línea.\\nVerso uno\\nVerso dos\\n\\nNota al pie.");
   assert.equal(ingested.chapters[1].heading, "Capítulo segundo");
   assert.match(ingested.chapters[1].text, /Una sección/);
   assert.ok(ingested.chapters[0].sourceSpans.every(span => span.location.locator.startsWith("OPS/chapter1.xhtml#")));

@@ -5,9 +5,9 @@ import type {
 } from "./narrative-idea-evolution";
 
 export type NarrativeIdeaContinuityLineType =
-  | "exact-recurrence-chain"
-  | "lexical-resonance-cluster"
-  | "mixed-signal-cluster";
+  | "exact-recurrence-line"
+  | "lexical-resonance-line"
+  | "mixed-signal-line";
 
 export type NarrativeIdeaContinuityTopology =
   | "linear"
@@ -155,7 +155,16 @@ function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): v
       !event.supportingRelation.relationId.trim() ||
       !["exact-recurrence", "lexical-resonance"].includes(event.supportingRelation.relationType) ||
       !Array.isArray(event.supportingRelation.sharedTerms) ||
+      event.supportingRelation.sharedTerms.length > 500 ||
+      event.supportingRelation.sharedTerms.some(term => typeof term !== "string" || !term.trim()) ||
+      typeof event.supportingRelation.normalizedSimilarity !== "number" ||
+      !Number.isFinite(event.supportingRelation.normalizedSimilarity) ||
+      event.supportingRelation.normalizedSimilarity < 0 || event.supportingRelation.normalizedSimilarity > 1 ||
+      typeof event.supportingRelation.overlapCoefficient !== "number" ||
+      !Number.isFinite(event.supportingRelation.overlapCoefficient) ||
+      event.supportingRelation.overlapCoefficient < 0 || event.supportingRelation.overlapCoefficient > 1 ||
       !Array.isArray(event.signals) ||
+      new Set(event.signals).size !== event.signals.length ||
       event.signals.some(signal => ![
         "exact-wording-recurrence", "lexical-resonance", "modality-change", "idea-kind-change"
       ].includes(signal))) {
@@ -176,6 +185,17 @@ function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): v
     throw new Error("La clase del evento no coincide con su relación y cronología.");
   }
 
+  const expectedBaseSignal = event.supportingRelation.relationType === "exact-recurrence"
+    ? "exact-wording-recurrence" : "lexical-resonance";
+  const expectedModalitySignal = event.firstOccurrence.polarity !== event.secondOccurrence.polarity;
+  const expectedKindSignal = event.firstOccurrence.kind !== event.secondOccurrence.kind;
+  if (!event.signals.includes(expectedBaseSignal) ||
+      event.signals.includes(expectedBaseSignal === "exact-wording-recurrence" ? "lexical-resonance" : "exact-wording-recurrence") ||
+      event.signals.includes("modality-change") !== expectedModalitySignal ||
+      event.signals.includes("idea-kind-change") !== expectedKindSignal) {
+    throw new Error("Las señales del evento no corresponden a las apariciones y a la relación.");
+  }
+
   if (event.chronology === "ordered") {
     if (!event.earlierOccurrence || !event.laterOccurrence ||
         event.earlierOccurrence.ideaCandidateId === event.laterOccurrence.ideaCandidateId ||
@@ -189,6 +209,14 @@ function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): v
     if (event.laterOccurrence.ideaCandidateId !== event.firstOccurrence.ideaCandidateId &&
         event.laterOccurrence.ideaCandidateId !== event.secondOccurrence.ideaCandidateId) {
       throw new Error("La aparición posterior no coincide con los extremos de la relación.");
+    }
+    const earlierSource = event.earlierOccurrence.ideaCandidateId === event.firstOccurrence.ideaCandidateId
+      ? event.firstOccurrence : event.secondOccurrence;
+    const laterSource = event.laterOccurrence.ideaCandidateId === event.firstOccurrence.ideaCandidateId
+      ? event.firstOccurrence : event.secondOccurrence;
+    if (occurrenceSignature(event.earlierOccurrence) !== occurrenceSignature(earlierSource) ||
+        occurrenceSignature(event.laterOccurrence) !== occurrenceSignature(laterSource)) {
+      throw new Error("Los extremos cronológicos no conservan la misma procedencia de las apariciones.");
     }
   } else if (event.earlierOccurrence !== undefined || event.laterOccurrence !== undefined) {
     throw new Error("Un evento sin orden no puede declarar anterior y posterior.");
@@ -286,10 +314,10 @@ export function buildNarrativeIdeaContinuityLines(
 ): NarrativeIdeaContinuityLinesResult {
   if (!input || typeof input !== "object" ||
       typeof input.projectId !== "string" || !input.projectId.trim() ||
-      !input.evolution || input.evolution.summary.projectId !== input.projectId ||
+      !input.evolution || !input.evolution.summary ||
+      input.evolution.summary.projectId !== input.projectId ||
       !Array.isArray(input.evolution.events) ||
       input.evolution.events.length > MAX_EVENTS ||
-      !input.evolution.summary ||
       !Number.isSafeInteger(input.evolution.summary.eventCount) ||
       input.evolution.summary.eventCount !== input.evolution.events.length ||
       typeof input.evolution.summary.sourceAnalysisTruncated !== "boolean") {
@@ -362,8 +390,8 @@ export function buildNarrativeIdeaContinuityLines(
     ).length;
     const lexicalResonanceCount = events.length - exactRecurrenceCount;
     const lineType = exactRecurrenceCount && lexicalResonanceCount
-      ? "mixed-signal-cluster"
-      : exactRecurrenceCount ? "exact-recurrence-chain" : "lexical-resonance-cluster";
+      ? "mixed-signal-line"
+      : exactRecurrenceCount ? "exact-recurrence-line" : "lexical-resonance-line";
     const modalityChangeCount = events.filter(event => event.signals.includes("modality-change")).length;
     const ideaKindChangeCount = events.filter(event => event.signals.includes("idea-kind-change")).length;
 
@@ -389,9 +417,9 @@ export function buildNarrativeIdeaContinuityLines(
   }
 
   lines.sort((a, b) => a.id.localeCompare(b.id));
-  const exactOnlyLineCount = lines.filter(line => line.lineType === "exact-recurrence-chain").length;
-  const lexicalOnlyLineCount = lines.filter(line => line.lineType === "lexical-resonance-cluster").length;
-  const mixedSignalLineCount = lines.filter(line => line.lineType === "mixed-signal-cluster").length;
+  const exactOnlyLineCount = lines.filter(line => line.lineType === "exact-recurrence-line").length;
+  const lexicalOnlyLineCount = lines.filter(line => line.lineType === "lexical-resonance-line").length;
+  const mixedSignalLineCount = lines.filter(line => line.lineType === "mixed-signal-line").length;
   const chronologyCompleteCount = lines.filter(line => line.chronology === "complete").length;
   const chronologyPartialCount = lines.filter(line => line.chronology === "partial").length;
   const chronologyUnknownCount = lines.filter(line => line.chronology === "unknown").length;

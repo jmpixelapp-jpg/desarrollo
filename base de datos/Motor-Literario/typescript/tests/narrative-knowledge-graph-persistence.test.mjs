@@ -10,6 +10,7 @@ import {
   retireNarrativeDocumentProjection,
   reconcileNarrativeDocumentProjections,
   repairNarrativeDocumentProjectionManifest,
+  proposeNarrativeReferenceRepairs,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
@@ -389,4 +390,37 @@ test("reconcilia referencias cruzadas rotas sin modificar el grafo", async () =>
     before,
     "la reconciliación no debe mutar registros"
   );
+});
+
+
+test("propone reparación sólo ante una correspondencia de merge explícita y única", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-repair", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  const report = {
+    projectId: "novel-repair", checkedManifests: 0, checkedRecords: 1,
+    issues: [
+      { code: "missing-relation-entity", documentId: "", recordType: "relation",
+        recordId: "relation:1", relatedId: "entity:legacy", detail: "missing" },
+      { code: "missing-event-participant", documentId: "", recordType: "event",
+        recordId: "event:1", relatedId: "entity:unknown", detail: "missing" },
+      { code: "missing-related-idea", documentId: "", recordType: "idea",
+        recordId: "idea:1", relatedId: "idea:unknown", detail: "missing" }
+    ]
+  };
+  const proposals = await proposeNarrativeReferenceRepairs(store, report);
+  assert.equal(proposals.length, 2);
+  assert.deepEqual(proposals[0], {
+    projectId: "novel-repair", issueCode: "missing-relation-entity",
+    recordType: "relation", recordId: "relation:1",
+    missingReferenceId: "entity:legacy",
+    candidateEntityId: "entity:canonical", resolution: "explicit-merge-match"
+  });
+  assert.equal(proposals[1].resolution, "manual-review");
+  assert.equal(proposals[1].candidateEntityId, undefined);
+  assert.equal(tables.entities.size, 1, "la generación de propuestas no escribe");
 });

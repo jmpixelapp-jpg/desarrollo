@@ -651,3 +651,16 @@ Cada enlace identifica el acontecimiento de origen o el posterior (`eventRole`),
 Esto permite consultas como: «¿Qué relación entre acontecimientos contiene una acción que respalda un objetivo declarado por este personaje?» o «¿Qué acción contradice ese objetivo?». La respuesta es una conexión entre evidencias existentes, no una afirmación de que el objetivo causó el acontecimiento ni de que el personaje actuó sinceramente.
 
 Se añadió una prueba de integración que recorre un ejemplo completo: objetivo explícito, primera acción, segunda acción, conector entre acontecimientos y enlaces a las dos comparaciones objetivo-acción. Comprueba que cada ID enlazado exista en los resultados del pipeline y que se conserve el tipo de consistencia.
+
+
+### Fase AM: precedencia entre conocimiento atribuido y acciones del personaje
+
+Se incorpora el módulo `narrative-knowledge-action-links.ts` y su salida integrada `knowledgeActionLinks`. Cada enlace relaciona un elemento de conocimiento atribuido explícitamente a un personaje con una acción afirmativa posterior del mismo personaje.
+
+La precedencia solo se acepta cuando puede demostrarse:
+- dentro del mismo documento y revisión, si el final de la evidencia del conocimiento precede al inicio de la acción;
+- entre documentos distintos, únicamente si el proyecto proporciona `orderedDocumentIds` y el documento de la acción aparece después.
+
+No se enlazan evidencias obsoletas, acciones negadas, acciones de otros personajes ni documentos cuya cronología sea desconocida. Cada enlace conserva los IDs, la evaluación epistemológica disponible, el canal y estado de la información, y las evidencias literales de conocimiento y acción. Los canales y evaluaciones se preservan como datos, no como garantía de verdad o comprensión.
+
+La relación se denomina `knowledge-precedes-action`: indica precedencia verificable, no que el personaje haya usado esa información para decidir ni que esta haya causado la acción. Se añadieron pruebas unitarias para cronología local y entre documentos, abstención ante orden desconocido, evidencia obsoleta, negación, actor distinto y entradas duplicadas; también una prueba de integración del pipeline principal.

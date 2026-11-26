@@ -226,6 +226,28 @@ export function bindLiveAuthorMonitorEditorChanges(
     reportError(error, change);
   };
 
+  const pauseAfterPermanentRejection = (change: EditorChange, reason: string): void => {
+    if (disposed || resyncRequired) return;
+    // Un rechazo distinto de queue_full indica que reenviar la misma rama no
+    // es seguro. Cerramos la fuente antes de notificar al anfitrión: onAdmission
+    // puede ser reentrante y no debe introducir deltas posteriores en esta cola.
+    resyncRequired = true;
+    pausedForResynchronization = true;
+    pendingReason = "resync_required";
+    const message = "El motor rechazó permanentemente la edición (" + reason +
+      "); se requiere resincronizar editor y motor desde un snapshot común.";
+    try {
+      options.source.requireResynchronization?.(message);
+    } catch (error) {
+      reportError(error, change);
+    }
+    try {
+      detachSource();
+    } catch (error) {
+      reportError(error, change);
+    }
+    publishBackpressure();
+  };
   const submitNewChange = (change: EditorChange): void => {
     if (disposed || resyncRequired) return;
     if (pending.length > 0) {
@@ -280,9 +302,11 @@ export function bindLiveAuthorMonitorEditorChanges(
           pending.shift();
           if (pending.length === 0) pendingReason = undefined;
           publishBackpressure();
-        } else {
-          pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
+        } else if (admission.reason === "queue_full") {
+          pendingReason = "queue_full";
           publishBackpressure();
+        } else {
+          pauseAfterPermanentRejection(change, admission.reason);
         }
         reportAdmission(change, admission);
         if (admission.status === "rejected") break;

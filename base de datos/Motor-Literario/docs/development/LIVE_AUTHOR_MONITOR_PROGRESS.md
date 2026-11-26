@@ -1465,3 +1465,14 @@ El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a 
 
 
 **Validación adicional del motor general:** [Motor Literario TypeScript — run 45760625242](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760625242), también sobre el checkout exacto 04632f8b1e454a9c951ae8f6de58dbc9979c8fbf, terminó success: type-check y build general aprobados; suite completa **926/926**, cero fallos y cero cancelaciones. La regresión de tres instancias pasó como test 751 de esa ejecución. El benchmark general procesó 100.000 commits en 533,53 ms (~187.431 commits/s), heap de 4,39 MiB a mitad y carga completa, 0 MiB de crecimiento medido y 0,50 MiB retenidos. La lane dedicada del monitor y la lane global del motor están ambas verdes para este commit de código; las validaciones se ejecutaron antes de los commits posteriores que solo actualizaron documentación.
+
+
+## 94. Validación defensiva del snapshot antes de recuperar (26 de noviembre de 2026)
+
+**Hallazgo:** restoreCheckpoint comparaba checkpoint.documentId con snapshot.documentId antes de comprobar que snapshot fuera un objeto. Una llamada inválida con null/undefined podía escapar como TypeError de acceso a propiedad, en lugar de un error de contrato explícito. No afectaba al flujo tipado normal, pero dejaba sin ejecutar la validación defensiva que el método ya pretendía ofrecer.
+
+**Corrección:** se valida snapshot === null o typeof snapshot !== "object" antes de leer cualquier propiedad. La nueva regresión entrega null y exige un TypeError claro; además comprueba que no se crea una sesión parcial en el monitor. La validación existente de identidad del proyecto, documento y snapshot durable se mantiene después del guard.
+
+**Cambios publicados en main:** núcleo 37f5563878c236417bb34aa7aeb1362b53cab6c6 y test ce1b71bb56eb66ab4ec4c26fc4c76a205aac3da2. No se cambió el contrato persistido ni el esquema IndexedDB.
+
+**Validación CI:** pendiente al registrar este avance. Se documentará el resultado solo cuando el workflow focalizado ejecute el código corregido.

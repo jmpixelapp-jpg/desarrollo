@@ -64,3 +64,5 @@ export * from "./narrative-knowledge-evolution";
 export * from "./narrative-information-chain";
 export * from "./narrative-information-interpretation";
 export * from "./narrative-character-knowledge-state";
+
+export * from "./narrative-memory-events";

@@ -52,12 +52,12 @@ test("resuelve evidencias persistidas del conocimiento narrativo con verificaci�
   const chapter = book.chapters[0];
   const start = chapter.text.indexOf("puerta");
   const evidence = resolveNarrativeTextEvidence(book, {
-    documentId: chapter.documentId, revision: 3, start, end: start + 6, excerpt: "puerta"
+    documentId: chapter.documentId, revision: 3, start, end: start + 6, excerpt: "La puerta se abrió."
   });
   assert.equal(evidence.excerpt, "puerta");
   assert.equal(evidence.fragments[0].locator, "chapter.xhtml#p");
   assert.throws(() => resolveNarrativeTextEvidence(book, {
-    documentId: chapter.documentId, revision: 3, start, end: start + 6, excerpt: "ventana"
+    documentId: chapter.documentId, revision: 3, start, end: start + 6, excerpt: "La ventana se abrió."
   }), /no coincide/u);
   assert.throws(() => resolveNarrativeTextEvidence(book, {
     documentId: chapter.documentId, revision: 2, start, end: start + 6, excerpt: "puerta", status: "stale"
@@ -66,7 +66,7 @@ test("resuelve evidencias persistidas del conocimiento narrativo con verificaci�
     documentId: chapter.documentId, revision: 2, start, end: start + 6, excerpt: "puerta"
   }), /no coincide/u);
   assert.throws(() => resolveNarrativeTextEvidence(book, {
-    documentId: "otro-documento", revision: 3, start: 0, end: 2, excerpt: "La"
+    documentId: "otro-documento", revision: 3, start: 0, end: 2, excerpt: "Otra línea"
   }), /no pertenece/u);
 });
 
@@ -77,11 +77,11 @@ test("resuelve colecciones completas y no devuelve resultados parciales ante evi
     { blockId: "p", sequence: 1, kind: "paragraph", text: "Una escena termina." }
   ]);
   const chapter = book.chapters[0];
-  const valid = { documentId: chapter.documentId, revision: 7, start: 0, end: 3, excerpt: "Una" };
-  const results = resolveNarrativeEvidenceCollection(book, [valid, { ...valid, start: 4, end: 9, excerpt: "escena" }]);
+  const valid = { documentId: chapter.documentId, revision: 7, start: 0, end: 3, excerpt: "Una escena termina." };
+  const results = resolveNarrativeEvidenceCollection(book, [valid, { ...valid, start: 4, end: 10, excerpt: "Una escena termina." }]);
   assert.equal(results.length, 2);
   assert.deepEqual(results.map(item => item.excerpt), ["Una", "escena"]);
-  assert.throws(() => resolveNarrativeEvidenceCollection(book, [valid, { ...valid, excerpt: "otra" }]), /no coincide/u);
+  assert.throws(() => resolveNarrativeEvidenceCollection(book, [valid, { ...valid, excerpt: "Otra escena termina." }]), /no coincide/u);
 });
 
 test("no resuelve evidencia narrativa si el snapshot no tiene revisión declarada", async () => {

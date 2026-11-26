@@ -349,26 +349,26 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
     }
     if (!spine.length) fail("el spine está vacío.");
     const navigation: EpubNavigationItem[] = [];
-    const navManifestItem = [...manifest.values()].find(item => item.properties.split(/\\s+/u).includes("nav"));
+    const navManifestItem = [...manifest.values()].find(item => item.properties.split(/\s+/u).includes("nav"));
     const tocItem = [...manifest.values()].find(item => item.mediaType === "application/x-dtbncx+xml");
     const navigationPath = navManifestItem?.path;
     if (navigationPath && zip.has(navigationPath)) {
       const navXhtml = await zip.text(navigationPath);
-      const tocNav = /<nav\\b([^>]*)>([\\s\\S]*?)<\\/nav\\s*>/giu;
+      const tocNav = /<nav\b([^>]*)>([\s\S]*?)<\/nav\s*>/giu;
       for (const navMatch of navXhtml.matchAll(tocNav)) {
         const navAttrs = attributes(navMatch[1]);
-        if (!(navAttrs.get("epub:type") ?? "").split(/\\s+/u).includes("toc")) continue;
+        if (!(navAttrs.get("epub:type") ?? "").split(/\s+/u).includes("toc")) continue;
         const body = navMatch[2];
-        const links = /<a\\b([^>]*)>([\\s\\S]*?)<\\/a\\s*>/giu;
+        const links = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/giu;
         let depth = 0;
         let cursor = 0;
         for (const link of body.matchAll(links)) {
           const before = body.slice(cursor, link.index);
-          depth += [...before.matchAll(/<ol\\b/giu)].length - [...before.matchAll(/<\\/ol\\s*>/giu)].length;
+          depth += [...before.matchAll(/<ol\b/giu)].length - [...before.matchAll(/<\/ol\s*>/giu)].length;
           cursor = (link.index ?? 0) + link[0].length;
           const attrs = attributes(link[1]);
           const href = attrs.get("href");
-          const label = decodeEntities(link[2].replace(/<[^>]+>/gu, "").replace(/\\s+/gu, " ").trim());
+          const label = decodeEntities(link[2].replace(/<[^>]+>/gu, "").replace(/\s+/gu, " ").trim());
           if (!href || !label || /^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//")) continue;
           const [filePart, fragment] = href.split("#", 2);
           const targetPath = filePart ? resolvePath(navigationPath, filePart) : navigationPath;
@@ -380,11 +380,11 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
     }
     if (!navigation.length && tocItem && zip.has(tocItem.path)) {
       const ncx = await zip.text(tocItem.path);
-      const pointPattern = /<navPoint\\b[^>]*>|<\\/navPoint\\s*>|<navLabel\\b[^>]*>([\\s\\S]*?)<\\/navLabel\\s*>|<content\\b([^>]*)\\/?\\s*>/giu;
+      const pointPattern = /<navPoint\b[^>]*>|<\/navPoint\s*>|<navLabel\b[^>]*>([\s\S]*?)<\/navLabel\s*>|<content\b([^>]*)\/?\s*>/giu;
       let depth = 0;
       let pendingLabel = "";
       for (const match of ncx.matchAll(pointPattern)) {
-        if (/^<\\/navPoint/iu.test(match[0])) { depth = Math.max(0, depth - 1); continue; }
+        if (/^<\/navPoint/iu.test(match[0])) { depth = Math.max(0, depth - 1); continue; }
         if (/^<navPoint/iu.test(match[0])) { depth++; pendingLabel = ""; continue; }
         if (/^<navLabel/iu.test(match[0])) {
           pendingLabel = decodeEntities((match[1] ?? "").replace(/<[^>]+>/gu, "").trim());

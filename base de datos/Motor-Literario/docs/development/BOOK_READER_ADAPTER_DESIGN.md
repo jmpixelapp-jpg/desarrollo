@@ -103,3 +103,19 @@ Cada capítulo debe conservar su fuente y mapa de spans. El análisis literario 
 ## Estado
 
 La ingesta estructural común está implementada y probada a nivel de código. Ningún lector binario EPUB/PDF/DOCX ni OCR se declara terminado todavía. La prioridad inmediata es implementar EPUB con su validación ZIP/OPF/spine y pruebas de corpus; después PDF y OCR.
+
+
+## Primera implementación EPUB
+
+Se ha añadido `typescript/src/epub-reader.ts` con `EpubBookReader` y `createEpubBookReader`.
+
+- Acepta `ArrayBuffer` y `Uint8Array`.
+- Lee `META-INF/container.xml`, OPF, metadatos, manifest y spine; respeta el orden del spine.
+- Extrae XHTML en bloques con encabezados, secciones, párrafos, versos y notas al pie.
+- Conserva localizadores por archivo interno, spine y bloque.
+- Valida rutas internas, duplicados, cifrado, métodos ZIP, límites de expansión, CRC32 y consistencia de cabeceras locales.
+- Rechaza ZIP64 y archivos multi-volumen en esta iteración.
+- No ejecuta scripts ni incorpora estilos, SVG o MathML al texto.
+- Usa UTF-8 estricto y DecompressionStream para deflate-raw.
+
+Las pruebas de fixture cubren metadatos, orden, extracción de texto, notas, localizadores, rutas inseguras, mimetype incorrecto y corrupción CRC. Aún falta ejecutar la suite en el entorno del proyecto y contrastar con un corpus de EPUB reales. La extracción XHTML es estructural y conservadora, pero todavía no implementa todos los casos de HTML5, codificaciones XML alternativas, nav/NCX para jerarquía editorial, CSS de contenido oculto, overlays ni recursos remotos.

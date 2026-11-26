@@ -162,3 +162,5 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Endurecido el replay: verifica nuevamente el SHA-256 desde el registro recuperado antes de ejecutar el callback. Una entrada alterada no se entrega al consumidor, queda pendiente y se informa `invalid-envelope`; fallos de aplicación/acuse se distinguen por separado. Añadida prueba de manipulación del payload persistido.
 
 - Ajuste de verificación del replay: al recalcular SHA-256 se reconstruye la envoltura original y se excluyen los metadatos locales `receivedAt` y `appliedAt`, que no forman parte del contenido firmado por digest. Esto evita falsos rechazos de entradas válidas almacenadas en el diario.
+
+- La verificación de replay normaliza el payload recuperado de IndexedDB al subconjunto JSON antes de recalcular el digest, excluyendo los metadatos locales. Si el payload persistido no puede normalizarse, la operación se conserva pendiente y se informa como envoltura inválida.

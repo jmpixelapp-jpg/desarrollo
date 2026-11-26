@@ -1420,3 +1420,12 @@ La lane global continúa en `failure` por los controles compartidos de IndexedDB
 **Rendimiento:** 100.000 commits en 513,67 ms (~194.676 commits/s), heap de 4,39 MiB tanto a mitad como al final de carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
 
 **Alcance temporal:** esta evidencia pertenece exactamente al checkout `948408ae`. Los commits de sincronización posteriores modificaron la ruta compartida de persistencia; en el HEAD actual el workflow vuelve a informar un error sintáctico en `indexeddb-store.ts:2560`. Por tanto, la ejecución integral es un hito verificado, pero no se declara como estado verde del HEAD actual. Se mantiene abierta la repetición sobre el HEAD actual una vez que terminen los cambios paralelos de persistencia.
+
+
+## 90. Chromium independiente para Page Lifecycle cuando falla el runtime general (26 de noviembre de 2026)
+
+**Motivación:** el harness `tests/browser/live-author-monitor-lifecycle.html` importa directamente `src/live-author-monitor-visibility.ts`; no necesita `indexeddb-store.ts`, el bundle de producción ni los adaptadores del editor. Sin embargo, la instalación de Chromium y todas las pruebas de navegador estaban condicionadas al éxito de `runtime-build`, impidiendo validar esta parte independiente cuando persistencia fallaba.
+
+**Cambio CI:** Chromium se instala después de las pruebas aisladas con una condición `!cancelled()` independiente del resultado de `runtime-build`. A continuación se ejecuta `live-author-monitor-lifecycle-browser.test.mjs` cuando la instalación termina correctamente. Las pruebas host/editor/IndexedDB completas permanecen condicionadas al éxito del runtime y de la instalación del navegador.
+
+**Validación:** pendiente de la ejecución iniciada por el commit `d31055f1`; no se presupone que la prueba Chromium haya pasado hasta ver el resultado del paso dedicado.

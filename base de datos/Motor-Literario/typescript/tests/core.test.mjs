@@ -5758,7 +5758,7 @@ test("IndexedDB rechaza vínculos de idea duplicados y autorreferenciales antes 
       originDocumentId: "chapter", sourceProjectName: "Libro", evidence: [] };
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-b", "idea-b"] }),
-      /referencias inválidas o duplicadas/i
+      /referencias inválidas, duplicadas o superiores al límite de 500/i
     );
     await assert.rejects(
       store.saveIdea({ ...base, relatedIdeaIds: ["idea-a"] }),
@@ -9797,7 +9797,8 @@ test("IndexedDB conserva el contexto completo al archivar redes amplias de ideas
   const projectId = "archive-large-context";
   const projectName = "Libro de red amplia";
   const smallCount = 256;
-  const wideCount = 1200;
+  // Cada idea admite como máximo 500 referencias salientes; se prueba el límite válido.
+  const wideCount = 500;
   const pendingIdeas = Array.from({ length: smallCount }, (_, index) => ({
     projectId,
     id: `pending-${String(index).padStart(4, "0")}`,

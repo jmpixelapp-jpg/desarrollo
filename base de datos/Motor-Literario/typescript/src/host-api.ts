@@ -45,7 +45,6 @@ import {
   MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
   type NarrativeIdeaCandidate
 } from "./narrative-idea-discovery";
-const MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS = 20_000_000;
 
 import { analyzeNarrativeIdeaCrossDocumentRelations, MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES } from "./narrative-idea-cross-document-relations";
 import { buildNarrativeIdeaEvolution } from "./narrative-idea-evolution";
@@ -53,6 +52,8 @@ import {
   updateNarrativeIdeaContinuityIndexIncrementally,
   type NarrativeIdeaContinuityIndex
 } from "./narrative-idea-continuity-index";
+
+const MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS = 20_000_000;
 import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";

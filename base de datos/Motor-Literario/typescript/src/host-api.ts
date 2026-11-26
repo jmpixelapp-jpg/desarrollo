@@ -842,6 +842,188 @@ export class HostEngineApi {
   }
 
   /**
+   * Reconstruye los candidatos de idea de los documentos cuyas revisiones
+   * cambiaron y actualiza automáticamente la proyección transversal del libro.
+   *
+   * Los candidatos proceden de prosa/documentos actuales, nunca del estado
+   * editorial de NarrativeIdea. No se inventa orden: sin una lista explícita
+   * del anfitrión, toda cronología entre capítulos queda como desconocida.
+   */
+  private refreshNarrativeIdeaContinuityIndex(): Promise<void> {
+    const project = this.requireProject();
+    const work = this.continuityIndexTail.then(async () => {
+      const store = this.store;
+      if (!store.loadDocumentMetadata || !store.loadDocument ||
+          !store.loadNarrativeIdeaContinuityIndex ||
+          !store.saveNarrativeIdeaContinuityIndexIfUnchanged) {
+        return;
+      }
+
+      const metadata = await store.loadDocumentMetadata(project.projectId);
+      if (!Array.isArray(metadata) || metadata.length > 10_000) {
+        throw new Error("El proyecto supera el límite de 10.000 documentos para reconciliar continuidad.");
+      }
+      const seenDocuments = new Set<string>();
+      const candidatesByDocument = new Map<string, readonly NarrativeIdeaCandidate[]>();
+      const sourceRevisions: Array<{
+        documentId: string;
+        revision: number;
+        status: "active";
+      }> = [];
+      let anyDocumentTruncated = false;
+
+      for (const item of metadata) {
+        if (!item || item.projectId !== project.projectId ||
+            typeof item.documentId !== "string" || !item.documentId.trim() ||
+            item.documentId.length > 256 ||
+            !Number.isSafeInteger(item.revision) || item.revision < 0 ||
+            !Number.isSafeInteger(item.sequence) || item.sequence < 0 ||
+            !Number.isFinite(item.updatedAt) || item.updatedAt < 0 ||
+            seenDocuments.has(item.documentId)) {
+          throw new Error("Los metadatos documentales no superan la validación de identidad/revisión.");
+        }
+        seenDocuments.add(item.documentId);
+        sourceRevisions.push({
+          documentId: item.documentId,
+          revision: item.revision,
+          status: "active"
+        });
+
+        const cached = this.continuityCandidatesByDocument.get(item.documentId);
+        if (cached && cached.revision === item.revision) {
+          candidatesByDocument.set(item.documentId, cached.candidates);
+          anyDocumentTruncated ||= cached.truncated;
+          continue;
+        }
+
+        const document = await store.loadDocument(project.projectId, item.documentId);
+        if (!document || document.projectId !== project.projectId ||
+            document.documentId !== item.documentId || document.revision !== item.revision ||
+            typeof document.text !== "string") {
+          throw new Error(
+            "La revisión documental cambió durante la reconciliación; se conserva el índice anterior para reintentar."
+          );
+        }
+
+        let discoveryText = document.text;
+        let truncated = discoveryText.length > MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS;
+        if (truncated) {
+          let end = MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS;
+          const lastUnit = discoveryText.charCodeAt(end - 1);
+          if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF) end--;
+          discoveryText = discoveryText.slice(0, end);
+        }
+        const candidates = discoverNarrativeIdeaCandidates({
+          projectId: project.projectId,
+          documentId: item.documentId,
+          revision: item.revision,
+          text: discoveryText
+        });
+        this.continuityCandidatesByDocument.set(item.documentId, {
+          revision: item.revision,
+          candidates,
+          truncated
+        });
+        candidatesByDocument.set(item.documentId, candidates);
+        anyDocumentTruncated ||= truncated;
+      }
+
+      // Los documentos retirados dejan de aportar candidatos. La comparación
+      // de sourceRevisions convierte su desaparición en un cambio de documento.
+      for (const documentId of this.continuityCandidatesByDocument.keys()) {
+        if (!seenDocuments.has(documentId)) {
+          this.continuityCandidatesByDocument.delete(documentId);
+        }
+      }
+
+      // Reparte el presupuesto entre documentos antes de truncar. Así un libro
+      // con muchos candidatos en el primer capítulo no excluye por completo
+      // capítulos posteriores del análisis transversal.
+      const documentCandidateLists = [...candidatesByDocument.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([, candidates]) => candidates);
+      const totalCandidates = documentCandidateLists.reduce(
+        (sum, candidates) => sum + candidates.length, 0
+      );
+      const selectedCandidates: NarrativeIdeaCandidate[] = [];
+      for (let offset = 0;
+           selectedCandidates.length < MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES;
+           offset++) {
+        let foundAtOffset = false;
+        for (const candidates of documentCandidateLists) {
+          const candidate = candidates[offset];
+          if (!candidate) continue;
+          foundAtOffset = true;
+          selectedCandidates.push(candidate);
+          if (selectedCandidates.length >= MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES) break;
+        }
+        if (!foundAtOffset) break;
+      }
+      const candidateBudgetTruncated = totalCandidates > selectedCandidates.length;
+
+      let orderedDocumentIds: readonly string[] | undefined;
+      if (this.getOrderedDocumentIds) {
+        const suppliedOrder = this.getOrderedDocumentIds(project.projectId);
+        if (suppliedOrder !== undefined) {
+          if (!Array.isArray(suppliedOrder) || suppliedOrder.length > 10_000 ||
+              suppliedOrder.some(id => typeof id !== "string" || !id.trim()) ||
+              new Set(suppliedOrder).size !== suppliedOrder.length) {
+            throw new Error("El anfitrión entregó un orden documental inválido o con IDs repetidos.");
+          }
+          orderedDocumentIds = [...suppliedOrder];
+        }
+      }
+
+      const rawAnalysis = analyzeNarrativeIdeaCrossDocumentRelations({
+        projectId: project.projectId,
+        ideaCandidates: selectedCandidates,
+        ...(orderedDocumentIds ? { orderedDocumentIds } : {})
+      });
+      const sourceTruncated = rawAnalysis.truncated ||
+        candidateBudgetTruncated || anyDocumentTruncated;
+      const crossDocumentAnalysis = sourceTruncated
+        ? { ...rawAnalysis, truncated: true }
+        : rawAnalysis;
+      const evolution = buildNarrativeIdeaEvolution({
+        projectId: project.projectId,
+        crossDocumentAnalysis
+      });
+
+      if (this.disposed || this.project?.projectId !== project.projectId) return;
+      const updated = await updateNarrativeIdeaContinuityIndexIncrementally(store, {
+        projectId: project.projectId,
+        updatedAt: Date.now(),
+        sourceRevisions,
+        nextEvolution: evolution
+      });
+      if (this.disposed || this.project?.projectId !== project.projectId) return;
+
+      const callback = this.onNarrativeIdeaContinuityIndexUpdated;
+      if (callback) {
+        const notice: NarrativeIdeaContinuityIndexUpdateNotice = {
+          projectId: project.projectId,
+          index: updated.index,
+          ...(updated.index.generation > 1
+            ? { expectedGeneration: updated.index.generation - 1 } : {}),
+          sourceDocumentCount: sourceRevisions.length,
+          analyzedCandidateCount: selectedCandidates.length,
+          truncated: updated.index.summary.sourceAnalysisTruncated,
+          reused: updated.reused
+        };
+        try {
+          // El callback es una señal para encolar transporte, no para enviar
+          // por red dentro de la cola de escritura del documento.
+          void Promise.resolve(callback(notice)).catch(error => this.reportKnowledgeError(error));
+        } catch (error) {
+          this.reportKnowledgeError(error);
+        }
+      }
+    });
+    this.continuityIndexTail = work.then(() => undefined, () => undefined);
+    return work;
+  }
+
+  /**
    * Mantiene coherentes las evidencias persistidas antes de analizar el nuevo
    * fragmento. Las líneas tocadas pasan a histórico; las posteriores se
    * desplazan por el delta UTF-16 sin releer el manuscrito completo.
@@ -865,6 +1047,7 @@ export class HostEngineApi {
         await this.extractNarrativeKnowledge(
           result.documentId, result.revision, result.affectedText, result.affectedStart
         );
+        await this.refreshNarrativeIdeaContinuityIndex();
       } finally {
         const analysisExecutionMs = Math.max(0, performance.now() - executionStartedAt);
         this.liveMetrics.totalAnalysisExecutionMs += analysisExecutionMs;

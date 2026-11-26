@@ -930,7 +930,7 @@ test("clasifica escritura, pegado, borrado, corrección, deshacer y rehacer; los
   assert.equal(recovered.otherChanges, 0);
 
   const legacy = { ...checkpoint };
-  for (const key of ["typingChanges", "pasteChanges", "deletionChanges", "correctionChanges",
+  for (const key of ["typingChanges", "compositionChanges", "pasteChanges", "deletionChanges", "correctionChanges",
     "undoChanges", "redoChanges", "otherChanges"]) delete legacy[key];
   const legacyMonitor = new LiveAuthorMonitor({ now: () => 0 });
   const legacySnapshot = legacyMonitor.restoreCheckpoint(legacy, {
@@ -950,4 +950,54 @@ test("clasifica escritura, pegado, borrado, corrección, deshacer y rehacer; los
   }, "book-activity", 200);
   assert.equal(interimSnapshot.otherChanges, 0,
     "una entrega intermedia con las seis categorías debe restaurar el residual calculado");
+});
+
+
+test("separa actualizaciones de composición IME de la escritura ordinaria y las restaura", () => {
+  let time = 0;
+  const monitor = new LiveAuthorMonitor({ now: () => time });
+  monitor.openDocument({ documentId: "ime-chapter", text: "abc", revision: 0, sequence: 0 }, "ime-book");
+  const operations = [
+    { sequence: 1, baseRevision: 0, start: 3, end: 3, replacement: "に", activityKind: "composition" },
+    { sequence: 2, baseRevision: 1, start: 3, end: 4, replacement: "日本", activityKind: "composition" },
+    { sequence: 3, baseRevision: 2, start: 5, end: 5, replacement: "!", activityKind: "typing" }
+  ];
+  operations.forEach((operation, index) => {
+    time += 1;
+    const ticketId = "ime-ticket-" + index;
+    monitor.recordAdmission({
+      documentId: "ime-chapter",
+      ...operation
+    }, { status: "queued", ticketId });
+    monitor.recordCommit({ ticketId, status: "applied", revision: index + 1 });
+  });
+
+  const snapshot = monitor.getSnapshot("ime-chapter");
+  assert.equal(snapshot.acceptedChanges, 3);
+  assert.equal(snapshot.compositionChanges, 2);
+  assert.equal(snapshot.typingChanges, 1);
+  assert.equal(snapshot.otherChanges, 0);
+  assert.equal(snapshot.insertedCharacters, 4,
+    "el contador bruto refleja todos los payloads de delta, no caracteres finales únicos");
+  assert.equal(snapshot.deletedCharacters, 1);
+
+  const checkpoint = monitor.createCheckpoint("ime-chapter", 100);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.compositionChanges, 2);
+  const restored = new LiveAuthorMonitor({ now: () => 0 });
+  const recovered = restored.restoreCheckpoint(checkpoint, {
+    documentId: "ime-chapter", text: "abc日本!", revision: 3, sequence: 3
+  }, "ime-book", 200);
+  assert.equal(recovered.compositionChanges, 2);
+  assert.equal(recovered.typingChanges, 1);
+  assert.equal(recovered.otherChanges, 0);
+
+  const malformed = new LiveAuthorMonitor({ now: () => 0 });
+  assert.throws(() => malformed.restoreCheckpoint(
+    { ...checkpoint, compositionChanges: -1 },
+    { documentId: "ime-chapter", text: "abc日本!", revision: 3, sequence: 3 },
+    "ime-book",
+    200
+  ), /métricas o tiempos inválidos/);
+  assert.equal(malformed.getSnapshot("ime-chapter"), undefined);
 });

@@ -28,6 +28,13 @@ export interface LiveAuthorMonitorSnapshot {
   readonly currentIdleMs: number;
   readonly pauseCount: number;
   readonly acceptedChanges: number;
+  readonly typingChanges: number;
+  readonly pasteChanges: number;
+  readonly deletionChanges: number;
+  readonly correctionChanges: number;
+  readonly undoChanges: number;
+  readonly redoChanges: number;
+  readonly otherChanges: number;
   readonly rejectedChanges: number;
   readonly committedChanges: number;
   readonly failedChanges: number;
@@ -69,6 +76,13 @@ interface DocumentSession {
   idleDurationMs: number;
   pauseCount: number;
   acceptedChanges: number;
+  typingChanges: number;
+  pasteChanges: number;
+  deletionChanges: number;
+  correctionChanges: number;
+  undoChanges: number;
+  redoChanges: number;
+  otherChanges: number;
   rejectedChanges: number;
   committedChanges: number;
   failedChanges: number;
@@ -88,6 +102,25 @@ interface DocumentSession {
 }
 
 export type LiveAuthorMonitorListener = (snapshot: LiveAuthorMonitorSnapshot) => void;
+
+function classifyActivityKind(change: EditorChange):
+  "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other" {
+  switch (change.activityKind) {
+    case "typing":
+    case "paste":
+    case "deletion":
+    case "correction":
+    case "undo":
+    case "redo":
+    case "other":
+      return change.activityKind;
+    default:
+      if (change.end > change.start && change.replacement.length > 0) return "correction";
+      if (change.end > change.start) return "deletion";
+      if (change.replacement.length > 0) return "typing";
+      return "other";
+  }
+}
 
 const defaultMonotonicClock = (): number =>
   typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -159,6 +192,13 @@ export class LiveAuthorMonitor {
       idleDurationMs: 0,
       pauseCount: 0,
       acceptedChanges: 0,
+      typingChanges: 0,
+      pasteChanges: 0,
+      deletionChanges: 0,
+      correctionChanges: 0,
+      undoChanges: 0,
+      redoChanges: 0,
+      otherChanges: 0,
       rejectedChanges: 0,
       committedChanges: 0,
       failedChanges: 0,
@@ -210,6 +250,15 @@ export class LiveAuthorMonitor {
     }
 
     session.acceptedChanges++;
+    switch (classifyActivityKind(change)) {
+      case "typing": session.typingChanges++; break;
+      case "paste": session.pasteChanges++; break;
+      case "deletion": session.deletionChanges++; break;
+      case "correction": session.correctionChanges++; break;
+      case "undo": session.undoChanges++; break;
+      case "redo": session.redoChanges++; break;
+      case "other": session.otherChanges++; break;
+    }
     session.insertedCharacters += change.replacement.length;
     session.deletedCharacters += change.end - change.start;
     session.currentDocumentLength += change.replacement.length - (change.end - change.start);
@@ -342,6 +391,13 @@ export class LiveAuthorMonitor {
         : Math.max(0, now - session.lastActivityAt),
       pauseCount: session.pauseCount,
       acceptedChanges: session.acceptedChanges,
+      typingChanges: session.typingChanges,
+      pasteChanges: session.pasteChanges,
+      deletionChanges: session.deletionChanges,
+      correctionChanges: session.correctionChanges,
+      undoChanges: session.undoChanges,
+      redoChanges: session.redoChanges,
+      otherChanges: session.otherChanges,
       rejectedChanges: session.rejectedChanges,
       committedChanges: session.committedChanges,
       failedChanges: session.failedChanges,
@@ -386,6 +442,19 @@ export class LiveAuthorMonitor {
     }
     const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
     const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
+    const classifiedActivityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
+      checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges, checkpoint.redoChanges];
+    const hasActivityCounts = classifiedActivityCounts.some(value => value !== undefined) ||
+      checkpoint.otherChanges !== undefined;
+    const validClassifiedCounts = classifiedActivityCounts.every(
+      value => value !== undefined && integerNonNegative(value)
+    );
+    const classifiedCountTotal = classifiedActivityCounts.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    const validActivityCounts = !hasActivityCounts || (validClassifiedCounts &&
+      (checkpoint.otherChanges === undefined || integerNonNegative(checkpoint.otherChanges)) &&
+      classifiedCountTotal <= checkpoint.acceptedChanges &&
+      (checkpoint.otherChanges === undefined ||
+        classifiedCountTotal + checkpoint.otherChanges === checkpoint.acceptedChanges));
     if (!finiteNonNegative(restoredAt) || !finiteNonNegative(checkpoint.savedAt) ||
         restoredAt < checkpoint.savedAt ||
         !finiteNonNegative(checkpoint.sessionDurationMs) ||
@@ -398,6 +467,7 @@ export class LiveAuthorMonitor {
             checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1)) ||
         !integerNonNegative(checkpoint.pauseCount) ||
         !integerNonNegative(checkpoint.acceptedChanges) ||
+        (hasActivityCounts && (!validActivityCounts || activityCountTotal !== checkpoint.acceptedChanges)) ||
         !integerNonNegative(checkpoint.rejectedChanges) ||
         !integerNonNegative(checkpoint.committedChanges) ||
         !integerNonNegative(checkpoint.failedChanges) ||
@@ -449,6 +519,15 @@ export class LiveAuthorMonitor {
       idleDurationMs,
       pauseCount: checkpoint.pauseCount,
       acceptedChanges: checkpoint.acceptedChanges,
+      typingChanges: checkpoint.typingChanges ?? 0,
+      pasteChanges: checkpoint.pasteChanges ?? 0,
+      deletionChanges: checkpoint.deletionChanges ?? 0,
+      correctionChanges: checkpoint.correctionChanges ?? 0,
+      undoChanges: checkpoint.undoChanges ?? 0,
+      redoChanges: checkpoint.redoChanges ?? 0,
+      otherChanges: hasActivityCounts
+        ? (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedCountTotal)
+        : checkpoint.acceptedChanges,
       rejectedChanges: checkpoint.rejectedChanges,
       committedChanges: checkpoint.committedChanges,
       failedChanges: checkpoint.failedChanges,
@@ -534,6 +613,13 @@ export class LiveAuthorMonitor {
         : Math.max(0, now - session.lastActivityAt - this.idleAfterMs),
       pauseCount: session.pauseCount,
       acceptedChanges: session.acceptedChanges,
+      typingChanges: session.typingChanges,
+      pasteChanges: session.pasteChanges,
+      deletionChanges: session.deletionChanges,
+      correctionChanges: session.correctionChanges,
+      undoChanges: session.undoChanges,
+      redoChanges: session.redoChanges,
+      otherChanges: session.otherChanges,
       rejectedChanges: session.rejectedChanges,
       committedChanges: session.committedChanges,
       failedChanges: session.failedChanges,
@@ -587,10 +673,34 @@ export class LiveAuthorMonitor {
  * Superficie pública de HostEngineApi necesaria para conectar un panel.
  * No expone ni conserva el texto del manuscrito.
  */
+export type LiveAuthorMonitorCheckpointState =
+  | "unavailable" | "not-saved" | "waiting-for-durability" | "saving" | "saved" | "error";
+
+export type LiveAuthorMonitorLeaseState =
+  | "unsupported" | "uninitialized" | "owner" | "observer" | "lost"
+  | "expired" | "releasing" | "error";
+
+/**
+ * Diagnóstico operativo local. Solo expone códigos de error, timestamps y
+ * metadatos de coordinación; nunca mensajes arbitrarios ni texto del manuscrito.
+ */
+export interface LiveAuthorMonitorPersistenceDiagnostics {
+  readonly documentId: string;
+  readonly checkpointState: LiveAuthorMonitorCheckpointState;
+  readonly lastCheckpointAt?: number;
+  readonly checkpointErrorCode?: string;
+  readonly leaseState: LiveAuthorMonitorLeaseState;
+  readonly fencingToken?: number;
+  readonly leaseExpiresAt?: number;
+  readonly leaseErrorCode?: string;
+}
+
 export interface LiveAuthorMonitorHostApi {
   /** Reanuda de forma idempotente las métricas desde el snapshot durable del motor. */
   ensureLiveAuthorMonitorDocument?(documentId: string): LiveAuthorMonitorSnapshot;
   getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined;
+  /** Estado de persistencia y coordinación, sin datos del manuscrito. */
+  getLiveAuthorMonitorPersistenceDiagnostics?(documentId: string): LiveAuthorMonitorPersistenceDiagnostics | undefined;
   getLiveAuthorMonitorSnapshots(): readonly LiveAuthorMonitorSnapshot[];
   subscribeLiveAuthorMonitor(listener: LiveAuthorMonitorListener, documentId?: string): () => void;
 }

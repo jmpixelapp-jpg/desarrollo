@@ -244,6 +244,130 @@ export async function retireNarrativeDocumentProjection(
   return commitNarrativeDocumentProjectionManifest(store, candidate);
 }
 
+export type NarrativeProjectionReconciliationIssueCode =
+  | "missing-manifest"
+  | "missing-inventory-id"
+  | "stale-inventory-id"
+  | "tombstone-has-evidence"
+  | "unmanifested-evidence";
+
+export interface NarrativeProjectionReconciliationIssue {
+  readonly code: NarrativeProjectionReconciliationIssueCode;
+  readonly documentId: string;
+  readonly recordType: "entity" | "relation" | "event" | "idea" | "assertion";
+  readonly recordId?: string;
+  readonly detail: string;
+}
+
+export interface NarrativeProjectionReconciliationReport {
+  readonly projectId: string;
+  readonly checkedManifests: number;
+  readonly checkedRecords: number;
+  readonly issues: readonly NarrativeProjectionReconciliationIssue[];
+}
+
+/**
+ * Compara inventarios documentales con evidencia persistida. Es sólo diagnóstico:
+ * no borra, restaura ni reescribe registros; las reparaciones requieren resolver
+ * cada discrepancia y aplicar las operaciones CAS del store.
+ */
+export async function reconcileNarrativeDocumentProjections(
+  store: ProjectStore,
+  projectId: string
+): Promise<NarrativeProjectionReconciliationReport> {
+  if (!store || typeof projectId !== "string" || !projectId.trim()) {
+    throw new Error("Proyecto o almacenamiento inválido para reconciliar proyecciones.");
+  }
+  const required = [
+    "loadNarrativeDocumentProjectionManifests",
+    "loadEntities", "loadRelations", "loadEvents", "loadIdeas", "loadAssertions"
+  ] as const;
+  for (const method of required) {
+    if (typeof store[method] !== "function") {
+      throw new Error("El almacenamiento no permite reconciliar proyecciones: " + method);
+    }
+  }
+  const [manifests, entities, relations, events, ideas, assertions] = await Promise.all([
+    store.loadNarrativeDocumentProjectionManifests!(projectId),
+    store.loadEntities!(projectId),
+    store.loadRelations!(projectId),
+    store.loadEvents!(projectId),
+    store.loadIdeas!(projectId),
+    store.loadAssertions!(projectId)
+  ]);
+  const issues: NarrativeProjectionReconciliationIssue[] = [];
+  const manifestByDocument = new Map(manifests.map(manifest => {
+    validateNarrativeDocumentProjectionManifest(manifest);
+    if (manifest.projectId !== projectId) throw new Error("Manifiesto de otro proyecto en el inventario.");
+    return [manifest.documentId, manifest] as const;
+  }));
+  const collections = [
+    { type: "entity" as const, records: entities, inventory: "entityIds" as const },
+    { type: "relation" as const, records: relations, inventory: "relationIds" as const },
+    { type: "event" as const, records: events, inventory: "eventIds" as const },
+    { type: "idea" as const, records: ideas, inventory: "ideaIds" as const },
+    { type: "assertion" as const, records: assertions, inventory: "assertionIds" as const }
+  ];
+  const allDocumentIds = new Set<string>(manifestByDocument.keys());
+  for (const collection of collections) {
+    for (const record of collection.records) {
+      const evidenceItems = Array.isArray((record as { evidence?: unknown }).evidence)
+        ? (record as { evidence: readonly { documentId: string }[] }).evidence
+        : (record as { evidence?: { documentId: string } }).evidence
+          ? [(record as { evidence: { documentId: string } }).evidence] : [];
+      for (const evidence of evidenceItems) {
+        if (evidence && typeof evidence.documentId === "string" && evidence.documentId.trim()) {
+          allDocumentIds.add(evidence.documentId);
+        }
+      }
+    }
+  }
+  const emit = (
+    code: NarrativeProjectionReconciliationIssueCode,
+    documentId: string,
+    recordType: NarrativeProjectionReconciliationIssue["recordType"],
+    recordId: string | undefined,
+    detail: string
+  ) => issues.push({ code, documentId, recordType, ...(recordId ? { recordId } : {}), detail });
+
+  for (const documentId of allDocumentIds) {
+    const manifest = manifestByDocument.get(documentId);
+    if (!manifest) {
+      emit("missing-manifest", documentId, "entity", undefined,
+        "Hay evidencia documental sin manifiesto durable.");
+    }
+    for (const collection of collections) {
+      const actualIds = new Set<string>();
+      for (const record of collection.records) {
+        const evidence = Array.isArray((record as { evidence?: unknown }).evidence)
+          ? (record as { evidence: readonly { documentId: string }[] }).evidence
+          : (record as { evidence?: { documentId: string } }).evidence
+            ? [(record as { evidence: { documentId: string } }).evidence] : [];
+        if (evidence.some(item => item?.documentId === documentId)) actualIds.add(record.id);
+      }
+      const listed = new Set(manifest?.[collection.inventory] ?? []);
+      if (manifest?.status === "deleted") {
+        for (const recordId of actualIds) emit("tombstone-has-evidence", documentId,
+          collection.type, recordId, "El tombstone declara retirado el documento, pero persiste evidencia.");
+        continue;
+      }
+      for (const recordId of actualIds) {
+        if (!listed.has(recordId)) emit("missing-inventory-id", documentId,
+          collection.type, recordId, "La evidencia existe, pero el manifiesto no enumera el registro.");
+      }
+      for (const recordId of listed) {
+        if (!actualIds.has(recordId)) emit("stale-inventory-id", documentId,
+          collection.type, recordId, "El manifiesto enumera un registro sin evidencia documental vigente.");
+      }
+    }
+  }
+  return {
+    projectId, checkedManifests: manifests.length,
+    checkedRecords: entities.length + relations.length + events.length + ideas.length + assertions.length,
+    issues
+  };
+}
+
 export interface NarrativeKnowledgeGraphPersistenceResult {
   readonly projectId: string;
   readonly saved: {

@@ -91,7 +91,8 @@ Se corrigió una atribución de métricas: una sustitución normal de selección
 
 El adaptador ahora establece siempre una categoría explícita para los eventos aceptados:
 
-- `insertText`, `insertLineBreak` e `insertParagraph` → `typing` (entrada de texto declarada por el navegador);\n- `insertCompositionText` → `composition` (actualización de composición IME; no se suma a escritura ordinaria);
+- `insertText`, `insertLineBreak` e `insertParagraph` → `typing` (entrada de texto declarada por el navegador);
+- `insertCompositionText` → `composition` (actualización de composición IME; no se suma a escritura ordinaria);
 - `insertFromPaste` y `insertFromPasteAsQuotation` → `paste`;
 - `insertReplacementText` → `correction` (señal específica de reemplazo del navegador);
 - los tipos `delete*` → `deletion`;
@@ -217,3 +218,10 @@ Cada actualización IME aceptada sigue siendo un delta real del documento y avan
 
 El panel y el workspace de capítulos ahora lo indican con etiquetas de métricas brutas (UTF-16) para que el dato no parezca una medida de caracteres finales únicos. No se afirma que estos contadores midan caracteres finales únicos ni una tasa humana exacta. Para medir texto de composición consolidado sin sobreconteo haría falta una señal de ciclo de composición autoritativa del editor que delimite inicio, actualizaciones, cancelación y commit final; el evento DOM aislado no ofrece una garantía uniforme suficiente para inventar esa conclusión.
 
+
+
+### Base del ciclo IME y alcance de las pruebas
+
+El borrador vigente de [Input Events Level 2 del W3C](https://www.w3.org/TR/2026/WD-input-events-2-20261120/) describe, durante una sesión de composición, una secuencia de `compositionupdate` seguida de pares `beforeinput`/`input` con `inputType="insertCompositionText"`; `compositionend` marca el final de la sesión. El adaptador conserva el emparejamiento de cada par y tolera el orden `compositionend`/último `input` que ya tiene regresión específica.
+
+Las pruebas unitarias cubren varias actualizaciones candidatas y el orden de los eventos de composición, pero no equivalen a una sesión física de IME con un teclado/servicio de entrada del sistema operativo. La prueba Chromium actual valida teclado nativo para `insertText`, persistencia IndexedDB y rechazo de eventos sintéticos; una matriz de IME reales por navegador, sistema operativo e idioma sigue siendo una validación de dispositivo pendiente.

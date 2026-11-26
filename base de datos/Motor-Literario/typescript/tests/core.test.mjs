@@ -2212,7 +2212,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 22);
+      assert.equal(version, 24);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2241,6 +2241,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "narrative-ideas", keyPath: ["projectId", "id"] },
       { name: "personal-idea-library", keyPath: ["writerId", "sourceProjectId", "idea.id"] },
       { name: "writer-library-finalization-receipts", keyPath: ["writerId", "sourceProjectId", "receiptId"] },
+      { name: "live-author-monitor-checkpoints", keyPath: ["projectId", "documentId"] },
+      { name: "live-author-monitor-leases", keyPath: ["projectId", "documentId"] },
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
       { name: "document-diagnostics", keyPath: ["projectId", "documentId"] },
       { name: "manuscript-fragments", keyPath: ["projectId", "id"] },
@@ -2293,6 +2295,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
       ["document-diagnostics", "by-project"],
+      ["live-author-monitor-checkpoints", "by-project"],
+      ["live-author-monitor-leases", "by-project"],
       ["manuscript-fragments", "by-project"],
       ["manuscript-fragments", "by-document-revision"],
       ["manuscript-fragments", "by-parent"],
@@ -2400,6 +2404,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
+    "live-author-monitor-checkpoints", "live-author-monitor-leases",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
@@ -2452,7 +2457,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 22);
+    assert.equal(openedVersion, 24);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],

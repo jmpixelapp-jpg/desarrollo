@@ -214,3 +214,10 @@ La auditoría normaliza de forma defensiva los campos de identidad de los cursor
 ### Plan consultivo de recuperación de cursores
 
 `planNarrativeSyncJournalCursorRecovery(journal, projectId)` clasifica cada escritor sin modificar IndexedDB. Devuelve `no-action` cuando el cursor coincide; propone `rebuild-cursor-from-complete-journal` únicamente si las operaciones forman una secuencia íntegra desde 1 y la única anomalía es la ausencia del cursor o su `lastOperationId` divergente en la misma secuencia; en los demás casos devuelve `manual-review`. El plan incluye la propuesta de identidad y secuencia final, códigos de incidencia, recuentos y `requiresManualReview`. Es una recomendación, no una reparación: antes de implementar cualquier escritura, el estado debe revalidarse dentro de una transacción que cubra diario y cursores.
+
+
+### Aplicación transaccional de propuestas de cursor
+
+`IndexedDbNarrativeSyncJournal.applyCursorRecoveryProposal(proposal)` implementa el paso de escritura explícito y separado del plan consultivo. Antes de abrir la transacción, vuelve a cargar el historial del escritor, comprueba que cubra exactamente las secuencias 1..N, valida los metadatos locales y verifica cada envoltura SHA-256. Después abre una única transacción `readwrite` sobre `operations` y `writer-cursors`, vuelve a leer ambos registros y compara el snapshot verificado con el contenido durable. Solo escribe el cursor si el historial no cambió y el cursor actual está ausente o conserva la misma secuencia con una identidad final divergente. Un cursor adelantado, retrasado, malformado o modificado concurrentemente provoca aborto; las operaciones nunca se reescriben.
+
+La respuesta distingue `applied`, `already-consistent` (reintento idempotente) y `rejected` con motivo. La verificación criptográfica se realiza fuera de la transacción para no dejar una transacción IndexedDB suspendida durante WebCrypto; la comparación exacta de los campos de identidad, digest y metadatos se repite dentro de la transacción para cerrar la ventana TOCTOU. La propuesta no es una autorización: el llamador debe decidir explícitamente cuándo invocar este método.

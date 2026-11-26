@@ -444,3 +444,13 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 
 **Actualización de seguimiento de CI:** las ejecuciones 2819 y 2820 también fallaron en Type-check por el fragmento residual de la expresión futura (error de cadena sin cerrar en la línea 80); ambas corresponden a commits anteriores a la limpieza definitiva. La limpieza está en `4436e52`, cuya ejecución 2821 seguía en validación al actualizar esta nota. La corrección del fixture de salto de línea está en `38373ee`; todavía no debe considerarse verificada de forma aislada hasta disponer de una ejecución completa posterior.
+
+
+### Futuro verbal generalizado y evidencia de menciones de entidades — 26-11-2026
+
+- La ejecución 2821 (`4436e52`) terminó correctamente: Type-check, build/pruebas automatizadas y benchmark de edición en vivo aprobados. Esta ejecución incluye las pruebas de formas futuras regulares e irregulares frecuentes añadidas en `dcd94b6`.
+- Se amplió la extracción de futuro a todo el inventario de acciones mediante formas regulares derivadas del infinitivo y radicales irregulares para «decir» y «salir». Se conservan límites Unicode para evitar coincidencias como prefijos.
+- Se añadió `entityMentionEvidence` a las observaciones: primera mención literal por entidad y frase, con ID, tipo y offsets exactos. No se infiere con ello quién actúa, recibe, posee o se dirige a un objeto/lugar.
+- Pruebas nuevas verifican evidencia exacta para personaje y objeto, alias de entidad y offsets de la primera coincidencia.
+- Commits de la nueva fase de evidencia de menciones: `4729747a` (implementación), `eb06bf9` (pruebas), `9429f62` (documentación).
+- Las ejecuciones 2828, 2829 y 2830 se encontraban en curso/cola al registrar este avance. La evidencia de menciones todavía no se declara validada por CI.

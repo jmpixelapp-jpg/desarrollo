@@ -82,9 +82,6 @@ function classifyTransitionContext(
  if(selected?.frame==="reported-speech"){
   const possible=characters.flatMap(entity=>[entity.canonicalName,...entity.aliases].flatMap(name=>{
    const escaped=escapeRegExp(name);
- return {documentId,revision,start:base+start,end:base+end,excerpt};
-}
-");
    const expression=new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])"+escaped+"(?![\\p{L}\\p{M}\\p{N}_])","giu");
    return [...sentence.slice(0,selected!.start).matchAll(expression)].map(match=>({entityId:entity.id,start:match.index!,end:match.index!+match[0].length,excerpt:match[0]}));
   })).sort((a,b)=>b.end-a.end||b.start-a.start);

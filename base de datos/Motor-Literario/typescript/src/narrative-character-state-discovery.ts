@@ -57,7 +57,7 @@ const STATE_PATTERNS: readonly {
   { state: "present", expression: /^presentes?(?![\p{L}\p{M}])/iu }
 ];
 
-const COPULA = /^(?<marker>volvi[oó]\s+a\s+|dej[oó]\s+de\s+|ya\s+no\s+|todav[ií]a\s+no\s+|a[uú]n\s+no\s+|no\s+)?(?<copula>est[aá]n?|estaban?|estuv(?:o|ieron)|estar[aá]n?|sigu(?:e|en|i[oó]|ieron)|permanece(?:n)?|contin[uú](?:a|an|ó)|se\s+encuentra|se\s+encontraba|qued[oó]|parece(?:n)?)\s+(?<adverb>(?:(?:muy|bastante|gravemente|ligeramente)\s+)?)(?<adjective>[\p{L}\p{M}]+)(?![\p{L}\p{M}])/iu;
+const COPULA = /^(?<marker>volvi[oó]\s+a\s+|dej[oó]\s+de\s+|ya\s+no\s+|todav[ií]a\s+no\s+|a[uú]n\s+no\s+|no\s+)?(?<copula>est[aá]s?|est[aá]n?|estaba(?:n)?|estuv(?:o|ieron)|estar|estar[aá]n?|er(?:a|an)|fu(?:e|eron)|ser[aá]n?|es|son|sigu(?:e|en|i[oó]|ieron)|permanece(?:n)?|contin[uú](?:a|an|ó)|se\s+encuentra|se\s+encontraba|qued[oó]|parece(?:n)?)\s+(?<adverb>(?:(?:muy|bastante|gravemente|ligeramente)\s+)?)(?<adjective>[\p{L}\p{M}]+)(?![\p{L}\p{M}])/iu;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -83,7 +83,7 @@ function sentenceSpans(text: string): readonly { start: number; end: number }[] 
 
 function tenseOf(copula: string, marker: string): NarrativeCharacterStateCandidate["grammaticalTense"] {
   const form = copula.toLocaleLowerCase("es");
-  if (/(?:volvi[oó]|dej[oó])\\s+de?\\s*(?:a\\s+)?$/u.test(marker)) return "past";
+  if (/(?:volvi[oó]|dej[oó])\s+de?\s*(?:a\s+)?$/u.test(marker)) return "past";
   if (/(?:estar[aá]n?|ser[aá]n?)$/u.test(form)) return "future";
   if (/(?:aba|aban|ía|ían|estuvo|estuvieron|sigui[oó]|siguieron|qued[oó]|encontraba)$/u.test(form)) return "past";
   if (/^(?:est[aá]s?|est[aá]n?|es|son|sigue|siguen|permanece|permanecen|contin[uú]a|contin[uú]an|se encuentra|parece|parecen)$/u.test(form)) return "present";

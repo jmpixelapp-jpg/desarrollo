@@ -56,7 +56,8 @@ function sampleEpub() {
   return storedZip([
     ["mimetype", "application/epub+zip"],
     ["META-INF/container.xml", '<?xml version="1.0"?><container><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'],
-    ["OPS/book.opf", '<?xml version="1.0"?><package><metadata><dc:title>La novela &amp; el viaje</dc:title><dc:creator>Ana Autora</dc:creator><dc:language>es</dc:language><dc:identifier>urn:test:book</dc:identifier></metadata><manifest><item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>'],
+    ["OPS/book.opf", '<?xml version="1.0"?><package><metadata><dc:title>La novela &amp; el viaje</dc:title><dc:creator>Ana Autora</dc:creator><dc:language>es</dc:language><dc:identifier>urn:test:book</dc:identifier></metadata><manifest><item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/><item id="toc" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>'],
+    ["OPS/nav.xhtml", '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><nav epub:type="toc"><ol><li><a href="chapter1.xhtml">Parte primera</a><ol><li><a href="chapter2.xhtml">Parte segunda</a></li></ol></li></ol></nav></body></html>'],
     ["OPS/chapter1.xhtml", '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><h1>Capítulo primero</h1><p>Una <em>historia</em> &amp; su comienzo.</p><p>Segunda línea.</p><pre>Verso uno\nVerso dos</pre><aside epub:type="footnote"><p>Nota al pie.</p></aside><script>texto que no debe entrar</script></body></html>'],
     ["OPS/chapter2.xhtml", '<html><body><h1>Capítulo segundo</h1><p>El viaje continúa.</p><h2>Una sección</h2><p>Y termina.</p></body></html>']
   ]);
@@ -71,6 +72,10 @@ test("lee EPUB, metadatos, orden spine, encabezados y párrafos conservando loca
     language: "es", identifier: "urn:test:book"
   });
   assert.equal(inspection.spineItems, 2);
+  assert.deepEqual(inspection.navigation.map(item => [item.label, item.targetPath, item.depth]), [
+    ["Parte primera", "OPS/chapter1.xhtml", 0],
+    ["Parte segunda", "OPS/chapter2.xhtml", 1]
+  ]);
   assert.ok(inspection.extractedBlocks >= 6);
   assert.deepEqual(inspection.emptySpineItems, []);
   const ingested = await ingestBookWithReader(reader, bytes, { sourceId: "epub-test" });

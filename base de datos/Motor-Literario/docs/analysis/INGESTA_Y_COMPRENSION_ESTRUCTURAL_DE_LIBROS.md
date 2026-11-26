@@ -89,6 +89,14 @@ Además, cada evidencia específica (acción, objeto, actor y destinatario) debe
 
 La comparación entre frases y evidencias utiliza intervalos ordenados y un recorrido lineal, evitando comparar cada frase contra toda la colección de evidencias. El procesamiento mantiene límites explícitos y offsets UTF-16 para que la auditoría siga siendo viable en manuscritos extensos.
 
+### Presencia explícita de personajes en lugares
+
+Módulo: `typescript/src/narrative-location-presence-discovery.ts`
+
+La ingesta detecta afirmaciones como «Ana está en el castillo», «Ana se encontraba dentro de la torre», «Ana vive en París» o «Ana parece estar cerca del puerto» cuando el personaje y el lugar tienen fichas explícitas y no ambiguas. Conserva evidencias separadas para personaje, cópula/predicado, relación espacial, lugar y afirmación completa. Distingue presente, pasado, futuro, condicional, negación y modo perceptual/modal.
+
+La detección es deliberadamente conservadora: exige un único personaje nombrado en la oración y un lugar tipado como `location`; no resuelve pronombres ni atribuye automáticamente una ubicación a varios personajes coordinados. Futuro y condicional se mantienen como prospectivo/hipotético; una negación no se transforma en presencia. La salida nunca consolida «ubicación actual»: cada afirmación sigue siendo candidata revisable.
+
 ### Trayectorias de ubicación derivadas del texto
 
 Módulo: `typescript/src/narrative-location-transition-discovery.ts`

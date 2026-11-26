@@ -22,7 +22,7 @@ export interface NarrativeDialogueSegmentCandidate {
   readonly revision: number;
   readonly format: "guillemets" | "curly-quotes" | "straight-quotes" | "em-dash";
   readonly utteranceEvidence: TextEvidence;
-  readonly delimiterEvidence: TextEvidence;
+  readonly segmentEvidence: TextEvidence;
   readonly attributionEvidence?: TextEvidence;
   readonly speakerCandidates: readonly NarrativeDialogueSpeakerCandidate[];
   readonly speakerStatus: NarrativeDialogueSpeakerStatus;
@@ -219,7 +219,7 @@ export function discoverNarrativeDialogueSpeakers(
       format: span.format,
       utteranceEvidence: evidence(input.documentId, input.revision, base,
         span.contentStart, span.contentEnd, input.text.slice(span.contentStart, span.contentEnd)),
-      delimiterEvidence: evidence(input.documentId, input.revision, base,
+      segmentEvidence: evidence(input.documentId, input.revision, base,
         span.start, span.end, input.text.slice(span.start, span.end)),
       ...(attributionEvidence ? { attributionEvidence } : {}),
       speakerCandidates: unique,

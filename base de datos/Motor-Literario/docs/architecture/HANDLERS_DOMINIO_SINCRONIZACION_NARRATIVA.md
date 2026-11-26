@@ -228,3 +228,10 @@ La respuesta distingue `applied`, `already-consistent` (reintento idempotente) y
 `createRecoveryFirstNarrativeSyncConsumer` genera el plan de cursores después de recuperar las reparaciones y antes de auditar el diario para replay. El anfitrión puede proporcionar `NarrativeSyncCursorRecoveryApproval` con una función `approve(proposal)`. Solo las propuestas aprobadas se envían a `applyCursorRecoveryProposal`; la aplicación vuelve a validar su snapshot dentro de la transacción. Sin callback de aprobación, el consumidor devuelve el plan sin modificar cursores. Si una propuesta queda sin aprobar, es rechazada o existe cualquier otra incidencia de integridad, el replay permanece bloqueado. Solo después de una auditoría íntegra se ejecutan los handlers.
 
 El resultado `RecoveryFirstNarrativeSyncResult.cursorRecovery` expone el plan y los resultados de aplicación para diagnóstico. La aprobación es explícita por propuesta y no reemplaza la autenticación/autorización del emisor, que sigue siendo responsabilidad del anfitrión/servidor.
+
+
+### Exclusión de replay entre pestañas
+
+El replay conserva los locks locales por proyecto/escritor y ahora usa Web Locks (`navigator.locks`) cuando el runtime los ofrece. El nombre del lock se deriva del proyecto, no del escritor, para que un replay completo y uno parcial no puedan ejecutarse simultáneamente en pestañas distintas. La adquisición usa `ifAvailable`: si otra pestaña posee el lock, el consumidor devuelve `consumer-already-running` y no ejecuta handlers. Si el backend de locks falla, devuelve `consumer-lock-failed` sin degradarse a ejecución desprotegida. En runtimes sin Web Locks se conserva explícitamente la garantía local; no se afirma exclusión entre pestañas ni entre dispositivos.
+
+El adaptador `NarrativeSyncReplayLockManager` es inyectable para probar contención, fallo del coordinador y mantenimiento del lock durante el callback. Esto no cambia la semántica de entrega al menos una vez: el handler sigue obligado a ser idempotente por `operationId`, porque el proceso puede interrumpirse después de la mutación de dominio y antes del acuse durable.

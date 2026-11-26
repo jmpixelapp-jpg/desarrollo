@@ -390,15 +390,17 @@ test("visibilitychange oculta suspende una composición abierta sin reanudar al 
   f.source.dispose();
 });
 
-test("visibilitychange oculto conserva el input de texto ya encolado", () => {
+test("visibilitychange oculto conserva el input de texto ya encolado", async () => {
   const f = fixture("abc", 0, 0);
   f.element.selectionStart = 3;
   f.element.selectionEnd = 3;
   f.element.emitBeforeInput("insertText", false, true, "x");
+  await Promise.resolve();
 
   const documentTarget = f.element.ownerDocument;
   documentTarget.hidden = true;
   documentTarget.emit("visibilitychange");
+  await Promise.resolve();
   assert.equal(f.source.getState().needsResync, false);
   assert.equal(f.source.getState().pendingInput, true);
   assert.equal(f.errors.length, 0);

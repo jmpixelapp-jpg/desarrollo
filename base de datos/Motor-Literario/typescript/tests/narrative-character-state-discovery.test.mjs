@@ -95,6 +95,17 @@ test("no resuelve pronombres ni nombres ambiguos entre dos fichas", () => {
   assert.deepEqual(result, []);
 });
 
+test("clasifica estados cognitivos, emocionales, sociales y físicos sin mezclarlos", () => {
+  const text = "Ana está dormida. Bruno está furioso. Ana está encarcelada. Bruno está ciego.";
+  const candidates = discover(text);
+  assert.deepEqual(candidates.map(item => [item.state, item.category]), [
+    ["asleep", "cognitive"],
+    ["angry", "emotional"],
+    ["imprisoned", "social"],
+    ["blind", "physical"]
+  ]);
+});
+
 test("reconoce nombres con marcas Unicode descompuestas y conserva offsets UTF-16 originales", () => {
   const jose = {
     ...ana, id: "character:jose", canonicalName: "José",

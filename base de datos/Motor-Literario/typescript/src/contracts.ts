@@ -23,7 +23,7 @@ export interface DocumentSnapshot {
 }
 
 export type EditorChangeActivityKind =
-  | "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
+  | "typing" | "composition" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
 
 export interface EditorChange {
   readonly documentId: string;
@@ -117,6 +117,8 @@ export interface StoredLiveAuthorMonitorCheckpoint {
   readonly commitLatencies: readonly number[];
   /** Optional v1 counters; absent in historic checkpoints means zero. */
   readonly typingChanges?: number;
+  /** Raw composition update deltas; absent in older v1 checkpoints. */
+  readonly compositionChanges?: number;
   readonly pasteChanges?: number;
   readonly deletionChanges?: number;
   readonly correctionChanges?: number;

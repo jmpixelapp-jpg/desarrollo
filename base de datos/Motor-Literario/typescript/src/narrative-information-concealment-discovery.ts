@@ -123,8 +123,8 @@ export function discoverNarrativeInformationConcealmentCandidates(
   if(!names.length)return [];
   const alternatives=[...new Set(names.map(item=>item.value))].sort((a,b)=>b.length-a.length)
     .map(escapeRegExp).join("|");
-  const boundaryStart="(?<![\\\\p{L}\\\\p{M}\\\\p{N}_])";
-  const boundaryEnd="(?![\\\\p{L}\\\\p{M}\\\\p{N}_])";
+  const boundaryStart="(?<![\\p{L}\\p{M}\\p{N}_])";
+  const boundaryEnd="(?![\\p{L}\\p{M}\\p{N}_])";
   const actor="(?<actor>"+boundaryStart+"(?:"+alternatives+")"+boundaryEnd+")";
   const recipient="(?<recipient>"+boundaryStart+"(?:"+alternatives+")"+boundaryEnd+")";
   const patterns:readonly {signal:NarrativeInformationConcealmentSignal;expression:RegExp}[]=[
@@ -172,7 +172,7 @@ export function discoverNarrativeInformationConcealmentCandidates(
           evidence:evidence(input,span.start,span.end),
           ...(recipientId&&recipientStart!==undefined?{recipientEvidence:evidence(input,recipientStart,recipientStart+recipientRaw!.length)}:{}),
           assertionStatus:"textually-asserted",
-          polarity:/(?:^|\\\\s)(?:no|nunca|jam[aá]s)\\\\s+[^.!?;]*$/iu.test(sentence.slice(0,triggerStart-span.start))?"negated":"affirmed",
+          polarity:/\\b(?:no|nunca|jam[aá]s)\\s+[^.!?;]*$/iu.test(sentence.slice(0,triggerStart-span.start))?"negated":"affirmed",
           deceptionEstablished:false,intentEstablished:false,
           reviewStatus:"candidate"
         });

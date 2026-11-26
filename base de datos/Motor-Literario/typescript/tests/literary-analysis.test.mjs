@@ -907,7 +907,7 @@ test("la cronología limita las muestras de identificadores de eventos y conserv
       revision: 1,
       start: 0,
       end: 12,
-      excerpt: "Acontecimiento"
+      excerpt: "Escena 1\nAna"
     }]
   }));
   const result = analyzeLiteraryFragment({

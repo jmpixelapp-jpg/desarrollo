@@ -122,3 +122,16 @@ test("rechaza evidencia epistémica malformada aunque la afirmación principal s
   observations:[{...observations[0],epistemicFrameEvidence:{...observations[0].evidence,excerpt:"falso"}}]
  }),/Observación inválida/);
 });
+
+test("rechaza evidencia auxiliar perteneciente a otro documento o revisión",()=>{
+ const observations=discoverNarrativeObservationCandidates({
+  ...context,text:"Ana abrió la puerta."
+ });
+ assert.throws(()=>compareNarrativeActionClaims({
+  projectId:"book-1",
+  observations:[{...observations[0],epistemicFrameEvidence:{
+   ...observations[0].evidence,documentId:"other-chapter",excerpt:"A",
+   end:observations[0].evidence.start+1
+  }}]
+ }),/Observación inválida/);
+});

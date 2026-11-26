@@ -823,6 +823,26 @@ export async function recoverNarrativeReferenceRepairs(
   return { projectId, checked: pendingEntries.length, recovered, pending: failures };
 }
 
+
+/**
+ * Punto de entrada de carga de un proyecto narrativo. Ejecuta la recuperación
+ * durable antes de entregar el proyecto al hidratador/lector del anfitrión.
+ * Los conflictos quedan reportados en recovery.pending y no se fuerzan ni
+ * bloquean la lectura del resto del proyecto.
+ */
+export async function loadNarrativeProjectAfterRepairRecovery<T>(
+  store: ProjectStore,
+  projectId: string,
+  loadProject: () => Promise<T>
+): Promise<{ readonly project: T; readonly recovery: NarrativeReferenceRepairRecoveryResult }> {
+  if (typeof loadProject !== "function") {
+    throw new TypeError("Se requiere una función de carga del proyecto narrativo.");
+  }
+  const recovery = await recoverNarrativeReferenceRepairs(store, projectId);
+  const project = await loadProject();
+  return { project, recovery };
+}
+
 export interface NarrativeReferenceRepairAuditIntegrityIssue {
   readonly code: "invalid-entry" | "operation-id-mismatch" | "duplicate-operation";
   readonly operationId: string;

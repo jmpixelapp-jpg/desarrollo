@@ -143,3 +143,7 @@ El backoff no resuelve el conflicto de negocio. Tras vencer, el coordinador pued
 Cuando vence nextAttemptAt, el coordinador puede volver a enviar la misma operación, conservando operationId y payload. El resultado del transporte debe clasificarla de nuevo de forma exhaustiva: si el servidor confirma que ahora puede aceptarla, el acuse explícito permite retirarla; si continúa en conflicto, permanece pendiente y recibe un nuevo backoff. El coordinador no modifica el payload, no cambia la revisión de origen y no presupone que el conflicto se haya resuelto por el mero paso del tiempo.
 
 La regresión correspondiente cubre tres momentos: conflicto inicial, ausencia de envío un milisegundo antes del vencimiento y aceptación explícita en el instante de vencimiento. Comprueba que el reintento conserva la identidad y el contenido de la operación. Esta prueba valida el comportamiento del cliente con un transporte simulado; no demuestra que un servidor real haya reconciliado la revisión.
+
+### Regresión de recuperación con la outbox IndexedDB
+
+Además de la prueba del coordinador con una outbox en memoria, la suite de integración cubre el mismo ciclo usando `IndexedDbProjectStore`: el conflicto y su mensaje quedan persistidos, el vencimiento se respeta entre llamadas separadas, y el segundo envío conserva `operationId` y payload. La operación se elimina únicamente tras el acuse posterior. El transporte sigue siendo simulado, por lo que esta regresión verifica la persistencia y la coordinación del cliente, no el comportamiento de un servidor remoto real.

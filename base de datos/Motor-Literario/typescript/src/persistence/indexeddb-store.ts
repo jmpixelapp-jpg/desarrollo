@@ -1624,10 +1624,11 @@ function normalizeSyncOperation(operation: StoredSyncOperation): StoredSyncOpera
 }
 
 function syncOperationFingerprint(operation: StoredSyncOperation): string {
+  // Los metadatos de transporte cambian durante los reintentos y no forman parte
+  // de la identidad del cambio narrativo.
   return JSON.stringify([
     operation.operationId, operation.projectId, operation.deviceId, operation.sequence,
-    operation.kind, operation.payload, operation.createdAt, operation.attemptCount,
-    operation.lastAttemptAt ?? null, operation.lastError ?? null
+    operation.kind, operation.payload, operation.createdAt
   ]);
 }
 

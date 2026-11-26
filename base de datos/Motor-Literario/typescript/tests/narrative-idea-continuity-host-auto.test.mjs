@@ -403,3 +403,49 @@ test("detecta cambios de snapshot aunque un adaptador conserve revisión y secue
     await store.close();
   }
 });
+
+
+test("reanuncia la generación local reutilizada para recuperar una inserción de outbox fallida", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  await store.saveDocument({
+    projectId: id,
+    documentId: "chapter-outbox",
+    text: "El tema central es la memoria compartida que une a dos ciudades.",
+    revision: 2,
+    sequence: 5,
+    updatedAt: 10
+  });
+  const notices = [];
+  let failFirstEnqueue = true;
+  const api = new HostEngineApi({
+    store,
+    callbacks: {
+      onNarrativeIdeaContinuityIndexUpdated: notice => {
+        notices.push(notice);
+        if (failFirstEnqueue) {
+          failFirstEnqueue = false;
+          throw new Error("outbox temporalmente no disponible");
+        }
+      }
+    }
+  });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Recuperación del outbox" });
+    await api.flushPendingChanges();
+    const index = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(index);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].index.generation, index.generation);
+    assert.equal(notices[0].reused, false);
+
+    await api.invalidateNarrativeKnowledgeFromExternalChange();
+    assert.equal(notices.length, 2);
+    assert.equal(notices[1].index.generation, index.generation);
+    assert.equal(notices[1].reused, true);
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});

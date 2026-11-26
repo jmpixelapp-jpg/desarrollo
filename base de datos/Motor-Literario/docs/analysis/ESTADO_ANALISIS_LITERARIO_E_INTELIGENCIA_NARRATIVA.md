@@ -612,3 +612,16 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Se hizo explícita la preservación del BOM en `8510519` mediante `TextDecoder(..., { ignoreBOM: true })`. La prueba inicial confundía el inicio del contexto probatorio del párrafo con el offset exacto del verbo (el campo `evidence` conserva el párrafo, no solo el verbo). Corregido en `7f514c7`: calcula el offset del verbo dentro del fragmento de evidencia y lo compara con la fuente original.
 - Documentación funcional del objeto gramatical en `3d84432`.
 - Runs 2856–2858 detectaron únicamente el test de offset del BOM; los runs previos de complemento personal y objeto gramatical también estaban atravesados por ese fallo de prueba. La revisión `7f514c7` queda pendiente de CI completa (run 2859 y posteriores); no se declara validada todavía.
+
+
+## Detección ampliada de conectores entre acciones
+
+El módulo `src/narrative-action-link-discovery.ts` amplía el inventario de marcadores discursivos españoles que pueden aparecer entre dos observaciones de acción consecutivas. La ampliación cubre:
+
+- **Temporales:** «a continuación», «acto seguido», «poco después», «mucho después», «al instante», «de inmediato», «al mismo tiempo», «simultáneamente» y referencias de continuidad como «esa misma tarde».
+- **Causales:** «por culpa de», «gracias a», «a raíz de», «por esta/esa razón», «de ahí que» y «como resultado», además de los conectores ya reconocidos.
+- **Adversativos y concesivos:** «aun así», «a pesar de ello», «pese a ello» y «con todo».
+
+**Garantías de interpretación:** cada resultado sigue siendo un vínculo candidato; el tipo del marcador describe la señal textual y no establece por sí solo la dirección de causa/efecto, la simultaneidad real ni la cronología objetiva. La evidencia conserva offsets UTF-16 y el fragmento exacto del texto. No se generan vínculos si falta un marcador explícito, si las acciones se solapan o si el espacio entre ellas supera el límite configurado.
+
+**Cobertura de pruebas añadida:** conectores temporales, causales y concesivos compuestos; comprobación de evidencia literal; y comprobación de que los marcadores causales no crean campos automáticos de causa o efecto. La ejecución efectiva de CI debe verificarse en GitHub Actions y no se presume por el mero hecho de añadir los casos.

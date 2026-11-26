@@ -45,6 +45,7 @@ function fixture(text = "hello", maxPendingChanges) {
   let snapshot = { documentId: "chapter-1", text, revision: 0, sequence: 0 };
   let sync = { sequence: 0, pendingSequence: 0, needsResync: false };
   let rejectNext = false;
+  let rejectReason = "queue_full";
   const monitor = new LiveAuthorMonitor({ now: () => 100 });
   monitor.openDocument(snapshot, "book-1");
   const changes = [];
@@ -76,7 +77,7 @@ function fixture(text = "hello", maxPendingChanges) {
       changes.push(change);
       if (rejectNext) {
         rejectNext = false;
-        const rejected = { status: "rejected", reason: "queue_full" };
+        const rejected = { status: "rejected", reason: rejectReason };
         monitor.recordAdmission(change, rejected);
         return rejected;
       }
@@ -123,7 +124,10 @@ function fixture(text = "hello", maxPendingChanges) {
     errors,
     retryListeners,
     pressureStates,
-    setRejectNext(value) { rejectNext = value; },
+    setRejectNext(value, reason = "queue_full") {
+      rejectNext = value;
+      rejectReason = reason;
+    },
     setSnapshot(next, nextSync = {
       sequence: next.sequence,
       pendingSequence: next.sequence,
@@ -228,6 +232,39 @@ test("resincroniza motor, métricas y textarea desde un snapshot durable", () =>
   f.element.edit(6, 6, "hello?!");
   assert.equal(f.changes.at(-1).sequence, 2);
   assert.equal(f.changes.at(-1).baseRevision, 1);
+  f.integration.dispose();
+});
+
+test("un rechazo permanente produce un solo diagnóstico resync y recupera desde snapshot durable", () => {
+  const f = fixture();
+  f.setRejectNext(true, "invalid_change");
+  f.element.edit(5, 5, "hello!");
+
+  assert.equal(f.integration.getState().needsResync, true);
+  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1]);
+  assert.equal(f.element.listeners.get("beforeinput").size, 0);
+  assert.equal(f.errors.filter(item =>
+    item.error?.code === "resync-required"
+  ).length, 1,
+  "binding y callback de admisión no deben duplicar el diagnóstico de fuente");
+
+  const authoritative = {
+    documentId: "chapter-1",
+    text: "hello!",
+    revision: 1,
+    sequence: 1
+  };
+  f.setSnapshot(authoritative);
+  const state = f.integration.resynchronize();
+
+  assert.equal(state.needsResync, false);
+  assert.equal(state.sequence, 1);
+  assert.equal(f.integration.getPendingChanges().length, 0);
+  assert.equal(f.element.listeners.get("beforeinput").size, 1);
+
+  f.element.edit(6, 6, "hello!!");
+  assert.equal(f.changes.at(-1).sequence, 2);
+  assert.equal(f.monitor.getSnapshot("chapter-1").durableSequence, 2);
   f.integration.dispose();
 });
 

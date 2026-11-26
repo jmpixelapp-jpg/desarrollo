@@ -2743,6 +2743,117 @@
           "lifecycle_id"
         ]
       ]
+    },
+    {
+      "name": "narrative_document_projection_manifests",
+      "scope": "project",
+      "purpose": "Manifiesto vigente de IDs derivados de cada documento y tombstone explícito para su retirada; generación CAS monotónica.",
+      "columns": [
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Ámbito del libro"
+        ],
+        [
+          "document_id",
+          "TEXT",
+          "NOT NULL",
+          "Identidad estable del documento"
+        ],
+        [
+          "revision",
+          "INTEGER",
+          "NOT NULL",
+          "Revisión del documento representada"
+        ],
+        [
+          "generation",
+          "INTEGER",
+          "NOT NULL",
+          "Generación CAS monotónica del manifiesto"
+        ],
+        [
+          "status",
+          "TEXT",
+          "NOT NULL",
+          "active o deleted; deleted representa tombstone"
+        ],
+        [
+          "entity_ids_json",
+          "JSON",
+          "NOT NULL",
+          "IDs de entidades derivadas"
+        ],
+        [
+          "relation_ids_json",
+          "JSON",
+          "NOT NULL",
+          "IDs de relaciones derivadas"
+        ],
+        [
+          "event_ids_json",
+          "JSON",
+          "NOT NULL",
+          "IDs de acontecimientos derivados"
+        ],
+        [
+          "idea_ids_json",
+          "JSON",
+          "NOT NULL",
+          "IDs de ideas derivadas"
+        ],
+        [
+          "assertion_ids_json",
+          "JSON",
+          "NOT NULL",
+          "IDs de afirmaciones derivadas"
+        ],
+        [
+          "updated_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          "Última escritura del manifiesto"
+        ],
+        [
+          "PRIMARY KEY",
+          "(project_id,document_id)",
+          "",
+          ""
+        ]
+      ],
+      "constraints": [
+        "CHECK(generation > 0)",
+        "CHECK(revision >= 0)",
+        "CHECK(status IN ('active','deleted'))"
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_narrative_projection_manifests_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "status"
+        ],
+        [
+          "project_id",
+          "document_id",
+          "generation"
+        ]
+      ]
     }
   ],
   "not_in_main_database": [

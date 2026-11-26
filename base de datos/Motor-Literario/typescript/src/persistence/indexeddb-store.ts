@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 27;
+const DATABASE_VERSION = 28;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const SYNC_OUTBOX = "sync-outbox";
@@ -2304,7 +2304,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(TIMELINE_OCCURRENCES, "by-event-record", ["projectId", "eventRecordId"]);
         ensureIndex(TIMELINE_OCCURRENCES, "by-track-order", ["projectId", "trackId", "narrativeOrder"]);
         // DB26: bandeja de operaciones pendiente y cursor persistente por dispositivo.
-        // La creación es idempotente y conserva íntegros los almacenes de DB25.
+        // La creación es idempotente y conserva íntegros los almacenes de DB27.
         if (!db.objectStoreNames.contains(SYNC_OUTBOX)) {
           db.createObjectStore(SYNC_OUTBOX, { keyPath: "operationId" });
         }

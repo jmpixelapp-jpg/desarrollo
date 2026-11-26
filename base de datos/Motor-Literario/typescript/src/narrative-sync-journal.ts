@@ -34,6 +34,16 @@ export interface NarrativeSyncWriterCursor {
   readonly updatedAt: number;
 }
 
+export type NarrativeSyncCursorRecoveryApplyResult =
+  | { readonly status: "applied"; readonly writerId: string; readonly lastSequence: number; readonly lastOperationId: string }
+  | { readonly status: "already-consistent"; readonly writerId: string; readonly lastSequence: number; readonly lastOperationId: string }
+  | { readonly status: "rejected"; readonly reason: "invalid-proposal" | "journal-not-complete" | "journal-changed" | "cursor-changed" | "transaction-failed" };
+
+/**
+ * Aplicación atómica de una propuesta. La verificación criptográfica se hace
+ * antes de abrir la transacción y el snapshot se compara de nuevo dentro de
+ * ella; así no se mantiene una transacción IndexedDB abierta durante WebCrypto.
+ */
 /**
  * Diario durable de recepción. La inserción de operación y avance de cursor
  * se confirman en una única transacción IndexedDB.
@@ -276,6 +286,166 @@ export class IndexedDbNarrativeSyncJournal {
     });
   }
 
+  /**
+   * Reconstruye un cursor únicamente desde un diario completo y verificado.
+   * Relee operaciones y cursor en una transacción readwrite y aborta si el
+   * diario cambió desde la verificación o si otro proceso alteró el cursor.
+   */
+  async applyCursorRecoveryProposal(
+    proposal: NarrativeSyncCursorRecoveryProposal
+  ): Promise<NarrativeSyncCursorRecoveryApplyResult> {
+    if (!proposal || typeof proposal.projectId !== "string" || !proposal.projectId.trim() ||
+        typeof proposal.writerId !== "string" || !proposal.writerId.trim() ||
+        !Number.isSafeInteger(proposal.lastSequence) || proposal.lastSequence < 1 ||
+        typeof proposal.lastOperationId !== "string" || !proposal.lastOperationId.trim()) {
+      return { status: "rejected", reason: "invalid-proposal" };
+    }
+
+    let snapshot: NarrativeSyncJournalEntry[];
+    try {
+      snapshot = (await this.loadOperations(proposal.projectId, proposal.writerId))
+        .slice().sort((a, b) => a.sequence - b.sequence);
+      if (snapshot.length !== proposal.lastSequence ||
+          snapshot.some((entry, index) =>
+            entry.projectId !== proposal.projectId ||
+            entry.writerId !== proposal.writerId ||
+            entry.sequence !== index + 1 ||
+            !Number.isFinite(entry.receivedAt) || entry.receivedAt < 0 ||
+            (entry.appliedAt !== undefined &&
+              (!Number.isFinite(entry.appliedAt) || entry.appliedAt < entry.receivedAt)))) {
+        return { status: "rejected", reason: "journal-not-complete" };
+      }
+      for (const entry of snapshot) {
+        const { receivedAt: _receivedAt, appliedAt: _appliedAt, ...envelope } = entry;
+        if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+          return { status: "rejected", reason: "journal-not-complete" };
+        }
+      }
+      const last = snapshot[snapshot.length - 1];
+      if (!last || last.sequence !== proposal.lastSequence ||
+          last.operationId !== proposal.lastOperationId) {
+        return { status: "rejected", reason: "journal-changed" };
+      }
+    } catch {
+      return { status: "rejected", reason: "transaction-failed" };
+    }
+
+    let database: IDBDatabase;
+    try {
+      database = await this.open();
+    } catch {
+      return { status: "rejected", reason: "transaction-failed" };
+    }
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = (result: NarrativeSyncCursorRecoveryApplyResult): void => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      let transaction: IDBTransaction;
+      try {
+        transaction = database.transaction(["operations", "writer-cursors"], "readwrite");
+      } catch {
+        finish({ status: "rejected", reason: "transaction-failed" });
+        return;
+      }
+      const operationsStore = transaction.objectStore("operations");
+      const cursorsStore = transaction.objectStore("writer-cursors");
+      const operationsRequest = operationsStore.index("by-project").getAll(proposal.projectId);
+      const cursorRequest = cursorsStore.get([proposal.projectId, proposal.writerId]);
+      let currentOperations: StoredOperation[] | undefined;
+      let currentCursor: WriterCursor | undefined;
+      let operationsReady = false;
+      let cursorReady = false;
+      let outcome: NarrativeSyncCursorRecoveryApplyResult | undefined;
+      const abortWith = (reason: "journal-changed" | "cursor-changed"): void => {
+        outcome = { status: "rejected", reason };
+        try { transaction.abort(); } catch { /* la transacción ya terminó */ }
+      };
+      const evaluate = (): void => {
+        if (!operationsReady || !cursorReady || outcome) return;
+        const currentWriterOperations = (currentOperations ?? [])
+          .filter(entry => entry.writerId === proposal.writerId)
+          .sort((a, b) => a.sequence - b.sequence);
+        const sameSnapshot = currentWriterOperations.length === snapshot.length &&
+          currentWriterOperations.every((entry, index) => {
+            const expected = snapshot[index];
+            return JSON.stringify(entry) === JSON.stringify(expected);
+          });
+        if (!sameSnapshot) {
+          abortWith("journal-changed");
+          return;
+        }
+        const last = snapshot[snapshot.length - 1];
+        if (!last) {
+          abortWith("journal-not-complete");
+          return;
+        }
+        if (currentCursor &&
+            (currentCursor.projectId !== proposal.projectId ||
+             currentCursor.writerId !== proposal.writerId ||
+             !Number.isSafeInteger(currentCursor.lastSequence) ||
+             currentCursor.lastSequence < 1 ||
+             !Number.isFinite(currentCursor.updatedAt) || currentCursor.updatedAt < 0 ||
+             typeof currentCursor.lastOperationId !== "string" ||
+             !currentCursor.lastOperationId)) {
+          abortWith("cursor-changed");
+          return;
+        }
+        if (currentCursor?.lastSequence === proposal.lastSequence &&
+            currentCursor.lastOperationId === proposal.lastOperationId) {
+          outcome = {
+            status: "already-consistent",
+            writerId: proposal.writerId,
+            lastSequence: proposal.lastSequence,
+            lastOperationId: proposal.lastOperationId
+          };
+          return;
+        }
+        if (currentCursor && currentCursor.lastSequence !== proposal.lastSequence) {
+          abortWith("cursor-changed");
+          return;
+        }
+        const nextCursor: WriterCursor = {
+          projectId: proposal.projectId,
+          writerId: proposal.writerId,
+          lastSequence: last.sequence,
+          lastOperationId: last.operationId,
+          updatedAt: Math.max(Date.now(), currentCursor?.updatedAt ?? 0, last.receivedAt)
+        };
+        cursorsStore.put(nextCursor);
+        outcome = {
+          status: "applied",
+          writerId: proposal.writerId,
+          lastSequence: last.sequence,
+          lastOperationId: last.operationId
+        };
+      };
+      operationsRequest.onsuccess = () => {
+        currentOperations = operationsRequest.result as StoredOperation[];
+        operationsReady = true;
+        evaluate();
+      };
+      cursorRequest.onsuccess = () => {
+        currentCursor = cursorRequest.result as WriterCursor | undefined;
+        cursorReady = true;
+        evaluate();
+      };
+      operationsRequest.onerror = () => abortWith("journal-changed");
+      cursorRequest.onerror = () => abortWith("cursor-changed");
+      transaction.oncomplete = () => finish(outcome ?? {
+        status: "rejected", reason: "transaction-failed"
+      });
+      transaction.onabort = () => finish(outcome ?? {
+        status: "rejected", reason: "transaction-failed"
+      });
+      transaction.onerror = () => finish(outcome ?? {
+        status: "rejected", reason: "transaction-failed"
+      });
+    });
+  }
+
   async getLastSequence(projectId: string, writerId: string): Promise<number> {
     if (!projectId.trim() || !writerId.trim()) throw new TypeError("Proyecto y escritor son obligatorios.");
     const database = await this.open();
@@ -375,10 +545,11 @@ export interface NarrativeSyncJournalIntegrityReport {
  * por escritor. SHA-256 detecta corrupción, pero no autentica al emisor.
  */
 export async function inspectNarrativeSyncJournalIntegrity(
-  journal: IndexedDbNarrativeSyncJournal,
+  journal: Pick<IndexedDbNarrativeSyncJournal, "loadOperations" | "loadWriterCursors">,
   projectId: string
 ): Promise<NarrativeSyncJournalIntegrityReport> {
   if (!journal || typeof journal.loadOperations !== "function" ||
+      typeof journal.loadWriterCursors !== "function" ||
       typeof projectId !== "string" || !projectId.trim()) {
     throw new TypeError("Se requiere un diario y un proyecto válidos para auditar sincronización.");
   }
@@ -434,7 +605,9 @@ export async function inspectNarrativeSyncJournalIntegrity(
     }
   }
   const cursors = await journal.loadWriterCursors(projectId);
-  const cursorWriters = new Set(cursors.map(cursor => cursor.writerId));
+  const cursorWriters = new Set(cursors.map(cursor =>
+    typeof cursor.writerId === "string" ? cursor.writerId : ""
+  ));
   for (const writerId of writers.keys()) {
     if (!cursorWriters.has(writerId)) {
       issues.push({
@@ -446,13 +619,15 @@ export async function inspectNarrativeSyncJournalIntegrity(
     }
   }
   for (const cursor of cursors) {
-    const entries = writers.get(cursor.writerId) ?? [];
+    const writerId = typeof cursor.writerId === "string" ? cursor.writerId : "";
+    const lastOperationId = typeof cursor.lastOperationId === "string" ? cursor.lastOperationId : "";
+    const entries = writers.get(writerId) ?? [];
     const last = entries.reduce<NarrativeSyncJournalEntry | undefined>(
       (current, entry) => !current || entry.sequence > current.sequence ? entry : current,
       undefined
     );
     const addCursorIssue = (code: NarrativeSyncJournalIntegrityIssueCode, detail: string): void => {
-      issues.push({ code, operationId: cursor.lastOperationId, writerId: cursor.writerId, detail });
+      issues.push({ code, operationId: lastOperationId, writerId, detail });
     };
     if (!Number.isSafeInteger(cursor.lastSequence) || cursor.lastSequence < 1 ||
         !Number.isFinite(cursor.updatedAt) || cursor.updatedAt < 0 ||
@@ -468,7 +643,7 @@ export async function inspectNarrativeSyncJournalIntegrity(
       } else if (cursor.lastSequence < last.sequence) {
         addCursorIssue("cursor-behind-journal", "El diario contiene una operación posterior al cursor durable.");
       }
-      if (cursor.lastSequence === last.sequence && cursor.lastOperationId !== last.operationId) {
+      if (cursor.lastSequence === last.sequence && lastOperationId !== last.operationId) {
         addCursorIssue("cursor-last-operation-mismatch", "El cursor no identifica la última operación de su secuencia.");
       }
     }
@@ -482,11 +657,159 @@ export async function inspectNarrativeSyncJournalIntegrity(
   };
 }
 
+export type NarrativeSyncCursorRecoveryAction =
+  | "no-action"
+  | "rebuild-cursor-from-complete-journal"
+  | "manual-review";
+
+export interface NarrativeSyncCursorRecoveryProposal {
+  readonly projectId: string;
+  readonly writerId: string;
+  readonly lastSequence: number;
+  readonly lastOperationId: string;
+}
+
+export interface NarrativeSyncCursorRecoveryItem {
+  readonly writerId: string;
+  readonly action: NarrativeSyncCursorRecoveryAction;
+  readonly reason: string;
+  readonly proposal?: NarrativeSyncCursorRecoveryProposal;
+  readonly issueCodes: readonly NarrativeSyncJournalIntegrityIssueCode[];
+}
+
+export interface NarrativeSyncCursorRecoveryPlan {
+  readonly projectId: string;
+  readonly items: readonly NarrativeSyncCursorRecoveryItem[];
+  readonly manualReviewCount: number;
+  readonly proposedRebuildCount: number;
+  readonly requiresManualReview: boolean;
+}
+
+/**
+ * Construye un plan consultivo para divergencias de cursores. Nunca escribe
+ * en IndexedDB. Solo propone reconstrucción cuando el diario de ese escritor
+ * es completo desde la secuencia 1, cada envoltura/metadato es válido y la
+ * única divergencia es un cursor ausente o una identidad final equivocada.
+ * La propuesta debe volver a validarse en una transacción antes de aplicarse.
+ */
+export async function planNarrativeSyncJournalCursorRecovery(
+  journal: Pick<IndexedDbNarrativeSyncJournal, "loadOperations" | "loadWriterCursors">,
+  projectId: string
+): Promise<NarrativeSyncCursorRecoveryPlan> {
+  if (!journal || typeof journal.loadOperations !== "function" ||
+      typeof journal.loadWriterCursors !== "function" ||
+      typeof projectId !== "string" || !projectId.trim()) {
+    throw new TypeError("Se requiere un diario y un proyecto válidos para planificar recuperación.");
+  }
+
+  const operations = await journal.loadOperations(projectId);
+  const cursors = await journal.loadWriterCursors(projectId);
+  const snapshotJournal = {
+    loadOperations: async () => operations,
+    loadWriterCursors: async () => cursors
+  };
+  const integrity = await inspectNarrativeSyncJournalIntegrity(snapshotJournal, projectId);
+  const writers = new Set<string>([
+    ...operations.map(operation => typeof operation.writerId === "string" ? operation.writerId : ""),
+    ...cursors.map(cursor => typeof cursor.writerId === "string" ? cursor.writerId : "")
+  ]);
+  const items: NarrativeSyncCursorRecoveryItem[] = [];
+
+  for (const writerId of [...writers].sort((left, right) => left.localeCompare(right))) {
+    const entries = operations
+      .filter(operation => operation.writerId === writerId)
+      .slice()
+      .sort((left, right) => left.sequence - right.sequence);
+    const cursor = cursors.find(candidate => candidate.writerId === writerId);
+    const writerIssues = integrity.issues.filter(issue => issue.writerId === writerId);
+    const issueCodes = [...new Set(writerIssues.map(issue => issue.code))];
+    const last = entries[entries.length - 1];
+    const complete = entries.length > 0 &&
+      entries.every((entry, index) =>
+        entry.projectId === projectId &&
+        entry.writerId === writerId &&
+        Number.isSafeInteger(entry.sequence) &&
+        entry.sequence === index + 1
+      ) &&
+      !writerIssues.some(issue =>
+        issue.code !== "cursor-missing-for-operations" &&
+        issue.code !== "cursor-last-operation-mismatch"
+      );
+
+    if (writerIssues.length === 0 && cursor && last &&
+        cursor.lastSequence === last.sequence && cursor.lastOperationId === last.operationId) {
+      items.push({
+        writerId,
+        action: "no-action",
+        reason: "El cursor coincide con la última operación y no hay incidencias para este escritor.",
+        issueCodes
+      });
+      continue;
+    }
+
+    const onlyMissingCursor = !cursor &&
+      issueCodes.length === 1 &&
+      issueCodes[0] === "cursor-missing-for-operations";
+    const onlyLastIdentityMismatch = Boolean(cursor && last &&
+      cursor.lastSequence === last.sequence &&
+      issueCodes.length === 1 &&
+      issueCodes[0] === "cursor-last-operation-mismatch");
+
+    if (complete && last && (onlyMissingCursor || onlyLastIdentityMismatch)) {
+      items.push({
+        writerId,
+        action: "rebuild-cursor-from-complete-journal",
+        reason: onlyMissingCursor
+          ? "El historial es contiguo desde la secuencia 1 y sus envolturas son válidas; se puede proponer un cursor derivado de la última operación."
+          : "El historial completo confirma la última secuencia e identidad; solo diverge la identidad almacenada en el cursor.",
+        proposal: {
+          projectId,
+          writerId,
+          lastSequence: last.sequence,
+          lastOperationId: last.operationId
+        },
+        issueCodes
+      });
+      continue;
+    }
+
+    items.push({
+      writerId,
+      action: "manual-review",
+      reason: !entries.length
+        ? "No hay operaciones conservadas para reconstruir el cursor."
+        : "La divergencia no puede resolverse únicamente con un historial completo y verificable; no se propone modificar datos.",
+      issueCodes
+    });
+  }
+
+  const manualReviewCount = items.filter(item => item.action === "manual-review").length;
+  const proposedRebuildCount = items.filter(
+    item => item.action === "rebuild-cursor-from-complete-journal"
+  ).length;
+  return {
+    projectId,
+    items,
+    manualReviewCount,
+    proposedRebuildCount,
+    requiresManualReview: manualReviewCount > 0
+  };
+}
+
 export interface NarrativeSyncReplayResult {
   readonly processed: number;
   readonly remaining: number;
   readonly stoppedAtOperationId?: string;
-  readonly failure?: "invalid-envelope" | "apply-or-ack-failed" | "consumer-already-running";
+  readonly failure?: "invalid-envelope" | "apply-or-ack-failed" | "consumer-already-running" | "consumer-lock-failed";
+}
+
+/** Adaptador mínimo de Web Locks, inyectable para pruebas y runtimes alternativos. */
+export interface NarrativeSyncReplayLockManager {
+  request<T>(
+    name: string,
+    options: { readonly mode: "exclusive"; readonly ifAvailable: true },
+    callback: (lock: unknown | null) => Promise<T>
+  ): Promise<T>;
 }
 
 /**
@@ -502,7 +825,8 @@ export async function replayPendingNarrativeSyncOperations(
   journal: IndexedDbNarrativeSyncJournal,
   projectId: string,
   apply: (operation: NarrativeSyncOperationEnvelope) => Promise<void>,
-  writerId?: string
+  writerId?: string,
+  lockManager?: NarrativeSyncReplayLockManager
 ): Promise<NarrativeSyncReplayResult> {
   if (!journal || typeof apply !== "function") {
     throw new TypeError("Se requiere un diario y un procesador de operaciones.");
@@ -513,7 +837,8 @@ export async function replayPendingNarrativeSyncOperations(
   // Un replay de proyecto completo excluye a todos los escritores del proyecto.
   // Replays de escritores distintos pueden avanzar en paralelo: sus cursores son
   // independientes y las escrituras de dominio siguen protegidas por CAS.
-  // Estos locks solo coordinan este runtime, no pestañas ni dispositivos.
+  // El lock local evita reentradas inmediatas; Web Locks añade exclusión
+  // entre pestañas del mismo origen. Sin Web Locks, la garantía es local.
   const writerLocks = activeNarrativeSyncWriterReplays.get(projectId);
   const blocked = writerId === undefined
     ? activeNarrativeSyncProjectWideReplays.has(projectId) || Boolean(writerLocks?.size)
@@ -533,54 +858,85 @@ export async function replayPendingNarrativeSyncOperations(
     activeNarrativeSyncWriterReplays.set(projectId, locks);
   }
   try {
-  const pending = await journal.loadPendingOperations(projectId, writerId);
-  let processed = 0;
-  for (const operation of pending) {
-    // El registro añade receivedAt/appliedAt, que son metadatos locales y no
-    // forman parte del digest original de la envoltura recibida.
-    let envelope: NarrativeSyncOperationEnvelope;
+    const runReplay = async (): Promise<NarrativeSyncReplayResult> => {
+        const pending = await journal.loadPendingOperations(projectId, writerId);
+        let processed = 0;
+        for (const operation of pending) {
+          // El registro añade receivedAt/appliedAt, que son metadatos locales y no
+          // forman parte del digest original de la envoltura recibida.
+          let envelope: NarrativeSyncOperationEnvelope;
+          try {
+            envelope = {
+              schemaVersion: operation.schemaVersion,
+              algorithm: operation.algorithm,
+              operationId: operation.operationId,
+              projectId: operation.projectId,
+              writerId: operation.writerId,
+              sequence: operation.sequence,
+              createdAt: operation.createdAt,
+              kind: operation.kind,
+              // IndexedDB entrega un structured clone; normalizamos el payload al
+              // subconjunto JSON antes de verificar su representación canónica.
+              payload: JSON.parse(JSON.stringify(operation.payload)) as unknown,
+              digest: operation.digest
+            };
+          } catch {
+            const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+            return {
+              processed, remaining, stoppedAtOperationId: operation.operationId,
+              failure: "invalid-envelope"
+            };
+          }
+          if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+            const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+            return {
+              processed, remaining, stoppedAtOperationId: operation.operationId,
+              failure: "invalid-envelope"
+            };
+          }
+          try {
+            await apply(envelope);
+            await journal.markApplied(projectId, operation.operationId, operation.digest);
+            processed++;
+          } catch {
+            const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+            return {
+              processed, remaining, stoppedAtOperationId: operation.operationId,
+              failure: "apply-or-ack-failed"
+            };
+          }
+        }
+        return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
+      
+    };
+    const runtimeLocks = (globalThis as unknown as {
+      navigator?: { locks?: unknown };
+    }).navigator?.locks as NarrativeSyncReplayLockManager | undefined;
+    const locks = lockManager ?? runtimeLocks;
+    if (!locks) return await runReplay();
     try {
-      envelope = {
-        schemaVersion: operation.schemaVersion,
-        algorithm: operation.algorithm,
-        operationId: operation.operationId,
-        projectId: operation.projectId,
-        writerId: operation.writerId,
-        sequence: operation.sequence,
-        createdAt: operation.createdAt,
-        kind: operation.kind,
-        // IndexedDB entrega un structured clone; normalizamos el payload al
-        // subconjunto JSON antes de verificar su representación canónica.
-        payload: JSON.parse(JSON.stringify(operation.payload)) as unknown,
-        digest: operation.digest
-      };
+      return await locks.request(
+        "motor-literario:narrative-sync:" + encodeURIComponent(projectId),
+        { mode: "exclusive", ifAvailable: true },
+        async lock => {
+          if (!lock) {
+            return {
+              processed: 0,
+              remaining: (await journal.loadPendingOperations(projectId, writerId)).length,
+              failure: "consumer-already-running"
+            };
+          }
+          return runReplay();
+        }
+      );
     } catch {
-      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+      // Si Web Locks falla, nunca degradar silenciosamente a replay sin exclusión.
       return {
-        processed, remaining, stoppedAtOperationId: operation.operationId,
-        failure: "invalid-envelope"
+        processed: 0,
+        remaining: (await journal.loadPendingOperations(projectId, writerId)).length,
+        failure: "consumer-lock-failed"
       };
     }
-    if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
-      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
-      return {
-        processed, remaining, stoppedAtOperationId: operation.operationId,
-        failure: "invalid-envelope"
-      };
-    }
-    try {
-      await apply(envelope);
-      await journal.markApplied(projectId, operation.operationId, operation.digest);
-      processed++;
-    } catch {
-      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
-      return {
-        processed, remaining, stoppedAtOperationId: operation.operationId,
-        failure: "apply-or-ack-failed"
-      };
-    }
-  }
-  return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
   } finally {
     if (writerId === undefined) {
       activeNarrativeSyncProjectWideReplays.delete(projectId);

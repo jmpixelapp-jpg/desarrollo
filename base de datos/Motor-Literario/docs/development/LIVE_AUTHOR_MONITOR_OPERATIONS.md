@@ -553,3 +553,8 @@ El archivo `tsconfig.live-author-monitor.json` extiende la configuración estric
 La lane específica ejecutó `npx tsc --noEmit --project tsconfig.live-author-monitor.json` y aprobó el chequeo estricto de los módulos transitivos del monitor, panel y workspace. El build aislado Vite, 17 pruebas diagnósticas y 59 pruebas combinadas también pasaron. El benchmark procesó 100.000 commits en 580,44 ms (~172.282 commits/s), manteniendo 4,26 MiB de heap tras GC tanto a mitad como al final de la carga y cero pendientes.
 
 La conclusión global de la lane sigue siendo fallo por la auditoría IndexedDB y un error de sintaxis en `indexeddb-store.ts:2560`, fuera del alcance del monitor. La nueva comprobación no sustituye el type-check global ni la integración real con el runtime/editor.
+
+
+## 44. Ciclo de vida de los contadores de errores de vistas
+
+`listenerErrors` pertenece a la instancia de observabilidad y no al checkpoint durable. Se incrementa por sesión/documento mientras la instancia está viva; al serializar métricas durables se omite deliberadamente y `restoreCheckpoint()` lo inicializa a cero. Así, un panel que falló antes de un cierre forzado no hace que una vista nueva parezca defectuosa al recuperar el documento. Las regresiones de checkpoint verifican el contador previo, la ausencia de la propiedad en el registro durable y el cero tras la restauración.

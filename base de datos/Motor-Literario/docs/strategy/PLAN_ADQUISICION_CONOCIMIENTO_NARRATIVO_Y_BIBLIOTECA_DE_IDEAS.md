@@ -636,3 +636,18 @@ Esto permite que el siguiente nivel de razonamiento consulte, para una relación
 La validación de acontecimientos exige que los IDs de acción sean cadenas no vacías y únicas, igual que las listas de participantes. Se añadieron pruebas para comprobar la conservación de las acciones de ambos extremos y para rechazar IDs de acción duplicados o mal formados.
 
 **Límite de inferencia:** disponer de acciones en ambos extremos no significa que una acción haya causado la otra. Esta fase únicamente preserva referencias estructuradas para análisis posterior y revisión humana.
+
+
+### Fase AL: cruce entre objetivos, acciones y relaciones de acontecimientos
+
+El pipeline incorpora `consequenceIntentActionLinks`, una capa de enlaces que cruza:
+1. una relación candidata entre dos acontecimientos;
+2. la acción explícita de uno de esos acontecimientos;
+3. la comparación ya existente entre un objetivo/motivación y esa acción;
+4. las evidencias literales del objetivo y de la acción.
+
+Cada enlace identifica el acontecimiento de origen o el posterior (`eventRole`), el candidato de relación, la comparación objetivo-acción, el personaje, la intención, la acción y el tipo de consistencia (por ejemplo, `supports-intent` u `opposes-intent`). No recalcula ni modifica la clasificación de consistencia: conserva su resultado y sus evidencias.
+
+Esto permite consultas como: «¿Qué relación entre acontecimientos contiene una acción que respalda un objetivo declarado por este personaje?» o «¿Qué acción contradice ese objetivo?». La respuesta es una conexión entre evidencias existentes, no una afirmación de que el objetivo causó el acontecimiento ni de que el personaje actuó sinceramente.
+
+Se añadió una prueba de integración que recorre un ejemplo completo: objetivo explícito, primera acción, segunda acción, conector entre acontecimientos y enlaces a las dos comparaciones objetivo-acción. Comprueba que cada ID enlazado exista en los resultados del pipeline y que se conserve el tipo de consistencia.

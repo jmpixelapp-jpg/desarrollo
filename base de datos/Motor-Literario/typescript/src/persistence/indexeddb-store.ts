@@ -6103,8 +6103,10 @@ export class IndexedDbProjectStore implements ProjectStore {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(SYNC_OUTBOX, "readonly");
-      const index = transaction.objectStore(SYNC_OUTBOX).index("by-project-created-at");
-      const range = IDBKeyRange.bound([projectId, 0], [projectId, Number.MAX_SAFE_INTEGER]);
+      // El índice compuesto garantiza FIFO por dispositivo, aunque el reloj
+      // local retroceda o dos operaciones reciban el mismo createdAt.
+      const index = transaction.objectStore(SYNC_OUTBOX).index("by-project-device-sequence");
+      const range = IDBKeyRange.bound([projectId], [projectId, []]);
       const request = index.openCursor(range);
       const result: StoredSyncOperation[] = [];
       request.onsuccess = () => {

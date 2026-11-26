@@ -71,3 +71,17 @@ test("un texto vacío tiene cobertura neutral completa y no genera pendientes", 
   assert.equal(result.sentenceCount, 0);
   assert.deepEqual(result.uncoveredSentences, []);
 });
+
+
+test("segmenta CRLF y limita la cola de revisión sin ocultar omisiones", () => {
+  const text = "Primera frase.\r\nSegunda frase.\r\n" +
+    Array.from({ length: 1_002 }, (_, index) => "Pendiente " + index + ".").join("\n");
+  const result = auditNarrativeExtractionCoverage({
+    documentId: "d", revision: 1, text,
+    observations: [], events: []
+  });
+  assert.equal(result.sentenceCount, 1_004);
+  assert.equal(result.uncoveredSentences.length, 1_000);
+  assert.equal(result.omittedUncoveredSentences, 4);
+  assert.equal(result.truncated, true);
+});

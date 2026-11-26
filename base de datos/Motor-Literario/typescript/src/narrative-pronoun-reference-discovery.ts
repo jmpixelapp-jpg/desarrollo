@@ -14,6 +14,10 @@ export interface NarrativePronounAntecedentCandidate {
   readonly entityKind: NarrativeEntity["kind"];
   readonly antecedentEvidence: TextEvidence;
   readonly distance: number;
+  /** Número de límites de oración entre la mención y el pronombre. */
+  readonly sentenceDistance: number;
+  /** Número de separadores de párrafo en el intervalo; no es una prueba semántica. */
+  readonly paragraphDistance: number;
 }
 
 export interface NarrativePronounReferenceCandidate {
@@ -98,6 +102,12 @@ function* sentenceSpans(text: string): Iterable<{ start: number; end: number }> 
   }
 }
 
+function countMatches(value: string, expression: RegExp): number {
+  let count = 0;
+  for (const _match of value.matchAll(expression)) count++;
+  return count;
+}
+
 function validate(input: NarrativePronounReferenceDiscoveryInput): void {
   const window = input?.maxAntecedentDistance ?? DEFAULT_NARRATIVE_PRONOUN_WINDOW;
   if (!input || typeof input !== "object" ||
@@ -172,7 +182,15 @@ export function discoverNarrativePronounReferences(
           end: base + mention.end,
           excerpt: mention.excerpt
         },
-        distance: pronounStart - mention.end
+        distance: pronounStart - mention.end,
+        sentenceDistance: countMatches(
+          input.text.slice(mention.end, pronounStart),
+          /[.!?]+|\n/gu
+        ),
+        paragraphDistance: countMatches(
+          input.text.slice(mention.end, pronounStart),
+          /\n[\t \r]*\n/gu
+        )
       });
     }
 

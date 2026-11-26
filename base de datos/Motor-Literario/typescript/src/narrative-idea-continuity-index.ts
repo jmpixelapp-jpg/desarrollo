@@ -717,7 +717,7 @@ export interface UpdateNarrativeIdeaContinuityIndexIncrementallyInput {
   readonly projectId: string;
   readonly updatedAt: number;
   readonly sourceRevisions: readonly NarrativeIdeaContinuitySourceRevision[];
-  readonly nextEvolution: NarrativeIdeaEvolutionEvent[] extends never[] ? never : import("./narrative-idea-evolution").NarrativeIdeaEvolutionResult;
+  readonly nextEvolution: import("./narrative-idea-evolution").NarrativeIdeaEvolutionResult;
   /** Cambios editoriales conocidos; se completa automáticamente con el vector de revisiones. */
   readonly changedDocumentIds?: readonly string[];
 }

@@ -14,13 +14,30 @@ export interface LiveAuthorMonitorEditorTransaction {
   readonly change: EditorChange;
 }
 
+/** Metadatos ligeros del editor, disponibles sin materializar el texto completo. */
+export interface LiveAuthorMonitorEditorDocumentState {
+  readonly documentId: string;
+  readonly revision: number;
+  readonly sequence: number;
+  /** Longitud en unidades UTF-16, igual a String.prototype.length. */
+  readonly documentLength: number;
+}
+
 /**
  * Contrato mínimo que debe implementar el adaptador del editor anfitrión.
  * getSnapshot devuelve el estado local actual; subscribeTransactions emite
  * transacciones ya aplicadas, en orden y una vez por transacción.
  */
 export interface LiveAuthorMonitorEditorTransactionProvider {
+  /** Snapshot completo requerido al montar y al resincronizar. */
   getSnapshot(documentId: string): DocumentSnapshot | undefined;
+  /**
+   * Metadatos sin texto completo para validar cada transacción aplicada.
+   * Los adaptadores de producción deberían implementarlo para no copiar o
+   * serializar el manuscrito en cada pulsación. Si se omite, se usa getSnapshot
+   * como fallback compatible con proveedores anteriores.
+   */
+  getDocumentState?(documentId: string): LiveAuthorMonitorEditorDocumentState | undefined;
   subscribeTransactions(
     documentId: string,
     listener: (transaction: LiveAuthorMonitorEditorTransaction) => void
@@ -320,25 +337,25 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
 
     const nextDocumentLength =
       this.documentLength + change.replacement.length - (change.end - change.start);
-    let editorSnapshot: DocumentSnapshot | undefined;
+    let editorState: LiveAuthorMonitorEditorDocumentState | undefined;
     try {
-      editorSnapshot = this.provider.getSnapshot(this.documentId);
+      editorState = this.readEditorState();
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.fail(
         "editor-state-unavailable",
-        "No se pudo verificar el snapshot nativo tras la transacción: " + detail
+        "No se pudieron verificar los metadatos nativos tras la transacción: " + detail
       );
       return;
     }
-    if (!this.isValidSnapshot(editorSnapshot) ||
-        editorSnapshot.documentId !== this.documentId ||
-        editorSnapshot.sequence !== change.sequence ||
-        editorSnapshot.revision !== this.revision + 1 ||
-        editorSnapshot.text.length !== nextDocumentLength) {
+    if (!editorState ||
+        editorState.documentId !== this.documentId ||
+        editorState.sequence !== change.sequence ||
+        editorState.revision !== this.revision + 1 ||
+        editorState.documentLength !== nextDocumentLength) {
       this.fail(
         "editor-state-mismatch",
-        "El snapshot nativo todavía no refleja la transacción anunciada; se suspende la captura."
+        "Los metadatos nativos todavía no reflejan la transacción anunciada; se suspende la captura."
       );
       return;
     }
@@ -416,6 +433,36 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     try { unsubscribe?.(); } catch (error) {
       this.report(error instanceof Error ? error : new Error(String(error)));
     }
+  }
+
+  private readEditorState(): LiveAuthorMonitorEditorDocumentState | undefined {
+    const metadata = this.provider.getDocumentState;
+    if (typeof metadata === "function") {
+      const state = metadata.call(this.provider, this.documentId);
+      if (!this.isValidEditorState(state)) {
+        throw new Error("getDocumentState devolvió metadatos inválidos para el editor.");
+      }
+      return state;
+    }
+
+    const snapshot = this.provider.getSnapshot(this.documentId);
+    if (!this.isValidSnapshot(snapshot)) return undefined;
+    return {
+      documentId: snapshot.documentId,
+      revision: snapshot.revision,
+      sequence: snapshot.sequence,
+      documentLength: snapshot.text.length
+    };
+  }
+
+  private isValidEditorState(
+    state: LiveAuthorMonitorEditorDocumentState | undefined
+  ): state is LiveAuthorMonitorEditorDocumentState {
+    return !!state &&
+      typeof state.documentId === "string" && state.documentId.trim().length > 0 &&
+      Number.isSafeInteger(state.revision) && state.revision >= 0 &&
+      Number.isSafeInteger(state.sequence) && state.sequence >= 0 &&
+      Number.isSafeInteger(state.documentLength) && state.documentLength >= 0;
   }
 
   private isValidSnapshot(snapshot: DocumentSnapshot | undefined): snapshot is DocumentSnapshot {

@@ -14,7 +14,6 @@ export * from "./mldb-records";
 export * from "./literary-analysis";
 export * from "./narrative-sync-integrity";
 export * from "./narrative-sync-envelope";
-export * from "./narrative-sync-envelope";
 export * from "./bridge-client";
 export * from "./live-author-monitor";
 export * from "./live-author-monitor-panel";
@@ -26,3 +25,7 @@ export * from "./live-author-monitor-textarea-integration";
 export * from "./live-author-monitor-editor-transaction-source";
 export * from "./live-author-monitor-editor-transaction-integration";
 export * from "./live-author-monitor-editor-transaction-bridge";
+
+export * from "./narrative-consistency";
+
+export * from "./narrative-knowledge-graph";

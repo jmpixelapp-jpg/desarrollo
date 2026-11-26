@@ -979,3 +979,38 @@ En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelap
 **Validación confirmada:** los workflows **Motor Literario TypeScript** y **Live Author Monitor** terminaron en `success` para el commit `71d6144c820512ce5989be17d03e6cdc88d6ccdb`. Se aprobaron typecheck, build, suite automatizada, regresiones de monitor, validación MLDB y benchmarks. Los commits posteriores `7a75e0e` (configuración del entrypoint aislado) y `f7dfabb` (distinción de arrays dispersos y propiedades adicionales) están sometidos a una nueva ejecución CI; su estado debe consultarse por separado.
 
 **Alcance:** las mejoras del lease corrigen la coordinación local entre pestañas del navegador. No sustituyen un servidor remoto ni constituyen por sí solas sincronización multidispositivo.
+
+
+## 54. Polling visual consciente de la visibilidad del navegador (25 de noviembre de 2026)
+
+**Objetivo:** reducir intervalos de refresco innecesarios cuando la pestaña del editor queda suspendida/oculta y evitar que el panel se muestre desactualizado al volver a primer plano.
+
+**Implementación:** nuevo módulo `src/live-author-monitor-visibility.ts` exporta `scheduleLiveAuthorMonitorWhileVisible()`. Panel y workspace conectan su scheduler mediante ese helper. `visibilitychange` a hidden cancela el intervalo; a visible ejecuta refresco inmediato y programa uno nuevo. Al desmontar, elimina listeners y cancela el intervalo activo.
+
+**Aislamiento:** solo controla el polling de presentación. No pausa ni cancela checkpoints, actividad, escrituras, heartbeats o leases. La orquestación de persistencia y coordinación sigue perteneciendo al motor anfitrión.
+
+**Regresiones:** montaje oculto no crea intervalos; volver a visible actualiza y reprograma ambas vistas; ocultar cancela; desmontar elimina listener y no permite reactivar; cancelación idempotente.
+
+**Archivos:** nuevo `src/live-author-monitor-visibility.ts`, panel, workspace, suite de diagnóstico aislada y esta guía.
+
+**Validación:** pendiente de los workflows CI disparados por este commit.
+
+## 55. Descarte de ticks encolados después de suspender o desmontar (25 de noviembre de 2026)
+
+**Endurecimiento adicional:** el scheduler de visibilidad ya no entrega el callback de la vista directamente al timer. Usa una envoltura que comprueba `document.hidden` y el flag `disposed` en el instante de ejecución. Esto descarta ticks que el event loop hubiera encolado antes de cancelar el intervalo y que lleguen tras ocultar o desmontar.
+
+**Regresión:** se invocan deliberadamente callbacks guardados del intervalo después de ocultar y después de desmontar; ninguno puede actualizar métricas.
+
+**Validación:** pendiente de CI para esta corrección.
+
+## 56. CI del polling visible y descarte de ticks retrasados (25 de noviembre de 2026)
+
+**Commit de comportamiento:** `37282e3b50b19047f656084474cb7dae7337beb3` introduce el scheduler visible para panel/workspace. **Commit de endurecimiento:** `0a21f341ae1787a4ae82255295e4fdc79e3182cd` agrega una envoltura que descarta ticks que se ejecuten después de ocultar la pestaña o desmontar la vista.
+
+**CI de monitor aprobada:** [Live Author Monitor — run 45747598005](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598005), `success` sobre `0a21f34`. Bundle focalizado, 10/10 regresiones aisladas, Chromium, validación MLDB, build runtime, **169/169 pruebas del monitor** y benchmark en verde.
+
+**Benchmark específico:** Node.js v22.23.5; 8 documentos de 1.048.576 unidades UTF-16; 100.000 commits; 274.897,17 commits/s; 363,77 ms; heap 5,23 MB antes de carga y 5,71 MB a mitad/final; heap retenido por sesiones abiertas 0,48 MB; crecimiento de mitad a carga completa 0 MB; RSS final 73,89 MB; 12.500 commits confirmados y cero pendientes en cada documento.
+
+**CI general:** [Motor Literario TypeScript — run 45747598008](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598008) seguía `in_progress` en la instalación de Chromium cuando se registró este avance (última actualización del run: 03:14:12 UTC, 26 de noviembre). No se atribuye resultado de typecheck ni suite general a esta ejecución mientras ese paso no termine.
+
+**Alcance:** el scheduler opera solo sobre timers de refresco visual. Los checkpoints, los heartbeats y la propiedad del lease siguen activos independientemente de la visibilidad.

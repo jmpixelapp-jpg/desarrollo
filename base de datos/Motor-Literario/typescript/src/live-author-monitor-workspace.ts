@@ -2,7 +2,8 @@ import {
   LIVE_AUTHOR_MONITOR_PANEL_STYLES,
   formatLiveAuthorMonitorCheckpointStatus,
   formatLiveAuthorMonitorLeaseStatus,
-  readLiveAuthorMonitorPersistenceDiagnosticsSafely
+  readLiveAuthorMonitorPersistenceDiagnosticsSafely,
+  scheduleLiveAuthorMonitorWhileVisible
 } from "./live-author-monitor-panel";
 import type {
   LiveAuthorMonitorHostApi,
@@ -395,10 +396,8 @@ export function mountLiveAuthorMonitorWorkspace(
       updateCount();
     });
     reconcile();
-    const schedule = options.schedule ?? ((callback: () => void, milliseconds: number) => {
-      const handle = globalThis.setInterval(callback, milliseconds);
-      return () => globalThis.clearInterval(handle);
-    });
+    const schedule = (callback: () => void, milliseconds: number) =>
+      scheduleLiveAuthorMonitorWhileVisible(document, callback, milliseconds, options.schedule);
     cancelRefresh = schedule(reconcile, intervalMs);
     if (typeof cancelRefresh !== "function") {
       throw new TypeError("El planificador debe devolver una función de cancelación.");

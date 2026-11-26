@@ -4,6 +4,9 @@ import {
   type LiveAuthorMonitorSnapshot,
   type LiveAuthorMonitorPersistenceDiagnostics
 } from "./live-author-monitor";
+import { scheduleLiveAuthorMonitorWhileVisible } from "./live-author-monitor-visibility";
+
+export { scheduleLiveAuthorMonitorWhileVisible } from "./live-author-monitor-visibility";
 
 export interface LiveAuthorMonitorPanelOptions {
   readonly documentId: string;
@@ -419,7 +422,8 @@ export function mountLiveAuthorMonitorPanel(
     }, {
       documentId: options.documentId,
       ...(options.intervalMs === undefined ? {} : { intervalMs: options.intervalMs }),
-      ...(options.schedule === undefined ? {} : { schedule: options.schedule })
+      schedule: (callback, milliseconds) =>
+        scheduleLiveAuthorMonitorWhileVisible(document, callback, milliseconds, options.schedule)
     });
   } catch (error) {
     disposed = true;

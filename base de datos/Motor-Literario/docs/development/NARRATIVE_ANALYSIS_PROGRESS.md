@@ -52,3 +52,28 @@ Los documentos añadidos después de estas ejecuciones no modifican código ejec
 ## 4. Estado que no debe sobredeclararse
 
 La canonicalización y las pruebas locales de bandeja no equivalen a sincronización remota. La sincronización multidispositivo todavía necesita transporte remoto, autenticación/autorización, API versionada, idempotencia de servidor, política de reintentos y reconciliación interactiva de conflictos. El PR #56 continúa separado y no se considera fusionado por este registro.
+
+
+## 5. Consistencia temporal de afirmaciones
+
+- Nuevo módulo `typescript/src/narrative-consistency.ts`, exportado desde el índice público.
+- `analyzeNarrativeConsistency` compara valores distintos del mismo atributo y entidad dentro de un proyecto.
+- Distingue conflicto en el mismo instante, evolución entre referencias ordenables y tiempo no comparable.
+- Ignora evidencia obsoleta y preserva las dos evidencias junto con una explicación.
+- Pruebas en `tests/narrative-consistency.test.mjs` para fechas, día narrativo, precisión, aislamiento y validación.
+- Contrato detallado: [Consistencia temporal de afirmaciones](../architecture/CONSISTENCIA_TEMPORAL_DE_AFIRMACIONES.md).
+
+**Límite:** los conflictos son candidatos para revisión humana; el motor no decide qué versión es verdadera. La comparación por pares es cuadrática por grupo entidad/atributo. Este módulo tampoco completa sincronización remota multidispositivo.
+
+
+## 6. Grafo unificado de conocimiento narrativo
+
+- Nuevo `typescript/src/narrative-knowledge-graph.ts` y exportación pública `buildNarrativeKnowledgeGraph`.
+- Compone entidades, relaciones, acontecimientos, ideas, afirmaciones y hallazgos de consistencia en una vista por proyecto.
+- Consolida evidencias de entidades repetidas, ordena las salidas y rechaza revisiones documentales duplicadas.
+- Conserva offsets UTF-16 absolutos cuando se procesan ventanas mediante `baseOffset`.
+- El reloj de extracción se fija una sola vez por construcción y se comparte con las ideas, haciendo reproducibles las marcas temporales si se proporciona `options.now`.
+- Pruebas: `tests/narrative-knowledge-graph.test.mjs`.
+- Arquitectura: [Grafo unificado de conocimiento narrativo](../architecture/GRAFO_CONOCIMIENTO_NARRATIVO.md).
+
+**Límite operativo:** es una proyección en memoria y no persiste ni sincroniza. El llamador debe seleccionar las revisiones documentales que desea analizar; no se decide automáticamente cuál es la versión canónica.

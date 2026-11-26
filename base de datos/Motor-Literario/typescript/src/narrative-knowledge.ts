@@ -260,7 +260,7 @@ export function extractNarrativeEntities(
 ): readonly NarrativeEntity[] {
   validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset, undefined, now);
 
-  if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/u.test(text)) {
+  if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/iu.test(text)) {
     return [];
   }
   const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}]+){0,3}";
@@ -269,9 +269,9 @@ export function extractNarrativeEntities(
   const prefixObject = String.raw`\b(?:objeto|espada|arma|reliquia|amuleto|anillo|libro)\s+(?:llamado|llamada)?\s*`;
   const suffix = String.raw`(?=$|[^\p{L}\p{N}_])`;
   const patterns: readonly { kind: NarrativeEntityType; expression: RegExp }[] = [
-    { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "gu") },
-    { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "gu") },
-    { kind: "object", expression: new RegExp(prefixObject + "(" + name + ")" + suffix, "gu") }
+    { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "giu") },
+    { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "giu") },
+    { kind: "object", expression: new RegExp(prefixObject + "(" + name + ")" + suffix, "giu") }
   ];
   const scanText = text + "_";
   const grouped = new Map<string, { kind: NarrativeEntityType; name: string; evidence: TextEvidence[] }>();
@@ -567,9 +567,10 @@ export function extractNarrativeIdeas(
   revision: number,
   text: string,
   baseOffset = 0,
-  sourceProjectName = projectId
+  sourceProjectName = projectId,
+  now = Date.now()
 ): readonly NarrativeIdea[] {
-  validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset);
+  validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset, undefined, now);
   if (typeof sourceProjectName !== "string" || !sourceProjectName.trim()) {
     throw new Error("El nombre del proyecto de origen de la idea es obligatorio.");
   }
@@ -591,7 +592,7 @@ export function extractNarrativeIdeas(
       status: "IDEA",
       originDocumentId: documentId,
       sourceProjectName,
-      statusHistory: [{ status: "IDEA", changedAt: Date.now(), reason: "initial" }],
+      statusHistory: [{ status: "IDEA", changedAt: now, reason: "initial" }],
       evidence: [{
         documentId, revision, start, end,
         excerpt: text.slice(lineStart, lineEnd)

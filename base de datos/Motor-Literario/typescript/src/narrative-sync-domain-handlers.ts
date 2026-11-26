@@ -11,8 +11,6 @@ import {
 } from "./narrative-knowledge";
 import type { NarrativeAssertion } from "./narrative-history";
 import type { NarrativeSyncOperationHandler } from "./narrative-sync-dispatcher";
-import type { NarrativeDocumentProjectionManifest } from "./contracts";
-import { validateNarrativeDocumentProjectionManifest } from "./narrative-knowledge-graph-persistence";
 
 export interface NarrativeIdeaUpsertPayload {
   readonly idea: NarrativeIdea;

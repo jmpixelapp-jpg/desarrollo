@@ -20,7 +20,7 @@ test("normaliza fechas ISO y fechas escritas en español con validación de cale
 });
 
 test("no inventa el orden de fechas numéricas ambiguas ni resuelve expresiones relativas", () => {
-  const text = "El 12/03/1945 llegó Ana. Al día siguiente salió. Una semana después volvió.";
+  const text = "El 12/03/1945 llegó Ana. Al día siguiente salió. Una semana después volvió; dos días antes había esperado.";
   const result = discover(text);
   const numeric = result.find(item => item.kind === "ambiguous-numeric-date");
   assert.equal(numeric.numericDateAmbiguity, "day-month-order-not-established");
@@ -32,6 +32,8 @@ test("no inventa el orden de fechas numéricas ambiguas ni resuelve expresiones 
   const duration = result.find(item => item.surface.toLowerCase() === "una semana después");
   assert.equal(duration.kind, "relative-duration");
   assert.equal(duration.anchorRequired, true);
+  assert.equal(duration.relation, "after");
+  assert.equal(result.find(item => item.surface.toLowerCase() === "dos días antes").relation, "before");
 });
 
 test("extrae referencias de orden, franjas del día y horas sin asignar fecha absoluta", () => {

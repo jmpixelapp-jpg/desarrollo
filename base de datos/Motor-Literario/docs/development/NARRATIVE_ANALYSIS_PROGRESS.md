@@ -435,3 +435,12 @@ Se incorporó `inspectNarrativeReferenceRepairPending(store, projectId)`, una AP
 La resolución sigue siendo explícita: el diagnóstico no aplica automáticamente decisiones ni descarta intenciones.
 
 **Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. No hay CI confirmada para este cambio.
+
+
+## Pruebas de durabilidad entre instancias
+
+Se añadieron pruebas con dos instancias independientes de `IndexedDbProjectStore` compartiendo la misma base IndexedDB. Se comprueba la idempotencia al guardar concurrentemente una intención y su auditoría, la visibilidad consistente desde ambas instancias y la eliminación idempotente de la intención. Además, la inspección ahora rechaza campos incompatibles con el tipo de registro y marcas temporales inválidas, con cobertura de prueba.
+
+**Límite:** esto valida la persistencia idempotente entre instancias para intención y auditoría; no afirma que exista un mutex global para todo el algoritmo de recuperación.
+
+**Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. CI aún no se ha confirmado para este HEAD.

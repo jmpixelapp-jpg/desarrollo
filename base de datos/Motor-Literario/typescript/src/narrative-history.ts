@@ -4,7 +4,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export interface NarrativeAssertion {");
+export interface NarrativeAssertion {
 }
 
 export interface NarrativeAssertion {

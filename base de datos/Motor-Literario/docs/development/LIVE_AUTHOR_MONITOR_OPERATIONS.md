@@ -787,3 +787,10 @@ La prueba real de IndexedDB adquiere dos leases, deja expirar A y hace takeover 
 El host mantiene mapas de leases, heartbeats, generaciones, errores y colas de checkpoints indexados por `documentId`. Al cerrar un documento, solo deben limpiarse los recursos correspondientes a esa clave. Un segundo documento del mismo proyecto sigue siendo propietario, conserva su heartbeat y puede continuar guardando nuevas revisiones.
 
 La prueba abre dos capítulos, verifica dos leases/checkpoints, cierra A y después escribe otra edición en B. Se comprueba que A queda liberado con su snapshot final, B conserva el propietario y el fencing token, su checkpoint avanza y la sesión de B no cambia.
+
+
+## 70. Reanudación parcial de leases en varios documentos
+
+Al volver la página a primer plano, el host revalida todas las claves de documento que mantienen heartbeat. La expiración puede afectar solo a uno de ellos: ese documento compite por un nuevo fencing token; los demás renuevan su lease existente, conservando propietario y token.
+
+La prueba abre dos documentos, simula la suspensión expirando únicamente A y dispara `visibilitychange`. Comprueba que A avanza exactamente un token, B conserva el suyo y ambos preservan la sesión y el heartbeat. El ciclo no debe provocar un takeover innecesario para documentos que mantuvieron una titularidad válida.

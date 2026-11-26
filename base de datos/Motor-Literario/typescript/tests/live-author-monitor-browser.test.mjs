@@ -273,7 +273,8 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
         baseRevision: 0,
         start: 3,
         end: 3,
-        replacement: "!"
+        replacement: "!",
+        activityKind: "typing"
       });
       assert.deepEqual(nativeCapture.errors, ["missing-input"]);
       assert.equal(nativeCapture.state.needsResync, true,

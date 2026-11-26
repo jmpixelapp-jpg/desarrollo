@@ -14,6 +14,8 @@ export interface NarrativePronounAntecedentCandidate {
   readonly entityKind: NarrativeEntity["kind"];
   readonly antecedentEvidence: TextEvidence;
   readonly distance: number;
+  /** Procedencia textual del antecedente: nombre, alias o descripción confirmada. */
+  readonly mentionType: "canonical-name" | "alias" | "description";
   /** Número de límites de oración entre la mención y el pronombre. */
   readonly sentenceDistance: number;
   /** Número de separadores de párrafo en el intervalo; no es una prueba semántica. */
@@ -64,13 +66,14 @@ function escapeRegExp(value: string): string {
 
 function findLastNameMention(
   text: string,
-  names: readonly string[],
+  names: readonly { value: string; mentionType: NarrativePronounAntecedentCandidate["mentionType"] }[],
   from: number,
   to: number
-): { start: number; end: number; excerpt: string } | undefined {
+): { start: number; end: number; excerpt: string; mentionType: NarrativePronounAntecedentCandidate["mentionType"] } | undefined {
   const window = text.slice(from, to);
-  let best: { start: number; end: number; excerpt: string } | undefined;
-  for (const name of names) {
+  let best: { start: number; end: number; excerpt: string; mentionType: NarrativePronounAntecedentCandidate["mentionType"] } | undefined;
+  for (const nameEntry of names) {
+    const name = nameEntry.value;
     if (!name.trim()) continue;
     const expression = new RegExp(
       "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(name) +
@@ -81,7 +84,8 @@ function findLastNameMention(
       const candidate = {
         start: from + match.index!,
         end: from + match.index! + match[0].length,
-        excerpt: match[0]
+        excerpt: match[0],
+        mentionType: nameEntry.mentionType
       };
       if (!best || candidate.end > best.end ||
           (candidate.end === best.end && candidate.start > best.start)) best = candidate;
@@ -134,6 +138,10 @@ function validate(input: NarrativePronounReferenceDiscoveryInput): void {
         typeof entity.kind !== "string" || !entity.kind.trim() ||
         !Array.isArray(entity.aliases) ||
         entity.aliases.length > MAX_NARRATIVE_PRONOUN_ALIASES_PER_ENTITY ||
+        (entity.descriptions !== undefined && (!Array.isArray(entity.descriptions) ||
+          entity.descriptions.length > MAX_NARRATIVE_PRONOUN_ALIASES_PER_ENTITY ||
+          entity.descriptions.some((description: unknown) => typeof description !== "string" ||
+            !description.trim() || description.length > MAX_NARRATIVE_PRONOUN_NAME_LENGTH))) ||
         entity.aliases.some((alias: unknown) => typeof alias !== "string" || !alias.trim() ||
           alias.length > MAX_NARRATIVE_PRONOUN_NAME_LENGTH)) {
       throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
@@ -168,7 +176,11 @@ export function discoverNarrativePronounReferences(
     const latestByEntity = new Map<string, NarrativePronounAntecedentCandidate>();
 
     for (const entity of input.entities) {
-      const names = [entity.canonicalName, ...entity.aliases];
+      const names = [
+        { value: entity.canonicalName, mentionType: "canonical-name" as const },
+        ...entity.aliases.map(value => ({ value, mentionType: "alias" as const })),
+        ...(entity.descriptions ?? []).map(value => ({ value, mentionType: "description" as const }))
+      ];
       scanUnits += (pronounStart - windowStart) * names.length;
       if (scanUnits > MAX_NARRATIVE_PRONOUN_SCAN_UNITS) {
         throw new Error("La búsqueda de antecedentes supera el presupuesto operativo de exploración.");
@@ -191,6 +203,7 @@ export function discoverNarrativePronounReferences(
           excerpt: mention.excerpt
         },
         distance: pronounStart - mention.end,
+        mentionType: mention.mentionType,
         sentenceDistance: countMatches(
           input.text.slice(mention.end, pronounStart),
           /[.!?]+|\n/gu

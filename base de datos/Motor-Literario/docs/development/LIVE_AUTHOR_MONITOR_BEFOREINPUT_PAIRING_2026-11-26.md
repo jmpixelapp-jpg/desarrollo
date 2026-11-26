@@ -50,3 +50,18 @@ La ejecución CI anterior `45778453905` finalizó con éxito en type-check, buil
 - Si un `beforeinput` queda pendiente y no ocurre ningún otro evento observable, el adaptador no puede determinar por sí solo si fue cancelado o si el navegador aún está procesando la edición. No se introduce un timeout especulativo.
 - Los eventos nativos no revelan siempre la intención semántica del autor.
 - La integración de un editor enriquecido debe usar su proveedor de transacciones autoritativas cuando esté disponible.
+
+
+## Corrección de orden IME compositionend/input
+
+En algunos navegadores el evento `compositionend` puede llegar antes del `input` que completa el último `beforeinput` de composición. El adaptador anterior interpretaba esa separación como una composición truncada y descartaba el cambio final.
+
+Se corrigió `handleCompositionEnd` para cerrar el indicador de composición sin invalidar un `beforeinput` pendiente. El delta solo se publica cuando llega el `input` asociado; si no llega y aparece otro `beforeinput`, continúa aplicándose el diagnóstico `missing-input`. Así se tolera el orden de eventos sin debilitar la regla de emparejamiento.
+
+Regresión añadida en `live-author-monitor-textarea-source.test.mjs`: `acepta el input final cuando compositionend precede al input en el navegador`.
+
+Commits:
+- Corrección: `11dc5a86032f38cfe313c390769daf46ba5bf193`
+- Prueba: `ed2482015f1e558b5d1c2ed78e4202f755e01f36`
+
+**Validación pendiente:** ejecutar el build aislado del monitor, suite específica y prueba de integración Chromium sobre este HEAD. La prueba unitaria nueva cubre el orden de eventos; no equivale a una prueba con IME real del sistema operativo.

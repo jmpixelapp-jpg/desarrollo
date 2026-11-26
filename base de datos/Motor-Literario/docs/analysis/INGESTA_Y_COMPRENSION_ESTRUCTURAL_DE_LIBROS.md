@@ -85,6 +85,21 @@ El lector acepta TXT y Markdown UTF-8 estricto. La decodificación conserva expl
 
 Para entidades de tipo `object`, el descubrimiento de observaciones puede proponer `grammaticalObjectCandidate` cuando una mención literal única aparece inmediatamente después del verbo con un patrón nominal explícito (por ejemplo, «Ana perdió la Espada Solar»). Se conserva el ID y la evidencia exacta del nombre con offsets absolutos. Esto identifica un candidato a objeto gramatical, no confirma posesión, transferencia, pérdida efectiva ni estado del objeto. Si falta el marcador nominal o la entidad es ambigua, no se asigna candidato.
 
+### Trayectoria de objetos y cambios de estado candidatos
+
+Módulo: `typescript/src/narrative-object-state-discovery.ts`
+
+La función `discoverNarrativeObjectTransitionCandidates(input)` consume observaciones ya extraídas y propone cuatro clases limitadas de transición:
+
+- `discovered`: «Ana encontró la Espada Solar». Identifica quién encontró el objeto, pero no concluye que lo conserve.
+- `lost`: «Ana perdió la Espada Solar». Identifica al personaje y al objeto, pero no inventa el nuevo poseedor ni la ubicación.
+- `transferred`: «Ana entregó la Espada Solar a Bruno». Exige sujeto activo, objeto directo y receptor explícito. El extractor reconoce al receptor incluso cuando el sintagma del objeto aparece entre el verbo y «a + personaje».
+- `received`: «Ana recibió la Espada Solar». Identifica al receptor, pero deja desconocido al emisor.
+
+Cada candidato enlaza la observación original y conserva evidencia separada de acción, objeto, actor, receptor y contexto. La función no modifica fichas ni consolida inventarios. `effectStatus` distingue `candidate`, `prospective` (futuro) y `not-applied` (negación); por tanto, ni una promesa futura ni una frase negada pueden convertirse en posesión actual. Las evidencias obsoletas, de otra revisión o de otro documento se rechazan.
+
+La cobertura es deliberadamente limitada: no se infieren transferencias por coocurrencia, verbos no contemplados, poseedores posteriores, custodia, propiedad legal ni ubicación. Las salidas requieren revisión y futuras etapas deberán enlazar transiciones entre capítulos sin convertir incertidumbres en hechos.
+
 ### Complemento personal explícito
 
 El descubrimiento de observaciones puede conservar un candidato sintáctico para el patrón local «verbo + a + nombre de personaje conocido». Se guarda el ID de la entidad y la evidencia literal del nombre con offsets del documento. Esto no afirma por sí solo una relación semántica de víctima, destinatario, receptor o paciente. La coincidencia exige una entidad única registrada; una mención anterior al verbo no se reutiliza como objeto. Las pruebas cubren «Ana encontró a Bruno» y «Bruno encontró a Ana» para evitar invertir los participantes.

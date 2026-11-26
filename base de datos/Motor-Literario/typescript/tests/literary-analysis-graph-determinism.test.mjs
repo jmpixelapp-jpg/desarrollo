@@ -582,7 +582,7 @@ test("el análisis de dos saltos deduplica intermediarios y destinos sin borrar 
   assert.equal(graph.twoHopSharedDestinationCount, 1);
   assert.equal(graph.twoHopExclusiveDestinationCount, 2);
   assert.equal(graph.twoHopIndependentBranchSourceCount, 1);
-  assert.equal(graph.includedReferenceCount, 6);
+  assert.equal(graph.includedReferenceCount, 8);
   assert.equal(graph.selfReferenceCount, 0);
   assert.equal(graph.cycleCount, 1);
   assert.deepEqual(

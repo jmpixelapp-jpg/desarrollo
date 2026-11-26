@@ -89,6 +89,15 @@ export interface StoredDocument extends DocumentSnapshot {
   readonly updatedAt: number;
 }
 
+/** Metadatos de snapshot para reconciliación incremental sin transferir el texto. */
+export interface StoredDocumentMetadata {
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly sequence: number;
+  readonly updatedAt: number;
+}
+
 /** Diagnósticos durables de una revisión concreta del documento. */
 /** Checkpoint versionado de métricas del monitor; no contiene texto ni deltas del manuscrito. */
 export interface StoredLiveAuthorMonitorCheckpoint {
@@ -307,6 +316,8 @@ export interface ProjectStore {
   ): Promise<void>;
 
   saveDocument(document: StoredDocument): Promise<void>;
+  /** Enumera revisiones documentales sin devolver el contenido del manuscrito. */
+  loadDocumentMetadata?(projectId: string): Promise<readonly StoredDocumentMetadata[]>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;
   /** Obligatorio: lee snapshot y journal desde una misma vista transaccional consistente. */
   loadDocumentWithChanges(projectId: string, documentId: string): Promise<{

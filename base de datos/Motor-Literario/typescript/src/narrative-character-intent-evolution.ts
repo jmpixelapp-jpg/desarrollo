@@ -84,7 +84,7 @@ function transitionSignal(
 ): { kind: "replacement" | "withdrawal"; evidence?: TextEvidence } | undefined {
   const excerpt = intent.evidence.excerpt;
   const patterns = [
-    { kind: "replacement" as const, regex: /\b(?:en\s+lugar\s+de|en\s+vez\s+de|cambió\s+(?:de\s+)?objetivo|cambio\s+(?:de\s+)?objetivo|sustituyó\s+(?:su\s+)?objetivo|sustituyo\s+(?:su\s+)?objetivo)\b/iu },
+    { kind: "replacement" as const, regex: /\b(?:en\s+lugar\s+de|en\s+vez\s+de|cambió\s+(?:de\s+)?objetivo|cambio\s+(?:de\s+)?objetivo|sustituyó\s+(?:su\s+)?objetivo|sustituyo\s+(?:su\s+)?objetivo|cambió\s+de\s+motivación|cambio\s+de\s+motivacion|cambió\s+de\s+motivo|cambio\s+de\s+motivo)\b/iu },
     { kind: "withdrawal" as const, regex: /\b(?:dejó\s+de\s+querer|dejo\s+de\s+querer|renunció\s+a|renuncio\s+a|abandonó\s+(?:su\s+)?objetivo|abandono\s+(?:su\s+)?objetivo)\b/iu }
   ];
   for (const pattern of patterns) {

@@ -1578,8 +1578,6 @@ export class IndexedDbProjectStore implements ProjectStore {
 
   private publishNarrativeChange(projectId: string): void {
     const message = { type: "motor-literario:narrative-change", projectId };
-    // Una instancia suscrita reutiliza su canal. Una instancia que solo publica
-    // abre un canal temporal y lo cierra: no deja recursos retenidos tras escribir.
     const subscribedChannel = this.narrativeChangeChannel;
     if (subscribedChannel) {
       try {
@@ -5165,8 +5163,10 @@ export class IndexedDbProjectStore implements ProjectStore {
           ownerId,
           fencingToken,
           acquiredAt: sameActiveOwner ? existing.acquiredAt : now,
-          expiresAt: now + leaseDurationMs,
-          updatedAt: now
+          expiresAt: sameActiveOwner
+            ? Math.max(existing.expiresAt, now + leaseDurationMs)
+            : now + leaseDurationMs,
+          updatedAt: sameActiveOwner ? Math.max(existing.updatedAt, now) : now
         };
         try {
           store.put(structuredClone(acquired));
@@ -5213,11 +5213,11 @@ export class IndexedDbProjectStore implements ProjectStore {
         }
         if (existing.ownerId !== lease.ownerId ||
             existing.fencingToken !== lease.fencingToken ||
-            existing.expiresAt <= now || lease.expiresAt <= now) return;
+            existing.expiresAt <= now) return;
         renewed = {
           ...existing,
-          expiresAt: now + leaseDurationMs,
-          updatedAt: now
+          expiresAt: Math.max(existing.expiresAt, now + leaseDurationMs),
+          updatedAt: Math.max(existing.updatedAt, now)
         };
         try {
           store.put(structuredClone(renewed));
@@ -5269,7 +5269,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         try {
           store.put({
             ...existing,
-            expiresAt: now,
+            expiresAt: Math.max(existing.acquiredAt, now),
             updatedAt: Math.max(existing.acquiredAt, now)
           } satisfies StoredLiveAuthorMonitorLease);
         } catch (error) {
@@ -5299,9 +5299,6 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
     validateLiveAuthorMonitorLease(lease, checkpoint.projectId, checkpoint.documentId);
     const now = Date.now();
-    if (lease.expiresAt <= now || checkpoint.savedAt > lease.expiresAt) {
-      throw new Error("El lease del monitor expiró antes de guardar el checkpoint.");
-    }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(
@@ -5330,7 +5327,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         if (currentLease.ownerId !== lease.ownerId ||
             currentLease.fencingToken !== lease.fencingToken ||
             currentLease.expiresAt <= commitNow ||
-            lease.expiresAt <= commitNow) {
+            checkpoint.savedAt > currentLease.expiresAt) {
           failure = new Error("El checkpoint fue rechazado porque perdió el fencing token del monitor.");
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
           return;

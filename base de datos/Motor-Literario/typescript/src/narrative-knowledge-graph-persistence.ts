@@ -791,8 +791,10 @@ export async function verifyNarrativeReferenceRepairAuditIntegrity(
       : entry.recordType === "assertion" ? entry.referenceField === "entityId"
       : entry.recordType === "idea" ? entry.referenceField === "relatedEntityIds" : false;
     const validValues = entry.recordType === "relation" || entry.recordType === "assertion"
-      ? typeof entry.before === "string" && typeof entry.after === "string"
-      : isStringArray(entry.before) && isStringArray(entry.after);
+      ? typeof entry.before === "string" && entry.before === entry.missingReferenceId &&
+        typeof entry.after === "string" && entry.after === entry.replacementEntityId
+      : isStringArray(entry.before) && entry.before.includes(entry.missingReferenceId) &&
+        isStringArray(entry.after) && entry.after.includes(entry.replacementEntityId);
     const valid = entry.operation === "narrative-reference-repair" &&
       entry.projectId === projectId && validType && expectedField &&
       typeof entry.recordId === "string" && !!entry.recordId &&

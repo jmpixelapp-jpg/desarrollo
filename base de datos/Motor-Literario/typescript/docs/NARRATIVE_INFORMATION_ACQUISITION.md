@@ -118,3 +118,8 @@ Un marcador como «porque» se registra como `markerKind: "causal"`, pero el mó
 ## Regla de producto
 
 El éxito del monitor no se mide por cuántos registros guarda. Se mide por cuánta información narrativa correcta puede obtener del texto que el autor acaba de escribir, con evidencia que permita comprobar cada resultado.
+
+### Offsets exactos de acciones durante la ingesta
+
+Las señales de acción exponen como evidencia el rango exacto del token verbal, no el inicio de la ventana del párrafo. Esto mantiene offsets UTF-16 directamente navegables incluso cuando el texto fuente conserva un BOM UTF-8. Los marcadores temporales, causales y de contraste mantienen contexto alrededor de su aparición para facilitar la revisión.
+

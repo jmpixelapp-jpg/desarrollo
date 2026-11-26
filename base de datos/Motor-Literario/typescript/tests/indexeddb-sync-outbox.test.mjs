@@ -76,21 +76,21 @@ test("la outbox pagina por proyecto, conserva pendientes y registra reintentos",
 test("el acuse elimina únicamente la operación confirmada y valida el payload", async () => {
   const store = new IndexedDbProjectStore();
   await assert.rejects(
-    store.enqueueSyncOperation(operation({ projectId: "project-c", deviceId: "device-c", payload: "{invalid-json" })),
+    store.enqueueSyncOperation(operation({ projectId: "project-d", deviceId: "device-c", payload: "{invalid-json" })),
     /JSON válido/
   );
   await assert.rejects(
-    store.enqueueSyncOperation(operation({ projectId: "project-c", deviceId: "device-c", payload: "[]" })),
+    store.enqueueSyncOperation(operation({ projectId: "project-d", deviceId: "device-c", payload: "[]" })),
     /objeto JSON/
   );
 
-  await store.enqueueSyncOperation(operation({ operationId: "op-3", projectId: "project-c", deviceId: "device-c" }));
+  await store.enqueueSyncOperation(operation({ operationId: "op-3", projectId: "project-d", deviceId: "device-c" }));
   assert.equal(await store.acknowledgeSyncOperation("op-3"), true);
-  assert.equal(await store.loadLastSyncOperationSequence("project-c", "device-c"), 1);
+  assert.equal(await store.loadLastSyncOperationSequence("project-d", "device-c"), 1);
   assert.equal(await store.acknowledgeSyncOperation("op-3"), false);
-  assert.deepEqual(await store.loadPendingSyncOperations("project-c"), []);
+  assert.deepEqual(await store.loadPendingSyncOperations("project-d"), []);
   await assert.rejects(
-    store.enqueueSyncOperation(operation({ operationId: "op-4", projectId: "project-c", deviceId: "device-c" })),
+    store.enqueueSyncOperation(operation({ operationId: "op-4", projectId: "project-d", deviceId: "device-c" })),
     /Secuencia fuera de orden/
   );
 });

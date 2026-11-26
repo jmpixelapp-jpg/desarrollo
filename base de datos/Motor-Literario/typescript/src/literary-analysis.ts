@@ -4172,6 +4172,7 @@ function buildLiteraryIdeaGraph(
     if (intermediaries.size < 2) continue;
     const destinationCounts = new Map<number, number>();
     const firstIntermediaryByDestination = new Map<number, number>();
+    const sourceReturnIntermediaries = new Set<number>();
     let sourceWork = 0;
     let sourceTruncated = false;
     for (const intermediaryIndex of intermediaries) {
@@ -4182,9 +4183,12 @@ function buildLiteraryIdeaGraph(
           sourceTruncated = true;
           break;
         }
-        // Los retornos a la fuente no son destinos de convergencia de dos saltos.
-        // El ciclo completo permanece registrado en Tarjan y en las referencias.
-        if (destinationIndex === sourceIndex) continue;
+        // El retorno a la fuente no es convergencia: se conserva como salida
+        // exclusiva de una rama solo cuando ningún otro intermediario retorna.
+        if (destinationIndex === sourceIndex) {
+          sourceReturnIntermediaries.add(intermediaryIndex);
+          continue;
+        }
         destinationCounts.set(destinationIndex, (destinationCounts.get(destinationIndex) ?? 0) + 1);
         if (!firstIntermediaryByDestination.has(destinationIndex)) {
           firstIntermediaryByDestination.set(destinationIndex, intermediaryIndex);
@@ -4200,6 +4204,10 @@ function buildLiteraryIdeaGraph(
     let sourceSharedDestinationCount = 0;
     let sourceExclusiveDestinationCount = 0;
     const exclusiveIntermediaryCount = new Set<number>();
+    if (sourceReturnIntermediaries.size === 1) {
+      sourceExclusiveDestinationCount++;
+      exclusiveIntermediaryCount.add(sourceReturnIntermediaries.values().next().value!);
+    }
     for (const [destinationIndex, intermediaryCount] of destinationCounts) {
       if (intermediaryCount > 1) {
         sourceSharedDestinationCount++;

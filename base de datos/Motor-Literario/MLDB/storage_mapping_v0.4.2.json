@@ -916,6 +916,20 @@
             false
           ]
         ]
+      },
+      {
+        "name": "narrative-reference-repair-pending",
+        "keyPath": [
+          "projectId",
+          "operationId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
       }
     ]
   },

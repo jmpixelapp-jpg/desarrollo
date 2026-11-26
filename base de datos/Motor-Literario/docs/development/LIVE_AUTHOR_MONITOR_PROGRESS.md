@@ -1306,3 +1306,12 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Límite de responsabilidad:** no se modifica `indexeddb-store.ts` ni el manifiesto físico que otro trabajo está actualizando. La lane registra el fallo compartido, pero no bloquea la comprobación independiente de las métricas y notificaciones del monitor.
 
 **Validación:** pendiente de la nueva ejecución de GitHub Actions.
+
+
+## 81. No bloquear pruebas puras del monitor instalando Chromium antes de tiempo (26 de noviembre de 2026)
+
+**Hallazgo:** Chromium se instalaba antes de la auditoría y del bundle runtime, aunque las pruebas unitarias de `LiveAuthorMonitor` y el benchmark de heap no usan navegador. El coste de instalar el navegador demoraba evidencia independiente en un escenario donde el bundle runtime podía fallar por módulos externos al monitor.
+
+**Ajuste:** se mueve la instalación de Chromium después de `runtime-build` y se condiciona a su resultado `success`. Las pruebas unitarias FIFO y el benchmark ocurren antes, independientemente del fallo de auditoría o del runtime; las pruebas de integración multi-pestaña conservan Chromium cuando realmente pueden ejecutarse.
+
+**Validación:** pendiente de la nueva ejecución del workflow.

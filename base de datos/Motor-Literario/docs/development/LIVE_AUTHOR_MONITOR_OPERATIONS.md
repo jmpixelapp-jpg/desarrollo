@@ -738,3 +738,21 @@ El guardado de checkpoints debe preservar el error del request que escribe en `l
 El aborto afecta conjuntamente a la verificación del lease y a la escritura del checkpoint; por tanto, no debe quedar un snapshot parcial. Un checkpoint anterior se conserva. El host expone solamente el código de clase del error y no su mensaje, que podría contener texto privado.
 
 La regresión de cuota inyecta un error request-level asíncrono en el límite de almacenamiento y verifica rechazo con el nombre original y conservación del checkpoint previo. Es una simulación determinista de la ruta de error; no equivale a agotar físicamente la cuota del navegador. Para pruebas de cuota real hacen falta perfiles/dispositivos controlados con límites de almacenamiento distintos.
+
+
+**Validación CI:** [run 45765001413](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001413) aprobó el request-level `QuotaExceededError` como test 114 y la suite host/editor/browser 175/175. La ruta conserva el checkpoint previo y no expone el mensaje de error del manuscrito. La simulación no sustituye una prueba física de cuota agotada en navegador.
+
+La prueba de aborto fuerza `transaction.abort()` después de que el adaptador haya encolado el `put`, antes de completar la transacción. Se comprueba que el commit de checkpoint sea atómico (el registro previo permanece) y que una escritura nueva funcione después de restaurar el método nativo.
+
+## 65. Recuperación después de aborto de transacción y cierre externo de IndexedDB
+
+Un aborto después de `checkpointStore.put()` debe revertir toda la transacción `readwrite`; no se puede anunciar éxito ni dejar un checkpoint nuevo a medias. El error del request se conserva y una operación posterior debe poder escribir normalmente. La prueba deja un checkpoint anterior, aborta la siguiente escritura tras encolarla y comprueba tanto el rollback como la recuperación de una escritura posterior.
+
+Cuando el navegador notifica `IDBDatabase.onclose`, el almacén elimina la promesa de conexión cacheada. Sin esa invalidación, operaciones futuras podrían seguir usando una conexión cerrada. La regresión de cierre externo cierra la conexión e invoca el handler `onclose` que el adaptador registró (el simulador no admite un `dispatchEvent` sintético después del cierre); lee dos veces el checkpoint y verifica que la primera lectura haya reabierto la base y la segunda reutilice la conexión nueva.
+
+Estas pruebas deterministas no equivalen a un apagado forzado de sistema operativo ni a pérdida real del almacenamiento; esos casos requieren pruebas de navegador/dispositivo adicionales.
+
+
+**Validación del aborto:** [run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154) aprobó el rollback después de encolar el put (test 115); el checkpoint previo y la capacidad de escritura posterior quedaron verificados.
+
+**Validación CI dedicada:** [run 45765482739](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765482739) aprobó el aborto transaccional (test 115) y la reapertura por `onclose` (test 116), con 177/177 integraciones, Chromium Page Lifecycle 1/1 y benchmark de 100.000 commits.

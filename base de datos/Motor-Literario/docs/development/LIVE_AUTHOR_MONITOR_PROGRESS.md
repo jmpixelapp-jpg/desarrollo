@@ -1595,10 +1595,28 @@ La suite general del motor se valida por separado; este resultado certifica la l
 
 **Corrección:** se conserva el request devuelto por `checkpointStore.put()` y se instala su handler `onerror`. El error original (por ejemplo, `QuotaExceededError` o `DataCloneError`) se captura y se aborta la transacción; `onabort` rechaza con ese mismo error en vez de sustituirlo por uno genérico. Las excepciones síncronas siguen pasando por el guard existente.
 
-**Regresión:** una solicitud de escritura simulada entrega un `QuotaExceededError` asíncrono. La transacción debe abortarse, la promesa debe rechazar conservando `error.name`, y el checkpoint durable anterior debe permanecer intacto. El test no llena físicamente el disco ni pretende medir el límite real de cuota del navegador; simula la interfaz de error del request para verificar la ruta de propagación.
+**Regresión:** una solicitud de escritura simulada entrega un `QuotaExceededError` asíncrono. La transacción debe abortarse, la promesa debe rechazar conservando `error.name`, y el checkpoint durable anterior debe permanecer intacto. El test no llena físicamente el disco ni pretende medir el límite real de cuota del navegador; simula la interfaz de error del request para verificar la ruta de propagación. Una segunda regresión encola el put y aborta la transacción antes del commit; comprueba que el snapshot anterior sobrevive y que la misma instancia vuelve a persistir tras el aborto.
 
 **Diagnóstico de host:** la prueba existente `publica el error de cuota del checkpoint sin exponer el texto interno` verifica que el anfitrión muestre `checkpointState: error` y `checkpointErrorCode: QuotaExceededError` sin serializar el mensaje privado ni contenido del manuscrito.
 
 **Compatibilidad:** no modifica el esquema IndexedDB ni el formato del checkpoint v1. La transacción completa (lease y checkpoint) se aborta como unidad; ningún checkpoint parcial se considera guardado.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [Live Author Monitor — run 45765001413](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001413), checkout `01b7eb3927a920cea809cc5cd7949a2ab6c4e9bf`, terminó `success`. La regresión `IndexedDB propaga QuotaExceededError del request y aborta sin reemplazar el checkpoint anterior` pasó como test 114. Type-check estricto, bundle aislado, diagnósticos 17/17, auditoría MLDB/almacenamiento, runtime build y monitor/panel/workspace/adaptadores **167/167** aprobados; Page Lifecycle Chromium 1/1; integración host/editor/browser **175/175**. El benchmark procesó 100.000 commits en **649,99 ms** (~153.848 commits/s), heap de 4,39 MiB a mitad y al final, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001099) terminó 950/951 por el mismo fallo aislado de extracción de marcas combinantes en `tests/narrative-unicode-boundaries.test.mjs:107`. Type-check general aprobó. No se alteró el código Unicode paralelo.
+
+
+
+**Validación del aborto:** [Live Author Monitor — run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154), checkout `7ccf5f74df0081818df0f868b9c69dff540b42ab`, terminó `success`. La regresión de aborto después de encolar el put pasó como test 115; host/editor/browser 176/176, monitor aislado 167/167, diagnósticos 17/17 y Page Lifecycle Chromium 1/1. El benchmark de 100.000 commits terminó en 653,43 ms, con heap estable de 4,38 MiB desde mitad hasta el final y cero tickets pendientes.
+
+## 104. Recuperación tras abortar transacciones y cerrar conexiones externamente (26 de noviembre de 2026)
+
+**Objetivo:** verificar el comportamiento después de validar el lease y comenzar la escritura, cuando el navegador aborta la transacción o cierra la conexión IndexedDB fuera del ciclo normal del almacén.
+
+**Regresión A — aborto antes del commit:** la prueba encola el `put` y aborta la transacción antes de que complete. La operación debe rechazar, el checkpoint durable previo debe conservarse y una escritura posterior debe funcionar en la misma instancia.
+
+**Regresión B — cierre externo:** se cierra una conexión obtenida del almacén y se invoca el handler `onclose` que el adaptador registró; `fake-indexeddb` no permite despachar un evento sintético `close` sobre una conexión cerrada. El listener `IDBDatabase.onclose` debe invalidar la promesa de conexión cacheada; las lecturas posteriores deben abrir otra conexión, recuperar el checkpoint y reutilizar la nueva conexión.
+
+**Alcance:** ambas pruebas usan `fake-indexeddb` para controlar de forma determinista abortos/eventos. No sustituyen las pruebas de crash real de proceso o pérdida física del perfil en Chromium/OS.
+
+**Validación de la regresión A (aborto):** aprobada en [run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154), test 115. **Validación CI dedicada:** [Live Author Monitor — run 45765482739](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765482739), checkout `0c74084227cb357275ec277ba289757d474c1de5`, terminó `success`. Las regresiones A y B aprobaron como tests 115 y 116: rollback tras abortar la escritura y reapertura después de invocar el handler `onclose`. Suite monitor/panel/workspace/adaptadores 167/167, diagnósticos 17/17, Page Lifecycle Chromium 1/1 e integración host/editor/browser **177/177**. Benchmark de 100.000 commits en **522,37 ms** (~191.436 commits/s), heap de 4,39 MiB a mitad y final, 0 MiB de crecimiento, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.

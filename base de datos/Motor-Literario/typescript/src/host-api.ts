@@ -659,6 +659,7 @@ export class HostEngineApi {
   private readonly continuityCandidatesByDocument = new Map<string, {
     readonly revision: number;
     readonly sequence: number;
+    readonly updatedAt: number;
     readonly candidates: readonly NarrativeIdeaCandidate[];
     readonly truncated: boolean;
   }>();
@@ -882,6 +883,7 @@ export class HostEngineApi {
         revision: number;
         status: "active";
       }> = [];
+      const changedDocumentIds = new Set<string>();
       let anyDocumentTruncated = false;
 
       for (const item of metadata) {
@@ -902,12 +904,14 @@ export class HostEngineApi {
         });
 
         const cached = this.continuityCandidatesByDocument.get(item.documentId);
-        if (cached && cached.revision === item.revision && cached.sequence === item.sequence) {
+        if (cached && cached.revision === item.revision &&
+            cached.sequence === item.sequence && cached.updatedAt === item.updatedAt) {
           candidatesByDocument.set(item.documentId, cached.candidates);
           anyDocumentTruncated ||= cached.truncated;
           continue;
         }
 
+        changedDocumentIds.add(item.documentId);
         const document = await store.loadDocument(project.projectId, item.documentId);
         if (!document || document.projectId !== project.projectId ||
             document.documentId !== item.documentId || document.revision !== item.revision ||
@@ -938,6 +942,7 @@ export class HostEngineApi {
         this.continuityCandidatesByDocument.set(item.documentId, {
           revision: item.revision,
           sequence: item.sequence,
+          updatedAt: item.updatedAt,
           candidates,
           truncated
         });
@@ -1043,23 +1048,28 @@ export class HostEngineApi {
       // Evita publicar una mezcla de revisiones si otro escritor editó un
       // documento mientras se leían los cuerpos del proyecto.
       const latestMetadata = await store.loadDocumentMetadata(project.projectId);
-      const latestById = new Map<string, { revision: number; sequence: number }>();
+      const latestById = new Map<string, { revision: number; sequence: number; updatedAt: number }>();
       if (!Array.isArray(latestMetadata) || latestMetadata.length !== metadata.length) {
         throw new Error("El conjunto documental cambió durante la reconciliación de continuidad; se reintentará.");
       }
       for (const item of latestMetadata) {
         if (!item || item.projectId !== project.projectId ||
             typeof item.documentId !== "string" || !item.documentId.trim() ||
+            item.documentId.length > 256 ||
             !Number.isSafeInteger(item.revision) || item.revision < 0 ||
             !Number.isSafeInteger(item.sequence) || item.sequence < 0 ||
+            !Number.isFinite(item.updatedAt) || item.updatedAt < 0 ||
             latestById.has(item.documentId)) {
           throw new Error("El segundo inventario documental no superó su validación.");
         }
-        latestById.set(item.documentId, { revision: item.revision, sequence: item.sequence });
+        latestById.set(item.documentId, {
+          revision: item.revision, sequence: item.sequence, updatedAt: item.updatedAt
+        });
       }
       for (const item of metadata) {
         const latest = latestById.get(item.documentId);
-        if (!latest || latest.revision !== item.revision || latest.sequence !== item.sequence) {
+        if (!latest || latest.revision !== item.revision ||
+            latest.sequence !== item.sequence || latest.updatedAt !== item.updatedAt) {
           throw new Error("Una revisión avanzó durante la reconciliación de continuidad; se conserva el índice anterior.");
         }
       }
@@ -1069,7 +1079,8 @@ export class HostEngineApi {
         projectId: project.projectId,
         updatedAt: Date.now(),
         sourceRevisions,
-        nextEvolution: evolution
+        nextEvolution: evolution,
+        changedDocumentIds: [...changedDocumentIds]
       });
       if (this.disposed || this.project?.projectId !== project.projectId) return;
 

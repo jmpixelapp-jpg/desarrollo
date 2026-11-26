@@ -136,3 +136,9 @@ La relación se etiqueta como `transfers-to` y conserva evidencias separadas del
 
 Esta primera regla es deliberadamente estrecha: no generaliza el patrón a verbos como ayudar, atacar o hablar. Tampoco resuelve destinatarios implícitos ni referencias anafóricas. Los tests cubren el caso afirmativo y rechazan negación y estructuras incompletas/pasivas.
 
+## Detección incremental en fragmentos mientras se escribe
+
+El descubrimiento de acciones analiza también el último fragmento aunque todavía no tenga punto, signo de interrogación o cierre de párrafo. Una forma verbal completa puede producir un candidato provisional inmediatamente; una forma incompleta (por ejemplo, `corri`) no debe convertirse en acción. La evidencia mantiene offsets UTF-16 absolutos, incluidos los desplazamientos de `baseOffset`.
+
+Esta detección no afirma que la oración esté terminada. La interfaz debe presentar el resultado como candidato revisable y sustituirlo al llegar una revisión posterior del texto. Se añadieron pruebas para una forma verbal completa sin puntuación y para un verbo todavía incompleto.
+

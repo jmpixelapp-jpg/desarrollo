@@ -120,6 +120,18 @@ export interface NarrativeUnderstandingResult {
   readonly memoryActionLinks: readonly NarrativeMemoryActionLink[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
+  /** Cruces explicables entre relaciones de eventos y contrastes explícitos objetivo-acción. */
+  readonly consequenceIntentActionLinks: readonly {
+    readonly consequenceCandidateId: string;
+    readonly intentActionConsistencyId: string;
+    readonly eventRole: "source" | "consequence";
+    readonly characterEntityId: string;
+    readonly intentId: string;
+    readonly actionId: string;
+    readonly consistencyRelation: NarrativeIntentActionConsistency["relation"];
+    readonly intentEvidence: NarrativeIntentActionConsistency["intentEvidence"];
+    readonly actionEvidence: NarrativeIntentActionConsistency["actionEvidence"];
+  }[];
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
   readonly interactions: ReturnType<typeof extractNarrativeCharacterInteractions>;
   readonly interactionShifts: ReturnType<typeof detectNarrativeInteractionShifts>;
@@ -356,6 +368,33 @@ export function understandNarrativeFragment(
     actions: [...actions, ...pronounTargetActions],
     orderedDocumentIds: input.orderedDocumentIds
   });
+  const eventActionRoles = new Map<string, Array<{
+    consequenceCandidateId: string; eventRole: "source" | "consequence"
+  }>>();
+  for (const consequence of consequences) {
+    for (const actionId of consequence.supportingActionCandidateIds.sourceEvent) {
+      const roles = eventActionRoles.get(actionId) ?? [];
+      roles.push({consequenceCandidateId: consequence.id, eventRole: "source"});
+      eventActionRoles.set(actionId, roles);
+    }
+    for (const actionId of consequence.supportingActionCandidateIds.consequenceEvent) {
+      const roles = eventActionRoles.get(actionId) ?? [];
+      roles.push({consequenceCandidateId: consequence.id, eventRole: "consequence"});
+      eventActionRoles.set(actionId, roles);
+    }
+  }
+  const consequenceIntentActionLinks = intentActionConsistency.flatMap(consistency =>
+    (eventActionRoles.get(consistency.actionId) ?? []).map(role => ({
+      ...role,
+      intentActionConsistencyId: consistency.id,
+      characterEntityId: consistency.characterEntityId,
+      intentId: consistency.intentId,
+      actionId: consistency.actionId,
+      consistencyRelation: consistency.relation,
+      intentEvidence: consistency.intentEvidence,
+      actionEvidence: consistency.actionEvidence
+    }))
+  );
   const interactions = extractNarrativeCharacterInteractions(
     [...actions, ...pronounTargetActions], input.entities, input.projectId
   );
@@ -377,7 +416,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

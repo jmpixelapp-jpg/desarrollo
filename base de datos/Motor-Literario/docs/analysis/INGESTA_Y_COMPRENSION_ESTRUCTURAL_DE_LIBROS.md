@@ -16,6 +16,7 @@ La función asíncrona `readNarrativeBookFile(file)` adquiere archivos TXT y Mar
 - Segmentación de párrafos con offsets UTF-16 y clasificación inicial de narración, diálogo o contenido mixto.
 - Conteo de palabras y métricas de cobertura.
 - Señales candidatas de acciones, referencias temporales, marcadores causales y marcadores de contraste; los límites de palabras reconocen letras y marcas Unicode, incluidas terminaciones acentuadas del español.
+- Si el anfitrión entrega fichas de entidades del mismo libro, la ingesta también ejecuta el descubrimiento de observaciones: acciones ligadas a menciones de personajes, pronombres pendientes y evidencia exacta del verbo. La salida declara si se extrajeron observaciones, si faltan entidades o si se omitieron por el presupuesto de texto.
 - Evidencia literal para cada capítulo y señal, con documento, revisión y offsets absolutos.
 - IDs deterministas dentro de la misma identidad de documento, revisión y posición de origen.
 - Límites explícitos para evitar crecimiento descontrolado de memoria.

@@ -296,6 +296,7 @@ test("notifica el fallo de una vista aislada sin exponer la excepción", () => {
       onListenerError(snapshot) {
         failures++;
         assert.equal(snapshot.documentId, "chapter-1");
+        throw new Error("private telemetry handler failure");
       }
     }
   );
@@ -305,6 +306,30 @@ test("notifica el fallo de una vista aislada sin exponer la excepción", () => {
   refresh();
   assert.equal(failures, 2);
   unsubscribe();
+});
+
+test("valida onListenerError antes de instalar suscripciones o planificadores", () => {
+  let subscriptions = 0;
+  let schedules = 0;
+  const hostApi = {
+    getLiveAuthorMonitorSnapshot: () => undefined,
+    getLiveAuthorMonitorSnapshots: () => [],
+    subscribeLiveAuthorMonitor() {
+      subscriptions++;
+      return () => {};
+    }
+  };
+
+  assert.throws(() => subscribeLiveAuthorMonitorWithRefresh(
+    hostApi,
+    () => {},
+    {
+      onListenerError: "not-a-callback",
+      schedule() { schedules++; return () => {}; }
+    }
+  ), /onListenerError/);
+  assert.equal(subscriptions, 0);
+  assert.equal(schedules, 0);
 });
 
 test("valida secuencias, límite de documentos y retroceso del reloj", () => {

@@ -500,3 +500,61 @@ test("limita el volumen total de texto analizado en proyectos con muchos documen
     await store.close();
   }
 });
+
+
+test("redistribuye el presupuesto y revalida cachés cuando cambia el tamaño del proyecto", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  const sourceText = "El tema central es la memoria compartida que une a dos ciudades.";
+  for (let index = 0; index < 10; index++) {
+    await store.saveDocument({
+      projectId: id,
+      documentId: "chapter-" + String(index).padStart(2, "0"),
+      text: sourceText,
+      revision: 0,
+      sequence: 0,
+      updatedAt: index + 1
+    });
+  }
+  // Desactiva el aviso automático solo en esta prueba para medir exactamente
+  // una reconciliación solicitada por el anfitrión.
+  store.subscribeNarrativeChanges = undefined;
+  let reads = 0;
+  const originalLoadDocument = store.loadDocument.bind(store);
+  store.loadDocument = async (projectId, documentId) => {
+    reads++;
+    return originalLoadDocument(projectId, documentId);
+  };
+  const api = new HostEngineApi({ store });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Presupuesto cambiante" });
+    await api.flushPendingChanges();
+    assert.equal(reads, 10);
+    const previous = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(previous);
+
+    for (let index = 10; index < 12; index++) {
+      await store.saveDocument({
+        projectId: id,
+        documentId: "chapter-" + String(index).padStart(2, "0"),
+        text: sourceText,
+        revision: 0,
+        sequence: 0,
+        updatedAt: index + 1
+      });
+    }
+    await api.invalidateNarrativeKnowledgeFromExternalChange();
+
+    const updated = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(updated);
+    assert.equal(updated.sourceRevisions.length, 12);
+    // El presupuesto por capítulo disminuyó al pasar de 10 a 12 documentos,
+    // por eso se vuelven a descubrir también los diez documentos cacheados.
+    assert.equal(reads, 22);
+    assert.ok(updated.generation > previous.generation);
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});

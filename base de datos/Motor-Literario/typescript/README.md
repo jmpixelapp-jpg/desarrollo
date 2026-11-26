@@ -363,3 +363,19 @@ Los perfiles de ritmo son umbrales descriptivos de longitud de oración, no juic
 
 El análisis acepta hasta 2.000.000 de unidades UTF-16 por operación. Los documentos mayores deben analizarse por rangos y conservar su revisión al comparar resultados.
 
+
+
+## Persistencia protegida y bandeja de sincronización (IndexedDB v25)
+
+`IndexedDbProjectStore.inspectStorageHealth()` devuelve una inspección de solo lectura con la versión de la base, conteos por almacén y, si el navegador lo permite, estimaciones de uso/cuota y estado de almacenamiento persistente. Las estimaciones son orientativas y no sustituyen una exportación de respaldo.
+
+`IndexedDbProjectStore.requestPersistentStorage()` solicita al navegador protección frente al desalojo automático del origen. La aplicación anfitriona debe invocarla desde una acción explícita del usuario; el navegador puede denegarla.
+
+La bandeja `sync-outbox` conserva operaciones salientes hasta que el transporte remoto confirma su recepción:
+
+- `enqueueSyncOperation(operation)`: inserta una operación idempotente. Repetir el mismo `operationId` con el mismo contenido no duplica el registro; reutilizarlo con contenido distinto se rechaza. La secuencia es única por proyecto y dispositivo.
+- `loadPendingSyncOperations(projectId, limit)`: lee pendientes sin eliminarlos.
+- `recordSyncOperationAttempt(operationId, attemptedAt, error?)`: registra reintentos y conserva el error más reciente.
+- `acknowledgeSyncOperation(operationId)`: elimina la operación solo tras el acuse del transporte remoto.
+
+Esta bandeja es infraestructura local durable; por sí sola no realiza llamadas de red ni sincroniza dispositivos. El anfitrión debe aportar autenticación, transporte, validación del lado servidor, reintentos con política de backoff y resolución explícita de conflictos. Nunca debe confirmar una operación antes de que el servidor la haya aceptado.

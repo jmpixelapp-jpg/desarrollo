@@ -599,3 +599,10 @@ La evidencia del run 45758057459 es 161/161 pruebas y type-check estricto aproba
 La ejecución [Live Author Monitor — run 45758096783](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758096783) pasó todos los pasos: type-check estricto, bundle monitor, MLDB 0.4.2 con 27 tablas, runtime bundle, Chromium, 161/161 pruebas unitarias/aisladas y 167/167 al incluir host/editor/browser. En Chromium pasaron el lease entre dos páginas con IndexedDB real y fencing token, el ciclo de vida de pestaña y escritura/guardado/recuperación de dos capítulos.
 
 Se documenta como evidencia válida del checkout `948408ae9e9519495dc8df97f48abcf20a38020e`. No se extrapola al HEAD actual: commits de sincronización posteriores modificaron persistencia y una validación posterior reporta sintaxis inválida en `indexeddb-store.ts:2560`. El próximo gate es repetir el pipeline integral sobre un commit actual cuando las modificaciones de persistencia queden estables.
+
+
+## 51. Prueba Page Lifecycle en Chromium desacoplada del runtime
+
+El único harness Chromium que importa exclusivamente `live-author-monitor-visibility.ts` se ejecuta aunque falle la compilación general. Así se obtiene evidencia real de `pagehide/pageshow`, `freeze/resume` y `visibilitychange` en navegador incluso durante una regresión de persistencia. El workflow instala Chromium después de la suite de unidad; el browser test aislado no abre IndexedDB ni carga el motor narrativo. Las integraciones browser que requieren persistencia/editor siguen detrás de `runtime-build == success`.
+
+El paso Chromium independiente debe considerarse validado solo cuando `Run isolated Page Lifecycle regression in Chromium` termine con `success`; la ejecución inicial queda registrada por separado.

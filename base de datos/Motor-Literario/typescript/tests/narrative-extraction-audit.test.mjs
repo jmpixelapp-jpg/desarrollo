@@ -62,6 +62,26 @@ test("rechaza evidencia de otra revisión o que no coincide con el texto", () =>
   }));
 });
 
+test("la cobertura global incluye evidencias de otros extractores sin alterar el subtotal de acciones", () => {
+  const text = "Ana está herida. La torre parece abandonada.";
+  const additional = {
+    documentId: "d", revision: 1,
+    start: 0, end: "Ana está herida".length,
+    excerpt: "Ana está herida"
+  };
+  const result = auditNarrativeExtractionCoverage({
+    documentId: "d", revision: 1, text,
+    observations: [], events: [],
+    additionalEvidence: [{ evidence: additional }]
+  });
+  assert.equal(result.sentencesWithActionOrEventEvidence, 0);
+  assert.equal(result.sentencesWithAdditionalEvidence, 1);
+  assert.equal(result.sentencesWithAnyExtractedEvidence, 1);
+  assert.equal(result.sentencesWithoutAnyExtractedEvidence, 1);
+  assert.equal(result.coverageRatio, 0.5);
+  assert.equal(result.uncoveredSentences[0].evidence.excerpt, "La torre parece abandonada.");
+});
+
 test("un texto vacío tiene cobertura neutral completa y no genera pendientes", () => {
   const result = auditNarrativeExtractionCoverage({
     documentId: "d", revision: 1, text: "",

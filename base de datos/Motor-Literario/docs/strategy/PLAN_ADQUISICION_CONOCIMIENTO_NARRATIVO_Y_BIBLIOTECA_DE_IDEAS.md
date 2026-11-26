@@ -664,3 +664,6 @@ La precedencia solo se acepta cuando puede demostrarse:
 No se enlazan evidencias obsoletas, acciones negadas, acciones de otros personajes ni documentos cuya cronología sea desconocida. Cada enlace conserva los IDs, la evaluación epistemológica disponible, el canal y estado de la información, y las evidencias literales de conocimiento y acción. Los canales y evaluaciones se preservan como datos, no como garantía de verdad o comprensión.
 
 La relación se denomina `knowledge-precedes-action`: indica precedencia verificable, no que el personaje haya usado esa información para decidir ni que esta haya causado la acción. Se añadieron pruebas unitarias para cronología local y entre documentos, abstención ante orden desconocido, evidencia obsoleta, negación, actor distinto y entradas duplicadas; también una prueba de integración del pipeline principal.
+
+
+**Endurecimiento de la Fase AM:** la validación también exige un único estado por personaje e IDs de información globalmente únicos, para impedir colisiones en los identificadores de enlace. El límite de trabajo se aplica al total de elementos de conocimiento más acciones, no solo al número de estados. Las pruebas cubren estados de personaje duplicados e IDs repetidos entre personajes.

@@ -61,7 +61,7 @@ export function extractNarrativeCharacterIntentCandidates(
   const results = new Map<string, NarrativeCharacterIntentCandidate>();
   const goal = /\b(?:quiere|desea|pretende|intenta|busca|necesita|sueña\s+con)\s+(.+?)\s*$/iu;
   const motive = /\b(?:actúa|actua|lo\s+hace|decide\s+hacerlo)\s+porque\s+(.+?)\s*$/iu;
-  const because = /\bporque\s+(?:quiere|desea|teme|necesita)\s+(.+?)\s*$/iu;
+  const because = /\bporque\s+((?:quiere|desea|teme|necesita)\s+.+?)\s*$/iu;
   // Motivos indirectos: solo se extraen cuando el texto nombra la causa
   // mediante una construcción explícita; nunca se deducen por la acción sola.
   const causalMotive = /\bpor\s+((?:miedo|temor|amor|lealtad|venganza|deber|culpa|compasión|compasion)\s+(?:a|de|hacia|contra)\s+.+?)\s*$/iu;

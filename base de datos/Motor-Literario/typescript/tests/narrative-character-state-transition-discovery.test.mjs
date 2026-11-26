@@ -94,4 +94,6 @@ test("reconstruye cambios dentro de la misma perspectiva y conserva su fuente",(
  assert.equal(result[0].epistemicSourceEntityId,ana.id);
  assert.equal(result[0].previousEpistemicEvidence.excerpt,"dijo que ");
  assert.equal(result[0].currentEpistemicEvidence.excerpt,"dijo que ");
+ assert.equal(result[0].previousSourceEvidence.excerpt,"Ana");
+ assert.equal(result[0].currentSourceEvidence.excerpt,"Ana");
 });

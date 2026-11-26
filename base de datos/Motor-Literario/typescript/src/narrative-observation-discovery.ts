@@ -123,6 +123,9 @@ function futureActionExpression(action: string): RegExp {
 
 const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "cruzar", expression: /(?<![\p{L}\p{M}\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando|aré|arás|ará|aremos|arán))(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "atravesar", expression: /(?<![\\p{L}\\p{M}\\p{N}_])atraves(?:ó|aba|aban|amos|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\\p{L}\\p{M}\\p{N}_])/giu },
+  { action: "pasar", expression: /(?<![\\p{L}\\p{M}\\p{N}_])pas(?:ó|aba|aban|amos|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\\p{L}\\p{M}\\p{N}_])/giu },
+  { action: "recorrer", expression: /(?<![\\p{L}\\p{M}\\p{N}_])recorr(?:ió|ía|ían|imos|ieron|e|en|er|ido|iendo)(?![\\p{L}\\p{M}\\p{N}_])/giu },
   { action: "entrar", expression: /(?<![\p{L}\p{M}\p{N}_])entr(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "salir", expression: /(?<![\p{L}\p{M}\p{N}_])sal(?:ió|ía|ieron|e|en|ir|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "llegar", expression: /(?<![\p{L}\p{M}\p{N}_])lleg(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },

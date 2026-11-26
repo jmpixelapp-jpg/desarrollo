@@ -297,3 +297,84 @@ test("diario serializa recepciones concurrentes para una misma secuencia", async
     });
   }
 });
+
+
+test("replay del diario confirma cada operación y conserva pendiente si el consumidor falla", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const {
+    createNarrativeSyncOperationEnvelope,
+    IndexedDbNarrativeSyncJournal,
+    replayPendingNarrativeSyncOperations
+  } = await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-replay-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const make = (operationId, sequence) => createNarrativeSyncOperationEnvelope({
+      operationId, projectId: "project-replay", writerId: "writer-replay",
+      sequence, createdAt: 400 + sequence, kind: "idea-upsert", payload: { id: operationId }
+    });
+    const first = await make("replay-1", 1);
+    const second = await make("replay-2", 2);
+    await journal.accept(first);
+    await journal.accept(second);
+
+    const firstPass = await replayPendingNarrativeSyncOperations(journal, "project-replay", async operation => {
+      if (operation.operationId === "replay-2") throw new Error("fallo temporal del consumidor");
+    }, "writer-replay");
+    assert.deepEqual(firstPass, {
+      processed: 1, remaining: 1, stoppedAtOperationId: "replay-2"
+    });
+    assert.deepEqual((await journal.loadPendingOperations("project-replay", "writer-replay"))
+      .map(operation => operation.operationId), ["replay-2"]);
+
+    const applied = [];
+    const secondPass = await replayPendingNarrativeSyncOperations(journal, "project-replay", async operation => {
+      applied.push(operation.operationId);
+    }, "writer-replay");
+    assert.deepEqual(applied, ["replay-2"]);
+    assert.deepEqual(secondPass, { processed: 1, remaining: 0 });
+    assert.equal((await journal.loadPendingOperations("project-replay")).length, 0);
+    journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});
+
+test("marca aplicada rechaza digest divergente y es idempotente", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const { createNarrativeSyncOperationEnvelope, IndexedDbNarrativeSyncJournal } =
+    await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-applied-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const envelope = await createNarrativeSyncOperationEnvelope({
+      operationId: "applied-op", projectId: "project-applied", writerId: "writer-applied",
+      sequence: 1, kind: "idea-upsert", payload: { id: "idea-applied" }
+    });
+    await journal.accept(envelope);
+    await assert.rejects(
+      () => journal.markApplied("project-applied", "applied-op", "sha256:" + "0".repeat(64)),
+      /digest no coincide/u
+    );
+    await journal.markApplied("project-applied", "applied-op", envelope.digest, 500);
+    await journal.markApplied("project-applied", "applied-op", envelope.digest, 501);
+    const stored = await journal.loadOperation("project-applied", "applied-op");
+    assert.equal(stored.appliedAt, 500);
+    assert.equal((await journal.loadPendingOperations("project-applied")).length, 0);
+    journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});

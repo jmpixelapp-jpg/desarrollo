@@ -756,3 +756,9 @@ Estas pruebas deterministas no equivalen a un apagado forzado de sistema operati
 **Validación del aborto:** [run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154) aprobó el rollback después de encolar el put (test 115); el checkpoint previo y la capacidad de escritura posterior quedaron verificados.
 
 **Validación CI dedicada:** [run 45765482739](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765482739) aprobó el aborto transaccional (test 115) y la reapertura por `onclose` (test 116), con 177/177 integraciones, Chromium Page Lifecycle 1/1 y benchmark de 100.000 commits.
+
+## 66. Recuperación de diagnóstico después de liberar cuota
+
+Un error de persistencia no debe dejar el panel en estado de error después de que una escritura posterior se complete correctamente. El anfitrión conserva el código de la última falla mientras no haya un checkpoint guardado; al confirmar una escritura durable, elimina el error previo y registra el nuevo `lastCheckpointAt`.
+
+La regresión simula una cuota llena en el primer intento y una recuperación del almacenamiento antes de la siguiente edición. Debe observarse la transición `error / QuotaExceededError → saved / sin error`, con la misma sesión del monitor y la revisión durable nueva. La ruta no borra el diagnóstico solo por reintentar ni al programar el checkpoint; lo hace cuando el almacén confirma la escritura.

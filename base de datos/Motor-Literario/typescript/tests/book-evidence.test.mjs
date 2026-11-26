@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ingestBookReaderBlocks,
-  resolveBookEvidence
+  resolveBookEvidence,
+  resolveNarrativeTextEvidence
 } from "../dist/motor-literario.js";
 
 test("resuelve evidencia literaria a bloques y localizadores originales", async () => {
@@ -41,3 +42,27 @@ test("rechaza rangos inválidos y mantiene explícitos los separadores sintétic
   assert.throws(() => resolveBookEvidence(book, chapter, 2, 2), RangeError);
   assert.throws(() => resolveBookEvidence(book, chapter, 0, chapter.text.length + 1), RangeError);
 });
+
+
+test("resuelve evidencias persistidas del conocimiento narrativo con verificación exacta de cita", async () => {
+  const book = await ingestBookReaderBlocks({ sourceId: "novela", sourceFormat: "fixture" }, [
+    { blockId: "p", sequence: 1, kind: "paragraph", text: "La puerta se abrió.", location: { locator: "chapter.xhtml#p" } }
+  ]);
+  const chapter = book.chapters[0];
+  const start = chapter.text.indexOf("puerta");
+  const evidence = resolveNarrativeTextEvidence(book, {
+    documentId: chapter.documentId, revision: 3, start, end: start + 6, excerpt: "puerta"
+  });
+  assert.equal(evidence.excerpt, "puerta");
+  assert.equal(evidence.fragments[0].locator, "chapter.xhtml#p");
+  assert.throws(() => resolveNarrativeTextEvidence(book, {
+    documentId: chapter.documentId, revision: 3, start, end: start + 6, excerpt: "ventana"
+  }), /no coincide/u);
+  assert.throws(() => resolveNarrativeTextEvidence(book, {
+    documentId: chapter.documentId, revision: 2, start, end: start + 6, excerpt: "puerta", status: "stale"
+  }), /obsoleta/u);
+  assert.throws(() => resolveNarrativeTextEvidence(book, {
+    documentId: "otro-documento", revision: 3, start: 0, end: 2, excerpt: "La"
+  }), /no pertenece/u);
+});
+

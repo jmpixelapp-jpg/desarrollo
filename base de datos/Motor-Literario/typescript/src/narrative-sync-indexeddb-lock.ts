@@ -25,6 +25,7 @@ export class IndexedDbSyncExecutionLock implements SyncExecutionLock {
   private readonly now: () => number;
   private readonly leaseDurationMs: number;
   private readonly pollIntervalMs: number;
+  private readonly localTails = new Map<string, Promise<void>>();
 
   constructor(
     private readonly store: IndexedDbProjectStore,
@@ -58,6 +59,21 @@ export class IndexedDbSyncExecutionLock implements SyncExecutionLock {
       throw new TypeError("Clave o tarea inválida para el bloqueo de sincronización.");
     }
     const projectId = key.slice("narrative-sync:".length);
+    const previous = this.localTails.get(key) ?? Promise.resolve();
+    let releaseLocal!: () => void;
+    const localGate = new Promise<void>(resolve => { releaseLocal = resolve; });
+    const localTail = previous.then(() => localGate);
+    this.localTails.set(key, localTail);
+    await previous;
+    try {
+      return await this.runWithLease(projectId, task);
+    } finally {
+      releaseLocal();
+      if (this.localTails.get(key) === localTail) this.localTails.delete(key);
+    }
+  }
+
+  private async runWithLease<T>(projectId: string, task: () => Promise<T>): Promise<T> {
     let lease: StoredLiveAuthorMonitorLease | undefined;
     while (!lease) {
       lease = await this.store.acquireLiveAuthorMonitorLease(

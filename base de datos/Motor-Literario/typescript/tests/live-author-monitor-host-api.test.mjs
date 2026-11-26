@@ -640,6 +640,112 @@ test("una pestaña observadora toma el lease expirado sin necesitar una nueva ed
 });
 
 
+test("una escritura en vuelo del propietario anterior no sobrescribe el checkpoint tras el takeover", async () => {
+  let notifyDelayedSave;
+  let releaseDelayedSave;
+  const delayedSaveEntered = new Promise(resolve => { notifyDelayedSave = resolve; });
+  const delayedSaveResponse = new Promise(resolve => { releaseDelayedSave = resolve; });
+
+  class DelayedCheckpointStore extends MemoryDocumentStore {
+    delayNextCheckpoint = false;
+
+    async saveLiveAuthorMonitorCheckpoint(checkpoint, lease) {
+      if (this.delayNextCheckpoint) {
+        this.delayNextCheckpoint = false;
+        notifyDelayedSave();
+        await delayedSaveResponse;
+      }
+      return super.saveLiveAuthorMonitorCheckpoint(checkpoint, lease);
+    }
+  }
+
+  const store = new DelayedCheckpointStore();
+  const owner = new HostEngineApi({ store });
+  const observer = new HostEngineApi({ store });
+  const projectId = "monitor-takeover-inflight-write";
+  const documentId = "chapter-1";
+  const key = projectId + ":" + documentId;
+
+  owner.initializeProject({ projectId, projectName: "Takeover inflight write" });
+  observer.initializeProject({ projectId, projectName: "Takeover inflight write" });
+
+  try {
+    await owner.openDocument({
+      documentId,
+      text: "A",
+      revision: 0,
+      sequence: 0
+    });
+    await owner.flushPendingChanges();
+
+    const firstDurable = store.monitorCheckpoints.get(key);
+    const oldLease = structuredClone(store.monitorLeases.get(key));
+    assert.ok(firstDurable);
+    assert.ok(oldLease);
+
+    store.delayNextCheckpoint = true;
+    const admission = owner.onEditorChange({
+      documentId,
+      sequence: 1,
+      baseRevision: 0,
+      start: 1,
+      end: 1,
+      replacement: "B"
+    });
+    assert.equal(admission.status, "queued");
+
+    await delayedSaveEntered;
+    const delayedOwnerCheckpoint = owner.liveMonitorCheckpointTails.get(documentId);
+    assert.ok(delayedOwnerCheckpoint, "el guardado del propietario anterior debe seguir en vuelo");
+
+    // El propietario anterior desaparece sin release y su lease vence mientras
+    // su llamada a saveLiveAuthorMonitorCheckpoint está suspendida.
+    const expiredAt = Date.now() - 1;
+    store.monitorLeases.set(key, {
+      ...oldLease,
+      expiresAt: expiredAt,
+      updatedAt: Math.max(oldLease.acquiredAt, expiredAt)
+    });
+
+    await observer.recoverDocument(documentId);
+    const observerSession = observer.getLiveAuthorMonitorSnapshot(documentId);
+    assert.ok(observerSession);
+    await observer.renewLiveAuthorMonitorLeaseFromHeartbeat(documentId);
+
+    const observerCheckpoint = observer.liveMonitorCheckpointTails.get(documentId);
+    if (observerCheckpoint) await observerCheckpoint;
+    const takeoverLease = store.monitorLeases.get(key);
+    const takeoverCheckpoint = store.monitorCheckpoints.get(key);
+    assert.ok(takeoverLease);
+    assert.ok(takeoverCheckpoint);
+    assert.equal(takeoverLease.ownerId, observer.liveMonitorOwnerId);
+    assert.equal(takeoverLease.fencingToken, oldLease.fencingToken + 1);
+    assert.equal(takeoverCheckpoint.sessionId, observerSession.sessionId);
+
+    // La escritura del propietario anterior solo continúa después de que el
+    // observador confirmó el nuevo fencing token y publicó su checkpoint.
+    releaseDelayedSave();
+    await assert.rejects(
+      delayedOwnerCheckpoint,
+      /lease\/fencing token inválido para checkpoint/
+    );
+
+    assert.deepEqual(
+      store.monitorCheckpoints.get(key),
+      takeoverCheckpoint,
+      "la respuesta tardía del antiguo propietario no debe reemplazar el checkpoint del observador"
+    );
+    const ownerDiagnostics = owner.getLiveAuthorMonitorPersistenceDiagnostics(documentId);
+    assert.equal(ownerDiagnostics.checkpointState, "error");
+    assert.equal(ownerDiagnostics.checkpointErrorCode, "Error");
+    assert.equal(store.monitorLeases.get(key).fencingToken, oldLease.fencingToken + 1);
+  } finally {
+    releaseDelayedSave();
+    owner.dispose();
+    await observer.disposeSafely();
+  }
+});
+
 test("dispose durante la lectura de checkpoint no restaura métricas después del cierre", async () => {
   class DelayedCheckpointLoadStore extends MemoryDocumentStore {
     delayNextLoad = false;

@@ -112,11 +112,15 @@ function validateInput(input: NarrativeIdeaCrossDocumentAnalysisInput): void {
         !["theme", "premise", "conflict", "goal", "motivation", "dilemma", "question", "hypothesis", "motif"].includes(candidate.kind) ||
         !["affirmed", "negated", "conditional", "hypothetical"].includes(candidate.polarity) ||
         !["high", "medium"].includes(candidate.confidence) || candidate.reviewStatus !== "candidate" ||
-        !candidate.evidence || !Number.isSafeInteger(candidate.evidence.start) ||
+        !candidate.evidence ||
+        candidate.evidence.documentId !== candidate.documentId ||
+        candidate.evidence.revision !== candidate.revision ||
+        !Number.isSafeInteger(candidate.evidence.start) ||
         !Number.isSafeInteger(candidate.evidence.end) ||
         candidate.evidence.start < 0 || candidate.evidence.end <= candidate.evidence.start ||
         typeof candidate.evidence.excerpt !== "string" ||
-        candidate.evidence.excerpt.length > 2_000_000) {
+        candidate.evidence.excerpt.length > 2_000_000 ||
+        !candidate.evidence.excerpt.includes(candidate.text)) {
       throw new Error("Candidato de idea inválido, duplicado o ajeno al proyecto.");
     }
     candidateIds.add(candidate.id);

@@ -107,3 +107,10 @@ const coordinator = new NarrativeSyncCoordinator(store, transport, {
 El identificador debe ser único por contexto de ejecución y mantenerse estable durante la vida de ese adaptador. No compartir el mismo `ownerId` entre pestañas: el almacén considera que el mismo propietario puede renovar su lease activo. Cerrar el contexto debe cerrar también su conexión al almacén. Si el contexto desaparece sin liberar el lease, otro propietario puede adquirirlo después de `expiresAt`, recibiendo un fencing token superior.
 
 Las tareas que pierdan el lease se consideran de resultado incierto: el transporte puede haber sido aceptado antes de detectar la pérdida. Se debe reconciliar mediante deduplicación remota por `operationId`; nunca asumir exactamente una vez.
+
+
+### Ciclo de vida del lease y fallos de tarea
+
+El adaptador renueva el lease aproximadamente cada tercio de su duración configurada. Antes de liberar espera cualquier renovación que ya esté en curso, evitando que una renovación tardía compita con la liberación. Si la tarea falla, el lease se libera igualmente y el error original de la tarea se propaga. Si la renovación falla o la titularidad ya no coincide, el adaptador marca el lease como perdido y rechaza el resultado al finalizar la tarea.
+
+La prueba de integración debe cubrir tareas más largas que la duración inicial del lease, la espera de un segundo propietario durante la renovación y la liberación tras una excepción. La renovación reduce la ventana normal de expiración, pero no puede impedir que un navegador suspendido detenga temporizadores durante un periodo prolongado.

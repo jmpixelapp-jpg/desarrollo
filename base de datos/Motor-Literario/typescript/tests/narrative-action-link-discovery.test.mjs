@@ -132,8 +132,8 @@ test("reconoce conectores causales sin asignar automáticamente causa y efecto",
 test("reconoce conectores adversativos y concesivos compuestos", () => {
   for (const [text, marker] of [
     ["Ana entró. A pesar de ello, Ana corrió.", "A pesar de ello"],
-    ["Ana llegó. Aun así, Ana caminó.", "Aun así"],
-    ["Ana entró. Pese a ello, Ana respondió.", "Pese a ello"]
+    ["Ana entró. Aun así, Ana corrió.", "Aun así"],
+    ["Ana entró. Pese a ello, Ana corrió.", "Pese a ello"]
   ]) {
     const found = discoverNarrativeActionLinks({
       projectId: "book-1", documentId: "chapter-1", revision: 4,

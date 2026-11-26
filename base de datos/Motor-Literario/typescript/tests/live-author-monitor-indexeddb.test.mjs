@@ -115,7 +115,7 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
 });
 
 
-test("migra IndexedDB v22 a v23 creando el almacén de checkpoints sin perder documentos", async () => {
+test("migra IndexedDB v22 a v24 creando checkpoints y leases sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";
   const projectId = "monitor-migration-" + randomUUID();

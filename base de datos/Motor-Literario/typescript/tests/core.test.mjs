@@ -10550,6 +10550,61 @@ test("IndexedDB rechaza una entidad obsoleta sin sustituir la versión confirmad
   }
 });
 
+test("IndexedDB serializa CAS concurrentes entre instancias y protege la creación de IDs", async () => {
+  const projectId = "indexeddb-entity-cas-cross-instance";
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  const base = {
+    projectId,
+    id: "entity-ana",
+    kind: "character",
+    canonicalName: "Ana",
+    normalizedName: "ana",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  };
+  await firstStore.saveEntity(base);
+
+  const firstCandidate = { ...base, aliases: ["Anita"], lastSeenAt: 2 };
+  const secondCandidate = { ...base, aliases: ["Ana María"], lastSeenAt: 2 };
+  const updates = await Promise.allSettled([
+    firstStore.saveEntityIfUnchanged(firstCandidate, base),
+    secondStore.saveEntityIfUnchanged(secondCandidate, base)
+  ]);
+  assert.equal(updates.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(updates.filter(result => result.status === "rejected").length, 1);
+  const updateWinner = updates[0].status === "fulfilled" ? firstCandidate : secondCandidate;
+  const updateLoser = updates.find(result => result.status === "rejected");
+  assert.match(updateLoser.reason.message, /cambió en otra instancia/u);
+  assert.deepEqual(await secondStore.loadEntities(projectId), [updateWinner]);
+
+  // Repetir la versión ganadora conserva el mismo estado durable.
+  await firstStore.saveEntityIfUnchanged(updateWinner, updateWinner);
+  assert.deepEqual(await secondStore.loadEntities(projectId), [updateWinner]);
+
+  const createFirst = {
+    ...base, id: "entity-new", canonicalName: "Beatriz", normalizedName: "beatriz"
+  };
+  const createSecond = {
+    ...base, id: "entity-new", canonicalName: "Bruna", normalizedName: "bruna"
+  };
+  const creates = await Promise.allSettled([
+    firstStore.saveEntityIfUnchanged(createFirst),
+    secondStore.saveEntityIfUnchanged(createSecond)
+  ]);
+  assert.equal(creates.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(creates.filter(result => result.status === "rejected").length, 1);
+  const createWinner = creates[0].status === "fulfilled" ? createFirst : createSecond;
+  const createLoser = creates.find(result => result.status === "rejected");
+  assert.match(createLoser.reason.message, /apareció en otra instancia/u);
+  const finalRecords = await firstStore.loadEntities(projectId);
+  assert.equal(finalRecords.length, 2);
+  assert.deepEqual(finalRecords.find(record => record.id === "entity-new"), createWinner);
+});
+
 test("IndexedDB rechaza relaciones, acontecimientos y afirmaciones basados en versiones antiguas", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const projectId = "indexeddb-narrative-record-cas";

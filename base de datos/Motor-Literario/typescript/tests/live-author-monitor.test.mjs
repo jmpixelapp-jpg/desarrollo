@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LiveAuthorMonitor, subscribeLiveAuthorMonitorWithRefresh } from "../dist/motor-literario.js";
+import { LiveAuthorMonitor, subscribeLiveAuthorMonitorWithRefresh } from "../dist-monitor/live-author-monitor.js";
 
 function fixture(options = {}) {
   let time = 0;

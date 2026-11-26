@@ -61,7 +61,7 @@ jobs:
       - name: Build isolated live author monitor test bundle
         run: npx vite build --config vite.monitor.config.ts
       - name: Run isolated diagnostic recovery regressions
-        run: node --test tests/live-author-monitor-diagnostics-isolation.test.mjs
+        run: node --test tests/live-author-monitor.test.mjs tests/live-author-monitor-diagnostics-isolation.test.mjs
       - name: Install Chromium for cross-tab browser tests
         run: npx playwright install --with-deps chromium
       - name: Validate MLDB schema and physical storage mapping

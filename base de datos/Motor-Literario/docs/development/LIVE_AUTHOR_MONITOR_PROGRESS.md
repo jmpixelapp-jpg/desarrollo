@@ -869,3 +869,13 @@ El primer intento de añadir `tsc --project tsconfig.live-author-monitor.json` f
 **Conclusión:** las tres regresiones específicas incorporadas para aislar errores de diagnóstico pasan sobre un bundle ejecutable separado. No se atribuye aprobación a las suites de IndexedDB, leases, navegador multi-pestaña ni benchmark; no alcanzaron sus pasos de ejecución. El bloqueo de integración global continúa abierto y se mantiene fuera de esta área para no modificar el archivo narrativo que trabaja en paralelo.
 
 **Orden de CI:** el workflow se reorganizó para ejecutar el bundle y las regresiones aisladas antes de instalar Chromium, validar el esquema y compilar el entrypoint global. Se retiró el intento de typecheck separado porque el grafo transitivo de `contracts.ts` vuelve a incorporar el módulo narrativo.
+
+## 48. Ampliación de la lane aislada con pruebas del núcleo de métricas (25 de noviembre de 2026)
+
+Se incorpora la suite `tests/live-author-monitor.test.mjs` al bundle independiente `dist-monitor/live-author-monitor.js`. La suite deja de depender de `dist/motor-literario.js` y ejecuta directamente los métodos puros de `LiveAuthorMonitor` y `subscribeLiveAuthorMonitorWithRefresh`.
+
+Su cobertura incluye 17 casos ya existentes: clasificación de actividad, inserciones/borrados, latencia de commits, fallos y resincronización, secuencias, aislamiento entre documentos, suscripciones/refrescos, restauración y validación de checkpoints, y un escenario determinista de más de ocho horas y 40.000 cambios en ocho documentos grandes.
+
+El workflow ejecuta ahora estas 17 pruebas junto con las 3 regresiones DOM de aislamiento diagnóstico, en un mismo paso previo al build general. Esto no incorpora pruebas que requieren `HostEngineApi`, IndexedDB ni Chromium; esas permanecen en la suite de integración después del build completo.
+
+**Validación:** pendiente de CI para el commit que incorpora esta ampliación.

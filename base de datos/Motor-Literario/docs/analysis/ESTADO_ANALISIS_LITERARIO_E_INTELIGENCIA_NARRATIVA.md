@@ -312,3 +312,14 @@ Se incorporó a esta rama la implementación de `StoredSyncOperation` y los mét
 Se añadieron pruebas de bandeja real, idempotencia, conservación hasta acuse, aislamiento, validación de payload, inspección de almacenamiento y una prueba de integración que usa el coordinador contra IndexedDB: acepta una operación, conserva el conflicto, registra el intento y lo retira solo después del segundo acuse.
 
 **Límite:** sigue sin existir transporte remoto real, autenticación/autorización, política de backoff ni reconciliación de conflictos. La bandeja es durable y está conectada al coordinador en el núcleo; la sincronización entre dispositivos aún depende del adaptador remoto.
+
+
+### CI verde tras integrar la bandeja durable (26 de noviembre de 2026)
+
+La ejecución sobre el commit `7777e16cc5a86a1f4dc99130ea8186df9aa84516` terminó con ambos workflows en `success`:
+- **Motor Literario TypeScript:** typecheck, build, suite completa y benchmark de edición aprobados.
+- **Live Author Monitor:** validación de MLDB/almacenamiento, build, pruebas específicas y benchmark de heap aprobados.
+
+Se corrigió además el pipeline de pruebas: la suite completa incluye `live-author-monitor-diagnostics-isolation.test.mjs`, que importa el bundle `dist-monitor`. El script `test` ahora ejecuta `build:monitor-test` antes de descubrir todos los tests, evitando depender del orden o de que otro workflow haya construido ese artefacto. Los fixtures de migración v25 también incluyen el almacén `sync-outbox` en sus modelos de IndexedDB anterior.
+
+La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el coordinador y `IndexedDbProjectStore` trabajan juntos: un acuse elimina una operación, un conflicto permanece pendiente con su intento persistido y un acuse posterior la retira.

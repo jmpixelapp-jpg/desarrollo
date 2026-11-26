@@ -20,6 +20,8 @@ export interface EpubMetadata {
 export interface EpubInspection {
   readonly metadata: EpubMetadata;
   readonly spineItems: number;
+  readonly extractedBlocks: number;
+  readonly emptySpineItems: readonly string[];
   readonly warnings: readonly string[];
 }
 
@@ -348,7 +350,29 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
 
   async inspect(source: ArrayBuffer | Uint8Array): Promise<EpubInspection> {
     const data = await this.archive(source);
-    return { metadata: data.metadata, spineItems: data.spine.length, warnings: data.warnings };
+    const warnings = [...data.warnings];
+    if (!data.metadata.title) warnings.push("El EPUB no declara título en sus metadatos.");
+    if (!data.metadata.author) warnings.push("El EPUB no declara autor en sus metadatos.");
+    const emptySpineItems: string[] = [];
+    let extractedBlocks = 0;
+    for (let index = 0; index < data.spine.length; index++) {
+      const path = data.spine[index];
+      if (!data.zip.has(path)) fail("falta un documento del spine: " + path);
+      const xhtml = await data.zip.text(path);
+      const blocks = blocksFromXhtml(xhtml, path, index, extractedBlocks);
+      extractedBlocks += blocks.length;
+      if (!blocks.length) {
+        emptySpineItems.push(path);
+        warnings.push("El documento del spine no produjo bloques de texto: " + path);
+      }
+    }
+    return {
+      metadata: data.metadata,
+      spineItems: data.spine.length,
+      extractedBlocks,
+      emptySpineItems,
+      warnings
+    };
   }
 
   async *read(source: ArrayBuffer | Uint8Array, signal?: AbortSignal): AsyncIterable<BookReaderBlock> {

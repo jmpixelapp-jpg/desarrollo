@@ -287,6 +287,10 @@ function isNarrativeEntity(value: unknown): value is NarrativeEntity {
     Array.isArray(names) && names.length <= 2_000 &&
     names.every(name => typeof name === "string" && !!name.trim() && name.length <= 512) &&
     new Set(names.map(name => normalizeEntityName(name))).size === names.length;
+  const validMergedIds = (ids: unknown): ids is readonly string[] =>
+    Array.isArray(ids) && ids.length <= 2_000 &&
+    ids.every(id => typeof id === "string" && !!id.trim() && id.length <= 512) &&
+    new Set(ids).size === ids.length;
   const validEvidence = Array.isArray(item.evidence) && item.evidence.length <= 10_000 &&
     item.evidence.every(isTextEvidence);
   return typeof item.projectId === "string" && !!item.projectId.trim() && item.projectId.length <= 256 &&
@@ -297,7 +301,7 @@ function isNarrativeEntity(value: unknown): value is NarrativeEntity {
     item.normalizedName === normalizeEntityName(item.canonicalName) &&
     validNames(item.aliases) &&
     !item.aliases.some(alias => normalizeEntityName(alias) === item.normalizedName) &&
-    (item.mergedFromIds === undefined || validNames(item.mergedFromIds)) &&
+    (item.mergedFromIds === undefined || validMergedIds(item.mergedFromIds)) &&
     validEvidence &&
     typeof item.firstSeenAt === "number" && Number.isFinite(item.firstSeenAt) && item.firstSeenAt >= 0 &&
     typeof item.lastSeenAt === "number" && Number.isFinite(item.lastSeenAt) &&
@@ -336,15 +340,57 @@ export function createNarrativeEntityUpsertHandler(
   };
 }
 
+
+export interface NarrativeEntityMergePayload {
+  readonly targetEntityId: string;
+  readonly sourceEntityId: string;
+  readonly writerId?: string;
+}
+
 /**
- * Registra el conjunto completo de handlers de dominio para el consumidor entrante.
- * La construcción falla pronto si el almacén no proporciona todos los métodos CAS.
+ * La consolidación delega en la primitiva transaccional del ProjectStore.
+ * Nunca se emula con varios upserts: deben redirigirse todas las referencias
+ * y conservarse los snapshots archivados en una sola transacción.
+ */
+export function createNarrativeEntityMergeHandler(
+  store: ProjectStore
+): NarrativeSyncOperationHandler<NarrativeEntityMergePayload> {
+  if (!store || typeof store.mergeNarrativeEntityIdentity !== "function") {
+    throw new TypeError("El store debe implementar mergeNarrativeEntityIdentity atómico.");
+  }
+  return {
+    kind: "entity-merge",
+    validate(payload: unknown): payload is NarrativeEntityMergePayload {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const item = payload as Partial<NarrativeEntityMergePayload>;
+      return typeof item.targetEntityId === "string" && !!item.targetEntityId.trim() &&
+        item.targetEntityId.length <= 512 &&
+        typeof item.sourceEntityId === "string" && !!item.sourceEntityId.trim() &&
+        item.sourceEntityId.length <= 512 && item.targetEntityId !== item.sourceEntityId &&
+        (item.writerId === undefined ||
+          (typeof item.writerId === "string" && !!item.writerId.trim() && item.writerId.length <= 256));
+    },
+    async apply(operation): Promise<void> {
+      await store.mergeNarrativeEntityIdentity!(
+        operation.projectId,
+        operation.payload.targetEntityId,
+        operation.payload.sourceEntityId,
+        operation.payload.writerId
+      );
+    }
+  };
+}
+
+/**
+ * Registra los seis handlers de dominio para el consumidor entrante.
+ * Incluye la fusión de identidades, que delega en la primitiva atómica del almacén.
  */
 export function createNarrativeSyncDomainHandlers(
   store: ProjectStore
 ): readonly NarrativeSyncOperationHandler[] {
   return [
     createNarrativeEntityUpsertHandler(store),
+    createNarrativeEntityMergeHandler(store),
     createNarrativeIdeaUpsertHandler(store),
     createNarrativeAssertionUpsertHandler(store),
     createNarrativeRelationUpsertHandler(store),

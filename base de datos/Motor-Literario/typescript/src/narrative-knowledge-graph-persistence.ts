@@ -433,7 +433,7 @@ export async function reconcileNarrativeDocumentProjections(
     for (const relatedIdeaId of idea.relatedIdeaIds ?? []) {
       if (!ideaIds.has(relatedIdeaId)) emitReference(
         "missing-related-idea", "idea", idea.id, relatedIdeaId,
-        documents, "La idea referencia otra idea inexistente."
+        documents, "La idea referencia otra idea inexistente.", "relatedIdeaIds"
       );
     }
   }
@@ -878,7 +878,7 @@ export async function inspectNarrativeReferenceRepairPending(
         detail: "El registro ya no contiene la referencia original; requiere revisión." };
     }
     const replacement = entityById.get(entry.replacementEntityId);
-    if (!replacement || !replacement.mergedFromIds.includes(entry.missingReferenceId)) {
+    if (!replacement || !replacement.mergedFromIds?.includes(entry.missingReferenceId)) {
       return { operationId: entry.operationId, recordType: entry.recordType,
         recordId: entry.recordId, status: "replacement-not-proven",
         detail: "No se puede demostrar que la entidad sustituta proceda de la identidad faltante." };
@@ -1066,11 +1066,15 @@ export async function verifyNarrativeReferenceRepairAuditIntegrity(
       : entry.recordType === "event" ? entry.referenceField === "participants"
       : entry.recordType === "assertion" ? entry.referenceField === "entityId"
       : entry.recordType === "idea" ? entry.referenceField === "relatedEntityIds" : false;
+    const missingReferenceId = typeof entry.missingReferenceId === "string"
+      ? entry.missingReferenceId : "";
+    const replacementEntityId = typeof entry.replacementEntityId === "string"
+      ? entry.replacementEntityId : "";
     const validValues = entry.recordType === "relation" || entry.recordType === "assertion"
-      ? typeof entry.before === "string" && entry.before === entry.missingReferenceId &&
-        typeof entry.after === "string" && entry.after === entry.replacementEntityId
-      : isStringArray(entry.before) && entry.before.includes(entry.missingReferenceId) &&
-        isStringArray(entry.after) && entry.after.includes(entry.replacementEntityId);
+      ? typeof entry.before === "string" && entry.before === missingReferenceId &&
+        typeof entry.after === "string" && entry.after === replacementEntityId
+      : isStringArray(entry.before) && entry.before.includes(missingReferenceId) &&
+        isStringArray(entry.after) && entry.after.includes(replacementEntityId);
     const valid = entry.operation === "narrative-reference-repair" &&
       entry.projectId === projectId && validType && expectedField &&
       typeof entry.recordId === "string" && !!entry.recordId &&

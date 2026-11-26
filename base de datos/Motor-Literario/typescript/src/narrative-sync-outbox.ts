@@ -521,12 +521,16 @@ export class IndexedDbNarrativeSyncOutbox {
         try { transaction.abort(); } catch { /* abortada */ }
       };
       transaction.oncomplete = () => {
-        validateOutboxProjectCursor(projectCursor, projectId);
-        resolve({
-        ...(existing ? { existing } : {}),
-        ...(cursor ? { cursor } : {}),
-        ...(projectCursor ? { projectCursor } : {})
-      });
+        try {
+          validateOutboxProjectCursor(projectCursor, projectId);
+          resolve({
+            ...(existing ? { existing } : {}),
+            ...(cursor ? { cursor } : {}),
+            ...(projectCursor ? { projectCursor } : {})
+          });
+        } catch (error) {
+          reject(error);
+        }
       };
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo leer el estado de secuencia del outbox."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura de secuencia del outbox."));
@@ -572,7 +576,10 @@ export class IndexedDbNarrativeSyncOutbox {
           outcome = { status: "duplicate", entry: currentEntry };
           return;
         }
-        try { validateOutboxCursor(currentCursor, entry.projectId, entry.writerId); } catch (error) {
+        try {
+          validateOutboxCursor(currentCursor, entry.projectId, entry.writerId);
+          validateOutboxProjectCursor(currentProjectCursor, entry.projectId);
+        } catch (error) {
           failure = error instanceof Error ? error : new Error("Cursor de outbox inválido.");
           try { transaction.abort(); } catch { /* abortada */ }
           return;

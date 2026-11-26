@@ -158,7 +158,8 @@ function discoverMatches(text: string): readonly Match[] {
     add(item.expression, match => [{
       kind: item.kind,
       relation: item.kind === "relative-order" && /^(?:anteayer|ayer|la\s+v[ií]spera)$/iu.test(match[0]) ? "before"
-        : item.kind === "relative-order" && /^(?:pasado\s+ma[nñ]ana|el\s+d[ií]a\s+de\s+ma[nñ]ana)$/iu.test(match[0]) ? "after"\n        : item.kind === "relative-duration"
+        : item.kind === "relative-order" && /^(?:pasado\s+ma[nñ]ana|el\s+d[ií]a\s+de\s+ma[nñ]ana)$/iu.test(match[0]) ? "after"
+        : item.kind === "relative-duration"
         ? /^(?:a\s+lo\s+largo\s+de|desde\s+hace|durante|por)\s+/iu.test(match[0]) ? "duration"
           : /^(?:hace)\s+|antes$/iu.test(match[0]) ? "before" : "after"
         : item.relation,

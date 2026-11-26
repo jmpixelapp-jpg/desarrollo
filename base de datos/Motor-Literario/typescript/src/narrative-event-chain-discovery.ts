@@ -37,6 +37,7 @@ export interface NarrativeEventChainDiscoveryInput {
 
 export const MAX_NARRATIVE_EVENT_CHAIN_GAP = 5_000;
 export const MAX_NARRATIVE_EVENT_CHAIN_LINKS = 500;
+export const MAX_NARRATIVE_EVENT_CHAIN_OBSERVATIONS = 10_000;
 
 const MARKERS: readonly {
   readonly kind: NarrativeEventChainMarkerKind;
@@ -83,6 +84,7 @@ function validate(input: NarrativeEventChainDiscoveryInput): void {
       typeof input.text !== "string" ||
       input.text.length > MAX_NARRATIVE_EVENT_CHAIN_GAP * MAX_NARRATIVE_EVENT_CHAIN_LINKS ||
       !Array.isArray(input.observations) ||
+      input.observations.length > MAX_NARRATIVE_EVENT_CHAIN_OBSERVATIONS ||
       (input.baseOffset !== undefined &&
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
           input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {

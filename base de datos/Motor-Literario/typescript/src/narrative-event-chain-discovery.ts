@@ -101,7 +101,7 @@ function validate(input: NarrativeEventChainDiscoveryInput): void {
         ids.has(observation.id) ||
         !evidenceIsExact(observation.actionEvidence, input, base) ||
         !Array.isArray(observation.mentionedCharacterIds) ||
-        observation.mentionedCharacterIds.some(id => typeof id !== "string" || !id.trim())) {
+        observation.mentionedCharacterIds.some((id: unknown) => typeof id !== "string" || !id.trim())) {
       throw new Error("Las acciones deben tener identidad única y evidencia literal verificable en el mismo documento y revisión.");
     }
     ids.add(observation.id);

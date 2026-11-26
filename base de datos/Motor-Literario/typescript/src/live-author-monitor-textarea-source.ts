@@ -275,16 +275,26 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       return;
     }
 
-    // Si beforeinput declara el texto que va a insertar, contrastamos el
-    // payload real. Esto detecta una sustitución externa dentro de la selección
-    // que conservaría longitud, prefijo y sufijo y parecería un delta válido.
-    // Los navegadores que exponen data=null se mantienen en el camino estructural.
-    const insertedText = value.slice(start, start + insertedLength);
-    if (before.inputData !== null && before.inputType.startsWith("insert") &&
-        before.inputData !== insertedText) {
+    // Si beforeinput e input exponen contenido, ambas declaraciones deben
+    // coincidir. Si solo uno proporciona data, se usa como evidencia disponible.
+    // Nunca se incluyen esos valores en el diagnóstico.
+    const inputData = typeof input.data === "string" ? input.data : null;
+    if (before.inputData !== null && inputData !== null &&
+        before.inputData !== inputData) {
       this.fail(
         "input-data-mismatch",
-        "El texto insertado no coincide con el dato declarado por beforeinput; se requiere resincronización."
+        "Los datos declarados por beforeinput e input no coinciden; se requiere resincronización."
+      );
+      return;
+    }
+
+    const insertedText = value.slice(start, start + insertedLength);
+    const expectedInputData = before.inputData ?? inputData;
+    if (expectedInputData !== null && before.inputType.startsWith("insert") &&
+        expectedInputData !== insertedText) {
+      this.fail(
+        "input-data-mismatch",
+        "El texto insertado no coincide con los datos declarados por los eventos; se requiere resincronización."
       );
       return;
     }

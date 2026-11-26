@@ -27,6 +27,7 @@ let source;
 let baselineLengthUtf16 = 0;
 let startedAt;
 let disposed = false;
+let monitorErrorBeforeNextObservedEvent = false;
 const inputPairing = new LiveAuthorMonitorImePairing();
 
 const eventCounters = {
@@ -92,6 +93,12 @@ function recordEvent(event) {
 
   if (entry.type === "beforeinput") inputPairing.recordBeforeInput(entry, event);
   else if (entry.type === "input") inputPairing.recordInput(entry, event);
+  if (monitorErrorBeforeNextObservedEvent) {
+    // onError can run inside the source listener before this recorder sees
+    // the same beforeinput/input event. Interrupt the pair created above.
+    inputPairing.interrupt("monitor-error-before-input");
+    monitorErrorBeforeNextObservedEvent = false;
+  }
   appendTraceEntry(entry);
   render();
 }
@@ -101,6 +108,7 @@ function recordError(error) {
   eventCounters.monitorErrorCount += 1;
   errorCodeCounts[error.code] = (errorCodeCounts[error.code] ?? 0) + 1;
   inputPairing.interrupt("monitor-error-before-input");
+  monitorErrorBeforeNextObservedEvent = true;
   appendTraceEntry({
     index: traceEntryCount,
     atMs: Number(performance.now().toFixed(3)),

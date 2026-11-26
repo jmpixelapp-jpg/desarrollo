@@ -132,8 +132,8 @@ test("ordena de forma estable los ciclos y conserva el total al limitar sus mues
   assert.equal(graph.largestWeakComponentSize, 1);
 });
 
-test("rechaza catálogos globales por encima del límite documentado de 12.000 ideas", () => {
-  const ideas = Array.from({ length: 12_001 }, (_, index) => ({
+test("rechaza catálogos globales por encima del límite documentado de 20.000 ideas", () => {
+  const ideas = Array.from({ length: 20_001 }, (_, index) => ({
     projectId,
     ideaId: "overflow-" + String(index).padStart(5, "0"),
     status: "IDEA",

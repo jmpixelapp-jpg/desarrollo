@@ -647,3 +647,30 @@ test("integra conocimiento atribuido y acciones posteriores del mismo personaje"
   assert.ok(maraState.items.some(item=>item.informationId===link.informationId));
   assert.ok(result.actions.some(item=>item.id===link.actionId));
 });
+
+test("triangula conocimiento, objetivo y acción en el resultado narrativo principal",()=>{
+  const text="Mara quiere proteger a Elian. Mara vio que el puente había caído. Mara protegió a Elian.";
+  const result=understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-decision-context",revision:1,text,entities
+  });
+  assert.ok(result.characterKnowledgeStates.some(state=>
+    state.characterEntityId==="mara" && state.items.length>0
+  ));
+  assert.ok(result.characterIntents.some(intent=>
+    intent.characterEntityId==="mara" && intent.text.includes("proteger a Elian")
+  ));
+  assert.ok(result.knowledgeActionLinks.some(link=>
+    link.characterEntityId==="mara" && link.actionEvidence.excerpt.includes("protegió")
+  ));
+  const context=result.decisionContexts.find(item=>
+    item.characterEntityId==="mara" && item.actionEvidence.excerpt.includes("protegió")
+  );
+  assert.ok(context);
+  assert.equal(context.alignment,"supports-intent");
+  assert.ok(result.characterKnowledgeStates.some(state=>
+    state.characterEntityId===context.characterEntityId &&
+    state.items.some(item=>item.informationId===context.informationId)
+  ));
+  assert.ok(result.characterIntents.some(intent=>intent.id===context.intentId));
+  assert.ok(result.actions.some(action=>action.id===context.actionId));
+});

@@ -6,9 +6,9 @@
     "encoding": "UTF-8",
     "payload": "canonical JSON",
     "database_type": "MAIN_NARRATIVE",
-    "schema_version": "0.4.2",
+    "schema_version": "0.4.3",
     "status": "DECLARATIVE_SCHEMA",
-    "description": "MLDB 0.4.2: añade el historial append-only de cambios de etiqueta y participantes de acontecimientos, con aislamiento por proyecto y revisiones consecutivas."
+    "description": "MLDB 0.4.3: conserva el historial append-only de cambios de etiqueta y participantes de acontecimientos, con aislamiento por proyecto y revisiones consecutivas; declara la bandeja durable de operaciones salientes para sincronización."
   },
   "principles": {
     "project_identity_source": "HOST_APPLICATION",
@@ -2742,6 +2742,105 @@
           "project_id",
           "lifecycle_id"
         ]
+      ]
+    },
+    {
+      "name": "sync_outbox",
+      "scope": "project",
+      "purpose": "Operaciones salientes durables para sincronización; se conservan hasta acuse remoto y permiten reintentos idempotentes.",
+      "columns": [
+        [
+          "operation_id",
+          "TEXT",
+          "PRIMARY KEY",
+          "Identificador idempotente global de la operación."
+        ],
+        [
+          "project_id",
+          "TEXT",
+          "NOT NULL + FK projects.project_id",
+          "Ámbito del proyecto propietario."
+        ],
+        [
+          "device_id",
+          "TEXT",
+          "NOT NULL",
+          "Identidad estable del dispositivo de origen."
+        ],
+        [
+          "sequence",
+          "INTEGER",
+          "NOT NULL",
+          "Secuencia monotónica por proyecto y dispositivo."
+        ],
+        [
+          "kind",
+          "TEXT",
+          "NOT NULL",
+          "Tipo de operación extensible."
+        ],
+        [
+          "payload_json",
+          "JSON_VALUE",
+          "NOT NULL",
+          "Payload JSON validado de la operación."
+        ],
+        [
+          "created_at",
+          "TIMESTAMP",
+          "NOT NULL",
+          "Fecha de creación local."
+        ],
+        [
+          "attempt_count",
+          "INTEGER",
+          "NOT NULL",
+          "Cantidad de intentos de envío."
+        ],
+        [
+          "last_attempt_at",
+          "TIMESTAMP",
+          "NULL",
+          "Último intento de envío."
+        ],
+        [
+          "last_error",
+          "TEXT",
+          "NULL",
+          "Último error de transporte, si lo hubo."
+        ]
+      ],
+      "indexes": [
+        [
+          "project_id",
+          "created_at"
+        ],
+        [
+          "project_id",
+          "device_id",
+          "sequence"
+        ]
+      ],
+      "foreign_keys": [
+        {
+          "name": "fk_sync_outbox_project",
+          "columns": [
+            "project_id"
+          ],
+          "references": {
+            "table": "projects",
+            "columns": [
+              "project_id"
+            ]
+          },
+          "on_delete": "RESTRICT",
+          "on_update": "RESTRICT"
+        }
+      ],
+      "constraints": [
+        "UNIQUE(project_id,device_id,sequence)",
+        "sequence >= 1",
+        "attempt_count >= 0"
       ]
     }
   ],

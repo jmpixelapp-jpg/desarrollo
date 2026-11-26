@@ -7,7 +7,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
-    "test": "npm run build && npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs",
+    "build:monitor-test": "vite build --config vite.monitor.config.ts",
+    "test": "npm run build && npm run build:monitor-test && npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs",
     "bench": "npm run build && node bench/live-edit-benchmark.mjs && npm run bench:monitor",
     "validate:schema": "node scripts/validate-mldb-schema.mjs && node scripts/audit-storage-implementation.mjs",
     "bridge": "npm run build && node bridge/stdio-server.mjs",

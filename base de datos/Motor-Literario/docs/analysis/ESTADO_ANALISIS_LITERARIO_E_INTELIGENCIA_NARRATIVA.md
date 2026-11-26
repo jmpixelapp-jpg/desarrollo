@@ -264,3 +264,62 @@ La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualiza
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.
+
+
+## 10. Coordinador de sincronización narrativa y correcciones de monitor (26 de noviembre de 2026)
+
+Se trasladó la implementación a `feat/narrative-sync-coordinator-v3`, basada en el `main` actualizado (`6747a93e3a88a52d6ef089543d39eeea0472bfaf)), porque la rama anterior había quedado cuatro commits detrás.
+
+La tanda incluye:
+- Coordinador `NarrativeSyncCoordinator` y puertos `SyncOutboxPort` / `SyncTransport`, desacoplados del proveedor remoto.
+- Lotes acotados, aislamiento por proyecto, coalescencia por proyecto y concurrencia entre proyectos.
+- Validación estricta de cada operación y payload JSON antes del envío.
+- Respuesta remota exhaustiva y disjunta: cada operación debe quedar aceptada, en conflicto o reintentable; solo los acuses explícitos permiten retirar datos.
+- Ocho pruebas para acuses, conflictos, reintentos, aislamiento, concurrencia, fallos y payload malformado.
+- Reparación de la declaración vacía/malformada de `NarrativeAssertion` y de los acumuladores de actividad del monitor y IndexedDB.
+- Corrección de una condición de carrera del heartbeat: las revalidaciones que llegan mientras existe otra operación activa comparten una promesa de seguimiento y esperan su resultado.
+- Corrección de la causa raíz del fencing: se preserva `undefined` al capturar la generación del lease, en lugar de sustituirlo por `0`. La comparación anterior `undefined !== 0` descartaba la respuesta válida de renovación antes de detectar pérdida o recuperar el lease.
+
+**Estado de validación:** la ejecución anterior confirmó que el typecheck pasa, pero falló en dos pruebas de lease. La cola de seguimiento, por sí sola, no resolvió esas pruebas; la corrección de generación en `1cfe39d` aborda el origen confirmado. Se trasladaron los cambios a esta rama nueva para incorporar el `main` reciente. Aún falta una ejecución CI sobre el nuevo HEAD para validar conjuntamente typecheck, suite y pruebas de navegador.
+
+**Límite funcional:** la bandeja durable de IndexedDB del PR #52 todavía no está integrada en `main`. El coordinador define el puerto compatible con ella, pero la integración final exige incorporar esa bandeja y un transporte remoto real. Siguen pendientes autenticación/autorización, API versionada, idempotencia del servidor, backoff y resolución explícita de conflictos. No se declara sincronización multidispositivo terminada.
+
+
+### Ajuste de regresión del workspace tras cambios de accesibilidad
+
+La ejecución de CI sobre el merge commit confirmó que los dos tests de fencing ya no fallan. El job del monitor encontró, en cambio, que el helper `findCards` de `live-author-monitor-workspace.test.mjs` contaba todos los nodos `role=listitem`, incluidos los elementos de la lista accesible de métricas. El test ahora identifica tarjetas de documento por la presencia de `data-document-id`, manteniendo la semántica accesible de las métricas y verificando el número real de capítulos. Corrección añadida en `4682e21`; requiere nueva ejecución CI.
+
+
+### Validación CI confirmada de la corrección integrada
+
+La ejecución de CI del commit de código/pruebas `4682e21c9f29a61f803c0877f4cf1952b8e48422` terminó correctamente en ambos workflows:
+- **Motor Literario TypeScript:** typecheck, build y suite automatizada aprobados; benchmark de edición aprobado.
+- **Live Author Monitor:** validación de esquema/almacenamiento, build, pruebas específicas del monitor y benchmark de heap aprobados.
+
+La suite completa ya no reproduce los fallos de fencing ni el recuento erróneo de tarjetas del workspace. Después de ese commit se añadió únicamente documentación de seguimiento (`054e1b5`); no se modificó código ni pruebas. El PR #56 permanece abierto como borrador y no se ha fusionado.
+
+
+### Integración de bandeja durable con el coordinador (IndexedDB v25)
+
+Se incorporó a esta rama la implementación de `StoredSyncOperation` y los métodos de `IndexedDbProjectStore`:
+- `enqueueSyncOperation`: inserción idempotente por `operationId`, rechazo de colisiones y unicidad de secuencia por proyecto/dispositivo.
+- `loadPendingSyncOperations`: lectura ordenada sin retirar operaciones.
+- `recordSyncOperationAttempt`: persistencia de intentos y último error.
+- `acknowledgeSyncOperation`: retirada únicamente tras acuse remoto.
+- Migración de IndexedDB v24 a v25 con almacén `sync-outbox` e índices por proyecto/fecha y proyecto/dispositivo/secuencia.
+- MLDB 0.4.3 y manifiesto físico actualizados; el contrato de puerto del coordinador es estructuralmente compatible con `IndexedDbProjectStore`.
+
+Se añadieron pruebas de bandeja real, idempotencia, conservación hasta acuse, aislamiento, validación de payload, inspección de almacenamiento y una prueba de integración que usa el coordinador contra IndexedDB: acepta una operación, conserva el conflicto, registra el intento y lo retira solo después del segundo acuse.
+
+**Límite:** sigue sin existir transporte remoto real, autenticación/autorización, política de backoff ni reconciliación de conflictos. La bandeja es durable y está conectada al coordinador en el núcleo; la sincronización entre dispositivos aún depende del adaptador remoto.
+
+
+### CI verde tras integrar la bandeja durable (26 de noviembre de 2026)
+
+La ejecución sobre el commit `7777e16cc5a86a1f4dc99130ea8186df9aa84516` terminó con ambos workflows en `success`:
+- **Motor Literario TypeScript:** typecheck, build, suite completa y benchmark de edición aprobados.
+- **Live Author Monitor:** validación de MLDB/almacenamiento, build, pruebas específicas y benchmark de heap aprobados.
+
+Se corrigió además el pipeline de pruebas: la suite completa incluye `live-author-monitor-diagnostics-isolation.test.mjs`, que importa el bundle `dist-monitor`. El script `test` ahora ejecuta `build:monitor-test` antes de descubrir todos los tests, evitando depender del orden o de que otro workflow haya construido ese artefacto. Los fixtures de migración v25 también incluyen el almacén `sync-outbox` en sus modelos de IndexedDB anterior.
+
+La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el coordinador y `IndexedDbProjectStore` trabajan juntos: un acuse elimina una operación, un conflicto permanece pendiente con su intento persistido y un acuse posterior la retira.

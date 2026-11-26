@@ -2217,7 +2217,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 24);
+      assert.equal(version, 25);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2240,6 +2240,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "event-lifecycles", keyPath: ["projectId", "id"] },
       { name: "documents", keyPath: ["projectId", "documentId"] },
       { name: "changes", keyPath: ["projectId", "documentId", "sequence"] },
+      // La bandeja de salida se crea en la misma migración v25 sin tocar datos anteriores.
+      { name: "sync-outbox", keyPath: "operationId" },
       { name: "narrative-entities", keyPath: ["projectId", "id"] },
       { name: "narrative-relations", keyPath: ["projectId", "id"] },
       { name: "narrative-events", keyPath: ["projectId", "id"] },
@@ -2344,7 +2346,9 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["dictionary-entries", "by-dictionary-normalized"],
       ["dictionary-entry-entities", "by-project"],
       ["dictionary-entry-entities", "by-entry"],
-      ["dictionary-entry-entities", "by-record"]
+      ["dictionary-entry-entities", "by-record"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"]
     ]);
     assert.equal(createdIndexes.find(index => index.name === "by-document-sequence")?.unique, true);
   } finally {
@@ -2409,7 +2413,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
-    "live-author-monitor-checkpoints", "live-author-monitor-leases",
+    "live-author-monitor-checkpoints", "live-author-monitor-leases", "sync-outbox",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
@@ -2462,7 +2466,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 24);
+    assert.equal(openedVersion, 25);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -2542,9 +2546,14 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["project-evidences", "by-fragment"],
       ["timeline-occurrences", "by-project"],
       ["timeline-occurrences", "by-event-record"],
-      ["timeline-occurrences", "by-track-order"]
+      ["timeline-occurrences", "by-track-order"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"]
     ];
-    assert.deepEqual(createdIndexes.map(([storeName, indexName]) => [storeName, indexName]), expected);
+    const indexPairs = createdIndexes.map(([storeName, indexName]) => `${storeName}/${indexName}`);
+    const expectedIndexPairs = expected.map(([storeName, indexName]) => `${storeName}/${indexName}`);
+    assert.equal(new Set(indexPairs).size, indexPairs.length, "la migración no debe crear índices duplicados");
+    assert.deepEqual([...new Set(indexPairs)].sort(), [...new Set(expectedIndexPairs)].sort());
     assert.equal(
       createdIndexes.find(([, indexName]) => indexName === "by-document-sequence")?.[3]?.unique,
       true,
@@ -2564,7 +2573,7 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
-    "live-author-monitor-checkpoints", "live-author-monitor-leases",
+    "live-author-monitor-checkpoints", "live-author-monitor-leases", "sync-outbox",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",

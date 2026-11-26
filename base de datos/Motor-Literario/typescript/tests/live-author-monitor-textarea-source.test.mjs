@@ -291,7 +291,7 @@ test("captura actualizaciones IME sucesivas como deltas consecutivos y cierra el
       start: 3,
       end: 3,
       replacement: "に",
-      activityKind: "typing"
+      activityKind: "composition"
     },
     {
       documentId: "chapter-1",
@@ -300,7 +300,7 @@ test("captura actualizaciones IME sucesivas como deltas consecutivos y cierra el
       start: 3,
       end: 4,
       replacement: "日本",
-      activityKind: "typing"
+      activityKind: "composition"
     }
   ]);
   assert.equal(f.source.getState().compositionActive, true);

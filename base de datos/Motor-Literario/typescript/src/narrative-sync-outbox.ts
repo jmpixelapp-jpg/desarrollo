@@ -349,14 +349,15 @@ export class IndexedDbNarrativeSyncOutbox {
       const request = store.index("by-project").getAll(projectId);
       let entries: NarrativeSyncOutboxEntry[] | undefined;
       request.onsuccess = () => {
-        entries = (request.result as NarrativeSyncOutboxEntry[])
-          .filter(entry => status === undefined || entry.status === status)
-          .sort((left, right) =>
-            left.generation - right.generation
-          );
-        try { entries.forEach(validateStoredEntry); } catch (error) {
-          reject(error);
+        try {
+          const loaded = request.result as NarrativeSyncOutboxEntry[];
+          loaded.forEach(validateStoredEntry);
+          entries = loaded
+            .filter(entry => status === undefined || entry.status === status)
+            .sort((left, right) => left.generation - right.generation);
+        } catch (error) {
           try { transaction.abort(); } catch { /* abortada */ }
+          reject(error);
         }
       };
       request.onerror = () => {
@@ -426,9 +427,38 @@ export class IndexedDbNarrativeSyncOutbox {
     });
 
     const issues = new Set<string>();
-    const entries = [...snapshot.entries].sort((a, b) => a.generation - b.generation);
+    const safeEntries: NarrativeSyncOutboxEntry[] = [];
+    for (const raw of snapshot.entries) {
+      if (!raw || typeof raw !== "object") {
+        issues.add("INVALID_OPERATION_ENTRY");
+        continue;
+      }
+      const entry = raw as NarrativeSyncOutboxEntry;
+      try {
+        validateStoredEntry(entry);
+      } catch {
+        issues.add("INVALID_OPERATION_ENTRY");
+      }
+      if (typeof entry.projectId !== "string" ||
+          typeof entry.writerId !== "string" ||
+          !Number.isSafeInteger(entry.generation) || entry.generation < 1 ||
+          !Number.isSafeInteger(entry.sequence) || entry.sequence < 1 ||
+          typeof entry.operationId !== "string") {
+        issues.add("INVALID_OPERATION_IDENTITY");
+        continue;
+      }
+      safeEntries.push(entry);
+    }
+    const entries = safeEntries.sort((a, b) => a.generation - b.generation);
+
     const cursorsByWriter = new Map<string, OutboxWriterCursor>();
-    for (const cursor of snapshot.writerCursors) {
+    for (const raw of snapshot.writerCursors) {
+      if (!raw || typeof raw !== "object" ||
+          typeof (raw as OutboxWriterCursor).writerId !== "string") {
+        issues.add("INVALID_WRITER_CURSOR");
+        continue;
+      }
+      const cursor = raw as OutboxWriterCursor;
       if (cursorsByWriter.has(cursor.writerId)) issues.add("DUPLICATE_WRITER_CURSOR");
       cursorsByWriter.set(cursor.writerId, cursor);
       try {
@@ -441,11 +471,7 @@ export class IndexedDbNarrativeSyncOutbox {
     const operationsByWriter = new Map<string, NarrativeSyncOutboxEntry[]>();
     const operationIds = new Set<string>();
     for (const entry of entries) {
-      try {
-        validateStoredEntry(entry);
-      } catch {
-        issues.add("INVALID_OPERATION_ENTRY");
-      }
+      if (entry.projectId !== projectId) issues.add("CROSS_PROJECT_OPERATION");
       if (operationIds.has(entry.operationId)) issues.add("DUPLICATE_OPERATION_ID");
       operationIds.add(entry.operationId);
       const writerEntries = operationsByWriter.get(entry.writerId) ?? [];
@@ -455,7 +481,7 @@ export class IndexedDbNarrativeSyncOutbox {
 
     for (let index = 1; index < entries.length; index++) {
       if (entries[index]!.generation !== entries[index - 1]!.generation + 1 ||
-          entries[index]!.envelope.payload?.expectedGeneration !== entries[index - 1]!.generation) {
+          entries[index]!.envelope?.payload?.expectedGeneration !== entries[index - 1]!.generation) {
         issues.add("PROJECT_GENERATION_GAP");
       }
     }
@@ -491,7 +517,7 @@ export class IndexedDbNarrativeSyncOutbox {
 
     for (const entry of entries) {
       try {
-        if (!(await this.verifyEnvelope(entry.envelope))) {
+        if (!entry.envelope || !(await this.verifyEnvelope(entry.envelope))) {
           issues.add("INVALID_ENVELOPE_DIGEST");
         }
       } catch {
@@ -505,7 +531,7 @@ export class IndexedDbNarrativeSyncOutbox {
     return {
       projectId,
       intact: issues.size === 0,
-      operationCount: entries.length,
+      operationCount: snapshot.entries.length,
       pendingCount,
       leasedCount,
       deliveredCount,

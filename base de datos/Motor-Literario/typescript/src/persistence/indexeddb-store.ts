@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry, NarrativeReferenceRepairPendingEntry } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 26;
+const DATABASE_VERSION = 27;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -70,6 +70,7 @@ const PROJECT_RELATIONS = "project-relations";
 const PROJECT_EVIDENCES = "project-evidences";
 const TIMELINE_OCCURRENCES = "timeline-occurrences";
 const NARRATIVE_REFERENCE_REPAIR_AUDITS = "narrative-reference-repair-audits";
+const NARRATIVE_REFERENCE_REPAIR_PENDING = "narrative-reference-repair-pending";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -1727,6 +1728,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           audits.createIndex("by-project", "projectId", { unique: false });
         }
+        if (!db.objectStoreNames.contains(NARRATIVE_REFERENCE_REPAIR_PENDING)) {
+          const pending = db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_PENDING, {
+            keyPath: ["projectId", "operationId"]
+          });
+          pending.createIndex("by-project", "projectId", { unique: false });
+        }
         if (!db.objectStoreNames.contains(PROJECT_SETTINGS)) {
           const settings = db.createObjectStore(PROJECT_SETTINGS, {
             keyPath: ["projectId", "key"]
@@ -2496,6 +2503,72 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar la auditoría."));
       transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado de auditoría."));
+    });
+  }
+
+  async saveNarrativeReferenceRepairPending(entry: NarrativeReferenceRepairPendingEntry): Promise<void> {
+    if (!entry || typeof entry.projectId !== "string" || !entry.projectId.trim() ||
+        typeof entry.operationId !== "string" || !entry.operationId.trim() ||
+        entry.operation !== "narrative-reference-repair" ||
+        !["relation", "event", "assertion", "idea"].includes(entry.recordType) ||
+        !entry.recordId || !entry.referenceField || !entry.missingReferenceId ||
+        !entry.replacementEntityId || !Number.isFinite(entry.appliedAt) || entry.appliedAt < 0) {
+      throw new Error("Intención pendiente de reparación narrativa inválida.");
+    }
+    const expectedId = ["reference-repair", entry.projectId, entry.recordType, entry.recordId,
+      entry.referenceField, entry.missingReferenceId, entry.replacementEntityId].join("|");
+    if (entry.operationId !== expectedId) throw new Error("El ID de la intención no coincide con la reparación.");
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_PENDING, "readwrite");
+    const objectStore = transaction.objectStore(NARRATIVE_REFERENCE_REPAIR_PENDING);
+    const request = objectStore.get([entry.projectId, entry.operationId]);
+    await new Promise<void>((resolve, reject) => {
+      let failure: Error | undefined;
+      request.onsuccess = () => {
+        const current = request.result as NarrativeReferenceRepairPendingEntry | undefined;
+        if (current) {
+          const { appliedAt: _currentAt, ...currentOperation } = current;
+          const { appliedAt: _entryAt, ...newOperation } = entry;
+          if (JSON.stringify(currentOperation) !== JSON.stringify(newOperation)) {
+            failure = new Error("La intención pendiente ya existe con contenido diferente.");
+            transaction.abort();
+          }
+          return;
+        }
+        objectStore.add(structuredClone(entry));
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo consultar la intención pendiente.");
+        transaction.abort();
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar la intención pendiente."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado de la intención."));
+    });
+  }
+
+  async loadNarrativeReferenceRepairPending(projectId: string): Promise<readonly NarrativeReferenceRepairPendingEntry[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) throw new Error("Proyecto inválido para consultar intenciones.");
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_PENDING, "readonly");
+    const request = transaction.objectStore(NARRATIVE_REFERENCE_REPAIR_PENDING).index("by-project").getAll(projectId);
+    const records = await readAfterTransaction(transaction, request, "No se pudieron leer las intenciones pendientes.")
+      as NarrativeReferenceRepairPendingEntry[];
+    return records.map(item => structuredClone(item));
+  }
+
+  async deleteNarrativeReferenceRepairPending(projectId: string, operationId: string): Promise<void> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof operationId !== "string" || !operationId.trim()) {
+      throw new Error("Identidad inválida para cerrar una intención pendiente.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_PENDING, "readwrite");
+    transaction.objectStore(NARRATIVE_REFERENCE_REPAIR_PENDING).delete([projectId, operationId]);
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo cerrar la intención pendiente."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se canceló el cierre de la intención."));
     });
   }
 

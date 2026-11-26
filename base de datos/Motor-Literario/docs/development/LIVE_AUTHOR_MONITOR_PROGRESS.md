@@ -392,3 +392,27 @@ Se amplió `live-author-monitor-browser.test.mjs`: tras el takeover y guardado d
 **Commit:** [702846e — probar checkpoint tras reload](https://github.com/jmpixelapp-jpg/desarrollo/commit/702846e433654611343fbfc143b0b0ea2475d2a5).
 
 **Resultado CI verificado:** [45726777208](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726777208), commit `702846e433654611343fbfc143b0b0ea2475d2a5`: build Vite correcto, MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 34 almacenes) y **108/108 pruebas aprobadas, 0 fallidas, 0 omitidas**. Incluye la recarga real de una página Chromium y recuperación del checkpoint tras instanciar de nuevo el adaptador.
+
+
+
+## 19. Nueva entrega — carreras de heartbeat, dispose terminal y recuperación por expiración (26 de noviembre de 2026)
+
+**Objetivo:** evitar que callbacks asíncronos del lease restauren titularidad después del cierre y evitar que las pestañas observadoras queden esperando indefinidamente si la pestaña propietaria desaparece sin liberar.
+
+**Correcciones del HostEngineApi:**
+- las generaciones de heartbeat usan identidad de objeto, invalidada antes de una liberación; una respuesta tardía se ignora si cambió la generación, el owner/fencing token o el estado del ciclo de vida;
+- se impide que un heartbeat solapado ejecute más de una renovación simultánea por documento;
+- `dispose()` pasa a ser terminal e idempotente; si una adquisición iniciada previamente se confirma después de dispose, el anfitrión la libera sin instalar un heartbeat;
+- las pestañas observadoras conservan un heartbeat de sondeo a 10 s incluso sin lease. Al vencer la reserva de 30 s de una pestaña caída, adquieren el token siguiente sin depender de una nueva pulsación del autor.
+
+**Pruebas añadidas:** renovación demorada que vuelve después del cierre seguro; dispose durante adquisición pendiente y confirmación posterior del lease; toma automática de titularidad por una pestaña observadora después de expirar el TTL sin release del propietario anterior.
+
+**Archivos:** `typescript/src/host-api.ts`, `typescript/tests/live-author-monitor-host-api.test.mjs`; especificación sección 33.
+
+**Commits:** [50f09f4 — corregir comparación de generación](https://github.com/jmpixelapp-jpg/desarrollo/commit/50f09f460819f328dafceca2dbb5fb9e474c61c3), [4d378f9 — proteger heartbeat tras liberación](https://github.com/jmpixelapp-jpg/desarrollo/commit/4d378f9eedb3424cb915cf6ff2cbdc38fd231681), [5216f80 — probar respuesta tardía](https://github.com/jmpixelapp-jpg/desarrollo/commit/5216f80ca42886dd76e1194ea3bc3481c92dd7c5), [ddf5950 — dispose terminal](https://github.com/jmpixelapp-jpg/desarrollo/commit/ddf595034ece884d3a403ebb33cfa72b7d328df0), [f9bf957 — probar adquisición durante dispose](https://github.com/jmpixelapp-jpg/desarrollo/commit/f9bf957fea18998c6d78858a7534db5f9a8f4cff), [cc270c6 — recuperar tras expiración](https://github.com/jmpixelapp-jpg/desarrollo/commit/cc270c62f1f892e06455b0f9c0f9cde5a8371344), [2f78c0b — probar takeover automático](https://github.com/jmpixelapp-jpg/desarrollo/commit/2f78c0b542b8146a8924b5b980c05cc090ddc986).
+
+**Resultado verificado:** CI específica [45727622443](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727622443), build Vite correcto, MLDB 0.4.2 válido, auditoría de 25 tablas/34 almacenes y **112/112 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+**CI general:** [45727622233](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727622233) solo reporta errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`, fuera del alcance del monitor.
+
+**Alcance:** la recuperación al expirar protege únicamente la titularidad del checkpoint de métricas. No resuelve conflictos de edición concurrente ni sincroniza los textos locales de dos editores; el journal y el motor anfitrión siguen siendo la autoridad del manuscrito.

@@ -50,6 +50,8 @@ interface BeforeInputState {
   readonly inputType: string;
   readonly inputData: string | null;
   readonly isComposing: boolean;
+  /** Referencia efímera para resolver cancelaciones posteriores al listener. */
+  readonly event: InputEvent;
 }
 
 /**
@@ -88,6 +90,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       );
       return;
     }
+    this.clearCancelledPendingInput();
     if (this.pendingInput) {
       this.fail(
         "missing-input",
@@ -142,7 +145,8 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       previousLength,
       inputType,
       inputData: typeof input.data === "string" ? input.data : null,
-      isComposing
+      isComposing,
+      event: input
     };
     this.pendingInput = pending;
 
@@ -184,6 +188,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       );
       return;
     }
+    this.clearCancelledPendingInput();
     if (this.pendingInput) {
       this.fail(
         "composition-state-mismatch",
@@ -241,6 +246,12 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     // después de ocultar la pestaña. Mantener el par permite consumirlo si llega;
     // pagehide/freeze siguen siendo las señales fuertes de discontinuidad.
   };
+
+  private clearCancelledPendingInput(): void {
+    if (this.pendingInput?.event.defaultPrevented === true) {
+      this.pendingInput = undefined;
+    }
+  }
 
   private readonly handleInput = (event: Event): void => {
     if (this.disposed || this.needsResync) return;

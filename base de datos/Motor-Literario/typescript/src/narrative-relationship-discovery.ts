@@ -128,14 +128,10 @@ export function discoverNarrativeRelationships(
   ).sort((a,b) => b.name.length-a.name.length);
   for (const left of names) for (const right of names) {
     if (left.entity.id === right.entity.id) continue;
-    for (const relation of RELATIONS) {
-      if (relation.direction !== "name-to-name") continue;
-      // Reservado para futuras relaciones con orden direccional inequívoco.
-    }
     const pattern = new RegExp(
       "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(left.name) +
       "\\s+(?:es|era|fue|será)\\s+(" +
-      RELATIONS.filter(r => r.direction === "descriptor-to-name").map(r => r.expression).join("|") +
+      RELATIONS.map(r => r.expression).join("|") +
       ")\\s+de\\s+(?:" + escapeRegExp(right.name) + ")(?![\\p{L}\\p{M}\\p{N}_])",
       "giu"
     );

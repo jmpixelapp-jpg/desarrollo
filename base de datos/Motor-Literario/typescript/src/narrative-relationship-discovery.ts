@@ -112,7 +112,7 @@ export function discoverNarrativeRelationships(
     if (from.id === to.id) return;
     const key = [from.id, to.id, type, relStart, relEnd].join(":");
     found.set(key, {
-      id: "relationship-candidate:" + input.documentId + ":" + input.revision + ":" + (base + relStart),
+      id: "relationship-candidate:" + JSON.stringify([input.documentId, input.revision, base + relStart, base + relEnd, from.id, to.id, type]),
       projectId: input.projectId, documentId: input.documentId, revision: input.revision,
       fromEntityId: from.id, toEntityId: to.id, relationType: type, surface,
       relationEvidence: evidence(input.documentId, input.revision, base, relStart, relEnd, surface),

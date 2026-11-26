@@ -134,7 +134,7 @@ export function detectNarrativePronounInputs(
     if (mentionRanges.some(range => localStart < range.end && localEnd > range.start)) continue;
     const surface = match[0];
     const grammaticalGender: NarrativeGrammaticalGender =
-      normalize(surface) === "él" ? "masculine" : "feminine";
+      normalize(match[1] ?? "") === "él" ? "masculine" : "feminine";
     const start = baseOffset + localStart;
     references.push({
       id: "pronoun:" + documentId + ":" + revision + ":" + start,

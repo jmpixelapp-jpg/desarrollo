@@ -213,6 +213,22 @@ test("los vínculos de escena limitan la evidencia intermedia a veinte muestras"
 });
 
 
+test("la evolución de atributos localiza escenas mediante búsqueda binaria", () => {
+  const start = literaryAnalysisSource.indexOf("const findSceneForEvidence = (start: number, end: number)");
+  const end = literaryAnalysisSource.indexOf("\\n  for (const assertion of assertions)", start + 10);
+  assert.notEqual(start, -1, "debe existir el localizador binario de escenas");
+  assert.ok(end > start, "el localizador debe delimitarse");
+  const lookup = literaryAnalysisSource.slice(start, end);
+
+  assert.ok(lookup.includes("let low = 0;"));
+  assert.ok(lookup.includes("let high = scenes.length;"));
+  assert.ok(lookup.includes("const middle = low + Math.floor((high - low) / 2);"));
+  assert.ok(lookup.includes("scenes[middle]!.contentRange.end <= start"));
+  assert.ok(lookup.includes("return candidate && end > candidate.contentRange.start"));
+  assert.equal(lookup.includes("scenes.find("), false);
+});
+
+
 test("la evolución de atributos ordena buckets locales sin duplicar las colecciones completas", () => {
   const start = literaryAnalysisSource.indexOf("function buildCharacterAttributeEvolution(");
   const end = literaryAnalysisSource.indexOf("\nfunction ", start + 10);

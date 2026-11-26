@@ -497,3 +497,6 @@ Se conserva la regla de cronología local: dentro del mismo documento se exige m
 Se añaden seis pruebas unitarias nuevas en total: dos de cronología entre capítulos, dos de validación de duplicados y dos salvaguardas adicionales de integración; además, dos pruebas de integración del pipeline para acción pronominal y objetivo histórico.
 
 **Límites:** las referencias pronominales ambiguas o sin resolver no se convierten en acciones atribuidas; los objetos omitidos no se inventan; una oposición sigue sin demostrar engaño, hipocresía o cambio psicológico. La biblioteca debe suministrar los objetivos anteriores y el orden documental. Build, type-check y suite completa aún requieren validación ejecutada.
+
+### Nota de validación Unicode
+La ejecución anterior de CI falló en la prueba que extrae un nombre con marca combinante después del indicador capitalizado «Personaje». El fallo se originaba en el filtro preliminar, que buscaba los indicadores sin modo insensible a mayúsculas. En el código actual, ese filtro usa `iu`, y la prueba existente cubre la forma capitalizada. Esta corrección está presente en la rama, pero todavía necesita una ejecución nueva de CI para considerarse verificada.

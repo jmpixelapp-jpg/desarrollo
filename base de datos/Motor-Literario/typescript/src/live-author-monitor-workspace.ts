@@ -64,9 +64,8 @@ function resolveVisibleWorkspaceMetrics(
   if (!Array.isArray(requested)) {
     throw new TypeError("visibleMetrics debe ser una lista de métricas del workspace.");
   }
-  const definitions = new Map<string, (typeof WORKSPACE_METRICS)[number]>(
-    WORKSPACE_METRICS.map(metric => [metric.key, metric])
-  );
+  const definitions = new Map<string, (typeof WORKSPACE_METRICS)[number]>();
+  for (const metric of WORKSPACE_METRICS) definitions.set(metric.key, metric);
   const selected = new Set<string>();
   return requested.map(key => {
     const definition = definitions.get(key);

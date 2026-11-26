@@ -63,7 +63,8 @@ function resolveVisibleMetrics(
   if (!Array.isArray(requested)) {
     throw new TypeError("visibleMetrics debe ser una lista de métricas del panel.");
   }
-  const definitions = new Map<string, MetricDefinition>(METRICS.map(metric => [metric.key, metric]));
+  const definitions = new Map<string, MetricDefinition>();
+  for (const metric of METRICS) definitions.set(metric.key, metric);
   const selected = new Set<string>();
   return requested.map(key => {
     const definition = definitions.get(key);

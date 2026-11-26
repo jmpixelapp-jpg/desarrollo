@@ -755,3 +755,5 @@ Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace
 - Se añaden pruebas de selección, ocultación de métricas no solicitadas y rechazo de configuración inválida para ambos componentes.
 
 **Validación:** pendiente de CI para este commit.
+
+- Ajuste de tipado preventivo: los mapas de claves visibles se construyen mediante `Map.set()` explícito para mantener la inferencia de tuplas estable en TypeScript estricto.

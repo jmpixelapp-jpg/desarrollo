@@ -264,3 +264,21 @@ La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualiza
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.
+
+
+## 9. Coordinador de sincronización narrativa y saneamiento de TypeScript (26 de noviembre de 2026)
+
+La rama `feat/narrative-sync-coordinator-v2`, basada en el HEAD `481b0dde05b7878dce428b4778d7b828fa49af73` de `main`, incorpora:
+
+- `typescript/src/narrative-sync.ts`: contratos `SyncOutboxPort` y `SyncTransport`, y coordinador `NarrativeSyncCoordinator`.
+- Lotes limitados a 50 por defecto y 500 como máximo configurable.
+- Aislamiento por proyecto, validación de secuencias e IDs, coalescencia de llamadas simultáneas por proyecto y ejecución paralela de proyectos diferentes.
+- Clasificación remota estricta y disjunta: acuse, conflicto o reintento. Solo los IDs confirmados explícitamente se retiran de la bandeja.
+- Registro del intento antes de retirar operaciones aceptadas; ante fallo de transporte o respuesta inválida no se confirma ninguna operación.
+- Seis pruebas en `typescript/tests/narrative-sync.test.mjs` y contrato documentado en `docs/development/NARRATIVE_SYNC_TRANSPORT_CONTRACT.md`.
+
+Durante la inspección de CI se detectó en `src/narrative-history.ts` una declaración duplicada y malformada (`export interface NarrativeAssertion {");`), que provocaba `TS1002: Unterminated string literal`. Esta rama elimina el bloque vacío corrupto y conserva la interfaz completa inmediatamente posterior. El cambio se incluye para que el typecheck de la rama pueda avanzar; no se ha modificado `main` directamente.
+
+**Límites:** el coordinador aún requiere un adaptador para la bandeja IndexedDB, transporte remoto real, autenticación/autorización, idempotencia del servidor, backoff y resolución de conflictos. No representa sincronización multidispositivo completa. El PR #52 que contiene la bandeja durable sigue separado y no integrado en `main`.
+
+**Validación:** el workflow observado para el HEAD anterior falló en el typecheck por el error TS1002 descrito. La corrección ya está en esta rama nueva; todavía no se ha observado una ejecución CI para su HEAD ni se declara suite aprobada. Se debe verificar typecheck y suite completa en esta nueva base.

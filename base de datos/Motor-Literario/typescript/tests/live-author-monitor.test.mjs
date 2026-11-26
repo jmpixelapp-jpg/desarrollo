@@ -409,6 +409,7 @@ test("valida el intervalo y el filtro documental antes de suscribirse", () => {
 test("crea y restaura checkpoint durable conservando métricas y contando la interrupción como inactividad", () => {
   const first = fixture({ idleAfterMs: 10, commitSampleWindow: 4 });
   first.open("chapter-1", "hello");
+  first.monitor.subscribe(() => { throw new Error("observer-only failure"); }, "chapter-1");
   first.setTime(5);
   first.monitor.recordAdmission(
     first.change(1, 0, 5, 5, "!"),
@@ -432,6 +433,8 @@ test("crea y restaura checkpoint durable conservando métricas y contando la int
   assert.equal(checkpoint.lastActivityAgeMs, 15);
   assert.equal(checkpoint.committedChanges, 1);
   assert.equal(checkpoint.sequence, 1);
+  assert.equal(first.monitor.getSnapshot("chapter-1").listenerErrors, 2);
+  assert.equal(Object.hasOwn(checkpoint, "listenerErrors"), false);
   assert.equal(Object.hasOwn(checkpoint, "text"), false);
 
   const second = fixture({ idleAfterMs: 10, commitSampleWindow: 4 });
@@ -449,6 +452,7 @@ test("crea y restaura checkpoint durable conservando métricas y contando la int
   assert.equal(restored.currentIdleMs, 1005);
   assert.equal(restored.committedChanges, 1);
   assert.equal(restored.pendingChanges, 0);
+  assert.equal(restored.listenerErrors, 0, "los errores locales de observabilidad no deben restaurarse");
 
   second.setTime(5);
   const next = second.monitor.recordAdmission(

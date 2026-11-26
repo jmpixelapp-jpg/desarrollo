@@ -4901,6 +4901,7 @@ function buildCharacterNarrativeTrajectories(
       relationshipsByCharacter.set(endpoint.entityId,profiles);
     }
   }
+  const projectEventById = new Map(projectEvents.map(event => [event.eventId,event]));
   const decisionsByCharacter = new Map<string,LiteraryCharacterDocumentedDecision[]>();
   const decisionRecordsByCharacter = new Map<string,LiteraryAnalysisKnownIdea[]>();
   for (const idea of knownIdeas) {
@@ -4932,20 +4933,20 @@ function buildCharacterNarrativeTrajectories(
           : sceneEvidenceTruncated
             ? "unknown-due-to-truncation" as const
             : "no-event-in-evidenced-scene" as const;
-      const materializedProjectEvents = projectEvents.filter(event =>
-        materializedEventIds.includes(event.eventId)
-      );
-      const crossDocumentEventEvidence = materializedProjectEvents.flatMap(event =>
-        event.evidence.filter(item =>
-          item.status !== "stale" && item.documentId !== documentId
-        )
-      );
-      const crossDocumentEventIds = materializedProjectEvents
-        .filter(event => event.evidence.some(item =>
-          item.status !== "stale" && item.documentId !== documentId
-        ))
-        .map(event => event.eventId)
-        .sort((a,b) => a.localeCompare(b,"en"));
+      const materializedProjectEvents = materializedEventIds
+        .map(eventId => projectEventById.get(eventId))
+        .filter((event): event is LiteraryAnalysisKnownProjectEvent => event !== undefined);
+      const crossDocumentEventIds: string[] = [];
+      let crossDocumentEventEvidenceCount = 0;
+      for (const event of materializedProjectEvents) {
+        let hasCrossDocumentEvidence = false;
+        for (const evidence of event.evidence) {
+          if (evidence.status === "stale" || evidence.documentId === documentId) continue;
+          crossDocumentEventEvidenceCount++;
+          hasCrossDocumentEvidence = true;
+        }
+        if (hasCrossDocumentEvidence) crossDocumentEventIds.push(event.eventId);
+      }
       const crossDocumentContinuityStatus = materializedEventIds.length === 0
         ? "not-applicable" as const
         : crossDocumentEventIds.length > 0
@@ -5088,7 +5089,7 @@ function buildCharacterNarrativeTrajectories(
         materializedEventIds,
         eventMaterializationStatus,
         crossDocumentEventIds,
-        crossDocumentEventEvidenceCount:crossDocumentEventEvidence.length,
+        crossDocumentEventEvidenceCount,
         crossDocumentContinuityStatus,
         laterDocumentedEventIds:laterDocumentedEventIds.slice(0,50),
         laterDocumentedEventCount:laterDocumentedEventIds.length,

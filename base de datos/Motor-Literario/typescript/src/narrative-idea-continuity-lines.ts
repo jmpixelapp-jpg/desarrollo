@@ -109,8 +109,8 @@ function createDisjointSet(): DisjointSet {
 }
 
 function containsTextWithWhitespace(excerpt: string, text: string): boolean {
-  const normalizedExcerpt = excerpt.replace(/\\s+/gu, " ").trim();
-  const normalizedText = text.replace(/\\s+/gu, " ").trim();
+  const normalizedExcerpt = excerpt.replace(/\s+/gu, " ").trim();
+  const normalizedText = text.replace(/\s+/gu, " ").trim();
   return normalizedText.length > 0 && normalizedExcerpt.includes(normalizedText);
 }
 

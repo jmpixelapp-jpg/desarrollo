@@ -551,9 +551,29 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       );
       assert.equal(captureMetrics.pairing.inputDataMismatchCount, 0);
 
+      // Inyecta un beforeinput sintético que el adaptador debe rechazar.
+      // Su onError ocurre antes de que el listener manual vea ese mismo evento.
+      const rejectedInputSentinel = "PRIVATE_REJECTED_INPUT_PAYLOAD";
+      await page.evaluate(data => {
+        document.querySelector("#editor").dispatchEvent(new InputEvent("beforeinput", {
+          inputType: "insertText",
+          data,
+          bubbles: true,
+          cancelable: true
+        }));
+      }, rejectedInputSentinel);
+      const interruptedMetrics = JSON.parse(await page.locator("#metrics").textContent());
+      assert.equal(interruptedMetrics.state.needsResync, true);
+      assert.equal(interruptedMetrics.eventCounters.monitorErrorCount, 1);
+      assert.equal(interruptedMetrics.pairing.interruptedBeforeInputCount, 1);
+      assert.equal(interruptedMetrics.pairing.pendingBeforeInputCount, 0);
+      assert.equal(interruptedMetrics.errorCodeCounts["untrusted-event"], 1);
+      assert.equal(JSON.stringify(interruptedMetrics).includes(rejectedInputSentinel), false,
+        "el payload del beforeinput rechazado no debe quedar en métricas ni diagnósticos");
+
       // Solo para probar retención acotada y contadores acumulativos:
       // estos eventos son sintéticos, no modifican el textarea ni representan
-      // una sesión IME. El adaptador de captura no consume compositionupdate.
+      // una sesión IME. El adaptador no consume compositionupdate.
       const privateCompositionSentinel = "PRIVATE_IME_CANDIDATE_SENTINEL";
       await page.evaluate(({ candidate, count }) => {
         const target = document.querySelector("#editor");
@@ -568,7 +588,7 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       const longSessionMetrics = JSON.parse(await page.locator("#metrics").textContent());
       assert.equal(longSessionMetrics.eventCounters.compositionUpdateCount, 2_010);
       assert.equal(longSessionMetrics.retainedEventCount, 2_000);
-      assert.equal(longSessionMetrics.droppedOldestEvents, 12);
+      assert.equal(longSessionMetrics.droppedOldestEvents, 14);
       assert.equal(longSessionMetrics.pairing.pairedInputCount, 1);
       assert.equal(longSessionMetrics.deltaCounters.typing, 1);
 
@@ -590,15 +610,18 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       assert.equal(report.privacy.localOnlyDownload, true);
       assert.equal(report.baselineLengthUtf16, privateSentinel.length);
       assert.equal(report.finalLengthUtf16, privateSentinel.length + 1);
-      assert.equal(report.eventCounters.beforeInputCount, 1);
+      assert.equal(report.eventCounters.beforeInputCount, 2);
       assert.equal(report.eventCounters.inputCount, 1);
       assert.equal(report.eventCounters.compositionUpdateCount, 2_010,
         "los contadores de vida de sesión no deben perder eventos descartados del buffer");
-      assert.equal(report.eventCounters.untrustedEventCount, 2_010,
+      assert.equal(report.eventCounters.monitorErrorCount, 1);
+      assert.equal(report.errorCodeCounts["untrusted-event"], 1);
+      assert.equal(report.eventCounters.untrustedEventCount, 2_011,
         "las CompositionEvent sintéticas de esta regresión deben quedar identificadas como no confiables");
       assert.equal(report.pairing.pairedInputCount, 1);
       assert.equal(report.pairing.pendingBeforeInputCount, 0);
       assert.equal(report.pairing.unmatchedBeforeInputCount, 0);
+      assert.equal(report.pairing.interruptedBeforeInputCount, 1);
       assert.equal(report.pairing.orphanInputCount, 0);
       assert.equal(
         report.pairing.inputDataMatchCount +
@@ -609,7 +632,7 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       assert.equal(report.pairing.inputDataMismatchCount, 0);
       assert.equal(report.retainedEventCount, 2_000);
       assert.equal(report.events.length, 2_000);
-      assert.equal(report.droppedEventCount, 12);
+      assert.equal(report.droppedEventCount, 14);
       assert.equal(report.totalDeltaCount, 1);
       assert.equal(report.deltaCounters.typing, 1);
       assert.equal(report.deltas.length, 1);
@@ -624,6 +647,8 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
         "el texto inicial privado nunca debe aparecer en el archivo exportado");
       assert.equal(serialized.includes(privateCompositionSentinel), false,
         "el candidato IME tampoco debe aparecer en el archivo exportado");
+      assert.equal(serialized.includes(rejectedInputSentinel), false,
+        "el payload del beforeinput rechazado tampoco debe aparecer en el archivo exportado");
       assert.equal(serialized.includes('"data":"Z"'), false,
         "InputEvent.data debe exportarse solo como longitud, nunca como contenido");
     } finally {

@@ -1122,3 +1122,16 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Validación:** pendiente de CI para este commit. La recuperación de desuscripción del commit `e85f5302bc37eafa9af762734b28cf87633c07cc` terminó correctamente en [Live Author Monitor — run 45751018096](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018096) y [Motor Literario TypeScript — run 45751018120](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018120).
 
 **Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+
+## 65. Inmutabilidad de los deltas retenidos en la cola FIFO (26 de noviembre de 2026)
+
+**Hallazgo:** aunque `EditorChange` declara campos `readonly`, el runtime JavaScript no impide que la fuente o un callback de observabilidad modifique el objeto. El enlace retenía la misma referencia después de un rechazo o error de envío. Una mutación posterior podía cambiar el reemplazo, offsets o metadatos antes del reintento FIFO.
+
+**Corrección:** cada delta que entra en el backlog se copia a un objeto plain-data con los campos definidos por `EditorChange` y se congela inmediatamente. Esto se aplica al primer rechazo, a errores del sink y a los deltas posteriores que llegan mientras existe backlog. El sink recibe esas copias congeladas durante los reintentos. `getPendingChanges()` reutiliza el mismo copiador para producir instantáneas independientes.
+
+**Regresión:** el primer delta es rechazado y el callback `onAdmission` altera el objeto externo; el segundo delta se conserva y luego la fuente altera su objeto original. En ambos casos el backlog retiene el reemplazo original y el sink reintenta copias congeladas en el orden 1, 2.
+
+**Validación:** pendiente de CI para este commit. La protección de las instantáneas de diagnóstico del commit `eebb84da3fff3acc5d92b565892d8789401f7d70` pasó la lane del monitor [run 45751188342](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188342); el workflow general aprobó type-check, build y suite, con benchmark incluido en [run 45751188331](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188331).
+
+**Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.

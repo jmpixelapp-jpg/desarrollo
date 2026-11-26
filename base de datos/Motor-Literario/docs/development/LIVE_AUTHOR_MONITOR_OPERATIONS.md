@@ -391,3 +391,12 @@ Las pruebas `live-author-monitor-change-binding.test.mjs` cubren cancelación tr
 `getPendingChanges()` devuelve una instantánea de diagnóstico, no referencias a los objetos que el enlace reenviará al motor. Cada entrada es una copia plain-data limitada a los campos del contrato `EditorChange`, y tanto las entradas como el arreglo están congelados.
 
 Esta protección evita que un consumidor de JavaScript modifique accidentalmente un delta pendiente a través de la consulta de backlog. No modifica el objeto original que entregó el editor ni altera el orden FIFO. La regresión correspondiente intenta cambiar el reemplazo de una copia y comprueba que el delta pendiente original permanece intacto.
+
+
+## 21. Aislamiento del backlog respecto de objetos externos mutables
+
+Cada cambio que se retiene por contrapresión o error de admisión se copia inmediatamente a un objeto con solo los campos del contrato `EditorChange` y se congela. Los deltas posteriores que llegan mientras hay backlog siguen la misma regla.
+
+De esta manera, si el proveedor reutiliza o modifica después su objeto, o si un callback de observabilidad altera el argumento que recibió, el contenido pendiente no cambia. Al reintentar, el sink recibe la copia congelada y conserva la secuencia y los offsets originales.
+
+La consulta `getPendingChanges()` devuelve además nuevas copias congeladas para diagnóstico, sin compartir referencias con la cola interna. La regresión del módulo altera deliberadamente tanto el objeto entregado al callback como el objeto original del segundo delta, y comprueba que el reintento sigue enviando los dos reemplazos originales en orden.

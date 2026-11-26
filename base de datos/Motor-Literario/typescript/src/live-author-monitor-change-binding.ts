@@ -229,6 +229,16 @@ export function bindLiveAuthorMonitorEditorChanges(
     reportError(error, change);
   };
 
+  const retainPendingChange = (change: EditorChange): EditorChange => Object.freeze({
+    documentId: change.documentId,
+    sequence: change.sequence,
+    baseRevision: change.baseRevision,
+    start: change.start,
+    end: change.end,
+    replacement: change.replacement,
+    ...(change.activityKind === undefined ? {} : { activityKind: change.activityKind })
+  });
+
   const submitNewChange = (change: EditorChange): void => {
     if (disposed || resyncRequired) return;
     if (pending.length > 0) {
@@ -237,7 +247,7 @@ export function bindLiveAuthorMonitorEditorChanges(
         pauseForResynchronization(change);
         return;
       }
-      pending.push(change);
+      pending.push(retainPendingChange(change));
       publishBackpressure();
       return;
     }
@@ -246,7 +256,7 @@ export function bindLiveAuthorMonitorEditorChanges(
     try {
       admission = options.sink.onEditorChange(change);
     } catch (error) {
-      pending.push(change);
+      pending.push(retainPendingChange(change));
       pendingReason = "sink_error";
       publishBackpressure();
       reportError(error, change);
@@ -254,7 +264,7 @@ export function bindLiveAuthorMonitorEditorChanges(
     }
 
     if (admission.status === "rejected") {
-      pending.push(change);
+      pending.push(retainPendingChange(change));
       pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
       publishBackpressure();
     }
@@ -356,15 +366,7 @@ export function bindLiveAuthorMonitorEditorChanges(
   }) as LiveAuthorMonitorChangeBindingControl;
 
   stop.retryPending = retryPending;
-  stop.getPendingChanges = () => Object.freeze(pending.map(change => Object.freeze({
-    documentId: change.documentId,
-    sequence: change.sequence,
-    baseRevision: change.baseRevision,
-    start: change.start,
-    end: change.end,
-    replacement: change.replacement,
-    ...(change.activityKind === undefined ? {} : { activityKind: change.activityKind })
-  })));
+  stop.getPendingChanges = () => Object.freeze(pending.map(retainPendingChange));
   stop.discardPendingAfterResynchronization = () => {
     if (disposed) return;
     const shouldResume = pausedForResynchronization;

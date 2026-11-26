@@ -636,3 +636,48 @@ test("getPendingChanges devuelve copias congeladas también a nivel de cada delt
   stop.discardPendingAfterResynchronization();
   stop();
 });
+
+
+test("el backlog conserva deltas congelados aunque el callback o la fuente muten sus objetos originales", () => {
+  const f = sourceFixture();
+  const first = change(1);
+  const second = change(2);
+  const attempts = [];
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push([value.sequence, value.replacement, Object.isFrozen(value)]);
+        return value.sequence === 1 && attempts.length === 1
+          ? { status: "rejected", reason: "queue_full" }
+          : { status: "queued", ticketId: "ticket-" + value.sequence };
+      }
+    },
+    onAdmission(value, admission) {
+      if (admission.status === "rejected") {
+        // La observabilidad recibe el objeto de origen, pero no debe poder
+        // alterar la copia ya retenida para el siguiente intento.
+        value.replacement = "alterado-por-observabilidad";
+      }
+    },
+    onError: () => {}
+  });
+
+  f.emit(first);
+  assert.equal(first.replacement, "alterado-por-observabilidad");
+  assert.deepEqual(stop.getPendingChanges().map(value => value.replacement), ["A"]);
+
+  f.emit(second);
+  second.replacement = "alterado-por-la-fuente";
+  assert.deepEqual(stop.getPendingChanges().map(value => value.replacement), ["A", "A"]);
+  assert.deepEqual(stop.getPendingChanges().map(Object.isFrozen), [true, true]);
+
+  stop.retryPending();
+  assert.deepEqual(attempts, [
+    [1, "A", false],
+    [1, "A", true],
+    [2, "A", true]
+  ], "los reintentos deben recibir las copias inmutables, no las referencias externas");
+  assert.deepEqual(stop.getPendingChanges(), []);
+  stop();
+});

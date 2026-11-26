@@ -75,8 +75,8 @@ test("el acuse elimina únicamente la operación confirmada y valida el payload"
     /objeto JSON/
   );
 
-  await store.enqueueSyncOperation(operation({ projectId: "project-c", deviceId: "device-c" }));
-  assert.equal(await store.acknowledgeSyncOperation("op-1"), true);
-  assert.equal(await store.acknowledgeSyncOperation("op-1"), false);
-  assert.deepEqual(await store.loadPendingSyncOperations("project-a"), []);
+  await store.enqueueSyncOperation(operation({ operationId: "op-3", projectId: "project-c", deviceId: "device-c" }));
+  assert.equal(await store.acknowledgeSyncOperation("op-3"), true);
+  assert.equal(await store.acknowledgeSyncOperation("op-3"), false);
+  assert.deepEqual(await store.loadPendingSyncOperations("project-c"), []);
 });

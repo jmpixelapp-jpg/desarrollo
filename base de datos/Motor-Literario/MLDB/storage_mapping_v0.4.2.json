@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 14,
+  "mapping_version": 15,
   "schema_version": "0.4.2",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 24,
+    "database_version": 25,
     "object_stores": [
       {
         "name": "project-settings",
@@ -161,6 +161,11 @@
             false
           ]
         ]
+      },
+      {
+        "name": "writer-library-versions",
+        "keyPath": "writerId",
+        "indexes": []
       },
       {
         "name": "narrative-assertions",
@@ -1387,16 +1392,20 @@
         "writer/personal-idea-library/"
       ],
       "representation": "record",
-      "contract": "PersonalIdeaLibraryEntry en personal-idea-library; keyPath writerId/sourceProjectId/idea.id.",
+      "contract": "PersonalIdeaLibraryEntry en personal-idea-library; writer-library-versions conserva la generación monotónica para paginación consistente.",
       "implementationStatus": "implemented",
       "objectStores": [
-        "personal-idea-library"
+        "personal-idea-library",
+        "writer-library-versions"
       ],
       "keyPath": [
         [
           "writerId",
           "sourceProjectId",
           "idea.id"
+        ],
+        [
+          "writerId"
         ]
       ]
     },

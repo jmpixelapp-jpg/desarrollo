@@ -1755,9 +1755,7 @@ export class IndexedDbProjectStore implements ProjectStore {
           changes.createIndex(CHANGE_INDEX, ["projectId", "documentId", "sequence"], { unique: true });
         }
         if (!db.objectStoreNames.contains(SYNC_OUTBOX)) {
-          const outbox = db.createObjectStore(SYNC_OUTBOX, { keyPath: "operationId" });
-          outbox.createIndex("by-project-created-at", ["projectId", "createdAt"], { unique: false });
-          outbox.createIndex("by-project-device-sequence", ["projectId", "deviceId", "sequence"], { unique: true });
+          db.createObjectStore(SYNC_OUTBOX, { keyPath: "operationId" });
         }
         if (!db.objectStoreNames.contains(ENTITIES)) {
           const entities = db.createObjectStore(ENTITIES, { keyPath: ["projectId", "id"] });
@@ -1968,6 +1966,8 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(EVENT_LIFECYCLES, "by-subject-revision", ["projectId", "eventId", "revision"], true);
         ensureIndex(DOCUMENTS, "by-project", "projectId");
         ensureIndex(CHANGES, CHANGE_INDEX, ["projectId", "documentId", "sequence"], true);
+        ensureIndex(SYNC_OUTBOX, "by-project-created-at", ["projectId", "createdAt"]);
+        ensureIndex(SYNC_OUTBOX, "by-project-device-sequence", ["projectId", "deviceId", "sequence"], true);
         ensureIndex(ENTITIES, "by-project", "projectId");
         ensureIndex(RELATIONS, "by-project", "projectId");
         ensureIndex(EVENTS, "by-project", "projectId");

@@ -472,3 +472,12 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Documentado el contrato de reconciliación explícita: no reutilizar IDs con contenido distinto, no retirar la operación original por una decisión local sin validar, preservar causalidad y exigir comprobaciones transaccionales frente a decisiones concurrentes.
 - Separadas las decisiones conceptuales `accept-remote`, reemplazo local y fusión manual. No se implementa todavía ninguna API operativa de resolución, porque faltan modelo versionado de conflictos, autoridad formal de secuencias, transacción atómica y recibo remoto verificable.
 - **Validación:** test y documentación publicados en la rama de trabajo. No se ha ejecutado la suite local ni se dispone de resultados CI; no se declara la regresión aprobada.
+
+
+### Tanda — concurrencia de secuencias por dispositivo
+
+- Inspeccionado el almacenamiento IndexedDB y el contrato público: la bandeja recibe la secuencia ya asignada; no existe en el contrato actual un asignador durable del siguiente número por proyecto/dispositivo.
+- Confirmado que el índice único `by-project-device-sequence` protege la integridad y rechaza dos inserciones concurrentes con la misma secuencia, pero no asigna el siguiente número ni permite calcularlo de forma segura desde una lectura previa.
+- Añadida regresión con dos instancias de IndexedDB que intentan insertar simultáneamente secuencias iguales para el mismo dispositivo: exactamente una inserción debe persistir.
+- Documentado el requisito previo para reconciliación: contador durable compartido y asignación+inserción atómicas, o autoridad externa confiable. No se introdujo un contador parcial ni una migración especulativa.
+- **Validación:** regresión y documentación publicadas; no se ejecutaron localmente las pruebas ni se recibieron resultados CI.

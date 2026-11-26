@@ -94,10 +94,10 @@ test("rechaza observaciones malformadas o IDs duplicados sin lanzar errores inte
 
 test("reconoce conectores temporales narrativos compuestos", () => {
   for (const [text, marker] of [
-    ["Ana salió. Acto seguido, Bruno cerró la puerta.", "Acto seguido"],
-    ["Ana esperó. Al mismo tiempo, Bruno buscó ayuda.", "Al mismo tiempo"],
-    ["Ana cayó. Poco después, llegó el médico.", "Poco después"],
-    ["Ana abrió la carta. De inmediato, palideció.", "De inmediato"]
+    ["Ana entró en la casa. Acto seguido, Ana corrió hacia la puerta.", "Acto seguido"],
+    ["Ana entró. Al mismo tiempo, Ana buscó ayuda.", "Al mismo tiempo"],
+    ["Ana entró. Poco después, Ana llegó a casa.", "Poco después"],
+    ["Ana abrió la carta. De inmediato, Ana corrió.", "De inmediato"]
   ]) {
     const found = discoverNarrativeActionLinks({
       projectId: "book-1", documentId: "chapter-1", revision: 4,
@@ -112,10 +112,10 @@ test("reconoce conectores temporales narrativos compuestos", () => {
 
 test("reconoce conectores causales sin asignar automáticamente causa y efecto", () => {
   for (const [text, marker] of [
-    ["Ana se marchó. Por culpa de la tormenta, Bruno perdió el tren.", "Por culpa de"],
-    ["Bruno llegó a tiempo. Gracias a Ana, el grupo escapó.", "Gracias a"],
-    ["Ana recibió la noticia. A raíz de ello, canceló el viaje.", "A raíz de"],
-    ["El puente cedió. Como resultado, el camino quedó bloqueado.", "Como resultado"]
+    ["Ana entró. Por culpa de la tormenta, Ana perdió el tren.", "Por culpa de"],
+    ["Ana llegó a tiempo. Gracias a Ana, Ana corrió.", "Gracias a"],
+    ["Ana recibió la noticia. A raíz de ello, Ana corrió.", "A raíz de"],
+    ["Ana entró. Como resultado, Ana corrió.", "Como resultado"]
   ]) {
     const found = discoverNarrativeActionLinks({
       projectId: "book-1", documentId: "chapter-1", revision: 4,
@@ -131,9 +131,9 @@ test("reconoce conectores causales sin asignar automáticamente causa y efecto",
 
 test("reconoce conectores adversativos y concesivos compuestos", () => {
   for (const [text, marker] of [
-    ["Ana quiso entrar. A pesar de ello, permaneció afuera.", "A pesar de ello"],
-    ["Bruno estaba herido. Aun así, continuó caminando.", "Aun así"],
-    ["Ana pidió ayuda. Pese a ello, nadie respondió.", "Pese a ello"]
+    ["Ana entró. A pesar de ello, Ana corrió.", "A pesar de ello"],
+    ["Ana llegó. Aun así, Ana caminó.", "Aun así"],
+    ["Ana entró. Pese a ello, Ana respondió.", "Pese a ello"]
   ]) {
     const found = discoverNarrativeActionLinks({
       projectId: "book-1", documentId: "chapter-1", revision: 4,

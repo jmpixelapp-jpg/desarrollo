@@ -26,6 +26,11 @@ export interface NarrativeConsequenceCandidate {
   readonly hypothesisBasis: "explicit-linguistic-connector" | "temporal-marker-and-shared-character";
   /** Personajes compartidos que justifican la hipótesis; vacío para conectores explícitos. */
   readonly sharedCharacterEntityIds: readonly string[];
+  /** IDs de acciones explícitas agrupadas en cada acontecimiento; no implican causalidad. */
+  readonly supportingActionCandidateIds: {
+    readonly sourceEvent: readonly string[];
+    readonly consequenceEvent: readonly string[];
+  };
   /** Conserva las dos evidencias completas que se relacionan, además del marcador. */
   readonly supportingEvidence: {
     readonly sourceEvent: NarrativeEventCandidate["evidence"];
@@ -94,8 +99,11 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
         event.characterParticipantEntityIds.some(id =>
           typeof id !== "string" || !id.trim() || !event.participantEntityIds.includes(id)
         ) ||
+        !Array.isArray(event.actionCandidateIds) ||
+        event.actionCandidateIds.some(id => typeof id !== "string" || !id.trim()) ||
         new Set(event.participantEntityIds).size !== event.participantEntityIds.length ||
         new Set(event.characterParticipantEntityIds).size !== event.characterParticipantEntityIds.length ||
+        new Set(event.actionCandidateIds).size !== event.actionCandidateIds.length ||
         !event.evidence || event.projectId !== input.projectId ||
         event.evidence.documentId !== input.documentId ||
         event.evidence.revision !== input.revision ||
@@ -155,6 +163,10 @@ export function extractNarrativeConsequenceCandidates(
       causalStatus: "explicitly-signaled-candidate",
       hypothesisBasis: "explicit-linguistic-connector",
       sharedCharacterEntityIds: [],
+      supportingActionCandidateIds: {
+        sourceEvent: [...source.actionCandidateIds],
+        consequenceEvent: [...consequence.actionCandidateIds]
+      },
       supportingEvidence: {
         sourceEvent: source.evidence,
         consequenceEvent: consequence.evidence
@@ -204,6 +216,10 @@ export function extractNarrativeConsequenceCandidates(
       causalStatus: "unproven-hypothesis",
       hypothesisBasis: "temporal-marker-and-shared-character",
       sharedCharacterEntityIds: [...shared].sort(),
+      supportingActionCandidateIds: {
+        sourceEvent: [...source.actionCandidateIds],
+        consequenceEvent: [...consequence.actionCandidateIds]
+      },
       supportingEvidence: {
         sourceEvent: source.evidence,
         consequenceEvent: consequence.evidence

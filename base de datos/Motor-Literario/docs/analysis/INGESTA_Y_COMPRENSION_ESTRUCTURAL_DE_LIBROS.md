@@ -10,7 +10,7 @@ Módulo: `typescript/src/narrative-book-ingestion.ts`
 
 API pública: `ingestNarrativeBookText(input)`
 
-La función `ingestNarrativeBookText(input)` recibe texto Unicode ya decodificado y produce. La función asíncrona `readNarrativeBookFile(file)` ya permite adquirir archivos TXT y Markdown UTF-8 mediante `arrayBuffer` y `TextDecoder` estándar, sin bibliotecas de terceros. La detección de acciones conserva además el orden real del verbo mediante offsets específicos de su superficie: 
+La función asíncrona `readNarrativeBookFile(file)` adquiere archivos TXT y Markdown UTF-8 mediante `arrayBuffer` y `TextDecoder` estándar, sin bibliotecas de terceros. Su texto se entrega a `ingestNarrativeBookText(input)`, que lo convierte en unidades estructurales y señales candidatas respaldadas por evidencia. La detección de acciones conserva el orden real de los verbos mediante offsets específicos de cada superficie. 
 
 - Segmentación de capítulos a partir de encabezados explícitos (Capítulo/Chapter/Parte/Libro/Prólogo/Epílogo y variantes reconocidas), incluidos encabezados Markdown con prefijos `#`.
 - Segmentación de párrafos con offsets UTF-16 y clasificación inicial de narración, diálogo o contenido mixto.

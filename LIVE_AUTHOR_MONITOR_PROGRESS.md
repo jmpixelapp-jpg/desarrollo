@@ -1836,3 +1836,18 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Validación aislada nueva:** workflow [Live Author Monitor — beforeinput cancellation](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45806925554), commit `11367cc5c121c4ee5bd23e6d25e9b9a2fc2064a7`, estado `in_progress` en la última consulta durante instalación de Chromium. Su resultado debe consultarse antes de declarar aprobada la prueba de navegador de la entrada 115.
 
 **Conclusión:** la corrección FIFO sí quedó validada por la suite aislada de 191 pruebas. La nueva regresión de teclado/cancelación ya está integrada y tiene un workflow independiente, pero su ejecución específica aún no se marca como aprobada.
+## 119. Ejecutar la regresión beforeinput en el workflow habitual aunque falle el build runtime (26 de noviembre de 2026)
+
+**Ajuste CI:** `.github/workflows/live-author-monitor.yml` incluye ahora `Run trusted beforeinput cancellation regression in Chromium` después de instalar Chromium y ejecutar Page Lifecycle.
+
+**Condición:** `!cancelled() && steps.chromium-install.outcome == 'success'`. No depende del resultado de `runtime-build`, de modo que una avería en el bundle general no omite esta prueba aislada.
+
+**Comando:** `node --test tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs`.
+
+**Razón:** la suite host/editor/browser existente necesita el bundle runtime general y por eso permanece condicionada a su build; esta regresión usa su propio servidor Vite y carga directamente la fuente TypeScript, de modo que puede ejecutarse después de instalar Chromium incluso cuando el build general haya fallado.
+
+**Workflow focalizado:** se conserva también `.github/workflows/live-author-monitor-beforeinput-cancellation.yml` para poder validar la regresión sin ejecutar todo el pipeline del motor.
+
+**Documento:** se amplió `docs/development/LIVE_AUTHOR_MONITOR_BEFOREINPUT_CANCELLATION_CHROMIUM_2026-11-26.md` para distinguir la ejecución focalizada, la del workflow habitual y la suite completa del editor.
+
+**CI del cambio de workflow:** pendiente de consultar. No se considera aprobada la prueba hasta que el nuevo paso Chromium termine en `success`.

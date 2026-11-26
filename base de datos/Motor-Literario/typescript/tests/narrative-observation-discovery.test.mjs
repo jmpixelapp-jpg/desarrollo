@@ -284,6 +284,24 @@ test("conserva offsets de la primera mención de cada alias de entidad", () => {
   assert.equal(mention?.evidence.end, text.indexOf("la Espada Solar") + "la Espada Solar".length);
 });
 
+test("identifica objeto directo conocido con evidencia literal sin inferir posesión", () => {
+  const text = "Ana perdió la Espada Solar.";
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].action, "perder");
+  assert.equal(found[0].grammaticalObjectCandidate?.entityId, other.id);
+  const evidence = found[0].grammaticalObjectCandidate.evidence;
+  assert.equal(evidence.excerpt, "Espada Solar");
+  assert.equal(text.slice(evidence.start, evidence.end), "Espada Solar");
+});
+
+test("no asigna objeto gramatical si la entidad no sigue al verbo con marcador nominal", () => {
+  const text = "La Espada Solar desapareció. Ana perdió la paciencia.";
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].grammaticalObjectCandidate, undefined);
+});
+
 test("reconoce un complemento personal explícito sin inventar la relación semántica", () => {
   const bruno = {
     ...character, id: "character:bruno", canonicalName: "Bruno",

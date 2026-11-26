@@ -419,9 +419,9 @@ test("propone reparación sólo ante una correspondencia de merge explícita y �
     projectId: "novel-repair", checkedManifests: 0, checkedRecords: 1,
     issues: [
       { code: "missing-relation-entity", documentId: "", recordType: "relation",
-        recordId: "relation:1", relatedId: "entity:legacy", detail: "missing" },
+        recordId: "relation:1", relatedId: "entity:legacy", referenceField: "fromEntityId", detail: "missing" }
       { code: "missing-event-participant", documentId: "", recordType: "event",
-        recordId: "event:1", relatedId: "entity:unknown", detail: "missing" },
+        recordId: "event:1", relatedId: "entity:unknown", referenceField: "participants", detail: "missing" }
       { code: "missing-related-idea", documentId: "", recordType: "idea",
         recordId: "idea:1", relatedId: "idea:unknown", detail: "missing" }
     ]
@@ -431,7 +431,7 @@ test("propone reparación sólo ante una correspondencia de merge explícita y �
   assert.deepEqual(proposals[0], {
     projectId: "novel-repair", issueCode: "missing-relation-entity",
     recordType: "relation", recordId: "relation:1",
-    missingReferenceId: "entity:legacy",
+    missingReferenceId: "entity:legacy", referenceField: "fromEntityId",
     candidateEntityId: "entity:canonical", resolution: "explicit-merge-match"
   });
   assert.equal(proposals[1].resolution, "manual-review");
@@ -439,6 +439,32 @@ test("propone reparación sólo ante una correspondencia de merge explícita y �
   assert.equal(tables.entities.size, 1, "la generación de propuestas no escribe");
 });
 
+
+test("rechaza replay de relación si la entidad candidata sólo ocupa el extremo opuesto", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-field", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:field", {
+    projectId: "novel-field", id: "relation:field",
+    fromEntityId: "entity:other", toEntityId: "entity:canonical",
+    relationType: "knows", evidence: []
+  });
+  const proposal = {
+    projectId: "novel-field", issueCode: "missing-relation-entity",
+    recordType: "relation", recordId: "relation:field",
+    missingReferenceId: "entity:legacy", referenceField: "fromEntityId",
+    candidateEntityId: "entity:canonical", resolution: "explicit-merge-match"
+  };
+  await assert.rejects(
+    applyNarrativeReferenceRepair(store, proposal, true, 10),
+    /extremo indicado/
+  );
+  assert.equal((await store.loadNarrativeReferenceRepairAudits("novel-field")).length, 0);
+});
 
 test("aplica reparación aprobada de relación mediante CAS y devuelve auditoría", async () => {
   const { store, tables } = createMemoryStore();
@@ -456,7 +482,7 @@ test("aplica reparación aprobada de relación mediante CAS y devuelve auditorí
   const proposal = {
     projectId: "novel-apply", issueCode: "missing-relation-entity",
     recordType: "relation", recordId: "relation:1",
-    missingReferenceId: "entity:legacy", candidateEntityId: "entity:canonical",
+    missingReferenceId: "entity:legacy", referenceField: "fromEntityId", candidateEntityId: "entity:canonical",
     resolution: "explicit-merge-match"
   };
   await assert.rejects(
@@ -492,7 +518,7 @@ test("rechaza aplicar propuesta si la procedencia de fusión ya no la respalda",
   await assert.rejects(applyNarrativeReferenceRepair(store, {
     projectId: "novel-stale", issueCode: "missing-assertion-entity",
     recordType: "assertion", recordId: "assertion:1",
-    missingReferenceId: "entity:legacy", candidateEntityId: "entity:canonical",
+    missingReferenceId: "entity:legacy", referenceField: "entityId", candidateEntityId: "entity:canonical",
     resolution: "explicit-merge-match"
   }, true, 13), /correspondencia de fusión cambió/);
 });

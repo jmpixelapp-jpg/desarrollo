@@ -132,7 +132,7 @@ La ejecución integral del workflow **Motor Literario TypeScript** sobre el comm
 Correcciones incorporadas durante la depuración:
 
 1. La API descarta cachés parciales de ideas y entidades cuando falla la validación de referencias, permitiendo que la siguiente consulta vuelva a leer el almacenamiento durable.
-2. El analizador admite catálogos globales de hasta **12.000 ideas** y hasta **2.000 encabezados/escenas explícitas** por fragmento.
+2. El analizador admite catálogos globales de hasta **20.000 ideas** y hasta **2.000 encabezados/escenas explícitas** por fragmento. El límite de lectura preserva catálogos históricos; las operaciones de escritura mantienen sus límites propios.
 3. La detección de conectores causales utiliza límites Unicode de letras y marcas, evitando que conectores acentuados como `provocó`, `causó` y `desencadenó` queden fuera por el comportamiento ASCII de `\b`. Se añadieron pruebas de conectores acentuados y de falsos positivos dentro de palabras.
 4. Las métricas de convergencia a dos saltos conservan la distinción entre retornos cíclicos, destinos compartidos y ramas exclusivas.
 5. Las pruebas transaccionales de ideas y las nueve pruebas de persistencia del motor usan `fake-indexeddb`; así se ejecutan en Node sin depender de IndexedDB nativo.

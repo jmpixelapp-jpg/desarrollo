@@ -479,6 +479,7 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           const changes = [];
           const observed = [];
           let inputEvents = 0;
+          let blurEvents = 0;
           const source = new LiveAuthorMonitorTextAreaSource({
             element,
             initialSnapshot: {
@@ -491,7 +492,11 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           });
           source.subscribeChanges(change => changes.push(change));
           element.addEventListener("beforeinput", event => {
-            if (event.inputType === "insertText") event.preventDefault();
+            if (event.inputType === "insertText") {
+              event.preventDefault();
+              // El cambio de foco ocurre dentro de la misma propagación.
+              element.blur();
+            }
             observed.push({
               inputType: event.inputType,
               data: event.data,
@@ -501,7 +506,12 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
             });
           });
           element.addEventListener("input", () => { inputEvents += 1; });
-          window.__blurRecoveryHarness = { element, source, errors, changes, observed, get inputEvents() { return inputEvents; } };
+          element.addEventListener("blur", () => { blurEvents += 1; });
+          window.__blurRecoveryHarness = {
+            element, source, errors, changes, observed,
+            get inputEvents() { return inputEvents; },
+            get blurEvents() { return blurEvents; }
+          };
         });
 
         const blurTextarea = page.locator("#blur-recovery-textarea");
@@ -513,6 +523,7 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
         const beforeBlur = await page.evaluate(() => ({
           observed: [...window.__blurRecoveryHarness.observed],
           inputEvents: window.__blurRecoveryHarness.inputEvents,
+          blurEvents: window.__blurRecoveryHarness.blurEvents,
           value: window.__blurRecoveryHarness.element.value,
           pendingInput: window.__blurRecoveryHarness.source.pendingInput !== undefined,
           state: window.__blurRecoveryHarness.source.getState()
@@ -526,13 +537,14 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           "el listener posterior debe cancelar el evento que el adaptador ya observó");
         assert.equal(beforeBlur.inputEvents, 0,
           "preventDefault posterior debe impedir el input correspondiente");
+        assert.equal(beforeBlur.blurEvents, 1,
+          "el listener posterior debe desenfocar el textarea dentro de la misma propagación");
         assert.equal(beforeBlur.value, "abc");
         assert.equal(beforeBlur.pendingInput, false,
           "la microtarea debe liberar la pareja que un listener posterior canceló");
         assert.equal(beforeBlur.state.needsResync, false,
           "la cancelación final no debe suspender una fuente que sigue sincronizada");
 
-        await blurTextarea.evaluate(element => element.blur());
         const afterBlur = await page.evaluate(() => {
           const harness = window.__blurRecoveryHarness;
           const result = {

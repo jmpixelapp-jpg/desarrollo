@@ -11,20 +11,23 @@ const ana = {
   canonicalName: "Ana", normalizedName: "ana", aliases: [],
   evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
 };
+const bruno = {
+  ...ana, id: "character:bruno", canonicalName: "Bruno", normalizedName: "bruno"
+};
 
-function extract(text, baseOffset = 0) {
+function extract(text, baseOffset = 0, entities = [ana]) {
   const context = {
     projectId: "book-1", documentId: "chapter-1", revision: 3,
     text, baseOffset
   };
   return {
-    observations: discoverNarrativeObservationCandidates({ ...context, entities: [ana] }),
-    states: discoverNarrativeCharacterStateCandidates({ ...context, entities: [ana] })
+    observations: discoverNarrativeObservationCandidates({ ...context, entities }),
+    states: discoverNarrativeCharacterStateCandidates({ ...context, entities })
   };
 }
 
-function discover(text, baseOffset = 0) {
-  const found = extract(text, baseOffset);
+function discover(text, baseOffset = 0, entities = [ana]) {
+  const found = extract(text, baseOffset, entities);
   return discoverNarrativeActionStateLinks({
     projectId: "book-1", documentId: "chapter-1", revision: 3,
     text, baseOffset, ...found
@@ -32,13 +35,13 @@ function discover(text, baseOffset = 0) {
 }
 
 test("vincula acción y estado con marcador causal explícito cuando el estado aparece primero", () => {
-  const text = "Ana quedó herida porque Ana corrió.";
-  const found = discover(text);
+  const text = "Ana quedó herida porque Bruno atacó a Ana.";
+  const found = discover(text, 0, [ana, bruno]);
   assert.equal(found.length, 1);
   assert.equal(found[0].marker, "porque");
   assert.equal(found[0].position, "state-before-action");
   assert.equal(found[0].entityId, ana.id);
-  assert.equal(found[0].basis, "grammatical-subject");
+  assert.equal(found[0].basis, "personal-object");
   assert.equal(found[0].reviewStatus, "candidate");
   assert.equal(text.slice(found[0].markerEvidence.start, found[0].markerEvidence.end), "porque");
   assert.equal(text.slice(found[0].actionEvidence.start, found[0].actionEvidence.end), found[0].actionEvidence.excerpt);

@@ -511,11 +511,11 @@ export function validateNarrativeIdeaContinuityIndex(
         (!uniqueStoredOrder || !Array.isArray(line.orderedOccurrenceIds))) {
       throw new Error("Una línea completa debe conservar el único orden total deducible de sus relaciones.");
     }
-    if (line.chronology === "partial" && uniqueStoredOrder) {
-      throw new Error("Una cronología parcial no puede ocultar un orden total único ya deducible.");
+    if (line.chronology === "partial" && allEventsOrdered && uniqueStoredOrder) {
+      throw new Error("Una cronología parcial no puede ocultar un orden total único cuando todos los enlaces están dirigidos.");
     }
     if (line.chronology === "unknown" &&
-        (lineEvents.some(event => event.chronology !== "unknown") || uniqueStoredOrder)) {
+        lineEvents.some(event => event.chronology !== "unknown")) {
       throw new Error("La cronología desconocida contradice las relaciones ordenadas.");
     }
     if (line.chronology === "partial" &&

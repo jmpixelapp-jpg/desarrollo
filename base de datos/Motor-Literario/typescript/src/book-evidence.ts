@@ -112,6 +112,12 @@ export function resolveNarrativeTextEvidence(
       typeof evidence.excerpt !== "string" || !evidence.excerpt.length) {
     throw new TypeError("La evidencia narrativa no tiene revisión o cita válidas.");
   }
+  if (book.metadata.revision === undefined) {
+    throw new Error("El snapshot del libro no declara revisión; no se puede verificar la vigencia de la evidencia.");
+  }
+  if (book.metadata.revision !== evidence.revision) {
+    throw new Error("La revisión de la evidencia no coincide con el snapshot del libro.");
+  }
   const chapter = book.chapters.find(item => item.documentId === evidence.documentId);
   if (!chapter) {
     throw new Error("El documento de la evidencia no pertenece al libro importado.");

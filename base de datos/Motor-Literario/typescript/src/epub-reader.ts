@@ -36,6 +36,7 @@ export interface EpubInspection {
 interface ZipEntry {
   readonly name: string;
   readonly method: number;
+  readonly flags: number;
   readonly compressedSize: number;
   readonly expandedSize: number;
   readonly crc32: number;
@@ -197,7 +198,7 @@ class EpubArchive {
       }
       expandedTotal += expandedSize;
       if (expandedTotal > limits.maxExpandedBytes) fail("tamaño expandido total excesivo.");
-      this.entries.set(name, { name, method, compressedSize, expandedSize, crc32: expectedCrc32, localOffset });
+      this.entries.set(name, { name, method, flags, compressedSize, expandedSize, crc32: expectedCrc32, localOffset });
       offset = end;
     }
     if (offset !== directoryOffset + directorySize) fail("longitud del directorio central inconsistente.");
@@ -221,7 +222,7 @@ class EpubArchive {
     const nameLength = view.getUint16(at + 26, true);
     const extraLength = view.getUint16(at + 28, true);
     const localName = new TextDecoder("utf-8", { fatal: true }).decode(this.bytes.subarray(at + 30, at + 30 + nameLength));
-    if (localName !== path || localMethod !== entry.method || localFlags !== (view.getUint16(at + 6, true)) || (localFlags & 1)) {
+    if (localName !== path || localMethod !== entry.method || localFlags !== entry.flags || (localFlags & 1)) {
       fail("la cabecera local no coincide con el directorio central para " + path);
     }
     const start = at + 30 + nameLength + extraLength;

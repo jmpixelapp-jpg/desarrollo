@@ -313,7 +313,9 @@ export function discoverNarrativeCharacterStateCandidates(
           predicateEvidence: evidence(input, predicateStart, predicateEnd, predicateText),
           evidence: evidence(input, nameStart, assertionEnd, sentence.slice(match.index, assertionEnd - span.start))
         });
-        if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES) return results;
+        if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES) {
+          throw new Error("La extracción supera el límite de estados; divide el manuscrito por bloques o capítulos.");
+        }
       }
     }
   }

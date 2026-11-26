@@ -523,6 +523,95 @@ test("una recuperación inmediata no sitúa la última actividad antes del inici
   assert.ok(nextCheckpoint.lastActivityAgeMs <= nextCheckpoint.sessionDurationMs + 1);
 });
 
+test("encadena dos recuperaciones tras cierres abruptos sin duplicar métricas ni tiempo inactivo", () => {
+  const first = fixture({ idleAfterMs: 10, commitSampleWindow: 4 });
+  first.open("chapter-1", "seed");
+  first.setTime(5);
+  first.monitor.recordAdmission(
+    first.change(1, 0, 4, 4, "!"),
+    first.queued("takeover-1")
+  );
+  first.setTime(8);
+  first.monitor.recordCommit({
+    ticketId: "takeover-1",
+    status: "applied",
+    revision: 1
+  });
+  first.setTime(12);
+  const firstCheckpoint = first.monitor.createCheckpoint("chapter-1", 1_000);
+  assert.ok(firstCheckpoint);
+  assert.equal(firstCheckpoint.acceptedChanges, 1);
+  assert.equal(firstCheckpoint.committedChanges, 1);
+  assert.equal(firstCheckpoint.activeDurationMs, 7);
+  assert.equal(firstCheckpoint.idleDurationMs, 5);
+  first.monitor.dispose();
+
+  const second = fixture({ idleAfterMs: 10, commitSampleWindow: 4 });
+  const afterFirstTakeover = second.monitor.restoreCheckpoint(
+    firstCheckpoint,
+    { documentId: "chapter-1", text: "seed!", revision: 1, sequence: 1 },
+    "book-1",
+    1_100
+  );
+  assert.equal(afterFirstTakeover.sessionDurationMs, 112);
+  assert.equal(afterFirstTakeover.activeDurationMs, 7);
+  assert.equal(afterFirstTakeover.idleDurationMs, 105);
+  assert.equal(afterFirstTakeover.acceptedChanges, 1);
+  assert.equal(afterFirstTakeover.committedChanges, 1);
+  assert.equal(afterFirstTakeover.pendingChanges, 0);
+  assert.equal(afterFirstTakeover.state, "idle");
+
+  second.setTime(10);
+  const next = second.monitor.recordAdmission(
+    second.change(2, 1, 5, 5, "x"),
+    second.queued("takeover-2")
+  );
+  assert.equal(next.pauseCount, firstCheckpoint.pauseCount + 1);
+  assert.equal(next.latestSequence, 2);
+  second.setTime(13);
+  second.monitor.recordCommit({
+    ticketId: "takeover-2",
+    status: "applied",
+    revision: 2
+  });
+  second.setTime(14);
+  const secondCheckpoint = second.monitor.createCheckpoint("chapter-1", 1_200);
+  assert.ok(secondCheckpoint);
+  assert.equal(secondCheckpoint.acceptedChanges, 2);
+  assert.equal(secondCheckpoint.committedChanges, 2);
+  assert.equal(secondCheckpoint.typingChanges, 2);
+  assert.equal(secondCheckpoint.insertedCharacters, 2);
+  assert.equal(secondCheckpoint.currentDocumentLength, 6);
+  assert.equal(secondCheckpoint.sequence, 2);
+  assert.equal(secondCheckpoint.revision, 2);
+  assert.equal(secondCheckpoint.sessionDurationMs, 126);
+  assert.equal(secondCheckpoint.activeDurationMs, 11);
+  assert.equal(secondCheckpoint.idleDurationMs, 115);
+  assert.equal(secondCheckpoint.lastActivityAgeMs, 4);
+  second.monitor.dispose();
+
+  const third = fixture({ idleAfterMs: 10, commitSampleWindow: 4 });
+  const afterSecondTakeover = third.monitor.restoreCheckpoint(
+    secondCheckpoint,
+    { documentId: "chapter-1", text: "seed!x", revision: 2, sequence: 2 },
+    "book-1",
+    1_600
+  );
+  assert.equal(afterSecondTakeover.sessionId, firstCheckpoint.sessionId);
+  assert.equal(afterSecondTakeover.sessionDurationMs, 526);
+  assert.equal(afterSecondTakeover.activeDurationMs, 11);
+  assert.equal(afterSecondTakeover.idleDurationMs, 515);
+  assert.equal(afterSecondTakeover.acceptedChanges, 2);
+  assert.equal(afterSecondTakeover.committedChanges, 2);
+  assert.equal(afterSecondTakeover.typingChanges, 2);
+  assert.equal(afterSecondTakeover.insertedCharacters, 2);
+  assert.equal(afterSecondTakeover.currentDocumentLength, 6);
+  assert.equal(afterSecondTakeover.latestSequence, 2);
+  assert.equal(afterSecondTakeover.durableSequence, 2);
+  assert.equal(afterSecondTakeover.pendingChanges, 0);
+  assert.equal(afterSecondTakeover.state, "idle");
+});
+
 test("rechaza checkpoints que no coinciden con el snapshot durable o contienen métricas inválidas", () => {
   const first = fixture();
   first.open("chapter-1", "hello");

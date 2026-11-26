@@ -197,6 +197,9 @@ export function discoverNarrativeLocationPresenceCandidates(
       const assertion = LOCATION_ASSERTION.exec(tail.slice(leading));
       if (!assertion?.groups) continue;
       const assertionStart = character.end - span.start + leading + assertion.index;
+      const copula = assertion.groups.copula!;
+      const marker = assertion.groups.marker ?? "";
+      const predicateEnd = assertionStart + marker.length + copula.length;
       const relationStart = predicateEnd;
       const locationRelative = location.start - span.start;
       const locationStartInSentence = locationRelative;
@@ -206,9 +209,6 @@ export function discoverNarrativeLocationPresenceCandidates(
         continue;
       }
 
-      const copula = assertion.groups.copula!;
-      const marker = assertion.groups.marker ?? "";
-      const predicateEnd = assertionStart + marker.length + copula.length;
       const polarity = /(?:\bno\b|\bnunca\b|\bjam[aá]s\b)/iu.test(marker)
         ? "negated" as const : "affirmed" as const;
       const tense = tenseOf(copula);

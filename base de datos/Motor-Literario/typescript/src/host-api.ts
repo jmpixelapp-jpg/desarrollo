@@ -3553,7 +3553,7 @@ export class HostEngineApi {
           if (this.store.loadPersonalIdeasByKeys) {
             for (let offset = 0; offset < checked.unresolved.length; offset += 128) {
               const batch = checked.unresolved.slice(offset, offset + 128);
-              const targets = await this.store.loadPersonalIdeasByKeys(writerId, batch);
+              const targets = await this.store.loadPersonalIdeasByKeys(writerId, batch, pageLibraryVersion);
               if (!Array.isArray(targets)) {
                 throw new Error("La lectura agrupada de la biblioteca devolvió una colección inválida.");
               }

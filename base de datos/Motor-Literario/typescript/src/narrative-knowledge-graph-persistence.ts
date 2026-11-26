@@ -566,6 +566,141 @@ export async function proposeNarrativeReferenceRepairs(
   return proposals;
 }
 
+
+export interface NarrativeReferenceRepairAudit {
+  readonly operation: "narrative-reference-repair";
+  readonly projectId: string;
+  readonly recordType: NarrativeReferenceRepairProposal["recordType"];
+  readonly recordId: string;
+  readonly referenceField: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
+  readonly before: string | readonly string[];
+  readonly after: string | readonly string[];
+  readonly missingReferenceId: string;
+  readonly replacementEntityId: string;
+  readonly appliedAt: number;
+}
+
+export interface NarrativeReferenceRepairResult {
+  readonly changed: boolean;
+  readonly replayed: boolean;
+  readonly audit: NarrativeReferenceRepairAudit;
+}
+
+/**
+ * Aplica una propuesta explícitamente aprobada. Vuelve a comprobar la relación
+ * de fusión y lee el registro inmediatamente antes de escribir mediante CAS.
+ * El evento de auditoría se devuelve al llamador para su persistencia durable.
+ */
+export async function applyNarrativeReferenceRepair(
+  store: ProjectStore,
+  proposal: NarrativeReferenceRepairProposal,
+  approved: boolean,
+  appliedAt = Date.now()
+): Promise<NarrativeReferenceRepairResult> {
+  if (!approved) throw new Error("La reparación requiere aprobación explícita.");
+  if (!store || !proposal || typeof proposal.projectId !== "string" ||
+      !proposal.projectId.trim() || !proposal.recordId || !proposal.missingReferenceId ||
+      !proposal.candidateEntityId || proposal.resolution !== "explicit-merge-match" ||
+      !Number.isFinite(appliedAt) || appliedAt < 0) {
+    throw new Error("Propuesta o contexto inválido para aplicar la reparación.");
+  }
+  const entityLoader = store.loadEntities;
+  if (typeof entityLoader !== "function") throw new Error("El almacenamiento no permite verificar identidades.");
+  const entities = await entityLoader(proposal.projectId);
+  const matches = entities.filter(entity =>
+    entity.projectId === proposal.projectId &&
+    entity.id === proposal.candidateEntityId &&
+    Array.isArray(entity.mergedFromIds) &&
+    entity.mergedFromIds.includes(proposal.missingReferenceId)
+  );
+  if (matches.length !== 1) throw new Error("La correspondencia de fusión cambió o dejó de ser única.");
+  const candidate = matches[0]!;
+  const auditBase = {
+    operation: "narrative-reference-repair" as const,
+    projectId: proposal.projectId,
+    recordType: proposal.recordType,
+    recordId: proposal.recordId,
+    missingReferenceId: proposal.missingReferenceId,
+    replacementEntityId: candidate.id,
+    appliedAt
+  };
+  const requireMethod = (name: string, value: unknown) => {
+    if (typeof value !== "function") throw new Error("El almacenamiento no ofrece CAS para " + name + ".");
+  };
+  if (proposal.recordType === "relation") {
+    requireMethod("relaciones", store.loadRelations);
+    requireMethod("relaciones", store.saveRelationIfUnchanged);
+    const records = await store.loadRelations!(proposal.projectId);
+    const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
+    if (!current) throw new Error("La relación que se desea reparar ya no existe.");
+    const field = current.fromEntityId === proposal.missingReferenceId ? "fromEntityId"
+      : current.toEntityId === proposal.missingReferenceId ? "toEntityId" : undefined;
+    if (!field) {
+      const replay = current.fromEntityId === candidate.id || current.toEntityId === candidate.id;
+      if (!replay) throw new Error("La referencia propuesta ya no coincide con la relación actual.");
+      return { changed: false, replayed: true, audit: { ...auditBase,
+        referenceField: current.fromEntityId === candidate.id ? "fromEntityId" : "toEntityId",
+        before: proposal.missingReferenceId, after: candidate.id } };
+    }
+    const next = { ...current, [field]: candidate.id };
+    await store.saveRelationIfUnchanged!(next, current);
+    return { changed: true, replayed: false, audit: { ...auditBase,
+      referenceField: field, before: proposal.missingReferenceId, after: candidate.id } };
+  }
+  if (proposal.recordType === "event") {
+    requireMethod("acontecimientos", store.loadEvents);
+    requireMethod("acontecimientos", store.saveEventIfUnchanged);
+    const records = await store.loadEvents!(proposal.projectId);
+    const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
+    if (!current) throw new Error("El acontecimiento que se desea reparar ya no existe.");
+    if (!current.participants.includes(proposal.missingReferenceId)) {
+      if (current.participants.includes(candidate.id)) return { changed: false, replayed: true,
+        audit: { ...auditBase, referenceField: "participants",
+          before: [proposal.missingReferenceId], after: [candidate.id] } };
+      throw new Error("El participante propuesto ya no coincide con el acontecimiento actual.");
+    }
+    const next = { ...current, participants: [...new Set(current.participants.map(id =>
+      id === proposal.missingReferenceId ? candidate.id : id))] };
+    await store.saveEventIfUnchanged!(next, current);
+    return { changed: true, replayed: false, audit: { ...auditBase,
+      referenceField: "participants", before: current.participants, after: next.participants } };
+  }
+  if (proposal.recordType === "assertion") {
+    requireMethod("afirmaciones", store.loadAssertions);
+    requireMethod("afirmaciones", store.saveAssertionIfUnchanged);
+    const records = await store.loadAssertions!(proposal.projectId);
+    const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
+    if (!current) throw new Error("La afirmación que se desea reparar ya no existe.");
+    if (current.entityId !== proposal.missingReferenceId) {
+      if (current.entityId === candidate.id) return { changed: false, replayed: true,
+        audit: { ...auditBase, referenceField: "entityId",
+          before: proposal.missingReferenceId, after: candidate.id } };
+      throw new Error("La entidad propuesta ya no coincide con la afirmación actual.");
+    }
+    const next = { ...current, entityId: candidate.id, entityName: candidate.canonicalName };
+    await store.saveAssertionIfUnchanged!(next, current);
+    return { changed: true, replayed: false, audit: { ...auditBase,
+      referenceField: "entityId", before: proposal.missingReferenceId, after: candidate.id } };
+  }
+  requireMethod("ideas", store.loadIdeas);
+  requireMethod("ideas", store.saveIdeaIfUnchanged);
+  const records = await store.loadIdeas!(proposal.projectId);
+  const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
+  if (!current) throw new Error("La idea que se desea reparar ya no existe.");
+  const related = current.relatedEntityIds ?? [];
+  if (!related.includes(proposal.missingReferenceId)) {
+    if (related.includes(candidate.id)) return { changed: false, replayed: true,
+      audit: { ...auditBase, referenceField: "relatedEntityIds",
+        before: [proposal.missingReferenceId], after: [candidate.id] } };
+    throw new Error("La entidad propuesta ya no coincide con los vínculos de la idea.");
+  }
+  const next = { ...current, relatedEntityIds: [...new Set(related.map(id =>
+    id === proposal.missingReferenceId ? candidate.id : id))] };
+  await store.saveIdeaIfUnchanged!(next, current);
+  return { changed: true, replayed: false, audit: { ...auditBase,
+    referenceField: "relatedEntityIds", before: related, after: next.relatedEntityIds! } };
+}
+
 export interface NarrativeKnowledgeGraphPersistenceResult {
   readonly projectId: string;
   readonly saved: {

@@ -72,3 +72,8 @@ El diario incorpora `loadPendingOperations`, `markApplied` y `replayPendingNarra
 
 
 El replay también vuelve a verificar el SHA-256 de cada entrada recuperada inmediatamente antes de invocar el callback. Si el registro almacenado fue alterado o quedó corrupto después de su recepción, no se entrega al consumidor, permanece pendiente y el resultado identifica `failure: "invalid-envelope"`. Los fallos del callback o del acuse se distinguen como `apply-or-ack-failed`.
+
+
+### Exclusión de consumidores concurrentes en el mismo runtime
+
+`replayPendingNarrativeSyncOperations` serializa llamadas simultáneas por proyecto dentro del mismo runtime JavaScript. Una segunda llamada concurrente devuelve `failure: "consumer-already-running"` sin ejecutar callbacks. El callback recibe la envoltura validada sin los metadatos locales del diario. Esta protección no coordina pestañas, workers ni dispositivos distintos; el anfitrión debe mantener un único consumidor por proyecto o aportar coordinación distribuida/lease con fencing antes de habilitar múltiples consumidores.

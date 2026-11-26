@@ -251,6 +251,52 @@ test("libera after-dispatch un beforeinput cancelado por un listener posterior",
   f.source.dispose();
 });
 
+test("limpia beforeinput cancelado sincrónicamente antes de una segunda operación anidada", async () => {
+  const f = fixture("abc", 0, 0);
+  let nested = false;
+  const enqueueNextOperation = event => {
+    if (nested) return;
+    nested = true;
+
+    // El listener posterior cancela la primera intención y, antes de que
+    // termine la propagación, el editor inicia otra intención válida.
+    event.defaultPrevented = true;
+    f.element.selectionStart = 3;
+    f.element.selectionEnd = 3;
+    const next = f.element.emitBeforeInput("insertText", false, true, "y");
+    assert.equal(next.defaultPrevented, false);
+  };
+  f.element.addEventListener("beforeinput", enqueueNextOperation);
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+
+  const cancelled = f.element.emitBeforeInput("insertText", false, true, "x");
+  assert.equal(cancelled.defaultPrevented, true);
+  assert.equal(f.source.pendingInput.inputData, "y",
+    "la segunda operación debe reemplazar el estado provisional ya cancelado");
+
+  // La microtarea antigua no debe borrar el pending nuevo por identidad.
+  await Promise.resolve();
+  assert.equal(f.source.getState().pendingInput, true);
+  assert.equal(f.source.getState().needsResync, false);
+  assert.equal(f.errors.length, 0);
+
+  f.element.removeEventListener("beforeinput", enqueueNextOperation);
+  f.element.value = "abcy";
+  f.element.emitInput(false, "insertText", true, "y");
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].start, 3);
+  assert.equal(f.changes[0].end, 3);
+  assert.equal(f.changes[0].replacement, "y");
+  assert.equal(f.source.getState().pendingInput, false);
+  assert.equal(f.source.getState().needsResync, false);
+  assert.equal(f.errors.length, 0);
+
+  f.stop();
+  f.source.dispose();
+});
+
 test("marca como no confiable un input sin beforeinput previo", () => {
   const f = fixture();
   f.element.value = "hello!";

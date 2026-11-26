@@ -683,3 +683,5 @@ La triangulación exige coincidencia exacta de proyecto, personaje y acción. No
 **Límite semántico:** el resultado es un contexto de decisión documentado, no una decisión mental confirmada. No afirma que el personaje recordara conscientemente la información, que la considerara verdadera, que deliberara sobre ella ni que esta causara la acción. La etiqueta de alineación describe la comparación lingüística ya existente, no una evaluación moral o psicológica.
 
 Se añadieron pruebas unitarias para alineación favorable, oposición, condición, coincidencia de actor y acción, referencias inválidas y duplicadas; además de una prueba de integración que recorre el pipeline principal desde conocimiento e intención hasta la acción.
+
+**Endurecimiento de trazabilidad de Fase AN:** cuando dos análisis declaran compartir el mismo ID de acción, el módulo exige que documento, revisión, rango y fragmento textual de la evidencia de esa acción sean idénticos. Si no coinciden, rechaza la triangulación en lugar de fusionar referencias posiblemente distintas. Se agregó una prueba específica para esta condición.

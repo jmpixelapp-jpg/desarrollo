@@ -129,7 +129,9 @@ function validate(input: NarrativeUnderstandingInput): void {
       (input.characterMentions !== undefined && !Array.isArray(input.characterMentions)) ||
       (input.pronounReferences !== undefined && !Array.isArray(input.pronounReferences)) ||
       (input.priorAssertions !== undefined &&
-        (!Array.isArray(input.priorAssertions) || input.priorAssertions.length > 5000))) {
+        (!Array.isArray(input.priorAssertions) || input.priorAssertions.length > 5000)) ||
+      (input.priorClaims !== undefined &&
+        (!Array.isArray(input.priorClaims) || input.priorClaims.length > 5000))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
   }
   const baseOffset = input.baseOffset ?? 0;
@@ -201,7 +203,10 @@ export function understandNarrativeFragment(
   const actions = extractNarrativeActionCandidates(extractionContext);
   const attributedClaims = extractNarrativeAttributedClaims(extractionContext);
   const dialogueAttributions = extractNarrativeDialogueAttributions(extractionContext);
-  const informationProvenance = extractNarrativeInformationProvenance(extractionContext);\n  const knowledgeEvolution = extractNarrativeKnowledgeEvolution({\n    ...extractionContext, priorClaims: input.priorClaims\n  });
+  const informationProvenance = extractNarrativeInformationProvenance(extractionContext);
+  const knowledgeEvolution = extractNarrativeKnowledgeEvolution({
+    ...extractionContext, priorClaims: input.priorClaims
+  });
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,

@@ -5,7 +5,7 @@ import {
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
-  StoredLiveAuthorMonitorLease, Diagnostic
+  StoredLiveAuthorMonitorLease, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener } from "./live-author-monitor";
@@ -262,6 +262,135 @@ function requireUniquePersonalIdeaEntries(
     }
   }
   return entries;
+}
+
+
+function comparePersonalIdeaLibraryCursor(
+  first: Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">,
+  second: Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">
+): number {
+  if (first.sourceProjectId !== second.sourceProjectId) {
+    return first.sourceProjectId < second.sourceProjectId ? -1 : 1;
+  }
+  if (first.ideaId === second.ideaId) return 0;
+  return first.ideaId < second.ideaId ? -1 : 1;
+}
+
+/** Valida una página sin suponer que sus referencias archivadas caben en la misma página. */
+function validatePersonalIdeaLibraryPage(
+  value: unknown,
+  writerId: string,
+  cursor: PersonalIdeaLibraryCursor | null,
+  limit: number
+): {
+  readonly page: PersonalIdeaLibraryPage;
+  readonly unresolved: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[];
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("La biblioteca devolvió una página inválida.");
+  }
+  const candidate = value as Partial<PersonalIdeaLibraryPage>;
+  if (!Array.isArray(candidate.items) || candidate.items.length > limit ||
+      !Object.prototype.hasOwnProperty.call(candidate, "nextCursor") ||
+      (candidate.nextCursor !== null &&
+        (!candidate.nextCursor || candidate.nextCursor.writerId !== writerId ||
+          typeof candidate.nextCursor.sourceProjectId !== "string" ||
+          !candidate.nextCursor.sourceProjectId.trim() ||
+          typeof candidate.nextCursor.ideaId !== "string" ||
+          !candidate.nextCursor.ideaId.trim() ||
+          !Number.isSafeInteger(candidate.nextCursor.libraryVersion) ||
+          (candidate.nextCursor.libraryVersion as number) < 0)) ||
+      !Number.isSafeInteger(candidate.libraryVersion) ||
+      (candidate.libraryVersion as number) < 0 ||
+      (candidate.restartRequired !== undefined && typeof candidate.restartRequired !== "boolean")) {
+    throw new Error("La página o el cursor de biblioteca están malformados.");
+  }
+
+  const libraryVersion = candidate.libraryVersion as number;
+  const restartRequired = candidate.restartRequired === true;
+  if (cursor?.libraryVersion !== undefined && cursor.libraryVersion !== libraryVersion &&
+      !restartRequired) {
+    throw new Error("La generación de la biblioteca cambió sin solicitar reiniciar la paginación.");
+  }
+  if (restartRequired &&
+      (candidate.items.length !== 0 || candidate.nextCursor !== null)) {
+    throw new Error("Una resincronización debe devolver una página vacía y sin cursor.");
+  }
+  if (candidate.nextCursor !== null &&
+      candidate.nextCursor.libraryVersion !== libraryVersion) {
+    throw new Error("El cursor siguiente pertenece a otra generación de biblioteca.");
+  }
+
+  const items = candidate.items as PersonalIdeaLibraryEntry[];
+  const pageKeys = new Set<string>();
+  let previous: PersonalIdeaLibraryEntry | undefined;
+  for (const entry of items) {
+    if (!isValidPersonalIdeaEntry(entry, writerId)) {
+      throw new Error("Una página contiene una idea de otro escritor o un registro malformado.");
+    }
+    if (previous && comparePersonalIdeaLibraryCursor(
+      { sourceProjectId: previous.sourceProjectId, ideaId: previous.idea.id },
+      { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }
+    ) >= 0) {
+      throw new Error("Las entradas de la página no están estrictamente ordenadas.");
+    }
+    if (cursor && comparePersonalIdeaLibraryCursor(
+      { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }, cursor
+    ) <= 0) {
+      throw new Error("El cursor devolvió una idea anterior o repetida.");
+    }
+    const key = JSON.stringify([entry.sourceProjectId, entry.idea.id]);
+    if (pageKeys.has(key)) throw new Error("La página repite una idea archivada.");
+    pageKeys.add(key);
+    previous = entry;
+  }
+
+  const unresolved = new Map<string, Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">>();
+  for (const entry of items) {
+    if (!entry.context) continue;
+    const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+    const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+    if ([...contextIdeaIds].some(id => pageKeys.has(JSON.stringify([entry.sourceProjectId, id])))) {
+      throw new Error("El contexto duplica una idea archivada de la página.");
+    }
+    for (const related of [entry.idea, ...entry.context.relatedIdeas]) {
+      if ((related.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id))) {
+        throw new Error("Una idea archivada conserva una ficha relacionada sin contexto.");
+      }
+      for (const relatedId of related.relatedIdeaIds ?? []) {
+        const key = JSON.stringify([entry.sourceProjectId, relatedId]);
+        if (!contextIdeaIds.has(relatedId) && !pageKeys.has(key)) {
+          unresolved.set(key, { sourceProjectId: entry.sourceProjectId, ideaId: relatedId });
+        }
+      }
+    }
+  }
+
+  const nextCursor = candidate.nextCursor ?? null;
+  if (items.length === 0 && nextCursor !== null) {
+    throw new Error("Una página vacía no puede avanzar el cursor.");
+  }
+  if (items.length < limit && nextCursor !== null) {
+    throw new Error("Una página incompleta no puede indicar que existen más resultados.");
+  }
+  if (nextCursor !== null) {
+    const last = items[items.length - 1];
+    if (!last || nextCursor.sourceProjectId !== last.sourceProjectId ||
+        nextCursor.ideaId !== last.idea.id ||
+        (cursor && comparePersonalIdeaLibraryCursor(nextCursor, cursor) <= 0)) {
+      throw new Error("El cursor siguiente no coincide con la última idea de la página.");
+    }
+  }
+
+  return {
+    page: {
+      items,
+      nextCursor,
+      libraryVersion,
+      ...(restartRequired ? { restartRequired: true } : {})
+    },
+    unresolved: [...unresolved.values()]
+  };
 }
 
 function isValidPersonalIdeaContext(

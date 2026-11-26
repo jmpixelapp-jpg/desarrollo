@@ -211,3 +211,93 @@ export function discoverNarrativeDescriptiveReferences(
       };
     });
 }
+
+export interface NarrativeDescriptiveLabelCandidate {
+  readonly id: string;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly proposedLabel: string;
+  readonly labelEvidence: TextEvidence;
+  readonly anchorEntityId: string;
+  readonly anchorEvidence: TextEvidence;
+  readonly relation: "appositive-description";
+  readonly reviewStatus: "candidate";
+}
+
+export interface NarrativeDescriptiveLabelCandidateInput {
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly text: string;
+  readonly entities: readonly NarrativeEntity[];
+  readonly baseOffset?: number;
+  readonly maxCandidates?: number;
+}
+
+export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES = 2_000;
+export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_SCAN_UNITS = 25_000_000;
+
+/**
+ * Extrae etiquetas descriptivas en aposición inmediata a una entidad nombrada:
+ * «Ana, la heredera del reino». No confirma que la descripción sea verdadera
+ * ni la incorpora a la ficha; entrega ambas evidencias para revisión.
+ */
+export function discoverNarrativeDescriptiveLabelCandidates(
+  input: NarrativeDescriptiveLabelCandidateInput
+): readonly NarrativeDescriptiveLabelCandidate[] {
+  const maxCandidates = input.maxCandidates ?? MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES;
+  if (!input || typeof input !== "object" ||
+      typeof input.projectId !== "string" || !input.projectId.trim() ||
+      typeof input.documentId !== "string" || !input.documentId.trim() ||
+      !Number.isSafeInteger(input.revision) || input.revision < 0 ||
+      typeof input.text !== "string" || input.text.length > MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_TEXT_UNITS ||
+      !Array.isArray(input.entities) || !Number.isSafeInteger(maxCandidates) ||
+      maxCandidates < 1 || maxCandidates > MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES ||
+      (input.baseOffset !== undefined && (!Number.isSafeInteger(input.baseOffset) ||
+        input.baseOffset < 0 || input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) {
+    throw new Error("Contexto inválido para extraer etiquetas descriptivas candidatas.");
+  }
+  const base = input.baseOffset ?? 0;
+  const results = new Map<string, NarrativeDescriptiveLabelCandidate>();
+  let scanUnits = 0;
+  for (const entity of input.entities) {
+    if (!entity || entity.projectId !== input.projectId || typeof entity.id !== "string" ||
+        !entity.id.trim() || typeof entity.canonicalName !== "string" ||
+        !entity.canonicalName.trim() || !Array.isArray(entity.aliases)) {
+      throw new Error("Las entidades deben ser válidas y pertenecer al mismo proyecto.");
+    }
+    const names = [entity.canonicalName, ...entity.aliases].filter(name =>
+      typeof name === "string" && name.trim().length > 0 && name.length <= MAX_NARRATIVE_DESCRIPTIVE_LABEL_LENGTH);
+    for (const name of names) {
+      scanUnits += input.text.length;
+      if (scanUnits > MAX_NARRATIVE_DESCRIPTIVE_LABEL_SCAN_UNITS) {
+        throw new Error("La extracción de etiquetas descriptivas supera el presupuesto operativo de exploración.");
+      }
+      const expression = new RegExp(
+        "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(name) +
+        "(?![\\p{L}\\p{M}\\p{N}_])\\s*,\\s*((?:el|la|los|las|un|una)\\s+[\\p{L}][\\p{L}\\p{M}-]*(?:\\s+(?:de|del|de la|de los|de las|con|sin|en)\\s+[\\p{L}][\\p{L}\\p{M}-]*){0,2})",
+        "giu"
+      );
+      for (const match of input.text.matchAll(expression)) {
+        const anchorStart = match.index!;
+        const anchorEnd = anchorStart + name.length;
+        const labelStart = anchorStart + match[0].lastIndexOf(match[1]!);
+        const labelEnd = labelStart + match[1]!.length;
+        const key = entity.id + ":" + labelStart + ":" + labelEnd;
+        if (results.has(key)) continue;
+        results.set(key, {
+          id: "descriptive-label-candidate:" + input.documentId + ":" + input.revision + ":" + (base + labelStart) + ":" + entity.id,
+          projectId: input.projectId, documentId: input.documentId, revision: input.revision,
+          proposedLabel: match[1]!,
+          labelEvidence: { documentId: input.documentId, revision: input.revision, start: base + labelStart, end: base + labelEnd, excerpt: match[1]! },
+          anchorEntityId: entity.id,
+          anchorEvidence: { documentId: input.documentId, revision: input.revision, start: base + anchorStart, end: base + anchorEnd, excerpt: match[0].slice(0, match[0].indexOf(",")) },
+          relation: "appositive-description", reviewStatus: "candidate"
+        });
+        if (results.size >= maxCandidates) return [...results.values()];
+      }
+    }
+  }
+  return [...results.values()].sort((a,b) => a.labelEvidence.start - b.labelEvidence.start || a.anchorEntityId.localeCompare(b.anchorEntityId));
+}

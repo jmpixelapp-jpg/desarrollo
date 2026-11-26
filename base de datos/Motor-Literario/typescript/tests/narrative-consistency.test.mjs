@@ -90,3 +90,11 @@ test("rechaza contexto y afirmaciones mal formadas", () => {
   assert.throws(() => analyzeNarrativeConsistency("", []));
   assert.throws(() => analyzeNarrativeConsistency("novel-a", [assertion({ attribute: "unknown" })]));
 });
+
+test("normaliza mayúsculas y espacios antes de comparar valores textuales", () => {
+  const result = analyzeNarrativeConsistency("novel-a", [
+    assertion({ value: " Puerto Azul ", start: 1, timeReference: calendar("2030-04-02", 22005) }),
+    assertion({ value: "puerto azul", start: 20, timeReference: calendar("2030-04-02", 22005) })
+  ]);
+  assert.deepEqual(result, []);
+});

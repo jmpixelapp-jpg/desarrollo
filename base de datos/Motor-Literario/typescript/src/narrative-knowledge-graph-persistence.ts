@@ -261,7 +261,7 @@ export interface NarrativeProjectionReconciliationIssue {
   readonly recordType: "document" | "entity" | "relation" | "event" | "idea" | "assertion";
   readonly recordId?: string;
   readonly relatedId?: string;
-  readonly referenceField?: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
+  readonly referenceField?: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds" | "relatedIdeaIds";
   readonly detail: string;
 }
 
@@ -433,7 +433,7 @@ export async function reconcileNarrativeDocumentProjections(
     for (const relatedIdeaId of idea.relatedIdeaIds ?? []) {
       if (!ideaIds.has(relatedIdeaId)) emitReference(
         "missing-related-idea", "idea", idea.id, relatedIdeaId,
-        documents, "La idea referencia otra idea inexistente."
+        documents, "La idea referencia otra idea inexistente.", "relatedIdeaIds"
       );
     }
   }
@@ -878,7 +878,7 @@ export async function inspectNarrativeReferenceRepairPending(
         detail: "El registro ya no contiene la referencia original; requiere revisión." };
     }
     const replacement = entityById.get(entry.replacementEntityId);
-    if (!replacement || !replacement.mergedFromIds.includes(entry.missingReferenceId)) {
+    if (!replacement || !(replacement.mergedFromIds ?? []).includes(entry.missingReferenceId)) {
       return { operationId: entry.operationId, recordType: entry.recordType,
         recordId: entry.recordId, status: "replacement-not-proven",
         detail: "No se puede demostrar que la entidad sustituta proceda de la identidad faltante." };
@@ -1066,16 +1066,20 @@ export async function verifyNarrativeReferenceRepairAuditIntegrity(
       : entry.recordType === "event" ? entry.referenceField === "participants"
       : entry.recordType === "assertion" ? entry.referenceField === "entityId"
       : entry.recordType === "idea" ? entry.referenceField === "relatedEntityIds" : false;
-    const validValues = entry.recordType === "relation" || entry.recordType === "assertion"
-      ? typeof entry.before === "string" && entry.before === entry.missingReferenceId &&
-        typeof entry.after === "string" && entry.after === entry.replacementEntityId
-      : isStringArray(entry.before) && entry.before.includes(entry.missingReferenceId) &&
-        isStringArray(entry.after) && entry.after.includes(entry.replacementEntityId);
+    const missingReferenceId = typeof entry.missingReferenceId === "string" && entry.missingReferenceId.trim()
+      ? entry.missingReferenceId : undefined;
+    const replacementEntityId = typeof entry.replacementEntityId === "string" && entry.replacementEntityId.trim()
+      ? entry.replacementEntityId : undefined;
+    const validValues = missingReferenceId !== undefined && replacementEntityId !== undefined &&
+      (entry.recordType === "relation" || entry.recordType === "assertion"
+        ? typeof entry.before === "string" && entry.before === missingReferenceId &&
+          typeof entry.after === "string" && entry.after === replacementEntityId
+        : isStringArray(entry.before) && entry.before.includes(missingReferenceId) &&
+          isStringArray(entry.after) && entry.after.includes(replacementEntityId));
     const valid = entry.operation === "narrative-reference-repair" &&
       entry.projectId === projectId && validType && expectedField &&
       typeof entry.recordId === "string" && !!entry.recordId &&
-      typeof entry.missingReferenceId === "string" && !!entry.missingReferenceId &&
-      typeof entry.replacementEntityId === "string" && !!entry.replacementEntityId &&
+      missingReferenceId !== undefined && replacementEntityId !== undefined &&
       Number.isFinite(entry.appliedAt) && (entry.appliedAt ?? -1) >= 0 &&
       validValues;
     if (!valid) {

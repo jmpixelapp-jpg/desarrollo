@@ -378,6 +378,10 @@ export class IndexedDbNarrativeSyncJournal {
           return;
         }
         const last = snapshot[snapshot.length - 1];
+        if (!last) {
+          abortWith("journal-not-complete");
+          return;
+        }
         if (currentCursor &&
             (currentCursor.projectId !== proposal.projectId ||
              currentCursor.writerId !== proposal.writerId ||

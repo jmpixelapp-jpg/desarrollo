@@ -151,3 +151,10 @@ El bloqueo es deliberadamente local al runtime: no coordina pestañas, procesos 
 ### Inspección previa de conflictos pendientes
 
 `inspectNarrativeReferenceRepairPending(store, projectId)` ofrece un diagnóstico de solo lectura de cada intención durable. Clasifica las entradas como `ready-to-recover`, `already-applied`, `record-missing`, `record-changed`, `replacement-not-proven` o `invalid-intent`. Contrasta el registro actual y la procedencia `mergedFromIds` de la entidad sustituta. No modifica el grafo, no escribe auditorías y no elimina intenciones; la resolución sigue siendo una acción explícita del flujo de recuperación o del anfitrión.
+
+
+### Verificación de durabilidad entre instancias IndexedDB
+
+Se añadieron pruebas con dos instancias independientes de `IndexedDbProjectStore` sobre la misma base de datos. Ambas intentan guardar la misma intención y la misma auditoría; el resultado esperado es una única entrada durable e idéntica al leer desde cualquiera de las instancias. También se prueba la eliminación idempotente concurrente de la intención.
+
+Estas pruebas verifican coordinación a través de la transacción compartida de IndexedDB para las operaciones cubiertas; no prueban un bloqueo global del proceso de recuperación ni sustituyen los CAS de cada registro narrativo.

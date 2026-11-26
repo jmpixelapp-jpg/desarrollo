@@ -27,8 +27,8 @@ class FakeTextArea {
     for (const listener of [...(this.listeners.get("beforeinput") ?? [])]) listener(event);
   }
 
-  emitInput(isComposing = false, inputType = "", isTrusted = true) {
-    const event = { inputType, isComposing, isTrusted };
+  emitInput(isComposing = false, inputType = "", isTrusted = true, data = null) {
+    const event = { inputType, isComposing, isTrusted, data };
     for (const listener of [...(this.listeners.get("input") ?? [])]) listener(event);
   }
 
@@ -40,12 +40,12 @@ class FakeTextArea {
     for (const listener of [...(this.listeners.get("compositionend") ?? [])]) listener({ isTrusted: true });
   }
 
-  edit({ start, end, nextValue, inputType = "insertText", isComposing = false, data = null }) {
+  edit({ start, end, nextValue, inputType = "insertText", isComposing = false, data = null, inputData = null }) {
     this.selectionStart = start;
     this.selectionEnd = end;
     this.emitBeforeInput(inputType, isComposing, true, data);
     this.value = nextValue;
-    this.emitInput(isComposing);
+    this.emitInput(isComposing, inputType, true, inputData);
   }
 }
 
@@ -553,6 +553,49 @@ test("contrasta beforeinput.data con el reemplazo real y detecta mutaciones dent
   assert.equal(accepted.source.getState().needsResync, false);
   accepted.stop();
   accepted.source.dispose();
+
+  // Si beforeinput.data no está disponible, input.data puede aportar la
+  // comprobación del contenido sin inventar el payload esperado.
+  const inputOnly = fixture("abcd", 0, 0);
+  inputOnly.element.edit({
+    start: 1,
+    end: 3,
+    nextValue: "aXYd",
+    inputType: "insertText",
+    inputData: "XY"
+  });
+  assert.equal(inputOnly.changes.length, 1);
+  assert.equal(inputOnly.source.getState().needsResync, false);
+  inputOnly.stop();
+  inputOnly.source.dispose();
+
+  // Las dos declaraciones deben concordar, incluso si el valor del textarea
+  // coincide con beforeinput.data.
+  const contradictoryEvents = fixture("abcd", 0, 0);
+  contradictoryEvents.element.selectionStart = 1;
+  contradictoryEvents.element.selectionEnd = 3;
+  contradictoryEvents.element.emitBeforeInput("insertText", false, true, "XY");
+  contradictoryEvents.element.value = "aXYd";
+  contradictoryEvents.element.emitInput(false, "insertText", true, "XZ");
+  assert.equal(contradictoryEvents.changes.length, 0);
+  assert.equal(contradictoryEvents.source.getState().needsResync, true);
+  assert.equal(contradictoryEvents.errors[0].code, "input-data-mismatch");
+  assert.match(contradictoryEvents.errors[0].message, /beforeinput e input no coinciden/);
+  contradictoryEvents.stop();
+  contradictoryEvents.source.dispose();
+
+  // input.data también protege cuando beforeinput.data es null.
+  const inputOnlyMismatch = fixture("abcd", 0, 0);
+  inputOnlyMismatch.element.selectionStart = 1;
+  inputOnlyMismatch.element.selectionEnd = 3;
+  inputOnlyMismatch.element.emitBeforeInput("insertText", false, true, null);
+  inputOnlyMismatch.element.value = "aZZd";
+  inputOnlyMismatch.element.emitInput(false, "insertText", true, "XY");
+  assert.equal(inputOnlyMismatch.changes.length, 0);
+  assert.equal(inputOnlyMismatch.source.getState().needsResync, true);
+  assert.equal(inputOnlyMismatch.errors[0].code, "input-data-mismatch");
+  inputOnlyMismatch.stop();
+  inputOnlyMismatch.source.dispose();
 
   const rejected = fixture("abcd", 0, 0);
   rejected.element.selectionStart = 1;

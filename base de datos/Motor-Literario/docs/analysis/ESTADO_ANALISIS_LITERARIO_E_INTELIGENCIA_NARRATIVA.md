@@ -533,3 +533,13 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Se corrigió y verificó por inspección el alcance de la transacción: el store de outbox forma parte de la misma transacción antes de leer/asignar secuencia e insertar la operación.
 - La prueba de colisión deliberada de `operationId` verifica que el delta del journal no queda persistido cuando falla la outbox.
 - **No se ha ejecutado aún** `npm test` ni `npm run typecheck`; no se declara validación de runtime.
+
+### Validación de esquema para operaciones narrativas salientes
+
+- Se añadió el tipo exportado `NarrativeDocumentChangePayloadV1` y el validador `validateNarrativeDocumentChangePayloadV1`.
+- `NarrativeSyncCoordinator` aplica el validador a las operaciones `narrative-document-change.v1` al recuperarlas de la outbox, antes de transmitirlas.
+- Se comprueban versión de esquema, documento, secuencia, continuidad de revisiones, offsets UTF-16 y reemplazo textual.
+- Los tipos de operación existentes conservan validación JSON genérica; el cambio es compatible con otros productores.
+- Se añadió una prueba unitaria para payload válido y casos inválidos de versión, revisión, offsets, secuencia y objeto nulo.
+- Se actualizó el contrato de transporte.
+- **Validación de ejecución pendiente:** no se ha ejecutado `npm run typecheck` ni `npm test`. El repositorio no ha devuelto checks ni workflow runs para los commits inspeccionados.

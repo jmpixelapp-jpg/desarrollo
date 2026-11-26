@@ -32,6 +32,8 @@ export interface NarrativeEntity {
   readonly canonicalName: string;
   readonly normalizedName: string;
   readonly aliases: readonly string[];
+  /** Descripciones nominales confirmadas por el escritor; no se infieren automáticamente. */
+  readonly descriptions?: readonly string[];
   /** IDs de fichas consolidadas en esta identidad; preserva procedencia. */
   readonly mergedFromIds?: readonly string[];
   readonly evidence: readonly TextEvidence[];

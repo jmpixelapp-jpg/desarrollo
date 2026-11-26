@@ -299,3 +299,25 @@ test("integra la evolución del conocimiento y enlaza evidencia entre capítulos
   assert.equal(result.knowledgeEvolution[0].matchedClaimId, "claim:old:0:mara");
   assert.equal(result.knowledgeEvolution[0].claimEvidence.documentId, "chapter-old");
 });
+
+
+test("integra cadenas de transmisión con procedencia previa de otros capítulos", () => {
+  const priorInformationProvenance = [{
+    id:"information:chapter-1:0:visual-observation:elian",
+    projectId:"novel", informationHolderEntityId:"elian",
+    channel:"visual-observation", status:"observed",
+    content:"el puente había caído", reviewStatus:"candidate",
+    evidence:{documentId:"chapter-1",revision:1,start:0,end:36,excerpt:"Elian vio que el puente había caído."},
+    contentEvidence:{documentId:"chapter-1",revision:1,start:14,end:36,excerpt:"el puente había caído"}
+  }];
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-2", revision:2,
+    text:"Elian le contó a Mara que el puente había caído.",
+    entities, priorInformationProvenance
+  });
+  assert.equal(result.informationChain.length, 1);
+  assert.equal(result.informationChain[0].linkStatus, "linked");
+  assert.equal(result.informationChain[0].predecessorRecordId,
+    "information:chapter-1:0:visual-observation:elian");
+  assert.equal(result.informationChain[0].recipientEntityId, "mara");
+});

@@ -514,6 +514,7 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           observed: [...window.__blurRecoveryHarness.observed],
           inputEvents: window.__blurRecoveryHarness.inputEvents,
           value: window.__blurRecoveryHarness.element.value,
+          pendingInput: window.__blurRecoveryHarness.source.pendingInput !== undefined,
           state: window.__blurRecoveryHarness.source.getState()
         }));
         assert.equal(beforeBlur.observed.length, 1);
@@ -526,8 +527,10 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
         assert.equal(beforeBlur.inputEvents, 0,
           "preventDefault posterior debe impedir el input correspondiente");
         assert.equal(beforeBlur.value, "abc");
+        assert.equal(beforeBlur.pendingInput, false,
+          "la microtarea debe liberar la pareja que un listener posterior canceló");
         assert.equal(beforeBlur.state.needsResync, false,
-          "la fuente espera la resolución del beforeinput todavía no completado");
+          "la cancelación final no debe suspender una fuente que sigue sincronizada");
 
         await blurTextarea.evaluate(element => element.blur());
         const afterBlur = await page.evaluate(() => {

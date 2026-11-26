@@ -132,3 +132,10 @@ La reparación aprobada se registra primero en `narrative-reference-repair-pendi
 `loadNarrativeProjectAfterRepairRecovery(store, projectId, loadProject)` ofrece el punto de entrada para la hidratación del proyecto: primero inspecciona y recupera la cola durable; sólo después ejecuta el callback de carga/hidratación. Si no puede inspeccionar IndexedDB, rechaza la operación y no entrega un proyecto parcialmente inicializado. Los conflictos de reparación no fuerzan escrituras ni impiden consultar el proyecto: quedan en `recovery.pending` para que la interfaz los presente como incidencias revisables.
 
 El anfitrión debe utilizar esta función en su límite de apertura/selección de proyecto en lugar de invocar directamente su hidratador. La biblioteca no contiene un arranque global de aplicación que permita imponer esa sustitución desde el motor; por ello, la función constituye el contrato público de integración, no una afirmación de que todas las aplicaciones consumidoras ya lo estén invocando.
+
+
+### Sincronización entrante protegida por recuperación
+
+`createRecoveryFirstNarrativeSyncConsumer(store, journal, handlers, options)` compone la recuperación de referencias con el consumidor del diario de sincronización. Para cada proyecto, procesa primero las intenciones locales pendientes y sólo inicia el replay remoto si la cola queda sin conflictos. Cuando hay una intención inválida u obsoleta, devuelve `blockedByPendingRepairs: true`, conserva las operaciones remotas sin aplicar y expone el detalle en `recovery.pending`; el anfitrión puede presentar el conflicto y reintentar tras su resolución.
+
+Esta compuerta no convierte el diario y el grafo en una transacción distribuida ni sustituye la idempotencia de los handlers. El diario mantiene entrega al menos una vez y la exclusión de replay no debe interpretarse como un mutex global entre pestañas o dispositivos. La garantía añadida es de orden dentro de este punto de entrada: recuperación durable antes de despacho remoto.

@@ -267,3 +267,28 @@ test("un mismo adaptador no permite reentrada concurrente del mismo propietario"
     await deleteDatabase();
   }
 });
+
+
+test("el adaptador recupera un lease vencido tras el cierre del propietario anterior", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const now = Date.now();
+  try {
+    const abandoned = await store.acquireLiveAuthorMonitorLease(
+      "expired-lease-project", "__narrative_sync_project__", "crashed-tab",
+      now - 5_000, 1_000
+    );
+    assert.ok(abandoned);
+    let ran = false;
+    const lock = new IndexedDbSyncExecutionLock(store, {
+      ownerId: "recovery-tab", now: () => now, leaseDurationMs: 1_000, pollIntervalMs: 25
+    });
+    await lock.runExclusive("narrative-sync:expired-lease-project", async () => {
+      ran = true;
+    });
+    assert.equal(ran, true);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

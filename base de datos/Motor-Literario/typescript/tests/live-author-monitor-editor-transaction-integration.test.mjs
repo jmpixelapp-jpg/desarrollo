@@ -406,7 +406,10 @@ test("dispose repetido reintenta retirar un listener nativo cuyo primer cierre f
     return deleteListener(listener);
   };
 
-  f.integration.dispose();
+  assert.throws(
+    () => f.integration.dispose(),
+    /No se pudo retirar el listener del proveedor/
+  );
   assert.equal(attempts, 2, "binding y source intentan limpiar sin perder el handle");
   assert.equal(f.editor.listeners.size, 1, "el listener sigue registrado tras fallar la limpieza");
 

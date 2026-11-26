@@ -148,8 +148,8 @@ function emDashSpans(text: string, maxDistance: number): readonly Span[] {
     const closingTag = match[3];
     const bodyStart = lineStart + 1;
     const closingDashOffset = closingTag ? match[0].lastIndexOf("—") : -1;
-    const tagOffset = closingTag ? match.index! + closingDashOffset + 1 : undefined;
-    const utterance = closingTag ? body.slice(0, body.lastIndexOf("—")).trimEnd() : body.trimEnd();
+    const tagOffset = closingTag ? match.index! + closingDashOffset + 1 : -1;
+    const utterance = body.trimEnd();
     const leadingTrim = body.length - body.trimStart().length;
     const contentStart = bodyStart + leadingTrim;
     const contentEnd = contentStart + utterance.length;

@@ -13,6 +13,7 @@ on:
     paths:
       - "base de datos/Motor-Literario/typescript/src/live-author-monitor-textarea-source.ts"
       - "base de datos/Motor-Literario/typescript/tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs"
+      - "base de datos/Motor-Literario/typescript/tests/live-author-monitor-ime-composition-browser.test.mjs"
       - "base de datos/Motor-Literario/typescript/tests/browser/live-author-monitor-ime-manual.html"
       - ".github/workflows/live-author-monitor-beforeinput-cancellation.yml"
   workflow_dispatch:

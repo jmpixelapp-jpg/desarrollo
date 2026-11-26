@@ -596,3 +596,14 @@ Se añadieron tres pruebas para detección, abstención sin participante compart
 La revisión posterior detectó que las expresiones regulares de la hipótesis temporal debían comprobarse con pruebas específicas de los escapes y los límites de párrafo. Se normalizaron para reconocer espacios y saltos de línea reales, y se añadieron salvaguardas de entrada: IDs de acontecimientos no vacíos y únicos, participantes como colección válida de identificadores y evidencia textual coincidente. Se agregaron pruebas para impedir hipótesis que crucen párrafos y para rechazar eventos duplicados o malformados.
 
 Esta corrección fortalece la abstención: una hipótesis no se crea si el contexto estructural o la identidad de los participantes no es fiable.
+
+
+### Precisión adicional: identidad de personajes frente a objetos compartidos
+
+La hipótesis temporal ya no utiliza cualquier entidad compartida como si fuera un participante humano. Los acontecimientos conservan ahora dos conjuntos distintos:
+- `participantEntityIds`: todos los participantes explícitos (personajes y otras entidades).
+- `characterParticipantEntityIds`: únicamente entidades cuyo tipo en el catálogo del proyecto es `character`.
+
+La asociación temporal débil exige coincidencia en el segundo conjunto. Así, dos acontecimientos que mencionan la misma puerta, arma o ciudad, pero personajes distintos, no generan una hipótesis de continuidad entre personajes. La extracción deriva esta lista del catálogo de entidades y valida que cada personaje incluido también pertenezca al conjunto general de participantes.
+
+Se añadieron pruebas para el caso de objeto compartido y para listas de personajes incoherentes. La prueba de salto de párrafo fue corregida para utilizar saltos reales, no los caracteres literales `\\n`.

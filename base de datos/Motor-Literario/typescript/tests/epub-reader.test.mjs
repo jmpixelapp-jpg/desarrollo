@@ -149,3 +149,18 @@ test("la inspección identifica documentos del spine sin contenido textual", asy
   assert.ok(report.warnings.some(warning => warning.includes("no produjo bloques")));
 });
 
+
+test("recupera tabla de contenidos NCX cuando no existe EPUB 3 nav", async () => {
+  const bytes = storedZip([
+    ["mimetype", "application/epub+zip"],
+    ["META-INF/container.xml", '<container><rootfile full-path="OPS/book.opf"/></container>'],
+    ["OPS/book.opf", '<package><metadata><dc:title>Índice NCX</dc:title></metadata><manifest><item id="c" href="chapter.xhtml"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/></manifest><spine toc="ncx"><itemref idref="c"/></spine></package>'],
+    ["OPS/toc.ncx", '<ncx><navMap><navPoint id="n1"><navLabel><text>Capítulo inicial</text></navLabel><content src="chapter.xhtml#inicio"/></navPoint></navMap></ncx>'],
+    ["OPS/chapter.xhtml", "<html><body><p>Texto del capítulo.</p></body></html>"]
+  ]);
+  const report = await new EpubBookReader().inspect(bytes);
+  assert.deepEqual(report.navigation.map(item => [item.label, item.href, item.targetPath, item.depth]), [
+    ["Capítulo inicial", "chapter.xhtml#inicio", "OPS/chapter.xhtml", 0]
+  ]);
+});
+

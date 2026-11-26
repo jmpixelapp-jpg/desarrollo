@@ -69,6 +69,14 @@ function validate(input: NarrativeDecisionContextInput): void {
   }
 }
 
+function sameEvidence(
+  left: {documentId:string; revision:number; start:number; end:number; excerpt:string},
+  right: {documentId:string; revision:number; start:number; end:number; excerpt:string}
+): boolean {
+  return left.documentId === right.documentId && left.revision === right.revision &&
+    left.start === right.start && left.end === right.end && left.excerpt === right.excerpt;
+}
+
 /** Combina únicamente enlaces que apuntan al mismo personaje y a la misma acción. */
 export function buildNarrativeDecisionContexts(
   input: NarrativeDecisionContextInput
@@ -85,6 +93,9 @@ export function buildNarrativeDecisionContexts(
   for (const knowledge of input.knowledgeActionLinks) {
     const key = knowledge.characterEntityId + "\u0000" + knowledge.actionId;
     for (const intent of consistencyByAction.get(key) ?? []) {
+      if (!sameEvidence(knowledge.actionEvidence, intent.actionEvidence)) {
+        throw new Error("Las referencias a una misma acción deben conservar evidencia idéntica.");
+      }
       const alignment = intent.relation === "supports-intent" ||
         intent.relation === "opposes-intent" || intent.relation === "conditional-intent"
         ? intent.relation : "other-or-undetermined";

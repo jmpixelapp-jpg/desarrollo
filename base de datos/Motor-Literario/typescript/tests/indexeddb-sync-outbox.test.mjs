@@ -56,11 +56,11 @@ test("la outbox pagina por proyecto, conserva pendientes y registra reintentos",
     ["op-first", "op-later"]
   );
 
-  assert.equal(await store.recordSyncOperationAttempt("op-first", 500, "network unavailable"), true);
+  assert.equal(await store.recordSyncOperationAttempt("op-first", 500, "NETWORK_UNAVAILABLE"), true);
   const retried = await store.loadPendingSyncOperations("project-b");
   assert.equal(retried[0].attemptCount, 1);
   assert.equal(retried[0].lastAttemptAt, 500);
-  assert.equal(retried[0].lastError, "network unavailable");
+  assert.equal(retried[0].lastErrorCode, "NETWORK_UNAVAILABLE");
   // Reintentar el mismo cambio tras actualizar metadatos no debe producir una colisión.
   await store.enqueueSyncOperation(operation({
     operationId: "op-first",

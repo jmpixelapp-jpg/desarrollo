@@ -93,20 +93,26 @@ test("la auditoría detecta operaciones posteriores al cursor y última identida
     operationId: "cursor-op-b", projectId: "cursor-project-2",
     writerId: "writer-a", sequence: 2, kind: "note", payload: { value: 2 }
   });
+  const otherWriter = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-op-c", projectId: "cursor-project-2",
+    writerId: "writer-b", sequence: 1, kind: "note", payload: { value: 3 }
+  });
   const journal = {
     loadOperations: async () => [
       { ...first, receivedAt: 10 },
-      { ...second, receivedAt: 20 }
+      { ...second, receivedAt: 20 },
+      { ...otherWriter, receivedAt: 30 }
     ],
     loadWriterCursors: async () => [{
       projectId: "cursor-project-2", writerId: "writer-a",
       lastSequence: 1, lastOperationId: "cursor-op-a", updatedAt: 15
     }, {
-      projectId: "cursor-project-2", writerId: "writer-a-mismatch",
-      lastSequence: 2, lastOperationId: "wrong-last-operation", updatedAt: 25
+      projectId: "cursor-project-2", writerId: "writer-b",
+      lastSequence: 1, lastOperationId: "wrong-last-operation", updatedAt: 35
     }]
   };
   const report = await inspectNarrativeSyncJournalIntegrity(journal, "cursor-project-2");
   assert.ok(report.issues.some(issue => issue.code === "cursor-behind-journal"));
+  assert.ok(report.issues.some(issue => issue.code === "cursor-last-operation-mismatch"));
   assert.equal(report.intact, false);
 });

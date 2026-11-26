@@ -39,3 +39,5 @@ export * from "./narrative-sync-consumer";
 export * from "./narrative-sync-domain-handlers";
 
 export * from "./narrative-idea-discovery";
+
+export * from "./narrative-claim-extraction";

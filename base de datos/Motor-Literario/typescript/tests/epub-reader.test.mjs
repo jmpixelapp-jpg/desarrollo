@@ -107,3 +107,18 @@ test("detecta corrupción de contenido mediante CRC32", async () => {
     for await (const _block of new EpubBookReader().read(bytes)) { /* consume full spine */ }
   }, /CRC32 incorrecto/);
 });
+
+test("conserva límites entre documentos del spine aunque no tengan h1", async () => {
+  const bytes = storedZip([
+    ["mimetype", "application/epub+zip"],
+    ["META-INF/container.xml", '<container><rootfile full-path="book.opf"/></container>'],
+    ["book.opf", '<package><metadata><dc:title>Sin encabezados</dc:title></metadata><manifest><item id="a" href="a.xhtml"/><item id="b" href="b.xhtml"/></manifest><spine><itemref idref="a"/><itemref idref="b"/></spine></package>'],
+    ["a.xhtml", "<html><body><p>Primera parte.</p></body></html>"],
+    ["b.xhtml", "<html><body><p>Segunda parte.</p></body></html>"]
+  ]);
+  const result = await ingestBookWithReader(new EpubBookReader(), bytes, { sourceId: "no-headings" });
+  assert.equal(result.chapters.length, 2);
+  assert.equal(result.chapters[0].text, "Primera parte.");
+  assert.equal(result.chapters[1].text, "Segunda parte.");
+});
+

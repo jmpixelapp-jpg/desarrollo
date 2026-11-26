@@ -675,11 +675,10 @@ test("no inventa emisor cuando no hay personaje o la atribución local es ambigu
   assert.equal(noSpeaker?.epistemicFrame, "reported-speech");
   assert.equal(noSpeaker?.epistemicSourceCandidate, undefined);
 
-  const ambiguousText = "Ana y Bruno dijeron que Clara llegó.";
-  const anaAndBruno = discoverNarrativeObservationCandidates({
-    ...context, entities: [character, bruno,
-      { ...character, id: "character:clara", canonicalName: "Clara" }],
-    text: ambiguousText
+  const duplicateAlias = { ...bruno, id: "character:ana-alias", canonicalName: "Anabel", aliases: ["Ana"] };
+  const ambiguousText = "Ana dijo que Bruno llegó.";
+  const ambiguous = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, duplicateAlias, bruno], text: ambiguousText
   }).find(item => item.action === "llegar");
-  assert.equal(anaAndBruno?.epistemicSourceCandidate, undefined);
+  assert.equal(ambiguous?.epistemicSourceCandidate, undefined);
 });

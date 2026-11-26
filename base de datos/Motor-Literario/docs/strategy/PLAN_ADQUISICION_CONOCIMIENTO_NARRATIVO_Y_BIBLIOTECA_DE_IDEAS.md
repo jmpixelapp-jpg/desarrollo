@@ -71,3 +71,24 @@ Se añadieron pruebas de integración para atribución única, ambigüedad, refe
 ### Validación de Fase E
 
 Módulo, exportación, cinco pruebas y documentación publicados en la rama de la PR 63. No se ha confirmado aún una ejecución CI sobre el head actual; type-check, build y suite completa siguen pendientes.
+
+
+### Fase F: evolución observable de interacciones entre personajes
+
+Se añade `typescript/src/narrative-character-interaction-evolution.ts`. La capa toma acciones actor → objetivo ya extraídas y limita el análisis a pares donde ambas entidades están tipadas como personajes.
+
+Produce señales direccionales de interacción:
+- Vocabulario explícito de apoyo: acompañar, proteger, rescatar, ayudar y salvar.
+- Vocabulario explícito de hostilidad: traicionar, destruir, atacar y matar.
+- Acciones fuera de esos vocabularios: señal neutral/desconocida.
+- Acciones negadas: no se convierten en la valencia opuesta; quedan como neutral/desconocida, porque «no lo protegió» no demuestra que lo atacara.
+
+Después puede señalar un cambio de señal entre acciones del mismo actor hacia el mismo objetivo, únicamente dentro del mismo documento y revisión. Cada cambio conserva las dos evidencias originales y queda como candidato revisable.
+
+Se agregan cinco pruebas para dirección actor/objetivo, exclusión de objetos, negación, cambio explícito, neutralidad, aislamiento entre revisiones y validación de duplicados.
+
+**Límite:** estas señales no representan estados confirmados de amistad, confianza, amor u odio. Tampoco deducen emociones, intenciones, reciprocidad ni causalidad. Son indicios léxicos cronológicamente ordenados que el escritor puede revisar.
+
+### Validación de Fase F
+
+Módulo, exportación pública, cinco pruebas y documentación publicados en la rama de la PR 63. No hay aún una ejecución CI observada para el head actual; la compilación y la suite siguen pendientes de confirmación.

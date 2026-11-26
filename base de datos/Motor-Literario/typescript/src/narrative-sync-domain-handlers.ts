@@ -1,5 +1,13 @@
 import type { ProjectStore } from "./contracts";
-import { MAX_NARRATIVE_IDEA_REFERENCES, type NarrativeIdea } from "./narrative-knowledge";
+import {
+  MAX_NARRATIVE_IDEA_REFERENCES,
+  type NarrativeIdea,
+  type NarrativeRelation,
+  type NarrativeEvent,
+  type NarrativeTimeReference,
+  type TextEvidence
+} from "./narrative-knowledge";
+import type { NarrativeAssertion } from "./narrative-history";
 import type { NarrativeSyncOperationHandler } from "./narrative-sync-dispatcher";
 
 export interface NarrativeIdeaUpsertPayload {
@@ -86,8 +94,6 @@ export function createNarrativeIdeaUpsertHandler(
 }
 
 
-import type { NarrativeAssertion } from "./narrative-history";
-
 export interface NarrativeAssertionUpsertPayload {
   readonly assertion: NarrativeAssertion;
 }
@@ -155,13 +161,6 @@ export function createNarrativeAssertionUpsertHandler(
   };
 }
 
-
-import type {
-  NarrativeRelation,
-  NarrativeEvent,
-  NarrativeTimeReference,
-  TextEvidence
-} from "./narrative-knowledge";
 
 export interface NarrativeRelationUpsertPayload {
   readonly relation: NarrativeRelation;

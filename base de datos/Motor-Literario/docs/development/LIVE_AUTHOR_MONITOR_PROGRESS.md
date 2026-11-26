@@ -1489,3 +1489,14 @@ El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a 
 **Cambios publicados:** núcleo d096087f30d6065405f8662304fec5f54c44753d y pruebas dc8e6102338f24969640b9784749c52709b15708, ambos en main. No se modifica el formato ni la versión del checkpoint.
 
 **Validación CI:** [Live Author Monitor — run 45761138764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45761138764), checkout `dc8e6102338f24969640b9784749c52709b15708` (incluye el núcleo `d096087f`), terminó `success`: type-check aislado, build focalizado, auditoría MLDB 0.4.2 (27 tablas), runtime build, diagnósticos 17/17, núcleo/panel/workspace/adaptadores 164/164, Page Lifecycle Chromium 1/1 y host/editor/browser 168/168. La nueva regresión aprobó como test 161. El benchmark procesó 100.000 commits en 644,98 ms (~155.044 commits/s), con heap de 4,39 MiB a mitad y al final, 0 MiB de crecimiento, 0,50 MiB retenidos y cero tickets pendientes. La validación general [Motor Literario TypeScript — run 45761138762](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45761138762), sobre el mismo checkout, terminó `success` con **928/928 pruebas**, 0 fallos y 0 cancelaciones; type-check, build y benchmark global aprobados.
+
+
+## 96. Rechazo de ventanas de latencia dispersas durante la recuperación (26 de noviembre de 2026)
+
+**Hallazgo:** la validación de `commitLatencies` usaba `Array.prototype.some()`. Ese método, al igual que `reduce()`, omite huecos de arrays dispersos. Un checkpoint con tres resultados y una ventana de tres posiciones que contuviera una posición vacía podía superar la comprobación de valores finitos, la longitud y la suma parcial, pese a no representar tres muestras reales.
+
+**Corrección:** la comprobación materializa la ventana con `Array.from()` antes de validar cada valor. Los huecos se convierten en `undefined` y se rechazan mediante la validación numérica existente. No cambia el formato, la versión ni las métricas generadas por el monitor; endurece exclusivamente la entrada de recuperación.
+
+**Regresión:** se generan tres admisiones y tres commits reales, se crea un checkpoint válido y se elimina deliberadamente la segunda posición de la ventana de latencia. La restauración debe rechazarlo y dejar el documento sin sesión parcial.
+
+**Validación:** pendiente de GitHub Actions para el commit de esta sección.

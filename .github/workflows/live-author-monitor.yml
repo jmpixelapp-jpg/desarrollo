@@ -67,11 +67,15 @@ jobs:
       - name: Validate MLDB schema and physical storage mapping
         run: npm run validate:schema
       - name: Build runtime bundle
+        id: runtime-build
         if: ${{ !cancelled() }}
         run: npx vite build
-      - name: Run monitor-specific tests
+      - name: Run isolated monitor unit and diagnostic tests
         if: ${{ !cancelled() }}
-        run: node --test tests/live-author-monitor*.test.mjs tests/storage-implementation-audit.test.mjs
+        run: node --test tests/live-author-monitor.test.mjs tests/live-author-monitor-diagnostics-isolation.test.mjs
+      - name: Run host, editor and browser integration tests
+        if: ${{ !cancelled() && steps.runtime-build.outcome == 'success' }}
+        run: node --test tests/live-author-monitor-*.test.mjs
       - name: Measure bounded monitor heap across large documents
         if: ${{ !cancelled() }}
         run: npm run bench:monitor

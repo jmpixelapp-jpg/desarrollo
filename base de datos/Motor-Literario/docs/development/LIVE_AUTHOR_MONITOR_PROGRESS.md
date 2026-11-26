@@ -672,3 +672,16 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 - Se añade una prueba determinista que expira el lease mientras la pestaña está oculta, dispara el regreso a visible y verifica la adquisición con el siguiente fencing token.
 
 **Validación:** pendiente de CI.
+
+## 12. Entrega — retención configurable y limpieza segura (25 de noviembre de 2026)
+
+- Se añade `liveAuthorMonitorCheckpointRetentionMs` a `HostEngineOptions`. El valor predeterminado es 90 días; `0` desactiva la limpieza automática y manual; el rango aceptado es de 0 a 3650 días.
+- `initializeProject()` programa una limpieza local no bloqueante y reporta errores mediante el callback de diagnóstico existente.
+- `HostEngineApi.cleanupLiveAuthorMonitorCheckpoints(now?)` permite ejecutar la limpieza manual y devuelve solo el número de checkpoints eliminados.
+- `IndexedDbProjectStore.cleanupLiveAuthorMonitorCheckpoints()` recorre únicamente los registros del proyecto, elimina solo checkpoints anteriores al umbral y protege los que tengan lease vigente o malformado.
+- Nunca se eliminan registros de lease, incluso si expiraron: se conservan como tombstones para que el siguiente propietario obtenga un fencing token superior.
+- Se añaden pruebas de retención multi-proyecto, protección por lease activo, eliminación del checkpoint expirado, preservación del fencing token y validación temporal.
+
+**Privacidad:** el job de retención opera sobre IDs, timestamps y metadatos de lease/checkpoint; no materializa ni inspecciona el contenido del manuscrito.
+
+**Validación:** pendiente de GitHub Actions.

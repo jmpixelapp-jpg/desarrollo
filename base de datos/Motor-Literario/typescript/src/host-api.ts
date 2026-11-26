@@ -596,6 +596,8 @@ export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "o
   readonly callbacks?: HostCallbacks;
   /** Ajustes opcionales del monitor local de actividad del autor. */
   readonly liveAuthorMonitor?: LiveAuthorMonitorOptions;
+  /** Retención de checkpoints locales del monitor; predeterminado 90 días, 0 desactiva limpieza. */
+  readonly liveAuthorMonitorCheckpointRetentionMs?: number;
 }
 
 /**
@@ -608,6 +610,7 @@ export class HostEngineApi {
   private readonly liveAuthorMonitor: LiveAuthorMonitor;
   private project?: ProjectIdentity;
   private readonly store: HostEngineOptions["store"];
+  private readonly liveMonitorCheckpointRetentionMs: number;
   private unsubscribeNarrativeChanges: (() => void) | undefined;
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
   private readonly onKnowledgeChanged: HostCallbacks["onKnowledgeChanged"];
@@ -643,6 +646,8 @@ export class HostEngineApi {
   private readonly liveMonitorOwnerId = globalThis.crypto?.randomUUID?.() ??
     `monitor-owner:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   private static readonly LIVE_MONITOR_LEASE_DURATION_MS = 30_000;
+  private static readonly DEFAULT_LIVE_MONITOR_CHECKPOINT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
+  private static readonly MAX_LIVE_MONITOR_CHECKPOINT_RETENTION_MS = 3_650 * 24 * 60 * 60 * 1_000;
   private readonly liveMetrics = {
     completedAnalyses: 0,
     failedAnalyses: 0,
@@ -682,6 +687,14 @@ export class HostEngineApi {
   private entityNameIndex: Map<string, Set<string>> | undefined;
 
   constructor(options: HostEngineOptions) {
+    const retention = options.liveAuthorMonitorCheckpointRetentionMs === undefined
+      ? HostEngineApi.DEFAULT_LIVE_MONITOR_CHECKPOINT_RETENTION_MS
+      : options.liveAuthorMonitorCheckpointRetentionMs;
+    if (!Number.isSafeInteger(retention) || retention < 0 ||
+        retention > HostEngineApi.MAX_LIVE_MONITOR_CHECKPOINT_RETENTION_MS) {
+      throw new RangeError("La retención de checkpoints debe estar entre 0 y 3650 días.");
+    }
+    this.liveMonitorCheckpointRetentionMs = retention;
     this.liveMonitorLifecycleDocument = typeof document === "undefined" ? undefined : document;
     this.liveMonitorLifecycleWindow = typeof window === "undefined" ? undefined : window;
     this.liveMonitorLifecycleDocument?.addEventListener("visibilitychange", this.onLiveMonitorVisibilityChange);
@@ -3892,6 +3905,9 @@ export class HostEngineApi {
           this.onKnowledgeError?.(error);
         });
     });
+    if (this.liveMonitorCheckpointRetentionMs > 0) {
+      void this.cleanupLiveAuthorMonitorCheckpoints().catch(error => this.reportKnowledgeError(error));
+    }
   }
 
   /** Libera el suscriptor opcional de sincronización entre pestañas. */
@@ -4069,6 +4085,25 @@ export class HostEngineApi {
   /** Snapshot de actividad en vivo; no incluye texto del manuscrito. */
   getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined {
     return this.liveAuthorMonitor.getSnapshot(documentId);
+  }
+
+  /**
+   * Limpieza manual de checkpoints vencidos del proyecto actual.
+   * Devuelve solo el número eliminado; no lee ni expone contenido del manuscrito.
+   * La retención cero desactiva tanto la tarea automática como esta operación.
+   */
+  async cleanupLiveAuthorMonitorCheckpoints(now = Date.now()): Promise<number> {
+    if (!Number.isSafeInteger(now) || now < 0) {
+      throw new RangeError("El reloj de limpieza del monitor debe ser un entero seguro no negativo.");
+    }
+    if (this.liveMonitorCheckpointRetentionMs === 0 ||
+        typeof this.store.cleanupLiveAuthorMonitorCheckpoints !== "function") return 0;
+    const olderThan = Math.max(0, now - this.liveMonitorCheckpointRetentionMs);
+    return this.store.cleanupLiveAuthorMonitorCheckpoints(
+      this.requireProject().projectId,
+      olderThan,
+      now
+    );
   }
 
   /** Snapshots de todos los documentos actualmente observados. */

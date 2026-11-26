@@ -481,3 +481,110 @@ test("rechaza una apertura IndexedDB bloqueada y vuelve a abrir al cerrar la con
     await store.close();
   }
 });
+
+test("retención elimina checkpoints vencidos sin lease activo y conserva leases y otros proyectos", async () => {
+  globalThis.indexedDB = new IDBFactory();
+  const store = new IndexedDbProjectStore();
+  const projectId = "monitor-retention-" + randomUUID();
+  const otherProjectId = projectId + "-other";
+  const now = Date.now();
+  const activeDocument = "chapter-active";
+  const expiredDocument = "chapter-expired";
+  const otherDocument = "chapter-other";
+  let activeLease;
+  let expiredLease;
+  let otherLease;
+
+  try {
+    activeLease = await acquireLease(
+      store, projectId, activeDocument, "active-owner-" + randomUUID(), now, 30_000
+    );
+    expiredLease = await acquireLease(
+      store, projectId, expiredDocument, "expired-owner-" + randomUUID(), now, 30_000
+    );
+    otherLease = await acquireLease(
+      store, otherProjectId, otherDocument, "other-owner-" + randomUUID(), now, 30_000
+    );
+
+    const oldTimestamp = now - 100_000;
+    await store.saveLiveAuthorMonitorCheckpoint(
+      checkpoint(projectId, activeDocument, oldTimestamp), activeLease
+    );
+    await store.saveLiveAuthorMonitorCheckpoint(
+      checkpoint(projectId, expiredDocument, oldTimestamp), expiredLease
+    );
+    await store.saveLiveAuthorMonitorCheckpoint(
+      checkpoint(otherProjectId, otherDocument, oldTimestamp), otherLease
+    );
+
+    // Simula la desaparición del dueño anterior sin borrar el registro de lease.
+    // Se mantiene una entrada válida y expirada para proteger la secuencia fencing.
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("motor-literario-local");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction("live-author-monitor-leases", "readwrite");
+        const leases = transaction.objectStore("live-author-monitor-leases");
+        const request = leases.get([projectId, expiredDocument]);
+        let failure;
+        request.onsuccess = () => {
+          const current = request.result;
+          const expiredAt = now - 1;
+          if (!current) {
+            failure = new Error("No se encontró el lease que debe expirar.");
+            try { transaction.abort(); } catch {}
+            return;
+          }
+          leases.put({ ...current, expiresAt: expiredAt, updatedAt: expiredAt });
+        };
+        request.onerror = () => {
+          failure = request.error ?? new Error("No se pudo leer el lease.");
+          try { transaction.abort(); } catch {}
+        };
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(failure ?? transaction.error);
+        transaction.onabort = () => reject(failure ?? transaction.error);
+      });
+    } finally {
+      db.close();
+    }
+
+    const deleted = await store.cleanupLiveAuthorMonitorCheckpoints(
+      projectId, now - 50_000, now
+    );
+    assert.equal(deleted, 1);
+    assert.ok(await store.loadLiveAuthorMonitorCheckpoint(projectId, activeDocument),
+      "un lease vigente protege su checkpoint aunque ya sea antiguo");
+    assert.equal(await store.loadLiveAuthorMonitorCheckpoint(projectId, expiredDocument), undefined);
+    assert.ok(await store.loadLiveAuthorMonitorCheckpoint(otherProjectId, otherDocument),
+      "la limpieza queda limitada al proyecto solicitado");
+
+    const nextOwner = await acquireLease(
+      store, projectId, expiredDocument, "next-owner-" + randomUUID(), now + 1, 30_000
+    );
+    assert.equal(nextOwner.fencingToken, expiredLease.fencingToken + 1,
+      "el lease expirado se conserva como tombstone y mantiene el fencing monotónico");
+  } finally {
+    await store.close();
+  }
+});
+
+test("retención valida límites temporales antes de abrir IndexedDB", async () => {
+  const store = new IndexedDbProjectStore();
+  await assert.rejects(
+    store.cleanupLiveAuthorMonitorCheckpoints("project", -1, 10),
+    /límites temporales/
+  );
+  await assert.rejects(
+    store.cleanupLiveAuthorMonitorCheckpoints("project", 11, 10),
+    /límites temporales/
+  );
+  await assert.rejects(
+    store.cleanupLiveAuthorMonitorCheckpoints(" ", 0, 10),
+    /límites temporales/
+  );
+  await store.close();
+});

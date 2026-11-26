@@ -209,3 +209,9 @@ La suite general [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/acti
 - `other`: operación textual no clasificable.
 
 Los seis contadores se conservan en checkpoints versión 1 como campos opcionales compatibles con checkpoints anteriores. Los checkpoints antiguos restauran los nuevos contadores a cero; los nuevos validan que la suma de categorías coincida con las ediciones admitidas. Las métricas no guardan texto del manuscrito.
+
+## 10. Retención local de checkpoints
+
+La retención de métricas del monitor se configura al crear `HostEngineApi` mediante `liveAuthorMonitorCheckpointRetentionMs`. El valor predeterminado es 90 días; `0` desactiva la limpieza. El máximo configurable es 3650 días.
+
+La limpieza automática se programa al inicializar un proyecto y puede invocarse manualmente con `cleanupLiveAuthorMonitorCheckpoints()`. Solo elimina checkpoints anteriores al umbral de documentos sin lease vigente. Un lease malformado se trata de forma conservadora y protege el checkpoint. Los registros de lease expirados no se eliminan: son tombstones necesarios para preservar la monotonía de los fencing tokens. Esta tarea no carga ni lee el texto del manuscrito.

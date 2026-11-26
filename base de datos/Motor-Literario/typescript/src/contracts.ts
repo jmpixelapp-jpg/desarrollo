@@ -298,6 +298,8 @@ export interface ProjectStore {
     documentId: string
   ): Promise<StoredLiveAuthorMonitorCheckpoint | undefined>;
   deleteLiveAuthorMonitorCheckpoint?(projectId: string, documentId: string): Promise<void>;
+  /** Elimina checkpoints antiguos sin lease vigente; nunca elimina los tombstones de lease. */
+  cleanupLiveAuthorMonitorCheckpoints?(projectId: string, olderThan: number, now: number): Promise<number>;
   /** Guarda y recupera diagnósticos asociados a una revisión exacta. */
   saveDiagnostics?(diagnostics: StoredDiagnostics): Promise<void>;
   loadDiagnostics?(projectId: string, documentId: string): Promise<StoredDiagnostics | undefined>;

@@ -465,3 +465,13 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - La documentación funcional se amplió en `5e8fa37`.
 - Ejecuciones 2834–2837 estaban en curso o cola en la última consulta. La corrección no se considera validada hasta que una ejecución posterior apruebe toda la suite.
 - La prueba negativa «por un desconocido» se conserva: no se debe inventar agente si el complemento no coincide con una entidad registrada.
+
+
+### Complemento personal explícito — 26-11-2026
+
+- La ejecución 2836 (commit `4a65ae2c`) pasó Type-check y falló dos pruebas nuevas de extracción del complemento personal, con 1012/1014 pruebas aprobadas.
+- La causa fue un patrón regex con escapes duplicados en un literal regex, equivalente a la regresión del patrón de agente pasivo.
+- Corregido en `b83640a`: el patrón «verbo + a + nombre propio» usa ahora espacios y clases Unicode reales, y sigue exigiendo coincidencia única con una entidad conocida.
+- La prueba positiva «Ana encontró a Bruno» comprueba el complemento posterior al verbo; la prueba de control «Bruno encontró a Ana» comprueba que no se asigna Bruno como objeto por aparecer antes del verbo.
+- La documentación funcional se actualizó en `9ba40a2`.
+- La corrección queda pendiente de CI completa; no se contabiliza como validada hasta que pase Type-check, las pruebas y el benchmark.

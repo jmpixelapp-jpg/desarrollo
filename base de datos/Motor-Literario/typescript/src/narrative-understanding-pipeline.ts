@@ -7,6 +7,7 @@
  */
 import type { NarrativeEntity } from "./narrative-knowledge";
 import { discoverNarrativeIdeaCandidates } from "./narrative-idea-discovery";
+import { attributeNarrativeIdeasToEntities, type NarrativeIdeaEntityAttribution } from "./narrative-idea-entity-attribution";
 import { extractNarrativeActionCandidates, type NarrativeActionCandidate } from "./narrative-action-extraction";
 import { extractNarrativeCharacterIntentCandidates, type NarrativeCharacterIntentCandidate } from "./narrative-character-intent-extraction";
 import { evolveNarrativeCharacterIntents, type NarrativeCharacterIntentEvolution } from "./narrative-character-intent-evolution";
@@ -109,6 +110,8 @@ export interface NarrativeUnderstandingResult {
   readonly revision: number;
   readonly analyzedRange: { readonly start: number; readonly end: number };
   readonly ideas: ReturnType<typeof discoverNarrativeIdeaCandidates>;
+  /** Atribuciones explícitas y ambiguas de candidatos de idea a fichas; no canoniza vínculos. */
+  readonly ideaEntityAttributions: readonly NarrativeIdeaEntityAttribution[];
   readonly actions: ReturnType<typeof extractNarrativeActionCandidates>;
   readonly characterIntents: readonly NarrativeCharacterIntentCandidate[];
   readonly characterIntentEvolution: readonly NarrativeCharacterIntentEvolution[];
@@ -280,6 +283,9 @@ export function understandNarrativeFragment(
   const ideas = discoverNarrativeIdeaCandidates({
     projectId: input.projectId, documentId: input.documentId,
     revision: input.revision, text: input.text, baseOffset
+  });
+  const ideaEntityAttributions = attributeNarrativeIdeasToEntities({
+    projectId: input.projectId, ideas, entities: input.entities
   });
   const actions = extractNarrativeActionCandidates(extractionContext);
   const characterIntents = extractNarrativeCharacterIntentCandidates(extractionContext);
@@ -453,7 +459,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, behaviorShifts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, ideaEntityAttributions, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, behaviorShifts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

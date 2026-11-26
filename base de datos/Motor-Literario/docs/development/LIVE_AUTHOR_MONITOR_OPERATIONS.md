@@ -802,8 +802,13 @@ Al volver la página a primer plano, el host revalida todas las claves de docume
 La prueba abre dos documentos, simula la suspensión expirando A y reduciendo el vencimiento de B a un segundo sin perder su validez, y dispara `visibilitychange`. B debe recibir una extensión real de expiración sin cambiar owner/token. Comprueba que A avanza exactamente un token, B conserva el suyo y ambos preservan la sesión y el heartbeat. El ciclo no debe provocar un takeover innecesario para documentos que mantuvieron una titularidad válida.
 
 
+
+**Cobertura en navegador:** [run 45766901884](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766901884) también verificó aislamiento A/B con dos páginas Chromium, cierre abrupto de la propietaria y recarga real de la pestaña superviviente.
 ## 71. Dos documentos y dos páginas Chromium
 
 La prueba de navegador mantiene dos leases de documento en una misma pestaña propietaria. La otra página no puede adquirir ninguno. Tras cerrar abruptamente la propietaria, solo se expira A: la página superviviente toma A con el siguiente fencing token, pero B permanece ocupado y su checkpoint no cambia.
 
 La prueba persiste el checkpoint actualizado de A, recarga realmente la página observadora y comprueba que ambos checkpoints sobreviven a la recarga. También vuelve a intentar la adquisición de B para verificar que el takeover de A no alteró el lease durable del segundo documento.
+
+
+**Validación CI:** [run 45766901884](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766901884) aprobó el escenario de dos documentos en dos páginas Chromium; suite 182/182 y benchmark 100.000 commits.

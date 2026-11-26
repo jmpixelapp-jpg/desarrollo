@@ -244,12 +244,12 @@ test("el análisis de convergencia aplica un presupuesto agregado y marca los re
 
 test("la continuidad entre documentos cuenta evidencias sin materializar arreglos intermedios", () => {
   const start = literaryAnalysisSource.indexOf("const projectEventById = new Map(projectEvents.map(");
-  const end = literaryAnalysisSource.indexOf("\\n  const relationsByCharacter", start + 10);
+  const end = literaryAnalysisSource.indexOf("\n  const relationsByCharacter", start + 10);
   assert.notEqual(start, -1, "debe indexarse el catálogo de eventos por ID");
   assert.ok(end > start, "el bloque de continuidad debe delimitarse");
   const builder = literaryAnalysisSource.slice(start, end);
 
-  assert.ok(builder.includes("materializedEventIds\\n        .map(eventId => projectEventById.get(eventId))"));
+  assert.ok(builder.includes("materializedEventIds\n        .map(eventId => projectEventById.get(eventId))"));
   assert.ok(builder.includes("let crossDocumentEventEvidenceCount = 0;"));
   assert.ok(builder.includes("for (const evidence of event.evidence)"));
   assert.ok(builder.includes("crossDocumentEventEvidenceCount++;"));

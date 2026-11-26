@@ -90,8 +90,8 @@ export function compareNarrativeActionClaims(
         !validEvidence(item.evidence) || !validEvidence(item.actionEvidence) ||
         item.evidence.documentId !== item.actionEvidence.documentId ||
         item.evidence.revision !== item.actionEvidence.revision ||
-        !item.grammaticalSubjectCandidate ||
-        !validEvidence(item.grammaticalSubjectCandidate.evidence) ||
+        (item.grammaticalSubjectCandidate !== undefined &&
+          !validEvidence(item.grammaticalSubjectCandidate.evidence)) ||
         (item.grammaticalObjectCandidate !== undefined &&
           !validEvidence(item.grammaticalObjectCandidate.evidence))) {
       throw new Error("Observación inválida: se requiere identidad única y evidencia textual vigente.");

@@ -441,3 +441,6 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - La ejecución 2815 mostró un fallo independiente en un fixture de acontecimientos: el test contenía los dos caracteres literales `\\n` en vez de un salto de línea real, por lo que el parser no podía separar la declaración de personaje y la etiqueta de acontecimiento. Corregido en `38373ee`.
 - Commits de esta tanda: `db9c668` (primera ampliación, reemplazada por la corrección), `cabe5c6` (reparación parcial), `4436e52` (eliminación del fragmento residual), `dcd94b6` (pruebas futuras), `38373ee` (fixture) y `e45586e` (documentación de extracción).
 - Se mantienen como requisitos: límites Unicode de palabra, evidencia literal y offsets UTF-16; tiempo futuro es forma verbal y no prueba que el acontecimiento haya ocurrido.
+
+
+**Actualización de seguimiento de CI:** las ejecuciones 2819 y 2820 también fallaron en Type-check por el fragmento residual de la expresión futura (error de cadena sin cerrar en la línea 80); ambas corresponden a commits anteriores a la limpieza definitiva. La limpieza está en `4436e52`, cuya ejecución 2821 seguía en validación al actualizar esta nota. La corrección del fixture de salto de línea está en `38373ee`; todavía no debe considerarse verificada de forma aislada hasta disponer de una ejecución completa posterior.

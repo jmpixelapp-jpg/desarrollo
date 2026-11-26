@@ -4215,7 +4215,7 @@ export class HostEngineApi {
     this.liveMonitorLeaseHeartbeats.delete(documentId);
     try {
       await this.store.releaseLiveAuthorMonitorLease.call(this.store, lease, Date.now());
-      if ((this.liveMonitorLeaseGenerations.get(documentId) ?? 0) === generation) {
+      if (this.liveMonitorLeaseGenerations.get(documentId) === generation) {
         const latest = this.liveMonitorLeases.get(documentId);
         if (latest?.ownerId === lease.ownerId &&
             latest.fencingToken === lease.fencingToken) {

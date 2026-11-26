@@ -401,3 +401,12 @@ Se añadió `tests/indexeddb-narrative-repair-pending.test.mjs` con `fake-indexe
 La prueba queda incorporada al comando de suite (`tests/*.test.mjs`). Esto verifica el contrato de migración y CRUD de IndexedDB en Node; no equivale a una prueba en todos los navegadores ni a una recuperación automática al arrancar la aplicación. La recuperación sigue siendo una operación explícita por proyecto mediante `recoverNarrativeReferenceRepairs`, porque ejecutarla dentro de `open()` produciría reentrada: la propia recuperación vuelve a utilizar métodos del store que necesitan abrir la base.
 
 **Validación pendiente:** ejecutar `npm run typecheck` y `npm test` en Node 22.13+. No se atribuye aprobación a CI sin una ejecución observada.
+
+
+## Recuperación previa a la hidratación del proyecto
+
+Se incorporó `loadNarrativeProjectAfterRepairRecovery(store, projectId, loadProject)` como límite público de carga: la recuperación durable se ejecuta antes del callback de hidratación. Si la cola no puede consultarse, la carga no continúa; si hay conflictos individuales, estos se devuelven en `recovery.pending` sin forzar mutaciones ni bloquear la lectura del proyecto. Se añadieron pruebas que verifican el orden recuperación→hidratación y que un fallo de IndexedDB impide hidratar.
+
+**Límite de integración:** el paquete de motor no contiene un arranque global común a todas las aplicaciones consumidoras. Por eso el helper proporciona un contrato verificable que el anfitrión debe invocar al abrir o seleccionar cada proyecto; no se declara que las interfaces externas ya estén conectadas a él. La recuperación no se ejecuta dentro de `IndexedDbProjectStore.open()`, evitando recursión porque sus propias operaciones usan `open()`.
+
+**Validación pendiente:** ejecutar typecheck y suite completa en Node 22.13+. No hay ejecuciones de CI confirmadas para estos commits.

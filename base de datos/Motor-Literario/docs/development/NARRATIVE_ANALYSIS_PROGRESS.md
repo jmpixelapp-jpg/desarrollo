@@ -462,3 +462,13 @@ Se añadió `reconcileNarrativeRepairAndSyncState`, un diagnóstico de solo lect
 Los identificadores del diario remoto se mantienen separados de los identificadores de reparación: el sistema no debe inferir una relación entre operaciones distintas sin un contrato explícito.
 
 **Validación pendiente:** ejecutar `npm run typecheck` y `npm test` en Node 22.13+. CI no ha reportado resultados para el HEAD de esta tanda.
+
+
+## Inspección de integridad del diario de sincronización
+
+- Se incorporó `inspectNarrativeSyncJournalIntegrity(journal, projectId)` como diagnóstico read-only del historial durable.
+- Verifica la envoltura SHA-256 de cada operación, metadatos locales `receivedAt`/`appliedAt`, identidades duplicadas y secuencias por escritor.
+- Añade pruebas de diario intacto y de detección de huecos, secuencias repetidas, marcas temporales inválidas y digest alterado.
+- Documenta que la continuidad se evalúa sobre el historial conservado desde la secuencia 1 y que SHA-256 no equivale a autenticación.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado en este entorno. Revisar los resultados de CI del HEAD antes de considerar esta tanda validada.

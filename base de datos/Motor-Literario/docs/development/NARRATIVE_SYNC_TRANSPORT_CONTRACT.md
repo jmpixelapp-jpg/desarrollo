@@ -114,3 +114,10 @@ Las tareas que pierdan el lease se consideran de resultado incierto: el transpor
 El adaptador renueva el lease aproximadamente cada tercio de su duración configurada. Antes de liberar espera cualquier renovación que ya esté en curso, evitando que una renovación tardía compita con la liberación. Si la tarea falla, el lease se libera igualmente y el error original de la tarea se propaga. Si la renovación falla o la titularidad ya no coincide, el adaptador marca el lease como perdido y rechaza el resultado al finalizar la tarea.
 
 La prueba de integración debe cubrir tareas más largas que la duración inicial del lease, la espera de un segundo propietario durante la renovación y la liberación tras una excepción. La renovación reduce la ventana normal de expiración, pero no puede impedir que un navegador suspendido detenga temporizadores durante un periodo prolongado.
+
+
+### Confirmación local atómica de acuses
+
+El puerto `SyncOutboxPort` permite implementar `acknowledgeSyncOperations(ids)` para retirar varios acuses en una única transacción. El coordinador detecta esta capacidad y la prefiere; los adaptadores anteriores que solo implementan `acknowledgeSyncOperation(id)` conservan compatibilidad mediante el recorrido individual.
+
+La implementación IndexedDB lee y elimina el lote dentro de una transacción `readwrite`. Si la transacción falla, el lote completo se revierte en lugar de dejar una retirada parcial por fallo entre operaciones. Los IDs repetidos se rechazan; una lista vacía devuelve cero; los IDs ya ausentes no cuentan como nuevos acuses. Esta atomicidad solo cubre la persistencia local: no crea una transacción distribuida con el servidor. Si el servidor aceptó el lote y el cliente falla antes del commit local, el lote puede reenviarse y el servidor debe deduplicar cada `operationId`.

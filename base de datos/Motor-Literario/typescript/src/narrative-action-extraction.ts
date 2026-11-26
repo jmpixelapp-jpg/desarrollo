@@ -92,7 +92,7 @@ export function extractNarrativeActionCandidates(
 
   const actionPattern = ACTIONS.map(escapeRegExp).sort((a, b) => b.length - a.length).join("|");
   const results = new Map<string, NarrativeActionCandidate>();
-  for (const line of input.text.matchAll(/[^\\n]+/gu)) {
+  for (const line of input.text.matchAll(/[^\n]+/gu)) {
     const lineText = line[0];
     for (const actor of actors) {
       for (const target of targets) {

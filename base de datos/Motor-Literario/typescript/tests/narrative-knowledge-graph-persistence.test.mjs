@@ -13,6 +13,7 @@ import {
   proposeNarrativeReferenceRepairs,
   applyNarrativeReferenceRepair,
   recoverNarrativeReferenceRepairs,
+  inspectNarrativeReferenceRepairPending,
   loadNarrativeProjectAfterRepairRecovery,
   verifyNarrativeReferenceRepairAuditIntegrity,
   validateNarrativeDocumentProjectionManifest
@@ -757,4 +758,57 @@ test("dos recuperaciones concurrentes del mismo proyecto comparten una sola ejec
     recovered: 0,
     pending: []
   });
+});
+
+
+test("inspecciona reparaciones pendientes y distingue listas, aplicadas y conflictos", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "inspection-project", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:ready", {
+    projectId: "inspection-project", id: "relation:ready",
+    fromEntityId: "entity:legacy", toEntityId: "entity:other",
+    relationType: "knows", evidence: []
+  });
+  tables.relations.set("relation:applied", {
+    projectId: "inspection-project", id: "relation:applied",
+    fromEntityId: "entity:canonical", toEntityId: "entity:other",
+    relationType: "knows", evidence: []
+  });
+  tables.relations.set("relation:changed", {
+    projectId: "inspection-project", id: "relation:changed",
+    fromEntityId: "entity:unrelated", toEntityId: "entity:other",
+    relationType: "knows", evidence: []
+  });
+  const makePending = (recordId, missing = "entity:legacy", replacement = "entity:canonical") => ({
+    projectId: "inspection-project",
+    operationId: ["reference-repair", "inspection-project", "relation", recordId,
+      "fromEntityId", missing, replacement].join("|"),
+    issueCode: "missing-relation-entity",
+    recordType: "relation",
+    recordId,
+    referenceField: "fromEntityId",
+    missingReferenceId: missing,
+    replacementEntityId: replacement,
+    appliedAt: 50
+  });
+  for (const entry of [
+    makePending("relation:ready"),
+    makePending("relation:applied"),
+    makePending("relation:changed"),
+    makePending("relation:ready", "entity:unknown", "entity:missing")
+  ]) {
+    await store.saveNarrativeReferenceRepairPending(entry);
+  }
+
+  const inspection = await inspectNarrativeReferenceRepairPending(store, "inspection-project");
+  assert.deepEqual(inspection.map(item => item.status), [
+    "ready-to-recover", "already-applied", "record-changed", "replacement-not-proven"
+  ]);
+  assert.equal(tables.pendingRepairs.size, 4, "la inspección no debe borrar ni mutar intenciones");
+  assert.equal(tables.audits.size, 0, "la inspección no debe escribir auditoría");
 });

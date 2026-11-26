@@ -533,3 +533,25 @@ test("el pipeline conserva el motivo indirecto y su señal causal explícita", (
     result.characterIntents[0].text
   );
 });
+
+test("el pipeline detecta sustitución explícita de una motivación previa", () => {
+  const prior = {
+    id:"prior-fear",projectId:"novel",characterEntityId:"mara",
+    kind:"motivation",text:"miedo a perder a su hermana",polarity:"affirmed",
+    reviewStatus:"candidate",
+    evidence:{documentId:"chapter-1",revision:1,start:15,end:42,
+      excerpt:"Mara luchó por miedo a perder a su hermana."}
+  };
+  const text = "Mara cambió de motivación: dejó atrás el miedo a perder a su hermana y ahora actúa por lealtad a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-2",revision:1,text,entities,
+    priorCharacterIntents:[prior],
+    orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.characterIntents.length,1);
+  assert.equal(result.characterIntents[0].kind,"motivation");
+  assert.equal(result.characterIntents[0].text,"lealtad a Elian");
+  assert.equal(result.characterIntentEvolution.length,1);
+  assert.equal(result.characterIntentEvolution[0].transition,"replaced");
+  assert.deepEqual(result.characterIntentEvolution[0].priorIntentIds,["prior-fear"]);
+});

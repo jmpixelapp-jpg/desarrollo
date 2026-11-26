@@ -703,3 +703,18 @@ El reemplazo se valida como cadena antes de calcular la firma. Un evento duplica
 **Regresiones:** retransmisión como objeto clonado idéntico; mismo ID y secuencia con contenido distinto; reemplazo de tipo inválido durante una retransmisión.
 
 **Validación CI verificada:** ejecución [45729007367](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729007367), commit `d8642c6b83faa63959ca26e9775fae83ab0b1fdc`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes), build Vite y **124 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+
+
+## 37. Cuarentena de eventos dinámicos malformados en ambas fronteras
+
+El puente y el source contienen payloads inválidos en runtime, incluso cuando el consumidor TypeScript declare el evento como `LiveAuthorMonitorEditorTransaction`:
+- El bridge intenta crear una copia inmutable del evento sin conservar el manuscrito. Si recibe `null`, un tipo primitivo o un getter que lanza, publica un evento centinela inválido para que el source conectado lo reconozca y pause el stream.
+- El source también protege la frontera directa del proveedor: cada transacción encolada se procesa dentro de una captura de excepciones. `null`, Proxy/getters defectuosos y objetos no validables generan `invalid-transaction`, desconectan el proveedor y no escapan hacia el callback de edición.
+- Un payload que contiene un replacement no textual genera `invalid-change-range` antes de calcular la firma de deduplicación.
+
+Estas defensas complementan la validación semántica de IDs, secuencia, revisión, rangos y metadatos. No intentan reparar una transacción desconocida: pausan la captura para exigir resincronización desde un snapshot común.
+
+**Pruebas:** proveedor directo que emite `null`; provider Proxy con getter que lanza; bridge que recibe `null`; bridge que recibe un Proxy con getter que lanza; evento duplicado con replacement malformado.
+
+**Validación CI verificada:** ejecución [45729346603](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729346603), commit `12a754203130e82bea7808763319143243898fc1`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes), build Vite y **128 pruebas aprobadas, 0 fallidas y 0 omitidas**.

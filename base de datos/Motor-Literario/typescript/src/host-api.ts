@@ -41,6 +41,7 @@ import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
 import { discoverNarrativeIdeaCandidates, type NarrativeIdeaCandidate } from "./narrative-idea-discovery";
 import { discoverNarrativeObservationCandidates, type NarrativeObservationCandidate } from "./narrative-observation-discovery";
+import { discoverNarrativeCharacterStateCandidates, type NarrativeCharacterStateCandidate } from "./narrative-character-state-discovery";
 import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
@@ -596,6 +597,11 @@ export interface HostCallbacks {
   readonly onNarrativeIdeaCandidates?: (analysis: AnalysisResult, candidates: readonly NarrativeIdeaCandidate[]) => void;
   /** Acciones léxicas candidatas con evidencia, emitidas tras actualizar el conocimiento del documento. */
   readonly onNarrativeObservationCandidates?: (analysis: AnalysisResult, candidates: readonly NarrativeObservationCandidate[]) => void;
+  /** Estados explícitos candidatos de personajes, publicados por revisión en el flujo de escritura. */
+  readonly onNarrativeCharacterStateCandidates?: (
+    analysis: AnalysisResult,
+    candidates: readonly NarrativeCharacterStateCandidate[]
+  ) => void;
 }
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
@@ -622,6 +628,7 @@ export class HostEngineApi {
   private readonly onKnowledgeChanged: HostCallbacks["onKnowledgeChanged"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
   private readonly onNarrativeObservationCandidates: HostCallbacks["onNarrativeObservationCandidates"];
+  private readonly onNarrativeCharacterStateCandidates: HostCallbacks["onNarrativeCharacterStateCandidates"];
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
   private diagnosticsRecoveryTail: Promise<void> = Promise.resolve();
@@ -717,6 +724,7 @@ export class HostEngineApi {
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
     this.onNarrativeObservationCandidates = options.callbacks?.onNarrativeObservationCandidates;
+    this.onNarrativeCharacterStateCandidates = options.callbacks?.onNarrativeCharacterStateCandidates;
     this.engine = new LiteraryEngine({
       store: options.store,
       ...(options.queueCapacity === undefined ? {} : { queueCapacity: options.queueCapacity }),
@@ -871,7 +879,18 @@ export class HostEngineApi {
             entities: [...this.narrativeEntities.values()],
             baseOffset: contextStart
           });
-          this.onNarrativeObservationCandidates?.(result, candidates);
+          try { this.onNarrativeObservationCandidates?.(result, candidates); }
+          catch { /* Un callback de observaciones no debe bloquear otras extracciones en vivo. */ }
+          const characterStates = discoverNarrativeCharacterStateCandidates({
+            projectId: this.requireProject().projectId,
+            documentId: result.documentId,
+            revision: result.revision,
+            text: contextText,
+            entities: [...this.narrativeEntities.values()],
+            baseOffset: contextStart
+          });
+          try { this.onNarrativeCharacterStateCandidates?.(result, characterStates); }
+          catch { /* La vista de estados no debe afectar la escritura ni el resto del análisis. */ }
         } catch { /* La observación narrativa nunca bloquea la escritura ni la extracción principal. */ }
       } finally {
         const analysisExecutionMs = Math.max(0, performance.now() - executionStartedAt);

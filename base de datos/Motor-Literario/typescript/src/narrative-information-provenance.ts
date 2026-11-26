@@ -99,7 +99,7 @@ function uniqueCharacters(entities: readonly NarrativeEntity[]): readonly NamedC
     for (const name of [entity.canonicalName, ...entity.aliases]) {
       const key = normalizeName(name);
       const current = owners.get(key);
-      owners.set(key, current === undefined || current.id === entity.id ? entity : null);
+      owners.set(key, current == null || current.id === entity.id ? entity : null);
     }
   }
   return [...owners.entries()]

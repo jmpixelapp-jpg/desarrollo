@@ -307,6 +307,102 @@ export class IndexedDbNarrativeSyncJournal {
 }
 
 
+export type NarrativeSyncJournalIntegrityIssueCode =
+  | "invalid-envelope"
+  | "invalid-received-at"
+  | "invalid-applied-at"
+  | "duplicate-operation"
+  | "duplicate-writer-sequence"
+  | "sequence-gap";
+
+export interface NarrativeSyncJournalIntegrityIssue {
+  readonly code: NarrativeSyncJournalIntegrityIssueCode;
+  readonly operationId: string;
+  readonly writerId: string;
+  readonly detail: string;
+}
+
+export interface NarrativeSyncJournalIntegrityReport {
+  readonly projectId: string;
+  readonly checkedOperations: number;
+  readonly checkedWriters: number;
+  readonly issues: readonly NarrativeSyncJournalIntegrityIssue[];
+  readonly intact: boolean;
+}
+
+/**
+ * Audita la integridad del diario sin cambiar cursores ni estados de aplicación.
+ * Comprueba la envoltura SHA-256, metadatos locales y continuidad de secuencia
+ * por escritor. SHA-256 detecta corrupción, pero no autentica al emisor.
+ */
+export async function inspectNarrativeSyncJournalIntegrity(
+  journal: IndexedDbNarrativeSyncJournal,
+  projectId: string
+): Promise<NarrativeSyncJournalIntegrityReport> {
+  if (!journal || typeof journal.loadOperations !== "function" ||
+      typeof projectId !== "string" || !projectId.trim()) {
+    throw new TypeError("Se requiere un diario y un proyecto válidos para auditar sincronización.");
+  }
+  const operations = await journal.loadOperations(projectId);
+  const issues: NarrativeSyncJournalIntegrityIssue[] = [];
+  const seenIds = new Set<string>();
+  const writers = new Map<string, NarrativeSyncJournalEntry[]>();
+  for (const operation of operations) {
+    const operationId = typeof operation.operationId === "string" ? operation.operationId : "";
+    const writerId = typeof operation.writerId === "string" ? operation.writerId : "";
+    const addIssue = (code: NarrativeSyncJournalIntegrityIssueCode, detail: string): void => {
+      issues.push({ code, operationId, writerId, detail });
+    };
+    if (!operationId || seenIds.has(operationId)) {
+      addIssue("duplicate-operation", "La identidad de operación está vacía o aparece más de una vez.");
+    }
+    seenIds.add(operationId);
+    if (!Number.isFinite(operation.receivedAt) || operation.receivedAt < 0) {
+      addIssue("invalid-received-at", "El instante de recepción local no es válido.");
+    }
+    if (operation.appliedAt !== undefined &&
+        (!Number.isFinite(operation.appliedAt) || operation.appliedAt < operation.receivedAt)) {
+      addIssue("invalid-applied-at", "El instante de aplicación es inválido o anterior a la recepción.");
+    }
+    const { receivedAt: _receivedAt, appliedAt: _appliedAt, ...envelope } = operation;
+    if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+      addIssue("invalid-envelope", "La envoltura almacenada no supera la verificación de integridad.");
+    }
+    const writerOperations = writers.get(writerId) ?? [];
+    writerOperations.push(operation);
+    writers.set(writerId, writerOperations);
+  }
+  for (const [writerId, entries] of writers) {
+    entries.sort((left, right) => left.sequence - right.sequence);
+    let expected = 1;
+    for (const entry of entries) {
+      if (entry.sequence < expected) {
+        issues.push({
+          code: "duplicate-writer-sequence",
+          operationId: entry.operationId,
+          writerId,
+          detail: "El escritor repite una secuencia."
+        });
+      } else if (entry.sequence > expected) {
+        issues.push({
+          code: "sequence-gap",
+          operationId: entry.operationId,
+          writerId,
+          detail: "Falta la secuencia " + expected + " antes de esta operación."
+        });
+      }
+      expected = Math.max(expected, entry.sequence + 1);
+    }
+  }
+  return {
+    projectId,
+    checkedOperations: operations.length,
+    checkedWriters: writers.size,
+    issues,
+    intact: issues.length === 0
+  };
+}
+
 export interface NarrativeSyncReplayResult {
   readonly processed: number;
   readonly remaining: number;

@@ -17,7 +17,15 @@ export interface EpubMetadata {
   readonly identifier?: string;
 }
 
+export interface EpubNavigationItem {
+  readonly label: string;
+  readonly href: string;
+  readonly targetPath: string;
+  readonly depth: number;
+}
+
 export interface EpubInspection {
+  readonly navigation: readonly EpubNavigationItem[];
   readonly metadata: EpubMetadata;
   readonly spineItems: number;
   readonly extractedBlocks: number;
@@ -309,7 +317,7 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
 
   constructor(limits: EpubReaderLimits = {}) { this.limits = limits; }
 
-  private async archive(source: ArrayBuffer | Uint8Array): Promise<{ zip: EpubArchive; opfPath: string; opf: string; spine: string[]; metadata: EpubMetadata; warnings: string[] }> {
+  private async archive(source: ArrayBuffer | Uint8Array): Promise<{ zip: EpubArchive; opfPath: string; opf: string; spine: string[]; metadata: EpubMetadata; navigation: EpubNavigationItem[]; warnings: string[] }> {
     const zip = await EpubArchive.open(source, this.limits);
     if (!zip.has("mimetype")) fail("falta la entrada mimetype.");
     if (!zip.isStoredAtStart("mimetype")) fail("la entrada mimetype debe ser la primera y no estar comprimida.");
@@ -321,14 +329,14 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
     const rootAttrs = attributes(rootfile[1]);
     const opfPath = safePath(rootAttrs.get("full-path") ?? "");
     const opf = await zip.text(opfPath);
-    const manifest = new Map<string, string>();
+    const manifest = new Map<string, { path: string; properties: string; mediaType: string }>();
     const itemPattern = /<item\b([^>]*)\/?\s*>/giu;
     for (const match of opf.matchAll(itemPattern)) {
       const attrs = attributes(match[1]);
       const id = attrs.get("id"), href = attrs.get("href");
       if (id && href) {
         if (manifest.has(id)) fail("ID duplicado en manifest: " + id);
-        manifest.set(id, resolvePath(opfPath, href));
+        manifest.set(id, { path: resolvePath(opfPath, href), properties: attrs.get("properties") ?? "", mediaType: attrs.get("media-type") ?? "" });
       }
     }
     const spineSection = /<spine\b[^>]*>([\s\S]*?)<\/spine\s*>/iu.exec(opf)?.[1];
@@ -337,10 +345,61 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
     for (const match of spineSection.matchAll(/<itemref\b([^>]*)\/?\s*>/giu)) {
       const idref = attributes(match[1]).get("idref");
       if (!idref || !manifest.has(idref)) fail("itemref no resuelto: " + (idref ?? "(vacío)"));
-      spine.push(manifest.get(idref)!);
+      spine.push(manifest.get(idref)!.path);
     }
     if (!spine.length) fail("el spine está vacío.");
+    const navigation: EpubNavigationItem[] = [];
+    const navManifestItem = [...manifest.values()].find(item => item.properties.split(/\\s+/u).includes("nav"));
+    const tocItem = [...manifest.values()].find(item => item.mediaType === "application/x-dtbncx+xml");
+    const navigationPath = navManifestItem?.path;
+    if (navigationPath && zip.has(navigationPath)) {
+      const navXhtml = await zip.text(navigationPath);
+      const tocNav = /<nav\\b([^>]*)>([\\s\\S]*?)<\\/nav\\s*>/giu;
+      for (const navMatch of navXhtml.matchAll(tocNav)) {
+        const navAttrs = attributes(navMatch[1]);
+        if (!(navAttrs.get("epub:type") ?? "").split(/\\s+/u).includes("toc")) continue;
+        const body = navMatch[2];
+        const links = /<a\\b([^>]*)>([\\s\\S]*?)<\\/a\\s*>/giu;
+        let depth = 0;
+        let cursor = 0;
+        for (const link of body.matchAll(links)) {
+          const before = body.slice(cursor, link.index);
+          depth += [...before.matchAll(/<ol\\b/giu)].length - [...before.matchAll(/<\\/ol\\s*>/giu)].length;
+          cursor = (link.index ?? 0) + link[0].length;
+          const attrs = attributes(link[1]);
+          const href = attrs.get("href");
+          const label = decodeEntities(link[2].replace(/<[^>]+>/gu, "").replace(/\\s+/gu, " ").trim());
+          if (!href || !label || /^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//")) continue;
+          const [filePart, fragment] = href.split("#", 2);
+          const targetPath = filePart ? resolvePath(navigationPath, filePart) : navigationPath;
+          navigation.push({ label, href, targetPath, depth: Math.max(0, depth) });
+          void fragment;
+        }
+        if (navigation.length) break;
+      }
+    }
+    if (!navigation.length && tocItem && zip.has(tocItem.path)) {
+      const ncx = await zip.text(tocItem.path);
+      const pointPattern = /<navPoint\\b[^>]*>|<\\/navPoint\\s*>|<navLabel\\b[^>]*>([\\s\\S]*?)<\\/navLabel\\s*>|<content\\b([^>]*)\\/?\\s*>/giu;
+      let depth = 0;
+      let pendingLabel = "";
+      for (const match of ncx.matchAll(pointPattern)) {
+        if (/^<\\/navPoint/iu.test(match[0])) { depth = Math.max(0, depth - 1); continue; }
+        if (/^<navPoint/iu.test(match[0])) { depth++; pendingLabel = ""; continue; }
+        if (/^<navLabel/iu.test(match[0])) {
+          pendingLabel = decodeEntities((match[1] ?? "").replace(/<[^>]+>/gu, "").trim());
+          continue;
+        }
+        const src = attributes(match[2] ?? "").get("src");
+        if (!src || !pendingLabel || /^[a-z][a-z0-9+.-]*:/iu.test(src) || src.startsWith("//")) continue;
+        const [filePart] = src.split("#", 2);
+        const targetPath = filePart ? resolvePath(tocItem.path, filePart) : tocItem.path;
+        navigation.push({ label: pendingLabel, href: src, targetPath, depth: Math.max(0, depth - 1) });
+      }
+    }
     const warnings: string[] = [];
+    if (!navigation.length) warnings.push("No se encontró una tabla de contenidos nav/NCX utilizable.");
+
     const uniqueSpine = new Set(spine);
     if (uniqueSpine.size !== spine.length) warnings.push("El spine referencia documentos repetidos.");
     const metadata: EpubMetadata = {
@@ -349,7 +408,8 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
       ...(xmlText(opf, "language") ? { language: xmlText(opf, "language") } : {}),
       ...(xmlText(opf, "identifier") ? { identifier: xmlText(opf, "identifier") } : {})
     };
-    return { zip, opfPath, opf, spine, metadata, warnings };
+    for (const item of navigation) if (!zip.has(item.targetPath)) warnings.push("La navegación apunta a un recurso inexistente: " + item.targetPath);
+    return { zip, opfPath, opf, spine, metadata, navigation, warnings };
   }
 
   async inspect(source: ArrayBuffer | Uint8Array): Promise<EpubInspection> {
@@ -372,6 +432,7 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
     }
     return {
       metadata: data.metadata,
+      navigation: data.navigation,
       spineItems: data.spine.length,
       extractedBlocks,
       emptySpineItems,

@@ -813,6 +813,14 @@ El monitor y los tests del panel, workspace y benchmark siguen sin una ejecució
 
 **Archivos:** `src/live-author-monitor-panel.ts`, `src/live-author-monitor-workspace.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, esta guía y la guía operativa.
 
-**Commit de implementación:** se incorporará en la nota de verificación posterior a la creación del commit.
+**Commit de implementación:** [`c392f923566cda725b995e952a17690db6455909`](https://github.com/jmpixelapp-jpg/desarrollo/commit/c392f923566cda725b995e952a17690db6455909).
+
+**Ejecuciones de CI del commit:**
+- [Live Author Monitor — run 45744134650](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45744134650): falló en `Build runtime bundle` por `src/narrative-history.ts:7:40 — Unterminated string literal`. La auditoría física del esquema y los pasos de instalación/Chromium sí terminaron correctamente. La suite específica y el benchmark fueron omitidos.
+- [Motor Literario TypeScript — run 45744134762](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45744134762): falló en `Type-check` por `src/narrative-history.ts(7,41): TS1002`. La suite completa y el benchmark fueron omitidos.
+
+**Interpretación:** el código nuevo quedó publicado, pero sus tres regresiones no llegaron a ejecutarse en CI. El resultado no permite afirmar que estén aprobadas ni que hayan fallado. El bloqueo está en un archivo narrativo ajeno a esta entrega y no se modificó para evitar interferir con ese trabajo paralelo.
+
+**Coordinación:** revisión del PR #56 confirma que no incluye ninguno de los cinco archivos de esta entrega; el cambio de workspace en ese PR se limita a su prueba preexistente. Se mantiene la separación de áreas. `main` conserva el commit de implementación como ancestro directo.
 
 **Validación:** pendiente de CI. El baseline documentado sigue bloqueado antes de las pruebas del monitor por el error sintáctico externo `src/narrative-history.ts(7,41): TS1002`. No se modifica ese módulo ni se atribuye aprobación a tests que el workflow no haya ejecutado.

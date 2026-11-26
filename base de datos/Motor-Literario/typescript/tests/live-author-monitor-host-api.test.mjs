@@ -187,7 +187,7 @@ test("publica acciones narrativas candidatas tras reconocer personajes del proye
   assert.ok(update, "la integración debe publicar observaciones tras el análisis");
   assert.equal(update.candidates.length, 1);
   assert.equal(update.candidates[0].action, "cruzar");
-  assert.equal(update.candidates[0].actorEntityId, "entity:character:ana");
+  assert.equal(update.candidates[0].singleMentionedCharacterId, "entity:character:ana");
   assert.equal(update.candidates[0].evidence.excerpt, text);
   await api.disposeSafely();
 });

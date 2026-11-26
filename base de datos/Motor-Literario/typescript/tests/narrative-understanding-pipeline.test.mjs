@@ -118,3 +118,31 @@ test("no inventa género gramatical si el perfil del personaje no existe", () =>
   assert.equal(result.pronounResolutions[0].status, "unresolved");
   assert.equal(result.pronounActions.length, 0);
 });
+
+
+test("resuelve y atribuye acciones con pronombre enfático: Ella misma protegió", () => {
+  const text = "Mara llegó. Ella misma protegió a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-emphatic", revision:1,
+    text, entities,
+    characterProfiles:[{ characterId:"mara", grammaticalGender:"feminine" }]
+  });
+  assert.equal(result.pronounResolutions.length, 1);
+  assert.equal(result.pronounResolutions[0].status, "resolved");
+  assert.equal(result.pronounActions.length, 1);
+  assert.equal(result.pronounActions[0].actorEntityId, "mara");
+  assert.equal(result.pronounActions[0].action, "protegió");
+  assert.equal(result.pronounActions[0].evidence.start, text.indexOf("Ella"));
+});
+
+test("rechaza colecciones de entidades nulas sin provocar errores de acceso", () => {
+  assert.throws(() => understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-invalid", revision:1,
+    text:"Mara llegó. Ella esperó.",
+    entities:[null],
+    characterMentions:[{
+      characterId:"mara", documentId:"chapter-invalid", revision:1,
+      start:0, end:4, grammaticalNumber:"singular", grammaticalGender:"feminine"
+    }]
+  }), /entidades/i);
+});

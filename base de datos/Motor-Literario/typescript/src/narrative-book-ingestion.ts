@@ -25,6 +25,10 @@ import {
   discoverNarrativeLocationTransitionCandidates,
   type NarrativeLocationTransitionCandidate
 } from "./narrative-location-transition-discovery";
+import {
+  discoverNarrativeLocationPresenceCandidates,
+  type NarrativeLocationPresenceCandidate
+} from "./narrative-location-presence-discovery";
 import { auditNarrativeExtractionCoverage, type NarrativeExtractionAudit } from "./narrative-extraction-audit";
 
 /**
@@ -119,6 +123,8 @@ export interface NarrativeBookIngestionResult {
   readonly characterStateCandidates: readonly NarrativeCharacterStateCandidate[];
   /** Movimientos espaciales candidatos respaldados por lugar y preposición explícitos. */
   readonly locationTransitionCandidates: readonly NarrativeLocationTransitionCandidate[];
+  /** Afirmaciones candidatas de presencia de personajes en lugares explícitos. */
+  readonly locationPresenceCandidates: readonly NarrativeLocationPresenceCandidate[];
   /** Pasajes no cubiertos por las extracciones actuales, expuestos para revisión humana. */
   readonly extractionAudit: NarrativeExtractionAudit;
   readonly observationStatus: "extracted" | "no-entities" | "omitted-text-budget";
@@ -482,6 +488,18 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
       })
     : [];
 
+  const locationPresenceCandidates = entitiesForObservation.length > 0 &&
+      input.text.length <= MAX_NARRATIVE_OBSERVATION_TEXT_UNITS
+    ? discoverNarrativeLocationPresenceCandidates({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        revision: input.revision,
+        text: input.text,
+        entities: entitiesForObservation,
+        baseOffset: input.baseOffset ?? 0
+      })
+    : [];
+
   // Los acontecimientos se extraen solo cuando el escritor usa una etiqueta explícita.
   // Las entidades locales sirven para sugerir participantes, nunca para confirmar roles.
   const eventCandidates = input.text.length <= MAX_NARRATIVE_BOOK_TEXT_UNITS
@@ -511,7 +529,8 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     })),
     additionalEvidence: [
       ...characterStateCandidates.map(candidate => ({ evidence: candidate.evidence })),
-      ...locationTransitionCandidates.map(candidate => ({ evidence: candidate.locationEvidence }))
+      ...locationTransitionCandidates.map(candidate => ({ evidence: candidate.locationEvidence })),
+      ...locationPresenceCandidates.map(candidate => ({ evidence: candidate.evidence }))
     ]
   });
   return {
@@ -531,6 +550,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     objectTransitionCandidates,
     characterStateCandidates,
     locationTransitionCandidates,
+    locationPresenceCandidates,
     eventCandidates,
     extractionAudit,
     observationStatus,

@@ -448,3 +448,21 @@ test("conserva offsets absolutos y polaridad de objetivos negados", () => {
   assert.equal(result.characterIntents[0].evidence.start, baseOffset + text.indexOf("abandonar"));
   assert.equal(result.characterIntents[0].evidence.end, baseOffset + text.indexOf("abandonar a Elian") + "abandonar a Elian".length);
 });
+
+test("integra evolución de objetivos previos con cronología documental explícita", () => {
+  const text = "Mara quiere rescatar a Elian.";
+  const prior = {
+    id:"prior-goal", projectId:"novel", characterEntityId:"mara",
+    kind:"goal", text:"rescatar a Elian", polarity:"affirmed",
+    reviewStatus:"candidate",
+    evidence:{documentId:"chapter-1", revision:1, start:0, end:17, excerpt:"Mara quiere rescatar a Elian."}
+  };
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-2", revision:1, text, entities,
+    priorCharacterIntents:[prior],
+    orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.characterIntentEvolution.length, 1);
+  assert.equal(result.characterIntentEvolution[0].transition, "maintained");
+  assert.deepEqual(result.characterIntentEvolution[0].priorIntentIds, ["prior-goal"]);
+});

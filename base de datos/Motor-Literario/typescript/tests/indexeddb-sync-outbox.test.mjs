@@ -588,3 +588,47 @@ test("IndexedDB conserva un conflicto entre ciclos y lo retira solo tras una ace
     await deleteDatabase();
   }
 });
+
+
+test("una propuesta local nueva no sobrescribe ni retira la operación que originó el conflicto", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    const conflicted = operation({
+      operationId: "op-conflicted-original",
+      sequence: 1,
+      payload: JSON.stringify({ ideaId: "idea-merge", text: "Versión enviada" })
+    });
+    await store.enqueueSyncOperation(conflicted);
+    await store.recordSyncOperationAttempt(
+      conflicted.operationId, 500, "conflict: revision_conflict", 1_500
+    );
+
+    // Una edición/reconciliación manual debe producir otra identidad y otra
+    // secuencia; no reutiliza el ID ni modifica el payload original.
+    const replacement = operation({
+      operationId: "op-manual-replacement",
+      sequence: 2,
+      payload: JSON.stringify({ ideaId: "idea-merge", text: "Versión revisada" }),
+      createdAt: 600
+    });
+    await store.enqueueSyncOperation(replacement);
+
+    const pending = await store.loadPendingSyncOperations(conflicted.projectId);
+    assert.equal(pending.length, 2);
+    assert.deepEqual(
+      pending.map(item => [item.operationId, item.sequence, item.payload]),
+      [
+        [conflicted.operationId, 1, conflicted.payload],
+        [replacement.operationId, 2, replacement.payload]
+      ]
+    );
+    assert.equal(pending[0].lastError, "conflict: revision_conflict");
+    assert.equal(pending[0].nextAttemptAt, 1_500);
+    assert.notEqual(pending[0].operationId, pending[1].operationId);
+    assert.notEqual(pending[0].payload, pending[1].payload);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

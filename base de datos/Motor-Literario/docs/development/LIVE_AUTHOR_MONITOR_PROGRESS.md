@@ -1299,13 +1299,20 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 ## 80. Ejecutar regresiones FIFO y benchmark desde el bundle aislado (26 de noviembre de 2026)
 
-**Hallazgo:** la lane ampliada sí continuó tras fallos anteriores, pero el bundle runtime general falló por un error de sintaxis concurrente en `src/persistence/indexeddb-store.ts`. Las pruebas que importaban `dist/motor-literario.js` y el benchmark también fallaron al no existir ese artefacto; por tanto, las tres nuevas regresiones FIFO todavía no habían sido ejecutadas.
+**Hallazgo:** la lane ampliada continuó tras fallos previos, pero el bundle runtime general falló por un error de sintaxis concurrente en `src/persistence/indexeddb-store.ts`. Las suites que importaban `dist/motor-literario.js` y el benchmark no podían usar ese artefacto, por lo que las tres regresiones FIFO nuevas todavía no habían sido ejecutadas.
 
-**Corrección:** el test principal de `LiveAuthorMonitor` y el benchmark intentan importar primero `dist-monitor/live-author-monitor.js`, generado por el entrypoint reducido ya aprobado, y usan el bundle general solo como fallback. La lane ejecuta esas pruebas unitarias y diagnósticas incluso cuando la compilación global falla. Las pruebas que dependen de HostEngineApi/editor/Chromium quedan condicionadas al resultado correcto del bundle runtime; la auditoría MLDB conserva su resultado propio.
+**Corrección:** el test principal de `LiveAuthorMonitor` y el benchmark cargan primero `dist-monitor/live-author-monitor.js`, generado por el entrypoint reducido, y usan el bundle general solo como fallback. La lane ejecuta las pruebas unitarias y diagnósticas incluso cuando la compilación global falla. Las pruebas que dependen de HostEngineApi/editor/Chromium quedan condicionadas al resultado correcto del bundle runtime; la auditoría MLDB conserva su resultado propio.
 
-**Límite de responsabilidad:** no se modifica `indexeddb-store.ts` ni el manifiesto físico que otro trabajo está actualizando. La lane registra el fallo compartido, pero no bloquea la comprobación independiente de las métricas y notificaciones del monitor.
+**Validación en [Live Author Monitor — run 45755687906](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45755687906):**
+- Build aislado: correcto.
+- Recuperación diagnóstica: 17/17 aprobadas.
+- Suite principal + diagnósticos: 37/37 aprobadas, incluidas las tres pruebas de snapshots FIFO, cambios de suscripción durante notificaciones y `dispose()` reentrante.
+- Benchmark de memoria: correcto sobre Node.js 22.23.5, 8 documentos de 1.048.576 unidades UTF-16 cada uno, 12.500 cambios por documento y 100.000 commits totales. Tiempo: 507,42 ms; rendimiento: 197.074 commits/s; heap tras GC: 4,26 MiB al 50 % y 4,26 MiB al 100 %; heap retenido por sesiones abiertas: 0,49 MiB; cambios pendientes al cierre: 0 en los ocho documentos. La privacidad del benchmark confirma que solo se conservan métricas y longitudes, no el texto.
+- Integraciones de host/editor/browser: omitidas correctamente porque el bundle runtime general falló antes.
+- La lane completa conserva estado fallido por controles compartidos: `DATABASE_VERSION_MISMATCH`, dos almacenes de reparación fuera de `runtime.object_stores` y un error de sintaxis en `src/persistence/indexeddb-store.ts` durante el bundle general. No se atribuyen esos fallos al núcleo de monitoreo.
 
-**Validación:** pendiente de la nueva ejecución de GitHub Actions.
+**Límite de responsabilidad:** no se modifica `indexeddb-store.ts` ni el manifiesto físico que otro trabajo está actualizando. La comprobación independiente del núcleo de monitoreo queda aprobada; la integración completa sigue pendiente de esos arreglos externos.
+
 
 
 ## 81. No bloquear pruebas puras del monitor instalando Chromium antes de tiempo (26 de noviembre de 2026)
@@ -1314,4 +1321,4 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Ajuste:** se mueve la instalación de Chromium después de `runtime-build` y se condiciona a su resultado `success`. Las pruebas unitarias FIFO y el benchmark ocurren antes, independientemente del fallo de auditoría o del runtime; las pruebas de integración multi-pestaña conservan Chromium cuando realmente pueden ejecutarse.
 
-**Validación:** pendiente de la nueva ejecución del workflow.
+**Validación:** comprobada en [Live Author Monitor — run 45755687906](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45755687906): como `runtime-build` falló, la instalación de Chromium y las pruebas host/editor/browser se omitieron; la suite aislada (37/37) y el benchmark se ejecutaron y aprobaron.

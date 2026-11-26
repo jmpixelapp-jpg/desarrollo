@@ -100,7 +100,8 @@ test("ignora una notificación repetida del mismo transactionId y secuencia", ()
   const transaction = f.editor.apply("edit", "tx-duplicate", {
     start: 3, end: 3, replacement: "x"
   });
-  f.editor.publish(transaction);
+  // El proveedor puede reconstruir el objeto al retransmitir el mismo evento.
+  f.editor.publish(structuredClone(transaction));
 
   assert.equal(f.changes.length, 1);
   assert.equal(f.source.getState().sequence, 1);
@@ -530,4 +531,28 @@ test("suspende captura si getDocumentState devuelve metadatos inválidos", () =>
   assert.equal(errors.at(-1).code, "editor-state-unavailable");
   assert.equal(editor.listeners.size, 0);
   source.dispose();
+});
+
+
+test("exige resincronización si el mismo ID y secuencia reaparecen con otro delta", () => {
+  const f = fixture();
+  const accepted = f.editor.apply("edit", "tx-payload-reused", {
+    start: 3, end: 3, replacement: "x"
+  });
+  f.editor.publish({
+    transactionId: accepted.transactionId,
+    kind: accepted.kind,
+    change: {
+      ...accepted.change,
+      replacement: "y"
+    }
+  });
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.source.getState().sequence, 1);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "transaction-id-reused");
+  assert.equal(f.editor.listeners.size, 0);
+  f.stop();
+  f.source.dispose();
 });

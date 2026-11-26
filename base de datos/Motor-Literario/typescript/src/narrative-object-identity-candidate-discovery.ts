@@ -32,7 +32,7 @@ export const MAX_OBJECT_IDENTITY_TOTAL_LABELS=50_000;
 export const MAX_OBJECT_IDENTITY_LABEL_LENGTH=160;
 export const MAX_OBJECT_IDENTITY_CANDIDATES=20_000;
 function normalize(value:string):string{return value.normalize("NFC").toLocaleLowerCase("es").trim().replace(/\s+/gu," ");}
-function validEvidence(e:TextEvidence):boolean{return !!e&&typeof e.documentId==="string"&&!!e.documentId.trim()&&Number.isSafeInteger(e.revision)&&e.revision>=0&&Number.isSafeInteger(e.start)&&e.start>=0&&Number.isSafeInteger(e.end)&&e.end>e.start&&typeof e.excerpt==="string"&&e.excerpt.length===e.end-e.start&&e.status!=="stale";}
+function validEvidence(e:TextEvidence):boolean{return !!e&&typeof e.documentId==="string"&&!!e.documentId.trim()&&Number.isSafeInteger(e.revision)&&e.revision>=0&&Number.isSafeInteger(e.start)&&e.start>=0&&Number.isSafeInteger(e.end)&&e.end>e.start&&typeof e.excerpt==="string"&&e.excerpt.length===e.end-e.start;}
 export function discoverNarrativeObjectIdentityCandidates(input:NarrativeObjectIdentityDiscoveryInput):readonly NarrativeObjectIdentityCandidate[]{
  const max=input?.maxCandidates??MAX_OBJECT_IDENTITY_CANDIDATES;
  if(!input||typeof input!=="object"||typeof input.projectId!=="string"||!input.projectId.trim()||

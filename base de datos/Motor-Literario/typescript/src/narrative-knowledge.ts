@@ -249,6 +249,15 @@ function validateNarrativeExtractionContext(
   }
 }
 
+function caseInsensitiveLiteralPattern(value: string): string {
+  return Array.from(value, character => {
+    const lower = character.toLocaleLowerCase("es");
+    const upper = character.toLocaleUpperCase("es");
+    if (lower === upper) return lower;
+    return "[" + lower + upper + "]";
+  }).join("");
+}
+
 /** Extractor deliberadamente conservador: solo reconoce nombres tras indicadores explícitos. */
 export function extractNarrativeEntities(
   projectId: string,
@@ -260,13 +269,23 @@ export function extractNarrativeEntities(
 ): readonly NarrativeEntity[] {
   validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset, undefined, now);
 
-  if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/u.test(text)) {
-    return [];
-  }
+  const characterMarkers = ["personaje", "protagonista", "antagonista"]
+    .map(caseInsensitiveLiteralPattern).join("|");
+  const placeMarkers = ["ciudad", "pueblo", "aldea", "reino", "castillo", "bosque", "montaña", "lugar"]
+    .map(caseInsensitiveLiteralPattern).join("|");
+  const objectMarkers = ["objeto", "espada", "arma", "reliquia", "amuleto", "anillo", "libro"]
+    .map(caseInsensitiveLiteralPattern).join("|");
+  const allMarkers = [characterMarkers, placeMarkers, objectMarkers].join("|");
+  const markerBoundary = "(?<![\\p{L}\\p{M}\\p{N}_])(?:" + allMarkers + ")(?![\\p{L}\\p{M}\\p{N}_])";
+  if (!new RegExp(markerBoundary, "u").test(text)) return [];
   const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3}";
-  const prefixCharacter = String.raw`\b(?:personaje|protagonista|antagonista)\s+(?:el|la|a)?\s*`;
-  const prefixPlace = String.raw`\b(?:ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar)\s+(?:de|del|de la|de los|de las)?\s*`;
-  const prefixObject = String.raw`\b(?:objeto|espada|arma|reliquia|amuleto|anillo|libro)\s+(?:llamado|llamada)?\s*`;
+  const articles = ["el", "la", "a"].map(caseInsensitiveLiteralPattern).join("|");
+  const placeConnectors = ["de la", "de las", "de los", "del", "de"]
+    .map(caseInsensitiveLiteralPattern).join("|");
+  const objectIntroducers = ["llamado", "llamada"].map(caseInsensitiveLiteralPattern).join("|");
+  const prefixCharacter = "(?<![\\p{L}\\p{M}\\p{N}_])(?:" + characterMarkers + ")(?:\\s+(?:" + articles + "))?\\s+";
+  const prefixPlace = "(?<![\\p{L}\\p{M}\\p{N}_])(?:" + placeMarkers + ")(?:\\s+(?:" + placeConnectors + "))?\\s+";
+  const prefixObject = "(?<![\\p{L}\\p{M}\\p{N}_])(?:" + objectMarkers + ")(?:\\s+(?:" + objectIntroducers + "))?\\s+";
   const suffix = String.raw`(?=$|[^\p{L}\p{M}\p{N}_])`;
   const patterns: readonly { kind: NarrativeEntityType; expression: RegExp }[] = [
     { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "gu") },

@@ -5,7 +5,7 @@ import {
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
-  StoredLiveAuthorMonitorLease, Diagnostic
+  StoredLiveAuthorMonitorLease, Diagnostic, SyncOperationDraft
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener, type LiveAuthorMonitorPersistenceDiagnostics } from "./live-author-monitor";
@@ -1265,8 +1265,29 @@ export class HostEngineApi {
         throw new Error("La consolidación produciría un alias ambiguo con otra entidad del proyecto.");
       }
       try {
+        let syncOperation: SyncOperationDraft | undefined;
+        if (project.deviceId) {
+          if (!this.store.supportsAtomicNarrativeSyncOutbox) {
+            throw new Error("El adaptador no confirma fusiones y outbox en una sola transacción; no se realizará una fusión local no sincronizable.");
+          }
+          const operationId = globalThis.crypto?.randomUUID?.();
+          if (!operationId) {
+            throw new Error("No hay un generador criptográfico UUID disponible para identificar la fusión.");
+          }
+          syncOperation = {
+            operationId,
+            projectId,
+            deviceId: project.deviceId,
+            kind: "entity-merge",
+            payload: JSON.stringify({
+              targetEntityId, sourceEntityId,
+              ...(project.writerId === undefined ? {} : { writerId: project.writerId })
+            }),
+            createdAt: Date.now()
+          };
+        }
         await this.store.mergeNarrativeEntityIdentity!(
-          projectId, targetEntityId, sourceEntityId, project.writerId
+          projectId, targetEntityId, sourceEntityId, project.writerId, syncOperation
         );
       } catch (error) {
         this.invalidateNarrativeKnowledgeCaches();
@@ -3394,7 +3415,14 @@ export class HostEngineApi {
     // La transferencia entra en la misma cola que las demás mutaciones narrativas:
     // una actualización manual no puede intercalarse con el movimiento a biblioteca.
     const work = this.knowledgeTail.then(async () => {
-      const entries = await archive.call(this.store, project.projectId, writerId, project.projectName, Date.now());
+      const archivedAt = Date.now();
+      const syncOperation = this.createNarrativeSyncDraft(
+        "personal-idea-archive", "archive",
+        { projectId: project.projectId, writerId, sourceProjectName: project.projectName, archivedAt }
+      );
+      const entries = await archive.call(
+        this.store, project.projectId, writerId, project.projectName, archivedAt, syncOperation
+      );
       try {
         const validatedEntries = requireUniquePersonalIdeaEntries(entries, writerId, project.projectId);
         if (validatedEntries.some(entry =>
@@ -3640,11 +3668,21 @@ export class HostEngineApi {
     expectedCurrent?: NarrativeIdea
   ): Promise<void> {
     try {
+      const syncOperation = this.createNarrativeSyncDraft("idea-upsert", "idea", updated);
       if (store.saveIdeaIfUnchanged) {
-        await store.saveIdeaIfUnchanged(updated, expectedCurrent);
+        if (syncOperation && !this.store.saveIdeaIfUnchanged) {
+          throw new Error("El almacén no ofrece CAS atómico para sincronizar ideas.");
+        }
+        await store.saveIdeaIfUnchanged(updated, expectedCurrent, syncOperation);
       } else if (expectedCurrent && store.updateIdeaIfUnchanged) {
+        if (syncOperation) {
+          throw new Error("El almacén no ofrece CAS atómico con outbox para actualizar ideas.");
+        }
         await store.updateIdeaIfUnchanged(updated, expectedCurrent);
       } else {
+        if (syncOperation) {
+          throw new Error("El almacén no ofrece persistencia CAS/outbox para sincronizar ideas.");
+        }
         await this.persistNarrativeRecord(
           updated, expectedCurrent,
           record => store.saveIdea(record)
@@ -3664,20 +3702,64 @@ export class HostEngineApi {
    * conservan el comportamiento de escritura que ofrecían originalmente;
    * no se anuncia concurrencia atómica cuando no implementan este contrato.
    */
+  private createNarrativeSyncDraft<T extends { readonly projectId: string }>(
+    kind: string,
+    payloadKey: string,
+    record: T
+  ): SyncOperationDraft | undefined {
+    const project = this.project;
+    if (!project?.deviceId) return undefined;
+    if (!this.store.supportsAtomicNarrativeSyncOutbox) {
+      throw new Error("Este adaptador no confirma cambios narrativos y outbox en una sola transacción; no se guardará una mutación local no sincronizable.");
+    }
+    if (record.projectId !== project.projectId) {
+      throw new Error("El registro narrativo pertenece a otro proyecto y no puede sincronizarse.");
+    }
+    const operationId = globalThis.crypto?.randomUUID?.();
+    if (!operationId) {
+      throw new Error("No hay un generador criptográfico UUID disponible para identificar la operación narrativa.");
+    }
+    const createdAt = Date.now();
+    return {
+      operationId,
+      projectId: project.projectId,
+      deviceId: project.deviceId,
+      kind,
+      payload: JSON.stringify({ [payloadKey]: record }),
+      createdAt
+    };
+  }
+
   private async persistNarrativeRecord<T extends { readonly projectId: string; readonly id: string }>(
     updated: T,
     expectedCurrent: T | undefined,
     save: (record: T) => Promise<void>,
-    saveIfUnchanged?: (record: T, expected?: T) => Promise<void>
+    saveIfUnchanged?: (
+      record: T,
+      expected?: T,
+      syncOperation?: SyncOperationDraft
+    ) => Promise<void>,
+    syncKind?: string,
+    syncPayloadKey?: string
   ): Promise<void> {
     if (expectedCurrent && (
       expectedCurrent.projectId !== updated.projectId || expectedCurrent.id !== updated.id
     )) {
       throw new Error("La actualización debe conservar la identidad del registro narrativo.");
     }
+    const project = this.requireProject();
+    const syncOperation = syncKind && syncPayloadKey
+      ? this.createNarrativeSyncDraft(syncKind, syncPayloadKey, updated)
+      : undefined;
+    if (project.deviceId && syncKind && !saveIfUnchanged) {
+      throw new Error("El almacén no implementa CAS con outbox; no se guardará un cambio narrativo no sincronizable.");
+    }
     if (saveIfUnchanged) {
-      await saveIfUnchanged(updated, expectedCurrent);
+      await saveIfUnchanged(updated, expectedCurrent, syncOperation);
       return;
+    }
+    if (syncOperation) {
+      throw new Error("El almacén no ofrece persistencia atómica para este tipo de cambio narrativo.");
     }
     await save(updated);
   }
@@ -3695,8 +3777,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveEntity!(record),
         store.saveEntityIfUnchanged
-          ? (record, expected) => store.saveEntityIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveEntityIfUnchanged!(record, expected, operation)
+          : undefined,
+        "entity-upsert",
+        "entity"
       );
     } catch (error) {
       this.invalidateNarrativeKnowledgeCaches();
@@ -3717,8 +3801,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveRelation!(record),
         store.saveRelationIfUnchanged
-          ? (record, expected) => store.saveRelationIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveRelationIfUnchanged!(record, expected, operation)
+          : undefined,
+        "relation-upsert",
+        "relation"
       );
     } catch (error) {
       this.narrativeRelations.clear();
@@ -3741,8 +3827,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveEvent!(record),
         store.saveEventIfUnchanged
-          ? (record, expected) => store.saveEventIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveEventIfUnchanged!(record, expected, operation)
+          : undefined,
+        "event-upsert",
+        "event"
       );
     } catch (error) {
       this.narrativeEvents.clear();
@@ -3766,8 +3854,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveAssertion!(record),
         store.saveAssertionIfUnchanged
-          ? (record, expected) => store.saveAssertionIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveAssertionIfUnchanged!(record, expected, operation)
+          : undefined,
+        "assertion-upsert",
+        "assertion"
       );
     } catch (error) {
       this.narrativeAssertions.clear();
@@ -3895,7 +3985,9 @@ export class HostEngineApi {
     if (!identity || typeof identity.projectId !== "string" || !identity.projectId.trim() ||
         typeof identity.projectName !== "string" || !identity.projectName.trim() ||
         (identity.writerId !== undefined &&
-          (typeof identity.writerId !== "string" || !identity.writerId.trim() || identity.writerId.length > 256))) {
+          (typeof identity.writerId !== "string" || !identity.writerId.trim() || identity.writerId.length > 256)) ||
+        (identity.deviceId !== undefined &&
+          (typeof identity.deviceId !== "string" || !identity.deviceId.trim() || identity.deviceId.length > 256))) {
       throw new Error("La identidad del proyecto o del escritor es inválida.");
     }
     this.engine.initializeProject(identity);

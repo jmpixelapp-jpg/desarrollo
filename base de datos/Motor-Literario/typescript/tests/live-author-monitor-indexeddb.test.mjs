@@ -538,7 +538,7 @@ test("retención elimina checkpoints vencidos sin lease activo y conserva leases
             try { transaction.abort(); } catch {}
             return;
           }
-          leases.put({ ...current, expiresAt: expiredAt, updatedAt: expiredAt });
+          leases.put({ ...current, acquiredAt: now - 1_000, expiresAt: expiredAt, updatedAt: expiredAt });
         };
         request.onerror = () => {
           failure = request.error ?? new Error("No se pudo leer el lease.");

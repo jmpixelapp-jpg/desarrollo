@@ -688,3 +688,47 @@ test("al volver a visible recupera de inmediato un lease expirado durante suspen
     else delete globalThis.window;
   }
 });
+
+test("configura retención de checkpoints, la ejecuta al inicializar y permite desactivarla", async () => {
+  class RetentionStore extends MemoryDocumentStore {
+    cleanupCalls = [];
+    async cleanupLiveAuthorMonitorCheckpoints(projectId, olderThan, now) {
+      this.cleanupCalls.push({ projectId, olderThan, now });
+      return 3;
+    }
+  }
+
+  const store = new RetentionStore();
+  const api = new HostEngineApi({
+    store,
+    liveAuthorMonitorCheckpointRetentionMs: 24 * 60 * 60 * 1_000
+  });
+  api.initializeProject({ projectId: "monitor-retention-config", projectName: "Monitor retention config" });
+
+  assert.equal(store.cleanupCalls.length, 1, "la limpieza automática se programa al inicializar el proyecto");
+  assert.equal(store.cleanupCalls[0].projectId, "monitor-retention-config");
+  assert.equal(store.cleanupCalls[0].now - store.cleanupCalls[0].olderThan, 24 * 60 * 60 * 1_000);
+
+  const removed = await api.cleanupLiveAuthorMonitorCheckpoints(store.cleanupCalls[0].now + 10);
+  assert.equal(removed, 3);
+  assert.equal(store.cleanupCalls.length, 2);
+  api.dispose();
+
+  const disabledStore = new RetentionStore();
+  const disabled = new HostEngineApi({
+    store: disabledStore,
+    liveAuthorMonitorCheckpointRetentionMs: 0
+  });
+  disabled.initializeProject({ projectId: "monitor-retention-disabled", projectName: "Monitor retention disabled" });
+  assert.equal(await disabled.cleanupLiveAuthorMonitorCheckpoints(), 0);
+  assert.equal(disabledStore.cleanupCalls.length, 0);
+  disabled.dispose();
+
+  assert.throws(
+    () => new HostEngineApi({
+      store: new RetentionStore(),
+      liveAuthorMonitorCheckpointRetentionMs: -1
+    }),
+    /entre 0 y 3650 días/
+  );
+});

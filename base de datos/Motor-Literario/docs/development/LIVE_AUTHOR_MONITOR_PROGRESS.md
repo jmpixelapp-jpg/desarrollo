@@ -685,3 +685,5 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **Privacidad:** el job de retención opera sobre IDs, timestamps y metadatos de lease/checkpoint; no materializa ni inspecciona el contenido del manuscrito.
 
 **Validación:** pendiente de GitHub Actions.
+
+- Se amplía la cobertura de retención en HostEngineApi: valor configurable, limpieza automática al iniciar, llamada manual, desactivación con `0` y rechazo de límites inválidos. La fixture de lease vencido conserva fechas internamente válidas para probar expiración real y no corrupción.

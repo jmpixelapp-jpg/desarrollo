@@ -4147,7 +4147,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       throw new Error("Generación esperada del manifiesto inválida.");
     }
     if (manifest.generation !== (expectedGeneration ?? 0) + 1) {
-      throw new Error("La generación del manifiesto debe avanzar exactamente una unidad.");
+      throw new Error("La generación del manifiesto debe avanzar exactamente una unidad (conflicto CAS).");
     }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {

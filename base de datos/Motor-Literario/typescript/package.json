@@ -15,7 +15,8 @@
   "devDependencies": {
     "typescript": "^5.9.3",
     "vite": "^7.1.12",
-    "fake-indexeddb": "6.2.8"
+    "fake-indexeddb": "6.2.8",
+    "playwright": "1.65.1"
   },
   "engines": {
     "node": ">=22.13.0"

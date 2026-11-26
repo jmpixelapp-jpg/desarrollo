@@ -26,3 +26,26 @@ Se corrigió el patrón de nombres del extractor de entidades para utilizar prop
 ### Validación pendiente
 
 El último CI disponible corresponde a un SHA anterior y no valida estos commits. El conector de GitHub no ha generado una ejecución para el nuevo head; por ello, type-check, build y suite completa siguen pendientes de ejecución en GitHub Actions. No se declara esta fase validada hasta obtener un resultado asociado al head actual.
+
+
+### Fase D: referencias pronominales conservadoras
+
+Se incorpora `typescript/src/narrative-pronoun-resolution.ts` y se exporta desde el punto de entrada público. La API recibe menciones de personajes y referencias pronominales con rangos explícitos, documento, revisión y rasgos gramaticales aportados por un extractor lingüístico.
+
+El resolver:
+- Solo considera antecedentes anteriores dentro del mismo documento y revisión.
+- Aplica límites configurables de distancia y, opcionalmente, de oración.
+- Comprueba número gramatical y género cuando está disponible.
+- Agrupa menciones repetidas de la misma identidad para no generar falsos duplicados.
+- Devuelve `resolved` solo si queda un único personaje compatible.
+- Devuelve `ambiguous` cuando hay varios personajes compatibles, sin desempatar por cercanía.
+- Devuelve `unresolved` cuando no hay evidencia compatible.
+- No deduce género a partir de nombres propios; si el antecedente tiene género desconocido y el pronombre está marcado, no confirma la relación.
+
+Se agregaron pruebas para resolución única, ambigüedad, desacuerdo gramatical, aislamiento entre documentos/revisiones, distancia máxima, límite de oración, offsets inválidos y rasgos desconocidos.
+
+**Límite de esta fase:** todavía no existe un extractor sintáctico que identifique automáticamente pronombres y sus rasgos dentro de prosa arbitraria. Esta API es la capa de decisión segura que podrá consumir dicho extractor; no debe confundirse con comprensión completa del lenguaje natural.
+
+### Validación de Fase D
+
+El código, exportación, pruebas y documentación están publicados en la rama de la PR 63. Aún no se ha observado una ejecución CI asociada al último commit. Build, type-check y suite completa siguen pendientes de confirmación.

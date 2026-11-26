@@ -5,6 +5,7 @@ import type {
 } from "./mldb-records";
 import type { ProjectDictionary, DictionaryEntry, DictionaryEntryEntityLink } from "./dictionaries";
 import type { ProjectSetting, LanguageProfile, LanguageResourceRef, StyleProfile, TimelineTrack, RecordLifecycle, RelationLifecycle, EventLifecycle } from "./project-data";
+import type { NarrativeIdeaContinuityIndex } from "./narrative-idea-continuity-index";
 
 /** Contratos públicos. La identidad del proyecto siempre pertenece al anfitrión. */
 
@@ -352,6 +353,13 @@ export interface ProjectStore {
   /** Guarda y recupera diagnósticos asociados a una revisión exacta. */
   saveDiagnostics?(diagnostics: StoredDiagnostics): Promise<void>;
   loadDiagnostics?(projectId: string, documentId: string): Promise<StoredDiagnostics | undefined>;
+  /** Índice derivado de continuidad de ideas, versionado por proyecto y con CAS. */
+  loadNarrativeIdeaContinuityIndex?(projectId: string): Promise<NarrativeIdeaContinuityIndex | undefined>;
+  saveNarrativeIdeaContinuityIndexIfUnchanged?(
+    index: NarrativeIdeaContinuityIndex,
+    expectedGeneration?: number
+  ): Promise<void>;
+
   /** Manifiestos y tombstones de proyecciones por documento, con CAS monotónico. */
   loadNarrativeDocumentProjectionManifest?(
     projectId: string, documentId: string

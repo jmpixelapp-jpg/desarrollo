@@ -69,6 +69,7 @@ const MAX_EVENTS = 10_000;
 const MAX_OCCURRENCES = 200;
 const MAX_TEXT_UNITS = 500;
 const MAX_EVIDENCE_UNITS = 2_000_000;
+const MAX_TOTAL_EVIDENCE_UNITS = 25_000_000;
 
 interface DisjointSet {
   find(id: string): string;
@@ -133,15 +134,17 @@ function validateOccurrence(occurrence: NarrativeIdeaOccurrenceReference): void 
   }
 }
 
-function occurrenceSignature(occurrence: NarrativeIdeaOccurrenceReference): string {
-  return JSON.stringify({
-    documentId: occurrence.documentId,
-    revision: occurrence.revision,
-    kind: occurrence.kind,
-    polarity: occurrence.polarity,
-    text: occurrence.text,
-    evidence: occurrence.evidence
-  });
+function sameOccurrence(
+  a: NarrativeIdeaOccurrenceReference,
+  b: NarrativeIdeaOccurrenceReference
+): boolean {
+  return a.ideaCandidateId === b.ideaCandidateId &&
+    a.documentId === b.documentId && a.revision === b.revision &&
+    a.kind === b.kind && a.polarity === b.polarity && a.text === b.text &&
+    a.evidence.documentId === b.evidence.documentId &&
+    a.evidence.revision === b.evidence.revision &&
+    a.evidence.start === b.evidence.start && a.evidence.end === b.evidence.end &&
+    a.evidence.excerpt === b.evidence.excerpt;
 }
 
 function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): void {
@@ -172,8 +175,6 @@ function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): v
     throw new Error("El evento de evolución de idea es inválido.");
   }
 
-  validateOccurrence(event.firstOccurrence);
-  validateOccurrence(event.secondOccurrence);
   if (event.firstOccurrence.ideaCandidateId === event.secondOccurrence.ideaCandidateId ||
       event.firstOccurrence.documentId === event.secondOccurrence.documentId) {
     throw new Error("Una relación de continuidad necesita dos apariciones documentales distintas.");
@@ -215,8 +216,8 @@ function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): v
       ? event.firstOccurrence : event.secondOccurrence;
     const laterSource = event.laterOccurrence.ideaCandidateId === event.firstOccurrence.ideaCandidateId
       ? event.firstOccurrence : event.secondOccurrence;
-    if (occurrenceSignature(event.earlierOccurrence) !== occurrenceSignature(earlierSource) ||
-        occurrenceSignature(event.laterOccurrence) !== occurrenceSignature(laterSource)) {
+    if (!sameOccurrence(event.earlierOccurrence, earlierSource) ||
+        !sameOccurrence(event.laterOccurrence, laterSource)) {
       throw new Error("Los extremos cronológicos no conservan la misma procedencia de las apariciones.");
     }
   } else if (event.earlierOccurrence !== undefined || event.laterOccurrence !== undefined) {
@@ -328,7 +329,7 @@ export function buildNarrativeIdeaContinuityLines(
   }
 
   const occurrences = new Map<string, NarrativeIdeaOccurrenceReference>();
-  const signatures = new Map<string, string>();
+  let totalEvidenceUnits = 0;
   const eventIds = new Set<string>();
   const relationIds = new Set<string>();
   const sets = createDisjointSet();
@@ -343,13 +344,19 @@ export function buildNarrativeIdeaContinuityLines(
 
     for (const occurrence of [event.firstOccurrence, event.secondOccurrence]) {
       const id = occurrence.ideaCandidateId;
-      const signature = occurrenceSignature(occurrence);
-      const previous = signatures.get(id);
-      if (previous !== undefined && previous !== signature) {
-        throw new Error("Una aparición cambia de procedencia o contenido entre relaciones.");
+      const previous = occurrences.get(id);
+      if (previous) {
+        if (!sameOccurrence(previous, occurrence)) {
+          throw new Error("Una aparición cambia de procedencia o contenido entre relaciones.");
+        }
+      } else {
+        validateOccurrence(occurrence);
+        totalEvidenceUnits += occurrence.text.length + occurrence.evidence.excerpt.length;
+        if (totalEvidenceUnits > MAX_TOTAL_EVIDENCE_UNITS) {
+          throw new Error("La evidencia agregada supera el presupuesto de continuidad narrativa.");
+        }
+        occurrences.set(id, occurrence);
       }
-      signatures.set(id, signature);
-      occurrences.set(id, occurrence);
       sets.find(id);
     }
     sets.union(event.firstOccurrence.ideaCandidateId, event.secondOccurrence.ideaCandidateId);

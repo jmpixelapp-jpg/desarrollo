@@ -62,3 +62,10 @@ El digest se calcula mediante Web Crypto (`crypto.subtle`) y la creación falla 
 **Límite actual:** el diario confirma recepción ordenada, no aplicación al grafo. Aún no existe una transacción que combine el registro del sobre, la actualización de cursor y la mutación de entidades/relaciones/eventos/ideas/afirmaciones. El consumidor debe aplicar la operación mediante una fase posterior y recuperable; no debe asumir que `accepted` significa que el contenido narrativo ya fue aplicado. `writerId` es una declaración del sobre, no una identidad autenticada: el anfitrión debe vincularlo a una sesión autorizada antes de aceptar operaciones de red.
 
 El diario expone `loadOperations(projectId, writerId?)` y `loadOperation(projectId, operationId)` para recuperar el contenido durable después de un reinicio. La enumeración se ordena por escritor y secuencia, y permite al consumidor reanudar el procesamiento. Estas lecturas no marcan operaciones como aplicadas ni alteran el cursor.
+
+
+## Reproducción recuperable del diario (entrega al menos una vez)
+
+El diario incorpora `loadPendingOperations`, `markApplied` y `replayPendingNarrativeSyncOperations`. El replay entrega las operaciones pendientes en orden por escritor/secuencia, ejecuta un callback de aplicación y marca cada entrada como aplicada únicamente después de que el callback finaliza. Si el callback falla, la entrada permanece pendiente y la reproducción se detiene para permitir reintento. La confirmación comprueba el digest esperado y es idempotente.
+
+**Semántica y límites:** esto implementa entrega al menos una vez, no exactamente una vez. Si el proceso cae después de que el callback modifique el grafo y antes de guardar `appliedAt`, el callback volverá a recibir la operación. Por tanto, el callback debe ser idempotente y usar IDs de operación como clave de deduplicación en sus escrituras. El diario y las colecciones del grafo siguen en bases/transacciones distintas; `appliedAt` solo certifica que el callback terminó, no que exista atomicidad entre todas las proyecciones. La autenticación/autorización del escritor sigue fuera del diario.

@@ -320,7 +320,8 @@ export interface NarrativeSyncReplayResult {
  * El callback debe ser idempotente: un fallo del proceso entre la mutación externa
  * y markApplied puede provocar que la misma operación se entregue otra vez.
  */
-const activeNarrativeSyncReplays = new Set<string>();
+const activeNarrativeSyncProjectWideReplays = new Set<string>();
+const activeNarrativeSyncWriterReplays = new Map<string, Set<string>>();
 
 export async function replayPendingNarrativeSyncOperations(
   journal: IndexedDbNarrativeSyncJournal,
@@ -334,17 +335,28 @@ export async function replayPendingNarrativeSyncOperations(
   if (!projectId.trim() || (writerId !== undefined && !writerId.trim())) {
     throw new TypeError("Proyecto y escritor deben ser identificadores no vacíos.");
   }
-  // Evita que dos llamadas del mismo runtime ejecuten simultáneamente el mismo proyecto.
-  // No es un mutex entre pestañas/dispositivos: el anfitrión debe coordinar consumidores externos.
-  const lockKey = projectId;
-  if (activeNarrativeSyncReplays.has(lockKey)) {
+  // Un replay de proyecto completo excluye a todos los escritores del proyecto.
+  // Replays de escritores distintos pueden avanzar en paralelo: sus cursores son
+  // independientes y las escrituras de dominio siguen protegidas por CAS.
+  // Estos locks solo coordinan este runtime, no pestañas ni dispositivos.
+  const writerLocks = activeNarrativeSyncWriterReplays.get(projectId);
+  const blocked = writerId === undefined
+    ? activeNarrativeSyncProjectWideReplays.has(projectId) || Boolean(writerLocks?.size)
+    : activeNarrativeSyncProjectWideReplays.has(projectId) || Boolean(writerLocks?.has(writerId));
+  if (blocked) {
     return {
       processed: 0,
       remaining: (await journal.loadPendingOperations(projectId, writerId)).length,
       failure: "consumer-already-running"
     };
   }
-  activeNarrativeSyncReplays.add(lockKey);
+  if (writerId === undefined) {
+    activeNarrativeSyncProjectWideReplays.add(projectId);
+  } else {
+    const locks = writerLocks ?? new Set<string>();
+    locks.add(writerId);
+    activeNarrativeSyncWriterReplays.set(projectId, locks);
+  }
   try {
   const pending = await journal.loadPendingOperations(projectId, writerId);
   let processed = 0;
@@ -395,6 +407,12 @@ export async function replayPendingNarrativeSyncOperations(
   }
   return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
   } finally {
-    activeNarrativeSyncReplays.delete(lockKey);
+    if (writerId === undefined) {
+      activeNarrativeSyncProjectWideReplays.delete(projectId);
+    } else {
+      const locks = activeNarrativeSyncWriterReplays.get(projectId);
+      locks?.delete(writerId);
+      if (locks?.size === 0) activeNarrativeSyncWriterReplays.delete(projectId);
+    }
   }
 }

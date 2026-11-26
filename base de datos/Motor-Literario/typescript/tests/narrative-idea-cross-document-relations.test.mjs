@@ -180,3 +180,17 @@ test("seÃ±ala un cambio de modalidad entre apariciones sin llamarlo contradicciÃ
   assert.equal(result.relations[0].second.polarity, "negated");
   assert.equal(result.relations[0].reviewStatus, "candidate");
 });
+
+
+test("rechaza evidencia de un candidato cuya identidad documental no coincide", () => {
+  const candidate = idea("wrong-provenance", "chapter-1", "la memoria de la ciudad");
+  const invalid = {
+    ...candidate,
+    evidence: { ...candidate.evidence, documentId: "chapter-other" }
+  };
+
+  assert.throws(() => analyze([
+    invalid,
+    idea("valid-second", "chapter-2", "la memoria de la ciudad")
+  ]));
+});

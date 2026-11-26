@@ -343,6 +343,10 @@ test("presenta las siete categorías de actividad en la tarjeta del capítulo co
   for (const key of ["typing", "composition", "paste", "deletion", "correction", "undo", "redo", "other"]) {
     assert.equal(metric(chapter, key).textContent, "1", "la tarjeta del capítulo debe presentar " + key);
   }
+  assert.equal(metric(chapter, "typingUnits").textContent, "1");
+  assert.equal(metric(chapter, "compositionInserted").textContent, "1");
+  assert.equal(metric(chapter, "compositionDeleted").textContent, "0");
+  assert.equal(metric(chapter, "unitCoverage").textContent, "Completa");
   assert.equal(root.textContent.includes("texto privado"), false);
   unmount();
 });

@@ -110,6 +110,9 @@ function validatePushResult(
     assertNonEmpty(conflict.code, "code del conflicto");
   }
   for (const id of result.retryableOperationIds) add(id, "operationId reintentable");
+  if (classified.size !== sent.size) {
+    throw new Error("El transporte dejó operaciones enviadas sin clasificar.");
+  }
 }
 
 export class NarrativeSyncCoordinator {

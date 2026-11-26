@@ -4171,6 +4171,9 @@ function buildLiteraryIdeaGraph(
     if (intermediaries.size < 2) continue;
     const destinationCounts = new Map<number, number>();
     const firstIntermediaryByDestination = new Map<number, number>();
+    // Un retorno al origen identifica una rama que participa en el ciclo,
+    // pero no es un destino nuevo que deba inflar las métricas de alcance.
+    const cycleReturnIntermediaries = new Set<number>();
     let sourceWork = 0;
     let sourceTruncated = false;
     for (const intermediaryIndex of intermediaries) {
@@ -4181,14 +4184,10 @@ function buildLiteraryIdeaGraph(
           sourceTruncated = true;
           break;
         }
-        // Un retorno a la fuente puede ser una rama exclusiva del ciclo,
-        // pero nunca se considera convergencia compartida: evita contar el
-        // mismo ciclo como si dos ramas hubieran descubierto un destino nuevo.
+        // Un retorno a la fuente conserva la rama para detectar independencia
+        // cíclica, sin sumar la fuente como un destino de dos saltos.
         if (destinationIndex === sourceIndex) {
-          if (!firstIntermediaryByDestination.has(destinationIndex)) {
-            destinationCounts.set(destinationIndex, 1);
-            firstIntermediaryByDestination.set(destinationIndex, intermediaryIndex);
-          }
+          cycleReturnIntermediaries.add(intermediaryIndex);
           continue;
         }
         destinationCounts.set(destinationIndex, (destinationCounts.get(destinationIndex) ?? 0) + 1);
@@ -4205,7 +4204,7 @@ function buildLiteraryIdeaGraph(
     twoHopWork += sourceWork;
     let sourceSharedDestinationCount = 0;
     let sourceExclusiveDestinationCount = 0;
-    const exclusiveIntermediaryCount = new Set<number>();
+    const exclusiveIntermediaryCount = new Set<number>(cycleReturnIntermediaries);
     for (const [destinationIndex, intermediaryCount] of destinationCounts) {
       if (intermediaryCount > 1) {
         sourceSharedDestinationCount++;

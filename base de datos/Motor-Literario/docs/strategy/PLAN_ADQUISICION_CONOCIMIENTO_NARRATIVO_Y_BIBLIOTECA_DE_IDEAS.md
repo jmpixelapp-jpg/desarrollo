@@ -112,3 +112,20 @@ Todos los extractores reciben el mismo proyecto, documento, revisión, texto y `
 Se agregan tres pruebas de integración para la coordinación de extractores, propagación de offsets y rechazo de entidades de otros proyectos.
 
 **Límite:** esta capa coordina capacidades existentes; no es un modelo semántico general ni resuelve referencias pronominales por sí sola. La ausencia de encabezados explícitos deja candidatos sin escena. Los resultados siguen siendo candidatos y no modifican automáticamente la biblioteca canónica.
+
+
+### Fase H: integración de referencias pronominales en la comprensión coordinada
+
+La entrada `understandNarrativeFragment(input)` ahora admite `characterMentions` y `pronounReferences` previamente detectadas por un componente lingüístico. Ambas colecciones usan offsets UTF-16 absolutos y deben corresponder al mismo proyecto, documento, revisión y ventana de texto.
+
+La orquestación:
+- Convierte temporalmente los offsets absolutos a offsets locales para el resolver existente.
+- Resuelve cada referencia como identidad única, ambigua o no resuelta; no fuerza una elección.
+- Extrae acciones solo cuando existe una referencia compatible y un verbo explícito reconocido inmediatamente después.
+- Devuelve acciones pronominales con offsets absolutos restaurados y evidencia original.
+- Asigna esas acciones a escenas explícitas cuando su evidencia queda dentro de una escena reconocida.
+- Comprueba que la superficie del pronombre coincide exactamente con el texto y limita menciones/referencias para evitar entradas desproporcionadas.
+
+Se agregan dos pruebas de integración: resolución y atribución con `baseOffset` distinto de cero, y rechazo de una superficie pronominal que no coincide.
+
+**Límite importante:** el motor no descubre todavía por sí mismo todos los pronombres ni sus rasgos gramaticales. Un detector lingüístico debe proporcionar menciones y referencias; si faltan, el pipeline no inventa sujetos. Las acciones pronominales se conservan separadas de las acciones actor-objetivo con nombres explícitos.

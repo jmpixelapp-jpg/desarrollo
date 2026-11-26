@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
-import { IndexedDbProjectStore } from "../dist/motor-literario.js";
+import { HostEngineApi, IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 
@@ -245,6 +245,39 @@ test("IndexedDB revierte el archivo y la outbox si los IDs esperados ya no coinc
     assert.deepEqual(await store.loadPendingSyncOperations(projectId), []);
     assert.equal(await store.loadLastSyncOperationSequence(projectId, syncOperation.deviceId), 0);
   } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+
+test("HostEngineApi sincroniza la finalización de libro y biblioteca personal con su identidad de dispositivo", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const writerId = "writer-host-library";
+  const deviceId = "device-host-library";
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId, projectName: "Libro transaccional",
+    writerId, deviceId
+  });
+
+  try {
+    await store.saveIdea(idea());
+    const entries = await api.archiveUnincorporatedIdeas();
+    assert.deepEqual(entries.map(entry => entry.idea.id), ["idea-source"]);
+
+    const [operation] = await store.loadPendingSyncOperations(projectId);
+    assert.equal(operation.kind, "personal-idea-archive");
+    assert.equal(operation.deviceId, deviceId);
+    assert.equal(operation.sequence, 1);
+    const payload = JSON.parse(operation.payload);
+    assert.equal(payload.writerId, writerId);
+    assert.equal(payload.sourceProjectName, "Libro transaccional");
+    assert.deepEqual(payload.archivedIdeaIds, ["idea-source"]);
+    assert.equal(typeof payload.archiveChecksum, "string");
+  } finally {
+    api.dispose();
     await store.close();
     await deleteDatabase();
   }

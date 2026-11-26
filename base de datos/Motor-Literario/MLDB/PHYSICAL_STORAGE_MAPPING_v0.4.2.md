@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `26` (manifiesto físico, mapping version `12`).
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `27` (manifiesto físico, mapping version `12`).
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 

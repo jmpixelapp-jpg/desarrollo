@@ -900,9 +900,15 @@ test("la cronología limita las muestras de identificadores de eventos y conserv
       raw: "año 2030",
       orderValue: 300
     },
-    evidenceCount: 0,
+    evidenceCount: 1,
     staleEvidenceCount: 0,
-    evidence: []
+    evidence: [{
+      documentId: "chapter-one",
+      revision: 1,
+      start: 0,
+      end: 12,
+      excerpt: "Acontecimiento"
+    }]
   }));
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",

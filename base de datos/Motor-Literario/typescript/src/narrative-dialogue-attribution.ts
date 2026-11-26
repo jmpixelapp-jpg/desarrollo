@@ -160,7 +160,7 @@ export function extractNarrativeDialogueAttributions(
         {
           form: "dash-after-dialogue",
           regex: new RegExp(
-            String.raw`^[\\t ]*[—–-][\\t ]*(.+?)[\\t ]+[—–-][\\t ]*(?:${verbs})[\\t ]+${escapedName}[.!?…]?[\\t ]*$`,
+            String.raw`^[\t ]*[—–-][\t ]*(.+?)[\t ]+[—–-][\t ]*(?:${verbs})[\t ]+${escapedName}[.!?…]?[\t ]*$`,
             "iu"
           ),
           speechGroup: 1, nameGroup: 0
@@ -168,7 +168,7 @@ export function extractNarrativeDialogueAttributions(
         {
           form: "quote-after-dialogue",
           regex: new RegExp(
-            String.raw`[«“"](.+?)[»”"][,]?[\\t ]+(?:${verbs})[\\t ]+(${escapedName})(?=[.!?…]?[\\t ]*$)`,
+            String.raw`[«“"](.+?)[»”"][,]?[\t ]+(?:${verbs})[\t ]+(${escapedName})(?=[.!?…]?[\t ]*$)`,
             "iu"
           ),
           speechGroup: 1, nameGroup: 2
@@ -176,7 +176,7 @@ export function extractNarrativeDialogueAttributions(
         {
           form: "speaker-before-dialogue",
           regex: new RegExp(
-            String.raw`(^|[.!?][\\t ]+)(${escapedName})[\\t ]+(?:${verbs})[\\t ]*:[\\t ]*[«“"](.+?)[»”"]`,
+            String.raw`(^|[.!?][\t ]+)(${escapedName})[\t ]+(?:${verbs})[\t ]*:[\t ]*[«“"](.+?)[»”"]`,
             "iu"
           ),
           speechGroup: 3, nameGroup: 2

@@ -146,8 +146,7 @@ Desde `base de datos/Motor-Literario/typescript`:
 npm install
 npm run validate:schema
 npm run typecheck
-# Validación aislada del monitor (no depende de src/index.ts ni del módulo narrativo)
-npx tsc --project tsconfig.live-author-monitor.json
+# Build aislado del monitor (no importa los tipos globales de src/index.ts)
 npx vite build --config vite.monitor.config.ts
 node --test tests/live-author-monitor-diagnostics-isolation.test.mjs
 
@@ -255,13 +254,14 @@ El panel y cada tarjeta del workspace usan `readLiveAuthorMonitorPersistenceDiag
 La regresión `tests/live-author-monitor-diagnostics-isolation.test.mjs` cubre excepciones, recuperación, aislamiento entre documentos y rechazo de diagnósticos cruzados. No valida por sí sola la persistencia durable del checkpoint ni sustituye las pruebas de IndexedDB y leases.
 
 
-## 14. Validación aislada del monitor
+## 14. Validación de runtime aislada del monitor
 
-El workflow dedicado ejecuta una lane específica del monitor antes de compilar el bundle general:
+El workflow dedicado construye un bundle focalizado antes de instalar Chromium o compilar el entrypoint general:
 
-1. `tsc --project tsconfig.live-author-monitor.json` aplica TypeScript estricto únicamente al punto de entrada del monitor y sus dependencias importadas.
-2. `vite.monitor.config.ts` construye `src/live-author-monitor-test-entry.ts` en `dist-monitor/`, sin limpiar ni sobrescribir `dist/`.
-3. `tests/live-author-monitor-diagnostics-isolation.test.mjs` ejecuta las regresiones de aislamiento de telemetría sobre ese bundle.
-4. Después se intenta la compilación general del motor y, si esta termina correctamente, se ejecutan las demás suites y el benchmark.
+1. `vite.monitor.config.ts` construye `src/live-author-monitor-test-entry.ts` en `dist-monitor/`, sin limpiar ni sobrescribir `dist/`.
+2. `tests/live-author-monitor-diagnostics-isolation.test.mjs` ejecuta las regresiones de telemetría sobre ese bundle.
+3. Después se instalan las herramientas de navegador, se valida el esquema y se intenta la compilación general del motor.
 
-Esta separación permite obtener una señal de compilación y regresión del monitor aun cuando un módulo independiente del bundle general esté roto. No certifica la integración completa del monitor con `HostEngineApi`, la persistencia real IndexedDB ni el editor de producción; esas validaciones continúan en el workflow general y en las suites de integración.
+**Límite de tipos:** no se afirma que este bundle realice un typecheck estricto. Aunque el monitor importa los contratos solo como tipos, `contracts.ts` forma parte de un grafo de imports de tipos del motor; el intento de compilarlo como proyecto TypeScript aislado volvió a alcanzar `src/narrative-history.ts(7,41): TS1002`. La comprobación Vite/esbuild elimina esos imports de tipo al generar JavaScript y permite ejecutar las regresiones de runtime. El typecheck estricto de todo el proyecto sigue a cargo del workflow general.
+
+Esta separación permite verificar la ejecución del panel y workspace aun cuando un módulo independiente del bundle general esté roto. No certifica integración completa con `HostEngineApi`, persistencia real IndexedDB, leases multi-pestaña ni editor de producción.

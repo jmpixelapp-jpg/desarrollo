@@ -841,3 +841,13 @@ El monitor y los tests del panel, workspace y benchmark siguen sin una ejecució
 **Límites:** la lane aislada verifica tipos del monitor y sus módulos importados, más las regresiones DOM del aislamiento de diagnósticos. No reemplaza las pruebas de host, IndexedDB, leases multi-pestaña, editor real ni benchmark prolongado. La compilación general sigue siendo obligatoria y conserva el reporte de cualquier bloqueo externo.
 
 **Validación:** pendiente de CI para este commit. Se conserva como antecedente el bloqueo de compilación general por `src/narrative-history.ts(7,41): TS1002`; la lane aislada debe ejecutarse antes de ese paso y reportar su resultado por separado.
+
+## 46. Ajuste de la lane aislada tras el primer resultado de CI (25 de noviembre de 2026)
+
+El primer intento de añadir `tsc --project tsconfig.live-author-monitor.json` falló antes de compilar el monitor con el mismo `src/narrative-history.ts(7,41): TS1002`. Aunque `live-author-monitor.ts` importa `contracts.ts` solo mediante `import type`, TypeScript incorpora el grafo transitivo de esos contratos al análisis del programa. Este proyecto no puede declarar que el typecheck quedó aislado mientras esa dependencia siga presente.
+
+**Corrección:** se retira el tsconfig focalizado y se conserva una lane estrictamente de runtime: Vite/esbuild compila el entrypoint reducido (eliminando imports de tipo) y ejecuta las tres regresiones DOM del panel/workspace antes de instalar Chromium y antes del bundle general. La configuración se ordena para que los tests de runtime no dependan del navegador.
+
+**CI observada en el intento inicial:** [Live Author Monitor — run 45744464290](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45744464290) superó instalación, Chromium y auditoría de esquema; falló al intentar el typecheck aislado por TS1002 en `narrative-history.ts`. La compilación aislada y las regresiones no se ejecutaron en ese intento.
+
+**Precisión:** el bundle Vite no equivale a un typecheck TypeScript. El typecheck estricto de los módulos del monitor continúa pendiente hasta desacoplar de manera segura los contratos compartidos o resolver el error narrativo en el trabajo paralelo. No se modifican `contracts.ts`, `live-author-monitor.ts` ni `narrative-history.ts` en esta corrección, porque están dentro de áreas compartidas/paralelas.

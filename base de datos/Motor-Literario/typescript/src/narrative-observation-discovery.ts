@@ -21,6 +21,13 @@ export interface NarrativeObservationCandidate {
   readonly surface: string;
   /** Único personaje mencionado, si lo hay; nunca equivale a sujeto o agente confirmado. */
   readonly singleMentionedCharacterId?: string;
+  /** Referencia pronominal pendiente: nunca fusiona automáticamente el pronombre con una identidad. */
+  readonly unresolvedReferences?: readonly {
+    readonly pronoun: string;
+    readonly candidateEntityIds: readonly string[];
+    readonly evidence: TextEvidence;
+    readonly antecedentEvidence?: TextEvidence;
+  }[];
   /** Personajes mencionados; no implica que todos ejecuten la acción. */
   readonly mentionedCharacterIds: readonly string[];
   /** Otras entidades mencionadas; no se interpreta su papel semántico. */
@@ -151,12 +158,60 @@ export function discoverNarrativeObservationCandidates(
   const otherEntities = input.entities.filter(entity => entity.kind !== "character");
   const results = new Map<string, NarrativeObservationCandidate>();
 
-  for (const segment of splitSentences(input.text)) {
+  const segments = splitSentences(input.text);
+  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+    const segment = segments[segmentIndex]!;
     const sentence = input.text.slice(segment.start, segment.end);
     const mentionedCharacters = characters.filter(entity =>
       [entity.canonicalName, ...entity.aliases].some(name => includesName(sentence, name))
     );
-    if (mentionedCharacters.length === 0) continue;
+    const pronounMatch = sentence.match(/^\\s*(él|ella|ellos|ellas)\\b/iu);
+    let unresolvedReferences: NonNullable<NarrativeObservationCandidate["unresolvedReferences"]> = [];
+    if (mentionedCharacters.length === 0 && pronounMatch) {
+      // Solo se inspecciona la frase inmediatamente anterior. Incluso con un único
+      // candidato, el enlace queda pendiente: el género/número y la sintaxis pueden
+      // no concordar o existir referentes fuera de esta ventana.
+      const previous = segments[segmentIndex - 1];
+      if (previous) {
+        const previousText = input.text.slice(previous.start, previous.end);
+        const possibleAntecedents = characters.filter(entity =>
+          [entity.canonicalName, ...entity.aliases].some(name => includesName(previousText, name))
+        );
+        unresolvedReferences = [{
+          pronoun: pronounMatch[1]!,
+          candidateEntityIds: possibleAntecedents.map(entity => entity.id).sort(),
+          evidence: {
+            documentId: input.documentId,
+            revision: input.revision,
+            start: baseOffset + segment.start,
+            end: baseOffset + segment.start + pronounMatch[0].trimStart().length,
+            excerpt: sentence
+          },
+          ...(possibleAntecedents.length > 0 ? {
+            antecedentEvidence: {
+              documentId: input.documentId,
+              revision: input.revision,
+              start: baseOffset + previous.start,
+              end: baseOffset + previous.end,
+              excerpt: previousText
+            }
+          } : {})
+        }];
+      } else {
+        unresolvedReferences = [{
+          pronoun: pronounMatch[1]!,
+          candidateEntityIds: [],
+          evidence: {
+            documentId: input.documentId,
+            revision: input.revision,
+            start: baseOffset + segment.start,
+            end: baseOffset + segment.start + pronounMatch[0].trimStart().length,
+            excerpt: sentence
+          }
+        }];
+      }
+    }
+    if (mentionedCharacters.length === 0 && unresolvedReferences.length === 0) continue;
     const mentionedOthers = otherEntities.filter(entity =>
       [entity.canonicalName, ...entity.aliases].some(name => includesName(sentence, name))
     );
@@ -185,6 +240,7 @@ export function discoverNarrativeObservationCandidates(
           ...(mentionedCharacters.length === 1
             ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),
+          ...(unresolvedReferences.length > 0 ? { unresolvedReferences } : {}),
           mentionedEntityIds: mentionedOthers.map(entity => entity.id).sort(),
           polarity: before ? "negated" : "affirmed",
           confidence: "medium",

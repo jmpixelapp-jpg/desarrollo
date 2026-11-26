@@ -227,3 +227,42 @@ test("actualiza continuidad tras una edición aunque el adaptador no ofrezca ext
     await store.close();
   }
 });
+
+
+test("reparte 200 candidatos entre más de 200 documentos y señala cobertura parcial", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  const sourceText = "El tema central es la memoria compartida que une a dos ciudades.";
+
+  try {
+    for (let index = 0; index < 201; index++) {
+      const documentId = "chapter-" + String(index).padStart(3, "0");
+      await store.saveDocument({
+        projectId: id,
+        documentId,
+        text: sourceText,
+        revision: 0,
+        sequence: 0,
+        updatedAt: index + 1
+      });
+    }
+
+    const api = new HostEngineApi({ store });
+    try {
+      api.initializeProject({ projectId: id, projectName: "Proyecto extenso" });
+      await api.flushPendingChanges();
+
+      const index = await store.loadNarrativeIdeaContinuityIndex(id);
+      assert.ok(index);
+      assert.equal(index.sourceRevisions.length, 201);
+      assert.equal(index.occurrences.length, 200);
+      assert.equal(index.summary.sourceAnalysisTruncated, true);
+      assert.ok(index.occurrences.some(item => item.documentId === "chapter-000"));
+      assert.ok(index.occurrences.some(item => item.documentId === "chapter-200"));
+    } finally {
+      api.dispose();
+    }
+  } finally {
+    await store.close();
+  }
+});

@@ -234,6 +234,9 @@ export async function ingestBookReaderBlocks(
       }
       seenChapterDocumentIds.add(documentId);
       const heading = block.kind === "chapter-heading" ? text.trim() : undefined;
+      if (block.kind === "chapter-heading" && !heading) {
+        throw new Error("El lector entregó un encabezado de capítulo vacío.");
+      }
       current = makeChapter(documentId, heading || "Capítulo " + (chapters.length + 1), heading, block.sequence);
       if (heading !== undefined) current.headingSource = {
         blockId: block.blockId, sequence: block.sequence, kind: block.kind,

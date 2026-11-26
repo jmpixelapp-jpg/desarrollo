@@ -503,21 +503,18 @@ La prueba de HostEngineApi utiliza un almacén que falla al guardar y comprueba 
 
 ## 26. Correspondencia del almacén IndexedDB con el manifiesto físico
 
-El checkpoint del monitor forma parte del esquema físico y debe figurar tanto en el adaptador IndexedDB como en el manifiesto activo `MLDB/storage_mapping_v0.4.2.json`. La base de datos local se encuentra en versión **23**. El manifiesto activo declara la misma versión, aumenta `mapping_version` a 13 y registra el almacén adicional:
+El checkpoint y el lease del monitor forman parte del esquema físico y deben figurar en el manifiesto activo `MLDB/storage_mapping_v0.4.2.json`. La base local se encuentra en versión **24** y el manifiesto activo en `mapping_version: 14`.
 
-- nombre: `live-author-monitor-checkpoints`;
-- keyPath: `[projectId, documentId]`;
-- índice: `by-project` sobre `projectId`.
+Los dos almacenes operativos se aíslan por la clave compuesta `[projectId, documentId]` y declaran el índice `by-project`:
 
-El manifiesto histórico `storage_mapping_v0.4.1.json` se mantiene sin alterar. La tabla funcional de documentos y el journal de cambios no se modifican. Este almacén operativo conserva exclusivamente el checkpoint de métricas descrito en la sección 24.
+- `live-author-monitor-checkpoints`: métricas agregadas de la sesión; nunca texto ni deltas del manuscrito.
+- `live-author-monitor-leases`: propietario temporal, fechas de reserva y fencing token monotónico.
 
-El workflow específico del monitor ejecuta `npm run validate:schema` antes del build y las pruebas. También ejecuta `tests/storage-implementation-audit.test.mjs` contra el manifiesto activo para detectar almacenes físicos no declarados. La prueba de auditoría deja de depender de un número fijo de tablas y de una versión IndexedDB incrustada en un reemplazo de texto.
+El manifiesto histórico `storage_mapping_v0.4.1.json` se mantiene sin alterar. La tabla funcional de documentos y el journal de cambios no se modifican. El lease coordina exclusivamente la escritura de métricas y no bloquea la edición.
 
-**Validación de CI de esta alineación:** ejecución [45723969106](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723969106) y ejecución ampliada [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335). La última confirma esquema 0.4.2 válido, auditoría física correcta con 25 tablas y 33 almacenes, build Vite y 100 pruebas aprobadas.
+El workflow específico del monitor ejecuta `npm run validate:schema` antes del build y las pruebas. También ejecuta `tests/storage-implementation-audit.test.mjs` contra el manifiesto activo para detectar almacenes o índices físicos no declarados.
 
-
-El índice `by-project` también se declara mediante `ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId")` dentro de la rutina de migración `onupgradeneeded`. El manifiesto y la auditoría comparan las definiciones del almacén y de sus índices; crear el índice solo en la rama que crea el objectStore no es suficiente para satisfacer la auditoría de migraciones.
-
+**Validaciones anteriores:** las ejecuciones [45723969106](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45723969106) y [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335) validaron la etapa anterior con 33 almacenes en versión 23. La etapa actual amplía el esquema con el almacén de leases y lo eleva a versión 24/34 almacenes; su resultado específico se actualizará tras verificar la ejecución de esta entrega.
 
 ## 27. Prueba de runtime de IndexedDB para checkpoints
 
@@ -539,22 +536,18 @@ La prueba verifica:
 **Validación CI verificada:** ejecución [45724325962](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724325962), commit `2dca17b54eb2454026a298a6409f325e6dd1035e`: esquema 0.4.2 válido, 25 tablas del motor y 33 almacenes IndexedDB, build Vite correcto y **99 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye el test del adaptador IndexedDB contra `fake-indexeddb@6.2.8`.
 
 
-## 28. Migración de base v22 a v23 sin pérdida de documentos
+## 28. Migración de base v22 a v24 sin pérdida de documentos
 
-La prueba de runtime del almacén incluye un escenario de actualización desde una base IndexedDB versión 22 que ya contiene todos los almacenes existentes del manifiesto v0.4.2 y un documento guardado. Se abre después mediante IndexedDbProjectStore, que activa la migración a la versión 23 y crea live-author-monitor-checkpoints.
+La prueba de runtime incluye una actualización desde una base IndexedDB versión 22 que contiene los almacenes previos del manifiesto v0.4.2 y un documento guardado. Al abrirla mediante `IndexedDbProjectStore`, la migración crea los almacenes de checkpoint y lease hasta alcanzar la versión **24**.
 
 La prueba comprueba:
-- la versión final de la base es 23;
-- existe el almacén de checkpoints con keyPath [projectId, documentId];
-- existe el índice by-project con keyPath projectId;
-- se puede guardar y recuperar un checkpoint en la base migrada;
-- el registro anterior de documents conserva su texto y revisión originales.
+- la versión final de la base es 24;
+- existen `live-author-monitor-checkpoints` y `live-author-monitor-leases`;
+- ambos almacenes usan keyPath `[projectId, documentId]` e índice `by-project`;
+- se puede adquirir un lease, guardar y recuperar un checkpoint protegido por ese lease;
+- el documento anterior de `documents` conserva su texto y revisión originales.
 
-El test usa fake-indexeddb en memoria. Verifica el código de migración, las transacciones y la preservación de registros durante la actualización, pero sigue sin sustituir una prueba E2E en navegador con IndexedDB físico y reinicio real.
-
-**Validación CI:** ejecución [45724540335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724540335), commit 623a3397588ca135ab781d0a0a597a2f7ef53958: MLDB 0.4.2 válido; auditoría física correcta (25 tablas, 33 almacenes); build Vite correcto; 100 pruebas aprobadas, 0 fallidas y 0 omitidas.
-
-
+El test usa `fake-indexeddb` en memoria. Verifica el código de migración, las transacciones y la preservación de registros durante la actualización, pero no sustituye una prueba E2E en navegador con IndexedDB físico y reinicio real.
 
 ## 29. Reapertura de IndexedDbProjectStore después de close()
 
@@ -581,3 +574,37 @@ Las pruebas cubren un guardado de revisión/secuencia anterior con timestamp may
 **Alcance:** esta barrera impide que checkpoints obsoletos reemplacen métricas más avanzadas; no constituye un lease ni un fencing token de edición. La coordinación de dos escritores activos sobre el mismo documento sigue dependiendo del journal/HostEngine compartido y queda fuera de este control de checkpoint.
 
 **Validación CI:** ejecución [45724891204](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724891204), commit 8a584270842aca3d65f635a5b4ec0bd98ad84038: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/33 almacenes), build Vite y **102 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+
+
+## 31. Lease de titularidad y fencing token entre pestañas
+
+### Contrato y almacenamiento
+
+Cada instancia HostEngineApi crea un ownerId único. IndexedDbProjectStore mantiene un registro por proyecto/documento en live-author-monitor-leases. El registro incluye ownerId, acquiredAt, expiresAt y fencingToken. La reserva por defecto dura 30 segundos y el anfitrión la renueva cada 10 segundos mientras conserva la sesión.
+
+El token aumenta cuando una reserva expira o se libera y otro propietario la adquiere. Una renovación válida del mismo propietario conserva el token. La fila liberada se mantiene como registro expirado para que la siguiente titularidad incremente el token en vez de reiniciarlo.
+
+### Atomicidad y seguridad de escritura
+
+- La adquisición, renovación y liberación usan transacciones IndexedDB readwrite por proyecto/documento. Dos pestañas que compiten por una reserva activa no pueden adquirirla ambas.
+- saveLiveAuthorMonitorCheckpoint requiere un StoredLiveAuthorMonitorLease. En una sola transacción readwrite que incluye los almacenes de leases y checkpoints, el adaptador vuelve a leer el registro vigente y comprueba ownerId, fencingToken y expiración antes de guardar.
+- Si una pestaña antigua intenta escribir después de que otra haya adquirido un token superior, la transacción se aborta. La comparación no depende de que el objeto de lease local sea reciente: una copia antigua del mismo token sigue siendo válida si el registro persistido se renovó y no cambió la titularidad.
+- La barrera monotónica de revisión, secuencia y métricas de la sección 30 sigue activa dentro de la misma transacción.
+
+### Comportamiento del HostEngineApi
+
+- Al abrir o recuperar un documento, el anfitrión intenta adquirir la reserva antes de restaurar el checkpoint compartido. Solo el titular lee/restaura y publica métricas persistentes.
+- La pestaña sin lease puede mantener métricas locales en memoria y continuar editando, pero no escribe checkpoints compartidos mientras otra instancia conserve la titularidad.
+- Una pestaña observadora vuelve a intentar adquirir el lease en el siguiente punto seguro de checkpoint o durante el cierre seguro. Si el propietario anterior lo liberó, obtiene un fencing token superior y comienza a persistir su sesión local sobre el snapshot durable.
+- closeLiveAuthorMonitorDocumentSafely guarda un último checkpoint y libera el lease. disposeSafely guarda las sesiones que aún poseen lease, espera las escrituras y libera las reservas antes de disponer el anfitrión.
+- Si la liberación falla, se conserva la reserva local y se reanuda el heartbeat para permitir un reintento. dispose() síncrono detiene el heartbeat pero no libera la reserva; esta expira de forma natural, por lo que el anfitrión debe preferir disposeSafely() cuando requiere una liberación confirmada.
+- Los almacenes anfitriones antiguos que no implementan las operaciones de lease siguen siendo compatibles, pero no proporcionan coordinación entre pestañas; la garantía de fencing corresponde a IndexedDbProjectStore y a almacenes que implementen el contrato completo.
+
+### Alcance
+
+El lease protege exclusivamente los checkpoints de métricas. No bloquea el editor, no decide qué pestaña puede modificar el manuscrito y no sustituye el journal durable, la resolución de conflictos ni la sincronización de cursores. Dos editores pueden seguir necesitando la coordinación del motor anfitrión para los cambios del documento.
+
+Las pruebas cubren contienda de dos propietarios, renovación, incremento del token después de liberación/expiración, rechazo de escritura del propietario anterior, handoff en HostEngineApi, renovación con snapshot local antiguo y fallo temporal de liberación.
+
+**Validación CI de esta entrega:** pendiente de la ejecución que incluye el test de reintento de liberación y las últimas correcciones de lease. La ejecución previa [45725988078](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45725988078) aprobó 106/106 pruebas, MLDB 0.4.2, auditoría de 25 tablas y 34 almacenes y build Vite.

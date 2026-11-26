@@ -2174,7 +2174,9 @@ function analyzeExplicitScenes(
     localRanges.push(contentRange);
     sceneDrafts.push({marker,contentRange});
   }
-  const boundedScenes = sceneDrafts.slice(0,100);
+  // La evolución de atributos necesita conservar escenas posteriores;
+  // los perfiles individuales siguen limitando sus propias muestras de evidencia.
+  const boundedScenes = sceneDrafts.slice(0,2_000);
   const boundedRanges = boundedScenes.map(scene => scene.contentRange);
   const wordCounts = countTokensPerRange(tokens,boundedRanges);
   const narrativeWordCounts = countTokensOutsideRangesPerRange(tokens,boundedRanges,dialogueRanges);

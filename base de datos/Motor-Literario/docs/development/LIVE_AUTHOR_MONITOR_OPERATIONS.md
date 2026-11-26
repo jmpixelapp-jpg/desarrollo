@@ -730,3 +730,11 @@ Los arrays de muestras también deben ser densos. La validación con `Array.from
 
 
 **Validación:** los cinco balances imposibles se rechazaron antes de persistir en [run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913), test 113. La suite dedicada completó 167/167, Chromium 1/1, host/editor/browser 174/174 y benchmark de 100.000 commits; heap 4,39 MiB estable desde mitad a fin y cero tickets pendientes.
+
+## 64. Errores asíncronos de escritura y presión de cuota
+
+El guardado de checkpoints debe preservar el error del request que escribe en `live-author-monitor-checkpoints`. Si `IDBRequest.onerror` informa un error, el adaptador lo guarda como causa original y aborta la transacción completa. El rechazo de `saveLiveAuthorMonitorCheckpoint()` conserva el nombre del error, por ejemplo `QuotaExceededError`, para que `HostEngineApi` lo publique como código de diagnóstico seguro.
+
+El aborto afecta conjuntamente a la verificación del lease y a la escritura del checkpoint; por tanto, no debe quedar un snapshot parcial. Un checkpoint anterior se conserva. El host expone solamente el código de clase del error y no su mensaje, que podría contener texto privado.
+
+La regresión de cuota inyecta un error request-level asíncrono en el límite de almacenamiento y verifica rechazo con el nombre original y conservación del checkpoint previo. Es una simulación determinista de la ruta de error; no equivale a agotar físicamente la cuota del navegador. Para pruebas de cuota real hacen falta perfiles/dispositivos controlados con límites de almacenamiento distintos.

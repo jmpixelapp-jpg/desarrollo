@@ -40,11 +40,20 @@ test("clasifica tiempo activo, pausas e inactividad con reloj monotónico", () =
   const { monitor, setTime, open, change, queued } = fixture({ idleAfterMs: 10_000 });
   open();
   setTime(1_000);
-  monitor.recordAdmission(change(1, 0, 5, 5, "a"), queued("t-1"));
+  monitor.recordAdmission({
+    ...change(1, 0, 5, 5, "a"),
+    activityKind: "typing"
+  }, queued("t-1"));
   setTime(2_500);
-  monitor.recordAdmission(change(2, 1, 6, 6, "b"), queued("t-2"));
+  monitor.recordAdmission({
+    ...change(2, 1, 6, 6, "b"),
+    activityKind: "typing"
+  }, queued("t-2"));
   setTime(20_000);
-  const afterPause = monitor.recordAdmission(change(3, 2, 7, 7, "c"), queued("t-3"));
+  const afterPause = monitor.recordAdmission({
+    ...change(3, 2, 7, 7, "c"),
+    activityKind: "typing"
+  }, queued("t-3"));
   assert.equal(afterPause.pauseCount, 1);
   assert.equal(afterPause.activeDurationMs, 11_500);
   assert.equal(afterPause.idleDurationMs, 8_500);

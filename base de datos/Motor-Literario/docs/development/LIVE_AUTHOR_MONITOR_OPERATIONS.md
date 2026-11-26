@@ -472,3 +472,8 @@ Si la cancelación del listener del proveedor lanza una excepción, `dispose()` 
 ## 32. Categoría efectiva en la deduplicación de transacciones
 
 La firma compacta de una transacción incluye también la categoría que recibirá el monitor. Para `edit`, procede de `EditorChange.activityKind`; para `undo`/`redo`, procede del tipo nativo de transacción, que prevalece en el delta publicado. Si el mismo `transactionId` vuelve con la misma edición textual, pero otra categoría efectiva, ya no se considera duplicado idéntico y el source exige resincronización.
+
+
+## 33. Presupuesto de texto para eventos reentrantes
+
+La cola reentrante queda limitada simultáneamente por cantidad (`maxQueuedTransactions`, predeterminado 4096) y por tamaño agregado del texto de reemplazo (`maxQueuedTextUnits`, predeterminado 4 194 304 unidades UTF-16, alineado con el motor). Este presupuesto se consume solo mientras un evento espera detrás de otro que está siendo procesado; no limita un pegado grande que llega cuando el source está en reposo. Al agotar el presupuesto, se detiene la captura y se exige snapshot para evitar retener una cola de tamaño impredecible.

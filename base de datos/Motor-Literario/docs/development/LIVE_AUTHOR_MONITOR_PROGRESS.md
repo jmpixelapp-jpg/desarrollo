@@ -754,7 +754,7 @@ Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace
 - La opción solo controla la presentación; no modifica contadores, checkpoints ni el motor.
 - Se añaden pruebas de selección, ocultación de métricas no solicitadas y rechazo de configuración inválida para ambos componentes.
 
-**Validación:** pendiente de CI para este commit.
+**Validación:** aprobada en ambas lanes sobre `4ce9672`: [Live Author Monitor — run 45752680391](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752680391) y [Motor Literario TypeScript — run 45752680363](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752680363).
 
 - Ajuste de tipado preventivo: los mapas de claves visibles se construyen mediante `Map.set()` explícito para mantener la inferencia de tuplas estable en TypeScript estricto.
 
@@ -768,7 +768,7 @@ Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace
 
 **Límite de medición:** esta medición es heap/RSS del proceso Node en CI, no heap de Chromium ni RAM del editor en producción. No se fija un umbral global arbitrario; se publica el valor observado y se conserva la verificación estructural de las ventanas acotadas.
 
-**Validación:** pendiente de CI para este commit.
+**Validación:** [Live Author Monitor — run 45753400038](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753400038) aprobó build aislado, Chromium, auditoría MLDB, build runtime, suite específica y benchmark de memoria. El type-check de [Motor Literario TypeScript — run 45753400053](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753400053) pasó; la suite general ejecutó 849 pruebas, con 847 aprobadas y dos fallos en handlers de sincronización narrativa ajenos al monitor (`narrative-sync-assertion-handler.test.mjs` y `narrative-sync-entity-handler.test.mjs`).
 
 - Precisión de unidades: el tamaño de documento del benchmark se expresa en unidades UTF-16 (la misma convención de offsets del motor), no como bytes físicos de RAM. El resultado `initialCodeUnitsPerDocument` evita atribuir al heap un tamaño de almacenamiento que depende del runtime.
 
@@ -1237,4 +1237,4 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresión:** la prueba de resincronización transaccional confirma que se crea exactamente una nueva suscripción tras retirar la anterior; las pruebas de cancelación fallida siguen verificando reintento y `dispose()` repetido.
 
-**Validación previa:** [Live Author Monitor — run 45753234938](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753234938) falló la prueba de resincronización (esperaba 2 suscripciones y observó 3); [Motor Literario TypeScript — run 45753234976](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753234976) detectó además TS2774. El nuevo commit queda pendiente de ambas lanes.
+**Validación:** [Live Author Monitor — run 45753400038](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753400038) aprobó todas las pruebas específicas del monitor y el benchmark. [Motor Literario TypeScript — run 45753400053](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753400053) pasó type-check; su suite global registró 847/849 pruebas aprobadas y falló solo en las dos pruebas de sincronización narrativa indicadas en la sección 73. La corrección de listener activo/failed-detach pasó la lane específica.

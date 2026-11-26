@@ -3931,6 +3931,8 @@ export class HostEngineApi {
             this.reportKnowledgeError(error);
           }
         }
+        // La lectura puede ser lenta; no restaurar métricas si dispose() ganó la carrera.
+        if (this.disposed) return;
         if (checkpoint) {
           try {
             this.liveAuthorMonitor.restoreCheckpoint(checkpoint, recoveredSnapshot, projectId);

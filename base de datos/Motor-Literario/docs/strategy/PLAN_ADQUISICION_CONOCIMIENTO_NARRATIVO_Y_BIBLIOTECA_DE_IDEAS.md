@@ -92,3 +92,23 @@ Se agregan cinco pruebas para dirección actor/objetivo, exclusión de objetos, 
 ### Validación de Fase F
 
 Módulo, exportación pública, cinco pruebas y documentación publicados en la rama de la PR 63. No hay aún una ejecución CI observada para el head actual; la compilación y la suite siguen pendientes de confirmación.
+
+
+### Fase G: orquestación de comprensión de fragmentos
+
+Se incorpora `typescript/src/narrative-understanding-pipeline.ts` como punto de entrada único: `understandNarrativeFragment(input)`.
+
+En una ejecución coordinada sobre un documento y revisión, reúne:
+- candidatos de ideas;
+- acciones explícitas entre entidades;
+- acontecimientos agrupados por oración;
+- conectores explícitos de consecuencia;
+- escenas reconocidas por encabezados;
+- interacciones y cambios de señal entre personajes;
+- asignaciones de ideas, acciones y acontecimientos a escenas.
+
+Todos los extractores reciben el mismo proyecto, documento, revisión, texto y `baseOffset`. El resultado expone también el rango analizado, de modo que una ventana parcial conserva offsets absolutos coherentes. Las evidencias no se reescriben ni se parafrasean.
+
+Se agregan tres pruebas de integración para la coordinación de extractores, propagación de offsets y rechazo de entidades de otros proyectos.
+
+**Límite:** esta capa coordina capacidades existentes; no es un modelo semántico general ni resuelve referencias pronominales por sí sola. La ausencia de encabezados explícitos deja candidatos sin escena. Los resultados siguen siendo candidatos y no modifican automáticamente la biblioteca canónica.

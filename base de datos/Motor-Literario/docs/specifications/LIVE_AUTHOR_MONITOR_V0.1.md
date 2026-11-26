@@ -788,3 +788,17 @@ La prueba Chromium automatizada escribe con teclado real, comprueba cambios admi
 **Alcance completado en este repositorio:** motor de métricas, integración textarea ejecutable, enlace transaccional reusable para editores con historial nativo, contrapresión FIFO acotada, persistencia/recuperación IndexedDB, coordinación de pestañas, panel, workspace, guía de integración y prueba Chromium extremo a extremo.
 
 **Dependencia externa que permanece:** el repositorio no contiene la aplicación anfitriona final ni un editor enriquecido. Por ello, la conexión del callback nativo de ese editor y la validación de su undo/redo concreto requieren el repositorio/aplicación que lo aloja. La aplicación de referencia con textarea no se presenta como sustituto de esa integración.
+
+
+## 42. Validación general y benchmark de rendimiento posteriores
+
+El workflow general [45734599092](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734599092), ejecutado sobre `8855c23ed7d56c7041785150355835d38d42dc83`, aprobó TypeScript typecheck, build, suite completa y benchmark. Resultado de pruebas: 713 totales, 704 aprobadas, 0 fallidas y 9 omitidas.
+
+Resultados del benchmark del runner de CI:
+- 10.000 palabras / 40 ediciones: commit p95 5,06 ms; extremo a extremo p95 5,49 ms; heap +0,75 MB.
+- 100.000 palabras / 40 ediciones: commit p95 2,21 ms; extremo a extremo p95 2,63 ms; heap +1,83 MB.
+- 500.000 palabras / 40 ediciones: commit p95 3,54 ms; extremo a extremo p95 4,04 ms; heap +3,61 MB.
+- Línea única de 20.000 palabras / 5 ediciones: commit p95 61,59 ms; extremo a extremo p95 61,80 ms.
+- Cuatro documentos y 40 ediciones concurrentes: extremo a extremo p95 1,21 ms.
+
+Los datos son medidas del runner de CI, no un SLA ni una garantía de rendimiento de todos los equipos. Para la validación directa del módulo de navegador, conservar como referencia la ejecución específica 139/139 de [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285).

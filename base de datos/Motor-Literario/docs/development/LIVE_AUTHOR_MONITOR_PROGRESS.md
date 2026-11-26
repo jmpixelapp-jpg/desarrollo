@@ -563,3 +563,15 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 
 
 **CI de la aplicación de referencia:** el filtro del workflow específico contempla las rutas de `examples/live-author-monitor/**` tanto en `push` como en `pull_request`; el test de escritura se ejecuta junto con los demás archivos `live-author-monitor*.test.mjs`.
+
+
+**Verificación general posterior:** el workflow TypeScript [45734599092](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734599092), sobre el commit `8855c23ed7d56c7041785150355835d38d42dc83`, completó correctamente Type-check, build, suite completa y benchmark. La suite general registró **713 pruebas: 704 aprobadas, 0 fallidas y 9 omitidas**.
+
+**Benchmark de escritura (40 ediciones por tamaño, runner CI):**
+- Manuscrito de 10.000 palabras: latencia p95 de commit 5,06 ms; extremo a extremo 5,49 ms; incremento de heap 0,75 MB.
+- Manuscrito de 100.000 palabras: commit p95 2,21 ms; extremo a extremo 2,63 ms; heap +1,83 MB.
+- Manuscrito de 500.000 palabras: commit p95 3,54 ms; extremo a extremo 4,04 ms; heap +3,61 MB.
+- Línea única de 20.000 palabras y 5 ediciones: commit p95 61,59 ms; extremo a extremo 61,80 ms.
+- Cuatro documentos con diez ediciones cada uno: 40 ediciones concurrentes; p95 extremo a extremo 1,21 ms.
+
+Los valores son mediciones del runner de CI y no una garantía universal de latencia en todos los navegadores o equipos. La CI específica sigue siendo la validación directa del adaptador y navegador: 139/139 aprobadas en [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285).

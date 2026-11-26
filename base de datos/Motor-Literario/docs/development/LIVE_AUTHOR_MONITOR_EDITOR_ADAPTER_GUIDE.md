@@ -165,3 +165,6 @@ Esta referencia proporciona una integración de navegador reproducible. No susti
 El workflow específico del monitor [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285), ejecutado sobre el commit `ce2413194e1f02ce21fcc232c3f43a1ee036452a`, aprobó build, esquema MLDB 0.4.2, auditoría física de 25 tablas y 34 almacenes IndexedDB y **139/139 pruebas (0 fallidas, 0 omitidas)**. La prueba Chromium escribió texto real, confirmó métricas y durabilidad, cerró mediante `disposeSafely()`, recargó la página, restauró texto/checkpoint y volvió a editar.
 
 El chequeo de tipos de la suite general también pasó. Esa suite completa todavía presenta dos fallos en módulos fuera del monitor: reconciliación de ideas entre anfitriones y validación de catálogo del análisis literario. No se atribuyen al adaptador de escritura.
+
+
+**Rendimiento general verificado:** el benchmark del workflow general [45734599092](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734599092) ejecutó 40 ediciones sobre manuscritos de 10k, 100k y 500k palabras, además de línea única y cuatro documentos concurrentes. En el caso de 500k palabras midió commit p95 de 3,54 ms y extremo a extremo p95 de 4,04 ms en el runner CI. Son referencias de esa máquina, no garantías universales.

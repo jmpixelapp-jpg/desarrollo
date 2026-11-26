@@ -393,7 +393,7 @@ Durante el par, el banco compara los strings `beforeinput.data` y `input.data` s
 - `unavailable`: ninguno estaba disponible;
 - `not-applicable`: no se esperaba un `input` porque el `beforeinput` estaba cancelado.
 
-Los valores literales no se copian a los objetos de eventos, al resumen ni al JSON exportado. El string temporal del evento anterior se libera al emparejar el `input`, al ser reemplazado por otro `beforeinput` o al abandonar la página. Esto permite contrastar exactamente los datos de ambos eventos sin incluir el manuscrito ni los candidatos en la traza.
+Los valores literales no se copian a los objetos de eventos, al resumen ni al JSON exportado. El string temporal del evento anterior se libera al emparejar el `input`, al ser reemplazado por otro `beforeinput`, cuando el monitor informa un error o al abandonar la página. En caso de error con un par pendiente, el banco marca ese `beforeinput` como interrumpido, aumenta el contador de no emparejados y descarta el payload en memoria. Esto permite contrastar exactamente los datos de ambos eventos sin incluir el manuscrito ni los candidatos en la traza.
 
 ### Contadores acumulativos y límite del buffer
 

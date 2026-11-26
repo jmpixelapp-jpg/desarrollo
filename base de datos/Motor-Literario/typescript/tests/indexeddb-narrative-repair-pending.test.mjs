@@ -41,7 +41,7 @@ function pendingEntry(appliedAt = 100) {
   };
 }
 
-test("la migración 26→27 crea los almacenes de auditoría e intenciones pendientes y conserva reintentos", async () => {
+test("la migración 26→28 crea los almacenes de auditoría e intenciones pendientes y conserva reintentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   await deleteDatabase();
 
@@ -82,9 +82,9 @@ test("la migración 26→27 crea los almacenes de auditoría e intenciones pendi
       await reopened.close();
     }
 
-    const upgraded = await openDatabase(27);
+    const upgraded = await openDatabase(28);
     try {
-      assert.equal(upgraded.version, 27);
+      assert.equal(upgraded.version, 28);
       assert.ok(upgraded.objectStoreNames.contains("narrative-reference-repair-audits"));
       assert.ok(upgraded.objectStoreNames.contains("narrative-reference-repair-pending"));
       assert.deepEqual(

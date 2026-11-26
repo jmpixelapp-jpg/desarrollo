@@ -522,3 +522,16 @@ La comparación se protege por identidad del estado pendiente: si input ya consu
 Esta distinción es importante: un beforeinput cancelado no representa una edición perdida. En cambio, si el evento no fue cancelado y se pierde el input esperado, se conservan los diagnósticos missing-input/resync-required que protegen contra deltas inventados.
 
 La prueba Chromium ejecuta automatización del pipeline DOM del navegador. No equivale a un teclado físico, a la matriz IME de sistemas operativos ni a BFCache físico.
+
+## Blur síncrono dentro de la propagación de beforeinput — 26 de noviembre de 2026
+
+También se cerró el orden reentrante en que un listener posterior cancela beforeinput y desenfoca el textarea antes de que termine la propagación. Si handleBlur emitiera missing-input inmediatamente, se adelantaría a la microtarea que confirma defaultPrevented y produciría un falso positivo.
+
+Para operaciones no pertenecientes a una composición activa, handleBlur ahora captura la identidad del beforeinput pendiente y difiere una microtarea la decisión missing-input. La microtarea de cancelación, programada antes, se ejecuta primero: si el evento fue cancelado, libera la pareja y la comprobación de blur ya no encuentra la operación. Si no fue cancelado y el pending permanece, se exige snapshot con missing-input. Cuando compositionActive sigue true, la fuente se suspende inmediatamente con resync-required; no se espera a que una composición abierta sobreviva al cambio de foco.
+
+Las pruebas cubren:
+- cancelación tardía y blur dentro del mismo listener posterior, sin error ni pérdida de continuidad;
+- beforeinput no cancelado seguido de blur, que sigue suspendiendo con missing-input;
+- composición activa que pierde el foco, suspendida de inmediato;
+- Chromium con teclado automatizado: el listener llama preventDefault() y element.blur() dentro de la misma propagación, verifica un blur y cero input, y confirma que pendingInput queda liberado sin diagnóstico.
+

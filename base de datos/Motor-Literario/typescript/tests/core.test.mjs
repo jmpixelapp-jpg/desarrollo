@@ -2546,7 +2546,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["project-evidences", "by-fragment"],
       ["timeline-occurrences", "by-project"],
       ["timeline-occurrences", "by-event-record"],
-      ["timeline-occurrences", "by-track-order"]
+      ["timeline-occurrences", "by-track-order"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"]
     ];
     const indexPairs = createdIndexes.map(([storeName, indexName]) => [storeName, indexName]);
     const byStoreAndName = (left, right) =>

@@ -1409,3 +1409,14 @@ La conclusión global permanece en `failure` por el desajuste de versión Indexe
 **Validación en [Live Author Monitor — run 45758057459](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758057459), checkout `4671a7c0`:** type-check estricto y bundle Vite reducido aprobados; 17/17 pruebas diagnósticas y 161/161 pruebas combinadas aprobadas. El benchmark procesó 100.000 commits en 656,27 ms (~152.377 commits/s), con heap estable de 4,39 MiB al 50 % y 100 % de carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
 
 La lane global continúa en `failure` por los controles compartidos de IndexedDB y el error sintáctico en `indexeddb-store.ts:2560`; las pruebas que requieren el runtime general y Chromium se omitieron. Las siete suites de adaptadores del monitor sí pasaron dentro del bundle aislado.
+
+
+## 89. Primera validación integral en verde con Chromium (26 de noviembre de 2026)
+
+**Evidencia:** [Live Author Monitor — run 45758096783](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758096783), checkout `948408ae9e9519495dc8df97f48abcf20a38020e`, terminó `success` en todos los pasos. En ese commit pasaron el type-check aislado, bundle monitor, auditoría MLDB (`27 tablas`), bundle runtime general, instalación de Chromium, la suite aislada (`161/161`) y las integraciones host/editor/browser (`167/167`).
+
+**Cobertura real de navegador:** dos páginas Chromium compartieron IndexedDB y validaron exclusión y fencing del lease; el harness de Page Lifecycle recuperó polling después de `pagehide/pageshow` y `freeze/resume`; y dos capítulos conservaron métricas independientes a través de escritura, cambio de documento, guardado durable y recuperación.
+
+**Rendimiento:** 100.000 commits en 513,67 ms (~194.676 commits/s), heap de 4,39 MiB tanto a mitad como al final de carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+**Alcance temporal:** esta evidencia pertenece exactamente al checkout `948408ae`. Los commits de sincronización posteriores modificaron la ruta compartida de persistencia; en el HEAD actual el workflow vuelve a informar un error sintáctico en `indexeddb-store.ts:2560`. Por tanto, la ejecución integral es un hito verificado, pero no se declara como estado verde del HEAD actual. Se mantiene abierta la repetición sobre el HEAD actual una vez que terminen los cambios paralelos de persistencia.

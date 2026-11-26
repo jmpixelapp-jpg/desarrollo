@@ -213,6 +213,19 @@ test("los vínculos de escena limitan la evidencia intermedia a veinte muestras"
 });
 
 
+test("la evolución de atributos ordena buckets locales sin duplicar las colecciones completas", () => {
+  const start = literaryAnalysisSource.indexOf("function buildCharacterAttributeEvolution(");
+  const end = literaryAnalysisSource.indexOf("\\nfunction ", start + 10);
+  assert.notEqual(start, -1, "debe existir el análisis de evolución de atributos");
+  assert.ok(end > start, "el análisis debe delimitarse para auditar sus buckets");
+  const builder = literaryAnalysisSource.slice(start, end);
+
+  assert.match(builder, /const ordered = entries\.sort\(\(a,b\) =>\s*a\.evidence\.start-b\.evidence\.start/);
+  assert.match(builder, /const ordered = entries\.sort\(\(a,b\) =>\s*a\.evidence\.documentId\.localeCompare/);
+  assert.doesNotMatch(builder, /const ordered = \[\.\.\.entries\]\.sort/);
+});
+
+
 test("la auditoría de atomicidad detecta perder el almacén de entidades del alcance transaccional", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
   const weakenedWriter = writer.replace(

@@ -426,3 +426,12 @@ La API queda exportada por el barrel existente. No se declara una transacción d
 Se añadió coalescencia de llamadas a `recoverNarrativeReferenceRepairs`: las solicitudes simultáneas del mismo proyecto en un runtime comparten la misma promesa, evitando que consumidores locales dupliquen la lectura y el procesamiento de intenciones. La exclusión se libera al completar o fallar para permitir reintentos. Se incorporó una prueba concurrente que verifica una sola lectura durable y un resultado compartido.
 
 **Límite explícito:** esta coordinación no es un mutex entre pestañas o dispositivos. Para otros contextos, las escrituras siguen dependiendo del CAS de IndexedDB; los conflictos permanecen pendientes y pueden reintentarse.
+
+
+## Diagnóstico de conflictos pendientes
+
+Se incorporó `inspectNarrativeReferenceRepairPending(store, projectId)`, una API de solo lectura que contrasta cada intención con el registro actual y la procedencia de la entidad candidata. Clasifica reparaciones listas, ya aplicadas, registros ausentes o modificados, sustituciones sin procedencia demostrable e intenciones inválidas. La inspección no modifica registros, auditorías ni cola durable. Se añadieron pruebas para los estados listos, aplicados, modificados y sin procedencia, y se reforzó la validación frente a entradas malformadas.
+
+La resolución sigue siendo explícita: el diagnóstico no aplica automáticamente decisiones ni descarta intenciones.
+
+**Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. No hay CI confirmada para este cambio.

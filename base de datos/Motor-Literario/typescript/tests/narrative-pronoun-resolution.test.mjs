@@ -67,9 +67,18 @@ test("rechaza offsets inválidos, referencias duplicadas y opciones excesivas", 
   assert.throws(() => resolveNarrativePronounReferences(text, [], [ref], { maxDistance: 999999 }));
 });
 
-test("permite rasgos desconocidos sin fingir que el nombre determina el género", () => {
+test("no confirma un antecedente cuyo género gramatical es desconocido", () => {
   const result = resolveNarrativePronounReferences(text,
     [mention("mara", "Mara", "unknown")],
     [reference("Ella", "feminine")]);
+  assert.equal(result[0].status, "unresolved");
+  assert.deepEqual(result[0].candidateCharacterIds, []);
+});
+
+test("una referencia sin rasgo de género puede resolverse si hay un único antecedente", () => {
+  const result = resolveNarrativePronounReferences(text,
+    [mention("mara", "Mara", "feminine")],
+    [reference("Ella", "unknown")]);
   assert.equal(result[0].status, "resolved");
+  assert.equal(result[0].characterId, "mara");
 });

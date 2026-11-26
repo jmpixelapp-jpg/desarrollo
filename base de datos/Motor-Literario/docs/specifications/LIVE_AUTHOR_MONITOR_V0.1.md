@@ -631,3 +631,33 @@ Esta E2E valida el comportamiento de la capa IndexedDB y el fencing entre pesta�
 **Extensión de ciclo de vida:** después de que la segunda página guarda el checkpoint y la primera puede leerlo, la prueba recarga la segunda página. La recarga destruye el contexto JavaScript y crea una instancia nueva de IndexedDbProjectStore; se vuelve a leer la misma clave y se comprueba que el checkpoint permanece. Esto valida persistencia ante una recarga de página dentro del perfil Chromium de prueba, no un reinicio del navegador/proceso ni almacenamiento de perfil persistente.
 
 **CI de la recarga verificada:** ejecución [45726777208](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726777208), commit `702846e433654611343fbfc143b0b0ea2475d2a5`: esquema MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 34 almacenes), build Vite y **108 pruebas aprobadas, 0 fallidas y 0 omitidas**. La prueba recargó una página Chromium y recuperó el checkpoint con una nueva instancia del adaptador.
+
+
+
+## 33. Robustez del heartbeat, descarte tras dispose y takeover por expiración
+
+### Respuestas tardías y liberación
+
+El heartbeat renueva la titularidad en segundo plano, pero una respuesta asíncrona puede terminar después de que el anfitrión haya empezado a liberar el lease. Para evitar que una renovación tardía vuelva a poblar el estado local:
+- cada ciclo de heartbeat captura un token de generación por identidad de objeto; release/dispose lo invalida antes de continuar;
+- se serializa el trabajo de heartbeat por documento para no solapar varios intentos lentos;
+- al volver la operación IndexedDB, solo actualiza el estado local si el token de generación sigue siendo exactamente el mismo, el documento conserva el mismo ownerId/fencingToken y la instancia no está liberando ni dispuesta;
+- las respuestas de generaciones anteriores no pueden restaurar el lease, recrear timers ni marcar de nuevo la pestaña como titular.
+
+### dispose mientras hay adquisiciones pendientes
+
+`HostEngineApi.dispose()` es terminal e idempotente. Si una adquisición o renovación empezó antes de disponer la instancia y el almacén responde después, el anfitrión detecta el estado `disposed`, no crea un heartbeat y libera el lease recién confirmado. La recuperación del documento también se interrumpe antes de abrir métricas nuevas cuando la instancia ya fue dispuesta.
+
+El método síncrono `dispose()` no puede esperar transacciones ni garantizar una liberación confirmada; detiene timers y deja que cualquier reserva ya confirmada expire. `disposeSafely()` sigue siendo el método de cierre recomendado porque persiste, espera y libera antes de disponer.
+
+### Recuperación de una pestaña observadora cuando el dueño desaparece
+
+Una instancia que no posee el lease conserva un heartbeat de sondeo cada 10 segundos. Mientras el propietario siga activo, la adquisición falla sin alterar el checkpoint. Si el dueño se cierra abruptamente y no ejecuta release, la pestaña observadora vuelve a intentar la adquisición al siguiente heartbeat; una vez vencido el TTL de 30 segundos obtiene el fencing token siguiente y puede guardar su checkpoint. No requiere que el autor vuelva a teclear ni que exista un evento de liberación.
+
+### Regresiones cubiertas
+
+- renovación de heartbeat demorada que responde después del cierre seguro: no restaura el lease local;
+- adquisición IndexedDB pendiente mientras se ejecuta dispose(): la reserva se libera cuando se confirma y no se crea timer;
+- pérdida del propietario sin release(): el heartbeat de la instancia observadora adquiere al expirar el TTL y guarda el checkpoint con el nuevo fencing token.
+
+**Validación CI verificada:** ejecución específica [45727622443](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727622443), commit `2f78c0b542b8146a8924b5b980c05cc090ddc986`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes), build Vite y **112 pruebas aprobadas, 0 fallidas y 0 omitidas**. La CI general [45727622233](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727622233) continúa bloqueada solo por errores TypeScript en `src/literary-analysis.ts`; no reporta errores del monitor.

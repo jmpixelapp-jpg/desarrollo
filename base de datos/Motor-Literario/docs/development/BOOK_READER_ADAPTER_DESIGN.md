@@ -122,3 +122,10 @@ Las pruebas de fixture cubren metadatos, orden, extracción de texto, notas, loc
 
 
 La inspección del EPUB ahora recorre los documentos del spine y devuelve número de bloques extraídos, lista de documentos sin texto y advertencias por metadatos ausentes o documentos vacíos. Esto permite una etapa previa de control de calidad en la importación. No equivale todavía a un porcentaje de integridad del libro: para calcularlo se necesita una medida de contenido esperado que el formato realmente permita verificar.
+
+
+## Trazabilidad de evidencias hacia el libro
+
+Se añade `typescript/src/book-evidence.ts` con `resolveBookEvidence(book, chapter, start, end)`. Convierte offsets UTF-16 del documento analizado en fragmentos trazables a los bloques entregados por el lector. El resultado conserva fuente, formato, libro, capítulo, cita exacta, IDs y secuencias de bloques, offsets locales y localizadores originales.
+
+Una evidencia que cruza bloques se divide en fragmentos, y los saltos de párrafo sintéticos quedan sin atribución. Esta distinción evita inventar procedencia para caracteres que no estaban literalmente en el libro. Los consumidores del análisis pueden usar el resolver para abrir el pasaje original, mostrar la página/archivo y verificar una afirmación narrativa contra su texto fuente.

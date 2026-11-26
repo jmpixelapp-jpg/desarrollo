@@ -483,3 +483,14 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - Se amplió el resultado del consumidor con `journalIntegrity` y `blockedByJournalIntegrity` para que el anfitrión pueda mostrar un diagnóstico concreto.
 
 **Validación pendiente:** `npm run typecheck` y `npm test` aún no se han ejecutado en este entorno.
+
+
+## Reconciliación de cursores de escritores
+
+- Añadido `loadWriterCursors(projectId)` para leer snapshots de cursores durables.
+- La auditoría compara la última secuencia y `lastOperationId` de cada cursor con el diario persistido.
+- Nuevos diagnósticos: `cursor-without-operations`, `cursor-ahead-of-journal`, `cursor-behind-journal` y `cursor-last-operation-mismatch`.
+- Se amplían pruebas para detectar pérdidas finales, cursores huérfanos y divergencia entre identidad y secuencia.
+- No se reconstruyen cursores automáticamente: la detección es de solo lectura hasta disponer de una política de reparación respaldada por evidencia.
+
+**Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` en este entorno.

@@ -375,7 +375,7 @@ export interface NarrativeSyncJournalIntegrityReport {
  * por escritor. SHA-256 detecta corrupción, pero no autentica al emisor.
  */
 export async function inspectNarrativeSyncJournalIntegrity(
-  journal: IndexedDbNarrativeSyncJournal,
+  journal: Pick<IndexedDbNarrativeSyncJournal, "loadOperations" | "loadWriterCursors">,
   projectId: string
 ): Promise<NarrativeSyncJournalIntegrityReport> {
   if (!journal || typeof journal.loadOperations !== "function" ||
@@ -523,7 +523,7 @@ export interface NarrativeSyncCursorRecoveryPlan {
  * La propuesta debe volver a validarse en una transacción antes de aplicarse.
  */
 export async function planNarrativeSyncJournalCursorRecovery(
-  journal: IndexedDbNarrativeSyncJournal,
+  journal: Pick<IndexedDbNarrativeSyncJournal, "loadOperations" | "loadWriterCursors">,
   projectId: string
 ): Promise<NarrativeSyncCursorRecoveryPlan> {
   if (!journal || typeof journal.loadOperations !== "function" ||

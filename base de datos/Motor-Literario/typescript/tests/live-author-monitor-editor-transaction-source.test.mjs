@@ -63,8 +63,9 @@ function fixture(text = "abc", revision = 0, sequence = 0, options = {}) {
     documentId: snapshot.documentId,
     initialSnapshot: snapshot,
     provider: editor,
-    ...(options.duplicateWindowSize ? { duplicateWindowSize: options.duplicateWindowSize } : {}),
-    ...(options.maxQueuedTransactions ? { maxQueuedTransactions: options.maxQueuedTransactions } : {}),
+    ...(options.duplicateWindowSize === undefined ? {} : { duplicateWindowSize: options.duplicateWindowSize }),
+    ...(options.maxQueuedTransactions === undefined ? {} : { maxQueuedTransactions: options.maxQueuedTransactions }),
+    ...(options.maxQueuedTextUnits === undefined ? {} : { maxQueuedTextUnits: options.maxQueuedTextUnits }),
     onError: error => errors.push(error)
   });
   const stop = source.subscribeChanges(change => changes.push(change));
@@ -776,6 +777,46 @@ test("exige resincronización si se reutiliza transactionId cambiando activityKi
   assert.equal(f.source.getState().needsResync, true);
   assert.equal(f.errors.at(-1).code, "transaction-id-reused");
   assert.equal(f.editor.listeners.size, 0);
+  f.stop();
+  f.source.dispose();
+});
+
+
+test("limita las unidades UTF-16 retenidas por la cola de transacciones reentrantes", () => {
+  const f = fixture("abc", 0, 0, { maxQueuedTextUnits: 1 });
+  const stopReentrant = f.source.subscribeChanges(change => {
+    if (change.sequence !== 1) return;
+    f.editor.apply("edit", "tx-reentrant-text-overflow", {
+      start: 4, end: 4, replacement: "XY"
+    });
+  });
+
+  f.editor.apply("edit", "tx-first-before-text-overflow", {
+    start: 3, end: 3, replacement: "!"
+  });
+
+  assert.deepEqual(f.changes.map(change => change.sequence), [1],
+    "el delta reentrante que excede el presupuesto no alcanza el monitor");
+  assert.equal(f.source.getState().sequence, 1);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "transaction-backlog-overflow");
+  assert.match(f.errors.at(-1).message, /1 unidades UTF-16/);
+  assert.equal(f.editor.listeners.size, 0);
+  stopReentrant();
+  f.stop();
+  f.source.dispose();
+});
+
+test("no rechaza un pegado grande que llega con la cola reentrante vacía", () => {
+  const f = fixture("abc", 0, 0, { maxQueuedTextUnits: 1 });
+  f.editor.apply("edit", "tx-large-paste-while-idle", {
+    start: 3, end: 3, replacement: "LARGE"
+  });
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].replacement, "LARGE");
+  assert.equal(f.source.getState().sequence, 1);
+  assert.equal(f.source.getState().needsResync, false);
   f.stop();
   f.source.dispose();
 });

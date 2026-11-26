@@ -813,9 +813,9 @@ Se incorpora la persistencia del índice de continuidad como proyección derivad
 - 9 pruebas de actualización incremental de componentes.
 - 5 pruebas del índice compacto, integridad de referencias y rechazo de snapshots previos corruptos.
 - 4 pruebas de persistencia IndexedDB, CAS, concurrencia y actualización de revisiones.
-- 4 pruebas del handler de sincronización e idempotencia.
+- 5 pruebas del handler de sincronización e idempotencia, incluido el avance CAS de una generación nueva con contenido equivalente.
 - 3 pruebas de límites de envoltura, auditoría, transporte de un índice superior a 1 MiB y replay.
-- Total: 25 pruebas nuevas de Fase AT.
+- Total: 26 pruebas nuevas de Fase AT.
 
 El índice sigue siendo una vista derivada. No cambia estados editoriales, no fusiona ideas y no reemplaza el historial de la biblioteca. Debe poder descartarse y reconstruirse desde documentos, candidatos y revisiones fuente.
 

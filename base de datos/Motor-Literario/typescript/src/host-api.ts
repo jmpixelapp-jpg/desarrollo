@@ -716,6 +716,7 @@ export class HostEngineApi {
         ? {} : { maxConcurrentDocuments: options.maxConcurrentDocuments }),
       ...(options.maxQueuedTextUnits === undefined
         ? {} : { maxQueuedTextUnits: options.maxQueuedTextUnits }),
+      ...(options.syncDeviceId === undefined ? {} : { syncDeviceId: options.syncDeviceId }),
       onAnalysis: result => {
         try { options.callbacks?.onAnalysis?.(result); } catch { /* La UI no debe detener el análisis. */ }
         void this.persistLiveDiagnostics(result).catch(error => this.reportKnowledgeError(error));

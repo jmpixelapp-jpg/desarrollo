@@ -22,18 +22,18 @@ class FakeTextArea {
     this.listeners.get(type)?.delete(listener);
   }
 
-  emitBeforeInput(inputType, isComposing = false) {
-    const event = { defaultPrevented: false, inputType, isComposing };
+  emitBeforeInput(inputType, isComposing = false, isTrusted = true) {
+    const event = { defaultPrevented: false, inputType, isComposing, isTrusted };
     for (const listener of [...(this.listeners.get("beforeinput") ?? [])]) listener(event);
   }
 
-  emitInput(isComposing = false, inputType = "") {
-    const event = { inputType, isComposing };
+  emitInput(isComposing = false, inputType = "", isTrusted = true) {
+    const event = { inputType, isComposing, isTrusted };
     for (const listener of [...(this.listeners.get("input") ?? [])]) listener(event);
   }
 
   emitCompositionStart() {
-    for (const listener of [...(this.listeners.get("compositionstart") ?? [])]) listener({});
+    for (const listener of [...(this.listeners.get("compositionstart") ?? [])]) listener({ isTrusted: true });
   }
 
   emitCompositionEnd() {
@@ -536,4 +536,32 @@ test("no clasifica como corrección una sustitución de selección mediante inse
   assert.equal(f.source.getState().needsResync, false);
   f.stop();
   f.source.dispose();
+});
+
+test("rechaza eventos de edición sintéticos aunque imiten inputType y cambien el valor", () => {
+  const beforeSynthetic = fixture("abc");
+  beforeSynthetic.element.selectionStart = 3;
+  beforeSynthetic.element.selectionEnd = 3;
+  beforeSynthetic.element.emitBeforeInput("insertText", false, false);
+  beforeSynthetic.element.value = "abcx";
+  beforeSynthetic.element.emitInput(false, "insertText", false);
+
+  assert.equal(beforeSynthetic.changes.length, 0);
+  assert.equal(beforeSynthetic.source.getState().needsResync, true);
+  assert.equal(beforeSynthetic.errors[0].code, "untrusted-event");
+  beforeSynthetic.stop();
+  beforeSynthetic.source.dispose();
+
+  const inputSynthetic = fixture("abc");
+  inputSynthetic.element.selectionStart = 3;
+  inputSynthetic.element.selectionEnd = 3;
+  inputSynthetic.element.emitBeforeInput("insertText");
+  inputSynthetic.element.value = "abcx";
+  inputSynthetic.element.emitInput(false, "insertText", false);
+
+  assert.equal(inputSynthetic.changes.length, 0);
+  assert.equal(inputSynthetic.source.getState().needsResync, true);
+  assert.equal(inputSynthetic.errors[0].code, "untrusted-event");
+  inputSynthetic.stop();
+  inputSynthetic.source.dispose();
 });

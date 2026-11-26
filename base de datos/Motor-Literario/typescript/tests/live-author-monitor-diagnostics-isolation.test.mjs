@@ -55,13 +55,19 @@ class FakeElement {
   }
   remove() { this.parentElement?.removeChild(this); }
 }
-class FakeDocument {
-  constructor() { this.hidden = false; this.listeners = new Map(); }
-  createElement(tagName) { return new FakeElement(tagName, this); }
+class FakeEventTarget {
+  constructor() { this.listeners = new Map(); }
   addEventListener(name, callback) { const listeners = this.listeners.get(name) ?? []; listeners.push(callback); this.listeners.set(name, listeners); }
   removeEventListener(name, callback) { const listeners = this.listeners.get(name) ?? []; this.listeners.set(name, listeners.filter(item => item !== callback)); }
-  setHidden(hidden) { this.hidden = hidden; for (const listener of [...(this.listeners.get("visibilitychange") ?? [])]) listener(); }
-  visibilityListenerCount() { return (this.listeners.get("visibilitychange") ?? []).length; }
+  dispatch(name) { for (const listener of [...(this.listeners.get(name) ?? [])]) listener(); }
+  listenerCount(name) { return (this.listeners.get(name) ?? []).length; }
+}
+class FakeDocument extends FakeEventTarget {
+  constructor() { super(); this.hidden = false; this.defaultView = new FakeEventTarget(); }
+  createElement(tagName) { return new FakeElement(tagName, this); }
+  setHidden(hidden) { this.hidden = hidden; this.dispatch("visibilitychange"); }
+  visibilityListenerCount() { return this.listenerCount("visibilitychange"); }
+  lifecycleListenerCount() { return this.listenerCount("freeze") + this.listenerCount("resume") + this.defaultView.listenerCount("pagehide") + this.defaultView.listenerCount("pageshow"); }
 }
 function findNode(root, predicate) {
   if (!root) return undefined;
@@ -409,4 +415,28 @@ test("el scheduler visible actualiza de inmediato y cancela de forma idempotente
   assert.equal(refreshes, 1, "un callback antiguo tampoco se ejecuta después del desmontaje");
   assert.equal(cancellations, 2);
   assert.equal(f.document.visibilityListenerCount(), 0);
+});
+
+test("reanuda desde pagehide/pageshow y freeze/resume sin duplicar intervalos", () => {
+  const f = fixture();
+  const scheduleCalls = []; let cancellations = 0; let refreshes = 0;
+  const dispose = scheduleLiveAuthorMonitorWhileVisible(f.document, () => { refreshes += 1; }, 400, (callback, intervalMs) => {
+    scheduleCalls.push({ callback, intervalMs }); return () => { cancellations += 1; };
+  });
+  assert.equal(scheduleCalls.length, 1); assert.equal(f.document.lifecycleListenerCount(), 4);
+  f.document.defaultView.dispatch("pagehide"); assert.equal(cancellations, 1);
+  scheduleCalls[0].callback(); assert.equal(refreshes, 0, "no se ejecuta un tick encolado después de pagehide");
+  f.document.defaultView.dispatch("pageshow"); assert.equal(refreshes, 1); assert.equal(scheduleCalls.length, 2);
+  f.document.dispatch("freeze"); assert.equal(cancellations, 2);
+  scheduleCalls[1].callback(); assert.equal(refreshes, 1, "freeze invalida el callback anterior");
+  f.document.dispatch("resume"); assert.equal(refreshes, 2); assert.equal(scheduleCalls.length, 3);
+  f.document.setHidden(true); assert.equal(cancellations, 3);
+  f.document.defaultView.dispatch("pageshow"); f.document.dispatch("resume");
+  assert.equal(scheduleCalls.length, 3, "una señal de reanudación no vence el estado hidden");
+  f.document.setHidden(false); assert.equal(refreshes, 3); assert.equal(scheduleCalls.length, 4);
+  dispose(); assert.equal(f.document.lifecycleListenerCount(), 0);
+  assert.equal(f.document.visibilityListenerCount(), 0);
+  assert.equal(f.document.defaultView.listenerCount("pagehide"), 0);
+  assert.equal(f.document.defaultView.listenerCount("pageshow"), 0);
+  scheduleCalls[3].callback(); assert.equal(refreshes, 3);
 });

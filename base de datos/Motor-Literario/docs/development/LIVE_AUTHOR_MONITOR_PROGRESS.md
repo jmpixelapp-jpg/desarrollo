@@ -1026,3 +1026,15 @@ En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelap
 El workflow específico en `0a21f34` midió 274.897,17 commits/s y RSS final 73,89 MB. Las diferencias entre ejecuciones reflejan variación del runner; no deben interpretarse como una regresión entre mediciones.
 
 El run general original `45747598008` permaneció sin actualizar durante la instalación de Chromium. Su validación fue superada por el run descendiente `45747608045`, que finalizó correctamente.
+
+## 58. Page Lifecycle: restauración BFCache y congelación de pestaña (25 de noviembre de 2026)
+
+**Motivación:** Page Visibility cubre el cambio visible/oculto, pero Chromium también puede congelar una página o conservarla en Back/Forward Cache. La interfaz necesita revalidar sus métricas al recibir señales del ciclo de vida, sin despertar mientras siga oculta.
+
+**Implementación:** `scheduleLiveAuthorMonitorWhileVisible()` escucha `pagehide/pageshow` en la ventana propietaria y `freeze/resume` en el documento, además de `visibilitychange`. Las transiciones comparten un estado activo que impide doble cancelación/reanudación; la restauración ejecuta una lectura inmediata y solo rearma el intervalo si el documento está visible.
+
+**Regresiones:** pagehide cancela e invalida ticks encolados; pageshow refresca y rearma; freeze/resume repite el ciclo; pageshow/resume no reactivan un documento oculto; al desmontar se eliminan todos los listeners de documento y ventana.
+
+**Archivos:** `src/live-author-monitor-visibility.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, guía operativa y progreso.
+
+**Validación:** pendiente de CI para esta entrega.

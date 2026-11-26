@@ -319,3 +319,11 @@ Para el commit `0a21f341ae1787a4ae82255295e4fdc79e3182cd`, la lane específica [
 El workflow general [45747608045](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747608045) también terminó en éxito en el commit descendiente `c90fa1ad3b3174b205564cd71a60f91ace30c4b7`, que contiene íntegro `0a21f34`: typecheck correcto, 775/775 tests aprobados, build y benchmarks completados.
 
 Benchmark de monitor en ese runner general: 100.000 commits, 200.274 commits/s, 0,48 MB retenidos por sesiones, 0 MB de crecimiento de heap entre mitad y final, RSS 75,32 MB y cero pendientes en los ocho documentos.
+
+## 22. Recuperación mediante Page Lifecycle y BFCache
+
+Además de `visibilitychange`, el scheduler escucha `pagehide`/`pageshow` en `document.defaultView` y `freeze`/`resume` en el documento. Al recibir `pagehide` o `freeze`, detiene el intervalo y marca la vista inactiva. `pageshow` o `resume` ejecuta un refresco inmediato y rearma el intervalo solo si `document.hidden` ya es `false`.
+
+El estado activo evita dobles reanudaciones cuando el navegador emite varios eventos para una transición. Un evento `pageshow`/`resume` no puede reactivar el polling mientras el documento siga oculto. Los callbacks de intervalos anteriores se mantienen protegidos por la comprobación `active`.
+
+Las pruebas deterministas simulan pagehide/pageshow, freeze/resume, ticks encolados, eventos duplicados y la condición hidden durante una señal de reanudación. No se modifica la actividad del motor ni la persistencia.

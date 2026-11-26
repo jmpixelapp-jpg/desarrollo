@@ -1487,6 +1487,21 @@ function validateLiveAuthorMonitorCheckpoint(
   }
   if (!integerNonNegative(checkpoint.pauseCount)) invalid.push("pauseCount");
   if (!integerNonNegative(checkpoint.acceptedChanges)) invalid.push("acceptedChanges");
+  const classifiedActivityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
+    checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges,
+    checkpoint.redoChanges];
+  const hasActivityCounts = classifiedActivityCounts.some(value => value !== undefined) ||
+    checkpoint.otherChanges !== undefined;
+  if (hasActivityCounts) {
+    if (classifiedActivityCounts.some(value => !integerNonNegative(value as number)) ||
+        (checkpoint.otherChanges !== undefined && !integerNonNegative(checkpoint.otherChanges))) {
+      invalid.push("activity-counts.values");
+    } else if (integerNonNegative(checkpoint.acceptedChanges)) {
+      const classifiedTotal = classifiedActivityCounts.reduce((sum, value) => sum + (value as number), 0);
+      const total = classifiedTotal + (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedTotal);
+      if (total !== checkpoint.acceptedChanges) invalid.push("activity-counts.total");
+    }
+  }
   if (!integerNonNegative(checkpoint.rejectedChanges)) invalid.push("rejectedChanges");
   if (!integerNonNegative(checkpoint.committedChanges)) invalid.push("committedChanges");
   if (!integerNonNegative(checkpoint.failedChanges)) invalid.push("failedChanges");
@@ -1513,7 +1528,7 @@ function validateLiveAuthorMonitorCheckpoint(
     }
     if (finiteNonNegative(checkpoint.totalCommitLatencyMs) &&
         checkpoint.commitLatencies.every(value => finiteNonNegative(value)) &&
-        checkpoint.commitLatencies.reduce<number>((sum, value) => sum + value, 0) >
+        checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
           checkpoint.totalCommitLatencyMs + 1) {
       invalid.push("commitLatencies.total");
     }

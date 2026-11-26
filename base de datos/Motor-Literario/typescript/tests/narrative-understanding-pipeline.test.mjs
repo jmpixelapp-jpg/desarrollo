@@ -279,3 +279,23 @@ test("integra procedencia epistemológica sin convertir reportes en hechos", () 
   assert.equal(result.informationProvenance[1].channel, "visual-observation");
   assert.equal(result.informationProvenance[1].sourceEntityId, undefined);
 });
+
+
+test("integra la evolución del conocimiento y enlaza evidencia entre capítulos", () => {
+  const priorClaims = [{
+    id:"claim:old:0:mara", projectId:"novel", speakerEntityId:"mara",
+    attribution:"afirma", kind:"assertion", content:"el puente había caído",
+    attributionPolarity:"affirmed", contentPolarity:"affirmed", polarity:"affirmed",
+    reviewStatus:"candidate",
+    evidence:{documentId:"chapter-old",revision:1,start:0,end:30,excerpt:"Mara afirma que el puente había caído"}
+  }];
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-new", revision:2,
+    text:"Mara confirmó que el puente había caído.",
+    entities, priorClaims
+  });
+  assert.equal(result.knowledgeEvolution.length, 1);
+  assert.equal(result.knowledgeEvolution[0].evaluation, "confirmed");
+  assert.equal(result.knowledgeEvolution[0].matchedClaimId, "claim:old:0:mara");
+  assert.equal(result.knowledgeEvolution[0].claimEvidence.documentId, "chapter-old");
+});

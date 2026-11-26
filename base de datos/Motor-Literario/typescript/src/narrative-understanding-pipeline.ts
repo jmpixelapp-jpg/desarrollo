@@ -397,7 +397,7 @@ export function understandNarrativeFragment(
   const behaviorShifts = detectNarrativeBehaviorEvolution({
     projectId: input.projectId,
     entities: input.entities,
-    priorActions: input.priorActions,
+    ...(input.priorActions ? { priorActions: input.priorActions } : {}),
     currentActions,
     orderedDocumentIds: input.orderedDocumentIds,
     knowledgeActionLinks,

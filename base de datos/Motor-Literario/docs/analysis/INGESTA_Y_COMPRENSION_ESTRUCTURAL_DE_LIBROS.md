@@ -49,6 +49,7 @@ const book = ingestNarrativeBookText({
 2. Los fragmentos y offsets se refieren al texto de entrada; los offsets son unidades UTF-16 de JavaScript.
 3. Las acciones detectadas son señales léxicas, no acontecimientos confirmados.
 4. Un marcador como «porque» no demuestra por sí solo causalidad; se conserva como candidato revisable.
+5. La polaridad negativa de una acción se determina dentro de su cláusula/oración, para evitar que un «no» de una oración anterior contamine la siguiente. Las señales no accionarias no heredan polaridad negativa por mera proximidad.
 5. Una referencia como «después» no fija una fecha absoluta ni resuelve por sí sola el orden global de la historia.
 6. No se asigna agente, paciente, sujeto gramatical ni identidad de personaje sin una etapa posterior de resolución.
 7. La clasificación de diálogo es heurística y debe poder revisarse.
@@ -77,7 +78,7 @@ const book = ingestNarrativeBookText({
 
 ## Verificación
 
-La suite `tests/narrative-book-ingestion.test.mjs` cubre segmentación, offsets, señales, cautela semántica, límites y determinismo. Ejecutar desde esta carpeta:
+La suite `tests/narrative-book-ingestion.test.mjs` cubre segmentación, offsets, señales, cautela semántica, alcance de negación entre oraciones, límites y determinismo. Ejecutar desde esta carpeta:
 
 ```sh
 npm test

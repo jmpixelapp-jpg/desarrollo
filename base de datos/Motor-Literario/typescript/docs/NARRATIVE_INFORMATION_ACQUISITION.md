@@ -44,6 +44,7 @@ Módulo: `src/narrative-observation-discovery.ts`
 Reconoce un vocabulario controlado de acciones en frases que mencionan personajes previamente identificados. Devuelve verbo normalizado, forma superficial, evidencia exacta del verbo (`actionEvidence`) y evidencia contextual de toda la oración (`evidence`), clasificación morfológica del tiempo verbal (pretérito, imperfecto, presente, infinitivo, gerundio o participio), personajes y otras entidades mencionadas, polaridad afirmada/negada y frase probatoria. El tiempo verbal no se convierte en fecha ni en orden cronológico global.
 
 Reglas de prudencia:
+- Las etiquetas de clasificación (por ejemplo, «Personaje» o «Ciudad») admiten mayúscula inicial; los nombres propios extraídos siguen exigiendo inicial mayúscula para evitar convertir sustantivos comunes en identidades.
 - Solo vincula nombres canónicos o alias confirmados.
 - Si aparece un solo personaje conocido, conserva su ID como única mención. Solo propone sujeto gramatical cuando el nombre abre la frase y el patrón inmediato antes del verbo es explícito; conserva evidencia del nombre y distingue voz activa/pasiva. Este candidato sintáctico no equivale a agente semántico ni a hecho confirmado.
 - No atribuye sujeto cuando el personaje aparece como complemento, después del verbo o en estructuras que el patrón limitado no reconoce.

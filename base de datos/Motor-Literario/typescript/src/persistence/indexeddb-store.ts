@@ -5787,7 +5787,7 @@ export class IndexedDbProjectStore implements ProjectStore {
   async inspectStorageHealth(): Promise<IndexedDbStorageHealthReport> {
     const db = await this.open();
     const stores = [
-      DOCUMENTS, CHANGES, ENTITIES, RELATIONS, EVENTS, IDEAS, PERSONAL_IDEAS,
+      DOCUMENTS, CHANGES, SYNC_OUTBOX, ENTITIES, RELATIONS, EVENTS, IDEAS, PERSONAL_IDEAS,
       ASSERTIONS, DIAGNOSTICS, PROJECT_RECORDS, PROJECT_RELATIONS,
       PROJECT_EVIDENCES, TIMELINE_OCCURRENCES
     ];

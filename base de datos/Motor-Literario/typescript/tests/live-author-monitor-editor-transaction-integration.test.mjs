@@ -394,3 +394,24 @@ test("rechaza un límite inválido antes de consultar el motor o suscribir el ed
   assert.equal(hostApiCalls, 0);
   assert.equal(editor.listeners.size, 0);
 });
+
+
+test("dispose repetido reintenta retirar un listener nativo cuyo primer cierre falla", () => {
+  const f = fixture();
+  const deleteListener = f.editor.listeners.delete.bind(f.editor.listeners);
+  let attempts = 0;
+  f.editor.listeners.delete = listener => {
+    attempts += 1;
+    if (attempts <= 2) throw new Error("native_listener_detach_failed_" + attempts);
+    return deleteListener(listener);
+  };
+
+  f.integration.dispose();
+  assert.equal(attempts, 2, "binding y source intentan limpiar sin perder el handle");
+  assert.equal(f.editor.listeners.size, 1, "el listener sigue registrado tras fallar la limpieza");
+
+  f.integration.dispose();
+  assert.equal(attempts, 3, "la segunda llamada completa la limpieza pendiente");
+  assert.equal(f.editor.listeners.size, 0);
+  assert.equal(f.retryListeners.size, 0);
+});

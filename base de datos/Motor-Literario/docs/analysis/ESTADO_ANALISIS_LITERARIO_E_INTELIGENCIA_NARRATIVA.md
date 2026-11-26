@@ -571,3 +571,21 @@ También falta conectar el resultado validado de ingesta con una operación de i
 ### Validación
 
 Las pruebas de ingesta están escritas, pero todavía no se han ejecutado `npm run typecheck` ni `npm test`. No hay CI confirmado para esta tanda.
+
+
+### Segundo avance de lectura — lector EPUB concreto
+
+Se implementó el primer adaptador real de formato, `typescript/src/epub-reader.ts`:
+
+- `EpubBookReader` y `createEpubBookReader` aceptan bytes de archivo y exponen lectura e inspección de metadatos.
+- Analiza el contenedor EPUB, resuelve el OPF, manifest y spine; el orden de extracción respeta el spine.
+- Recupera título, autor, idioma e identificador cuando están presentes.
+- Extrae XHTML en bloques de capítulo, sección, párrafo, verso y nota al pie, con localizadores a archivo interno/spine/bloque.
+- Excluye scripts, estilos, SVG y MathML del contenido textual.
+- Valida estructura ZIP, rutas seguras, entradas duplicadas, cifrado, métodos stored/deflate, límites de tamaño/ratio, cabeceras locales y CRC32.
+- Añade pruebas de EPUB sintético: metadatos, orden, texto, notas, localizadores, exclusión de scripts, mimetype inválido, path traversal y corrupción CRC.
+- Exporta la API pública y documenta sus límites.
+
+**Limitaciones conocidas:** ZIP64 y ZIP multi-volumen no están soportados; deflate requiere `DecompressionStream("deflate-raw")`; codificaciones XML distintas de UTF-8, navegación NCX/nav, semántica CSS de contenido oculto y corpus EPUB complejos requieren trabajo adicional. El parser XHTML actual es deliberadamente acotado y no sustituye un parser HTML5 completo.
+
+**Validación pendiente:** los tests nuevos se han añadido pero no se han ejecutado; typecheck/build y suite completa siguen pendientes. Se necesita validar con libros EPUB reales y comparar la extracción con lectores de referencia antes de considerar completa la lectura EPUB.

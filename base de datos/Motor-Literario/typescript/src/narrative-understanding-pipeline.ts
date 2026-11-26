@@ -31,6 +31,7 @@ import {
 } from "./narrative-character-knowledge-state";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeMemoryEvents, type NarrativeMemoryEvent } from "./narrative-memory-events";
+import { buildNarrativeMemoryTimeline, type NarrativeCharacterMemoryState } from "./narrative-memory-timeline";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
   assignNarrativeEvidenceToScene,
@@ -85,6 +86,8 @@ export interface NarrativeUnderstandingInput {
   readonly priorInformationInterpretations?: readonly NarrativeInformationInterpretation[];
   /** Evaluaciones anteriores de afirmaciones, con evidencia y autoría originales. */
   readonly priorKnowledgeEvolution?: readonly NarrativeKnowledgeEvolution[];
+  /** Eventos explícitos de memoria anteriores, conservados entre fragmentos. */
+  readonly priorMemoryEvents?: readonly NarrativeMemoryEvent[];
   /** Orden cronológico de documentos conocido por el proyecto; si falta, no se inventa. */
   readonly orderedDocumentIds?: readonly string[];
 }
@@ -104,6 +107,7 @@ export interface NarrativeUnderstandingResult {
   readonly informationInterpretations: readonly NarrativeInformationInterpretation[];
   readonly characterKnowledgeStates: readonly NarrativeCharacterKnowledgeState[];
   readonly memoryEvents: readonly NarrativeMemoryEvent[];
+  readonly characterMemoryTimelines: readonly NarrativeCharacterMemoryState[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -250,6 +254,12 @@ export function understandNarrativeFragment(
     priorInformation: input.priorInformationProvenance
   });
   const memoryEvents = extractNarrativeMemoryEvents(extractionContext);
+  const characterMemoryTimelines = buildNarrativeMemoryTimeline({
+    projectId: input.projectId,
+    entities: input.entities,
+    events: [...(input.priorMemoryEvents ?? []), ...memoryEvents],
+    orderedDocumentIds: input.orderedDocumentIds
+  });
   const characterKnowledgeStates = buildNarrativeCharacterKnowledgeStates({
     projectId: input.projectId,
     entities: input.entities,
@@ -320,7 +330,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

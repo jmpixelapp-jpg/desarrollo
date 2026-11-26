@@ -232,6 +232,76 @@ test("los vínculos de escena acotan muestras de evidencia sin perder el total",
 });
 
 
+test("reconoce conectores causales acentuados y no acepta coincidencias dentro de palabras", () => {
+  const text = "El viento desencadenó la tormenta. La tormenta causó el derrumbe.";
+  const evidence = (phrase, occurrence = 0) => {
+    let start = -1;
+    let cursor = 0;
+    for (let index = 0; index <= occurrence; index++) {
+      start = text.indexOf(phrase, cursor);
+      if (start < 0) throw new Error("No se encontró evidencia: " + phrase);
+      cursor = start + phrase.length;
+    }
+    return {
+      documentId: "chapter-one",
+      revision: 1,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    };
+  };
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text,
+    knownCharacters: [{ entityId: "ana", canonicalName: "Ana" }],
+    knownEvents: [
+      { eventId: "wind", label: "El viento", participants: ["ana"], evidence: [evidence("El viento")] },
+      {
+        eventId: "storm",
+        label: "La tormenta",
+        participants: ["ana"],
+        evidence: [evidence("la tormenta"), evidence("La tormenta")]
+      },
+      { eventId: "collapse", label: "El derrumbe", participants: ["ana"], evidence: [evidence("el derrumbe")] }
+    ]
+  });
+  assert.equal(result.eventDependencyAnalysis.candidateCount, 2);
+  assert.deepEqual(
+    result.eventDependencyAnalysis.candidates.map(item => item.connector),
+    ["desencadenó", "causó"]
+  );
+  assert.ok(result.eventDependencyAnalysis.candidates.every(item =>
+    item.direction === "cause-before-consequence"
+  ));
+
+  const misleadingText = "El viento desprovocó el daño.";
+  const misleadingEvidence = phrase => {
+    const start = misleadingText.indexOf(phrase);
+    return {
+      documentId: "chapter-one",
+      revision: 1,
+      start,
+      end: start + phrase.length,
+      excerpt: phrase
+    };
+  };
+  const misleading = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: misleadingText,
+    knownCharacters: [{ entityId: "ana", canonicalName: "Ana" }],
+    knownEvents: [
+      { eventId: "wind", label: "El viento", participants: ["ana"], evidence: [misleadingEvidence("El viento")] },
+      { eventId: "damage", label: "El daño", participants: ["ana"], evidence: [misleadingEvidence("el daño")] }
+    ]
+  });
+  assert.equal(misleading.eventDependencyAnalysis.candidateCount, 0);
+});
+
+
 function LiteraryAnalysisForEvidence(text, knownEvents) {
   return analyzeLiteraryFragment({
     projectId: "literary-analysis-test",

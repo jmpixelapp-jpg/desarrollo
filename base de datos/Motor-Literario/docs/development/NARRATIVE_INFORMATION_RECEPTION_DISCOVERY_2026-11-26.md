@@ -9,6 +9,7 @@
 - «Oyó que…», «escuchó que…», «leyó que…» y «recibió la noticia/información de que…» producen exposición. No prueban atención, comprensión, recuerdo ni aceptación.
 - «Entendió que…» y «comprendió que…» registran comprensión afirmada, pero no aceptación.
 - «No entendió que…» y «no comprendió que…» conservan una señal explícita de no comprensión.
+- La negación previa («no creyó», «nunca oyó») se conserva como polaridad negada y no se transforma en aceptación o exposición afirmada.
 - «Creyó que…» y «aceptó que…» se registran como aceptación/creencia, sin convertirla en verdad objetiva.
 - «Interpretó erróneamente que…» registra malentendido textual, sin decidir cuál era la interpretación verdadera.
 

@@ -5,7 +5,7 @@ import {
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
-  StoredLiveAuthorMonitorLease, Diagnostic
+  StoredLiveAuthorMonitorLease, StoredSyncOperation, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener, type LiveAuthorMonitorPersistenceDiagnostics } from "./live-author-monitor";
@@ -3913,6 +3913,55 @@ export class HostEngineApi {
     if (this.liveMonitorCheckpointRetentionMs > 0) {
       void this.cleanupLiveAuthorMonitorCheckpoints().catch(error => this.reportKnowledgeError(error));
     }
+  }
+
+  /**
+   * Encola una operación narrativa saliente después de que el cambio local
+   * correspondiente haya sido confirmado. La identidad de operación debe
+   * permanecer estable en los reintentos; el almacén asigna la secuencia.
+   */
+  async enqueueNarrativeSyncOperation(input: {
+    readonly operationId: string;
+    readonly deviceId: string;
+    readonly kind: string;
+    readonly payload: Readonly<Record<string, unknown>>;
+    readonly createdAt?: number;
+  }): Promise<StoredSyncOperation> {
+    if (this.disposed) throw new Error("La API del motor ya fue liberada.");
+    const project = this.requireProject();
+    if (!input || typeof input.operationId !== "string" || !input.operationId.trim() ||
+        input.operationId.length > 256 ||
+        typeof input.deviceId !== "string" || !input.deviceId.trim() || input.deviceId.length > 256 ||
+        typeof input.kind !== "string" || !input.kind.trim() || input.kind.length > 128 ||
+        !input.payload || typeof input.payload !== "object" || Array.isArray(input.payload)) {
+      throw new Error("La identidad o el contenido de la operación narrativa es inválido.");
+    }
+    const enqueue = this.store.enqueueNextSyncOperation;
+    if (typeof enqueue !== "function") {
+      throw new Error("El almacenamiento no implementa asignación atómica de secuencias; no se usará una secuencia calculada localmente.");
+    }
+    let payload: string;
+    try {
+      payload = JSON.stringify(input.payload);
+    } catch {
+      throw new Error("El payload de la operación narrativa no se puede serializar como JSON.");
+    }
+    if (typeof payload !== "string") {
+      throw new Error("El payload de la operación narrativa debe ser serializable como JSON.");
+    }
+    const createdAt = input.createdAt ?? Date.now();
+    if (!Number.isFinite(createdAt) || createdAt < 0) {
+      throw new Error("La fecha de creación de la operación narrativa es inválida.");
+    }
+    return enqueue.call(this.store, {
+      operationId: input.operationId,
+      projectId: project.projectId,
+      deviceId: input.deviceId,
+      kind: input.kind,
+      payload,
+      createdAt,
+      attemptCount: 0
+    });
   }
 
   /** Libera el suscriptor opcional de sincronización entre pestañas. */

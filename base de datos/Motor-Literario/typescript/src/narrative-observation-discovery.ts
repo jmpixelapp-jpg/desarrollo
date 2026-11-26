@@ -202,11 +202,11 @@ const EPISTEMIC_FRAME_SIGNALS: readonly {
   readonly frame: Exclude<NarrativeObservationCandidate["epistemicFrame"], "narrator-asserted">;
   readonly expression: RegExp;
 }[] = [
-  { frame: "character-belief", expression: /\\b(?:creyó|creía|creyeron|pensó|pensaba|imag[iní]ó|imaginaba|supuso|suponía)\\s+que\\s+/giu },
-  { frame: "character-memory", expression: /\\b(?:recordó|recordaba|rememoró|rememoraba|olvidó|olvidaba)\\s+que\\s+/giu },
-  { frame: "character-desire", expression: /\\b(?:deseó|deseaba|quería|quiso|esperaba|esperó|anhelaba|anheló)\\s+que\\s+/giu },
-  { frame: "reported-speech", expression: /\\b(?:dijo|decía|afirmó|afirmaba|aseguró|aseguraba|contó|relató|advirtió|anunció)\\s+que\\s+/giu },
-  { frame: "hypothetical", expression: /\\b(?:si|quizá|quizás|tal vez|acaso|como si)\\s+/giu }
+  { frame: "character-belief", expression: /\b(?:creyó|creía|creyeron|pensó|pensaba|imaginó|imaginaba|supuso|suponía)\s+que\s+/giu },
+  { frame: "character-memory", expression: /\b(?:recordó|recordaba|rememoró|rememoraba|olvidó|olvidaba)\s+que\s+/giu },
+  { frame: "character-desire", expression: /\b(?:deseó|deseaba|quería|quiso|esperaba|esperó|anhelaba|anheló)\s+que\s+/giu },
+  { frame: "reported-speech", expression: /\b(?:dijo|decía|afirmó|afirmaba|aseguró|aseguraba|contó|relató|advirtió|anunció)\s+que\s+/giu },
+  { frame: "hypothetical", expression: /\b(?:si|quizá|quizás|tal vez|acaso|como si)\s+/giu }
 ];
 
 function classifyEpistemicFrame(

@@ -484,3 +484,10 @@ La cola reentrante queda limitada simultáneamente por cantidad (`maxQueuedTrans
 Las notificaciones de `LiveAuthorMonitor` se entregan de forma serializada. Si un callback provoca una nueva admisión durante la publicación de un snapshot, el nuevo estado queda en cola y se entrega después de terminar todos los destinatarios del snapshot anterior; así ningún panel puede observar primero la revisión más nueva y después una más antigua.
 
 La lista de destinatarios se fija para cada publicación. Un suscriptor añadido durante una notificación no recibe retroactivamente ese snapshot, y uno retirado antes de su turno ya no se invoca. Las excepciones de un panel siguen aisladas. `dispose()` vacía la cola y la lista de suscriptores, por lo que tampoco se entregan avisos reentrantes pendientes después de la limpieza.
+
+
+## 35. Continuar las pruebas del monitor cuando falla una auditoría compartida
+
+La lane conserva como fallos reales los errores de auditoría MLDB y de mapeo físico, pero no deja que estos impidan ejecutar la compilación runtime, las pruebas específicas del monitor y el benchmark de heap. Esos tres pasos usan \`if: \${{ !cancelled() }}\`, para continuar después de una falla previa sin ejecutar si el workflow fue cancelado.
+
+Esto separa el diagnóstico del monitor de errores de infraestructura compartida: la lane seguirá en rojo si falla la auditoría, pero ofrecerá evidencia adicional sobre el código de monitoreo. No se usa \`continue-on-error\` para ocultar o convertir en éxito la auditoría.

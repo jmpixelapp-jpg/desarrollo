@@ -4,6 +4,8 @@ Esta carpeta contiene la implementación definitiva en TypeScript. El código Ru
 
 **Integración con el programa anfitrión:** consulte la [Guía de integración TypeScript](../docs/integration/GUIA_INTEGRACION_ANFITRION_V1.md), que define el contrato público y los pasos de conexión.
 
+**Persistencia y sincronización:** consulte la [guía de outbox y migración IndexedDB DB27](../docs/architecture/SYNC_OUTBOX_Y_MIGRACION_INDEXEDDB_V27.md), que documenta la cola durable, el transporte, los acuses y la recuperación de reparaciones.
+
 **Seguimiento del análisis literario:** consulte el [estado de análisis literario e inteligencia narrativa](../docs/analysis/ESTADO_ANALISIS_LITERARIO_E_INTELIGENCIA_NARRATIVA.md), que registra alcance, contratos, límites, pruebas y pendientes.
 
 ## Principios

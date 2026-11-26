@@ -131,6 +131,7 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
 
 class EpubArchive {
   private readonly entries = new Map<string, ZipEntry>();
+  private directoryOffset = 0;
   private readonly limits: Required<EpubReaderLimits>;
 
   private constructor(private readonly bytes: Uint8Array, limits: EpubReaderLimits) {
@@ -159,7 +160,10 @@ class EpubArchive {
     }
     const count = view.getUint16(eocd + 10, true);
     const directorySize = view.getUint32(eocd + 12, true);
+    const entriesOnDisk = view.getUint16(eocd + 8, true);
     const directoryOffset = view.getUint32(eocd + 16, true);
+    this.directoryOffset = directoryOffset;
+    if (entriesOnDisk !== count) fail("el directorio ZIP está dividido entre volúmenes.");
     const commentLength = view.getUint16(eocd + 20, true);
     if (eocd + 22 + commentLength !== bytes.length) fail("comentario final ZIP truncado o longitud inconsistente.");
     if (count === 0xffff || directorySize === 0xffffffff || directoryOffset === 0xffffffff) {
@@ -217,12 +221,12 @@ class EpubArchive {
     const nameLength = view.getUint16(at + 26, true);
     const extraLength = view.getUint16(at + 28, true);
     const localName = new TextDecoder("utf-8", { fatal: true }).decode(this.bytes.subarray(at + 30, at + 30 + nameLength));
-    if (localName !== path || localMethod !== entry.method || (localFlags & 1)) {
+    if (localName !== path || localMethod !== entry.method || localFlags !== (view.getUint16(at + 6, true)) || (localFlags & 1)) {
       fail("la cabecera local no coincide con el directorio central para " + path);
     }
     const start = at + 30 + nameLength + extraLength;
     const end = start + entry.compressedSize;
-    if (end > this.bytes.length) fail("datos truncados para " + path);
+    if (end > this.bytes.length || end > this.directoryOffset) fail("datos truncados o solapados con el directorio ZIP para " + path);
     const compressed = this.bytes.subarray(start, end);
     const raw = entry.method === 0 ? compressed : await inflateRaw(compressed);
     if (raw.byteLength !== entry.expandedSize) fail("longitud descomprimida inconsistente para " + path);

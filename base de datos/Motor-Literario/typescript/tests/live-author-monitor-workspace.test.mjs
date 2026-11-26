@@ -371,6 +371,29 @@ test("permite configurar métricas compactas por tarjeta de documento", () => {
   unmount();
 });
 
+test("cada tarjeta indica cobertura parcial ante una edición sin procedencia explícita", () => {
+  const f = fixture();
+  f.monitor.recordAdmission({
+    documentId: "chapter-1",
+    sequence: 1,
+    baseRevision: 0,
+    start: "uno".length,
+    end: "uno".length,
+    replacement: "?"
+  }, { status: "queued", ticketId: "workspace-unclassified" });
+
+  const unmount = mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    visibleMetrics: ["unitCoverage", "typingUnits"]
+  });
+  const root = f.container.children[0];
+  const chapter = cardFor(root, "chapter-1");
+  assert.equal(metric(chapter, "unitCoverage").textContent,
+    "Parcial (procedencia histórica incompleta)");
+  assert.equal(metric(chapter, "typingUnits").textContent, "0");
+  assert.equal(root.textContent.includes("texto privado"), false);
+  unmount();
+});
+
 test("rechaza selección de métricas inválidas antes de crear el workspace", () => {
   const f = fixture();
   assert.throws(() => mountLiveAuthorMonitorWorkspace(f.container, f.api, {

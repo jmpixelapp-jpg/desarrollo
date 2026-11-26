@@ -56,6 +56,50 @@ test("distingue formas verbales sin convertir el tiempo gramatical en cronologí
   }
 });
 
+test("extrae una transferencia dirigida solo con sujeto, objeto y destinatario explícitos", () => {
+  const bruno = { ...character, id: "entity:character:bruno", canonicalName: "Bruno" };
+  const text = "Ana entregó la Espada Solar a Bruno.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno, other], text, baseOffset: 40
+  });
+  assert.equal(found.length, 1);
+  const relation = found[0].directedRelationCandidate;
+  assert.ok(relation);
+  assert.equal(relation.relation, "transfers-to");
+  assert.equal(relation.fromEntityId, character.id);
+  assert.equal(relation.toEntityId, bruno.id);
+  assert.equal(relation.objectEntityId, other.id);
+  assert.equal(relation.subjectEvidence.excerpt, "Ana");
+  assert.equal(relation.objectEvidence.excerpt, "Espada Solar");
+  assert.equal(relation.recipientEvidence.excerpt, "Bruno");
+  assert.equal(relation.actionEvidence.excerpt, "entregó");
+  for (const evidence of [relation.subjectEvidence, relation.objectEvidence,
+    relation.recipientEvidence, relation.actionEvidence]) {
+    assert.equal(evidence.start >= 40, true);
+    assert.equal(evidence.revision, 7);
+    assert.equal(text.slice(evidence.start - 40, evidence.end - 40), evidence.excerpt);
+  }
+});
+
+test("no crea transferencias dirigidas con negación o roles ambiguos", () => {
+  const bruno = { ...character, id: "entity:character:bruno", canonicalName: "Bruno" };
+  const negated = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno, other],
+    text: "Ana no entregó la Espada Solar a Bruno."
+  });
+  assert.equal(negated[0]?.directedRelationCandidate, undefined);
+  const ambiguous = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno, other],
+    text: "Ana entregó la Espada Solar."
+  });
+  assert.equal(ambiguous[0]?.directedRelationCandidate, undefined);
+  const passive = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno, other],
+    text: "La Espada Solar fue entregada a Bruno por Ana."
+  });
+  assert.equal(passive[0]?.directedRelationCandidate, undefined);
+});
+
 test("no atribuye un sujeto cuando aparecen varios personajes", () => {
   const bruno = { ...character, id: "entity:character:bruno", canonicalName: "Bruno" };
   const text = "Ana ayudó a Bruno durante la huida.";

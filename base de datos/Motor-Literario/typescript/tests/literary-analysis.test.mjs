@@ -767,7 +767,7 @@ test("la cronología de acontecimientos conserva contadores cuando recorta evide
     start: 0,
     end: 1,
     excerpt: "x"
-  }));
+  })).reverse();
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -798,6 +798,10 @@ test("la cronología de acontecimientos conserva contadores cuando recorta evide
   assert.equal(timeline.points[0].evidenceSamples.length, 20);
   assert.equal(timeline.points[0].omittedEvidenceCount, 230);
   assert.equal(timeline.points[0].evidenceTruncated, true);
+  assert.deepEqual(
+    timeline.points[0].evidenceSamples.map(item => item.documentId),
+    evidence.map(item => item.documentId).sort((a,b) => a.localeCompare(b,"en")).slice(0,20)
+  );
 });
 
 test("la cronología limita las muestras de identificadores de eventos y conserva el total", () => {

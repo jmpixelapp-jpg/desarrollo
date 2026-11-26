@@ -294,3 +294,10 @@ La implementación IndexedDB existente ejecuta la consolidación en una única t
 También se corrigió la validación de `mergedFromIds`: son identificadores (comparación exacta y límite de 512 caracteres), no nombres que deban normalizarse como alias. La prueba nueva cubre delegación atómica, rechazo de payloads inválidos y ausencia de soporte en el store.
 
 **Límite de verificación:** el cambio se publicó en `main`, pero no se ejecutó localmente `npm test` ni `npm run typecheck` en esta sesión. No se debe considerar CI aprobado hasta observar una ejecución real.
+
+
+### Reintento seguro de `entity-merge`
+
+Se detectó y corrigió una condición de entrega al menos una vez: si la transacción de fusión confirmaba pero el diario fallaba antes de registrar el acuse, un replay encontraba ausente la entidad de origen y rechazaba la operación ya completada. Ahora IndexedDB reconoce el caso cuando el destino contiene el ID de origen en `mergedFromIds` y completa el replay como no-op. Si falta el origen sin esa prueba durable, la operación sigue rechazándose.
+
+Se amplió `narrative-sync-entity-merge-handler.test.mjs` con una prueba de integración sobre `fake-indexeddb`: ejecuta la fusión dos veces, verifica que el segundo intento no falle y confirma que sólo queda el destino con el origen registrado. La prueba está añadida al repositorio; todavía no se ha ejecutado en este entorno.

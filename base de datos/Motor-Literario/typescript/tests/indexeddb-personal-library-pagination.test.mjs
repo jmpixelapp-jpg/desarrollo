@@ -51,6 +51,7 @@ test("biblioteca personal pagina por clave compuesta, valida vínculos externos 
     projectName: "Libro A",
     writerId
   });
+  assert.equal(api.getCapabilities().personalIdeaLibraryKeysetPagination, true);
 
   try {
     // La primera idea apunta a otra idea que quedará en la página siguiente.

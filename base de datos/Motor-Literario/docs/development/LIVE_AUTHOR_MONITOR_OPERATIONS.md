@@ -578,3 +578,10 @@ El workspace no deja que una excepción de actualización de una tarjeta detenga
 El refresco visual debe existir solamente mientras el documento está visible y no suspendido por Page Lifecycle. `visibilitychange` consulta el valor autoritativo `document.hidden`; por ello `pageshow` o `resume` no reactivan polling mientras permanezca oculto. Cada intervalo tiene una generación: callbacks de intervalos cancelados o de instalaciones síncronas invalidadas no se ejecutan aunque ya estén encolados.
 
 La inicialización es transaccional respecto de los listeners: si el registro parcial o la función de cancelación falla, se invalidan callbacks y se intenta retirar todos los handlers. El desmontaje intenta todos los `removeEventListener` y cancela el intervalo aun si una limpieza aislada falla; comunica al final el primer error de limpieza. La nueva suite pura de `live-author-monitor-visibility.test.mjs` fija estos comportamientos sin iniciar Chromium.
+
+
+## 48. Validación aislada del scheduler de visibilidad (run 45757854690)
+
+La lane de Live Author Monitor aprobó el type-check estricto, build aislado, 17/17 pruebas de recuperación y 69/69 pruebas combinadas. Las ocho pruebas dedicadas a visibilidad/Page Lifecycle cubren `visibilitychange`, `pagehide/pageshow`, `freeze/resume`, ticks obsoletos, transiciones síncronas durante el montaje, rollback por alta de listeners o scheduler defectuoso, limpieza parcial, modo sin Page Visibility y desmontaje idempotente.
+
+El benchmark midió 100.000 commits en 660,83 ms (~151.325 commits/s); el heap tras GC quedó en 4,27 MiB a mitad y 4,26 MiB al final, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes. La ejecución global sigue roja por la auditoría IndexedDB y el error de compilación de la ruta de persistencia compartida; las pruebas aisladas del monitor sí pasaron.

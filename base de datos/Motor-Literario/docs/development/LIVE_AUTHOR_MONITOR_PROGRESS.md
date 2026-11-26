@@ -1829,3 +1829,11 @@ Se corrigió una carrera dentro de la misma propagación DOM: un listener poster
 Las pruebas unitarias verifican cancelación reentrante sin error, input tardío aceptado después de blur y pérdida confirmada cuando un segundo beforeinput llega sin el input anterior. La regresión Chromium usa teclado automatizado confiable y ejecuta preventDefault()+blur() en el mismo listener posterior; comprueba cero input, pendingInput liberado y ausencia de un falso diagnóstico.
 
 La política quedó documentada en LIVE_AUTHOR_MONITOR_BEFOREINPUT_PAIRING_2026-11-26.md y LIVE_AUTHOR_MONITOR_OPERATIONS.md, sección 28. CI sigue pendiente de confirmación; no se declara aprobada esta revisión.
+
+## Segunda intención sincrónica después de beforeinput cancelado — 26 de noviembre de 2026
+
+Se añadió una resolución síncrona del evento anterior antes de rechazar un nuevo beforeinput o compositionstart: si el primer evento ya terminó con defaultPrevented=true, se elimina su estado pendiente y se procesa el evento nuevo. Esto cubre editores que cancelan una operación y producen otra dentro de la misma propagación/tarea de JavaScript.
+
+La microtarea de limpieza del primer evento compara identidad y no puede borrar el pending nuevo. La regresión unitaria ejecuta dos beforeinput anidados, cancela el primero y confirma un solo delta para el segundo. El Event y su payload permanecen efímeros en memoria y no salen a métricas ni a exportaciones.
+
+**Validación:** código y test publicados en main; no se ha confirmado CI para esta revisión.

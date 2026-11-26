@@ -10,6 +10,7 @@ export * from "./narrative-observation-discovery";
 export * from "./narrative-object-state-discovery";
 export * from "./narrative-object-trajectory";
 export * from "./narrative-book-ingestion";
+export * from "./narrative-extraction-audit";
 
 export * from "./narrative-history";
 export * from "./dictionaries";

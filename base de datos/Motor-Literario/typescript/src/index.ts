@@ -50,3 +50,4 @@ export * from "./narrative-consequence-extraction";
 export * from "./narrative-character-intent-extraction";
 
 export * from "./narrative-scene-context";
+\nexport * from "./narrative-pronoun-resolution";\n

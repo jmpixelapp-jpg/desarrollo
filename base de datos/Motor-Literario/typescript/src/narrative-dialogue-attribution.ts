@@ -191,8 +191,8 @@ export function extractNarrativeDialogueAttributions(
         const nameIndex = pattern.form === "dash-after-dialogue"
           ? line.toLocaleLowerCase("es").lastIndexOf(name.toLocaleLowerCase("es"))
           : pattern.form === "quote-after-dialogue"
-            ? match.index + match[0].lastIndexOf(name)
-            : match.index + match[0].indexOf(name);
+            ? match.index + match[0].toLocaleLowerCase("es").lastIndexOf(name.toLocaleLowerCase("es"))
+            : match.index + match[0].toLocaleLowerCase("es").indexOf(name.toLocaleLowerCase("es"));
         if (nameIndex < 0) continue;
         add(
           entity, pattern.form, lineStart, line,

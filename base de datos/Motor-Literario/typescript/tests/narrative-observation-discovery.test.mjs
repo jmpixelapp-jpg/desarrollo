@@ -305,7 +305,7 @@ test("no propone complemento personal si el personaje solo se menciona antes del
     ...character, id: "character:bruno", canonicalName: "Bruno",
     normalizedName: "bruno"
   };
-  const text = "Bruno vio a Ana.";
+  const text = "Bruno encontró a Ana.";
   const found = discoverNarrativeObservationCandidates({
     ...context, entities: [character, bruno], text
   });

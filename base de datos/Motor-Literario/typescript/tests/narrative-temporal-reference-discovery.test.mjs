@@ -80,3 +80,12 @@ test("rechaza fechas imposibles, respeta offsets absolutos y valida límites", (
   assert.throws(() => discover("Ana llegó.", -1));
   assert.throws(() => discover("x".repeat(2_000_001)));
 });
+
+
+test("limita coincidencias intermedias en textos densos sin superar el contrato público", () => {
+  const text = Array.from({ length: 25_000 }, (_, index) => `En 19${String(index % 100).padStart(2, "0")} llegó Ana.`).join(" ");
+  const result = discover(text);
+  assert.ok(result.length <= 500);
+  assert.ok(result.every(item => item.evidence.start >= 0 && item.evidence.end <= text.length));
+  assert.ok(result.every(item => text.slice(item.evidence.start, item.evidence.end) === item.surface));
+});

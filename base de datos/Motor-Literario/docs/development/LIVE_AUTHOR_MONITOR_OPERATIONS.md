@@ -855,3 +855,16 @@ El cierre definitivo de mountLiveAuthorMonitorTextArea() no equivale a pausar te
 Las pausas por overflow, rechazo permanente, pérdida de foco o ciclo de vida conservan el comportamiento contrario: la fuente no se dispone, libera su copia temporal, marca needsResync y espera una reconciliación autoritativa. El anfitrión debe usar integration.dispose() para el desmontaje definitivo y integration.resynchronize() para recuperar una fuente viva.
 
 La regresión de live-author-monitor-textarea-integration.test.mjs verifica que un montaje y edición válidos se pueden desmontar sin errores de captura adicionales, y que quedan retirados tanto los listeners DOM como las suscripciones de reintento.
+
+## 27. Cancelación de beforeinput por un listener posterior
+
+La fuente registra provisionalmente selección, inputType y datos cuando observa beforeinput. Otros listeners del editor pueden ejecutarse después y llamar a preventDefault(). Por ese motivo, el estado inicial de defaultPrevented visto dentro del listener del monitor no siempre representa la decisión final.
+
+El adaptador programa una microtarea de comprobación. Si, al terminar la propagación síncrona, defaultPrevented es true y la misma operación sigue pendiente, descarta ese estado provisional. No publica delta ni solicita snapshot, porque la acción por defecto fue cancelada. Si input ya consumió el par, la operación cambió o la fuente se suspendió, la comprobación tardía no altera el estado.
+
+No confundir:
+- beforeinput cancelado después de que el monitor lo observa: se libera sin error ni delta.
+- beforeinput no cancelado seguido de input ausente: se mantiene el diagnóstico missing-input.
+- input sin beforeinput: se mantiene missing-beforeinput.
+
+La regresión unitaria y el test Chromium de teclado automatizado cubren el primer caso. Chromium verifica además defaultPrevented=true, ausencia de input y que blur posterior no marque needsResync. La prueba no sustituye la matriz de teclado físico/IME ni una validación física de Page Lifecycle.

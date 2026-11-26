@@ -4,7 +4,8 @@ import {
   createNarrativeKnowledgeGraphSnapshot,
   persistNarrativeKnowledgeGraphSnapshot,
   createNarrativeDocumentProjectionManifest,
-  createNarrativeDocumentProjectionTombstone
+  createNarrativeDocumentProjectionTombstone,
+  commitNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
 function createMemoryStore() {
@@ -122,4 +123,48 @@ test("construye manifiestos desde una contribución y tombstones explícitos", (
     () => createNarrativeDocumentProjectionManifest(snapshot, "missing", 1, 200),
     /no forma parte/u
   );
+});
+
+test("commit de manifiestos rechaza revisiones antiguas y divergencias", async () => {
+  let current;
+  const store = {
+    async loadNarrativeDocumentProjectionManifest(projectId, documentId) {
+      return current && current.projectId === projectId && current.documentId === documentId
+        ? structuredClone(current) : undefined;
+    },
+    async saveNarrativeDocumentProjectionManifestIfUnchanged(next, expectedGeneration) {
+      assert.equal(current?.generation, expectedGeneration);
+      assert.equal(next.generation, (expectedGeneration ?? 0) + 1);
+      current = structuredClone(next);
+    }
+  };
+  const base = {
+    projectId: "novel-manifest", documentId: "chapter-1", revision: 1,
+    generation: 1, status: "active", entityIds: ["e1"], relationIds: [],
+    eventIds: [], ideaIds: [], assertionIds: [], updatedAt: 100
+  };
+  const first = await commitNarrativeDocumentProjectionManifest(store, base);
+  assert.equal(first.manifest.generation, 1);
+  assert.equal(first.reused, false);
+
+  const retry = await commitNarrativeDocumentProjectionManifest(store, {
+    ...base, generation: 99, updatedAt: 999
+  });
+  assert.equal(retry.reused, true);
+  assert.equal(retry.manifest.generation, 1);
+
+  await assert.rejects(
+    commitNarrativeDocumentProjectionManifest(store, { ...base, revision: 0 }),
+    /obsoleta/u
+  );
+  await assert.rejects(
+    commitNarrativeDocumentProjectionManifest(store, { ...base, entityIds: ["e2"] }),
+    /divergentes/u
+  );
+
+  const next = await commitNarrativeDocumentProjectionManifest(store, {
+    ...base, revision: 2, generation: 1, entityIds: ["e2"], updatedAt: 200
+  });
+  assert.equal(next.manifest.generation, 2);
+  assert.equal(next.manifest.revision, 2);
 });

@@ -826,7 +826,7 @@ Se conecta el índice de continuidad con el anfitrión del motor. La aplicación
 
 **Inventario documental ligero**
 - Se añade `StoredDocumentMetadata` y `ProjectStore.loadDocumentMetadata(projectId)`.
-- IndexedDB enumera `documentId`, `revision`, `sequence` y `updatedAt` sin devolver cuerpos de manuscrito.
+- IndexedDB enumera `documentId`, `revision`, `sequence` y `updatedAt` sin devolver cuerpos de manuscrito. Los snapshots completos se leen por lotes acotados de 16 y se validan contra esos metadatos.
 - El método valida identidad de proyecto, IDs duplicados, revisiones y secuencias, y ordena el resultado de forma determinista.
 
 **Activadores automáticos**
@@ -839,13 +839,13 @@ Se conecta el índice de continuidad con el anfitrión del motor. La aplicación
 **Consistencia y eficiencia**
 - Los candidatos se conservan en caché por documento y se reutilizan mientras coincidan revisión, secuencia y updatedAt. También se detectan cambios de snapshot aunque un adaptador conserve accidentalmente revisión y secuencia; una edición solo obliga a redescubrir el documento afectado.
 - Después de leer los cuerpos, se vuelve a enumerar el inventario. Si cambió el conjunto, la revisión o la secuencia durante el análisis, se aborta esa generación y se conserva el índice anterior.
-- El muestreo de hasta 200 candidatos se distribuye a lo largo del inventario documental, en lugar de favorecer siempre los primeros IDs. Si se alcanza el límite de candidatos por documento, el presupuesto total o el límite de tamaño del texto, se propaga `sourceAnalysisTruncated`.
+- El muestreo de hasta 200 candidatos se distribuye a lo largo del inventario documental, en lugar de favorecer siempre los primeros IDs. El descubrimiento limita el texto agregado a 20 millones de unidades UTF-16 por reconciliación y reparte el presupuesto entre los documentos que deben releerse. Si se alcanza el límite por documento, el presupuesto total o el límite de tamaño del texto, se propaga `sourceAnalysisTruncated`.
 - Sin una lista editorial explícita suministrada por `HostEngineOptions.getOrderedDocumentIds`, la cronología entre documentos queda desconocida. No se infiere a partir de nombres, IDs, fechas de guardado ni orden alfabético.
 - El anfitrión recibe `onNarrativeIdeaContinuityIndexUpdated` tras cada reconciliación exitosa, incluso cuando se reutiliza la generación actual. Debe insertar la envoltura en su outbox durable con clave única proyecto + generación y conservar el estado de entrega ya confirmado. Así una generación local se puede reanunciar al abrir el proyecto o tras un fallo temporal sin duplicar entregas. El envío de red corresponde al trabajador de transporte. La operación puede construirse con `createNarrativeIdeaContinuityIndexSyncEnvelope` y debe conservar `expectedGeneration`.
 - Los cambios de la proyección no crean, confirman ni modifican registros `NarrativeIdea`; los candidatos siguen siendo señales analíticas revisables.
 
 **Pruebas añadidas**
-- 10 pruebas de actualización automática: apertura y extracción entre capítulos, actualización tras edición, cronología desconocida, inventario sin cuerpo textual, adaptador sin extracción de entidades, muestreo truncado en un proyecto de 201 documentos, rechazo de revisiones concurrentes, reutilización de caché ante cambios externos sin cambios documentales, detección de cambios de snapshot con revisión/secuencia reutilizadas y recuperación de una inserción de outbox fallida.
-- Total: 10 pruebas nuevas de Fase AU.
+- 11 pruebas de actualización automática: apertura y extracción entre capítulos, actualización tras edición, cronología desconocida, inventario sin cuerpo textual, adaptador sin extracción de entidades, muestreo truncado en un proyecto de 201 documentos, rechazo de revisiones concurrentes, reutilización de caché ante cambios externos sin cambios documentales, detección de cambios de snapshot con revisión/secuencia reutilizadas, recuperación de una inserción de outbox fallida y presupuesto agregado ante once documentos grandes.
+- Total: 11 pruebas nuevas de Fase AU.
 
 La actualización local de la proyección queda automatizada. La entrega a otros dispositivos utiliza el callback/outbox del anfitrión; no se afirma que exista un transporte de red universal integrado en el motor.

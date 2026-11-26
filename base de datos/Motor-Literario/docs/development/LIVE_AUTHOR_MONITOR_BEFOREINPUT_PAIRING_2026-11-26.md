@@ -146,3 +146,7 @@ La prueba unitaria verifica que se rechacen tanto un `beforeinput` sintético co
 ## Límites Unicode en marcadores discursivos
 
 La suite detectó que el conector `Aun así` no era encontrado: los límites `\b` de JavaScript no separan de forma fiable ciertas palabras que terminan en letras acentuadas como `í`. Se reemplazaron en los tres grupos de marcadores (temporales, causales y adversativos) por lookbehind/lookahead con `\p{L}`, `\p{M}`, `\p{N}` y `_`, para no reconocer subcadenas dentro de palabras y sí respetar letras acentuadas y marcas combinantes. El test adversativo `Aun así` permanece como regresión del defecto.
+
+## Filtro de infinitivos en transiciones de estado
+
+La suite global reveló que `Ana no pudo activar la Espada Solar` generaba una transición `activated` aunque estuviera marcada como `effectStatus: not-applied`. La causa era que `discoverNarrativeObjectTransitionCandidates` publicaba el candidato antes de excluir la forma infinitiva subordinada. Ahora los infinitivos no generan transiciones de estado; permanecen en el flujo de observaciones como evidencia textual. Se conservan candidatos para formas finitas negadas (`not-applied`) y futuras (`prospective`), sin aplicarlos al estado actual.

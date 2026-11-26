@@ -21,6 +21,7 @@ const events = [];
 const deltas = [];
 let eventCountTotal = 0;
 let droppedEventCount = 0;
+let droppedDeltaCount = 0;
 let source;
 let baselineLengthUtf16 = 0;
 let startedAt;
@@ -87,6 +88,7 @@ function render() {
     totalEventCount: eventCountTotal,
     retainedEventCount: events.length,
     droppedOldestEvents: droppedEventCount,
+    droppedOldestDeltas: droppedDeltaCount,
     compositionStarts,
     compositionUpdates,
     compositionEnds,
@@ -129,6 +131,10 @@ startButton.addEventListener("click", () => {
     onError: recordError
   });
   source.subscribeChanges(change => {
+    if (deltas.length === MAX_TRACE_ITEMS) {
+      deltas.shift();
+      droppedDeltaCount += 1;
+    }
     deltas.push({
       sequence: change.sequence,
       baseRevision: change.baseRevision,
@@ -170,6 +176,7 @@ exportButton.addEventListener("click", () => {
     finalLengthUtf16: editor.value.length,
     eventCountTotal,
     droppedEventCount,
+    droppedDeltaCount,
     events,
     deltas,
     state: source.getState()
@@ -180,7 +187,7 @@ exportButton.addEventListener("click", () => {
   link.href = url;
   link.download = "live-author-monitor-ime-trace.json";
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 });
 
 window.addEventListener("pagehide", () => {

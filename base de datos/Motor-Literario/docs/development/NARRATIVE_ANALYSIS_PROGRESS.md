@@ -549,3 +549,15 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - Se agregaron pruebas IndexedDB para cursor perdido, identidad divergente, reintento, diario obsoleto, cursor cambiado concurrentemente y diario incompleto.
 
 **Validación pendiente:** los cambios están registrados en GitHub, pero no se han ejecutado `npm run typecheck` ni `npm test` en este entorno. No se considera validada la tanda hasta ejecutar ambas comprobaciones.
+
+
+## Integración del plan de cursores con el consumidor protegido
+
+- `createRecoveryFirstNarrativeSyncConsumer` planifica la recuperación de cursores tras completar la recuperación de reparaciones y antes de habilitar el replay.
+- La escritura requiere un callback explícito `NarrativeSyncCursorRecoveryApproval.approve(proposal)` suministrado por el anfitrión.
+- Sin aprobación, el plan se devuelve como diagnóstico, no se modifica IndexedDB y el replay sigue bloqueado por la inconsistencia.
+- Las propuestas aprobadas se aplican mediante la transacción revalidada; el consumidor vuelve a auditar el diario y solo despacha handlers si la integridad completa queda restablecida.
+- El resultado expone el plan y cada resultado `applied`/`already-consistent`/`rejected` para facilitar observabilidad.
+- Pruebas nuevas verifican que sin aprobación no se modifica el cursor y que, con aprobación, se reconstruye antes de ejecutar el handler.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` siguen sin ejecutarse en este entorno. No hay una ejecución de CI confirmada para estos commits.

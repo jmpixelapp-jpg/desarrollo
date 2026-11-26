@@ -45,6 +45,8 @@ import {
   MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
   type NarrativeIdeaCandidate
 } from "./narrative-idea-discovery";
+const MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS = 20_000_000;
+
 import { analyzeNarrativeIdeaCrossDocumentRelations, MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES } from "./narrative-idea-cross-document-relations";
 import { buildNarrativeIdeaEvolution } from "./narrative-idea-evolution";
 import {
@@ -878,6 +880,24 @@ export class HostEngineApi {
       }
       const seenDocuments = new Set<string>();
       const candidatesByDocument = new Map<string, readonly NarrativeIdeaCandidate[]>();
+      const documentsNeedingDiscovery = metadata.filter(item => {
+        const cached = this.continuityCandidatesByDocument.get(item.documentId);
+        return !cached || cached.revision !== item.revision ||
+          cached.sequence !== item.sequence || cached.updatedAt !== item.updatedAt;
+      }).length;
+      // Presupuesto agregado: evita escanear 2 MB por cada uno de miles de
+      // capítulos en una sola reconciliación. Los límites se reparten de forma
+      // determinista entre los documentos que realmente necesitan relectura.
+      const perDocumentTextBudget = Math.max(
+        1,
+        Math.min(
+          MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
+          Math.floor(
+            MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS /
+            Math.max(1, documentsNeedingDiscovery)
+          )
+        )
+      );
       const sourceRevisions: Array<{
         documentId: string;
         revision: number;
@@ -922,9 +942,9 @@ export class HostEngineApi {
         }
 
         let discoveryText = document.text;
-        const documentTextTruncated = discoveryText.length > MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS;
+        const documentTextTruncated = discoveryText.length > perDocumentTextBudget;
         if (documentTextTruncated) {
-          let end = MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS;
+          let end = perDocumentTextBudget;
           const lastUnit = discoveryText.charCodeAt(end - 1);
           if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF) end--;
           discoveryText = discoveryText.slice(0, end);

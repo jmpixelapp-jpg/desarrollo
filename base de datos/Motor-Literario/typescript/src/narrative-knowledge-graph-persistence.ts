@@ -248,8 +248,7 @@ export type NarrativeProjectionReconciliationIssueCode =
   | "missing-manifest"
   | "missing-inventory-id"
   | "stale-inventory-id"
-  | "tombstone-has-evidence"
-  | "unmanifested-evidence";
+  | "tombstone-has-evidence";
 
 export interface NarrativeProjectionReconciliationIssue {
   readonly code: NarrativeProjectionReconciliationIssueCode;
@@ -336,6 +335,7 @@ export async function reconcileNarrativeDocumentProjections(
       emit("missing-manifest", documentId, "document", undefined,
         "Hay evidencia documental sin manifiesto durable.");
     }
+    if (!manifest) continue;
     for (const collection of collections) {
       const actualIds = new Set<string>();
       for (const record of collection.records) {

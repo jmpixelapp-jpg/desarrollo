@@ -88,9 +88,16 @@ export function canonicalizeNarrativeSyncPayload(
         if (Object.getOwnPropertySymbols(value).length > 0) {
           throw new TypeError("El payload contiene propiedades Symbol.");
         }
+        const ownKeys = Reflect.ownKeys(value);
+        if (ownKeys.length !== value.length + 1 || !ownKeys.includes("length") ||
+            ownKeys.some(key => key !== "length" &&
+              (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/u.test(key) ||
+                Number(key) >= value.length))) {
+          throw new TypeError("El payload contiene un array con propiedades adicionales.");
+        }
         const keys = Object.keys(value);
         if (keys.length !== value.length) {
-          throw new TypeError("El payload contiene un array disperso o propiedades adicionales.");
+          throw new TypeError("El payload contiene un array disperso o posiciones no enumerables.");
         }
         const encoded: string[] = [];
         for (let index = 0; index < value.length; index++) {

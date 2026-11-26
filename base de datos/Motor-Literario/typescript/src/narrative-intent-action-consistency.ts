@@ -102,9 +102,9 @@ export function compareNarrativeIntentsWithActions(
   input: NarrativeIntentActionConsistencyInput
 ): readonly NarrativeIntentActionConsistency[] {
   validate(input);
-  const entities = new Map(input.entities
+  const entities = new Map<string, NarrativeEntity>(input.entities
     .filter(entity => entity && entity.projectId === input.projectId)
-    .map(entity => [entity.id, entity]));
+    .map(entity => [entity.id, entity] as const));
   const results: NarrativeIntentActionConsistency[] = [];
   for (const intent of input.intents) {
     const verb = goalVerb(intent.text);

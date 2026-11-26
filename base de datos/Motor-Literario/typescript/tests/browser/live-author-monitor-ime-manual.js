@@ -197,6 +197,12 @@ function recordError(error) {
   traceEntryCount += 1;
   eventCounters.monitorErrorCount += 1;
   errorCodeCounts[error.code] = (errorCodeCounts[error.code] ?? 0) + 1;
+  if (pendingBeforeInput) {
+    pairingCounters.unmatchedBeforeInputCount += 1;
+    pendingBeforeInput.entry.pairStatus = "monitor-error-before-input";
+    pendingBeforeInput.inputData = null;
+    pendingBeforeInput = undefined;
+  }
   appendTraceEntry({
     index: traceEntryCount,
     atMs: Number(performance.now().toFixed(3)),

@@ -188,11 +188,16 @@ test("diario IndexedDB acepta una secuencia, deduplica y sobrevive al reinicio",
 
     const reopened = new IndexedDbNarrativeSyncJournal({ databaseName });
     assert.equal(await reopened.getLastSequence("project-a", "writer-a"), 1);
+    const recovered = await reopened.loadOperations("project-a", "writer-a");
+    assert.equal(recovered.length, 1);
+    assert.equal(recovered[0].operationId, "journal-op-1");
+    assert.deepEqual(await reopened.loadOperation("project-a", "journal-op-1"), recovered[0]);
     const second = await createNarrativeSyncOperationEnvelope({
       operationId: "journal-op-2", projectId: "project-a", writerId: "writer-a",
       sequence: 2, createdAt: 101, kind: "idea-upsert", payload: { id: "idea-2" }
     });
     assert.deepEqual(await reopened.accept(second), { status: "accepted", nextSequence: 3 });
+    assert.deepEqual((await reopened.loadOperations("project-a", "writer-a")).map(item => item.sequence), [1, 2]);
     reopened.close();
   } finally {
     globalThis.indexedDB = previous;

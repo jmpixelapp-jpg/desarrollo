@@ -1,0 +1,102 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { discoverNarrativeDescriptiveReferences } from "../dist/motor-literario.js";
+
+const ana = {
+  projectId: "book-1", id: "character:ana", kind: "character",
+  canonicalName: "Ana", normalizedName: "ana", aliases: [],
+  evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+};
+const bruno = {
+  ...ana, id: "character:bruno", canonicalName: "Bruno", normalizedName: "bruno"
+};
+const sword = {
+  ...ana, id: "object:sword", kind: "object",
+  canonicalName: "Espada", normalizedName: "espada"
+};
+function label(text, excerpt = text, status) {
+  return {
+    text,
+    evidence: {
+      documentId: "chapter-profile", revision: 1, start: 10,
+      end: 10 + excerpt.length, excerpt, ...(status ? { status } : {})
+    }
+  };
+}
+function discover(text, profiles, entities = [ana, bruno], overrides = {}) {
+  return discoverNarrativeDescriptiveReferences({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text, entities, profiles, ...overrides
+  });
+}
+
+test("vincula una descripción literal registrada a un solo personaje", () => {
+  const [match] = discover("El anciano abrió la puerta.", [
+    { entityId: ana.id, labels: [label("el anciano")] }
+  ]);
+  assert.equal(match.status, "single-candidate");
+  assert.equal(match.candidates[0].entityId, ana.id);
+  assert.equal(match.mentionEvidence.excerpt, "El anciano");
+  assert.equal(match.reviewStatus, "candidate");
+});
+
+test("conserva ambigüedad cuando dos personajes comparten una descripción", () => {
+  const [match] = discover("La viajera llegó.", [
+    { entityId: ana.id, labels: [label("la viajera")] },
+    { entityId: bruno.id, labels: [label("la viajera")] }
+  ]);
+  assert.equal(match.status, "ambiguous");
+  assert.deepEqual(match.candidates.map(x => x.entityId), [ana.id, bruno.id]);
+});
+
+test("no infiere descripciones que no estén registradas", () => {
+  assert.deepEqual(discover("El anciano abrió la puerta.", []), []);
+});
+
+test("no confunde subcadenas dentro de palabras", () => {
+  assert.deepEqual(discover("El ancianismo no llegó.", [
+    { entityId: ana.id, labels: [label("anciano")] }
+  ]), []);
+});
+
+test("acepta acentos y límites Unicode con offsets absolutos UTF-16", () => {
+  const prefix = "😀 ";
+  const text = "La mujer salió.";
+  const [match] = discover(text, [
+    { entityId: ana.id, labels: [label("la mujer")] }
+  ], [ana], { baseOffset: prefix.length });
+  assert.equal(match.mentionEvidence.start, prefix.length);
+  assert.equal(match.mentionEvidence.end, prefix.length + "La mujer".length);
+});
+
+test("ignora perfiles sustentados únicamente por evidencia obsoleta", () => {
+  assert.deepEqual(discover("El guardián volvió.", [
+    { entityId: ana.id, labels: [label("el guardián", "guardián", "stale")] }
+  ], [ana]), []);
+});
+
+test("no permite que una entidad no-personaje reciba una descripción personal", () => {
+  assert.throws(() => discover("La viajera llegó.", [
+    { entityId: sword.id, labels: [label("la viajera")] }
+  ], [sword]), /personaje único/);
+});
+
+test("rechaza perfiles de otro proyecto, duplicados y evidencia inválida", () => {
+  assert.throws(() => discover("El anciano.", [
+    { entityId: "missing", labels: [label("el anciano")] }
+  ]), /personaje único/);
+  assert.throws(() => discover("El anciano.", [
+    { entityId: ana.id, labels: [label("el anciano"), label(" EL   ANCIANO ")] }
+  ]), /repetir descripciones/);
+  assert.throws(() => discover("El anciano.", [
+    { entityId: ana.id, labels: [{ text: "el anciano", evidence: {} }] }
+  ]), /evidencia de procedencia/);
+});
+
+test("respeta el límite de resultados y la procedencia de cada etiqueta", () => {
+  const matches = discover("El anciano vio al anciano.", [
+    { entityId: ana.id, labels: [label("el anciano")] }
+  ], [ana], { maxMatches: 1 });
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].candidates[0].labelEvidence.documentId, "chapter-profile");
+});

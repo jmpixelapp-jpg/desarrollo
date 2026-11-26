@@ -5202,7 +5202,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         }
         if (existing.ownerId !== lease.ownerId ||
             existing.fencingToken !== lease.fencingToken ||
-            existing.expiresAt <= now || lease.expiresAt <= now) return;
+            existing.expiresAt <= now) return;
         renewed = {
           ...existing,
           expiresAt: Math.max(existing.expiresAt, now + leaseDurationMs),
@@ -5288,9 +5288,6 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
     validateLiveAuthorMonitorLease(lease, checkpoint.projectId, checkpoint.documentId);
     const now = Date.now();
-    if (lease.expiresAt <= now || checkpoint.savedAt > lease.expiresAt) {
-      throw new Error("El lease del monitor expiró antes de guardar el checkpoint.");
-    }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(
@@ -5319,7 +5316,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         if (currentLease.ownerId !== lease.ownerId ||
             currentLease.fencingToken !== lease.fencingToken ||
             currentLease.expiresAt <= commitNow ||
-            lease.expiresAt <= commitNow) {
+            checkpoint.savedAt > currentLease.expiresAt) {
           failure = new Error("El checkpoint fue rechazado porque perdió el fencing token del monitor.");
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
           return;

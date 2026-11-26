@@ -66,8 +66,7 @@ const MAX_OCCURRENCE_TEXT_UNITS = 500;
 const MAX_EVIDENCE_UNITS = 2_000_000;
 
 function validateOccurrence(
-  occurrence: NarrativeIdeaOccurrenceReference,
-  projectId: string
+  occurrence: NarrativeIdeaOccurrenceReference
 ): void {
   if (!occurrence || typeof occurrence !== "object" ||
       typeof occurrence.ideaCandidateId !== "string" || !occurrence.ideaCandidateId.trim() ||
@@ -89,7 +88,16 @@ function validateOccurrence(
       occurrence.evidence.excerpt.length > MAX_EVIDENCE_UNITS) {
     throw new Error("La evolución contiene una aparición de idea inválida.");
   }
-  void projectId;
+}
+
+function normalizeExactPhrase(value: string): string {
+  return value.normalize("NFKD")
+    .replace(/\\p{M}/gu, "")
+    .toLocaleLowerCase("es")
+    .replace(/[\\p{P}\\p{S}]+/gu, " ")
+    .replace(/\\s+/gu, " ")
+    .trim()
+    .normalize("NFKC");
 }
 
 function validateRelation(
@@ -115,15 +123,16 @@ function validateRelation(
     throw new Error("La relación de origen para evolución de ideas es inválida.");
   }
 
-  validateOccurrence(relation.first, projectId);
-  validateOccurrence(relation.second, projectId);
+  validateOccurrence(relation.first);
+  validateOccurrence(relation.second);
 
   if ((relation.first.polarity === relation.second.polarity ? "consistent" : "changed") !== relation.polarityRelation) {
     throw new Error("La modalidad de la relación no coincide con las dos apariciones.");
   }
   if (relation.relationType === "exact-recurrence" &&
-      (relation.normalizedSimilarity !== 1 || relation.overlapCoefficient !== 1)) {
-    throw new Error("Una recurrencia exacta debe conservar métricas unitarias.");
+      (relation.normalizedSimilarity !== 1 || relation.overlapCoefficient !== 1 ||
+        normalizeExactPhrase(relation.first.text) !== normalizeExactPhrase(relation.second.text))) {
+    throw new Error("Una recurrencia exacta debe conservar texto normalizado y métricas unitarias.");
   }
 
   if (relation.first.ideaCandidateId === relation.second.ideaCandidateId ||
@@ -199,8 +208,10 @@ export function buildNarrativeIdeaEvolution(
       input.crossDocumentAnalysis.relations.length > MAX_RELATIONS ||
       !Number.isSafeInteger(input.crossDocumentAnalysis.analyzedCandidateCount) ||
       input.crossDocumentAnalysis.analyzedCandidateCount < 0 ||
+      input.crossDocumentAnalysis.analyzedCandidateCount > 200 ||
       !Number.isSafeInteger(input.crossDocumentAnalysis.comparedCrossDocumentPairs) ||
       input.crossDocumentAnalysis.comparedCrossDocumentPairs < 0 ||
+      input.crossDocumentAnalysis.comparedCrossDocumentPairs > 19_900 ||
       typeof input.crossDocumentAnalysis.truncated !== "boolean") {
     throw new Error("Contexto inválido para construir la evolución de ideas.");
   }

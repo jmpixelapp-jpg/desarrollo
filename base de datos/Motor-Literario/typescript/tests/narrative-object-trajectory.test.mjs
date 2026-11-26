@@ -22,15 +22,19 @@ function transition({
 }) {
   const actionEvidence = evidence(documentId, revision, start, action);
   const objectEvidence = evidence(documentId, revision, start + action.length + 1, "Espada Solar");
-  const contextEvidence = evidence(documentId, revision, 0,
-    action + " Espada Solar.");
+  const recipientLabel = recipientId === "character:ana" ? "Ana" : "Bruno";
+  const contextExcerpt = action + " Espada Solar" +
+    (recipientId ? " a " + recipientLabel : "") + ".";
+  const contextEvidence = evidence(documentId, revision, start, contextExcerpt);
   return {
     id, projectId, documentId, revision, observationId: "observation:" + id,
     objectEntityId: objectId, transition: kind,
     actorEntityId: "character:ana", polarity,
     ...(recipientId ? {
       recipientEntityId: recipientId,
-      recipientEvidence: evidence(documentId, revision, start + action.length + 20, "Bruno")
+      recipientEvidence: evidence(
+        documentId, revision, start + action.length + 1 + "Espada Solar a ".length, recipientLabel
+      )
     } : {}),
     grammaticalTense: "past-preterite", effectStatus,
     actionEvidence, objectEvidence, contextEvidence,

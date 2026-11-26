@@ -467,3 +467,53 @@ test("el coordinador usa acuse atómico del almacén cuando el puerto lo ofrece"
     await deleteDatabase();
   }
 });
+
+
+test("recupera aceptación remota cuando falla el commit local del lote de acuses", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    await store.enqueueSyncOperation(operation({
+      operationId: "op-remote-committed-local-failed", sequence: 1
+    }));
+    const acceptedByServer = new Set();
+    let pushes = 0;
+    const transport = {
+      async push(_projectId, operations) {
+        pushes++;
+        const ids = operations.map(item => item.operationId);
+        for (const id of ids) acceptedByServer.add(id);
+        return {
+          acknowledgedOperationIds: ids.filter(id => acceptedByServer.has(id)),
+          conflicts: [],
+          retryableOperationIds: []
+        };
+      }
+    };
+    const originalAcknowledge = store.acknowledgeSyncOperations.bind(store);
+    let failOnce = true;
+    store.acknowledgeSyncOperations = async ids => {
+      if (failOnce) {
+        failOnce = false;
+        throw new Error("local transaction aborted");
+      }
+      return originalAcknowledge(ids);
+    };
+    const coordinator = new NarrativeSyncCoordinator(store, transport, { now: () => 700 });
+    await assert.rejects(
+      coordinator.syncOnce("sync-outbox-project"),
+      /local transaction aborted/
+    );
+    assert.equal(acceptedByServer.size, 1);
+    assert.equal(await store.countPendingSyncOperations("sync-outbox-project"), 1);
+
+    const recovered = await coordinator.syncOnce("sync-outbox-project");
+    assert.equal(pushes, 2);
+    assert.equal(recovered.acknowledged, 1);
+    assert.equal(recovered.remaining, 0);
+    assert.equal(acceptedByServer.size, 1);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

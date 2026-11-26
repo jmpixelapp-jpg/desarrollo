@@ -311,6 +311,7 @@ test("presenta las siete categorías de actividad en la tarjeta del capítulo co
   let length = "uno".length;
   const operations = [
     { activityKind: "typing", start: () => [length, length], replacement: "x" },
+    { activityKind: "composition", start: () => [length, length], replacement: "に" },
     { activityKind: "paste", start: () => [length, length], replacement: "yy" },
     { activityKind: "deletion", start: () => [length - 1, length], replacement: "" },
     { activityKind: "correction", start: () => [0, 1], replacement: "Z" },
@@ -339,7 +340,7 @@ test("presenta las siete categorías de actividad en la tarjeta del capítulo co
   });
   const root = f.container.children[0];
   const chapter = cardFor(root, "chapter-1");
-  for (const key of ["typing", "paste", "deletion", "correction", "undo", "redo", "other"]) {
+  for (const key of ["typing", "composition", "paste", "deletion", "correction", "undo", "redo", "other"]) {
     assert.equal(metric(chapter, key).textContent, "1", "la tarjeta del capítulo debe presentar " + key);
   }
   assert.equal(root.textContent.includes("texto privado"), false);
@@ -350,11 +351,12 @@ test("permite configurar métricas compactas por tarjeta de documento", () => {
   const f = fixture();
   f.monitor.openDocument({ documentId: "chapter-2", text: "dos", revision: 0, sequence: 0 }, "book-1");
   const unmount = mountLiveAuthorMonitorWorkspace(f.container, f.api, {
-    visibleMetrics: ["typing", "redo", "pending"]
+    visibleMetrics: ["typing", "composition", "redo", "pending"]
   });
   const root = f.container.children[0];
   const card = cardFor(root, "chapter-1");
   assert.equal(metric(card, "typing").getAttribute("data-metric"), "typing");
+  assert.equal(metric(card, "composition").getAttribute("data-metric"), "composition");
   assert.equal(metric(card, "redo").getAttribute("data-metric"), "redo");
   assert.equal(metric(card, "pending").getAttribute("data-metric"), "pending");
   assert.equal(metric(card, "wordsPerMinute"), undefined);

@@ -73,3 +73,46 @@ test("rechaza datos de otro proyecto y evidencia inválida", () => {
     projectId:"story",entities,information:[{...received,evidence:{...received.evidence,start:-1}}]
   }));
 });
+
+
+test("mantiene el historial de evaluaciones y selecciona la última solo con orden demostrable", () => {
+  const first = {...evaluation,id:"eval:uncertain",evaluation:"uncertain",
+    evidence:ev("chapter-1",70,"Mara dudó que el puente había caído.")};
+  const later = {...evaluation,id:"eval:refuted",evaluation:"refuted",
+    evidence:ev("chapter-1",120,"Mara refutó que el puente había caído.")};
+  const states = buildNarrativeCharacterKnowledgeStates({
+    projectId:"story",entities,information:[received],
+    evaluations:[first,later]
+  });
+  const item = states.find(state => state.characterEntityId === "mara").items[0];
+  assert.equal(item.evaluations.length,2);
+  assert.equal(item.currentAssessment,"refuted-by-character");
+});
+
+test("no decide qué evaluación es más reciente entre capítulos sin orden explícito", () => {
+  const first = {...evaluation,id:"eval:uncertain",evaluation:"uncertain",
+    evidence:ev("chapter-2",10,"Mara dudó que el puente había caído.")};
+  const later = {...evaluation,id:"eval:refuted",evaluation:"refuted",
+    evidence:ev("chapter-3",10,"Mara refutó que el puente había caído.")};
+  const states = buildNarrativeCharacterKnowledgeStates({
+    projectId:"story",entities,information:[received],
+    evaluations:[first,later]
+  });
+  const item = states.find(state => state.characterEntityId === "mara").items[0];
+  assert.equal(item.evaluations.length,2);
+  assert.equal(item.currentAssessment,"chronology-unresolved");
+});
+
+test("el orden de capítulos permite reconstruir la evaluación posterior", () => {
+  const first = {...evaluation,id:"eval:uncertain",evaluation:"uncertain",
+    evidence:ev("chapter-2",10,"Mara dudó que el puente había caído.")};
+  const later = {...evaluation,id:"eval:refuted",evaluation:"refuted",
+    evidence:ev("chapter-3",10,"Mara refutó que el puente había caído.")};
+  const states = buildNarrativeCharacterKnowledgeStates({
+    projectId:"story",entities,information:[received],
+    evaluations:[later,first],
+    orderedDocumentIds:["chapter-1","chapter-2","chapter-3"]
+  });
+  const item = states.find(state => state.characterEntityId === "mara").items[0];
+  assert.equal(item.currentAssessment,"refuted-by-character");
+});

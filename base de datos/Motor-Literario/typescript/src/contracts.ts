@@ -188,10 +188,16 @@ export interface NarrativeReferenceRepairAuditEntry {
   readonly appliedAt: number;
 }
 
+export interface NarrativeReferenceRepairPendingEntry extends NarrativeReferenceRepairAuditEntry {}
+
 export interface ProjectStore {
   /** Auditoría append-only e idempotente de reparaciones narrativas. */
   appendNarrativeReferenceRepairAudit?(entry: NarrativeReferenceRepairAuditEntry): Promise<void>;
   loadNarrativeReferenceRepairAudits?(projectId: string): Promise<readonly NarrativeReferenceRepairAuditEntry[]>;
+  /** Intención durable escrita antes del CAS; se conserva hasta completar la auditoría. */
+  saveNarrativeReferenceRepairPending?(entry: NarrativeReferenceRepairPendingEntry): Promise<void>;
+  loadNarrativeReferenceRepairPending?(projectId: string): Promise<readonly NarrativeReferenceRepairPendingEntry[]>;
+  deleteNarrativeReferenceRepairPending?(projectId: string, operationId: string): Promise<void>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */

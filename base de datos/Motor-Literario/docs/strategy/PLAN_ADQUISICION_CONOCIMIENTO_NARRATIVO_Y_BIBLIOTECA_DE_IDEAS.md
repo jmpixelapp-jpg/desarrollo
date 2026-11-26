@@ -857,10 +857,10 @@ Se incorpora `narrative-sync-outbox.ts` como infraestructura saliente separada d
 
 **Persistencia e identidad**
 - `IndexedDbNarrativeSyncOutbox` usa una base IndexedDB independiente, `motor-literario-sync-outbox`, con almacenes `outbox-operations`, `outbox-writer-cursors` y `outbox-project-cursors`.
-- Cada snapshot queda identificado por proyecto + generación. Su `operationId` es determinista por proyecto/generación, lo que permite reintentos idempotentes.
+- Cada snapshot queda identificado por proyecto + generación dentro de cada outbox local. Su `operationId` es determinista por proyecto + `continuityOutboxWriterId` + generación, lo que permite reintentos idempotentes sin colisionar cuando dos instalaciones envían la misma generación.
 - La asignación de secuencia por escritor, la inserción de la operación y el avance del cursor de generación del proyecto se confirman en una misma transacción.
 - La misma generación y huella se reconoce como duplicada; un contenido distinto para esa identidad se rechaza.
-- El outbox exige continuidad de generaciones después de su snapshot base inicial. No permite saltar una generación ya encolada.
+- El outbox exige continuidad de generaciones después de su snapshot base inicial. No permite saltar una generación ya encolada. Cada instalación mantiene su propio cursor de secuencia mediante un `continuityOutboxWriterId` estable y único; `ProjectIdentity.writerId` sigue identificando al escritor autenticado.
 
 **Reclamación y entrega**
 - Estados durables: `pending`, `leased` y `delivered`.
@@ -877,7 +877,7 @@ Se incorpora `narrative-sync-outbox.ts` como infraestructura saliente separada d
 - La base del outbox es independiente del almacén principal del proyecto; no modifica el esquema MLDB ni los almacenes de IndexedDB del motor.
 
 **Pruebas añadidas**
-- 11 pruebas de outbox: secuencias, deduplicación, conflictos, generaciones consecutivas, concurrencia de encolado, leases, reclamación tras vencimiento, ack idempotente, reintentos, entrega, recuperación después de cerrar/reabrir la base, callback e integración con el handler CAS receptor.
+- 12 pruebas de outbox: secuencias, deduplicación, conflictos, generaciones consecutivas, concurrencia de encolado, leases, reclamación tras vencimiento, ack idempotente, reintentos, entrega, recuperación después de cerrar/reabrir la base, callback, integración con el handler CAS receptor y dos instalaciones enviando la misma generación al mismo diario sin colisión de operationId.
 - Una prueba adicional en Fase AU verifica que `HostEngineApi` inserta las generaciones 1 y 2 automáticamente en el outbox y mantiene separada la identidad de instalación de la identidad del escritor autenticado.
 
 La entrega remota se describe como al menos una vez, no exactamente una vez. La durabilidad de la cola y la idempotencia reducen duplicados; no sustituyen la autenticación del transporte, la autorización del proyecto ni el acuse durable del receptor.

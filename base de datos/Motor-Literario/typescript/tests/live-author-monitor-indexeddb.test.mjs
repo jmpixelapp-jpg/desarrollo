@@ -182,6 +182,7 @@ test("migra IndexedDB v22 a v25 creando checkpoints, leases y outbox sin perder 
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("sync-outbox"), true);
+      assert.equal(migratedDatabase.objectStoreNames.contains("sync-device-sequences"), true);
       const outboxStore = migratedDatabase.transaction("sync-outbox", "readonly").objectStore("sync-outbox");
       assert.equal(outboxStore.keyPath, "operationId");
       assert.equal(outboxStore.indexNames.contains("by-project-created-at"), true);

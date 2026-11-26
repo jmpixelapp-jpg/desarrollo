@@ -87,6 +87,8 @@ Para entidades de tipo `object`, el descubrimiento de observaciones puede propon
 
 Además, cada evidencia específica (acción, objeto, actor y destinatario) debe quedar contenida en el fragmento contextual de la misma transición. Se verifica tanto el rango como la coincidencia literal del subfragmento. Esto evita aceptar una mención de participante que esté fuera de la oración/línea aportada como contexto o que no coincida con el texto fuente.
 
+La comparación entre frases y evidencias utiliza intervalos ordenados y un recorrido lineal, evitando comparar cada frase contra toda la colección de evidencias. El procesamiento mantiene límites explícitos y offsets UTF-16 para que la auditoría siga siendo viable en manuscritos extensos.
+
 ### Auditoría de cobertura: localizar lo que el extractor todavía no comprende
 
 Módulo: `typescript/src/narrative-extraction-audit.ts`

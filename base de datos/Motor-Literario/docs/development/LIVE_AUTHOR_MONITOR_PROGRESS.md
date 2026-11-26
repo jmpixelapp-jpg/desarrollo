@@ -416,3 +416,21 @@ Se amplió `live-author-monitor-browser.test.mjs`: tras el takeover y guardado d
 **CI general:** [45727622233](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727622233) solo reporta errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`, fuera del alcance del monitor.
 
 **Alcance:** la recuperación al expirar protege únicamente la titularidad del checkpoint de métricas. No resuelve conflictos de edición concurrente ni sincroniza los textos locales de dos editores; el journal y el motor anfitrión siguen siendo la autoridad del manuscrito.
+
+
+
+## 20. Nueva entrega — cancelar restauración cuando dispose() gana la carrera (26 de noviembre de 2026)
+
+**Objetivo:** impedir que la lectura asíncrona de un checkpoint restaure o reabra métricas después de que el HostEngineApi ya fue dispuesto.
+
+**Implementación:** después de `loadLiveAuthorMonitorCheckpoint`, `afterDocumentRecovery` vuelve a comprobar `disposed` antes de ejecutar `restoreCheckpoint()` o `openDocument()` del monitor. Si el cierre ganó la carrera, abandona la restauración.
+
+**Regresión:** un store de prueba demora intencionadamente la lectura. La prueba inicia `recoverDocument`, dispone el HostEngineApi mientras la promesa sigue pendiente, libera después la lectura y confirma que no reaparecen el snapshot del monitor ni el heartbeat.
+
+**Archivos:** `typescript/src/host-api.ts`, `typescript/tests/live-author-monitor-host-api.test.mjs`, especificación sección 34.
+
+**Commits:** [e1ce19c — detener restauración tras dispose](https://github.com/jmpixelapp-jpg/desarrollo/commit/e1ce19ceffc9675dd03ed3ca42979f52b80e7f25), [351f223 — probar lectura de checkpoint en carrera con dispose](https://github.com/jmpixelapp-jpg/desarrollo/commit/351f2232822a8a7005ff5df7675f044537db7cab).
+
+**Resultado verificado:** CI específica [45727834409](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727834409): build Vite correcto, MLDB 0.4.2 válido, auditoría de 25 tablas y 34 almacenes y **113/113 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+**CI general:** [45727834577](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727834577) sigue fallando exclusivamente por errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`; no reporta errores en el módulo de monitoreo.

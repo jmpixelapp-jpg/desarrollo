@@ -286,3 +286,16 @@ Commits de seguimiento:
 La última ejecución observada para el HEAD `46098b8607020a5c32d94f242feac1614be93455` tenía los dos workflows en curso, todavía instalando Chromium. El estado de typecheck, suite completa, pruebas del monitor y benchmark queda pendiente de esos resultados. No se considera validación verde.
 
 La ejecución posterior del typecheck detectó además inconsistencias en la restauración de contadores de actividad del monitor: un identificador antiguo (`activityCountTotal`) y acumuladores `reduce` sobre valores opcionales. Se sustituyeron esas sumas por bucles explícitos con acumuladores numéricos, manteniendo la validación previa de que cada contador sea entero no negativo. Cambios registrados en `87599f4` y `e4f26a1`. El siguiente CI debe confirmar que desaparecieron estos errores; todavía no hay resultado de CI para esos commits en el momento de esta anotación.
+
+
+## Documentación consolidada de persistencia y sincronización
+
+Se incorporó la guía de arquitectura `docs/architecture/PERSISTENCIA_NARRATIVA_BIBLIOTECA_Y_SINCRONIZACION_V1.md`. Es la referencia principal para el mapa de módulos, modelo de conocimiento, biblioteca de ideas, aislamiento por proyecto, IndexedDB v25, diagnóstico y respaldo, contrato de la bandeja de salida, protocolo remoto propuesto, seguridad, pruebas y criterios de aceptación.
+
+La guía diferencia explícitamente la infraestructura local implementada del transporte multidispositivo todavía pendiente. En particular, la existencia de `sync-outbox` no significa que todas las mutaciones del dominio ya se encolen automáticamente ni que exista un servidor de sincronización.
+
+El README TypeScript enlaza esta guía y el descriptor MLDB ahora identifica correctamente la descripción como versión lógica 0.4.3. Los nombres de archivo MLDB conservan por compatibilidad su sufijo histórico `v0.4.2`; la versión lógica declarada dentro de los documentos es `0.4.3`.
+
+### Estado de validación actualizado
+
+Los últimos workflows observados corresponden a commits anteriores al HEAD actual y terminaron con fallos de integración. Se corrigieron errores identificados en esos runs, pero no hay todavía una ejecución verde comprobada para el HEAD actual de la PR #52. La rama permanece en borrador. No se debe fusionar hasta validar typecheck, build, auditorías MLDB, suite completa, pruebas Chromium del monitor y benchmark.

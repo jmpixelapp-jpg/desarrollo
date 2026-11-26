@@ -14,13 +14,15 @@ Los handlers conectan las envolturas verificadas del diario con el almacenamient
 | `relation-upsert` | `{ relation: NarrativeRelation }` | `loadRelations` / `saveRelationIfUnchanged` |
 | `event-upsert` | `{ event: NarrativeEvent }` | `loadEvents` / `saveEventIfUnchanged` |
 
-Las fábricas públicas son `createNarrativeIdeaUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler` y `createNarrativeEventUpsertHandler`, en `typescript/src/narrative-sync-domain-handlers.ts`.
+Las fábricas públicas son `createNarrativeEntityUpsertHandler`, `createNarrativeIdeaUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler` y `createNarrativeEventUpsertHandler`. `createNarrativeSyncDomainHandlers(store)` las registra juntas y valida al inicializar que el almacén ofrezca todos los métodos CAS requeridos.
 
 ## Validación del dominio
 
 Todos los handlers comprueban que el proyecto del registro coincide con el proyecto del sobre antes de escribir. Las validaciones limitan longitud y cardinalidad de campos, verifican IDs, y rechazan evidencia con revisiones o rangos UTF-16 inválidos.
 
-Las entidades comprueban coherencia de nombre canónico normalizado, alias únicos, tiempos de primera/última aparición y versión de extracción. Este handler no fusiona identidades: la consolidación debe usar la operación atómica de identidad del store para redirigir referencias y conservar snapshots archivados.\n\nLas relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
+Las entidades comprueban coherencia de nombre canónico normalizado, alias únicos, tiempos de primera/última aparición y versión de extracción. Este handler no fusiona identidades: la consolidación debe usar la operación atómica de identidad del store para redirigir referencias y conservar snapshots archivados.
+
+Las relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
 
 ## Conflictos
 
@@ -40,9 +42,8 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 
 ## Alcance no implementado
 
-- No existe todavía handler de `entity-upsert`.
 - No hay resolución automática de conflictos ni fusión de ediciones de texto.
-- No hay transporte remoto ni autorización por proyecto.
+- No hay cliente HTTP predeterminado ni autorización remota por proyecto; el anfitrión proporciona y autentica el transporte.
 - El diario no autentica `writerId`; la identidad debe proceder de una sesión validada por el anfitrión/servidor.
 - SHA-256 verifica integridad, no identidad del emisor.
 - No hay exactamente-una-vez ni atomicidad distribuida entre diario y proyecciones.
@@ -50,7 +51,8 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 
 ## Pruebas
 
-- `tests/narrative-sync-domain-handlers.test.mjs`: ideas, CAS, reintentos y conflictos.
-- `tests/narrative-sync-entity-handler.test.mjs`: entidades, normalización canónica, CAS y reintentos.\n- `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.
+- `tests/narrative-sync-domain-handlers.test.mjs`: ideas, registro agregado, CAS, reintentos y conflictos.
+- `tests/narrative-sync-entity-handler.test.mjs`: entidades, normalización canónica, CAS y reintentos.
+- `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.
 - `tests/narrative-sync-relation-event-handlers.test.mjs`: relaciones, acontecimientos y validación temporal.
 - `tests/narrative-sync-writer-concurrency.test.mjs`: replay paralelo entre escritores y exclusión de replay completo.

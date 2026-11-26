@@ -28,7 +28,7 @@
     <h2>2. Contadores de sesión</h2>
     <pre id="metrics">Aún no hay datos.</pre>
     <h2>3. Secuencia observada</h2>
-    <p class="muted">Se muestran solo metadatos. No se registran letras, candidatos, teclas, valores de data ni fragmentos del documento.</p>
+    <p class="muted">Se muestran solo metadatos. No se registran letras, candidatos, teclas, valores de data ni fragmentos del documento. Los contadores cubren toda la sesión; la traza conserva las últimas 2.000 entradas.</p>
     <pre id="trace" aria-live="polite">Inicia la captura para comenzar.</pre>
     <h2>4. Secuencia recomendada</h2>
     <ol>
@@ -37,7 +37,7 @@
       <li>Confirma un candidato y comprueba visualmente el texto final.</li>
       <li>Repite otra composición y cancélala con la tecla de cancelación del IME.</li>
       <li>Prueba composición junto a texto existente, sustitución de una selección y composición al principio/final del textarea.</li>
-      <li>Exporta la traza y revisa si hubo pares incompletos, errores o necesidad de resincronización.</li>
+      <li>Exporta la traza y revisa pares completos, `inputType` discordantes, comparación de datos, eventos huérfanos, errores y necesidad de resincronización.</li>
     </ol>
     <p class="muted">La exportación es local: el archivo JSON se descarga desde el navegador. No se envía al servidor. No compartas el texto del textarea; el archivo solo contiene metadatos de eventos.</p>
   </main>

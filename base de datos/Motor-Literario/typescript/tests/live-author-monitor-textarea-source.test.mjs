@@ -7,6 +7,7 @@ const { LiveAuthorMonitorTextAreaSource } = monitorModule;
 class FakeEventTarget {
   listeners = new Map();
   defaultView;
+  hidden = false;
 
   addEventListener(type, listener) {
     const current = this.listeners.get(type) ?? new Set();
@@ -292,9 +293,53 @@ test("desmonta listeners y exige snapshot autoritativo tras un intervalo sin obs
 
   stopAgain();
   assert.equal(f.element.ownerDocument.listenerCount("freeze"), 0);
+  assert.equal(f.element.ownerDocument.listenerCount("visibilitychange"), 0);
   assert.equal(f.element.ownerDocument.defaultView.listenerCount("pagehide"), 0);
   f.source.dispose();
   assert.throws(() => f.source.subscribeChanges(() => {}), /ya dispuesto/);
+});
+
+test("visibilitychange oculta suspende una composición abierta sin reanudar al volver", () => {
+  const f = fixture("abc", 0, 0);
+  const documentTarget = f.element.ownerDocument;
+
+  f.element.emitCompositionStart();
+  documentTarget.hidden = true;
+  documentTarget.emit("visibilitychange");
+
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.source.getState().compositionActive, false);
+  assert.equal(f.source.previousText, "");
+  assert.equal(f.errors[0].code, "resync-required");
+
+  documentTarget.emit("visibilitychange");
+  assert.equal(f.errors.length, 1, "eventos visibilitychange repetidos no duplican el error");
+
+  documentTarget.hidden = false;
+  documentTarget.emit("visibilitychange");
+  assert.equal(f.source.getState().needsResync, true,
+    "volver a mostrar la pestaña no demuestra que la composición se completó");
+
+  const recovered = f.source.resynchronize({
+    documentId: "chapter-1",
+    text: "abc日本",
+    revision: 3,
+    sequence: 4
+  });
+  assert.equal(recovered.needsResync, false);
+  f.element.edit({
+    start: 5,
+    end: 5,
+    nextValue: "abc日本!",
+    inputType: "insertText",
+    data: "!"
+  });
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].sequence, 5);
+
+  f.stop();
+  assert.equal(documentTarget.listenerCount("visibilitychange"), 0);
+  f.source.dispose();
 });
 
 test("blur suspende operaciones incompletas pero no interrumpe un editor inactivo", () => {
@@ -334,6 +379,7 @@ test("pagehide y freeze suspenden la captura y exigen snapshot tras volver", () 
   const viewTarget = documentTarget.defaultView;
 
   assert.equal(documentTarget.listenerCount("freeze"), 1);
+  assert.equal(documentTarget.listenerCount("visibilitychange"), 1);
   assert.equal(viewTarget.listenerCount("pagehide"), 1);
 
   // Simula una composición abierta cuando la página entra en BFCache.
@@ -380,6 +426,7 @@ test("pagehide y freeze suspenden la captura y exigen snapshot tras volver", () 
 
   f.stop();
   assert.equal(documentTarget.listenerCount("freeze"), 0);
+  assert.equal(documentTarget.listenerCount("visibilitychange"), 0);
   assert.equal(viewTarget.listenerCount("pagehide"), 0);
   f.source.dispose();
 });

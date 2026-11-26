@@ -338,3 +338,17 @@ La documentación debe seguir separando tres estados: implementación presente, 
 - **Verificación:** en la ejecución 2767, TypeScript y build pasaron; 990 de 991 pruebas pasaron y la única regresión restante era la conservación de nombres incompletos durante edición viva. Se publicó la corrección `7d87458`; la ejecución 2768 está en curso y debe confirmar el resultado antes de declarar la suite completa verde.
 
 **Siguiente frente:** completar el diagnóstico de extracción de entidades con la línea de trabajo paralela sin sobrescribirla; después, implementar adaptadores EPUB/PDF/DOCX con trazabilidad de página, sección y bloque, y ampliar la resolución de participantes, causalidad y continuidad entre capítulos.
+
+
+### Tanda adicional 26-11-2026 — corrección de dos regresiones de extracción
+
+La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionados con la ingesta de archivos:
+
+1. **Límite Unicode en acciones:** dos expresiones regulares (acciones `cruzar` y `abrir`) tenían barras invertidas duplicadas en clases Unicode. El motor podía aceptar prefijos incompletos de verbos; por ejemplo, la forma infinitiva podía perder la `r` final y clasificarse incorrectamente. Se normalizaron las clases a propiedades Unicode reales (`\\p{L}`, `\\p{M}`, `\\p{N}`) y se comprobó que no quedan expresiones con el escape duplicado.
+2. **Nombre parcial al abrir documento:** el análisis inicial de snapshots recuperados trataba el final del snapshot como un límite definitivo de palabra. Ahora el flujo de recuperación aplaza la entidad que toca el borde final, igual que el análisis de edición viva, para no persistir un nombre mientras el escritor aún lo está completando.
+
+- Commits publicados: `de73579` (límites Unicode de señales de acción) y `511e1d9` (aplazamiento de nombres terminales en recuperación).
+- Diagnóstico de CI 2775: Type-check correcto; 995 pruebas aprobadas y 2 fallidas. Los dos casos fallidos se vincularon a los defectos anteriores.
+- La ejecución 2778, sobre el primer commit correctivo, está en curso; la ejecución 2779, que incluye ambas correcciones, está en cola. No se afirma todavía que la suite completa esté verde.
+
+**Criterio de aceptación inmediato:** Type-check, build, pruebas completas y benchmark de edición viva deben finalizar sin regresiones antes de pasar a nuevos formatos. Mantener la regla de no convertir una forma verbal en fecha cronológica y no persistir nombres incompletos en bordes de fragmentos.

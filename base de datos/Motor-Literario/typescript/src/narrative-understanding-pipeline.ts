@@ -21,6 +21,10 @@ import {
   type NarrativeInformationChainStep
 } from "./narrative-information-chain";
 import type { NarrativeInformationProvenance } from "./narrative-information-provenance";
+import {
+  extractNarrativeInformationInterpretations,
+  type NarrativeInformationInterpretation
+} from "./narrative-information-interpretation";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
@@ -86,6 +90,7 @@ export interface NarrativeUnderstandingResult {
   readonly informationProvenance: ReturnType<typeof extractNarrativeInformationProvenance>;
   readonly knowledgeEvolution: readonly NarrativeKnowledgeEvolution[];
   readonly informationChain: readonly NarrativeInformationChainStep[];
+  readonly informationInterpretations: readonly NarrativeInformationInterpretation[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -222,6 +227,10 @@ export function understandNarrativeFragment(
     currentRecords: informationProvenance,
     priorRecords: input.priorInformationProvenance
   });
+  const informationInterpretations = extractNarrativeInformationInterpretations({
+    ...extractionContext,
+    priorInformation: input.priorInformationProvenance
+  });
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,
@@ -284,7 +293,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

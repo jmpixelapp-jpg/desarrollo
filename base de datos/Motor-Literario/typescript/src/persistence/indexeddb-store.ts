@@ -5838,9 +5838,14 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
     const db = await this.open();
     const transaction = db.transaction(SYNC_OUTBOX, "readonly");
+    // La secuencia es el orden causal dentro de cada escritor. createdAt
+    // puede coincidir o retroceder por relojes locales y no debe ordenar el replay.
     const request = transaction.objectStore(SYNC_OUTBOX)
-      .index("by-project-created-at")
-      .getAll(IDBKeyRange.bound([projectId, 0], [projectId, Number.MAX_SAFE_INTEGER]), limit);
+      .index("by-project-device-sequence")
+      .getAll(IDBKeyRange.bound(
+        [projectId, "", 0],
+        [projectId, "\\uffff", Number.MAX_SAFE_INTEGER]
+      ), limit);
     const result = await readAfterTransaction(
       transaction, request, "No se pudieron recuperar las operaciones pendientes de sincronización."
     ) as StoredSyncOperation[];

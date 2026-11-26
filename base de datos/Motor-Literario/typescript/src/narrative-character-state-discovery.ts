@@ -30,6 +30,9 @@ export interface NarrativeCharacterStateCandidate {
   readonly grammaticalTense: "present" | "past" | "future" | "unknown";
   readonly aspect: "ordinary" | "ongoing" | "recurrent" | "ceased";
   readonly assertionMode: "copular" | "perceptual";
+  readonly epistemicFrame: "narrator-asserted" | "character-belief" | "character-memory" | "character-desire" | "reported-speech" | "hypothetical";
+  readonly epistemicFrameEvidence?: TextEvidence;
+  readonly epistemicSourceCandidate?: { readonly entityId: string; readonly evidence: TextEvidence };
   readonly reviewStatus: "candidate";
   readonly entityEvidence: TextEvidence;
   readonly stateEvidence: TextEvidence;
@@ -47,6 +50,57 @@ export interface NarrativeCharacterStateDiscoveryInput {
 }
 
 export const MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES = 200;
+
+const STATE_EPISTEMIC_SIGNALS: readonly {
+  readonly frame: Exclude<NarrativeCharacterStateCandidate["epistemicFrame"], "narrator-asserted">;
+  readonly expression: RegExp;
+}[] = [
+  { frame: "character-belief", expression: /\b(?:creyó|creía|creyeron|pensó|pensaba|imaginó|imaginaba|supuso|suponía)\s+que\s+/giu },
+  { frame: "character-memory", expression: /\b(?:recordó|recordaba|rememoró|rememoraba|olvidó|olvidaba)\s+que\s+/giu },
+  { frame: "character-desire", expression: /\b(?:deseó|deseaba|quería|quiso|esperaba|esperó|anhelaba|anheló)\s+que\s+/giu },
+  { frame: "reported-speech", expression: /\b(?:dijo|decía|afirmó|afirmaba|aseguró|aseguraba|contó|relató|advirtió|anunció)\s+que\s+/giu },
+  { frame: "hypothetical", expression: /\b(?:quizá|quizás|tal vez|acaso|como si)\s+/giu }
+];
+
+function classifyStateEpistemicFrame(
+  sentence: string, assertionStart: number, characters: readonly NarrativeEntity[],
+  input: NarrativeCharacterStateDiscoveryInput, sentenceStart: number
+): Pick<NarrativeCharacterStateCandidate, "epistemicFrame" | "epistemicFrameEvidence" | "epistemicSourceCandidate"> {
+  let selected: { frame: NarrativeCharacterStateCandidate["epistemicFrame"]; start: number; end: number; excerpt: string } | undefined;
+  for (const signal of STATE_EPISTEMIC_SIGNALS) {
+    signal.expression.lastIndex = 0;
+    for (const match of sentence.matchAll(signal.expression)) {
+      if (match.index! >= assertionStart) break;
+      const current = { frame: signal.frame, start: match.index!, end: match.index! + match[0].length, excerpt: match[0] };
+      if (!selected || current.start > selected.start) selected = current;
+    }
+  }
+  if (!selected) return { epistemicFrame: "narrator-asserted" };
+  const base = input.baseOffset ?? 0;
+  const frameEvidence = evidence(input, sentenceStart + selected.start, sentenceStart + selected.end, selected.excerpt);
+  if (selected.frame !== "reported-speech") {
+    return { epistemicFrame: selected.frame, epistemicFrameEvidence: frameEvidence };
+  }
+  const possible = characters.flatMap(entity => [entity.canonicalName, ...entity.aliases].flatMap(name => {
+    const escaped = name.replace(/[.*+?^$()|[\]{}\\]/gu, "\\export const MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES = 200;
+");
+    const expression = new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escaped + "(?![\\p{L}\\p{M}\\p{N}_])", "giu");
+    return [...sentence.slice(0, selected!.start).matchAll(expression)].map(match => ({
+      entityId: entity.id, start: match.index!, end: match.index! + match[0].length, excerpt: match[0]
+    }));
+  })).sort((a,b) => b.end-a.end || b.start-a.start);
+  const nearest = possible[0];
+  const tied = nearest ? possible.filter(item => item.end === nearest.end) : [];
+  const unambiguous = nearest && tied.every(item => item.entityId === nearest.entityId) ? nearest : undefined;
+  return {
+    epistemicFrame: selected.frame,
+    epistemicFrameEvidence: frameEvidence,
+    ...(unambiguous ? { epistemicSourceCandidate: {
+      entityId: unambiguous.entityId,
+      evidence: evidence(input, sentenceStart + unambiguous.start, sentenceStart + unambiguous.end, unambiguous.excerpt)
+    }} : {})
+  };
+}
 
 const STATE_PATTERNS: readonly {
   readonly state: NarrativeCharacterState;
@@ -252,6 +306,7 @@ export function discoverNarrativeCharacterStateCandidates(
           grammaticalTense: tenseOf(copula, marker),
           aspect,
           assertionMode: mode,
+          ...classifyStateEpistemicFrame(sentence, match.index, characters, input, span.start),
           reviewStatus: "candidate",
           entityEvidence: evidence(input, nameStart, nameEnd, sentence.slice(match.index, match.end)),
           stateEvidence: evidence(input, stateStart, stateEnd, adjective),

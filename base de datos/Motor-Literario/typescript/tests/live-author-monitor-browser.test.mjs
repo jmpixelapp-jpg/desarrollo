@@ -514,7 +514,32 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
         try { return JSON.parse(metrics).totalEventCount >= 2; } catch { return false; }
       }, undefined, { timeout: 5_000 });
       const captureMetrics = JSON.parse(await page.locator("#metrics").textContent());
-      assert.equal(captureMetrics.typingDeltas, 1, JSON.stringify(captureMetrics));
+      assert.equal(captureMetrics.deltaCounters.typing, 1, JSON.stringify(captureMetrics));
+      assert.equal(captureMetrics.pairing.pairedInputCount, 1,
+        "beforeinput e input deben quedar correlacionados");
+      assert.equal(captureMetrics.pairing.pendingBeforeInputCount, 0);
+      assert.equal(captureMetrics.pairing.orphanInputCount, 0);
+
+      // Solo para probar retención acotada y contadores acumulativos:
+      // estos eventos son sintéticos, no modifican el textarea ni representan
+      // una sesión IME. El adaptador de captura no consume compositionupdate.
+      const privateCompositionSentinel = "PRIVATE_IME_CANDIDATE_SENTINEL";
+      await page.evaluate(({ candidate, count }) => {
+        const target = document.querySelector("#editor");
+        for (let index = 0; index < count; index += 1) {
+          target.dispatchEvent(new CompositionEvent("compositionupdate", {
+            data: candidate,
+            bubbles: true
+          }));
+        }
+      }, { candidate: privateCompositionSentinel, count: 2_010 });
+
+      const longSessionMetrics = JSON.parse(await page.locator("#metrics").textContent());
+      assert.equal(longSessionMetrics.eventCounters.compositionUpdateCount, 2_010);
+      assert.equal(longSessionMetrics.retainedEventCount, 2_000);
+      assert.equal(longSessionMetrics.droppedOldestEvents, 12);
+      assert.equal(longSessionMetrics.pairing.pairedInputCount, 1);
+      assert.equal(longSessionMetrics.deltaCounters.typing, 1);
 
       const downloadPromise = page.waitForEvent("download");
       await page.getByRole("button", { name: "Exportar traza sin contenido" }).click();
@@ -527,23 +552,40 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       const serialized = Buffer.concat(chunks).toString("utf8");
       const report = JSON.parse(serialized);
 
+      assert.equal(report.format, "live-author-monitor-ime-trace-v2");
       assert.equal(report.privacy.manuscriptContentIncluded, false);
       assert.equal(report.privacy.inputEventDataIncluded, false);
       assert.equal(report.privacy.keystrokesIncluded, false);
       assert.equal(report.privacy.localOnlyDownload, true);
       assert.equal(report.baselineLengthUtf16, privateSentinel.length);
       assert.equal(report.finalLengthUtf16, privateSentinel.length + 1);
+      assert.equal(report.eventCounters.beforeInputCount, 1);
+      assert.equal(report.eventCounters.inputCount, 1);
+      assert.equal(report.eventCounters.compositionUpdateCount, 2_010,
+        "los contadores de vida de sesión no deben perder eventos descartados del buffer");
+      assert.equal(report.eventCounters.untrustedEventCount, 2_010,
+        "las CompositionEvent sintéticas de esta regresión deben quedar identificadas como no confiables");
+      assert.equal(report.pairing.pairedInputCount, 1);
+      assert.equal(report.pairing.pendingBeforeInputCount, 0);
+      assert.equal(report.pairing.unmatchedBeforeInputCount, 0);
+      assert.equal(report.pairing.orphanInputCount, 0);
+      assert.equal(report.retainedEventCount, 2_000);
+      assert.equal(report.events.length, 2_000);
+      assert.equal(report.droppedEventCount, 12);
+      assert.equal(report.totalDeltaCount, 1);
+      assert.equal(report.deltaCounters.typing, 1);
+      assert.equal(report.deltas.length, 1);
       assert.ok(report.events.some(event =>
-        event.type === "beforeinput" && event.dataLengthUtf16 === 1
-      ));
-      assert.ok(report.events.some(event =>
-        event.type === "input" && event.dataLengthUtf16 === 1
+        event.type === "compositionupdate" &&
+        event.dataLengthUtf16 === privateCompositionSentinel.length
       ));
       assert.ok(report.deltas.some(delta =>
         delta.activityKind === "typing" && delta.replacementLengthUtf16 === 1
       ));
       assert.equal(serialized.includes(privateSentinel), false,
         "el texto inicial privado nunca debe aparecer en el archivo exportado");
+      assert.equal(serialized.includes(privateCompositionSentinel), false,
+        "el candidato IME tampoco debe aparecer en el archivo exportado");
       assert.equal(serialized.includes('"data":"Z"'), false,
         "InputEvent.data debe exportarse solo como longitud, nunca como contenido");
     } finally {

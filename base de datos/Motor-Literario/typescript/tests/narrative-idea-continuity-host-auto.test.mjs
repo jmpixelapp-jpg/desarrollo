@@ -449,3 +449,37 @@ test("reanuncia la generación local reutilizada para recuperar una inserción d
     await store.close();
   }
 });
+
+
+test("limita el volumen total de texto analizado en proyectos con muchos documentos grandes", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  const largePrefix = "x".repeat(1_900_000);
+  const text = largePrefix + " El tema central es una señal deliberadamente situada al final.";
+  try {
+    for (let index = 0; index < 11; index++) {
+      await store.saveDocument({
+        projectId: id,
+        documentId: "large-chapter-" + String(index).padStart(2, "0"),
+        text,
+        revision: 0,
+        sequence: 0,
+        updatedAt: index + 1
+      });
+    }
+    const api = new HostEngineApi({ store });
+    try {
+      api.initializeProject({ projectId: id, projectName: "Proyecto de gran volumen" });
+      await api.flushPendingChanges();
+      const index = await store.loadNarrativeIdeaContinuityIndex(id);
+      assert.ok(index);
+      assert.equal(index.sourceRevisions.length, 11);
+      assert.equal(index.summary.sourceAnalysisTruncated, true);
+      assert.equal(index.occurrences.length, 0);
+    } finally {
+      api.dispose();
+    }
+  } finally {
+    await store.close();
+  }
+});

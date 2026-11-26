@@ -498,6 +498,7 @@ export class LiveAuthorMonitor {
         !integerNonNegative(checkpoint.acceptedChanges) ||
         (hasActivityCounts && (!validActivityCounts || activityCountTotal !== checkpoint.acceptedChanges)) ||
         !integerNonNegative(checkpoint.rejectedChanges) ||
+        checkpoint.pauseCount > checkpoint.acceptedChanges + checkpoint.rejectedChanges ||
         !integerNonNegative(checkpoint.committedChanges) ||
         !integerNonNegative(checkpoint.failedChanges) ||
         checkpoint.committedChanges + checkpoint.failedChanges !== checkpoint.acceptedChanges ||

@@ -105,7 +105,7 @@ function classifyGrammaticalTense(surface: string): NarrativeObservationCandidat
   if (/(?:ar|er|ir)$/u.test(form)) return "infinitive";
   if (/(?:aba|abas|ábamos|aban|ía|ías|íamos|ían)$/u.test(form)) return "past-imperfect";
   if (/(?:ó|ió|aron|ieron|yó|yeron|dijo|dijeron)$/u.test(form)) return "past-preterite";
-  if (/(?:ado|ido|to|cho|so|abierto|muerto|visto|puesto|hecho|escrito)$/u.test(form)) return "participle";
+  if (/(?:ad[oa]s?|id[oa]s?|to|cho|so|abiert[oa]s?|muert[oa]s?|vist[oa]s?|puest[oa]s?|hech[oa]s?|escrit[oa]s?)$/u.test(form)) return "participle";
   if (/(?:a|an|e|en|o|es)$/u.test(form)) return "present";
   return "unknown";
 }

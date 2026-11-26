@@ -558,3 +558,47 @@ test("redistribuye el presupuesto y revalida cachés cuando cambia el tamaño de
     await store.close();
   }
 });
+
+
+test("refreshNarrativeKnowledge también reconcilia cambios documentales externos en el índice transversal", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  const originalText = "El tema central es la memoria compartida que une a dos ciudades.";
+  const changedText = "El tema central es la culpa compartida que divide a dos ciudades.";
+  await store.saveDocument({
+    projectId: id,
+    documentId: "chapter-explicit-refresh",
+    text: originalText,
+    revision: 3,
+    sequence: 8,
+    updatedAt: 10
+  });
+  store.subscribeNarrativeChanges = undefined;
+  const api = new HostEngineApi({ store });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Actualización explícita" });
+    await api.flushPendingChanges();
+    const before = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(before);
+
+    await store.saveDocument({
+      projectId: id,
+      documentId: "chapter-explicit-refresh",
+      text: changedText,
+      revision: 3,
+      sequence: 8,
+      updatedAt: 11
+    });
+    await api.refreshNarrativeKnowledge();
+
+    const after = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(after);
+    assert.ok(after.generation > before.generation);
+    assert.equal(after.occurrences[0].text, "la culpa compartida que divide a dos ciudades");
+    assert.equal(after.occurrences[0].revision, 3);
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});

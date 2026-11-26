@@ -94,16 +94,34 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
 
       let cancellationCount = 0;
       let cancelledEventWasTrusted = false;
+      const eventTrace = [];
       const cancelFirstInsertion = event => {
-        if (cancellationCount !== 0 || event.inputType !== "insertText") return;
-        cancellationCount += 1;
-        cancelledEventWasTrusted = event.isTrusted === true;
-        event.preventDefault();
+        if (cancellationCount === 0 && event.inputType === "insertText") {
+          cancellationCount += 1;
+          cancelledEventWasTrusted = event.isTrusted === true;
+          event.preventDefault();
+        }
+        eventTrace.push({
+          type: event.type,
+          inputType: typeof event.inputType === "string" ? event.inputType : null,
+          isTrusted: event.isTrusted === true,
+          cancelable: event.cancelable === true,
+          defaultPreventedAfterHostListener: event.defaultPrevented === true
+        });
       };
 
       // Se registra después de la fuente: reproduce un listener anfitrión que
       // cancela el beforeinput después de que el monitor capturó el candidato.
       element.addEventListener("beforeinput", cancelFirstInsertion);
+      element.addEventListener("input", event => {
+        eventTrace.push({
+          type: event.type,
+          inputType: typeof event.inputType === "string" ? event.inputType : null,
+          isTrusted: event.isTrusted === true,
+          cancelable: event.cancelable === true,
+          defaultPreventedAfterHostListener: event.defaultPrevented === true
+        });
+      });
       element.focus();
       element.setSelectionRange(element.value.length, element.value.length);
       window.__beforeinputCancellationTest = {
@@ -112,7 +130,8 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
         errors,
         changes,
         get cancellationCount() { return cancellationCount; },
-        get cancelledEventWasTrusted() { return cancelledEventWasTrusted; }
+        get cancelledEventWasTrusted() { return cancelledEventWasTrusted; },
+        get eventTrace() { return eventTrace.map(event => ({ ...event })); }
       };
 
       return { initialValue: element.value, initialState: source.getState() };
@@ -125,12 +144,9 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
     await page.locator("#trusted-input-editor").focus();
     await page.keyboard.type("x");
 
-    // El microtask del adaptador debe observar defaultPrevented después de que
-    // todos los listeners síncronos del beforeinput hayan terminado.
-    await page.waitForFunction(() => {
-      const state = window.__beforeinputCancellationTest?.source.getState();
-      return state?.pendingInput === false;
-    });
+    // keyboard.type termina después de la propagación DOM; cede una tarea para
+    // permitir que la microtarea de resolución de defaultPrevented se complete.
+    await page.waitForTimeout(0);
 
     const afterCancellation = await page.evaluate(() => {
       const test = window.__beforeinputCancellationTest;
@@ -138,6 +154,7 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
         value: test.element.value,
         cancellationCount: test.cancellationCount,
         cancelledEventWasTrusted: test.cancelledEventWasTrusted,
+        events: test.eventTrace,
         errors: [...test.errors],
         changes: [...test.changes],
         state: test.source.getState()
@@ -145,7 +162,8 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
     });
 
     assert.equal(afterCancellation.cancellationCount, 1,
-      "Chromium debe haber emitido un beforeinput que el listener anfitrión canceló");
+      "Chromium debe haber emitido un beforeinput cancelable que el listener anfitrión canceló: " +
+      JSON.stringify(afterCancellation.events));
     assert.equal(afterCancellation.cancelledEventWasTrusted, true,
       "la cancelación debe proceder de un evento confiable del navegador");
     assert.equal(afterCancellation.value, "abc",
@@ -154,7 +172,8 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
       "la cancelación voluntaria no es una discontinuidad del stream");
     assert.deepEqual(afterCancellation.changes, [],
       "no se debe publicar un delta para una edición que el editor no aplicó");
-    assert.equal(afterCancellation.state.pendingInput, false);
+    assert.equal(afterCancellation.state.pendingInput, false,
+      "el estado pendiente debe resolverse tras la propagación: " + JSON.stringify(afterCancellation.events));
     assert.equal(afterCancellation.state.needsResync, false);
 
     // La siguiente edición real debe iniciar una pareja nueva y ser admitida.

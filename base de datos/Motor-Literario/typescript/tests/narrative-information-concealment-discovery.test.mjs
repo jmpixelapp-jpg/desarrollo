@@ -53,3 +53,12 @@ test("aplica baseOffset a toda la evidencia",()=>{
 test("ignora una frase sin verbo explícito de ocultación o engaño",()=>{
  assert.deepEqual(discover(input("Ana sabía que Bruno había vuelto.")),[]);
 });
+
+test("preserva negación explícita sin etiquetarla como ocultación afirmada",()=>{
+ const [item]=discover(input("Ana no mintió a Bruno diciendo que Clara había partido."));
+ assert.equal(item.signal,"lied-to-recipient");
+ assert.equal(item.polarity,"negated");
+});
+test("exige límites de palabra para nombres de personajes",()=>{
+ assert.deepEqual(discover(input("Anabel ocultó que la carta llegó.")),[]);
+});

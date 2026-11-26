@@ -505,3 +505,20 @@ live-author-monitor-textarea-source.test.mjs cubre:
 Las pruebas unitarias de esta máquina usan EventTargets controlados. Además, live-author-monitor-browser.test.mjs ahora ejecuta una regresión en Chromium con automatización de teclado: observa un beforeinput confiable, un listener posterior cancela la acción por defecto, verifica que no aparece input y luego provoca blur real del textarea. El adaptador debe emitir missing-input, conservar cero deltas y suspenderse. Esta prueba acredita el pipeline DOM de Chromium bajo automatización, no un teclado físico ni un proveedor IME del sistema operativo. Tampoco simula un congelamiento físico del proceso ni una entrada real en BFCache; pagehide/freeze siguen cubiertos por pruebas de estado separadas.
 
 **Estado de validación:** el código y la regresión se publicaron en main; la ejecución CI sobre estos commits no está confirmada todavía. No se extrapolan aquí los resultados de CI de revisiones anteriores.
+
+## Cancelación posterior del beforeinput y liberación del par provisional — 26 de noviembre de 2026
+
+El listener del adaptador puede ejecutarse antes que otro listener de la aplicación sobre el mismo textarea. Por eso, comprobar defaultPrevented solo al entrar en handleBeforeInput no es suficiente: un listener posterior todavía puede cancelar el evento y evitar la acción por defecto.
+
+Después de crear el estado pendiente, el adaptador programa una microtarea que observa el resultado final de la propagación síncrona. Si defaultPrevented terminó siendo true y ese mismo estado continúa pendiente, libera el par provisional. No emite delta, no marca needsResync y no espera un input que la edición cancelada no debe producir.
+
+La comparación se protege por identidad del estado pendiente: si input ya consumió el par, la fuente se suspendió o una operación posterior lo sustituyó, la microtarea tardía no modifica el estado nuevo.
+
+### Regresiones
+
+- Prueba unitaria: un listener posterior cancela beforeinput; tras la microtarea no quedan datos pendientes, no se emite error, blur no invalida el stream y la siguiente edición válida se admite.
+- Prueba Chromium: Playwright produce beforeinput confiable mediante teclado; un listener posterior llama a preventDefault; se comprueba defaultPrevented=true, que no aparece input y que blur posterior no genera missing-input ni suspende una fuente que sigue sincronizada.
+
+Esta distinción es importante: un beforeinput cancelado no representa una edición perdida. En cambio, si el evento no fue cancelado y se pierde el input esperado, se conservan los diagnósticos missing-input/resync-required que protegen contra deltas inventados.
+
+La prueba Chromium ejecuta automatización del pipeline DOM del navegador. No equivale a un teclado físico, a la matriz IME de sistemas operativos ni a BFCache físico.

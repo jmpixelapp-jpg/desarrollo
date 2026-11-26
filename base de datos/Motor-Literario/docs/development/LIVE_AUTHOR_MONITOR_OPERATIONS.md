@@ -71,7 +71,7 @@ Cada `EditorChange` puede incluir `activityKind` para los contadores agregados y
 | `insertCompositionText` | `composition` | Delta de candidato IME aplicado, que puede seguir siendo provisional. |
 | `insertFromDrop`, `insertFromYank`, `insertFromDictation` | `other` | No se reclasifica como pegado ni como escritura manual sin evidencia adicional. |
 | Otro `inputType` no vacío | `other` | El identificador nativo se conserva para auditoría. |
-| `inputType` vacío/ausente | Sin categoría | El delta puede ser exacto; la cobertura de procedencia queda parcial. |
+| `inputType` vacío/ausente | Sin categoría | El adaptador textarea suspende porque no puede validar con seguridad el tipo de operación. Un proveedor transaccional puede enviar un delta exacto sin categoría, y entonces la cobertura queda parcial. |
 
 `inputType` tiene un máximo de 128 caracteres, se rechazan caracteres de control y no lleva el payload `InputEvent.data`. El metadato es efímero en `EditorChange`: no se serializa en snapshots, checkpoints, diagnósticos ni logs del monitor. El texto insertado se usa solo para validar y formar el delta y no se agrega a esta metadata.
 

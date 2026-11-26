@@ -468,7 +468,15 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     text: input.text,
     baseOffset: input.baseOffset ?? 0,
     observations: observations.map(observation => ({ evidence: observation.actionEvidence })),
-    events: eventCandidates.map(event => ({ evidence: event.evidence }))
+    events: eventCandidates.map(event => ({
+      evidence: event.evidence.map(item => ({
+        ...item,
+        excerpt: input.text.slice(
+          item.start - (input.baseOffset ?? 0),
+          item.end - (input.baseOffset ?? 0)
+        )
+      }))
+    }))
   });
   return {
     version: 1,

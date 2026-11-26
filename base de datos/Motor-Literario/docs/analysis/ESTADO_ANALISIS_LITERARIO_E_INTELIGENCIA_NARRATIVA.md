@@ -407,3 +407,17 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Las ejecuciones 2795–2799 fallaron en distintas pruebas: 2795 tuvo dos fallos de negación y reconocimiento de formas verbales; 2796–2798/2799 incluyen validaciones de los cambios de límites Unicode de nombres. Las correcciones se están consolidando por separado para no confundir el estado de cada rama de validación.
 
 **Criterio antes de ampliar formatos o añadir más heurísticas:** conseguir que la suite completa y el benchmark pasen con el clasificador de ingesta efectivo, no solo con el módulo auxiliar de observaciones.
+
+
+### Validación recuperada y ampliación de tiempo futuro — 26-11-2026
+
+- La ejecución 2800 (commit `4fb98f9`) terminó con éxito en todos sus pasos: instalación de Chromium, Type-check, build/pruebas automatizadas y benchmark de edición en vivo.
+- La ejecución 2801 (commit `00c4425`, documentación del arreglo) también terminó con éxito.
+- Se identificó una inconsistencia entre la ingesta de señales generales y la extracción de observaciones ligadas a personajes: la segunda no reconocía formas futuras ni disponía de una categoría de tiempo gramatical `future`.
+- Se añadió `future` al tipo `grammaticalTense`, su clasificación morfológica y formas futuras seleccionadas de `cruzar`, `llegar`, `caminar` y `entrar`.
+- Se añadió una prueba de regresión para «Ana cruzará», «Ana llegará», «Ana caminará» y «Ana entrará», comprobando acción, superficie, personaje y tiempo gramatical.
+- Se documentó expresamente que futuro gramatical no equivale a hecho sucedido ni a fecha cronológica.
+- Commits de esta ampliación: `d6e6583` (código), `06e6de5` (pruebas), `4e903ad` (documentación).
+- Las ejecuciones 2802, 2803 y 2804 estaban en curso/cola durante la última consulta; no se declara aún validada esta ampliación.
+
+**Próxima tarea técnica:** extender la extracción de formas futuras a los verbos de mayor frecuencia con pruebas morfológicas, y separar explícitamente futuro, condicional, obligación, deseo y predicción cuando la evidencia lingüística lo permita. Después, reforzar los vínculos entre acciones para que un marcador explícito no baste por sí solo para afirmar causalidad.

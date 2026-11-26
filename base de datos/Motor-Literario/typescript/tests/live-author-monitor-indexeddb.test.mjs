@@ -115,7 +115,7 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
 });
 
 
-test("migra IndexedDB v22 a v27 creando stores narrativos, sync y checkpoints sin perder documentos", async () => {
+test("migra IndexedDB v22 a v28 creando stores narrativos, sync y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";
   const projectId = "monitor-migration-" + randomUUID();
@@ -185,6 +185,22 @@ test("migra IndexedDB v22 a v27 creando stores narrativos, sync y checkpoints si
       for (const name of ["sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"]) {
         assert.equal(migratedDatabase.objectStoreNames.contains(name), true);
       }
+      for (const repairStoreName of [
+        "narrative-reference-repair-audits",
+        "narrative-reference-repair-pending"
+      ]) {
+        const repairStore = migratedDatabase.transaction(repairStoreName, "readonly")
+          .objectStore(repairStoreName);
+        assert.deepEqual(repairStore.keyPath, ["projectId", "operationId"]);
+        assert.equal(repairStore.indexNames.contains("by-project"), true);
+        assert.equal(repairStore.index("by-project").keyPath, "projectId");
+      }
+      const outboxStore = migratedDatabase.transaction("sync-outbox", "readonly")
+        .objectStore("sync-outbox");
+      assert.equal(outboxStore.indexNames.contains("by-project-created-at"), true);
+      assert.equal(outboxStore.indexNames.contains("by-project-device-sequence"), true);
+      assert.deepEqual(outboxStore.index("by-project-device-sequence").keyPath,
+        ["projectId", "deviceId", "sequence"]);
 
       const leaseStore = migratedDatabase.transaction(
         "live-author-monitor-leases",

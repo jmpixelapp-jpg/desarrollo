@@ -139,3 +139,10 @@ El anfitrión debe utilizar esta función en su límite de apertura/selección d
 `createRecoveryFirstNarrativeSyncConsumer(store, journal, handlers, options)` compone la recuperación de referencias con el consumidor del diario de sincronización. Para cada proyecto, procesa primero las intenciones locales pendientes y sólo inicia el replay remoto si la cola queda sin conflictos. Cuando hay una intención inválida u obsoleta, devuelve `blockedByPendingRepairs: true`, conserva las operaciones remotas sin aplicar y expone el detalle en `recovery.pending`; el anfitrión puede presentar el conflicto y reintentar tras su resolución.
 
 Esta compuerta no convierte el diario y el grafo en una transacción distribuida ni sustituye la idempotencia de los handlers. El diario mantiene entrega al menos una vez y la exclusión de replay no debe interpretarse como un mutex global entre pestañas o dispositivos. La garantía añadida es de orden dentro de este punto de entrada: recuperación durable antes de despacho remoto.
+
+
+### Concurrencia de recuperación por proyecto
+
+Las llamadas concurrentes a `recoverNarrativeReferenceRepairs` para el mismo proyecto dentro de un mismo runtime comparten una única promesa. Así, dos consumidores locales no leen y procesan simultáneamente la misma cola ni compiten innecesariamente por el CAS de una misma intención. La coordinación se libera tanto si la recuperación termina correctamente como si falla, permitiendo reintentos posteriores.
+
+El bloqueo es deliberadamente local al runtime: no coordina pestañas, procesos ni dispositivos. La persistencia IndexedDB conserva la protección CAS para escrituras concurrentes externas; un conflicto entre contextos puede quedar pendiente y requerir un nuevo intento.

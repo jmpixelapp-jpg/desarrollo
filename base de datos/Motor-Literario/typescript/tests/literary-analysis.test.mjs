@@ -2905,6 +2905,45 @@ test("ancla eventos en offsets absolutos UTF-16 y excluye revisiones obsoletas",
   assert.equal(candidate.status, "candidate-needs-review");
 });
 
+test("las resonancias léxicas contabilizan términos compartidos omitidos de su muestra", () => {
+  const projectId = "literary-analysis-test";
+  const sharedTerms = Array.from({ length: 15 }, (_, index) =>
+    "sharedlexicalterm" + String(index).padStart(2, "0")
+  );
+  const knownProjectIdeas = ["idea-a", "idea-b"].map(ideaId => ({
+    projectId,
+    ideaId,
+    text: sharedTerms.join(" "),
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  }));
+  const lexical = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nUna escena de prueba.",
+    knownProjectIdeas
+  }).ideaGraph.lexicalResonances;
+
+  assert.equal(lexical.candidatePairCount, 1);
+  assert.equal(lexical.resonances.length, 1);
+  const resonance = lexical.resonances[0];
+  assert.equal(resonance.sharedTermCount, 15);
+  assert.equal(resonance.sharedTerms.length, 12);
+  assert.equal(resonance.sharedTermFrequencies.length, 12);
+  assert.equal(resonance.omittedSharedTermCount, 3);
+  assert.deepEqual(resonance.sharedTerms, sharedTerms.slice(0, 12));
+  assert.ok(resonance.sharedTermFrequencies.every(frequency =>
+    frequency.leftFrequency === 1 && frequency.rightFrequency === 1
+  ));
+});
+
+
 test("el análisis léxico conserva el total de resonancias al limitar la muestra a cien", () => {
   const projectId = "literary-analysis-test";
   const knownProjectIdeas = Array.from({ length: 17 }, (_, cluster) => {

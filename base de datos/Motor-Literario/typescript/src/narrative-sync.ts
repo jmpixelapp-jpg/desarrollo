@@ -140,6 +140,9 @@ function validatePushResult(
     }
     add(conflict.operationId, "operationId del conflicto");
     assertNonEmpty(conflict.code, "code del conflicto");
+    if (conflict.code.length > 128) {
+      throw new TypeError("El código del conflicto supera el límite permitido.");
+    }
     if (conflict.message !== undefined &&
         (typeof conflict.message !== "string" || conflict.message.length > 2048)) {
       throw new TypeError("El mensaje del conflicto supera el límite permitido.");

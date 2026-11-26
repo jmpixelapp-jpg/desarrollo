@@ -189,3 +189,8 @@ El diagnóstico asume que el diario conserva el historial completo de operacione
 `createRecoveryFirstNarrativeSyncConsumer` ahora inspecciona la integridad del diario después de recuperar reparaciones y antes de despachar operaciones. Si quedan reparaciones en conflicto, el replay sigue bloqueado por esa causa. Si no quedan reparaciones, pero el historial del diario presenta digest inválido, metadatos locales inconsistentes o secuencias repetidas/incompletas, devuelve `blockedByJournalIntegrity: true`, el informe `journalIntegrity` y no ejecuta handlers. La operación corrupta permanece durable y pendiente para investigación; no se elimina ni se confirma automáticamente.
 
 La inspección cubre el historial del proyecto completo, no solo el escritor solicitado para replay, porque una inconsistencia en cualquier escritor es relevante para la integridad del diario compartido del proyecto.
+
+
+### Reconciliación entre cursores y operaciones
+
+La auditoría del diario también lee los cursores durables por proyecto y contrasta cada escritor con su última operación almacenada. Detecta cursores sin operaciones, cursores adelantados o retrasados respecto del diario y discrepancias en el `lastOperationId`. Esto permite detectar la pérdida de la última operación aunque las secuencias que todavía existen formen un prefijo continuo. La auditoría no reconstruye ni mueve cursores automáticamente: deja la decisión de recuperación al anfitrión, evitando inventar operaciones o confirmar recepción sin evidencia.

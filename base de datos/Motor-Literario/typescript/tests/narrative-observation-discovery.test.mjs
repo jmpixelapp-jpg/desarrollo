@@ -519,7 +519,7 @@ test("reconoce formas irregulares frecuentes sin depender de raíces regulares",
     ["Ana vino al refugio.", "venir", "vino"],
     ["Ana vio la señal.", "ver", "vio"],
     ["Ana puso la llave sobre la mesa.", "poner", "puso"],
-    ["Ana habían visto la señal.", "ver", "visto"]
+    ["Ana había visto la señal.", "ver", "visto"]
   ];
   for (const [text, action, surface] of forms) {
     const found = discoverNarrativeObservationCandidates({ ...context, text });
@@ -530,6 +530,7 @@ test("reconoce formas irregulares frecuentes sin depender de raíces regulares",
     if (["hizo", "vino", "vio", "puso"].includes(surface)) {
       assert.equal(candidate.grammaticalTense, "past-preterite", text);
     }
+    if (surface === "visto") assert.equal(candidate.grammaticalTense, "participle", text);
   }
 });
 

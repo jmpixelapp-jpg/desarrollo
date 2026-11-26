@@ -87,7 +87,7 @@ const STATE_PATTERNS: readonly {
   { state: "worried", category: "emotional", expression: /^preocupad[oa]s?(?![\p{L}\p{M}])/iu },
   { state: "hopeful", category: "emotional", expression: /^esperanzad[oa]s?(?![\p{L}\p{M}])/iu },
   { state: "sad", category: "emotional", expression: /^tristes?(?![\p{L}\p{M}])/iu },
-  { state: "happy", category: "emotional", expression: /^(?:felices?|content[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "happy", category: "emotional", expression: /^(?:feliz|felices|content[oa]s?)(?![\p{L}\p{M}])/iu },
   { state: "surprised", category: "emotional", expression: /^sorprendid[oa]s?(?![\p{L}\p{M}])/iu }
 ];
 

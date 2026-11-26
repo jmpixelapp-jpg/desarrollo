@@ -1620,3 +1620,16 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Alcance:** ambas pruebas usan `fake-indexeddb` para controlar de forma determinista abortos/eventos. No sustituyen las pruebas de crash real de proceso o pérdida física del perfil en Chromium/OS.
 
 **Validación de la regresión A (aborto):** aprobada en [run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154), test 115. **Validación CI dedicada:** [Live Author Monitor — run 45765482739](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765482739), checkout `0c74084227cb357275ec277ba289757d474c1de5`, terminó `success`. Las regresiones A y B aprobaron como tests 115 y 116: rollback tras abortar la escritura y reapertura después de invocar el handler `onclose`. Suite monitor/panel/workspace/adaptadores 167/167, diagnósticos 17/17, Page Lifecycle Chromium 1/1 e integración host/editor/browser **177/177**. Benchmark de 100.000 commits en **522,37 ms** (~191.436 commits/s), heap de 4,39 MiB a mitad y final, 0 MiB de crecimiento, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+
+## 105. Recuperación automática del diagnóstico después de corregir la cuota (26 de noviembre de 2026)
+
+**Objetivo:** asegurar que el fallo de almacenamiento no se vuelva permanente en la interfaz si el usuario libera cuota y una escritura posterior vuelve a ser aceptada.
+
+**Regresión:** un almacén de anfitrión controlado rechaza el primer checkpoint con `QuotaExceededError`, y el diagnóstico debe pasar a `checkpointState: error` con `checkpointErrorCode: QuotaExceededError`. Después se admite una nueva edición; su checkpoint se persiste correctamente, mantiene la misma sesión y el diagnóstico debe volver a `checkpointState: saved` sin código de error.
+
+**Comportamiento esperado:** `enqueueLiveAuthorMonitorCheckpoint()` ya elimina el error anterior únicamente tras completar una escritura satisfactoria. Esta prueba fija el contrato de recuperación observable y asegura que el error no se borra antes del commit durable.
+
+**Privacidad:** el mensaje del error incluye un sentinel privado, pero el diagnóstico expuesto solo contiene el nombre de clase. El test verifica que no se presenta el texto interno al consumidor.
+
+**Validación:** pendiente de GitHub Actions.

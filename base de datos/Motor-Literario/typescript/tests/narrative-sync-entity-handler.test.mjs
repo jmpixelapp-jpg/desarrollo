@@ -95,7 +95,7 @@ test("entity-upsert es idempotente después de persistir antes del acuse", async
     }
   }]);
   assert.deepEqual(await consume("novel-entities", "writer-1"), {
-    processed: 0, remaining: 1, failure: "apply-or-ack-failed"
+    processed: 0, remaining: 1, stoppedAtOperationId: "entity-operation-retry", failure: "apply-or-ack-failed"
   });
   assert.deepEqual(await consume("novel-entities", "writer-1"), {
     processed: 1, remaining: 0

@@ -177,3 +177,40 @@ test("no inventa objetivo cuando la acción pronominal no lo expresa", () => {
   assert.equal(result.pronounTargetActions.length, 0);
   assert.equal(result.interactions.length, 0);
 });
+
+
+test("compara afirmaciones actuales con memoria previa y distingue evolución temporal", () => {
+  const priorAssertions = [{
+    projectId:"novel", id:"prior-age-mara", entityId:"mara", entityName:"Mara",
+    attribute:"age", value:19,
+    evidence:{ documentId:"chapter-previous", revision:2, start:0, end:20, excerpt:"Mara tiene 19 años el 2025-01-01." },
+    timeReference:{ basis:"calendar", precision:"date", raw:"2025-01-01", orderValue:20089 },
+    capturedAt:10
+  }];
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-current", revision:3,
+    text:"Mara tiene 20 años el 2026-01-01.", entities, priorAssertions
+  });
+  assert.equal(result.assertions.length, 1);
+  assert.equal(result.assertions[0].entityId, "mara");
+  assert.equal(result.assertions[0].value, 20);
+  assert.equal(result.consistencyFindings.length, 1);
+  assert.equal(result.consistencyFindings[0].classification, "temporal-change");
+  assert.deepEqual(
+    result.consistencyFindings[0].evidence.map(item => item.documentId).sort(),
+    ["chapter-current", "chapter-previous"]
+  );
+});
+
+test("no compara memoria narrativa de otro proyecto", () => {
+  assert.throws(() => understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-current", revision:1,
+    text:"Mara tiene 20 años.", entities,
+    priorAssertions:[{
+      projectId:"other", id:"foreign", entityId:"mara", entityName:"Mara",
+      attribute:"age", value:19,
+      evidence:{ documentId:"other-chapter", revision:1, start:0, end:10, excerpt:"Mara tiene 19." },
+      capturedAt:1
+    }]
+  }), /proyecto/i);
+});

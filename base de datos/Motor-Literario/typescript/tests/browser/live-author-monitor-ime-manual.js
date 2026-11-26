@@ -236,7 +236,7 @@ function render() {
       needsResync: state.needsResync
     } : null
   }, null, 2);
-  traceNode.textContent = events.slice(-80).map(entry => JSON.stringify(entry)).join("\\n") ||
+  traceNode.textContent = events.slice(-80).map(entry => JSON.stringify(entry)).join("\n") ||
     "Aún no hay eventos registrados.";
   statusNode.textContent = !source
     ? "Captura sin iniciar."

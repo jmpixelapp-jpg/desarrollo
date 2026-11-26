@@ -1555,11 +1555,10 @@ function validateLiveAuthorMonitorLeaseRequest(
  */
 function advanceWriterLibraryVersion(transaction: IDBTransaction, writerId: string): void {
   const names = transaction.objectStoreNames as DOMStringList | undefined;
+  // Adaptadores legacy y fixtures antiguos pueden no exponer generaciones.
+  // El IndexedDB nativo de la versión 25 siempre incluye este almacén.
   if (!names || typeof names.contains !== "function" ||
-      !names.contains(WRITER_LIBRARY_VERSIONS)) {
-    try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
-    return;
-  }
+      !names.contains(WRITER_LIBRARY_VERSIONS)) return;
   const versions = transaction.objectStore(WRITER_LIBRARY_VERSIONS);
   const request = versions.get(writerId);
   request.onsuccess = () => {
@@ -3718,9 +3717,11 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(
-        [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS, WRITER_LIBRARY_VERSIONS], "readwrite"
-      );
+      const archiveStores = [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS];
+      if (db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS)) {
+        archiveStores.push(WRITER_LIBRARY_VERSIONS);
+      }
+      const transaction = db.transaction(archiveStores, "readwrite");
       const ideas = transaction.objectStore(IDEAS);
       const personal = transaction.objectStore(PERSONAL_IDEAS);
       const entities = transaction.objectStore(ENTITIES);
@@ -4584,9 +4585,10 @@ export class IndexedDbProjectStore implements ProjectStore {
     await new Promise<void>((resolve, reject) => {
       // La biblioteca se incluye incluso sin writerId para detectar
       // entradas archivadas que no podríamos mantener coherentes sin identidad.
-      const stores = [
-        ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS, WRITER_LIBRARY_VERSIONS
-      ];
+      const stores = [ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS];
+      if (db.objectStoreNames?.contains?.(WRITER_LIBRARY_VERSIONS)) {
+        stores.push(WRITER_LIBRARY_VERSIONS);
+      }
       const transaction = db.transaction(stores, "readwrite");
       const entityStore = transaction.objectStore(ENTITIES);
       const relationStore = transaction.objectStore(RELATIONS);

@@ -512,7 +512,7 @@ export interface NarrativeSyncCursorRecoveryPlan {
   readonly items: readonly NarrativeSyncCursorRecoveryItem[];
   readonly manualReviewCount: number;
   readonly proposedRebuildCount: number;
-  readonly safe: boolean;
+  readonly requiresManualReview: boolean;
 }
 
 /**
@@ -622,7 +622,7 @@ export async function planNarrativeSyncJournalCursorRecovery(
     items,
     manualReviewCount,
     proposedRebuildCount,
-    safe: manualReviewCount === 0
+    requiresManualReview: manualReviewCount > 0
   };
 }
 

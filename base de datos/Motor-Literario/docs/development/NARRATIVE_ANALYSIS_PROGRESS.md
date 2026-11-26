@@ -310,3 +310,12 @@ Se añadió `persistNarrativeKnowledgeGraphSnapshotWithManifests`: guarda primer
 Se añadió `retireNarrativeDocumentProjection`, que genera tombstones con inventarios vacíos, exige una revisión posterior a la vigente y admite replay idempotente de la misma retirada. El tombstone no elimina registros compartidos: el borrado físico queda deliberadamente fuera hasta implementar reconciliación referencial y retención segura.
 
 Pruebas añadidas a `narrative-knowledge-graph-persistence.test.mjs`: publicación y replay de manifiestos, retirada, idempotencia y rechazo de revisiones obsoletas. Pendiente ejecutar suite y typecheck.
+
+
+## Diagnóstico de reconciliación documental
+
+Se añadió `reconcileNarrativeDocumentProjections(store, projectId)`, una operación de sólo lectura que compara inventarios de manifiestos con evidencia de las cinco familias de registros narrativos. Detecta manifiestos ausentes, IDs de inventario sin evidencia, evidencia no inventariada y tombstones con evidencia residual.
+
+El diagnóstico no modifica datos ni intenta adivinar reparaciones. Esta separación evita que una rutina automática borre o restaure contenido editorialmente válido después de una caída. Las pruebas cubren un proyecto coherente, inventarios divergentes, tombstones con evidencia residual y documentos sin manifiesto, comprobando que el diagnóstico no muta las tablas.
+
+**Pendiente:** ejecutar `npm test` y `npm run typecheck` en el entorno del proyecto; no se ha observado CI en esta sesión.

@@ -1791,3 +1791,20 @@ La pausa temporal sigue invalidando continuidad y exige snapshot; el cierre defi
 Se amplió live-author-monitor-browser.test.mjs con una prueba sobre Chromium real: Playwright genera una pulsación de teclado y el adaptador observa el beforeinput confiable. Un listener registrado después cancela la acción por defecto, por lo que no debe aparecer input; al desenfocar el textarea, la fuente debe informar missing-input, liberar el estado pendiente, exigir snapshot y no publicar deltas.
 
 Esta regresión distingue el evento nativo confiable generado por el pipeline DOM de los eventos dispatchEvent sintéticos. No equivale a teclado físico ni a proveedor IME de sistema operativo; esas matrices siguen pendientes. La prueba de browser quedó publicada, pero aún no hay confirmación de CI para esta revisión.
+
+## Recuperación de binding, teardown terminal y prueba Chromium de blur — 26 de noviembre de 2026
+
+Se cerró el ciclo de recuperación entre adaptador, cola FIFO e integración:
+
+- mountLiveAuthorMonitorTextArea().resynchronize() reconecta primero el binding después de un overflow y luego llama a source.resynchronize(snapshot) con un observador activo.
+- El desmontaje definitivo dispone primero la fuente y después el binding, evitando registrar un resync-required falso durante una limpieza terminal.
+- fail() es idempotente: un rechazo permanente comunicado por binding y callback de admisión produce un solo diagnóstico de fuente.
+- Las regresiones de integración cubren rechazo permanente, recuperación desde snapshot durable, continuidad de sequence/revision y ausencia de errores durante dispose().
+
+**Prueba Chromium:** se añadió una secuencia de teclado Playwright que produce un beforeinput confiable, lo cancela desde un listener posterior, verifica que no se produce input y desenfoca el textarea. El resultado esperado es missing-input, cero deltas y captura suspendida. Se verifica además defaultPrevented=true y la posición de caret al final del contenido.
+
+**Límite:** esto valida el pipeline DOM de Chromium bajo automatización, no un teclado físico ni IME del sistema operativo. Tampoco prueba una congelación física ni BFCache real. La matriz de teclados físicos/IME por sistema operativo continúa pendiente.
+
+**Archivos:** live-author-monitor-textarea-source.ts, live-author-monitor-textarea-integration.ts, live-author-monitor-browser.test.mjs, live-author-monitor-textarea-source.test.mjs, live-author-monitor-textarea-integration.test.mjs y live-author-monitor-change-binding.test.mjs.
+
+**Validación:** los commits están publicados en main; no se ha confirmado todavía una ejecución CI sobre esta revisión.

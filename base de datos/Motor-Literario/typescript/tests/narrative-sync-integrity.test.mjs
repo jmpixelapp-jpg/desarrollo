@@ -164,3 +164,101 @@ test("la envoltura no confunde integridad con autenticación", async () => {
   assert.equal(await verifyNarrativeSyncOperationEnvelope(forgedByRehashing), true);
   assert.notEqual(forgedByRehashing.digest, original.digest);
 });
+
+
+test("diario IndexedDB acepta una secuencia, deduplica y sobrevive al reinicio", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const {
+    createNarrativeSyncOperationEnvelope
+  } = await import("../dist/motor-literario.js");
+  const { IndexedDbNarrativeSyncJournal } = await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-test-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const first = await createNarrativeSyncOperationEnvelope({
+      operationId: "journal-op-1", projectId: "project-a", writerId: "writer-a",
+      sequence: 1, createdAt: 100, kind: "idea-upsert", payload: { id: "idea-1" }
+    });
+    assert.deepEqual(await journal.accept(first), { status: "accepted", nextSequence: 2 });
+    assert.deepEqual(await journal.accept(first), { status: "duplicate", nextSequence: 2 });
+    assert.equal(await journal.getLastSequence("project-a", "writer-a"), 1);
+    journal.close();
+
+    const reopened = new IndexedDbNarrativeSyncJournal({ databaseName });
+    assert.equal(await reopened.getLastSequence("project-a", "writer-a"), 1);
+    const second = await createNarrativeSyncOperationEnvelope({
+      operationId: "journal-op-2", projectId: "project-a", writerId: "writer-a",
+      sequence: 2, createdAt: 101, kind: "idea-upsert", payload: { id: "idea-2" }
+    });
+    assert.deepEqual(await reopened.accept(second), { status: "accepted", nextSequence: 3 });
+    reopened.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});
+
+test("diario rechaza huecos, replay y colisión de operationId sin avanzar cursor", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const { createNarrativeSyncOperationEnvelope, IndexedDbNarrativeSyncJournal } =
+    await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-reject-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const make = (operationId, sequence, payload = { value: sequence }) =>
+      createNarrativeSyncOperationEnvelope({
+        operationId, projectId: "project-b", writerId: "writer-b",
+        sequence, createdAt: 200 + sequence, kind: "event-upsert", payload
+      });
+    const second = await make("op-2", 2);
+    await assert.rejects(() => journal.accept(second), /Hueco de secuencia/u);
+    assert.equal(await journal.getLastSequence("project-b", "writer-b"), 0);
+
+    const first = await make("op-1", 1);
+    await journal.accept(first);
+    await assert.rejects(() => journal.accept(await make("op-old", 1)), /Replay/u);
+    await assert.rejects(() => journal.accept(await make("op-1", 2, { changed: true })), /Conflicto/u);
+    assert.equal(await journal.getLastSequence("project-b", "writer-b"), 1);
+    journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});
+
+test("diario mantiene secuencias aisladas por proyecto y escritor", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const { createNarrativeSyncOperationEnvelope, IndexedDbNarrativeSyncJournal } =
+    await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-isolation-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const envelope = await createNarrativeSyncOperationEnvelope({
+      operationId: "isolated-op", projectId: "project-c", writerId: "writer-c",
+      sequence: 1, kind: "idea-upsert", payload: { id: "idea-c" }
+    });
+    await journal.accept(envelope);
+    assert.equal(await journal.getLastSequence("project-c", "writer-c"), 1);
+    assert.equal(await journal.getLastSequence("project-c", "writer-d"), 0);
+    assert.equal(await journal.getLastSequence("project-d", "writer-c"), 0);
+    journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});

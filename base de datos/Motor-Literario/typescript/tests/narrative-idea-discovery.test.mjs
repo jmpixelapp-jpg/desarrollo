@@ -121,3 +121,20 @@ test("marca preguntas e hipótesis como modalidades no confirmadas", () => {
 
   assert.deepEqual(found.map(item => item.polarity), ["hypothetical", "hypothetical"]);
 });
+
+
+test("descubre semillas de historia y temas sugeridos en formulaciones exploratorias", () => {
+  const text = [
+    "Me gustaría explorar una ciudad que cambia de lugar cada noche.",
+    "La trama gira en torno a la memoria heredada.",
+    "La protagonista sueña con regresar a su hogar."
+  ].join("\\n");
+
+  const found = discoverNarrativeIdeaCandidates({ ...context, text });
+  assert.deepEqual(found.map(item => item.kind), ["premise", "theme", "goal"]);
+  assert.deepEqual(found.map(item => item.text), [
+    "una ciudad que cambia de lugar cada noche",
+    "la memoria heredada",
+    "regresar a su hogar"
+  ]);
+});

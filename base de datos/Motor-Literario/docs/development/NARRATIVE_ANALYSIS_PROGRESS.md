@@ -52,3 +52,15 @@ Los documentos añadidos después de estas ejecuciones no modifican código ejec
 ## 4. Estado que no debe sobredeclararse
 
 La canonicalización y las pruebas locales de bandeja no equivalen a sincronización remota. La sincronización multidispositivo todavía necesita transporte remoto, autenticación/autorización, API versionada, idempotencia de servidor, política de reintentos y reconciliación interactiva de conflictos. El PR #56 continúa separado y no se considera fusionado por este registro.
+
+
+## 5. Consistencia temporal de afirmaciones
+
+- Nuevo módulo `typescript/src/narrative-consistency.ts`, exportado desde el índice público.
+- `analyzeNarrativeConsistency` compara valores distintos del mismo atributo y entidad dentro de un proyecto.
+- Distingue conflicto en el mismo instante, evolución entre referencias ordenables y tiempo no comparable.
+- Ignora evidencia obsoleta y preserva las dos evidencias junto con una explicación.
+- Pruebas en `tests/narrative-consistency.test.mjs` para fechas, día narrativo, precisión, aislamiento y validación.
+- Contrato detallado: [Consistencia temporal de afirmaciones](../architecture/CONSISTENCIA_TEMPORAL_DE_AFIRMACIONES.md).
+
+**Límite:** los conflictos son candidatos para revisión humana; el motor no decide qué versión es verdadera. La comparación por pares es cuadrática por grupo entidad/atributo. Este módulo tampoco completa sincronización remota multidispositivo.

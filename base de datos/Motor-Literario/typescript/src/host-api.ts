@@ -52,6 +52,7 @@ import {
   updateNarrativeIdeaContinuityIndexIncrementally,
   type NarrativeIdeaContinuityIndex
 } from "./narrative-idea-continuity-index";
+import type { IndexedDbNarrativeSyncOutbox } from "./narrative-sync-outbox";
 
 import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
@@ -639,6 +640,8 @@ export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "o
    * las recurrencias se detectan pero su cronología permanece desconocida.
    */
   readonly getOrderedDocumentIds?: (projectId: string) => readonly string[] | undefined;
+  /** Outbox local persistente opcional; requiere ProjectIdentity.writerId estable. */
+  readonly continuityOutbox?: IndexedDbNarrativeSyncOutbox;
 }
 
 /**
@@ -658,6 +661,7 @@ export class HostEngineApi {
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
   private readonly onNarrativeIdeaContinuityIndexUpdated: HostCallbacks["onNarrativeIdeaContinuityIndexUpdated"];
   private readonly getOrderedDocumentIds: HostEngineOptions["getOrderedDocumentIds"];
+  private readonly hasNarrativeContinuityOutbox: boolean;
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
   private continuityIndexTail: Promise<void> = Promise.resolve();
@@ -761,7 +765,29 @@ export class HostEngineApi {
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
-    this.onNarrativeIdeaContinuityIndexUpdated = options.callbacks?.onNarrativeIdeaContinuityIndexUpdated;
+    this.hasNarrativeContinuityOutbox = Boolean(options.continuityOutbox);
+    const continuityNoticeCallback = options.callbacks?.onNarrativeIdeaContinuityIndexUpdated;
+    this.onNarrativeIdeaContinuityIndexUpdated =
+      continuityNoticeCallback || options.continuityOutbox
+        ? async notice => {
+            const operations: Promise<unknown>[] = [];
+            if (continuityNoticeCallback) {
+              operations.push(Promise.resolve(continuityNoticeCallback(notice)));
+            }
+            if (options.continuityOutbox) {
+              const writerId = this.requireWriterId();
+              operations.push(options.continuityOutbox.enqueueContinuityIndex({
+                index: notice.index,
+                writerId,
+                ...(notice.expectedGeneration !== undefined
+                  ? { expectedGeneration: notice.expectedGeneration }
+                  : {}),
+                createdAt: notice.index.updatedAt
+              }));
+            }
+            await Promise.all(operations);
+          }
+        : undefined;
     this.getOrderedDocumentIds = options.getOrderedDocumentIds;
     this.engine = new LiteraryEngine({
       store: options.store,
@@ -4221,6 +4247,7 @@ export class HostEngineApi {
         this.store.saveNarrativeIdeaContinuityIndexIfUnchanged
       ),
       narrativeIdeaContinuityTransportNotification: Boolean(this.onNarrativeIdeaContinuityIndexUpdated),
+      narrativeIdeaContinuityDurableOutbox: this.hasNarrativeContinuityOutbox,
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt

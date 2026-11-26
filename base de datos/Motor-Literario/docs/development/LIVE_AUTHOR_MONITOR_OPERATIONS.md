@@ -748,7 +748,7 @@ La prueba de aborto fuerza `transaction.abort()` después de que el adaptador ha
 
 Un aborto después de `checkpointStore.put()` debe revertir toda la transacción `readwrite`; no se puede anunciar éxito ni dejar un checkpoint nuevo a medias. El error del request se conserva y una operación posterior debe poder escribir normalmente. La prueba deja un checkpoint anterior, aborta la siguiente escritura tras encolarla y comprueba tanto el rollback como la recuperación de una escritura posterior.
 
-Cuando el navegador notifica `IDBDatabase.onclose`, el almacén elimina la promesa de conexión cacheada. Sin esa invalidación, operaciones futuras podrían seguir usando una conexión cerrada. La regresión de cierre externo dispara el evento `close` tras cerrar una conexión, lee dos veces el checkpoint y verifica que la primera lectura haya reabierto la base y la segunda reutilice la conexión nueva.
+Cuando el navegador notifica `IDBDatabase.onclose`, el almacén elimina la promesa de conexión cacheada. Sin esa invalidación, operaciones futuras podrían seguir usando una conexión cerrada. La regresión de cierre externo cierra la conexión e invoca el handler `onclose` que el adaptador registró (el simulador no admite un `dispatchEvent` sintético después del cierre); lee dos veces el checkpoint y verifica que la primera lectura haya reabierto la base y la segunda reutilice la conexión nueva.
 
 Estas pruebas deterministas no equivalen a un apagado forzado de sistema operativo ni a pérdida real del almacenamiento; esos casos requieren pruebas de navegador/dispositivo adicionales.
 

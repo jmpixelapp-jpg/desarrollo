@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `22` (manifiesto físico, mapping version `12`).
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `25` (manifiesto físico, mapping version `15`).
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -20,6 +20,7 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `narrative-events` | `[projectId, id]` | `by-project` | Acontecimientos y referencias temporales explícitas |
 | `narrative-ideas` | `[projectId, id]` | `by-project` | Ideas del libro, estado e historial |
 | `personal-idea-library` | `[writerId, sourceProjectId, idea.id]` | `by-writer`, `by-writer-source`, `by-source-project` | Ideas no incorporadas archivadas con contexto |\n| `writer-library-finalization-receipts` | `[writerId, sourceProjectId, receiptId]` | `by-writer`, `by-writer-source` | Recibos idempotentes de transferencia final de ideas |
+| `writer-library-versions` | `writerId` | — | Generación monotónica para lecturas paginadas consistentes por escritor |
 | `narrative-assertions` | `[projectId, id]` | `by-project`, `by-entity` | Afirmaciones históricas explícitas |
 | `document-diagnostics` | `[projectId, documentId]` | `by-project` | Diagnósticos asociados a revisión |
 | `project-dictionaries` | `[projectId, id]` | `by-project`, `by-project-language-name` único | Diccionarios por proyecto e idioma |
@@ -72,7 +73,7 @@ Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()
 | `record_lifecycles` | `record-lifecycles` | Implementado; historial append-only con continuidad de revisión |
 | `relation_lifecycles` | `relation-lifecycles` | Implementado; historial append-only con continuidad de revisión |
 | `event_lifecycles` | `event-lifecycles` | Implementado; transiciones de etiqueta y participantes con instantáneas anterior/nueva y escritura atómica |
-| `writer_library_ideas` | `personal-idea-library` | Implementado con transacción de transferencia |
+| `writer_library_ideas` | `personal-idea-library` + `writer-library-versions` | Implementado; transferencia atómica, generación monotónica y paginación keyset con reinicio al detectar cambios |
 | `writer_library_finalization_receipts` | `writer-library-finalization-receipts` | Implementado; recibo idempotente con checksum y transferencia en la misma transacción |
 
 Las 25 tablas lógicas propiedad del motor están implementadas. `projects` permanece bajo propiedad del anfitrión. Los vínculos de diccionario se materializan por separado y DB21 conserva las asociaciones heredadas indicando expresamente que su procedencia es MIGRATION y que su fecha corresponde a la migración, no a una fecha histórica reconstruida.
@@ -81,6 +82,6 @@ El archivo `storage_mapping_v0.4.2.json` es la fuente verificable del mapeo: con
 
 ## Límites que no deben ocultarse
 
-La versión IndexedDB 22 añade el historial append-only de acontecimientos (`event-lifecycles`) con aislamiento por proyecto y revisión única, además de mantener las fichas genéricas, nombres, relaciones, evidencias, ocurrencias cronológicas y vínculos de diccionario en almacenes independientes (`project-records`, `record-names`, `project-relations`, `project-evidences` y `timeline-occurrences`), sin sustituir los almacenes especializados de extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
+La versión IndexedDB 25 añade generaciones durables de biblioteca por escritor y lectura keyset paginada; la versión 22 añadió el historial append-only de acontecimientos (`event-lifecycles`) con aislamiento por proyecto y revisión única, además de mantener las fichas genéricas, nombres, relaciones, evidencias, ocurrencias cronológicas y vínculos de diccionario en almacenes independientes (`project-records`, `record-names`, `project-relations`, `project-evidences` y `timeline-occurrences`), sin sustituir los almacenes especializados de extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.

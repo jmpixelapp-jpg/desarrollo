@@ -86,12 +86,12 @@ test("acepta alias explícitos como menciones de antecedente", () => {
   assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt, "La viajera");
 });
 
-test("ignora nombres que aparecen después y no inventa concordancia gramatical", () => {
-  const text = "La espada solar brilló. Ella cayó.";
+test("no exige concordancia gramatical para conservar un antecedente nominal explícito", () => {
+  const text = "Espada Solar brilló. Ella cayó.";
   const [reference] = discover(text, { entities: [sword] });
   assert.equal(reference.status, "single-candidate");
   assert.equal(reference.antecedentCandidates[0].entityId, sword.id);
-  assert.equal(reference.status, "single-candidate");
+  assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt, "Espada Solar");
 });
 
 test("rechaza entidades duplicadas o de otro proyecto", () => {

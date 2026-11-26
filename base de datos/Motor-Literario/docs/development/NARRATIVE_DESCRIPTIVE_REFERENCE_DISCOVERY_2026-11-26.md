@@ -17,3 +17,28 @@ La prueba de carga construye un documento de dos millones de unidades y trece pe
 ## Alcance semántico
 
 Este módulo sigue buscando solo etiquetas previamente revisadas y asociadas a perfiles de personaje. No extrae por sí solo descripciones nuevas ni decide a quién se refiere una descripción. La asociación continúa siendo candidata y requiere revisión.
+
+## Extracción de descripciones en aposición — 26 de noviembre de 2026
+
+Se incorpora `discoverNarrativeDescriptiveLabelCandidates` al módulo. Detecta una forma acotada de aposición nominal inmediatamente posterior a una entidad conocida: «Ana, la heredera del reino» o «Ana, la mujer con cicatriz». La extracción reconoce determinantes españoles comunes y hasta dos complementos preposicionales.
+
+Cada propuesta conserva dos evidencias independientes: la mención del nombre/alias que sirve de ancla y el fragmento descriptivo. El resultado indica `appositive-description` y `reviewStatus: candidate`. No escribe la etiqueta en `NarrativeEntity`, no afirma que sea verdadera y no convierte la aposición en identidad confirmada.
+
+### Límites y precisión
+
+- Texto de hasta 2.000.000 de unidades UTF-16.
+- Máximo de 10.000 entidades y 2.000 propuestas por llamada.
+- Presupuesto agregado de 25.000.000 de unidades estimadas de exploración.
+- Solo se consideran nombre canónico y alias explícitos como ancla.
+- Etiquetas limitadas a determinante + núcleo nominal + hasta dos complementos preposicionales.
+- Los offsets se expresan en UTF-16 y respetan `baseOffset`.
+
+La gramática es deliberadamente conservadora: no intenta resolver aposiciones libres, relativas como «la mujer que llegó del norte», ni descripciones separadas del nombre por varias cláusulas. Esas construcciones requieren análisis sintáctico/contextual más amplio.
+
+### Pruebas añadidas
+
+Se añaden pruebas para «Ana, la heredera del reino», offsets absolutos con caracteres suplementarios y rechazo de frases descriptivas sin una entidad explícita como ancla. La ejecución del conjunto de pruebas debe confirmarse en el entorno CI; el commit por sí solo no equivale a una ejecución satisfactoria.
+
+### Próximo paso
+
+Ampliar la extracción a aposiciones con incisos y complementos relativos, manteniendo separadas la extracción de frase, la atribución candidata y la confirmación editorial. También será necesario evaluar falsos positivos sobre prosa literaria real antes de ampliar la gramática.

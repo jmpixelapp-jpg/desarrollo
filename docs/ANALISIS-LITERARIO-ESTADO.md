@@ -121,34 +121,34 @@ Ejecución: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/4573260427
 
 ### Correcciones guiadas por CI y validación integral aprobada
 
-La ejecución integral del workflow **Motor Literario TypeScript** sobre el commit `8855c23ed7d56c7041785150355835d38d42dc83` terminó correctamente:
+La ejecución integral del workflow **Motor Literario TypeScript** sobre el commit `bf6d3f559bb045120bf5fb04aa37ae72985af0ba` terminó correctamente:
 
 - `npm run typecheck`: aprobado.
 - Compilación, validación de esquemas y `npm test`: aprobados.
-- Resultado de Node Test Runner: **713 pruebas, 704 aprobadas, 0 fallidas y 9 omitidas**.
+- Resultado de Node Test Runner: **714 pruebas, 714 aprobadas, 0 fallidas y 0 omitidas**.
 - `npm run bench`: aprobado.
-- Ejecución CI: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734599092
+- Ejecución CI: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734900028
 
 Correcciones incorporadas durante la depuración:
 
 1. La API descarta cachés parciales de ideas y entidades cuando falla la validación de referencias, permitiendo que la siguiente consulta vuelva a leer el almacenamiento durable.
 2. El analizador admite catálogos globales de hasta **12.000 ideas** y hasta **2.000 encabezados/escenas explícitas** por fragmento.
-3. La detección de conectores causales utiliza límites Unicode de letras y marcas, evitando que conectores acentuados como `provocó`, `causó` y `desencadenó` queden fuera por el comportamiento ASCII de `\b`.
+3. La detección de conectores causales utiliza límites Unicode de letras y marcas, evitando que conectores acentuados como `provocó`, `causó` y `desencadenó` queden fuera por el comportamiento ASCII de `\b`. Se añadieron pruebas de conectores acentuados y de falsos positivos dentro de palabras.
 4. Las métricas de convergencia a dos saltos conservan la distinción entre retornos cíclicos, destinos compartidos y ramas exclusivas.
-5. Las pruebas transaccionales de ideas usan `fake-indexeddb` y ya no dependen de que el runtime exponga IndexedDB nativo.
+5. Las pruebas transaccionales de ideas y las nueve pruebas de persistencia del motor usan `fake-indexeddb`; así se ejecutan en Node sin depender de IndexedDB nativo.
 6. Las expectativas de sincronización y de catálogos históricos se ajustaron a los contratos actuales: revalidación de referencias, historiales importados parciales y contadores explícitamente inválidos.
 
 #### Resultados del benchmark de edición en vivo
 
-Métricas observadas en la ejecución de CI; son mediciones de ese runner y no garantías universales:
+Métricas observadas en esta ejecución de CI; son mediciones de ese runner y no garantías universales:
 
 | Tamaño del documento | Ediciones | P95 commit | P95 extremo a extremo | Delta de heap |
 |---:|---:|---:|---:|---:|
-| 10.000 palabras | 40 | 5,06 ms | 5,49 ms | +0,75 MB |
-| 100.000 palabras | 40 | 2,21 ms | 2,63 ms | +1,83 MB |
-| 500.000 palabras | 40 | 3,54 ms | 4,04 ms | +3,61 MB |
-| 20.000 palabras, una sola línea | 5 | 61,59 ms | 61,80 ms | -9,65 MB |
+| 10.000 palabras | 40 | 7,22 ms | 7,88 ms | +0,76 MB |
+| 100.000 palabras | 40 | 3,25 ms | 3,84 ms | +1,82 MB |
+| 500.000 palabras | 40 | 5,69 ms | 6,38 ms | +3,63 MB |
+| 20.000 palabras, una sola línea | 5 | 69,74 ms | 70,07 ms | -9,65 MB |
 
-Escenario concurrente: 4 documentos, 10 ediciones por documento, 40 ediciones totales; P95 extremo a extremo de 1,21 ms y máximo de 4 documentos activos.
+Escenario concurrente: 4 documentos, 10 ediciones por documento, 40 ediciones totales; P95 extremo a extremo de 1,68 ms y máximo de 4 documentos activos.
 
-**Estado de esta fase:** las comprobaciones automatizadas configuradas en el workflow pasan en el commit citado. Las 9 pruebas omitidas siguen contabilizadas como omitidas, no como aprobadas.
+**Estado de esta fase:** todas las pruebas configuradas en el workflow se ejecutaron y aprobaron en el commit citado. No quedaron pruebas omitidas en esa ejecución.

@@ -174,6 +174,29 @@ test("restaurar un checkpoint antiguo marca incompleta la cobertura de unidades 
     "new observations do not retroactively complete missing historical metrics");
 });
 
+test("una resincronización textual invalida la cobertura histórica de unidades por actividad", () => {
+  const { monitor, open, change, queued } = fixture();
+  open("chapter-1", "abc");
+  monitor.recordAdmission({
+    ...change(1, 0, 3, 3, "x"),
+    activityKind: "typing"
+  }, queued("resync-units"));
+  monitor.recordCommit({ ticketId: "resync-units", status: "applied", revision: 1 });
+  assert.equal(monitor.getSnapshot("chapter-1").activityUnitMetricsComplete, true);
+
+  const resynced = monitor.resynchronizeDocument({
+    documentId: "chapter-1",
+    text: "abcx",
+    revision: 1,
+    sequence: 1
+  });
+  assert.equal(resynced.activityUnitMetricsComplete, false,
+    "el snapshot confirma el texto, no reconstruye la clasificación de cambios ausentes");
+  const checkpoint = monitor.createCheckpoint("chapter-1", 100);
+  assert.equal(checkpoint.activityUnitMetricsComplete, false,
+    "la cobertura incompleta debe conservarse en el checkpoint");
+});
+
 test("registra rechazos sin sumarlos a los caracteres aceptados", () => {
   const { monitor, open, change } = fixture();
   open();

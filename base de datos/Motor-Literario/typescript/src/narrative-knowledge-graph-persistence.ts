@@ -1078,8 +1078,7 @@ export async function verifyNarrativeReferenceRepairAuditIntegrity(
     const valid = entry.operation === "narrative-reference-repair" &&
       entry.projectId === projectId && validType && expectedField &&
       typeof entry.recordId === "string" && !!entry.recordId &&
-      typeof entry.missingReferenceId === "string" && !!entry.missingReferenceId &&
-      typeof entry.replacementEntityId === "string" && !!entry.replacementEntityId &&
+      missingReferenceId !== undefined && replacementEntityId !== undefined &&
       Number.isFinite(entry.appliedAt) && (entry.appliedAt ?? -1) >= 0 &&
       validValues;
     if (!valid) {

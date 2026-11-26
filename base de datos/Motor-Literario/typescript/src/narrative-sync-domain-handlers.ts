@@ -381,3 +381,124 @@ export function createNarrativeEntityMergeHandler(
     }
   };
 }
+
+/**
+ * Payload de finalización de libro y transferencia a la biblioteca personal.
+ * La lista exacta evita que el receptor archive ideas creadas después del evento.
+ */
+export interface PersonalIdeaArchivePayload {
+  readonly writerId: string;
+  readonly sourceProjectName: string;
+  readonly archivedAt: number;
+  readonly archivedIdeaIds: readonly string[];
+  readonly archiveChecksum: string;
+}
+
+function isPersonalIdeaArchivePayload(value: unknown): value is PersonalIdeaArchivePayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Partial<PersonalIdeaArchivePayload>;
+  return typeof item.writerId === "string" && !!item.writerId.trim() && item.writerId.length <= 256 &&
+    typeof item.sourceProjectName === "string" && !!item.sourceProjectName.trim() && item.sourceProjectName.length <= 512 &&
+    Number.isFinite(item.archivedAt) && item.archivedAt! >= 0 &&
+    Array.isArray(item.archivedIdeaIds) && item.archivedIdeaIds.length <= 100_000 &&
+    item.archivedIdeaIds.every(id => typeof id === "string" && !!id.trim() && id.length <= 512) &&
+    new Set(item.archivedIdeaIds).size === item.archivedIdeaIds.length &&
+    item.archivedIdeaIds.every((id, index, ids) => index === 0 || ids[index - 1]! < id) &&
+    typeof item.archiveChecksum === "string" && /^fnv1a64:[0-9a-f]{16}$/u.test(item.archiveChecksum);
+}
+
+/**
+ * Replica el cierre de un libro solo bajo la identidad de escritor autenticada
+ * por el anfitrión. El store vuelve a comparar el conjunto de IDs y el recibo
+ * durable después de archivar; una operación fuera de orden queda pendiente.
+ */
+export function createPersonalIdeaArchiveHandler(
+  store: ProjectStore,
+  resolveAuthorizedWriterId: (projectId: string) => string | undefined
+): NarrativeSyncOperationHandler<PersonalIdeaArchivePayload> {
+  if (!store || typeof store.archiveUnincorporatedIdeas !== "function" ||
+      typeof store.loadProjectFinalizationReceipt !== "function" ||
+      typeof resolveAuthorizedWriterId !== "function") {
+    throw new TypeError("El archivo personal requiere una resolución de escritor autenticado y recibo durable.");
+  }
+  return {
+    kind: "personal-idea-archive",
+    validate: isPersonalIdeaArchivePayload,
+    async apply(operation): Promise<void> {
+      const payload = operation.payload;
+      const authorizedWriterId = resolveAuthorizedWriterId(operation.projectId);
+      if (!authorizedWriterId || authorizedWriterId !== payload.writerId) {
+        throw new Error("El escritor de la operación no coincide con la identidad autenticada del proyecto.");
+      }
+      const entries = await store.archiveUnincorporatedIdeas!(
+        operation.projectId, payload.writerId, payload.sourceProjectName,
+        payload.archivedAt, undefined, payload.archivedIdeaIds
+      );
+      if (!Array.isArray(entries) || entries.length !== payload.archivedIdeaIds.length) {
+        throw new Error("La biblioteca local no devolvió exactamente la colección archivada.");
+      }
+      for (const entry of entries) {
+        if (!entry || entry.writerId !== payload.writerId ||
+            entry.sourceProjectId !== operation.projectId ||
+            entry.sourceProjectName !== payload.sourceProjectName ||
+            entry.category !== payload.sourceProjectName ||
+            entry.archivedAt !== payload.archivedAt ||
+            !entry.idea || entry.idea.projectId !== operation.projectId ||
+            entry.idea.sourceProjectName !== payload.sourceProjectName ||
+            entry.idea.status !== "IDEA" || entry.context?.version !== 1) {
+          throw new Error("La biblioteca local devolvió una entrada ajena o incompleta.");
+        }
+      }
+      const archivedIds = entries.map(entry => entry.idea.id).sort();
+      if (JSON.stringify(archivedIds) !== JSON.stringify(payload.archivedIdeaIds)) {
+        throw new Error("La biblioteca local no confirmó exactamente las ideas de la operación recibida.");
+      }
+      const receipt = await store.loadProjectFinalizationReceipt!(payload.writerId, operation.projectId);
+      if (!receipt || !Array.isArray(receipt.archivedIdeaIds) ||
+          receipt.writerId !== payload.writerId ||
+          receipt.sourceProjectId !== operation.projectId ||
+          receipt.sourceProjectName !== payload.sourceProjectName ||
+          receipt.finalizedAt !== payload.archivedAt ||
+          receipt.archiveChecksum !== payload.archiveChecksum ||
+          JSON.stringify([...receipt.archivedIdeaIds].sort()) !== JSON.stringify(payload.archivedIdeaIds)) {
+        throw new Error("El recibo durable de la biblioteca no coincide con la operación de archivo.");
+      }
+    }
+  };
+}
+
+export interface NarrativeSyncDomainHandlerOptions {
+  /** Identidad del escritor obtenida de la sesión autenticada del anfitrión. */
+  readonly resolveAuthorizedWriterId?: (projectId: string) => string | undefined;
+}
+
+/**
+ * Registra los seis handlers de dominio CAS/fusión y, cuando se proporciona
+ * una identidad autenticada, el handler de archivo a la biblioteca personal.
+ */
+export type NarrativeSyncDomainHandler =
+  | NarrativeSyncOperationHandler<NarrativeEntityUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeEntityMergePayload>
+  | NarrativeSyncOperationHandler<NarrativeIdeaUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeAssertionUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeRelationUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeEventUpsertPayload>
+  | NarrativeSyncOperationHandler<PersonalIdeaArchivePayload>;
+
+export function createNarrativeSyncDomainHandlers(
+  store: ProjectStore,
+  options: NarrativeSyncDomainHandlerOptions = {}
+): readonly NarrativeSyncDomainHandler[] {
+  const handlers: NarrativeSyncDomainHandler[] = [
+    createNarrativeEntityUpsertHandler(store),
+    createNarrativeEntityMergeHandler(store),
+    createNarrativeIdeaUpsertHandler(store),
+    createNarrativeAssertionUpsertHandler(store),
+    createNarrativeRelationUpsertHandler(store),
+    createNarrativeEventUpsertHandler(store)
+  ];
+  if (options.resolveAuthorizedWriterId) {
+    handlers.push(createPersonalIdeaArchiveHandler(store, options.resolveAuthorizedWriterId));
+  }
+  return handlers;
+}

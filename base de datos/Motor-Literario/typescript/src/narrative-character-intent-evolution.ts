@@ -143,7 +143,10 @@ export function evolveNarrativeCharacterIntents(
       transition = "withdrawn";
       candidates = exact;
     } else if (signal?.kind === "replacement") {
-      const affirmed = orderedPrior.filter(item => item.polarity === "affirmed");
+      const excerpt = normalize(current.evidence.excerpt);
+      const affirmed = orderedPrior.filter(item =>
+        item.polarity === "affirmed" && excerpt.includes(normalize(item.text))
+      );
       transition = affirmed.length === 1 ? "replaced" : affirmed.length > 1
         ? "ambiguous-predecessor" : "coexisting";
       candidates = affirmed;

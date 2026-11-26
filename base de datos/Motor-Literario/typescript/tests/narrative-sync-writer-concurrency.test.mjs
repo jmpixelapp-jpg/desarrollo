@@ -88,8 +88,9 @@ async function mutateStoredCursor(databaseName, projectId, writerId, mutate) {
     const request = store.get([projectId, writerId]);
     request.onsuccess = () => {
       const current = request.result;
-      if (current) store.put(mutate(current));
-      else if (mutate === null) store.delete([projectId, writerId]);
+      const next = mutate(current);
+      if (next === null) store.delete([projectId, writerId]);
+      else if (next !== undefined) store.put(next);
     };
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error);
@@ -107,15 +108,6 @@ test("aplica una propuesta de cursor ausente y el reintento es idempotente", asy
   });
   await journal.accept(envelope);
   await mutateStoredCursor(databaseName, "recover-cursor-project", "writer-recover", () => null);
-  // El helper de mutación elimina el registro explícitamente para simular pérdida de cursor.
-  const database = await openJournalDatabase(databaseName);
-  await new Promise((resolve, reject) => {
-    const transaction = database.transaction("writer-cursors", "readwrite");
-    transaction.objectStore("writer-cursors").delete(["recover-cursor-project", "writer-recover"]);
-    transaction.oncomplete = resolve;
-    transaction.onerror = () => reject(transaction.error);
-  });
-  database.close();
 
   const plan = await planNarrativeSyncJournalCursorRecovery(journal, "recover-cursor-project");
   const proposal = plan.items[0].proposal;
@@ -141,9 +133,7 @@ test("rechaza una propuesta obsoleta si el diario avanzó después de planificar
     writerId: "writer-stale", sequence: 1, kind: "note", payload: { n: 1 }
   });
   await journal.accept(first);
-  // Construimos la propuesta de forma consultiva y simulamos la pérdida del cursor.
-  const database = await openJournalDatabase("narrative-sync-cursor-stale-journal-" + "");
-  database.close();
+  // La propuesta representa un snapshot válido anterior al avance del diario.
   const proposal = {
     projectId: "stale-journal-project", writerId: "writer-stale",
     lastSequence: 1, lastOperationId: "stale-journal-1"

@@ -167,3 +167,16 @@ Se incorpora `typescript/src/narrative-pronoun-target-link.ts`. Cuando el sujeto
 - El pipeline integra estas acciones con las interacciones y los candidatos de cambio de señal.
 
 Se agregan pruebas para el recorrido «Mara llegó. Ella protegió a Elian. Después, Ella traicionó a Elian», y para comprobar que «Ella protegió» no genera un objetivo inventado.
+
+
+## Fase L: memoria narrativa entre fragmentos
+
+- El pipeline acepta `priorAssertions` procedentes de capítulos o fragmentos anteriores del mismo proyecto.
+- Extrae afirmaciones explícitas de edad, ubicación y rol del fragmento actual y las compara con esa memoria previa.
+- Devuelve `assertions` y `consistencyFindings` en el resultado coordinado.
+- Distingue cambios temporales ordenables, conflictos en el mismo instante y casos temporalmente incomparables.
+- Conserva las dos evidencias originales para que el escritor pueda revisar la evolución.
+- Rechaza memoria previa de otro proyecto y limita la colección de entrada a 5.000 afirmaciones.
+- No decide qué versión es canónica, no corrige el texto y no interpreta automáticamente un cambio como error: una edad o ubicación diferente puede ser evolución legítima.
+
+**Límite:** la memoria anterior debe ser suministrada por la capa de biblioteca/persistencia; el pipeline no consulta ni modifica almacenes por su cuenta. La extracción sigue limitada a patrones lingüísticos explícitos de los atributos soportados.

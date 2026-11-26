@@ -49,6 +49,7 @@ Reglas de prudencia:
 - Si aparecen varios personajes, conserva todos como mencionados y deja el actor sin resolver.
 - La presencia de una entidad en una frase no demuestra que sea objeto directo o destinatario.
 - La negación explícita se conserva; "no abrió" nunca se transforma en una acción afirmada.
+- Los pronombres iniciales explícitos (él/ella/ellos/ellas) se registran como referencias pendientes; se conserva la frase anterior como evidencia y los posibles antecedentes como candidatos, sin resolver identidad automáticamente.
 - No se infieren emociones, motivaciones, causalidad ni cronología.
 
 Callback: `onNarrativeObservationCandidates(analysis, candidates)`.
@@ -67,11 +68,12 @@ Callback: `onNarrativeObservationCandidates(analysis, candidates)`.
 
 1. **Contexto coherente de escena:** aportar a cada análisis un contexto acotado de frases anteriores/posteriores del snapshot de la misma revisión, sin perder los offsets globales.
 2. **Menciones de personajes:** generar candidatos de nombres propios no registrados, resolver ambigüedades y solicitar confirmación antes de crear identidades.
-3. **Acciones con sujeto gramatical:** mejorar concordancia sujeto-verbo, coordinación, diálogo y voz pasiva; no asignar actor solo por ser el único personaje nombrado si la sintaxis no lo demuestra.
-4. **Acontecimientos narrados:** detectar secuencias de acciones y participantes sin exigir etiquetas editoriales, manteniendo cada evento como candidato con evidencia.
-5. **Estados y emociones:** distinguir percepción, pensamiento, emoción, diálogo y acción; preservar negación, modalidad, tiempo y punto de vista.
-6. **Continuidad y contradicciones:** comparar afirmaciones explícitas entre revisiones/documentos y presentar pares de evidencia incompatibles, nunca un veredicto automático.
-7. **Evaluación real:** corpus de escenas en español con casos positivos, negativos, diálogo, nombres ambiguos, pronombres, negaciones, tiempos verbales y ediciones parciales; medir precisión y recall por categoría antes de ampliar automatismos.
+3. **Referencias pronominales:** ampliar resolución de él/ella/ellos/ellas y pronombres clíticos con concordancia, distancia, diálogo y ambigüedad; nunca enlazar identidades sin evidencia suficiente.
+4. **Acciones con sujeto gramatical:** mejorar concordancia sujeto-verbo, coordinación, diálogo y voz pasiva; no asignar actor solo por ser el único personaje nombrado si la sintaxis no lo demuestra.
+5. **Acontecimientos narrados:** detectar secuencias de acciones y participantes sin exigir etiquetas editoriales, manteniendo cada evento como candidato con evidencia.
+6. **Estados y emociones:** distinguir percepción, pensamiento, emoción, diálogo y acción; preservar negación, modalidad, tiempo y punto de vista.
+7. **Continuidad y contradicciones:** comparar afirmaciones explícitas entre revisiones/documentos y presentar pares de evidencia incompatibles, nunca un veredicto automático.
+8. **Evaluación real:** corpus de escenas en español con casos positivos, negativos, diálogo, nombres ambiguos, pronombres, negaciones, tiempos verbales y ediciones parciales; medir precisión y recall por categoría antes de ampliar automatismos.
 
 ## Criterios de aceptación
 

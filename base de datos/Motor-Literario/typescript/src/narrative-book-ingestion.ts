@@ -107,13 +107,13 @@ interface Span { start: number; end: number; text: string; }
 const CHAPTER_HEADING = /^\s*(?:#{1,6}\s*)?(?:(?:cap[ií]tulo|chapter|parte|part|libro|book)\s+(?:[ivxlcdm]+|\d+|[a-záéíóúñ-]+)(?:\s*[:.—-]\s*.*)?|pr[oó]logo|ep[ií]logo|introducci[oó]n|interludio)\s*$/iu;
 const ACTIONS: readonly { label: string; expression: RegExp }[] = [
   { label: "death", expression: /(?<![\p{L}\p{M}\p{N}_])(?:muri[oó]|falleci[oó]|mat[oó]|asesin[oó]|pereci[oó])(?![\p{L}\p{M}\p{N}_])/giu },
-  { label: "arrival", expression: /(?<![\p{L}\p{M}\p{N}_])(?:lleg[oó]|arrib[oó]|regres[oó]|volvi[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "arrival", expression: /(?<![\p{L}\p{M}\p{N}_])(?:lleg(?:o|as|a|an|amos|ué|aste|ó|aron|aba|abas|ábamos|aban|aré|ará|arás|aremos|arán|aría|arías|aríamos|arían|ar|ando|ado)|arrib(?:o|as|a|an|amos|é|ó|aron|aba|aban|ará|arán|ar|ando|ado)|regres(?:o|as|a|an|amos|é|ó|aste|aron|aba|aban|ará|arán|ar|ando|ado)|volv(?:ió|ieron|ía|ías|íamos|ían|er|erá|erán|ería|erían|iendo|ido))(?![\p{L}\p{M}\p{N}_])/giu },
   { label: "departure", expression: /(?<![\p{L}\p{M}\p{N}_])(?:parti[oó]|sali[oó]|huy[oó]|escap[oó])(?![\p{L}\p{M}\p{N}_])/giu },
   { label: "discovery", expression: /(?<![\p{L}\p{M}\p{N}_])(?:descubri[oó]|encontr[oó]|hall[oó]|revel[oó])(?![\p{L}\p{M}\p{N}_])/giu },
   { label: "decision", expression: /(?<![\p{L}\p{M}\p{N}_])(?:decidi[oó]|resolvi[oó]|acept[oó]|rechaz[oó])(?![\p{L}\p{M}\p{N}_])/giu },
   { label: "conflict", expression: /(?<![\p{L}\p{M}\p{N}_])(?:atac[oó]|golpe[oó]|luch[oó]|combati[oó]|traicion[oó])(?![\p{L}\p{M}\p{N}_])/giu },
   { label: "communication", expression: /(?<![\p{L}\p{M}\p{N}_])(?:dijo|declar[oó]|confes[oó]|pregunt[oó]|respondi[oó]|advirti[oó])(?![\p{L}\p{M}\p{N}_])/giu },
-  { label: "movement", expression: /(?<![\p{L}\p{M}\p{N}_])(?:entr[oó]|cruz[oó]|camin[oó]|corri[oó]|subi[oó]|baj[oó])(?![\p{L}\p{M}\p{N}_])/giu }
+  { label: "movement", expression: /(?<![\p{L}\p{M}\p{N}_])(?:entr(?:o|as|a|an|amos|é|ó|aste|aron|aba|abas|ábamos|aban|ará|arán|ar|ando|ado)|cruz(?:o|as|a|an|amos|é|ó|aste|aron|aba|abas|ábamos|aban|ará|arán|ar|ando|ado)|camin(?:o|as|a|an|amos|é|ó|aste|aron|aba|abas|ábamos|aban|ará|arán|ar|ando|ado)|corr(?:o|es|e|en|emos|í|ió|iste|ieron|ía|ías|íamos|ían|er|erá|erán|iendo|ido)|sub(?:o|es|e|en|imos|í|ió|iste|ieron|ía|ías|íamos|ían|ir|irá|irán|iendo|ido)|baj(?:o|as|a|an|amos|é|ó|aste|aron|aba|abas|ábamos|aban|ará|arán|ar|ando|ado))(?![\p{L}\p{M}\p{N}_])/giu }
 ];
 const TEMPORAL: readonly { label: string; expression: RegExp }[] = [
   { label: "explicit-date", expression: /\b(?:el\s+)?\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/giu },
@@ -187,6 +187,19 @@ function classifyParagraph(text: string): NarrativeBookParagraph["kind"] {
   return hasDialogue && hasNarration ? "mixed" : hasDialogue ? "dialogue" : "narration";
 }
 
+function isActionNegated(text: string, actionStart: number, paragraphStart: number): boolean {
+  const prefix = text.slice(paragraphStart, actionStart);
+  const boundary = Math.max(
+    prefix.lastIndexOf("."),
+    prefix.lastIndexOf("!"),
+    prefix.lastIndexOf("?"),
+    prefix.lastIndexOf(";"),
+    prefix.lastIndexOf("\n")
+  );
+  const clausePrefix = prefix.slice(boundary + 1);
+  return /(?:^|[\s(])(?:no|nunca|jamás|tampoco)(?:\s+[\p{L}\p{M}]+){0,2}\s*$/iu.test(clausePrefix);
+}
+
 function collectSignals(
   input: NarrativeBookIngestionInput,
   chapterId: string,
@@ -216,7 +229,7 @@ function collectSignals(
     const end = paragraph.start + match.end;
     const contextStart = Math.max(paragraph.start, start - 100);
     const contextEnd = Math.min(paragraph.end, end + 100);
-    const negated = /\b(?:no|nunca|jam[aá]s|tampoco)\b/iu.test(input.text.slice(Math.max(paragraph.start, start - 36), start));
+    const negated = match.kind === "action" && isActionNegated(input.text, start, paragraph.start);
     output.push({
       id: "nbs-" + input.documentId + "-" + input.revision + "-" + (input.baseOffset ?? 0) + "-" + start + "-" + match.kind,
       chapterId,

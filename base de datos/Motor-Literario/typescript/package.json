@@ -11,7 +11,7 @@
     "bench": "npm run build && node bench/live-edit-benchmark.mjs",
     "validate:schema": "node scripts/validate-mldb-schema.mjs && node scripts/audit-storage-implementation.mjs",
     "bridge": "npm run build && node bridge/stdio-server.mjs",
-    "test:storage-integrity": "npx vite build && node --test tests/indexeddb-narrative-reference-integrity.test.mjs tests/indexeddb-idea-transaction.test.mjs"
+    "test:storage-integrity": "npx vite build && node --import fake-indexeddb/auto --test tests/indexeddb-narrative-reference-integrity.test.mjs tests/indexeddb-idea-transaction.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

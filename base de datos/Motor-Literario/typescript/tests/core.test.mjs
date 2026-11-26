@@ -2420,7 +2420,8 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
-    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities"
+    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities",
+    "sync-outbox", "sync-device-sequences"
   ];
   const stores = new Map(names.map(name => [name, {
     indexNames: { contains: () => false },
@@ -2550,7 +2551,9 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["project-evidences", "by-fragment"],
       ["timeline-occurrences", "by-project"],
       ["timeline-occurrences", "by-event-record"],
-      ["timeline-occurrences", "by-track-order"]
+      ["timeline-occurrences", "by-track-order"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"]
     ];
     assert.deepEqual(createdIndexes.map(([storeName, indexName]) => [storeName, indexName]), expected);
     assert.equal(
@@ -2576,7 +2579,8 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
-    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities"
+    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities",
+    "sync-outbox", "sync-device-sequences"
   ];
   const deleted = [];
   const created = [];

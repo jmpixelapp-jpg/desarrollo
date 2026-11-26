@@ -428,7 +428,7 @@ La salida distingue:
 
 Se conservan por separado la evidencia del recuerdo, la acción y el conector. Solo se enlazan acciones afirmadas y recuerdos/recuperaciones explícitos del mismo actor; los eventos de olvido no se reinterpretan como recuerdos. El pipeline publica el resultado como `memoryActionLinks`, valida el tamaño de `priorMemoryEvents` y el módulo se exporta desde el índice público.
 
-Se añaden pruebas de integración para causalidad explícita, secuencia temporal, actor distinto, recuerdo negado, offsets absolutos y proximidad entre oraciones sin conector causal.
+Se añaden pruebas de integración para causalidad explícita, secuencia temporal, actor distinto, recuerdo negado, offsets absolutos y proximidad entre oraciones sin conector causal. También se prueba el caso de varios recuerdos candidatos: se conservan todos y la relación queda `unresolved`, sin escoger arbitrariamente el más cercano.
 
 **Límites:** no se deduce causalidad a partir de la mera sucesión. Una relación temporal o una coincidencia en la misma oración no prueba que el recuerdo haya motivado la acción. La detección depende de conectores españoles explícitos y del extractor actual de acciones actor → verbo → objetivo; no cubre acciones intransitivas ni sujetos omitidos. La salida sigue siendo candidata y revisable.
 

@@ -645,3 +645,15 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Validación CI:** las ejecuciones recientes del workflow de TypeScript terminan en `failure`. La información accesible confirma el fallo del paso «Build and run automated tests», pero todavía no expone el detalle de la salida que permita atribuirlo a estos cambios. Por tanto, esta ampliación está registrada y cubierta por pruebas añadidas, pero no se declara validada por CI hasta obtener una ejecución satisfactoria.
 
+## Detección de negación a través de auxiliares
+
+**Problema corregido:** la polaridad anterior solo reconocía una negación inmediatamente antes de la forma verbal. Por ello, construcciones como «Ana no había llegado» o «Ana no pudo abrir» podían quedar marcadas como afirmadas cuando el marcador negativo estaba separado del verbo léxico por un auxiliar.
+
+**Cambio incorporado:** se añadió una comprobación acotada de la secuencia anterior a la acción. Reconoce `no`, `nunca` o `jamás` seguidos por una cadena limitada de auxiliares/modales frecuentes (`haber`, `estar`, formas de `ser`, `poder` y `querer`). La ventana se limita a tres formas auxiliares contiguas y no busca negaciones arbitrariamente lejos dentro de la oración.
+
+**Protección de alcance:** la negación se evalúa por separado para cada verbo. En «Ana dijo que no había llegado», la acción matriz `decir` permanece afirmada y `llegar` queda negada. La polaridad negativa también impide construir relaciones dirigidas de transferencia o interacción como si el acontecimiento hubiera ocurrido.
+
+**Pruebas añadidas:** negación en «no había llegado», «no pudo abrir» y alcance diferenciado entre verbo matriz y subordinado.
+
+**Límite conocido:** no se pretende resolver todavía el alcance de negación en coordinaciones complejas, discurso indirecto libre, dobles negaciones dialectales ni construcciones como «no llegó a abrir». Esos casos requieren análisis de cláusulas y perífrasis más profundo; no deben resolverse ampliando indiscriminadamente una expresión regular.
+

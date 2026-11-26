@@ -1518,13 +1518,15 @@ function validateLiveAuthorMonitorCheckpoint(
     checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges,
     checkpoint.redoChanges];
   const hasActivityCounts = classifiedActivityCounts.some(value => value !== undefined) ||
-    checkpoint.otherChanges !== undefined;
+    checkpoint.compositionChanges !== undefined || checkpoint.otherChanges !== undefined;
   if (hasActivityCounts) {
     if (classifiedActivityCounts.some(value => !integerNonNegative(value as number)) ||
+        (checkpoint.compositionChanges !== undefined && !integerNonNegative(checkpoint.compositionChanges)) ||
         (checkpoint.otherChanges !== undefined && !integerNonNegative(checkpoint.otherChanges))) {
       invalid.push("activity-counts.values");
     } else if (integerNonNegative(checkpoint.acceptedChanges)) {
-      const classifiedTotal = classifiedActivityCounts.reduce<number>((sum, value) => sum + (value as number), 0);
+      const classifiedTotal = classifiedActivityCounts.reduce<number>((sum, value) => sum + (value as number), 0) +
+        (checkpoint.compositionChanges ?? 0);
       const total = classifiedTotal + (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedTotal);
       if (total !== checkpoint.acceptedChanges) invalid.push("activity-counts.total");
     }
@@ -5731,6 +5733,7 @@ export class IndexedDbProjectStore implements ProjectStore {
               // interpretan como "other"; el total implícito debe conservarse.
               const activityMetricKeys = [
                 "typingChanges",
+                "compositionChanges",
                 "pasteChanges",
                 "deletionChanges",
                 "correctionChanges",
@@ -5745,6 +5748,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                 if (key === "otherChanges") {
                   const classifiedTotal =
                     (candidate.typingChanges ?? 0) +
+                    (candidate.compositionChanges ?? 0) +
                     (candidate.pasteChanges ?? 0) +
                     (candidate.deletionChanges ?? 0) +
                     (candidate.correctionChanges ?? 0) +

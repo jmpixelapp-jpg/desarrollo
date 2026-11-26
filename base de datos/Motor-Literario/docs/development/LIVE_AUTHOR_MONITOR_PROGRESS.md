@@ -1370,3 +1370,53 @@ La conclusión global de la lane sigue siendo `failure` por controles compartido
 **Regresión:** el test de checkpoint instala un suscriptor que falla durante una admisión y un commit; comprueba que la sesión informa dos errores, que el checkpoint no contiene la propiedad `listenerErrors` y que `restoreCheckpoint()` comienza en cero. Las métricas de escritura y durabilidad se restauran sin contaminar la sesión nueva con fallos antiguos de UI.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+## 86. Aislamiento visible de fallos de reconciliación del workspace (26 de noviembre de 2026)
+
+**Hallazgo:** el workspace protegía el conjunto de tarjetas con un `catch` general durante la reconciliación. Si un callback de presentación como `getDocumentLabel()` lanzaba una excepción, el refresco conservaba la última vista pero no indicaba qué capítulo había fallado. El fallo quedaba oculto y podía repetirse en cada pulso.
+
+**Corrección:** cada `upsert` del workspace se ejecuta mediante `upsertSafely`; las excepciones se cuentan en un mapa efímero por documento y se muestran en el nodo de diagnóstico de la tarjeta afectada. La reconciliación continúa con los demás documentos, conserva la alerta después de que el callback se recupere y elimina el contador cuando se cierra la tarjeta o se desmonta el workspace. No se conserva el mensaje de excepción ni se incrementa el contador de errores de listeners del motor, porque se trata de un fallo local del renderer.
+
+**Regresión:** dos documentos están abiertos; el callback de etiqueta lanza una vez para el primero y funciona para el segundo. El test comprueba aviso sólo en la tarjeta afectada, ausencia del mensaje privado, recuperación de la etiqueta en el siguiente pulso y persistencia de la alerta local sin contaminar `snapshot.listenerErrors`.
+
+**Validación en [Live Author Monitor — run 45757281903](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45757281903):** aprobada para la lane aislada. El type-check estricto, el bundle reducido y las 17 pruebas diagnósticas pasaron. La suite del núcleo, panel y workspace terminó con 61/61 pruebas aprobadas, incluida la nueva regresión `getDocumentLabel()` que falla una vez durante la reconciliación y se recupera en el siguiente pulso. La advertencia queda sólo en la tarjeta afectada, no filtra el mensaje privado y el contador local no modifica `snapshot.listenerErrors`. El benchmark procesó 100.000 commits en 511,50 ms (~195.503 commits/s), con heap de 4,26 MiB a mitad y al final de la carga, crecimiento de 0 MiB, 0,49 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+La lane global sigue en `failure` por controles compartidos de persistencia: `DATABASE_VERSION_MISMATCH`, dos almacenes no mapeados y el error de sintaxis de `indexeddb-store.ts:2560`. No se han modificado esos archivos; las integraciones que requieren el bundle general siguen pendientes.
+
+
+## 87. Regresiones aisladas del scheduler de visibilidad y ciclo de vida (26 de noviembre de 2026)
+
+**Motivación:** las regresiones previas de `visibilitychange`, `pagehide/pageshow`, `freeze/resume` estaban cubiertas en Chromium, pero se ejecutaban junto a las integraciones que dependen del bundle completo del motor. Cuando persistencia impide compilar dicho bundle, faltaba una señal independiente sobre el scheduler visual.
+
+**Prueba añadida:** `tests/live-author-monitor-visibility.test.mjs` usa targets DOM controlados y un scheduler manual para validar: suspensión y reanudación con visibilidad/ciclo de vida; rechazo de `pageshow/resume` mientras `document.hidden` continúa activo; invalidación de callbacks de intervalos antiguos; transición `pagehide` síncrona durante la instalación del scheduler; rollback si falla el registro parcial de listeners; invalidación de callbacks cuando el scheduler no devuelve cancelación; y limpieza completa incluso si un `removeEventListener` aislado falla.
+
+**CI:** se incluye el archivo en el comando aislado de pruebas junto al núcleo, panel, workspace y pruebas de diagnóstico. No necesita Chromium ni importar el almacenamiento general.
+
+**Validación en [Live Author Monitor — run 45757854690](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45757854690), checkout `efc4db4a`:** aprobada para la lane aislada. Type-check estricto, build Vite reducido y 17/17 pruebas diagnósticas correctos. La suite combinada terminó en **69/69** sin fallos; se ejecutaron las ocho regresiones nuevas de visibilidad/ciclo de vida, incluida la compatibilidad sin Page Visibility y el rollback cuando el scheduler lanza. El benchmark de 100.000 commits en ocho documentos de 1 MiB terminó en 660,83 ms (~151.325 commits/s), con heap de 4,27 MiB a mitad y 4,26 MiB al finalizar (0 MiB de crecimiento medido), 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+La conclusión global permanece en `failure` por el desajuste de versión IndexedDB, los dos almacenes de reparación sin mapear y el error sintáctico compartido en `indexeddb-store.ts:2560`. Se omitieron las integraciones que requieren el bundle general/editor/Chromium; la validación aislada del monitor está aprobada.
+
+
+## 88. Pruebas aisladas de integración de editor, transacciones y textarea (26 de noviembre de 2026)
+
+**Motivación:** el bundle general del Motor Literario sigue bloqueado por un error sintáctico en persistencia. Varias integraciones del monitor importaban exclusivamente sus propios adaptadores, contratos de tipos y el núcleo, pero sus pruebas dependían innecesariamente de `dist/motor-literario.js`. Esto dejaba sin ejecutar pruebas de la frontera editor-monitor cuando fallaba un módulo ajeno.
+
+**Cambio:** se amplía `live-author-monitor-test-entry.ts` con exports de `live-author-monitor-change-binding`, fuente/puente/integración de transacciones nativas, integración del panel con pestaña activa y fuentes/integración de textarea. Las siete suites correspondientes ahora cargan `dist-monitor/live-author-monitor.js`, con fallback al bundle general para entornos completos. El workflow aislado ejecuta además `change-binding`, `editor-integration`, `editor-transaction-bridge`, `editor-transaction-integration`, `editor-transaction-source`, `textarea-integration` y `textarea-source`.
+
+**Cobertura ejecutada:** eventos únicos del editor; orden edit/undo/redo; deduplicación de IDs y secuencias; FIFO bajo reentrada; queue_full, contrapresión y recuperación; buffer acotado por cantidad y unidades UTF-16; resincronización contra snapshot común; cleanup idempotente; integración de pestaña activa y workspace; beforeinput/input y selección UTF-16; composición IME; rechazo de undo/redo sin deltas autoritativos. El type-check estricto incorpora transitivamente estos adaptadores sin errores.
+
+**Validación en [Live Author Monitor — run 45758057459](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758057459), checkout `4671a7c0`:** type-check estricto y bundle Vite reducido aprobados; 17/17 pruebas diagnósticas y 161/161 pruebas combinadas aprobadas. El benchmark procesó 100.000 commits en 656,27 ms (~152.377 commits/s), con heap estable de 4,39 MiB al 50 % y 100 % de carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+La lane global continúa en `failure` por los controles compartidos de IndexedDB y el error sintáctico en `indexeddb-store.ts:2560`; las pruebas que requieren el runtime general y Chromium se omitieron. Las siete suites de adaptadores del monitor sí pasaron dentro del bundle aislado.
+
+
+## 89. Primera validación integral en verde con Chromium (26 de noviembre de 2026)
+
+**Evidencia:** [Live Author Monitor — run 45758096783](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758096783), checkout `948408ae9e9519495dc8df97f48abcf20a38020e`, terminó `success` en todos los pasos. En ese commit pasaron el type-check aislado, bundle monitor, auditoría MLDB (`27 tablas`), bundle runtime general, instalación de Chromium, la suite aislada (`161/161`) y las integraciones host/editor/browser (`167/167`).
+
+**Cobertura real de navegador:** dos páginas Chromium compartieron IndexedDB y validaron exclusión y fencing del lease; el harness de Page Lifecycle recuperó polling después de `pagehide/pageshow` y `freeze/resume`; y dos capítulos conservaron métricas independientes a través de escritura, cambio de documento, guardado durable y recuperación.
+
+**Rendimiento:** 100.000 commits en 513,67 ms (~194.676 commits/s), heap de 4,39 MiB tanto a mitad como al final de carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+**Alcance temporal:** esta evidencia pertenece exactamente al checkout `948408ae`. Los commits de sincronización posteriores modificaron la ruta compartida de persistencia; en el HEAD actual el workflow vuelve a informar un error sintáctico en `indexeddb-store.ts:2560`. Por tanto, la ejecución integral es un hito verificado, pero no se declara como estado verde del HEAD actual. Se mantiene abierta la repetición sobre el HEAD actual una vez que terminen los cambios paralelos de persistencia.

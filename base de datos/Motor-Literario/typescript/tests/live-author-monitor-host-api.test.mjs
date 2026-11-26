@@ -1058,6 +1058,117 @@ test("al volver a visible recupera de inmediato un lease expirado durante suspen
   }
 });
 
+test("al reanudar varios documentos solo el lease expirado cambia de fencing", async () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const documentListeners = new Map();
+  const windowListeners = new Map();
+  const fakeDocument = {
+    visibilityState: "hidden",
+    addEventListener(type, listener) {
+      const listeners = documentListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      documentListeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) {
+      documentListeners.get(type)?.delete(listener);
+    }
+  };
+  const fakeWindow = {
+    addEventListener(type, listener) {
+      const listeners = windowListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      windowListeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) {
+      windowListeners.get(type)?.delete(listener);
+    }
+  };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: fakeDocument });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+
+  const store = new MemoryDocumentStore();
+  const api = new HostEngineApi({ store });
+  const projectId = "monitor-resume-multiple-documents";
+  const documentA = "chapter-a";
+  const documentB = "chapter-b";
+  const keyA = projectId + ":" + documentA;
+  const keyB = projectId + ":" + documentB;
+
+  try {
+    api.initializeProject({ projectId, projectName: "Resume multiple documents" });
+    await api.openDocument({
+      documentId: documentA,
+      text: "A",
+      revision: 0,
+      sequence: 0
+    });
+    await api.openDocument({
+      documentId: documentB,
+      text: "B",
+      revision: 0,
+      sequence: 0
+    });
+    await api.flushPendingChanges();
+
+    const sessionA = api.getLiveAuthorMonitorSnapshot(documentA).sessionId;
+    const sessionB = api.getLiveAuthorMonitorSnapshot(documentB).sessionId;
+    const leaseA = structuredClone(store.monitorLeases.get(keyA));
+    const leaseB = structuredClone(store.monitorLeases.get(keyB));
+    assert.ok(leaseA);
+    assert.ok(leaseB);
+    assert.equal(documentListeners.get("visibilitychange")?.size, 1);
+
+    // Simula que durante la suspensión expiró únicamente A. B aún conserva
+    // una titularidad válida y debe renovarse sin cambiar de token.
+    const expiredAt = Date.now() - 1;
+    store.monitorLeases.set(keyA, {
+      ...leaseA,
+      acquiredAt: Math.max(0, expiredAt - 60_000),
+      expiresAt: expiredAt,
+      updatedAt: expiredAt
+    });
+
+    fakeDocument.visibilityState = "visible";
+    for (const listener of [...(documentListeners.get("visibilitychange") ?? [])]) listener();
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (!api.liveMonitorLeaseHeartbeatInFlight.has(documentA) &&
+          !api.liveMonitorLeaseHeartbeatInFlight.has(documentB) &&
+          !api.liveMonitorLeaseHeartbeatFollowups.has(documentA) &&
+          !api.liveMonitorLeaseHeartbeatFollowups.has(documentB)) break;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    for (const documentId of [documentA, documentB]) {
+      const pending = api.liveMonitorCheckpointTails.get(documentId);
+      if (pending) await pending;
+    }
+
+    const resumedA = store.monitorLeases.get(keyA);
+    const resumedB = store.monitorLeases.get(keyB);
+    assert.equal(resumedA.ownerId, api.liveMonitorOwnerId);
+    assert.equal(resumedA.fencingToken, leaseA.fencingToken + 1,
+      "solo el documento cuyo lease expiró debe avanzar su fencing token");
+    assert.equal(resumedB.ownerId, leaseB.ownerId);
+    assert.equal(resumedB.fencingToken, leaseB.fencingToken,
+      "el documento que conservaba lease no debe sufrir un takeover");
+    assert.ok(resumedB.expiresAt > leaseB.expiresAt);
+
+    assert.equal(api.getLiveAuthorMonitorSnapshot(documentA).sessionId, sessionA);
+    assert.equal(api.getLiveAuthorMonitorSnapshot(documentB).sessionId, sessionB);
+    assert.equal(api.getLiveAuthorMonitorPersistenceDiagnostics(documentA).leaseState, "owner");
+    assert.equal(api.getLiveAuthorMonitorPersistenceDiagnostics(documentB).leaseState, "owner");
+    assert.equal(api.liveMonitorLeaseHeartbeats.has(documentA), true);
+    assert.equal(api.liveMonitorLeaseHeartbeats.has(documentB), true);
+  } finally {
+    api.dispose();
+    if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+    else delete globalThis.document;
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test("configura retención de checkpoints, la ejecuta al inicializar y permite desactivarla", async () => {
   class RetentionStore extends MemoryDocumentStore {
     cleanupCalls = [];

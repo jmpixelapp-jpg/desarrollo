@@ -5004,6 +5004,31 @@ test("reconoce nombres compuestos de lugares y objetos sin perder partículas in
 });
 
 
+
+test("la extracción narrativa conserva offsets UTF-16 con emoji y nombres Unicode", async () => {
+  const { extractNarrativeEntities } = await import("../dist/motor-literario.js");
+  const text = "😀\nEl personaje Élodie Núñez llegó a la ciudad de São Paulo.";
+  const baseOffset = 137;
+  const entities = extractNarrativeEntities(
+    "unicode-offsets", "chapter-unicode", 4, text, 1234, baseOffset
+  );
+  const character = entities.find(item =>
+    item.kind === "character" && item.canonicalName === "Élodie Núñez"
+  );
+  const place = entities.find(item =>
+    item.kind === "place" && item.canonicalName === "São Paulo"
+  );
+  assert.ok(character);
+  assert.ok(place);
+  assert.equal(character.evidence[0].start, baseOffset + text.indexOf("Élodie Núñez"));
+  assert.equal(character.evidence[0].end, baseOffset + text.indexOf("Élodie Núñez") + "Élodie Núñez".length);
+  assert.equal(place.evidence[0].start, baseOffset + text.indexOf("São Paulo"));
+  assert.equal(text.slice(
+    character.evidence[0].start - baseOffset,
+    character.evidence[0].end - baseOffset
+  ), "Élodie Núñez");
+});
+
 test("rechaza consolidaciones que crearían alias ambiguos con una tercera entidad", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({ store });

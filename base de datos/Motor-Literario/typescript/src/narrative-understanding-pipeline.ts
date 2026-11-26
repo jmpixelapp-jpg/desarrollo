@@ -25,6 +25,10 @@ import {
   type NarrativePronounResolutionOptions
 } from "./narrative-pronoun-resolution";
 import { extractNarrativePronounActionCandidates } from "./narrative-pronoun-action-link";
+import {
+  detectNarrativePronounInputs,
+  type NarrativeCharacterPronounProfile
+} from "./narrative-pronoun-detection";
 
 export interface NarrativeUnderstandingInput {
   readonly projectId: string;
@@ -38,7 +42,7 @@ export interface NarrativeUnderstandingInput {
   readonly characterMentions?: readonly NarrativeCharacterMention[];
   /** Pronombres detectados externamente; offsets UTF-16 absolutos del documento. */
   readonly pronounReferences?: readonly NarrativePronounReference[];
-  readonly pronounResolutionOptions?: NarrativePronounResolutionOptions;
+  readonly pronounResolutionOptions?: NarrativePronounResolutionOptions;\n  readonly characterProfiles?: readonly NarrativeCharacterPronounProfile[];
 }
 
 export interface NarrativeUnderstandingResult {
@@ -54,7 +58,7 @@ export interface NarrativeUnderstandingResult {
   readonly interactions: ReturnType<typeof extractNarrativeCharacterInteractions>;
   readonly interactionShifts: ReturnType<typeof detectNarrativeInteractionShifts>;
   readonly pronounResolutions: ReturnType<typeof resolveNarrativePronounReferences>;
-  readonly pronounActions: ReturnType<typeof extractNarrativePronounActionCandidates>;
+  readonly pronounActions: ReturnType<typeof extractNarrativePronounActionCandidates>;\n  readonly skippedAmbiguousCharacterNames: readonly string[];
   readonly sceneAssignments: {
     readonly ideaCandidates: readonly {
       readonly candidateId: string;
@@ -200,7 +204,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions,
+    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions,\n    skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     sceneAssignments: {
       ideaCandidates: assign(ideas),
       actionCandidates: assign(actions),

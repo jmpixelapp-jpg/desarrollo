@@ -1513,7 +1513,7 @@ function validateLiveAuthorMonitorCheckpoint(
     }
     if (finiteNonNegative(checkpoint.totalCommitLatencyMs) &&
         checkpoint.commitLatencies.every(value => finiteNonNegative(value)) &&
-        checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
+        checkpoint.commitLatencies.reduce<number>((sum, value) => sum + value, 0) >
           checkpoint.totalCommitLatencyMs + 1) {
       invalid.push("commitLatencies.total");
     }

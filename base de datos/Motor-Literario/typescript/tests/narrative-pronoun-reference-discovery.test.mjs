@@ -102,3 +102,36 @@ test("rechaza entidades duplicadas o de otro proyecto", () => {
     entities: [{ ...ana, projectId: "other" }]
   }), /mismo proyecto/);
 });
+
+
+test("rechaza textos y colecciones de entidades fuera de los límites operativos", () => {
+  assert.throws(() => discover("Ella corrió.", {
+    text: "x".repeat(2_000_001)
+  }), /Contexto inválido/);
+  assert.throws(() => discover("Ella corrió.", {
+    entities: Array.from({ length: 10_001 }, (_, index) => ({
+      ...ana, id: "character:" + index
+    }))
+  }), /Contexto inválido/);
+});
+
+test("rechaza alias no textuales, vacíos o excesivamente largos", () => {
+  assert.throws(() => discover("Ella corrió.", {
+    entities: [{ ...ana, aliases: [""] }]
+  }), /únicas, válidas/);
+  assert.throws(() => discover("Ella corrió.", {
+    entities: [{ ...ana, aliases: [null] }]
+  }), /únicas, válidas/);
+  assert.throws(() => discover("Ella corrió.", {
+    entities: [{ ...ana, aliases: ["A".repeat(257)] }]
+  }), /únicas, válidas/);
+});
+
+test("rechaza nombres canónicos excesivamente largos y tipos vacíos", () => {
+  assert.throws(() => discover("Ella corrió.", {
+    entities: [{ ...ana, canonicalName: "A".repeat(257) }]
+  }), /únicas, válidas/);
+  assert.throws(() => discover("Ella corrió.", {
+    entities: [{ ...ana, kind: " " }]
+  }), /únicas, válidas/);
+});

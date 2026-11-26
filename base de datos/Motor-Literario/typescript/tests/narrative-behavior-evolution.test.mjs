@@ -134,3 +134,31 @@ test("rechaza IDs de acciones duplicados y actores no caracterizados",()=>{
     currentActions:[action("a1","atacó","chapter-1",0,{actorEntityId:"unknown"})]
   }));
 });
+
+test("no ordena versiones distintas del mismo capítulo al compararlas con otro capítulo",()=>{
+  const first=action("a1","atacó","chapter-1",0,{evidence:evidence("chapter-1","Mara atacó a Elian.",0,1)});
+  const revised=action("a2","protegió","chapter-1",0,{evidence:evidence("chapter-1","Mara protegió a Elian.",0,2)});
+  const later=action("a3","ayudó","chapter-2",0);
+  const result=detectNarrativeBehaviorEvolution({
+    projectId:"novel",entities,priorActions:[first,revised],
+    currentActions:[later],orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.ok(result.every(item=>item.previousActionId!=="a2" && item.previousActionId!=="a1"));
+});
+
+test("rechaza IDs repetidos en las referencias contextuales",()=>{
+  const current=action("a2","ayudó","chapter-1",40);
+  const context={
+    id:"same-context",projectId:"novel",characterEntityId:"mara",
+    actionId:"a2",informationId:"info-1",intentId:"intent-1",alignment:"supports-intent",
+    chronology:{knowledgeBeforeAction:"same-document-position",intentBeforeAction:"same-document-position"},
+    knowledgeEvidence:evidence("chapter-1","Mara vio algo.",0),
+    intentEvidence:evidence("chapter-1","Mara quiso ayudar.",20),
+    actionEvidence:current.evidence,reviewStatus:"candidate"
+  };
+  assert.throws(()=>detectNarrativeBehaviorEvolution({
+    projectId:"novel",entities,
+    priorActions:[action("a1","atacó","chapter-1")],currentActions:[current],
+    decisionContexts:[context,context]
+  }));
+});

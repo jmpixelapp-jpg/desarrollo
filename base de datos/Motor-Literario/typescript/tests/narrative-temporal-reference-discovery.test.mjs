@@ -51,7 +51,7 @@ test("reconoce duraciones largas y referencias futuras sin fijar fechas absoluta
   assert.ok(result.every(item => item.anchorRequired && item.absoluteResolution === "unresolved-relative"));
 });
 
-test("extrae referencias de orden, franjas del día y horas sin asignar fecha absoluta", () => {
+test("reconoce días deícticos y plazos en unidades temporales menores y mayores", () => {\n  const result = discover("Anteayer llegó. Ayer descansó. Hoy escribe. Pasado mañana partirá. En tres horas llamará. Hace quince minutos salió. Durante dos décadas esperó.");\n  assert.equal(result.find(item => item.surface === "Anteayer").relation, "before");\n  assert.equal(result.find(item => item.surface === "Ayer").relation, "before");\n  assert.equal(result.find(item => item.surface === "Hoy").relation, "unspecified");\n  assert.equal(result.find(item => item.surface === "Pasado mañana").relation, "after");\n  assert.equal(result.find(item => item.surface === "En tres horas").relation, "after");\n  assert.equal(result.find(item => item.surface === "Hace quince minutos").relation, "before");\n  assert.equal(result.find(item => item.surface === "Durante dos décadas").relation, "duration");\n  assert.ok(result.every(item => item.anchorRequired && item.absoluteResolution === "unresolved-relative"));\n});\n\ntest("extrae referencias de orden, franjas del día y horas sin asignar fecha absoluta", () => {
   const text = "Mientras esperaba, al amanecer miró el reloj a las 18:30.";
   const result = discover(text);
   assert.ok(result.some(item => item.relation === "simultaneous"));

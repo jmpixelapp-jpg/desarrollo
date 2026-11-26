@@ -172,6 +172,19 @@ export function discoverNarrativeRelationships(
       }
     }
   }
-  return [...found.values()].sort((a,b) => a.relationEvidence.start-b.relationEvidence.start ||
+  const values = [...found.values()];
+  const ambiguity = new Map<string, Set<string>>();
+  for (const item of values) {
+    const key = [item.relationEvidence.start, item.relationEvidence.end,
+      item.toEntityId, item.relationType].join(":");
+    const ids = ambiguity.get(key) ?? new Set<string>();
+    ids.add(item.fromEntityId);
+    ambiguity.set(key, ids);
+  }
+  return values.map(item => {
+    const key = [item.relationEvidence.start, item.relationEvidence.end,
+      item.toEntityId, item.relationType].join(":");
+    return { ...item, status: ambiguity.get(key)!.size > 1 ? "ambiguous" as const : "single-candidate" as const };
+  }).sort((a,b) => a.relationEvidence.start-b.relationEvidence.start ||
     a.fromEntityId.localeCompare(b.fromEntityId) || a.toEntityId.localeCompare(b.toEntityId)).slice(0,max);
 }

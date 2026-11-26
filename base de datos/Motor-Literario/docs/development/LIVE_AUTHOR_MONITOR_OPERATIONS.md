@@ -780,3 +780,10 @@ La regresión pausa una escritura del propietario A, deja expirar su lease, perm
 Los leases se direccionan por la clave compuesta `(projectId, documentId)`. En un proyecto con varios capítulos abiertos, el cambio de propietario de A no debe cambiar el fencing token de B. El lease de B puede renovarse y su checkpoint puede persistirse mientras A pertenece a otra pestaña.
 
 La prueba real de IndexedDB adquiere dos leases, deja expirar A y hace takeover con el siguiente token; luego renueva B usando su snapshot original, intenta guardar con el token antiguo de A y guarda el checkpoint B. Se comprueba que A no escriba, B siga siendo durable y la liberación de A con el token obsoleto no afecte la titularidad de B.
+
+
+## 69. Cerrar un documento no altera la titularidad de los demás
+
+El host mantiene mapas de leases, heartbeats, generaciones, errores y colas de checkpoints indexados por `documentId`. Al cerrar un documento, solo deben limpiarse los recursos correspondientes a esa clave. Un segundo documento del mismo proyecto sigue siendo propietario, conserva su heartbeat y puede continuar guardando nuevas revisiones.
+
+La prueba abre dos capítulos, verifica dos leases/checkpoints, cierra A y después escribe otra edición en B. Se comprueba que A queda liberado con su snapshot final, B conserva el propietario y el fencing token, su checkpoint avanza y la sesión de B no cambia.

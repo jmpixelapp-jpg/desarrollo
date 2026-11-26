@@ -5,7 +5,7 @@ import {
 } from "./narrative-sync-journal";
 import {
   createNarrativeSyncOperationDispatcher,
-  type NarrativeSyncOperationHandler,
+  type AnyNarrativeSyncOperationHandler,
   type NarrativeSyncDispatchOptions
 } from "./narrative-sync-dispatcher";
 
@@ -29,7 +29,7 @@ export interface NarrativeSyncJournalConsumerOptions extends NarrativeSyncDispat
  */
 export function createNarrativeSyncJournalConsumer(
   journal: IndexedDbNarrativeSyncJournal,
-  handlers: readonly NarrativeSyncOperationHandler[],
+  handlers: readonly AnyNarrativeSyncOperationHandler[],
   options: NarrativeSyncJournalConsumerOptions = {}
 ): (
   projectId: string,

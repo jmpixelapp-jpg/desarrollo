@@ -80,7 +80,14 @@ test("no enlaza entidades que no aparecen como participantes compartidos", () =>
 test("conserva offsets absolutos UTF-16 con prefijo y emoji", () => {
   const prefix = "😀 Prólogo.\n";
   const text = "Ana corrió porque Ana estaba herida.";
-  const found = discover(text, prefix.length);
+  const extracted = extract(text, prefix.length);
+  assert.equal(extracted.observations.length, 1);
+  assert.equal(extracted.observations[0].grammaticalSubjectCandidate?.entityId, ana.id);
+  assert.equal(extracted.states.length, 1);
+  const found = discoverNarrativeActionStateLinks({
+    projectId: "book-1", documentId: "chapter-1", revision: 3,
+    text, baseOffset: prefix.length, ...extracted
+  });
   assert.equal(found.length, 1);
   assert.equal(found[0].markerEvidence.start, prefix.length + text.indexOf("porque"));
   assert.equal(found[0].markerEvidence.excerpt, "porque");

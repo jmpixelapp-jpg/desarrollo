@@ -378,3 +378,44 @@ test("marca aplicada rechaza digest divergente y es idempotente", async () => {
     });
   }
 });
+
+
+test("replay vuelve a entregar si el proceso falla después del efecto externo y antes del ack", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const {
+    createNarrativeSyncOperationEnvelope,
+    IndexedDbNarrativeSyncJournal,
+    replayPendingNarrativeSyncOperations
+  } = await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-crash-window-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const envelope = await createNarrativeSyncOperationEnvelope({
+      operationId: "crash-window-op", projectId: "project-crash", writerId: "writer-crash",
+      sequence: 1, kind: "idea-upsert", payload: { id: "idea-crash" }
+    });
+    await journal.accept(envelope);
+    const effects = [];
+    const first = await replayPendingNarrativeSyncOperations(journal, "project-crash", async operation => {
+      effects.push(operation.operationId);
+      throw new Error("simulated crash before acknowledgment");
+    }, "writer-crash");
+    assert.deepEqual(first, {
+      processed: 0, remaining: 1, stoppedAtOperationId: "crash-window-op"
+    });
+    const second = await replayPendingNarrativeSyncOperations(journal, "project-crash", async operation => {
+      effects.push(operation.operationId);
+    }, "writer-crash");
+    assert.deepEqual(second, { processed: 1, remaining: 0 });
+    assert.deepEqual(effects, ["crash-window-op", "crash-window-op"]);
+    journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});

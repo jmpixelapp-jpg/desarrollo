@@ -89,6 +89,14 @@ Además, cada evidencia específica (acción, objeto, actor y destinatario) debe
 
 La comparación entre frases y evidencias utiliza intervalos ordenados y un recorrido lineal, evitando comparar cada frase contra toda la colección de evidencias. El procesamiento mantiene límites explícitos y offsets UTF-16 para que la auditoría siga siendo viable en manuscritos extensos.
 
+### Extracción de referencias temporales
+
+Módulo: `typescript/src/narrative-temporal-reference-discovery.ts`
+
+La extracción distingue fechas ISO y fechas escritas en español (validadas con calendario), años, fechas numéricas ambiguas, relaciones de orden (`antes`, `después`, `mientras`, `al día siguiente`), duraciones relativas, franjas del día y horas explícitas. Las fechas válidas se normalizan a `YYYY-MM-DD`; una fecha numérica como `12/03/1945` no se interpreta como día/mes o mes/día sin una configuración de idioma inequívoca.
+
+Las expresiones relativas conservan su superficie textual, clase de relación y requisito de ancla. No se convierten en fechas absolutas ni se ordenan globalmente sin una referencia temporal verificable. Horas y franjas del día tampoco reciben fecha por inferencia. Cada candidato conserva offsets y evidencia literal; el procesamiento se omite explícitamente si el texto supera el presupuesto de dos millones de unidades UTF-16.
+
 ### Presencia explícita de personajes en lugares
 
 Módulo: `typescript/src/narrative-location-presence-discovery.ts`

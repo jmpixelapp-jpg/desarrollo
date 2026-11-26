@@ -151,3 +151,13 @@ test("la ingesta enlaza acciones solo mediante marcadores textuales explícitos"
     result.actionLinks[0].evidence.end
   ), "Después");
 });
+
+test("reconoce acciones de movimiento y llegada en varios tiempos sin aceptar prefijos", () => {
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "verb-tenses", revision: 1,
+    text: "Ana camina hacia el puerto. Mañana llegará. El caminante observó la llegada."
+  });
+  const actions = result.signals.filter(signal => signal.kind === "action");
+  assert.deepEqual(actions.map(signal => signal.surface), ["camina", "llegará"]);
+  assert.ok(actions.every(signal => signal.label === "movement" || signal.label === "arrival"));
+});

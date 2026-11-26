@@ -1184,7 +1184,7 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresión:** el test `un onAdmission reentrante no puede adelantar cambios al rechazo permanente durante retryPending` falla con la implementación duplicada y valida el orden de notificación después de esta corrección.
 
-**CI:** la ejecución [Live Author Monitor — run 45751943626](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751943626) falló 1/185 pruebas (184 aprobadas); la ejecución general [Motor Literario TypeScript — run 45751943629](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751943629) falló la misma regresión (815/816). Build aislado, type-check y demás pruebas finalizaron correctamente. El nuevo commit queda pendiente de CI.
+**CI (corrección validada):** las ejecuciones posteriores al ajuste del fixture, sobre el commit `9bcfd478`, aprobaron ambas lanes: [Live Author Monitor — run 45752316925](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752316925) y [Motor Literario TypeScript — run 45752316941](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752316941). Las pruebas confirman el rechazo permanente notificado una sola vez después de pausar y la preservación del backlog.
 
 
 ## 70. Fixture de recuperación reentrante: admisión válida después del snapshot (26 de noviembre de 2026)
@@ -1193,7 +1193,7 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Evidencia:** [Motor Literario TypeScript — run 45752135449](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752135449) pasó type-check y ejecutó 819/820 pruebas; la única fallida fue este fixture con un sink de prueba que rechazaba también la edición posterior. La lane específica [Live Author Monitor — run 45752135425](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752135425) ya había completado las regresiones aisladas; el conjunto de monitor seguía avanzando en Chromium al último chequeo.
 
-**Validación:** pendiente de una nueva ejecución con el fixture corregido.
+**Validación:** aprobada en ambas lanes sobre `9bcfd478`: [Live Author Monitor — run 45752316925](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752316925) y [Motor Literario TypeScript — run 45752316941](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752316941).
 
 
 ## 71. Snapshot inmutable de eventos transaccionales reentrantes (26 de noviembre de 2026)
@@ -1204,4 +1204,4 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresión:** un suscriptor del source provoca una segunda transacción mientras se procesa la primera y modifica el reemplazo del objeto original antes de que se drene la cola. El monitor debe entregar el texto original (`B`), conservar la longitud UTF-16 y seguir sincronizado.
 
-**Validación:** pendiente de CI para el commit que añade esta frontera defensiva.
+**Validación:** aprobada en ambas lanes sobre `71cf0d13`: [Live Author Monitor — run 45752453251](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752453251) completó el build aislado, regresiones diagnósticas, Chromium, auditoría MLDB, build de runtime, suite específica y benchmark de memoria; [Motor Literario TypeScript — run 45752453216](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752453216) completó type-check, build, suite y benchmark.

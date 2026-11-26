@@ -83,11 +83,11 @@ test("acepta alias explícitos como menciones de antecedente", () => {
     entities: [aliased]
   });
   assert.equal(reference.status, "single-candidate");
-  assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt, "la viajera");
+  assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt, "La viajera");
 });
 
 test("ignora nombres que aparecen después y no inventa concordancia gramatical", () => {
-  const text = "La espada brilló. Ella cayó.";
+  const text = "La espada solar brilló. Ella cayó.";
   const [reference] = discover(text, { entities: [sword] });
   assert.equal(reference.status, "single-candidate");
   assert.equal(reference.antecedentCandidates[0].entityId, sword.id);

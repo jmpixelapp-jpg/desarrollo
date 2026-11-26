@@ -20,11 +20,14 @@ function transition({
   kind = "discovered", objectId = objectEntityId, recipientId,
   polarity = "affirmed", effectStatus = "candidate"
 }) {
-  const actionEvidence = evidence(documentId, revision, start, action);
-  const objectEvidence = evidence(documentId, revision, start + action.length + 1, "Espada Solar");
   const recipientLabel = recipientId === "character:ana" ? "Ana" : "Bruno";
-  const contextExcerpt = action + " Espada Solar" +
-    (recipientId ? " a " + recipientLabel : "") + ".";
+  const recipientIsSubject = kind === "received" && !!recipientId;
+  const actionStart = start + (recipientIsSubject ? recipientLabel.length + 1 : 0);
+  const actionEvidence = evidence(documentId, revision, actionStart, action);
+  const objectEvidence = evidence(documentId, revision, actionStart + action.length + 1, "Espada Solar");
+  const contextExcerpt = recipientIsSubject
+    ? recipientLabel + " " + action + " Espada Solar."
+    : action + " Espada Solar" + (recipientId ? " a " + recipientLabel : "") + ".";
   const contextEvidence = evidence(documentId, revision, start, contextExcerpt);
   return {
     id, projectId, documentId, revision, observationId: "observation:" + id,
@@ -33,7 +36,9 @@ function transition({
     ...(recipientId ? {
       recipientEntityId: recipientId,
       recipientEvidence: evidence(
-        documentId, revision, start + action.length + 1 + "Espada Solar a ".length, recipientLabel
+        documentId, revision,
+        recipientIsSubject ? start : actionStart + action.length + 1 + "Espada Solar a ".length,
+        recipientLabel
       )
     } : {}),
     grammaticalTense: "past-preterite", effectStatus,

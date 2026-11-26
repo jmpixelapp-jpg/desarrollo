@@ -661,3 +661,8 @@ El registro técnico detallado se encuentra en `docs/analysis/REGISTRO_TECNICO_L
 **Validación:** las pruebas están escritas, pero no se ha ejecutado typecheck, build ni suite completa en esta tanda. No se declara CI aprobado. El lector EPUB sigue siendo una implementación inicial pendiente de corpus real y de cierre de compatibilidad.
 
 **Hallazgo de integración documentado:** `TextEvidence.excerpt` conserva la línea completa y `start/end` delimitan la ocurrencia dentro de ella. El resolver ahora verifica esa línea contextual. También se identificó que los IDs sintéticos de capítulo de la ingesta no son automáticamente equivalentes a los `documentId` del anfitrión; el mapeo y la base de offsets deben definirse explícitamente antes de integrar las evidencias al conocimiento narrativo.
+
+
+### Auditoría adicional de procedencia
+
+Se corrigió el salto XHTML `br` para emitir un LF real y se ajustaron los tests. También se alineó la validación de `TextEvidence` con su contrato real: rango de ocurrencia más excerpt de línea completa. Se identificó un bloqueo de integración aún abierto: los IDs `chapter:<id>` y offsets locales de ingesta no equivalen automáticamente a `TextEvidence.documentId` y offsets absolutos del anfitrión. El registro técnico detalla el mapeo requerido; la integración automática permanece desactivada hasta resolverlo.

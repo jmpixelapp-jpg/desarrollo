@@ -13,6 +13,7 @@ export * from "./mldb-records";
 
 export * from "./literary-analysis";
 export * from "./narrative-sync-integrity";
+export * from "./narrative-sync-envelope";
 export * from "./bridge-client";
 export * from "./live-author-monitor";
 export * from "./live-author-monitor-panel";

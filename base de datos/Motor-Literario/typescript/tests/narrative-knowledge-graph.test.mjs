@@ -70,3 +70,23 @@ test("respeta offsets absolutos al construir evidencia desde ventanas de texto",
   assert.ok(graph.entities[0].evidence[0].start >= 500);
   assert.ok(graph.assertions[0].evidence.start >= 500);
 });
+
+
+test("reconoce marcadores de entidad sin distinguir mayúsculas", () => {
+  const graph = buildNarrativeKnowledgeGraph("novel-case", [{
+    documentId: "chapter-case",
+    revision: 1,
+    text: [
+      "PERSONAJE Mara.",
+      "personaje Leo.",
+      "LUGAR Puerto Azul.",
+      "OBJETO Espada Solar.",
+      "personaje mara."
+    ].join("\n")
+  }]);
+
+  assert.deepEqual(
+    graph.entities.map(entity => entity.kind + ":" + entity.canonicalName).sort(),
+    ["character:Leo", "character:Mara", "object:Espada Solar", "place:Puerto Azul"]
+  );
+});

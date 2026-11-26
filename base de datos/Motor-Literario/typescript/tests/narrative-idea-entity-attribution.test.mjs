@@ -167,3 +167,22 @@ test("atribuye correctamente cuando la evidencia conserva espacios repetidos del
   assert.equal(result[0].entityId, "mara");
   assert.equal(result[0].evidence.excerpt, excerpt);
 });
+
+
+test("rechaza evidencia documental cruzada y alias malformados antes de atribuir", () => {
+  const candidate = idea("idea-provenance-check", "Mara desea proteger el reino.", "proteger el reino");
+  assert.throws(() => attributeNarrativeIdeasToEntities({
+    projectId: "book-1",
+    ideas: [{
+      ...candidate,
+      evidence: { ...candidate.evidence, documentId: "other-chapter" }
+    }],
+    entities: [entity("mara", "Mara")]
+  }));
+
+  assert.throws(() => attributeNarrativeIdeasToEntities({
+    projectId: "book-1",
+    ideas: [candidate],
+    entities: [entity("mara", "Mara", [""])]
+  }));
+});

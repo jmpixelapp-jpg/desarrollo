@@ -316,7 +316,7 @@ export function discoverNarrativeObservationCandidates(
         const subjectCandidates = characters.filter(entity =>
           [entity.canonicalName, ...entity.aliases].some(name =>
             sentence.toLocaleLowerCase("es").startsWith(name.toLocaleLowerCase("es")) &&
-            (sentence.length === name.length || !/[\\p{L}\\p{M}\\p{N}_]/u.test(sentence[name.length]!))
+            (sentence.length === name.length || !/[\p{L}\p{M}\p{N}_]/u.test(sentence[name.length]!))
           )
         );
         const subjectCandidate = subjectCandidates.length === 1

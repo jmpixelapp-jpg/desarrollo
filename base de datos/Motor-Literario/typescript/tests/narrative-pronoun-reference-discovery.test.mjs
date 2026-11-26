@@ -156,3 +156,20 @@ test("recorre segmentos de forma incremental y conserva evidencia en documentos 
     }
   }
 });
+
+test("separa oraciones por saltos de línea sin consumir letras del texto", () => {
+  const [reference] = discover("Ana llegó\nElla salió.", { entities: [ana] });
+  assert.equal(reference.pronoun, "Ella");
+  assert.equal(reference.status, "single-candidate");
+  assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt, "Ana");
+});
+
+test("escapa signos especiales en nombres y alias", () => {
+  const named = { ...ana, canonicalName: "Ana (la viajera)" };
+  const [reference] = discover("Ana (la viajera) llegó. Ella partió.", {
+    entities: [named]
+  });
+  assert.equal(reference.status, "single-candidate");
+  assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt,
+    "Ana (la viajera)");
+});

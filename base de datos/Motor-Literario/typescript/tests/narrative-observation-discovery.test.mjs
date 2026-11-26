@@ -327,3 +327,18 @@ test("no propone complemento personal si el personaje solo se menciona antes del
   assert.equal(found[0].grammaticalSubjectCandidate?.entityId, bruno.id);
   assert.equal(found[0].grammaticalSubjectCandidate?.voice, "active");
 });
+
+test("no confunde un nombre propio más largo con el prefijo de un personaje conocido", () => {
+  const bruno = {
+    ...character, id: "character:bruno", canonicalName: "Bruno",
+    normalizedName: "bruno"
+  };
+  const text = "Anabel ayudó a Bruno.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno], text
+  });
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0].mentionedCharacterIds, [bruno.id]);
+  assert.equal(found[0].grammaticalSubjectCandidate, undefined);
+  assert.equal(found[0].personalObjectCandidate?.entityId, bruno.id);
+});

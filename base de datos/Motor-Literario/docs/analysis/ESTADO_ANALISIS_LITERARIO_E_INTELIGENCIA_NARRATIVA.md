@@ -540,6 +540,8 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Integrado en la ingesta como `temporalReferences` y `temporalReferenceStatus`, y en la auditoría global con evidencias exactas.
 - Añadidas pruebas unitarias para fechas válidas/imposibles, ambigüedad numérica, referencias relativas, dirección de duraciones, franjas horarias y offsets, además de integración con ingesta. En run 3031 (`83ba3087`) Type-check y las pruebas temporales (incluida integración) pasaron; el workflow completo quedó en fallo por una prueba ajena de `live-author-monitor-textarea-source.test.mjs` (resincronización de textarea, línea 348), no por el extractor temporal.
 
+- Ampliación posterior: se reconocen duraciones acumuladas (`desde hace`), referencias futuras (`dentro de`) y cantidades cardinales frecuentes hasta cien; todas permanecen relativas y exigen ancla antes de cualquier resolución absoluta. Se incorporan pruebas específicas para distinguir duración, pasado y futuro.
+
 ### Presencia explícita de personajes en ubicaciones — 26-11-2026
 
 - Nuevo `narrative-location-presence-discovery.ts`: extrae afirmaciones copulativas/perceptuales/modalizadas de presencia («Ana está en el castillo», «Ana parece estar cerca del puerto»), con personaje y lugar explícitos y no ambiguos.

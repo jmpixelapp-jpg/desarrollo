@@ -276,18 +276,18 @@ test("clona y congela diagnósticos para que el panel no dependa del objeto muta
 test("convierte getters defectuosos del diagnóstico en estado no disponible sin detener métricas", () => {
   const f = fixture();
   let refresh;
-  const diagnostic = {
+  const diagnosticPayload = {
     documentId: "chapter-1",
     leaseState: "owner"
   };
-  Object.defineProperty(diagnostic, "checkpointState", {
+  Object.defineProperty(diagnosticPayload, "checkpointState", {
     enumerable: true,
     get() { throw new Error("contenido privado del getter"); }
   });
   const api = {
     getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
     getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
-    getLiveAuthorMonitorPersistenceDiagnostics: () => diagnostic,
+    getLiveAuthorMonitorPersistenceDiagnostics: () => diagnosticPayload,
     subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
   };
   const unmount = mountLiveAuthorMonitorPanel(f.container, api, {

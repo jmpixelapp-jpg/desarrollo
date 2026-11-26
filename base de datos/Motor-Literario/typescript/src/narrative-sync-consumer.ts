@@ -3,6 +3,8 @@ import {
   type IndexedDbNarrativeSyncJournal,
   type NarrativeSyncReplayResult
 } from "./narrative-sync-journal";
+import { recoverNarrativeReferenceRepairs, type NarrativeReferenceRepairRecoveryResult } from "./narrative-knowledge-graph-persistence";
+import type { ProjectStore } from "./contracts";
 import {
   createNarrativeSyncOperationDispatcher,
   type AnyNarrativeSyncOperationHandler,
@@ -42,4 +44,40 @@ export function createNarrativeSyncJournalConsumer(
   const dispatch = createNarrativeSyncOperationDispatcher(handlers, options);
   return (projectId, writerId) =>
     replayPendingNarrativeSyncOperations(journal, projectId, dispatch, writerId);
+}
+
+
+/** Resultado del consumo protegido por recuperación del grafo. */
+export interface RecoveryFirstNarrativeSyncResult {
+  readonly recovery: NarrativeReferenceRepairRecoveryResult;
+  readonly blockedByPendingRepairs: boolean;
+  readonly replay?: NarrativeSyncReplayResult;
+}
+
+/**
+ * Construye el límite recomendado para sincronización entrante: reanuda las
+ * reparaciones durables antes de reproducir operaciones remotas. Si quedan
+ * reparaciones en conflicto, no ejecuta handlers; el anfitrión puede mostrar
+ * las incidencias y reintentar después de resolverlas.
+ */
+export function createRecoveryFirstNarrativeSyncConsumer(
+  store: ProjectStore,
+  journal: IndexedDbNarrativeSyncJournal,
+  handlers: readonly AnyNarrativeSyncOperationHandler[],
+  options: NarrativeSyncJournalConsumerOptions = {}
+): (projectId: string, writerId?: string) => Promise<RecoveryFirstNarrativeSyncResult> {
+  if (!store || typeof store.loadNarrativeReferenceRepairPending !== "function" ||
+      typeof store.appendNarrativeReferenceRepairAudit !== "function" ||
+      typeof store.deleteNarrativeReferenceRepairPending !== "function") {
+    throw new TypeError("La sincronización protegida requiere persistencia durable de reparaciones.");
+  }
+  const consume = createNarrativeSyncJournalConsumer(journal, handlers, options);
+  return async (projectId, writerId) => {
+    const recovery = await recoverNarrativeReferenceRepairs(store, projectId);
+    if (recovery.pending.length > 0) {
+      return { recovery, blockedByPendingRepairs: true };
+    }
+    const replay = await consume(projectId, writerId);
+    return { recovery, blockedByPendingRepairs: false, replay };
+  };
 }

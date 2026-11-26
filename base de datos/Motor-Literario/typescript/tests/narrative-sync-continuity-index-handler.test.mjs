@@ -151,3 +151,31 @@ test("el helper crea una envoltura SHA-256 con el kind y límites de la proyecci
   assert.ok(NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS.maxBytes > 1_048_576);
   assert.equal(envelope.payload.index.projectId, projectId);
 });
+
+
+test("avanza el CAS cuando una generación nueva conserva contenido idéntico y deduplica solo su replay", async () => {
+  const projectId = "sync-continuity-same-content";
+  const current = makeIndex(projectId, 1, "same");
+  const next = makeIndex(projectId, 2, "same");
+  assert.equal(current.fingerprint, next.fingerprint);
+
+  const store = createStore(current);
+  const handler = createNarrativeIdeaContinuityIndexUpsertHandler(store);
+  const payload = { index: next, expectedGeneration: 1 };
+  assert.equal(handler.validate(payload), true);
+
+  const envelope = await createNarrativeIdeaContinuityIndexSyncEnvelope({
+    operationId: "continuity-same-content-2",
+    projectId,
+    writerId: "replica-a",
+    sequence: 2,
+    payload
+  });
+  await handler.apply(envelope);
+  assert.equal(store.value.generation, 2);
+  assert.equal(store.writes, 1);
+
+  await handler.apply(envelope);
+  assert.equal(store.value.generation, 2);
+  assert.equal(store.writes, 1, "solo el replay de la misma generación es idempotente");
+});

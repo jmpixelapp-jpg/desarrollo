@@ -2,6 +2,7 @@
  * Agrupa acciones explícitas en candidatos de acontecimiento por oración.
  * La proximidad textual organiza evidencia; no demuestra causalidad ni cronología.
  */
+import type { NarrativeTimeReference } from "./narrative-knowledge";
 import type { NarrativeActionCandidate, NarrativeActionExtractionInput } from "./narrative-action-extraction";
 import { extractNarrativeActionCandidates } from "./narrative-action-extraction";
 
@@ -22,6 +23,8 @@ export interface NarrativeEventCandidate {
     readonly end: number;
     readonly excerpt: string;
   };
+  /** Solo se completa cuando hay una referencia temporal inequívoca en la oración. */
+  readonly timeReference?: NarrativeTimeReference;
 }
 
 function sentenceBounds(text: string, offset: number): { start: number; end: number } {
@@ -38,6 +41,61 @@ function sentenceBounds(text: string, offset: number): { start: number; end: num
   while (start < end && /\s/u.test(text[start] ?? "")) start++;
   while (end > start && /\s/u.test(text[end - 1] ?? "")) end--;
   return { start, end };
+}
+
+
+function validCalendarDay(year: number, month: number, day: number): number | undefined {
+  if (year < 1000 || year > 2999 || month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return undefined;
+  return Math.floor(date.getTime() / 86_400_000);
+}
+
+/**
+ * Reconoce únicamente fechas inequívocas (AAAA-MM-DD, DD/MM/AAAA),
+ * años aislados y contadores explícitos "día N". Si hay más de una
+ * referencia temporal distinta en la oración, no elige arbitrariamente.
+ */
+function extractTimeReference(sentence: string): NarrativeTimeReference | undefined {
+  const found: NarrativeTimeReference[] = [];
+  const occupied: Array<[number, number]> = [];
+  const datePatterns = [
+    { regex: /(?<![\\p{L}\\p{N}])((\\d{4})-(\\d{2})-(\\d{2}))(?![\\p{L}\\p{N}])/gu, iso: true },
+    { regex: /(?<![\\p{L}\\p{N}])((\\d{2})\\/(\\d{2})\\/(\\d{4}))(?![\\p{L}\\p{N}])/gu, iso: false }
+  ];
+  for (const pattern of datePatterns) {
+    for (const match of sentence.matchAll(pattern.regex)) {
+      const start = match.index ?? 0;
+      const end = start + match[0].length;
+      if (occupied.some(([a, b]) => start < b && end > a)) continue;
+      const year = Number(pattern.iso ? match[2] : match[4]);
+      const month = Number(pattern.iso ? match[3] : match[3]);
+      const day = Number(pattern.iso ? match[4] : match[2]);
+      const orderValue = validCalendarDay(year, month, day);
+      if (orderValue === undefined) continue;
+      occupied.push([start, end]);
+      found.push({ basis: "calendar", precision: "date", raw: match[0], orderValue });
+    }
+  }
+  for (const match of sentence.matchAll(/(?<![\\p{L}\\p{N}])(?:día|dia)\\s+(?:n(?:ú|u)mero\\s+)?(\\d{1,9})(?![\\p{L}\\p{N}])/giu)) {
+    const value = Number(match[1]);
+    if (!Number.isSafeInteger(value) || value < 1) continue;
+    found.push({ basis: "story-day", precision: "day-index", raw: match[0], orderValue: value });
+  }
+  for (const match of sentence.matchAll(/(?<![\\p{L}\\p{N}])((?:1[0-9]{3}|2[0-9]{3}))(?![\\p{L}\\p{N}])/gu)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (occupied.some(([a, b]) => start >= a && end <= b)) continue;
+    const year = Number(match[1]);
+    found.push({
+      basis: "calendar", precision: "year", raw: match[0],
+      orderValue: Math.floor(Date.UTC(year, 0, 1) / 86_400_000)
+    });
+  }
+  const unique = new Map(found.map(item => [
+    JSON.stringify([item.basis, item.precision, item.raw, item.orderValue]), item
+  ]));
+  return unique.size === 1 ? [...unique.values()][0] : undefined;
 }
 
 /** Construye eventos candidatos agrupando acciones que aparecen en la misma oración. */
@@ -66,6 +124,7 @@ export function extractNarrativeEventCandidates(
     ))].sort();
     const start = (input.baseOffset ?? 0) + localStart;
     const end = (input.baseOffset ?? 0) + localEnd;
+    const timeReference = extractTimeReference(input.text.slice(localStart, localEnd));
     events.push({
       id: "event:" + input.documentId + ":" + input.revision + ":" + start,
       projectId: input.projectId,
@@ -73,6 +132,7 @@ export function extractNarrativeEventCandidates(
       participantEntityIds,
       actionCandidateIds: group.map(action => action.id),
       reviewStatus: "candidate",
+      ...(timeReference ? { timeReference } : {}),
       evidence: {
         documentId: input.documentId,
         revision: input.revision,

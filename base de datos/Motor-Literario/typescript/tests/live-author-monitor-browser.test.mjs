@@ -466,8 +466,8 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
 
         // Comprueba una interrupción con eventos DOM confiables de teclado:
         // el adaptador observa beforeinput, un listener posterior cancela la
-        // acción por defecto y no se produce input; al perder el foco debe
-        // suspenderse sin inventar el delta.
+        // acción por defecto y no se produce input. La microtarea del adaptador
+        // debe liberar el par cancelado antes de que el textarea pierda foco.
         await page.evaluate(async () => {
           const { LiveAuthorMonitorTextAreaSource } =
             await import("/src/live-author-monitor-textarea-source.ts");
@@ -543,11 +543,13 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           delete window.__blurRecoveryHarness;
           return result;
         });
-        assert.deepEqual(afterBlur.errors, ["missing-input"]);
+        assert.deepEqual(afterBlur.errors, [],
+          "la cancelación final del beforeinput no debe generar un diagnóstico de pérdida");
         assert.equal(afterBlur.changes.length, 0,
           "un beforeinput cancelado no debe convertirse en un delta");
         assert.equal(afterBlur.inputEvents, 0);
-        assert.equal(afterBlur.state.needsResync, true);
+        assert.equal(afterBlur.state.needsResync, false,
+          "el blur posterior no debe invalidar un stream cuya operación fue cancelada correctamente");
         assert.equal(afterBlur.state.compositionActive, false);
       } finally {
         await cdp.detach();

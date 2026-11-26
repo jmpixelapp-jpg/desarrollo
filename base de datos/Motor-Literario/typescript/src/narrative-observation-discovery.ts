@@ -377,7 +377,7 @@ export function discoverNarrativeObservationCandidates(
           : undefined;
         const personalObjectCandidate = (() => {
           const afterVerb = sentence.slice(match.index + surface.length);
-          const objectMarker = /^\\s+a\\s+([\\p{Lu}ÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[\\p{Lu}ÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3})/u.exec(afterVerb);
+          const objectMarker = /^\s+a\s+([\p{Lu}ÁÉÍÓÚÜÑ][\p{L}\p{M}]+(?:[ \u00a0]+(?:de[ \u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \u00a0]*[\p{Lu}ÁÉÍÓÚÜÑ][\p{L}\p{M}]+){0,3})/u.exec(afterVerb);
           if (!objectMarker) return undefined;
           const matchedName = objectMarker[1]!;
           const candidates = characters.filter(entity =>

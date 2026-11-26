@@ -81,6 +81,10 @@ En construcciones pasivas, el extractor puede conservar por separado el sujeto p
 
 El lector acepta TXT y Markdown UTF-8 estricto. La decodificación conserva explícitamente un BOM UTF-8 inicial (`U+FEFF`) en el texto devuelto (`ignoreBOM: true`). La segmentación lo omite al reconocer el primer encabezado, pero conserva el desplazamiento de una unidad UTF-16 para que las evidencias posteriores sigan apuntando al texto decodificado original. Así, los offsets son coherentes con la cadena exacta que devuelve el lector.
 
+### Objeto directo de entidades conocidas
+
+Para entidades de tipo `object`, el descubrimiento de observaciones puede proponer `grammaticalObjectCandidate` cuando una mención literal única aparece inmediatamente después del verbo con un patrón nominal explícito (por ejemplo, «Ana perdió la Espada Solar»). Se conserva el ID y la evidencia exacta del nombre con offsets absolutos. Esto identifica un candidato a objeto gramatical, no confirma posesión, transferencia, pérdida efectiva ni estado del objeto. Si falta el marcador nominal o la entidad es ambigua, no se asigna candidato.
+
 ### Complemento personal explícito
 
 El descubrimiento de observaciones puede conservar un candidato sintáctico para el patrón local «verbo + a + nombre de personaje conocido». Se guarda el ID de la entidad y la evidencia literal del nombre con offsets del documento. Esto no afirma por sí solo una relación semántica de víctima, destinatario, receptor o paciente. La coincidencia exige una entidad única registrada; una mención anterior al verbo no se reutiliza como objeto. Las pruebas cubren «Ana encontró a Bruno» y «Bruno encontró a Ana» para evitar invertir los participantes.

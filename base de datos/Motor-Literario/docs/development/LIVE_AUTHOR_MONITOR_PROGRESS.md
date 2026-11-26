@@ -1119,7 +1119,9 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresión:** se comprueba que el arreglo y cada delta estén congelados, que el objeto sea distinto del original, que los campos coincidan y que un intento de mutación lance sin cambiar el contenido que sigue pendiente.
 
-**Validación:** pendiente de CI para este commit. La recuperación de desuscripción del commit `e85f5302bc37eafa9af762734b28cf87633c07cc` terminó correctamente en [Live Author Monitor — run 45751018096](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018096) y [Motor Literario TypeScript — run 45751018120](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018120).
+**Validación verificada:** [Live Author Monitor — run 45751188342](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188342) y [Motor Literario TypeScript — run 45751188331](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188331) finalizaron en `success` para el commit `eebb84d`. La lane específica completó bundle aislado, regresiones, Chromium, auditoría MLDB, build runtime, suite completa del monitor y benchmark. El workflow general completó type-check, build, suite automatizada y benchmark.
+
+**Validación previa de recuperación FIFO:** el commit `e85f5302bc37eafa9af762734b28cf87633c07cc` también pasó en [Live Author Monitor — run 45751018096](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018096) y [Motor Literario TypeScript — run 45751018120](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018120).
 
 **Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
 

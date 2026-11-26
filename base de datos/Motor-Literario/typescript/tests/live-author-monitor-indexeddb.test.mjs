@@ -559,7 +559,7 @@ test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timest
   }
 });
 
-test("rechaza retrocesos en la clasificación de actividad aunque el total aceptado no cambie", async () => {
+test("rechaza retrocesos en composición IME aunque el total aceptado no cambie", async () => {
   const store = new IndexedDbProjectStore();
   const projectId = "live-author-monitor-activity-regression-" + randomUUID();
   const documentId = "chapter-" + randomUUID();
@@ -584,8 +584,8 @@ test("rechaza retrocesos en la clasificación de actividad aunque el total acept
       /activity-counts.values/
     );
 
-    // El total sigue siendo cinco, pero un checkpoint de la misma sesión
-    // reclasifica retroactivamente un cambio de tecleo como "other".
+    // El total sigue siendo cinco, pero el contador IME no puede retroceder
+    // ni reclasificarse como otra categoría en la misma sesión.
     const regressed = checkpoint(projectId, documentId, durable.savedAt + 1, {
       sessionId: durable.sessionId,
       acceptedChanges: 5,

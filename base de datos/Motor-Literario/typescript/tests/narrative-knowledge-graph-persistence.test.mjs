@@ -732,3 +732,29 @@ test("la carga del proyecto no hidrata si no se puede inspeccionar la cola durab
   );
   assert.equal(hydrated, false);
 });
+
+
+test("dos recuperaciones concurrentes del mismo proyecto comparten una sola ejecución", async () => {
+  const { store } = createMemoryStore();
+  let reads = 0;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  store.loadNarrativeReferenceRepairPending = async () => {
+    reads++;
+    await gate;
+    return [];
+  };
+
+  const first = recoverNarrativeReferenceRepairs(store, "concurrent-recovery-project");
+  const second = recoverNarrativeReferenceRepairs(store, "concurrent-recovery-project");
+  assert.equal(reads, 1, "la segunda llamada debe reutilizar la recuperación activa");
+  release();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  assert.strictEqual(firstResult, secondResult);
+  assert.deepEqual(firstResult, {
+    projectId: "concurrent-recovery-project",
+    checked: 0,
+    recovered: 0,
+    pending: []
+  });
+});

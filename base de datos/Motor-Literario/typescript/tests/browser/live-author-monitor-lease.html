@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Author Monitor — IndexedDB lease harness</title>
+</head>
+<body>
+  <main>
+    <h1>Live Author Monitor browser test harness</h1>
+    <p>Harness E2E de IndexedDB real. No forma parte de la interfaz de producción.</p>
+    <output id="ready">starting</output>
+  </main>
+  <script type="module">
+    import { IndexedDbProjectStore } from "/src/persistence/indexeddb-store.ts";
+
+    const store = new IndexedDbProjectStore();
+    window.__monitorLeaseHarness = Object.freeze({
+      acquire: (...args) => store.acquireLiveAuthorMonitorLease(...args),
+      renew: (...args) => store.renewLiveAuthorMonitorLease(...args),
+      release: (...args) => store.releaseLiveAuthorMonitorLease(...args),
+      saveCheckpoint: (...args) => store.saveLiveAuthorMonitorCheckpoint(...args),
+      loadCheckpoint: (...args) => store.loadLiveAuthorMonitorCheckpoint(...args),
+      close: () => store.close()
+    });
+    document.querySelector("#ready").textContent = "ready";
+  </script>
+</body>
+</html>

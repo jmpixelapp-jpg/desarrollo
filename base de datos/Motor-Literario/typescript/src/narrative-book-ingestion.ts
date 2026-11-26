@@ -511,7 +511,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     })),
     additionalEvidence: [
       ...characterStateCandidates.map(candidate => ({ evidence: candidate.evidence })),
-      ...locationTransitionCandidates.map(candidate => ({ evidence: candidate.contextEvidence }))
+      ...locationTransitionCandidates.map(candidate => ({ evidence: candidate.locationEvidence }))
     ]
   });
   return {

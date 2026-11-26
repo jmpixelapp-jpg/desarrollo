@@ -58,6 +58,16 @@ export interface LiveAuthorMonitorSnapshot {
   readonly commitLatencySamples: number;
 }
 
+interface MonitorSubscriber {
+  readonly listener: LiveAuthorMonitorListener;
+  readonly documentId?: string;
+}
+
+interface PendingMonitorNotification {
+  readonly snapshot: LiveAuthorMonitorSnapshot;
+  readonly subscribers: readonly MonitorSubscriber[];
+}
+
 interface PendingTicket {
   readonly documentId: string;
   readonly submittedAt: number;
@@ -139,7 +149,9 @@ function percentile(values: readonly number[], fraction: number): number {
 export class LiveAuthorMonitor {
   private readonly sessions = new Map<string, DocumentSession>();
   private readonly pendingTickets = new Map<string, PendingTicket>();
-  private readonly listeners = new Set<{ listener: LiveAuthorMonitorListener; documentId?: string }>();
+  private readonly listeners = new Set<MonitorSubscriber>();
+  private readonly notificationQueue: PendingMonitorNotification[] = [];
+  private notifyingListeners = false;
   private readonly idleAfterMs: number;
   private readonly maxOpenDocuments: number;
   private readonly commitSampleWindow: number;
@@ -557,6 +569,7 @@ export class LiveAuthorMonitor {
 
   dispose(): void {
     this.listeners.clear();
+    this.notificationQueue.length = 0;
     this.sessions.clear();
     this.pendingTickets.clear();
   }
@@ -648,9 +661,38 @@ export class LiveAuthorMonitor {
 
   private publish(session: DocumentSession): LiveAuthorMonitorSnapshot {
     const snapshot = this.createSnapshot(session, this.readClock(session));
-    for (const entry of this.listeners) {
-      if (entry.documentId !== undefined && entry.documentId !== session.documentId) continue;
-      try { entry.listener(snapshot); } catch { /* Un panel no debe interrumpir la escritura. */ }
+    this.notificationQueue.push({
+      snapshot,
+      // Fija los destinatarios al publicar: altas posteriores no reciben
+      // snapshots anteriores y las bajas se respetan antes de cada callback.
+      subscribers: [...this.listeners]
+    });
+
+    // Un callback puede producir otra edición de forma síncrona. Encolamos su
+    // snapshot para que ningún suscriptor reciba primero el estado nuevo y
+    // después el antiguo.
+    if (this.notifyingListeners) return snapshot;
+
+    this.notifyingListeners = true;
+    let cursor = 0;
+    try {
+      while (cursor < this.notificationQueue.length) {
+        const notification = this.notificationQueue[cursor++];
+        if (!notification) continue;
+        for (const subscriber of notification.subscribers) {
+          if (!this.listeners.has(subscriber)) continue;
+          if (subscriber.documentId !== undefined &&
+              subscriber.documentId !== notification.snapshot.documentId) continue;
+          try {
+            subscriber.listener(notification.snapshot);
+          } catch {
+            // Un panel no debe interrumpir la escritura ni a otros suscriptores.
+          }
+        }
+      }
+    } finally {
+      this.notificationQueue.length = 0;
+      this.notifyingListeners = false;
     }
     return snapshot;
   }

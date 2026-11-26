@@ -319,6 +319,6 @@ export function discoverNarrativeObservationCandidates(
 
   return [...results.values()]
     .sort((a, b) => a.actionEvidence.start - b.actionEvidence.start ||
-      a.id.localeCompare(b.id))
+      a.actionEvidence.end - b.actionEvidence.end)
     .slice(0, MAX_NARRATIVE_OBSERVATION_CANDIDATES);
 }

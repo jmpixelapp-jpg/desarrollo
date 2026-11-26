@@ -126,18 +126,28 @@ function transitionFor(
   between: string
 ): NarrativeLocationTransitionKind | undefined {
   const phrase = between.toLocaleLowerCase("es").normalize("NFC");
+  const article = "(?:(?:el|la|los|las|un|una|unos|unas)\\s+)?";
   if (action === "llegar" &&
-      /^\s+(?:a|al|hasta|en)\s+$/u.test(phrase)) return "arrived";
+      new RegExp("^\\s+(?:a|al|hasta|en)\\s+" + article + "$", "u").test(phrase)) {
+    return "arrived";
+  }
   if (action === "salir" &&
-      /^\s+(?:de|desde)\s+$/u.test(phrase)) return "departed";
+      new RegExp("^\\s+(?:de|del|desde)\\s+" + article + "$", "u").test(phrase)) {
+    return "departed";
+  }
   if (action === "entrar" &&
-      /^\s+(?:en|a|al|hacia)\s+$/u.test(phrase)) return "entered";
+      new RegExp("^\\s+(?:en|a|al|hacia)\\s+" + article + "$", "u").test(phrase)) {
+    return "entered";
+  }
   if (action === "cruzar" &&
-      /^\s+(?:por|a\s+trav[eé]s\s+de|a\s+lo\s+largo\s+de)\s+$/u.test(phrase)) {
+      (new RegExp("^\\s+(?:por)\\s+" + article + "$", "u").test(phrase) ||
+       /^\\s+(?:(?:el|la|los|las|un|una)\\s+)?$/u.test(phrase))) {
     return "passed-through";
   }
   if ((action === "regresar" || action === "volver") &&
-      /^\s+(?:a|al|hacia|hasta)\s+$/u.test(phrase)) return "returned";
+      new RegExp("^\\s+(?:a|al|hacia|hasta)\\s+" + article + "$", "u").test(phrase)) {
+    return "returned";
+  }
   return undefined;
 }
 

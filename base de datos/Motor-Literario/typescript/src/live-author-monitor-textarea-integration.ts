@@ -189,8 +189,11 @@ export function mountLiveAuthorMonitorTextArea(
         options.hostApi.resynchronizeLiveAuthorMonitor(authoritative);
       }
 
-      const state = source.resynchronize(authoritative);
+      // El binding puede haber desuscrito la fuente por overflow o rechazo
+      // permanente. Primero reconstruye la suscripción (la fuente sigue
+      // suspendida), luego valida el snapshot con un observador ya activo.
       binding.discardPendingAfterResynchronization();
+      const state = source.resynchronize(authoritative);
       return state;
     },
 

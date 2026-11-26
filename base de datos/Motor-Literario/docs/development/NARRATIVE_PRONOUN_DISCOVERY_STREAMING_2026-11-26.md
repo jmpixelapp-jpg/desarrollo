@@ -33,3 +33,12 @@ Cada candidato incorpora ahora dos medidas reproducibles: `sentenceDistance`, ca
 Estas señales no alteran la ordenación principal por recencia, no descartan candidatos y no prueban correferencia. Una mención cercana puede ser irrelevante y una distante puede seguir siendo el antecedente correcto. Se añaden pruebas para varios párrafos y antecedentes competidores.
 
 **Límite actual:** el modelo de entidades no contiene atributos gramaticales fiables de género y número. Esta etapa no inventa concordancias ni penaliza nombres por género aparente. La concordancia requiere una fuente explícita y versionada de esos atributos.
+
+
+## Presupuesto agregado de exploración de nombres — 26 de noviembre de 2026
+
+La búsqueda de antecedentes recorría la ventana de texto por cada entidad y por cada nombre/alias. Aunque cada dimensión tenía un límite individual, su producto podía producir un coste excesivo cuando coincidían muchos personajes, alias y una ventana amplia.
+
+Se incorpora `MAX_NARRATIVE_PRONOUN_SCAN_UNITS = 25_000_000`. Antes de ejecutar la búsqueda de cada entidad se estima el trabajo como longitud de ventana multiplicada por cantidad de nombres (nombre canónico más alias). Si el presupuesto agregado se supera, la operación falla explícitamente; no devuelve un resultado parcial que pudiera confundirse con una extracción completa.
+
+La prueba combina 100 entidades, 100 alias por entidad y la ventana máxima. El límite es una cota conservadora del trabajo estimado, no una medición exacta de operaciones de motor de expresiones regulares. La optimización futura apropiada sería un índice de menciones reutilizable por documento/revisión, en vez de repetir búsquedas por entidad.

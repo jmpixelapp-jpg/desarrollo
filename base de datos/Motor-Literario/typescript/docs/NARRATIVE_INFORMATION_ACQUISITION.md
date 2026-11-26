@@ -221,3 +221,9 @@ La taxonomía se amplió para separar estados vitales, físicos, cognitivos, emo
 
 La categoría no se usa para inferir estados ausentes. Por ejemplo, que un personaje haya sido atacado no basta para clasificarlo como herido: hace falta una afirmación copulativa explícita respaldada por el texto. Las formas masculinas/femeninas y singulares/plurales contempladas se reconocen sin alterar el fragmento original de evidencia.
 
+### Publicación por revisión durante la escritura
+
+La extracción de condiciones de personajes ya no queda limitada a la ingesta de un libro. `HostEngineApi` la ejecuta también dentro del flujo de análisis de cada edición admitida, después de reconciliar el conocimiento y de construir una ventana contextual coherente con la revisión analizada. La ventana y sus evidencias mantienen offsets absolutos mediante `baseOffset`.
+
+La aplicación anfitriona recibe `onNarrativeCharacterStateCandidates(analysis, candidates)`. El callback se emite por revisión, incluso cuando la lista queda vacía, para que la interfaz pueda retirar candidatos de una frase que el autor corrigió. Un error del callback no bloquea la escritura, la cola del motor ni la publicación de observaciones de acciones. No se entrega una revisión mezclada: si no existe snapshot con la misma revisión, se usa únicamente el fragmento afectado.
+

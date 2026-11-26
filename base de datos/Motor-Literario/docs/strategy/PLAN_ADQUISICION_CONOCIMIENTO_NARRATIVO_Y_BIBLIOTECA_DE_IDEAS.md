@@ -483,3 +483,17 @@ La comparación:
 Se agregan diez pruebas unitarias y una prueba de integración del pipeline para un objetivo de protección seguido por una acción explícita de traición. Las pruebas cubren además objetivos no coincidentes y evidencias obsoletas.
 
 **Límites:** una acción opuesta no demuestra engaño, hipocresía, intención oculta ni que el personaje haya abandonado su meta. Una acción negada no se trata como realizada. La comparación no cruza capítulos ni revisiones en esta fase; tampoco evalúa acciones pronominales todavía. Type-check, build y suite completa requieren ejecución CI sobre el head actualizado.
+
+## Fase AC: contraste de objetivos con acciones pronominales y continuidad entre capítulos
+
+Se amplía `compareNarrativeIntentsWithActions` para recibir `priorIntents` y `orderedDocumentIds`. El pipeline entrega los objetivos históricos mediante `priorCharacterIntents` y combina las acciones nominales con las acciones pronominales que ya fueron resueltas y vinculadas a un objetivo explícito.
+
+Dos vías quedan habilitadas:
+1. **Acción pronominal en el mismo fragmento:** una referencia como «Ella traicionó a Elian» solo participa si la resolución pronominal identifica un único personaje y el vínculo posterior identifica un único destinatario.
+2. **Objetivo histórico frente a acción posterior:** un objetivo de otro capítulo se compara con acciones del capítulo actual únicamente si ambos documentos aparecen en el orden declarado por `orderedDocumentIds`.
+
+Se conserva la regla de cronología local: dentro del mismo documento se exige misma revisión y que la acción aparezca después del objetivo. Entre documentos se exige orden explícito. Si no existe orden fiable, no se crea una comparación.
+
+Se añaden dos pruebas unitarias de cronología entre capítulos y dos pruebas de integración del pipeline para acción pronominal y objetivo histórico.
+
+**Límites:** las referencias pronominales ambiguas o sin resolver no se convierten en acciones atribuidas; los objetos omitidos no se inventan; una oposición sigue sin demostrar engaño, hipocresía o cambio psicológico. La biblioteca debe suministrar los objetivos anteriores y el orden documental. Build, type-check y suite completa aún requieren validación ejecutada.

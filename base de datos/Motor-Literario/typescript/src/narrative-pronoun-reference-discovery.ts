@@ -85,7 +85,7 @@ function findLastNameMention(
 }
 
 function* sentenceSpans(text: string): Iterable<{ start: number; end: number }> {
-  const expression = /[^.!?\n]+(?:[.!?]+|$)/gu;
+  const expression = /[^.!?\n]+(?:[.!?]+|(?=\n|$))/gu;
   for (const match of text.matchAll(expression)) {
     const raw = match[0];
     const leading = raw.search(/\S/u);

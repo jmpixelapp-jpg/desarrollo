@@ -442,12 +442,19 @@ export class LiveAuthorMonitor {
     }
     const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
     const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
-    const activityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
-      checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges,
-      checkpoint.redoChanges, checkpoint.otherChanges];
-    const hasActivityCounts = activityCounts.some(value => value !== undefined);
-    const validActivityCounts = activityCounts.every(value => value !== undefined && integerNonNegative(value));
-    const activityCountTotal = activityCounts.reduce((sum, value) => sum + (value ?? 0), 0);
+    const classifiedActivityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
+      checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges, checkpoint.redoChanges];
+    const hasActivityCounts = classifiedActivityCounts.some(value => value !== undefined) ||
+      checkpoint.otherChanges !== undefined;
+    const validClassifiedCounts = classifiedActivityCounts.every(
+      value => value !== undefined && integerNonNegative(value)
+    );
+    const classifiedCountTotal = classifiedActivityCounts.reduce((sum, value) => sum + (value ?? 0), 0);
+    const validActivityCounts = !hasActivityCounts || (validClassifiedCounts &&
+      (checkpoint.otherChanges === undefined || integerNonNegative(checkpoint.otherChanges)) &&
+      classifiedCountTotal <= checkpoint.acceptedChanges &&
+      (checkpoint.otherChanges === undefined ||
+        classifiedCountTotal + checkpoint.otherChanges === checkpoint.acceptedChanges));
     if (!finiteNonNegative(restoredAt) || !finiteNonNegative(checkpoint.savedAt) ||
         restoredAt < checkpoint.savedAt ||
         !finiteNonNegative(checkpoint.sessionDurationMs) ||
@@ -518,7 +525,9 @@ export class LiveAuthorMonitor {
       correctionChanges: checkpoint.correctionChanges ?? 0,
       undoChanges: checkpoint.undoChanges ?? 0,
       redoChanges: checkpoint.redoChanges ?? 0,
-      otherChanges: hasActivityCounts ? (checkpoint.otherChanges ?? 0) : checkpoint.acceptedChanges,
+      otherChanges: hasActivityCounts
+        ? (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedCountTotal)
+        : checkpoint.acceptedChanges,
       rejectedChanges: checkpoint.rejectedChanges,
       committedChanges: checkpoint.committedChanges,
       failedChanges: checkpoint.failedChanges,

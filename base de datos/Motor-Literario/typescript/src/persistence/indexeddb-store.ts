@@ -1486,16 +1486,19 @@ function validateLiveAuthorMonitorCheckpoint(
   }
   if (!integerNonNegative(checkpoint.pauseCount)) invalid.push("pauseCount");
   if (!integerNonNegative(checkpoint.acceptedChanges)) invalid.push("acceptedChanges");
-  const activityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
+  const classifiedActivityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
     checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges,
-    checkpoint.redoChanges, checkpoint.otherChanges];
-  const hasActivityCounts = activityCounts.some(value => value !== undefined);
+    checkpoint.redoChanges];
+  const hasActivityCounts = classifiedActivityCounts.some(value => value !== undefined) ||
+    checkpoint.otherChanges !== undefined;
   if (hasActivityCounts) {
-    if (activityCounts.some(value => !integerNonNegative(value as number))) {
+    if (classifiedActivityCounts.some(value => !integerNonNegative(value as number)) ||
+        (checkpoint.otherChanges !== undefined && !integerNonNegative(checkpoint.otherChanges))) {
       invalid.push("activity-counts.values");
-    } else if (integerNonNegative(checkpoint.acceptedChanges) &&
-        activityCounts.reduce((sum, value) => sum + (value as number), 0) !== checkpoint.acceptedChanges) {
-      invalid.push("activity-counts.total");
+    } else if (integerNonNegative(checkpoint.acceptedChanges)) {
+      const classifiedTotal = classifiedActivityCounts.reduce((sum, value) => sum + (value as number), 0);
+      const total = classifiedTotal + (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedTotal);
+      if (total !== checkpoint.acceptedChanges) invalid.push("activity-counts.total");
     }
   }
   if (!integerNonNegative(checkpoint.rejectedChanges)) invalid.push("rejectedChanges");

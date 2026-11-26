@@ -501,4 +501,13 @@ test("clasifica escritura, pegado, borrado, corrección, deshacer y rehacer; los
   const nextCheckpoint = legacyMonitor.createCheckpoint("chapter-activity", 300);
   assert.ok(nextCheckpoint);
   assert.equal(nextCheckpoint.otherChanges, 6);
+
+  const interim = { ...checkpoint };
+  delete interim.otherChanges;
+  const interimMonitor = new LiveAuthorMonitor({ now: () => 0 });
+  const interimSnapshot = interimMonitor.restoreCheckpoint(interim, {
+    documentId: "chapter-activity", text: "Zbcdxy", revision: 6, sequence: 6
+  }, "book-activity", 200);
+  assert.equal(interimSnapshot.otherChanges, 0,
+    "una entrega intermedia con las seis categorías debe restaurar el residual calculado");
 });

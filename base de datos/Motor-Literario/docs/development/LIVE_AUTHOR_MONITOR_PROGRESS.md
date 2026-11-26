@@ -661,3 +661,5 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **Validación:** pendiente de CI. La compilación sigue condicionada por el error TS1002 de `src/narrative-history.ts`, fuera del ámbito de este módulo.
 
 - Compatibilidad adicional: los checkpoints v1 anteriores a las categorías restauran sus ediciones históricas como `otherChanges`; así, los nuevos totales siguen cuadrando al volver a guardar.
+
+- La restauración también admite checkpoints intermedios con los seis contadores clasificados pero todavía sin `otherChanges`; el residual se infiere como `acceptedChanges - suma(clasificados)`.

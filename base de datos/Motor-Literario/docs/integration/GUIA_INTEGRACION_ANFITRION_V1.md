@@ -2,8 +2,8 @@
 
 **Estado:** contrato vigente para integración TypeScript/JavaScript  
 **Versión de API:** `0.1.0` (`MOTOR_LITERARIO_API_VERSION`)  
-**Esquema lógico:** MLDB `0.4.1`  
-**Persistencia incluida:** IndexedDB `motor-literario-local`, versión `21`  
+**Esquema lógico:** MLDB `0.4.2`  
+**Persistencia incluida:** IndexedDB `motor-literario-local`, versión `27`  
 **Punto de entrada público:** `typescript/src/index.ts`
 
 Esta guía describe cómo conectar el Motor Literario con el programa que crea los libros, administra usuarios y contiene el editor. La aplicación anfitriona conserva la propiedad de los proyectos, documentos y texto original. El motor recibe su identidad y los cambios del editor; devuelve confirmaciones, diagnósticos y conocimiento estructurado. Nunca reescribe el texto del anfitrión por iniciativa propia.
@@ -31,6 +31,7 @@ El paquete TypeScript del repositorio sigue marcado como privado (`private: true
 | Crear y nombrar documentos | Responsable | Recibe el `documentId` |
 | Contener y mostrar el manuscrito | Autoridad del texto | Mantiene una sesión y una copia local recuperable |
 | Detectar cada edición | Envía el delta del editor | Lo admite, valida, persiste y analiza |
+| Identificar la instalación | Conserva un UUID estable por instalación | Secuencia las operaciones salientes por `deviceId` |
 | Aplicar cambios al manuscrito | Responsable | No escribe sobre el editor ni cambia el texto original |
 | Mostrar diagnósticos | Responsable | Devuelve diagnósticos asociados a una revisión concreta |
 | Conservar conocimiento narrativo | Puede consultarlo y presentarlo | Extrae y persiste registros aislados por proyecto |
@@ -80,7 +81,9 @@ if (MOTOR_LITERARIO_API_VERSION !== "0.1.0") {
 motor.initializeProject({
   projectId: hostProject.id,
   projectName: hostProject.title,
-  writerId: authenticatedUser.stableWriterId
+  writerId: authenticatedUser.stableWriterId,
+  // UUID aleatorio persistido una sola vez por instalación, no por sesión.
+  deviceId: hostInstallation.stableDeviceId
 });
 ```
 
@@ -89,6 +92,7 @@ Reglas de identidad:
 - `projectId`: ID estable que ya asigna el programa anfitrión al libro.
 - `projectName`: título vigente suministrado por el anfitrión; se conserva como procedencia cuando se archivan ideas.
 - `writerId`: ID estable del escritor autenticado, no el nombre visible ni un valor enviado libremente desde la interfaz. Es opcional para las funciones generales, pero obligatorio para usar la biblioteca personal de ideas y la finalización de un libro.
+- `deviceId`: UUID aleatorio, persistido por el anfitrión en la configuración local de esta instalación. No es el ID de usuario, no se comparte entre equipos y no se regenera por sesión. Solo debe suministrarse cuando el adaptador ofrece atomicidad journal/outbox/CAS; IndexedDB DB27 la ofrece.
 - `documentId`: ID estable que asigna el anfitrión a cada documento o capítulo.
 
 No se deben derivar estas identidades del título, nombre de usuario, ruta del archivo ni texto del manuscrito.
@@ -99,6 +103,15 @@ No se deben derivar estas identidades del título, nombre de usuario, ruta del a
 
 Para procesos separados no se usa IndexedDB: el proceso compañero utiliza el adaptador SQLite local incorporado, basado en `node:sqlite`, sin dependencias npm adicionales en runtime. El archivo SQLite y el almacén IndexedDB de una ejecución dentro del navegador son bases físicas diferentes y no se sincronizan automáticamente. El contrato, la identidad y las estructuras lógicas MLDB se mantienen; la guía del puente documenta su esquema físico, versión y procedimiento de inicio. No se debe conectar una base remota o un servicio externo sin una decisión de arquitectura y privacidad expresa.
 
+### Persistencia saliente y sincronización
+
+Con `deviceId` configurado, `IndexedDbProjectStore` confirma cada edición del editor en una transacción que escribe el delta del journal, la operación `document.change` y la secuencia monotónica de la instalación. Las mutaciones CAS locales de entidades, ideas, afirmaciones, relaciones, acontecimientos y fusiones de entidades siguen la misma regla: registro de dominio, outbox y cursor se confirman juntos.
+
+El adaptador debe exponer `supportsAtomicNarrativeSyncOutbox === true`. Si se usa el puente de procesos con el adaptador SQLite actual, no se debe configurar `deviceId` hasta implementar la transacción equivalente. El motor rechaza estas mutaciones si no hay garantía atómica.
+
+El núcleo exporta `dispatchPendingNarrativeSyncOperations`. El anfitrión proporciona un `transport.send` autenticado que recibe la envoltura SHA-256 y devuelve un acuse remoto durable. Solo se elimina el pendiente si coinciden exactamente proyecto, `operationId`, dispositivo/stream, secuencia y digest. La entrega es al menos una vez; el servidor debe deduplicar `operationId` y autorizar la relación entre usuario, dispositivo y proyecto. El digest no sustituye autenticación.
+
+No se incluye cliente HTTP ni se envía información automáticamente. Los payloads de edición y conocimiento narrativo contienen texto y datos del libro; el anfitrión debe protegerlos en tránsito y en destino.
 ## 4. Apertura y recuperación de documentos
 
 El anfitrión mantiene el snapshot autoritativo del editor: texto completo, revisión y secuencia. En una apertura normal, envía ese snapshot:

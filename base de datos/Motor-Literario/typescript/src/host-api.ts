@@ -3023,37 +3023,47 @@ export class HostEngineApi {
       }
 
       const ideas = [...this.narrativeIdeas.values()];
-      // Una carga histórica permisiva nunca relaja las consultas estrictas posteriores.
-      for (const idea of ideas) {
-        if (!idea || idea.projectId !== projectId || typeof idea.id !== "string" || !idea.id.trim()) {
-          throw new Error("Violación de aislamiento: ideas contiene un registro ajeno al proyecto activo.");
+      try {
+        // Una carga histórica permisiva nunca relaja las consultas estrictas posteriores.
+        for (const idea of ideas) {
+          if (!idea || idea.projectId !== projectId || typeof idea.id !== "string" || !idea.id.trim()) {
+            throw new Error("Violación de aislamiento: ideas contiene un registro ajeno al proyecto activo.");
+          }
+          requireNarrativeRecordShape(idea, "ideas", {
+            allowLegacyIdeaGraph: options.allowLegacyGraph === true
+          });
         }
-        requireNarrativeRecordShape(idea, "ideas", {
-          allowLegacyIdeaGraph: options.allowLegacyGraph === true
-        });
-      }
-      if (options.allowLegacyGraph !== true &&
-          ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
-        if (!this.store.loadEntities) {
-          throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
+        if (options.allowLegacyGraph !== true &&
+            ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
+          if (!this.store.loadEntities) {
+            throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
+          }
+          // La lectura estricta comprueba destinos con un snapshot durable reciente.
+          const entities = requireProjectScopedRecords(
+            await this.requireKnowledgeReaderStore().loadEntities(projectId),
+            projectId,
+            "entidades"
+          );
+          requireNarrativeEntityReferences(
+            ideas, projectId, entities,
+            idea => idea.relatedEntityIds ?? [], "ideas"
+          );
+          this.narrativeEntities.clear();
+          for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
+          this.entitiesLoaded = true;
+          this.entityEvidenceIndex = undefined;
+          this.entityNameIndex = undefined;
         }
-        // La lectura de ideas es también un límite de reconciliación: el catálogo
-        // de entidades puede haber cambiado desde otra instancia del anfitrión.
-        // No validar contra una caché caliente que oculte destinos eliminados.
-        const entities = requireProjectScopedRecords(
-          await this.requireKnowledgeReaderStore().loadEntities(projectId),
-          projectId,
-          "entidades"
-        );
-        this.narrativeEntities.clear();
-        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
-        this.entitiesLoaded = true;
-        this.entityEvidenceIndex = undefined;
-        this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
+      } catch (error) {
+        // Un catálogo rechazado no puede permanecer caliente y contaminar la
+        // siguiente consulta tras corregir el almacenamiento o el adaptador.
+        if (options.allowLegacyGraph !== true) {
+          this.narrativeIdeas.clear();
+          this.ideasLoaded = false;
+          this.ideaEvidenceIndex = undefined;
+          this.ideaLineIndex = undefined;
+        }
+        throw error;
       }
       return cloneNarrativeRecords(ideas);
     });

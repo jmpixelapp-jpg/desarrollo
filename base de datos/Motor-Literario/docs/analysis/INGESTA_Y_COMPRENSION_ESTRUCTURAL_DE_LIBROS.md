@@ -21,6 +21,28 @@ La función asíncrona `readNarrativeBookFile(file)` adquiere archivos TXT y Mar
 - IDs deterministas dentro de la misma identidad de documento, revisión y posición de origen.
 - Límites explícitos para evitar crecimiento descontrolado de memoria.
 
+## Ejemplo de uso desde el anfitrión
+
+```ts
+const source = await readNarrativeBookFile(file);
+const knownEntities = await api.getNarrativeEntities();
+
+const book = ingestNarrativeBookText({
+  projectId,
+  documentId,
+  revision,
+  title: source.fileName,
+  language: "es",
+  text: source.text,
+  entities: knownEntities
+});
+
+// book.chapters / book.paragraphs: estructura con offsets y evidencia.
+// book.signals: señales lingüísticas revisables.
+// book.observations: acciones relacionadas con fichas conocidas.
+// book.observationStatus: declara si el análisis de observaciones fue completo.
+```
+
 ## Garantías y límites
 
 1. La ingesta no modifica el manuscrito.

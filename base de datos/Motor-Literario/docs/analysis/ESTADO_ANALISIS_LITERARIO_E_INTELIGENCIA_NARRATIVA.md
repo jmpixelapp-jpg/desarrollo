@@ -352,3 +352,15 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - La ejecución 2778, sobre el primer commit correctivo, está en curso; la ejecución 2779, que incluye ambas correcciones, está en cola. No se afirma todavía que la suite completa esté verde.
 
 **Criterio de aceptación inmediato:** Type-check, build, pruebas completas y benchmark de edición viva deben finalizar sin regresiones antes de pasar a nuevos formatos. Mantener la regla de no convertir una forma verbal en fecha cronológica y no persistir nombres incompletos en bordes de fragmentos.
+
+
+### Tanda 26-11-2026 — alcance correcto de la negación en señales de acción
+
+- Se reemplazó la detección por proximidad fija de 36 caracteres por una detección acotada a la cláusula/oración actual. Así, «Ana no cruzó. Pedro llegó» conserva «cruzó» como negada y «llegó» como afirmada; una negación anterior no contamina la siguiente acción.
+- La negación solo modifica la polaridad de señales de tipo acción. Los marcadores temporales, causales y de contraste no heredan una polaridad negativa por mera cercanía.
+- Se añadió una prueba de regresión con acción negada, acción afirmada en la oración siguiente y otra acción negada con «nunca».
+- La guía de ingesta documenta el alcance de polaridad y su prueba.
+- Commits: `9489407` (lógica de alcance), `2470f36` (prueba de regresión), `13841e4` (documentación).
+- GitHub Actions inició ejecuciones 2782 (cambio de lógica), 2783 (pruebas) y 2784 (documentación). En la última consulta, 2782 y 2783 estaban instalando Chromium y aún no habían llegado a Type-check ni a la suite; 2784 estaba en preparación. No se declara validación verde hasta ver sus conclusiones.
+
+**Siguiente paso:** ampliar cobertura verbal del español con pruebas positivas y negativas (presente, pretérito, imperfecto, futuro, infinitivo y formas compuestas) sin introducir coincidencias parciales; después abordar extracción de menciones y participantes con separación entre personaje mencionado y sujeto/ agente gramatical.

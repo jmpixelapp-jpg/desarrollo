@@ -377,25 +377,27 @@ export function discoverNarrativeObservationCandidates(
           : undefined;
         const personalObjectCandidate = (() => {
           const afterVerb = sentence.slice(match.index + surface.length);
-          const objectMarker = /^\s+a\s+([\p{Lu}ÁÉÍÓÚÜÑ][\p{L}\p{M}]+(?:[ \u00a0]+(?:de[ \u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \u00a0]*[\p{Lu}ÁÉÍÓÚÜÑ][\p{L}\p{M}]+){0,3})/u.exec(afterVerb);
-          if (!objectMarker) return undefined;
-          const matchedName = objectMarker[1]!;
-          const candidates = characters.filter(entity =>
-            [entity.canonicalName, ...entity.aliases].some(name =>
-              name.toLocaleLowerCase("es") === matchedName.toLocaleLowerCase("es")
-            )
-          );
-          if (candidates.length !== 1) return undefined;
-          const nameStart = match.index + surface.length + objectMarker.index + objectMarker[0].lastIndexOf(matchedName);
+          const matches = characters.flatMap(entity => {
+            const names = [entity.canonicalName, ...entity.aliases];
+            return names.flatMap(name => {
+              const mention = findNameMatch(afterVerb, name);
+              if (!mention || !/^\\s+a\\s+$/u.test(afterVerb.slice(0, mention.start))) return [];
+              return [{ entity, mention }];
+            });
+          });
+          const distinct = new Map(matches.map(item => [item.entity.id, item]));
+          if (distinct.size !== 1) return undefined;
+          const selected = [...distinct.values()][0]!;
+          const nameStart = match.index + surface.length + selected.mention.start;
           return {
-            entityId: candidates[0]!.id,
+            entityId: selected.entity.id,
             marker: "a" as const,
             evidence: {
               documentId: input.documentId,
               revision: input.revision,
               start: baseOffset + segment.start + nameStart,
-              end: baseOffset + segment.start + nameStart + matchedName.length,
-              excerpt: matchedName
+              end: baseOffset + segment.start + nameStart + selected.mention.excerpt.length,
+              excerpt: selected.mention.excerpt
             }
           };
         })();

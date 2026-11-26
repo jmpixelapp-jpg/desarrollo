@@ -311,7 +311,7 @@ export interface NarrativeSyncReplayResult {
   readonly processed: number;
   readonly remaining: number;
   readonly stoppedAtOperationId?: string;
-  readonly failure?: "invalid-envelope" | "apply-or-ack-failed";
+  readonly failure?: "invalid-envelope" | "apply-or-ack-failed" | "consumer-already-running";
 }
 
 /**
@@ -320,6 +320,8 @@ export interface NarrativeSyncReplayResult {
  * El callback debe ser idempotente: un fallo del proceso entre la mutación externa
  * y markApplied puede provocar que la misma operación se entregue otra vez.
  */
+const activeNarrativeSyncReplays = new Set<string>();
+
 export async function replayPendingNarrativeSyncOperations(
   journal: IndexedDbNarrativeSyncJournal,
   projectId: string,
@@ -329,6 +331,21 @@ export async function replayPendingNarrativeSyncOperations(
   if (!journal || typeof apply !== "function") {
     throw new TypeError("Se requiere un diario y un procesador de operaciones.");
   }
+  if (!projectId.trim() || (writerId !== undefined && !writerId.trim())) {
+    throw new TypeError("Proyecto y escritor deben ser identificadores no vacíos.");
+  }
+  // Evita que dos llamadas del mismo runtime ejecuten simultáneamente el mismo proyecto.
+  // No es un mutex entre pestañas/dispositivos: el anfitrión debe coordinar consumidores externos.
+  const lockKey = projectId;
+  if (activeNarrativeSyncReplays.has(lockKey)) {
+    return {
+      processed: 0,
+      remaining: (await journal.loadPendingOperations(projectId, writerId)).length,
+      failure: "consumer-already-running"
+    };
+  }
+  activeNarrativeSyncReplays.add(lockKey);
+  try {
   const pending = await journal.loadPendingOperations(projectId, writerId);
   let processed = 0;
   for (const operation of pending) {
@@ -365,7 +382,7 @@ export async function replayPendingNarrativeSyncOperations(
       };
     }
     try {
-      await apply(operation);
+      await apply(envelope);
       await journal.markApplied(projectId, operation.operationId, operation.digest);
       processed++;
     } catch {
@@ -377,4 +394,7 @@ export async function replayPendingNarrativeSyncOperations(
     }
   }
   return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
+  } finally {
+    activeNarrativeSyncReplays.delete(lockKey);
+  }
 }

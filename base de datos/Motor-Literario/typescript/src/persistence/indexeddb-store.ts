@@ -1553,8 +1553,8 @@ function validateLiveAuthorMonitorCheckpoint(
   if (integerNonNegative(checkpoint.insertedCharacters) &&
       integerNonNegative(checkpoint.deletedCharacters) &&
       integerNonNegative(checkpoint.currentDocumentLength) &&
-      checkpoint.deletedCharacters >
-        checkpoint.currentDocumentLength + checkpoint.insertedCharacters) {
+      checkpoint.insertedCharacters >
+        checkpoint.currentDocumentLength + checkpoint.deletedCharacters) {
     invalid.push("character-balance");
   }
   if (!integerNonNegative(checkpoint.revision)) invalid.push("revision");

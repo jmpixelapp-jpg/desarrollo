@@ -21,7 +21,7 @@ test("detecta acciones explícitas de un personaje conocido y conserva la frase 
   const text = "Ana cruzó el puente y abrió la Espada Solar.";
   const found = discoverNarrativeObservationCandidates({ ...context, text });
   assert.deepEqual(found.map(item => item.action), ["cruzar", "abrir"]);
-  assert.ok(found.every(item => item.actorEntityId === character.id));
+  assert.ok(found.every(item => item.singleMentionedCharacterId === character.id));
   assert.ok(found.every(item => item.mentionedEntityIds.includes(other.id)));
   assert.ok(found.every(item => item.evidence.excerpt === text));
   assert.ok(found.every(item => item.evidence.revision === 7));
@@ -34,8 +34,16 @@ test("no atribuye un sujeto cuando aparecen varios personajes", () => {
     ...context, entities: [character, bruno], text
   });
   assert.equal(found.length, 1);
-  assert.equal(found[0].actorEntityId, undefined);
+  assert.equal(found[0].singleMentionedCharacterId, undefined);
   assert.deepEqual(found[0].mentionedCharacterIds.sort(), [character.id, bruno.id].sort());
+});
+
+test("no presenta al único personaje mencionado como agente gramatical", () => {
+  const text = "Ana fue encontrada por el guardia.";
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].singleMentionedCharacterId, character.id);
+  assert.equal("actorEntityId" in found[0], false);
 });
 
 test("marca negación explícita sin convertirla en acción afirmada", () => {

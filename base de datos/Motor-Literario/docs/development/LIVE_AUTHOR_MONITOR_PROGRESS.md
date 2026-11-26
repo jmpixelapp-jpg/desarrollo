@@ -1681,3 +1681,14 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Invariante:** la revalidación del conjunto de documentos no convierte un lease todavía válido en takeover ni hace que un documento herede la generación de otro.
 
 **Ajuste del fixture:** la primera ejecución mostró que un lease B con casi 30 segundos aún disponibles puede renovarse sin que `expiresAt` aumente, por el guard monótono `Math.max`. El escenario se ajustó para que B siga vigente pero venza en un segundo, de modo que la renovación debe extender la fecha sin cambiar owner/token. **Validación:** pendiente de CI para el commit `abc5b5d1`.
+
+
+## 110. Fencing de varios documentos entre dos páginas Chromium reales (26 de noviembre de 2026)
+
+**Objetivo:** elevar el aislamiento multi-documento desde IndexedDB simulado a dos páginas Chromium compartiendo la misma base del navegador.
+
+**Regresión:** la página propietaria abre leases y guarda checkpoints para capítulos A y B. La pestaña observadora no puede adquirir ninguno mientras están activos. Se cierra abruptamente la propietaria, se expira solo A y la observadora toma el fencing token siguiente. B debe continuar ocupado por el propietario original y su checkpoint debe conservarse. Después de guardar A y recargar la pestaña observadora, ambos checkpoints deben seguir presentes y B debe seguir sin poder ser adquirido por la observadora.
+
+**Alcance real:** Playwright Chromium, dos páginas en el mismo contexto/origen, IndexedDB real del navegador, cierre abrupto de una página y recarga real de la página superviviente. No simula todavía un cierre de proceso completo del perfil ni dos dispositivos físicos.
+
+**Validación:** pendiente de GitHub Actions.

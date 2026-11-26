@@ -43,7 +43,7 @@ test("la inspección de almacenamiento informa versión y conteos sin modificar 
 
     const report = await store.inspectStorageHealth();
     assert.equal(report.databaseName, DATABASE_NAME);
-    assert.equal(report.databaseVersion, 24);
+    assert.equal(report.databaseVersion, 25);
     assert.equal(report.recordCounts.documents, 1);
     assert.equal(report.recordCounts["narrative-ideas"], 1);
     assert.equal(report.recordCounts.changes, 0);

@@ -624,6 +624,7 @@ export class HostEngineApi {
   private readonly liveMonitorLeaseHeartbeats = new Map<string, ReturnType<typeof setInterval>>();
   private readonly liveMonitorLeaseGenerations = new Map<string, object>();
   private readonly liveMonitorLeaseReleasing = new Set<string>();
+  private readonly liveMonitorLeaseHeartbeatInFlight = new Set<string>();
   private readonly liveMonitorOwnerId = globalThis.crypto?.randomUUID?.() ??
     `monitor-owner:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   private static readonly LIVE_MONITOR_LEASE_DURATION_MS = 30_000;
@@ -3872,6 +3873,7 @@ export class HostEngineApi {
     this.liveMonitorLeases.clear();
     this.liveMonitorLeaseGenerations.clear();
     this.liveMonitorLeaseReleasing.clear();
+    this.liveMonitorLeaseHeartbeatInFlight.clear();
     this.liveAuthorMonitor.dispose();
   }
 
@@ -4130,48 +4132,54 @@ export class HostEngineApi {
    * la titularidad local después de un cierre/liberación.
    */
   private async renewLiveAuthorMonitorLeaseFromHeartbeat(documentId: string): Promise<void> {
-    if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId)) return;
-    const current = this.liveMonitorLeases.get(documentId);
-    const generation = this.liveMonitorLeaseGenerations.get(documentId) ?? 0;
-    if (!current) {
-      const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
-      if (timer) clearInterval(timer);
-      this.liveMonitorLeaseHeartbeats.delete(documentId);
-      return;
-    }
-    const renew = this.store.renewLiveAuthorMonitorLease;
-    if (!renew) return;
-    const renewed = await renew.call(
-      this.store,
-      current,
-      Date.now(),
-      HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
-    );
-
-    // Una liberación, dispose o cambio de generación invalida esta respuesta.
-    if (this.disposed ||
-        this.liveMonitorLeaseGenerations.get(documentId) !== generation ||
-        this.liveMonitorLeaseReleasing.has(documentId)) return;
-    const latest = this.liveMonitorLeases.get(documentId);
-    if (!latest || latest.ownerId !== current.ownerId ||
-        latest.fencingToken !== current.fencingToken) return;
-
-    if (!renewed) {
-      this.liveMonitorLeases.delete(documentId);
-      const invalidatedGeneration = this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
-      if (this.liveMonitorLeaseGenerations.get(documentId) === invalidatedGeneration) {
-        this.liveMonitorLeaseGenerations.delete(documentId);
+    if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId) ||
+        this.liveMonitorLeaseHeartbeatInFlight.has(documentId)) return;
+    this.liveMonitorLeaseHeartbeatInFlight.add(documentId);
+    try {
+      const current = this.liveMonitorLeases.get(documentId);
+      if (!current) {
+        // También actúa como reintento para pestañas observadoras. Si el
+        // propietario desapareció sin liberar, el lease se adquiere al vencer.
+        const acquired = await this.acquireOrRenewLiveAuthorMonitorLease(documentId);
+        if (acquired && !this.disposed) this.scheduleLiveAuthorMonitorCheckpoint(documentId);
+        return;
       }
-      const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
-      if (timer) clearInterval(timer);
-      this.liveMonitorLeaseHeartbeats.delete(documentId);
-      return;
+      const generation = this.liveMonitorLeaseGenerations.get(documentId) ?? 0;
+      const renew = this.store.renewLiveAuthorMonitorLease;
+      if (!renew) return;
+      const renewed = await renew.call(
+        this.store,
+        current,
+        Date.now(),
+        HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
+      );
+
+      // Una liberación, dispose o cambio de generación invalida esta respuesta.
+      if (this.disposed ||
+          this.liveMonitorLeaseGenerations.get(documentId) !== generation ||
+          this.liveMonitorLeaseReleasing.has(documentId)) return;
+      const latest = this.liveMonitorLeases.get(documentId);
+      if (!latest || latest.ownerId !== current.ownerId ||
+          latest.fencingToken !== current.fencingToken) return;
+
+      if (!renewed) {
+        this.liveMonitorLeases.delete(documentId);
+        const invalidatedGeneration = this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
+        if (this.liveMonitorLeaseGenerations.get(documentId) === invalidatedGeneration) {
+          this.liveMonitorLeaseGenerations.delete(documentId);
+        }
+        // Se conserva el timer: en el siguiente heartbeat esta pestaña intentará
+        // adquirir un lease expirado, sin esperar a que el autor vuelva a escribir.
+        return;
+      }
+      this.liveMonitorLeases.set(documentId, {
+        ...renewed,
+        expiresAt: Math.max(renewed.expiresAt, latest.expiresAt),
+        updatedAt: Math.max(renewed.updatedAt, latest.updatedAt)
+      });
+    } finally {
+      this.liveMonitorLeaseHeartbeatInFlight.delete(documentId);
     }
-    this.liveMonitorLeases.set(documentId, {
-      ...renewed,
-      expiresAt: Math.max(renewed.expiresAt, latest.expiresAt),
-      updatedAt: Math.max(renewed.updatedAt, latest.updatedAt)
-    });
   }
 
   private async acquireOrRenewLiveAuthorMonitorLease(
@@ -4216,9 +4224,9 @@ export class HostEngineApi {
     }
     if (!lease) {
       this.liveMonitorLeases.delete(documentId);
-      const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
-      if (timer) clearInterval(timer);
-      this.liveMonitorLeaseHeartbeats.delete(documentId);
+      // Una instancia sin titularidad mantiene un heartbeat ligero para poder
+      // tomar el control si el lease actual expira sin una liberación explícita.
+      this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
       return undefined;
     }
     this.liveMonitorLeases.set(documentId, lease);

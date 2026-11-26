@@ -765,3 +765,16 @@ La regresión simula una cuota llena en el primer intento y una recuperación de
 
 
 **Validación CI:** [run 45765718734](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765718734) aprobó la recuperación observable como test 108, junto a la prueba de privacidad de error como test 107; 178/178 integraciones host/editor/browser y benchmark de 100.000 commits también aprobaron.
+
+## 67. Takeover cuando una escritura del antiguo propietario sigue en vuelo
+
+El fencing se valida en el punto de escritura durable, no solo al iniciar el trabajo ni al renovar el heartbeat. Una llamada antigua puede haber obtenido un snapshot local del lease y permanecer suspendida mientras otra pestaña toma el control. Al reanudarse, el almacén debe volver a comparar `ownerId` y `fencingToken` con el registro vigente.
+
+La regresión pausa una escritura del propietario A, deja expirar su lease, permite que el observador B adquiera el siguiente token y confirme su checkpoint, y luego reanuda A. La escritura de A debe rechazarse y nunca sustituir el checkpoint de B. Este escenario verifica el orden adverso en la capa del anfitrión; las transacciones IndexedDB reales conservan adicionalmente el bloqueo serializable de su transacción readwrite.
+
+
+## 68. Aislamiento del fencing por documento
+
+Los leases se direccionan por la clave compuesta `(projectId, documentId)`. En un proyecto con varios capítulos abiertos, el cambio de propietario de A no debe cambiar el fencing token de B. El lease de B puede renovarse y su checkpoint puede persistirse mientras A pertenece a otra pestaña.
+
+La prueba real de IndexedDB adquiere dos leases, deja expirar A y hace takeover con el siguiente token; luego renueva B usando su snapshot original, intenta guardar con el token antiguo de A y guarda el checkpoint B. Se comprueba que A no escriba, B siga siendo durable y la liberación de A con el token obsoleto no afecte la titularidad de B.

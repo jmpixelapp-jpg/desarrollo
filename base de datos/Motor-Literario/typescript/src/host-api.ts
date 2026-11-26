@@ -658,6 +658,7 @@ export class HostEngineApi {
   private continuityIndexTail: Promise<void> = Promise.resolve();
   private readonly continuityCandidatesByDocument = new Map<string, {
     readonly revision: number;
+    readonly sequence: number;
     readonly candidates: readonly NarrativeIdeaCandidate[];
     readonly truncated: boolean;
   }>();
@@ -901,7 +902,7 @@ export class HostEngineApi {
         });
 
         const cached = this.continuityCandidatesByDocument.get(item.documentId);
-        if (cached && cached.revision === item.revision) {
+        if (cached && cached.revision === item.revision && cached.sequence === item.sequence) {
           candidatesByDocument.set(item.documentId, cached.candidates);
           anyDocumentTruncated ||= cached.truncated;
           continue;
@@ -936,6 +937,7 @@ export class HostEngineApi {
           candidates.length === MAX_NARRATIVE_IDEA_DISCOVERY_CANDIDATES;
         this.continuityCandidatesByDocument.set(item.documentId, {
           revision: item.revision,
+          sequence: item.sequence,
           candidates,
           truncated
         });
@@ -4064,7 +4066,6 @@ export class HostEngineApi {
     this.eventLineIndex = undefined;
     this.ideaLineIndex = undefined;
     this.entityNameIndex = undefined;
-    this.continuityCandidatesByDocument.clear();
   }
 
   private requireRelationStore(): Required<Pick<

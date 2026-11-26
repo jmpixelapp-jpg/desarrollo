@@ -27,7 +27,7 @@ export interface LiveAuthorMonitorWorkspaceOptions {
 }
 
 export type LiveAuthorMonitorWorkspaceMetric = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95" |
-  "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
+  "typing" | "composition" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
 type CompactMetricKey = LiveAuthorMonitorWorkspaceMetric;
 interface WorkspaceCard {
   readonly root: HTMLElement;
@@ -45,9 +45,10 @@ interface WorkspaceCard {
 }
 
 const WORKSPACE_METRICS: readonly { readonly key: CompactMetricKey; readonly label: string }[] = [
-  { key: "wordsPerMinute", label: "Palabras/min" },
-  { key: "inserted", label: "Caracteres insertados" },
+  { key: "wordsPerMinute", label: "Palabras/min (bruto)" },
+  { key: "inserted", label: "Caracteres insertados brutos (UTF-16)" },
   { key: "typing", label: "Escritura" },
+  { key: "composition", label: "Composición IME" },
   { key: "paste", label: "Pegados" },
   { key: "deletion", label: "Borrados" },
   { key: "correction", label: "Correcciones" },
@@ -150,6 +151,7 @@ function metricValue(
     case "wordsPerMinute": return decimal.format(snapshot.estimatedWordsPerMinute);
     case "inserted": return integer.format(snapshot.insertedCharacters);
     case "typing": return integer.format(snapshot.typingChanges);
+    case "composition": return integer.format(snapshot.compositionChanges);
     case "paste": return integer.format(snapshot.pasteChanges);
     case "deletion": return integer.format(snapshot.deletionChanges);
     case "correction": return integer.format(snapshot.correctionChanges);

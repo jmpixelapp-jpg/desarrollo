@@ -72,7 +72,8 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
         !Number.isSafeInteger(event.evidence.start) ||
         !Number.isSafeInteger(event.evidence.end) ||
         event.evidence.start < 0 || event.evidence.end < event.evidence.start ||
-        event.evidence.end > input.text.length) {
+        event.evidence.end > input.text.length ||
+        input.text.slice(event.evidence.start, event.evidence.end) !== event.evidence.excerpt) {
       throw new Error("Los acontecimientos deben pertenecer al mismo documento y revisión.");
     }
   }
@@ -101,6 +102,10 @@ export function extractNarrativeConsequenceCandidates(
     const source = events[index - 1];
     const consequence = events[index];
     if (source.evidence.end > consequence.evidence.start) continue;
+    // Un salto de párrafo suele marcar cambio de escena o bloque narrativo;
+    // no se debe enlazar a través de ese límite aunque aparezca un conector.
+    const gap = input.text.slice(source.evidence.end, consequence.evidence.start);
+    if (/\\r?\\n[\\t ]*\\r?\\n/u.test(gap)) continue;
     const match = connectorPattern.exec(consequence.evidence.excerpt);
     if (!match) continue;
     const excerpt = match[1];

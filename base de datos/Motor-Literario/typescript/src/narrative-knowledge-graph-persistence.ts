@@ -50,7 +50,8 @@ export function createNarrativeDocumentProjectionManifest(
       !Number.isFinite(updatedAt) || updatedAt < 0) {
     throw new Error("Contexto inválido para construir el manifiesto documental.");
   }
-  const contribution = snapshot.documents.find(item => item.input.documentId === documentId);
+  const contribution = snapshot.documents.find((item: NarrativeKnowledgeGraphSnapshot["documents"][number]) =>
+    item.input.documentId === documentId);
   if (!contribution) throw new Error("El documento no forma parte del snapshot: " + documentId);
   type EvidenceBackedRecord = {
     readonly id: string;

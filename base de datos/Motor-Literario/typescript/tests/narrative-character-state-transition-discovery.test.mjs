@@ -97,3 +97,13 @@ test("reconstruye cambios dentro de la misma perspectiva y conserva su fuente",(
  assert.equal(result[0].previousSourceEvidence.excerpt,"Ana");
  assert.equal(result[0].currentSourceEvidence.excerpt,"Ana");
 });
+
+test("rechaza evidencia de emisor situada fuera de la afirmación",()=>{
+ const candidate=states("Ana dijo que Ana estaba herida.")[0];
+ assert.throws(()=>transitions([{
+  ...candidate,
+  epistemicSourceCandidate:{entityId:ana.id,evidence:{
+   ...candidate.evidence,start:candidate.evidence.end+1,end:candidate.evidence.end+4,excerpt:"Ana"
+  }}
+ }]));
+});

@@ -685,3 +685,18 @@ La triangulación exige coincidencia exacta de proyecto, personaje y acción. No
 Se añadieron pruebas unitarias para alineación favorable, oposición, condición, coincidencia de actor y acción, referencias inválidas y duplicadas; además de una prueba de integración que recorre el pipeline principal desde conocimiento e intención hasta la acción.
 
 **Endurecimiento de trazabilidad de Fase AN:** cuando dos análisis declaran compartir el mismo ID de acción, el módulo exige que documento, revisión, rango y fragmento textual de la evidencia de esa acción sean idénticos. Si no coinciden, rechaza la triangulación en lugar de fusionar referencias posiblemente distintas. Se agregó una prueba específica para esta condición.
+
+
+### Fase AO: evolución observable de la conducta
+
+Se incorpora `src/narrative-behavior-evolution.ts` y la salida `behaviorShifts` del pipeline. La entrada admite `priorActions` para conservar acciones de capítulos o fragmentos anteriores. El módulo compara acciones afirmadas del mismo actor hacia el mismo objetivo, con dos reglas cronológicas:
+- dentro del mismo documento y revisión, por posición textual no solapada;
+- entre documentos, solo cuando `orderedDocumentIds` declara el orden. Si hay varias revisiones de un mismo documento dentro de la comparación interdocumental, esa transición no se fuerza.
+
+Se distinguen inversiones de valencia léxica (apoyo-hostilidad y sus variantes) de cambios de patrón entre verbos. La valencia es una clasificación tentativa del verbo, no el estado emocional, la personalidad ni la relación real entre personajes. Las acciones negadas no se tratan como conducta afirmada.
+
+Cada cambio conserva las dos acciones, sus IDs y evidencias, y puede adjuntar al comportamiento nuevo referencias a conocimiento previo, contexto de decisión, enlaces de memoria y evolución de objetivos. Se validan proyecto, actores, objetivos, unicidad de IDs y coincidencia exacta de la evidencia de acción compartida.
+
+**Límite de interpretación:** detectar que alguien pasó de atacar a ayudar no explica por qué lo hizo. Un enlace de memoria con conector explícito se conserva como señal textual, pero el conjunto de contextos se presenta como material de revisión; no se asigna causalidad psicológica, arrepentimiento, engaño ni cambio de personalidad. La falta de antecedentes o de orden documental produce abstención, no una secuencia inventada.
+
+Las pruebas cubren cambios dentro de una revisión, orden entre capítulos, ausencia de orden, acciones negadas, repetición, cambio de patrón, señales contextuales, evidencia incompatible, IDs duplicados y ambigüedad entre revisiones. Se añadió además una prueba de integración desde `understandNarrativeFragment`.

@@ -53,6 +53,11 @@ export interface SyncTransport {
   push(projectId: string, operations: readonly SyncOperation[]): Promise<SyncPushResult>;
 }
 
+export interface SyncExecutionLock {
+  /** Ejecuta la tarea en exclusión mutua para la clave compartida entre coordinadores. */
+  runExclusive<T>(key: string, task: () => Promise<T>): Promise<T>;
+}
+
 export interface NarrativeSyncCoordinatorOptions {
   readonly batchSize?: number;
   readonly now?: () => number;
@@ -62,6 +67,8 @@ export interface NarrativeSyncCoordinatorOptions {
   readonly retryMaxDelayMs?: number;
   /** Fuente inyectable para jitter determinista en pruebas. Devuelve [0, 1]. */
   readonly random?: () => number;
+  /** Bloqueo compartido opcional (Web Locks o lease durable del anfitrión). */
+  readonly executionLock?: SyncExecutionLock;
 }
 
 export interface NarrativeSyncResult {
@@ -160,6 +167,7 @@ export class NarrativeSyncCoordinator {
   private readonly retryBaseDelayMs: number;
   private readonly retryMaxDelayMs: number;
   private readonly random: () => number;
+  private readonly executionLock?: SyncExecutionLock;
   private readonly inFlight = new Map<string, Promise<NarrativeSyncResult>>();
 
   constructor(
@@ -172,6 +180,11 @@ export class NarrativeSyncCoordinator {
     this.retryBaseDelayMs = options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
     this.retryMaxDelayMs = options.retryMaxDelayMs ?? DEFAULT_RETRY_MAX_DELAY_MS;
     this.random = options.random ?? Math.random;
+    this.executionLock = options.executionLock;
+    if (this.executionLock !== undefined &&
+        (typeof this.executionLock !== "object" || typeof this.executionLock.runExclusive !== "function")) {
+      throw new TypeError("executionLock debe implementar runExclusive.");
+    }
     if (!Number.isSafeInteger(this.batchSize) ||
         this.batchSize < 1 || this.batchSize > MAX_BATCH_SIZE) {
       throw new RangeError(`batchSize debe estar entre 1 y ${MAX_BATCH_SIZE}.`);
@@ -227,7 +240,10 @@ export class NarrativeSyncCoordinator {
     assertNonEmpty(projectId, "projectId");
     const active = this.inFlight.get(projectId);
     if (active) return active;
-    const task = this.performSync(projectId).finally(() => {
+    const execution = () => this.performSync(projectId);
+    const task = (this.executionLock
+      ? this.executionLock.runExclusive(`narrative-sync:${projectId}`, execution)
+      : execution()).finally(() => {
       if (this.inFlight.get(projectId) === task) this.inFlight.delete(projectId);
     });
     this.inFlight.set(projectId, task);

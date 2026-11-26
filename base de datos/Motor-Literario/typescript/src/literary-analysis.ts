@@ -1790,7 +1790,7 @@ interface LocalLiteraryStructureMarker extends LocalRange {
 }
 function detectLiteraryStructure(text: string): LocalLiteraryStructureMarker[] {
   const markers: LocalLiteraryStructureMarker[] = [];
-  const headingLimit = 100;
+  const headingLimit = 2_000;
   let cursor = 0;
   let lineIndex = 0;
   while (cursor < text.length && markers.length < headingLimit) {
@@ -4204,10 +4204,6 @@ function buildLiteraryIdeaGraph(
     let sourceSharedDestinationCount = 0;
     let sourceExclusiveDestinationCount = 0;
     const exclusiveIntermediaryCount = new Set<number>();
-    if (sourceReturnIntermediaries.size === 1) {
-      sourceExclusiveDestinationCount++;
-      exclusiveIntermediaryCount.add(sourceReturnIntermediaries.values().next().value!);
-    }
     for (const [destinationIndex, intermediaryCount] of destinationCounts) {
       if (intermediaryCount > 1) {
         sourceSharedDestinationCount++;
@@ -4222,7 +4218,14 @@ function buildLiteraryIdeaGraph(
       twoHopSharedDestinationCount += sourceSharedDestinationCount;
     }
     twoHopExclusiveDestinationCount += sourceExclusiveDestinationCount;
-    if (exclusiveIntermediaryCount.size > 1) twoHopIndependentBranchSourceCount++;
+    // Un retorno a la fuente no es destino exclusivo ni convergencia, pero
+    // distingue una rama cuando el resto de las ramas sí converge en otro nodo.
+    if (sourceSharedDestinationCount > 0 && sourceReturnIntermediaries.size === 1 &&
+        exclusiveIntermediaryCount.size === 1) {
+      twoHopIndependentBranchSourceCount++;
+    } else if (exclusiveIntermediaryCount.size > 1) {
+      twoHopIndependentBranchSourceCount++;
+    }
   }
   let terminalReachableNodeCount = 0;
   let directedBranchNodeCount = 0;

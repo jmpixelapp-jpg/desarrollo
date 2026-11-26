@@ -6,9 +6,9 @@ const entities = [
   { projectId:"novel", id:"mara", kind:"character", canonicalName:"Mara", normalizedName:"mara", aliases:[], evidence:[], firstSeenAt:1, lastSeenAt:1, extractionVersion:1 }
 ];
 
-function intent(id, text, polarity, documentId, start, excerpt = text, revision = 1) {
+function intent(id, text, polarity, documentId, start, excerpt = text, revision = 1, kind = "goal") {
   return {
-    id, projectId:"novel", characterEntityId:"mara", kind:"goal", text,
+    id, projectId:"novel", characterEntityId:"mara", kind, text,
     polarity, reviewStatus:"candidate",
     evidence:{documentId, revision, start, end:start+text.length, excerpt}
   };
@@ -113,4 +113,46 @@ test("detecta abandono explícito cuando se nombra la meta abandonada", () => {
   assert.equal(result.transition, "withdrawn");
   assert.deepEqual(result.priorIntentIds, ["old"]);
   assert.match(result.transitionEvidence.excerpt, /renunció a/u);
+});
+
+test("conserva una motivación idéntica como mantenida", () => {
+  const prior = intent("old-motive","miedo a perder a su hermana","affirmed","chapter-1",10,
+    "Mara luchó por miedo a perder a su hermana.",1,"motivation");
+  const current = intent("new-motive","miedo a perder a su hermana","affirmed","chapter-2",20,
+    "Mara volvió a luchar por miedo a perder a su hermana.",1,"motivation");
+  const [result] = evolveNarrativeCharacterIntents({
+    projectId:"novel",entities,priorIntents:[prior],currentIntents:[current],
+    orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.transition,"maintained");
+  assert.deepEqual(result.priorIntentIds,["old-motive"]);
+});
+
+test("detecta sustitución explícita de una motivación y conserva ambas evidencias", () => {
+  const excerpt = "Mara cambió de motivación: en lugar de actuar por miedo a perder a su hermana, ahora actúa por lealtad a Elian.";
+  const prior = intent("old-motive","miedo a perder a su hermana","affirmed","chapter-1",10,
+    "Mara luchó por miedo a perder a su hermana.",1,"motivation");
+  const current = intent("new-motive","lealtad a Elian","affirmed","chapter-2",90,
+    excerpt,1,"motivation");
+  const [result] = evolveNarrativeCharacterIntents({
+    projectId:"novel",entities,priorIntents:[prior],currentIntents:[current],
+    orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.transition,"replaced");
+  assert.deepEqual(result.priorIntentIds,["old-motive"]);
+  assert.equal(result.priorEvidence[0].documentId,"chapter-1");
+  assert.equal(result.currentEvidence.documentId,"chapter-2");
+  assert.match(result.transitionEvidence.excerpt,/en lugar de/u);
+});
+
+test("no interpreta una motivación diferente como sustitución sin marcador expreso", () => {
+  const prior = intent("old-motive","miedo a perder a su hermana","affirmed","chapter-1",10,
+    "Mara luchó por miedo a perder a su hermana.",1,"motivation");
+  const current = intent("new-motive","lealtad a Elian","affirmed","chapter-2",20,
+    "Mara actuó por lealtad a Elian.",1,"motivation");
+  const [result] = evolveNarrativeCharacterIntents({
+    projectId:"novel",entities,priorIntents:[prior],currentIntents:[current],
+    orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.transition,"coexisting");
 });

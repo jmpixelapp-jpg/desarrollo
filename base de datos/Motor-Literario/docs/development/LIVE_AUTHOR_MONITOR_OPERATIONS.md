@@ -636,3 +636,10 @@ La regresión "encadena dos recuperaciones tras cierres abruptos sin duplicar m�
 
 
 **Comprobación adicional de la suite general:** [Motor Literario TypeScript — run 45760625242](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760625242) terminó correctamente sobre el commit de código 04632f8b: 926/926 pruebas, 0 fallidas, 0 canceladas; type-check y build global aprobados. La regresión de recuperaciones consecutivas pasó también en esta suite (test 751). Esta evidencia complementa, pero no sustituye, las comprobaciones específicas de Chromium/IndexedDB y fencing.
+
+
+## 55. Validación previa del snapshot de recuperación
+
+restoreCheckpoint recibe un snapshot durable tipado, pero valida también la frontera de runtime. Antes de leer documentId, text, revision o sequence, debe rechazar null y valores no objeto con un TypeError de contrato. Esta comprobación se ejecuta antes de insertar una nueva DocumentSession, por lo que un argumento inválido no deja estado parcial en el monitor.
+
+Después de este guard se mantienen las validaciones de correspondencia exacta de projectId/documentId y de revision/sequence/longitud del snapshot. El rechazo de un snapshot malformado no modifica las sesiones existentes ni las métricas acumuladas.

@@ -174,6 +174,8 @@ export function discoverNarrativeInformationReceptionCandidates(
         seen.add(key);
         if(output.length>=MAX_NARRATIVE_INFORMATION_RECEPTION_CANDIDATES)
           throw new Error("La extracción supera el límite de candidatos; divide el manuscrito por capítulos.");
+        const precedingText=sentence.slice(0,localTrigger);
+        const negated=pattern.polarity==="affirmed"&&/(?:^|\\s)(?:no|nunca|jam[aá]s)\\s*$/iu.test(precedingText);
         output.push({
           id:"information-reception:"+input.documentId+":"+input.revision+":"+triggerStart+":"+pattern.signal,
           projectId:input.projectId,documentId:input.documentId,revision:input.revision,
@@ -181,9 +183,10 @@ export function discoverNarrativeInformationReceptionCandidates(
           propositionEvidence:evidence(input,propositionStart,propositionStart+proposition.length),
           characterEvidence:evidence(input,character.start,character.end),
           triggerEvidence:evidence(input,triggerStart,triggerStart+trigger.length),
-          evidence:evidence(input,span.start,span.end),polarity:pattern.polarity,
-          interpretation:pattern.interpretation,comprehensionEstablished:pattern.comprehension,
-          acceptanceEstablished:pattern.acceptance,reviewStatus:"candidate"
+          evidence:evidence(input,span.start,span.end),polarity:negated?"negated":pattern.polarity,
+          interpretation:pattern.interpretation,
+          comprehensionEstablished:pattern.comprehension&&!negated,
+          acceptanceEstablished:pattern.acceptance&&!negated,reviewStatus:"candidate"
         });
       }
     }

@@ -436,7 +436,7 @@ export function mountLiveAuthorMonitorPanel(
   const progress = makeElement(document, "div", "ml-author-monitor__progress");
   progressTrack.append(progress);
   const note = makeElement(document, "p", "ml-author-monitor__note");
-  note.textContent = "Métricas locales. Los totales brutos conservan cada delta aplicado, incluidos los candidatos IME provisionales; el ritmo de escritura usa solo unidades de operaciones clasificadas explícitamente como typing. La cobertura histórica se indica por separado.";
+  note.textContent = "Métricas locales. Los totales brutos conservan cada delta aplicado, incluidos los candidatos IME provisionales. El ritmo divide las unidades typing entre todo el tiempo activo de la sesión, que también puede incluir pegado, correcciones o composición; no es tiempo puro de teclado. La cobertura histórica se indica por separado.";
   root.append(header, grid, durability, persistence, coordination, listenerErrors, progressTrack, note);
   container.append(root);
 

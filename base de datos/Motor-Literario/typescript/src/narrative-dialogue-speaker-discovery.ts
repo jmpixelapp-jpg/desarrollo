@@ -141,7 +141,7 @@ function quotedSpans(text: string, maxDistance: number): readonly Span[] {
 
 function emDashSpans(text: string, maxDistance: number): readonly Span[] {
   const spans: Span[] = [];
-  const expression = /^([ \t]*)—([^\n]{1,20000})(?:[ \t]+—([ \t]*[^\n]{1,500}))?$/gmu;
+  const expression = /^([ \\t]*)—([^\\n]{1,20000}?)(?:[ \\t]+—([ \\t]*[^\\n]{1,500}))?$/gmu;
   for (const match of text.matchAll(expression)) {
     const lineStart = match.index! + match[1]!.length;
     const body = match[2]!;

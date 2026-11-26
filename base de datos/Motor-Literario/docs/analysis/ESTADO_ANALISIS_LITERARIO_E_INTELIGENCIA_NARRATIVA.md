@@ -542,6 +542,8 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 - Ampliación posterior: se reconocen duraciones acumuladas (`desde hace`), referencias futuras (`dentro de`) y cantidades cardinales frecuentes hasta cien; todas permanecen relativas y exigen ancla antes de cualquier resolución absoluta. Se incorporan pruebas específicas para distinguir duración, pasado y futuro.
 
+- Nueva ampliación: referencias deícticas (`ayer`, `anteayer`, `hoy`, `pasado mañana`), duraciones desde segundos hasta siglos y plazos introducidos por `en`, `dentro de`, `hace`, `durante` y `a lo largo de`. Las relaciones deícticas conservan la necesidad de ancla narrativa; `hoy` permanece sin dirección temporal y no se convierte en fecha absoluta.
+
 ### Presencia explícita de personajes en ubicaciones — 26-11-2026
 
 - Nuevo `narrative-location-presence-discovery.ts`: extrae afirmaciones copulativas/perceptuales/modalizadas de presencia («Ana está en el castillo», «Ana parece estar cerca del puerto»), con personaje y lugar explícitos y no ambiguos.

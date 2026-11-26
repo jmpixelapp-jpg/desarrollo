@@ -263,7 +263,7 @@ export function extractNarrativeEntities(
   if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/iu.test(text)) {
     return [];
   }
-  const name = String.raw\`[\p{Lu}][\p{L}\p{M}]+(?:[ \u00a0]+(?:de[ \u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \u00a0]*[\p{Lu}][\p{L}\p{M}]+){0,3}\`;
+  const name = String.raw`[\p{Lu}][\p{L}\p{M}]+(?:[ \u00a0]+(?:de[ \u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \u00a0]*[\p{Lu}][\p{L}\p{M}]+){0,3}`;
   const prefixCharacter = String.raw`\b(?:[Pp]ersonaje|[Pp]rotagonista|[Aa]ntagonista)\s+(?:(?:el|la|a)\s+)?`;
   const prefixPlace = String.raw`\b(?:[Cc]iudad|[Pp]ueblo|[Aa]ldea|[Rr]eino|[Cc]astillo|[Bb]osque|[Mm]ontaña|[Ll]ugar)\s+(?:de|del|de la|de los|de las)?\s*`;
   const prefixObject = String.raw`\b(?:[Oo]bjeto|[Ee]spada|[Aa]rma|[Rr]eliquia|[Aa]muleto|[Aa]nillo|[Ll]ibro)\s+(?:llamado|llamada)?\s*`;

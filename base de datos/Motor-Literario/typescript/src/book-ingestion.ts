@@ -177,6 +177,7 @@ export async function ingestBookReaderBlocks(
 
   const chapters: MutableChapter[] = [];
   const seenBlockIds = new Set<string>();
+  const seenChapterDocumentIds = new Set<string>();
   let current: MutableChapter | undefined;
   let previousSequence = -1;
   let blocksRead = 0;
@@ -228,6 +229,10 @@ export async function ingestBookReaderBlocks(
       const chapterId = block.chapterId ??
         (block.kind === "chapter-heading" ? "heading-" + block.sequence : "main");
       const documentId = "chapter:" + encodeURIComponent(chapterId);
+      if (seenChapterDocumentIds.has(documentId)) {
+        throw new Error("El lector reutilizó el identificador de capítulo " + chapterId + ".");
+      }
+      seenChapterDocumentIds.add(documentId);
       const heading = block.kind === "chapter-heading" ? text.trim() : undefined;
       current = makeChapter(documentId, heading || "Capítulo " + (chapters.length + 1), heading, block.sequence);
       if (heading !== undefined) current.headingSource = {

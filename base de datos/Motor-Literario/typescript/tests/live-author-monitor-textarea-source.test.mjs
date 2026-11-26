@@ -390,7 +390,7 @@ test("visibilitychange oculta suspende una composición abierta sin reanudar al 
   f.source.dispose();
 });
 
-test("blur suspende operaciones incompletas pero no interrumpe un editor inactivo", async () => {
+test("blur expone input de texto pendiente y suspende de inmediato una composición", async () => {
   const idle = fixture("abc", 0, 0);
   idle.element.emitBlur();
   assert.equal(idle.source.getState().needsResync, false,

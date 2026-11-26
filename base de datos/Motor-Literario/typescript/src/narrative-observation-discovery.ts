@@ -386,7 +386,20 @@ export function discoverNarrativeObservationCandidates(
             const names = [entity.canonicalName, ...entity.aliases];
             return names.flatMap(name => {
               const mention = findNameMatch(afterVerb, name);
-              if (!mention || !/^\s+a\s+$/u.test(afterVerb.slice(0, mention.start))) return [];
+              if (!mention) return [];
+              const beforeMention = afterVerb.slice(0, mention.start);
+              const directPersonalObject = /^\s+a\s+$/u.test(beforeMention);
+              const followsExplicitObject = otherEntities
+                .filter(candidate => candidate.kind === "object")
+                .some(object => [object.canonicalName, ...object.aliases].some(objectName => {
+                  const objectMention = findNameMatch(afterVerb, objectName);
+                  if (!objectMention || objectMention.end > mention.start) return false;
+                  const beforeObject = afterVerb.slice(0, objectMention.start);
+                  const betweenObjectAndPerson = afterVerb.slice(objectMention.end, mention.start);
+                  return /^\s+(?:(?:el|la|los|las|un|una|unos|unas)\s+)?$/iu.test(beforeObject) &&
+                    /^\s+a\s+$/iu.test(betweenObjectAndPerson);
+                }));
+              if (!directPersonalObject && !followsExplicitObject) return [];
               return [{ entity, mention }];
             });
           });

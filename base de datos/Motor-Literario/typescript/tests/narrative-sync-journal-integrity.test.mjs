@@ -20,7 +20,10 @@ test("el diario íntegro informa continuidad y metadatos sin mutar operaciones",
     { ...first, receivedAt: 11, appliedAt: 12 },
     { ...second, receivedAt: 21 }
   ];
-  const journal = { loadOperations: async () => structuredClone(operations) };
+  const journal = {
+    loadOperations: async () => structuredClone(operations),
+    loadWriterCursors: async () => [{ projectId: "integrity-project", writerId: "writer-a", lastSequence: 2, lastOperationId: "integrity-op-2", updatedAt: 22 }]
+  };
 
   const report = await inspectNarrativeSyncJournalIntegrity(journal, "integrity-project");
   assert.deepEqual(report, {
@@ -47,7 +50,8 @@ test("el diario detecta huecos, secuencias repetidas, metadatos inválidos y dig
   const corrupt = { ...await make("integrity-op-4", 4), digest: "sha256:" + "0".repeat(64) };
   corrupt.appliedAt = 40;
   const journal = {
-    loadOperations: async () => [first, gap, duplicate, corrupt]
+    loadOperations: async () => [first, gap, duplicate, corrupt],
+    loadWriterCursors: async () => [{ projectId: "integrity-project", writerId: "writer-a", lastSequence: 4, lastOperationId: "integrity-op-4", updatedAt: 60 }]
   };
 
   const report = await inspectNarrativeSyncJournalIntegrity(journal, "integrity-project");
@@ -58,4 +62,48 @@ test("el diario detecta huecos, secuencias repetidas, metadatos inválidos y dig
   assert.ok(codes.includes("invalid-envelope"));
   assert.equal(report.intact, false);
   assert.equal(report.checkedOperations, 4);
+});
+
+
+test("la auditoría detecta cursores adelantados, retrasados y sin operaciones", async () => {
+  const operation = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-op-1", projectId: "cursor-project",
+    writerId: "writer-a", sequence: 1, kind: "note", payload: { value: 1 }
+  });
+  const journal = {
+    loadOperations: async () => [{ ...operation, receivedAt: 10 }],
+    loadWriterCursors: async () => [
+      { projectId: "cursor-project", writerId: "writer-a", lastSequence: 2, lastOperationId: "cursor-op-2", updatedAt: 20 },
+      { projectId: "cursor-project", writerId: "writer-b", lastSequence: 1, lastOperationId: "missing-op", updatedAt: 20 }
+    ]
+  };
+  const report = await inspectNarrativeSyncJournalIntegrity(journal, "cursor-project");
+  const codes = report.issues.map(issue => issue.code);
+  assert.ok(codes.includes("cursor-ahead-of-journal"));
+  assert.ok(codes.includes("cursor-without-operations"));
+  assert.equal(report.intact, false);
+});
+
+test("la auditoría detecta operaciones posteriores al cursor y última identidad divergente", async () => {
+  const first = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-op-a", projectId: "cursor-project-2",
+    writerId: "writer-a", sequence: 1, kind: "note", payload: { value: 1 }
+  });
+  const second = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-op-b", projectId: "cursor-project-2",
+    writerId: "writer-a", sequence: 2, kind: "note", payload: { value: 2 }
+  });
+  const journal = {
+    loadOperations: async () => [
+      { ...first, receivedAt: 10 },
+      { ...second, receivedAt: 20 }
+    ],
+    loadWriterCursors: async () => [{
+      projectId: "cursor-project-2", writerId: "writer-a",
+      lastSequence: 1, lastOperationId: "cursor-op-a", updatedAt: 15
+    }]
+  };
+  const report = await inspectNarrativeSyncJournalIntegrity(journal, "cursor-project-2");
+  assert.ok(report.issues.some(issue => issue.code === "cursor-behind-journal"));
+  assert.equal(report.intact, false);
 });

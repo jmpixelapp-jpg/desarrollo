@@ -189,3 +189,11 @@ El adaptador transaccional conserva `inputType` en su cambio inmutable y lo incl
 `inputType` no lleva `InputEvent.data` ni texto del manuscrito. No se escribe en checkpoints, snapshots ni diagnósticos persistentes. La página local de prueba puede incluirlo en el informe descargable por el usuario: el formato se elevó a `live-author-monitor-ime-trace-v3`; cada delta exporta categoría y `inputType`, mientras que `InputEvent.data` se representa únicamente mediante su longitud UTF-16. El informe sigue excluyendo texto, candidatos IME, contenido tecleado y cargas de eventos.
 
 Esta evidencia local permite comparar `beforeinput`/`input`, tipos nativos y deltas aplicados por navegador/SO sin registrar el manuscrito. No reemplaza el test con IME físico del sistema operativo ni la conexión al editor enriquecido de producción.
+
+## 13. Replay exacto por cada candidato IME aplicado
+
+La prueba Chromium de composición mantiene ahora un replay independiente del texto inicial, pero no conserva una copia adicional del manuscrito en el informe. En cada callback de delta aplica el rango UTF-16 y el reemplazo al replay y compara el resultado inmediatamente con `textarea.value`. Solo conserva el resultado booleano y los metadatos de secuencia/revisión.
+
+La aceptación exige que todos los deltas intermedios reconstruyan el estado del editor en el instante de aplicación, que la secuencia sea consecutiva y que `baseRevision` avance exactamente una unidad por delta. La verificación se realiza tras los candidatos y tras la cancelación, además de mantener la comparación del replay final.
+
+Esto evita un falso positivo en el que dos deltas incorrectos pudieran compensarse y producir casualmente el texto final esperado. La prueba sigue siendo Chromium automatizado con CDP: no sustituye un IME físico ni valida editores enriquecidos que todavía no estén conectados al adaptador transaccional.

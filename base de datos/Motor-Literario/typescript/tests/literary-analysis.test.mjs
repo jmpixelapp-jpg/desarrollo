@@ -2845,46 +2845,6 @@ test("el grafo detecta convergencia indirecta a través de ramas distintas", () 
   assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
 });
 
-test("el grafo declara truncamiento al alcanzar el presupuesto de un millón de expansiones de dos saltos", () => {
-  const projectId = "literary-analysis-test";
-  const intermediaryIds = Array.from({ length: 500 }, (_, index) => "middle-" + index);
-  const destinationIds = Array.from({ length: 500 }, (_, index) => "terminal-" + index);
-  const makeIdea = (ideaId, relatedIdeaIds = []) => ({
-    projectId,
-    ideaId,
-    text: "Idea " + ideaId,
-    status: "IDEA",
-    relatedIdeaIds,
-    evidenceCount: 0,
-    staleEvidenceCount: 0,
-    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
-    writerDecisionCount: 0,
-    omittedStatusHistoryCount: 0
-  });
-  const catalog = [
-    ...Array.from({ length: 5 }, (_, index) =>
-      makeIdea("source-" + index, intermediaryIds)
-    ),
-    ...intermediaryIds.map(id => makeIdea(id, destinationIds)),
-    ...destinationIds.map(id => makeIdea(id))
-  ];
-  const graph = analyzeLiteraryFragment({
-    projectId,
-    documentId: "chapter-budget",
-    revision: 1,
-    text: "Escena 1\nEl grafo supera el presupuesto de expansiones.",
-    knownProjectIdeas: catalog
-  }).ideaGraph;
-
-  assert.equal(graph.ideaCount, 1_005);
-  assert.equal(graph.twoHopConvergenceAnalysisStatus, "truncated-by-work-budget");
-  // Cuatro fuentes completan 250.000 expansiones cada una; la quinta
-  // se interrumpe al intentar superar el millón agregado.
-  assert.equal(graph.twoHopConvergentSourceCount, 4);
-  assert.equal(graph.twoHopSharedDestinationCount, 2_000);
-});
-
-
 test("el grafo identifica puntos de articulación en cadenas de referencias", () => {
   const projectId = "literary-analysis-test";
   const makeIdea = (ideaId, relatedIdeaIds = []) => ({

@@ -1610,13 +1610,9 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     }),
     /historial de decisiones del catálogo global/
   );
+  // Los formatos heredados incompletos o divergentes se conservan;
+  // solo los valores estructuralmente desconocidos se rechazan.
   for (const invalidHistory of [
-    [{ status: "incorporated", reason: "initial" }],
-    [{ status: "IDEA", reason: "writer", changedAt: 1 }],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "IDEA", reason: "writer", changedAt: 2 }
-    ],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
       { status: "unknown", reason: "writer", changedAt: 2 }
@@ -1639,21 +1635,20 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     );
   }
 
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{
-        ...idea,
-        status: "discarded",
-        statusHistory: [
-          { status: "incorporated", reason: "initial", changedAt: 1 },
-          { status: "discarded", reason: "text-revised", changedAt: 2 }
-        ],
-        writerDecisionCount: 0
-      }]
-    }),
-    /historial de decisiones del catálogo global/
-  );
+  const divergentLegacyHistory = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{
+      ...idea,
+      status: "discarded",
+      statusHistory: [
+        { status: "incorporated", reason: "initial", changedAt: 1 },
+        { status: "discarded", reason: "text-revised", changedAt: 2 }
+      ],
+      writerDecisionCount: 0
+    }]
+  }).ideaGraph.nodes[0];
+  assert.equal(divergentLegacyHistory.status, "discarded");
+  assert.equal(divergentLegacyHistory.statusHistory.length, 2);
 
   const truncated = analyzeLiteraryFragment({
     ...input,
@@ -1684,7 +1679,7 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
           { status: "discarded", reason: "writer", changedAt: 10 },
           { status: "incorporated", reason: "writer", changedAt: 20 }
         ],
-        writerDecisionCount: 5,
+        writerDecisionCount: 6,
         omittedStatusHistoryCount: 3
       }]
     }),

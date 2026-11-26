@@ -162,13 +162,18 @@ Esta matriz es una guía de aceptación. Cada fila debe marcarse como verificada
 
 Una composición puede aplicar varios candidatos al mismo rango. Cada actualización puede ser un cambio real del control de edición y debe conservarse en la secuencia textual cuando el objetivo sea mantener el snapshot sincronizado. Sin embargo, esas actualizaciones no equivalen a varias piezas de texto final escritas por el autor.
 
-La fuente textarea identifica estos deltas como `activityKind: "composition"`. El motor los conserva como operaciones aplicadas, pero los acumulados actuales `insertedCharacters` y `deletedCharacters` suman el reemplazo de cada candidato. Por tanto:
+La fuente textarea identifica estos deltas como `activityKind: "composition"`. El motor conserva cada operación aplicada en la secuencia y mantiene los acumulados brutos `insertedCharacters` y `deletedCharacters`. Ahora separa además unidades por procedencia:
 
-- Las métricas de composición describen cambios/candidatos aplicados, no el contenido final confirmado.
-- Reemplazar varias veces un candidato puede inflar las unidades insertadas y eliminadas respecto al texto final.
-- Una cancelación puede devolver el documento a su texto inicial después de haber generado varios deltas.
-- `estimatedWordsPerMinute` no debe interpretarse como velocidad de palabras finales confirmadas durante una sesión con actividad IME.
-- La longitud y los rangos siguen expresados en unidades UTF-16, no en grafemas o palabras lingüísticas.
+- `typingInsertedCharacters`: unidades UTF-16 insertadas por operaciones identificadas explícitamente como `typing`.
+- `compositionInsertedCharacters`: suma de unidades insertadas por cada delta IME aplicado, incluidos todos los candidatos provisionales.
+- `compositionDeletedCharacters`: suma de las unidades sustituidas por cada delta IME aplicado.
+- `activityUnitMetricsComplete`: false después de restaurar un checkpoint histórico sin desglose por procedencia o después de resincronizar desde snapshot. El snapshot confirma el texto actual, pero no permite reconstruir los tipos/rangos de deltas que pudieron faltar.
+
+Estas métricas no representan longitud final confirmada: reemplazar varios candidatos puede sumar las mismas posiciones más de una vez, y una cancelación puede restaurar el texto original después de varios deltas. El total bruto no se cambia, porque cada operación aplicada forma parte de la secuencia que sincroniza el documento.
+
+`estimatedWordsPerMinute` y `insertedCharactersPerMinute` usan solo las unidades `typing` en el numerador. Dividen por el tiempo activo total de la sesión, que puede incluir también pegados, correcciones y composición; por eso no son una medición pura del tiempo de teclado ni un recuento de palabras finales confirmadas.
+
+La longitud y los rangos siguen expresados en unidades UTF-16, no en grafemas o palabras lingüísticas.
 
 Para producir una métrica exacta de composición confirmada hace falta un contrato de grupo con identidad de composición, rango inicial, actualizaciones provisionales y resultado final (commit/cancel). Ese cierre debe proceder del editor anfitrión o de una secuencia nativa validada; no se debe deducir solo de un temporizador ni de un `compositionend` aislado.
 

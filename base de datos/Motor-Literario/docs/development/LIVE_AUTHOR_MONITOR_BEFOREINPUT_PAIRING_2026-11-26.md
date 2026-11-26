@@ -215,5 +215,5 @@ Cada actualización IME aceptada sigue siendo un delta real del documento y avan
 - `insertedCharacters` y `deletedCharacters` siguen siendo volúmenes brutos acumulados de los payloads/rangos de cada delta;
 - los ritmos derivados de esos volúmenes también son brutos y pueden elevarse durante una composición con sustituciones provisionales.
 
-El panel ahora lo indica de forma visible y etiqueta los contadores como brutos en UTF-16. No se afirma que estos contadores midan caracteres finales únicos ni una tasa humana exacta. Para medir texto de composición consolidado sin sobreconteo haría falta una señal de ciclo de composición autoritativa del editor que delimite inicio, actualizaciones, cancelación y commit final; el evento DOM aislado no ofrece una garantía uniforme suficiente para inventar esa conclusión.
+El panel y el workspace de capítulos ahora lo indican con etiquetas de métricas brutas (UTF-16) para que el dato no parezca una medida de caracteres finales únicos. No se afirma que estos contadores midan caracteres finales únicos ni una tasa humana exacta. Para medir texto de composición consolidado sin sobreconteo haría falta una señal de ciclo de composición autoritativa del editor que delimite inicio, actualizaciones, cancelación y commit final; el evento DOM aislado no ofrece una garantía uniforme suficiente para inventar esa conclusión.
 

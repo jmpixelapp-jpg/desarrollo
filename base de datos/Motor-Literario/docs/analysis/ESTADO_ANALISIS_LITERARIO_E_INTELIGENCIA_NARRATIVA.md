@@ -388,3 +388,14 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Añadida prueba de dos coordinadores concurrentes con proveedor de lock compartido: una única operación llega al transporte y el segundo coordinador observa la bandeja ya confirmada.
 - El núcleo no afirma tener bloqueo multi-pestaña por defecto. La integración debe inyectar un adaptador real (Web Locks o lease IndexedDB); sin él, la protección sigue siendo local a la instancia.
 - CI y ejecución local de pruebas no verificados desde esta operación.
+
+
+### Tanda — adaptador compartido respaldado por IndexedDB
+
+- Implementado y exportado `IndexedDbSyncExecutionLock`, que adapta los leases transaccionales existentes de IndexedDB al puerto `SyncExecutionLock`.
+- Reutiliza el almacén `live-author-monitor-leases` y el esquema existente; no añade migración de base de datos.
+- Adquiere un lease por proyecto, renueva durante tareas largas, libera verificando propietario y fencing token, y espera con sondeo cuando otro contexto tiene la titularidad.
+- Añadida cola local por clave para impedir reentrada concurrente cuando una misma instancia reutiliza el mismo `ownerId`.
+- Añadidas pruebas de integración con dos instancias de IndexedDB y propietarios distintos, y de reentrada local.
+- Cada contexto debe usar un `ownerId` único. Los leases pueden expirar si una pestaña queda suspendida; no eliminan la necesidad de deduplicación remota por `operationId`.
+- **Validación:** pruebas añadidas al repositorio; no se ha ejecutado npm/TypeScript ni se dispone de resultados de CI desde esta operación.

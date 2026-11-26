@@ -149,7 +149,7 @@ function validate(input: NarrativeCharacterStateDiscoveryInput): void {
         typeof entity.id !== "string" || !entity.id.trim() || ids.has(entity.id) ||
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
         !Array.isArray(entity.aliases) ||
-        entity.aliases.some(alias => typeof alias !== "string")) {
+        entity.aliases.some((alias: unknown) => typeof alias !== "string")) {
       throw new Error("La lista de entidades contiene identidades inválidas o ajenas al proyecto.");
     }
     ids.add(entity.id);

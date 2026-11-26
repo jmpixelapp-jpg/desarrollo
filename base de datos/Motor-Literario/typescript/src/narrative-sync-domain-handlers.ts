@@ -403,7 +403,7 @@ function isPersonalIdeaArchivePayload(value: unknown): value is PersonalIdeaArch
     item.archivedIdeaIds.every(id => typeof id === "string" && !!id.trim() && id.length <= 512) &&
     new Set(item.archivedIdeaIds).size === item.archivedIdeaIds.length &&
     item.archivedIdeaIds.every((id, index, ids) => index === 0 || ids[index - 1]! < id) &&
-    typeof item.archiveChecksum === "string" && !!item.archiveChecksum.trim() && item.archiveChecksum.length <= 160;
+    typeof item.archiveChecksum === "string" && /^fnv1a64:[0-9a-f]{16}$/u.test(item.archiveChecksum);
 }
 
 /**
@@ -433,12 +433,28 @@ export function createPersonalIdeaArchiveHandler(
         operation.projectId, payload.writerId, payload.sourceProjectName,
         payload.archivedAt, undefined, payload.archivedIdeaIds
       );
+      if (!Array.isArray(entries) || entries.length !== payload.archivedIdeaIds.length) {
+        throw new Error("La biblioteca local no devolvió exactamente la colección archivada.");
+      }
+      for (const entry of entries) {
+        if (!entry || entry.writerId !== payload.writerId ||
+            entry.sourceProjectId !== operation.projectId ||
+            entry.sourceProjectName !== payload.sourceProjectName ||
+            entry.category !== payload.sourceProjectName ||
+            entry.archivedAt !== payload.archivedAt ||
+            !entry.idea || entry.idea.projectId !== operation.projectId ||
+            entry.idea.sourceProjectName !== payload.sourceProjectName ||
+            entry.idea.status !== "IDEA" || entry.context?.version !== 1) {
+          throw new Error("La biblioteca local devolvió una entrada ajena o incompleta.");
+        }
+      }
       const archivedIds = entries.map(entry => entry.idea.id).sort();
       if (JSON.stringify(archivedIds) !== JSON.stringify(payload.archivedIdeaIds)) {
         throw new Error("La biblioteca local no confirmó exactamente las ideas de la operación recibida.");
       }
       const receipt = await store.loadProjectFinalizationReceipt!(payload.writerId, operation.projectId);
-      if (!receipt || receipt.writerId !== payload.writerId ||
+      if (!receipt || !Array.isArray(receipt.archivedIdeaIds) ||
+          receipt.writerId !== payload.writerId ||
           receipt.sourceProjectId !== operation.projectId ||
           receipt.sourceProjectName !== payload.sourceProjectName ||
           receipt.finalizedAt !== payload.archivedAt ||

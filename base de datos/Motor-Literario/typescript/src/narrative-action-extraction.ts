@@ -91,39 +91,41 @@ export function extractNarrativeActionCandidates(
   if (!actors.length || !targets.length) return [];
 
   const actionPattern = ACTIONS.map(escapeRegExp).sort((a, b) => b.length - a.length).join("|");
+  const targetByName = new Map(targets.map(value => [normalize(value.name), value]));
+  const targetPattern = targets.map(value => escapeRegExp(value.name))
+    .sort((a, b) => b.length - a.length).join("|");
   const results = new Map<string, NarrativeActionCandidate>();
   for (const line of input.text.matchAll(/[^\n]+/gu)) {
     const lineText = line[0];
+    const lineStart = line.index ?? 0;
     for (const actor of actors) {
-      for (const target of targets) {
-        if (actor.entity.id === target.entity.id) continue;
-        const expression = new RegExp(
-          "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(actor.name) +
-          "(?![\\p{L}\\p{M}\\p{N}_])\\s+(no\\s+)?(" + actionPattern +
-          ")\\s+(?:(?:a|al|la|las|el|los|un|una|unos|unas)\\s+)?" +
-          escapeRegExp(target.name) + "(?![\\p{L}\\p{M}\\p{N}_])",
-          "giu"
-        );
-        for (const match of lineText.matchAll(expression)) {
-          const action = (match[2] ?? "").toLocaleLowerCase("es");
-          const localStart = line.index + match.index;
-          const localEnd = localStart + match[0].length;
-          const start = baseOffset + localStart;
-          const end = baseOffset + localEnd;
-          const id = "action:" + input.documentId + ":" + start + ":" +
-            actor.entity.id + ":" + target.entity.id;
-          results.set(id, {
-            id, projectId: input.projectId, actorEntityId: actor.entity.id,
-            action, targetEntityId: target.entity.id,
-            polarity: match[1] ? "negated" : "affirmed",
-            reviewStatus: "candidate",
-            evidence: {
-              documentId: input.documentId, revision: input.revision,
-              start, end, excerpt: lineText
-            }
-          });
-          if (results.size >= MAX_NARRATIVE_ACTIONS) break;
-        }
+      const expression = new RegExp(
+        "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(actor.name) +
+        "(?![\\p{L}\\p{M}\\p{N}_])\\s+(no\\s+)?(" + actionPattern +
+        ")\\s+(?:(?:a|al|la|las|el|los|un|una|unos|unas)\\s+)?(" +
+        targetPattern + ")(?![\\p{L}\\p{M}\\p{N}_])",
+        "giu"
+      );
+      for (const match of lineText.matchAll(expression)) {
+        const target = targetByName.get(normalize(match[3] ?? ""));
+        if (!target || actor.entity.id === target.entity.id) continue;
+        const action = (match[2] ?? "").toLocaleLowerCase("es");
+        const localStart = lineStart + (match.index ?? 0);
+        const localEnd = localStart + match[0].length;
+        const start = baseOffset + localStart;
+        const end = baseOffset + localEnd;
+        const id = "action:" + input.documentId + ":" + start + ":" +
+          actor.entity.id + ":" + target.entity.id;
+        results.set(id, {
+          id, projectId: input.projectId, actorEntityId: actor.entity.id,
+          action, targetEntityId: target.entity.id,
+          polarity: match[1] ? "negated" : "affirmed",
+          reviewStatus: "candidate",
+          evidence: {
+            documentId: input.documentId, revision: input.revision,
+            start, end, excerpt: lineText
+          }
+        });
         if (results.size >= MAX_NARRATIVE_ACTIONS) break;
       }
       if (results.size >= MAX_NARRATIVE_ACTIONS) break;

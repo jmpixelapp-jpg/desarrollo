@@ -694,3 +694,22 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Límite conocido:** el módulo propone relaciones locales entre afirmaciones; no demuestra causalidad médica, psicológica ni narrativa, ni decide por sí mismo si una negación expresa un cambio real, una creencia de un personaje o una afirmación de un narrador no fiable. La atribución de fuente/enunciador y el orden global entre capítulos siguen siendo tareas pendientes.
 
+## Vínculos entre acciones y estados de personajes
+
+**Nuevo módulo:** `typescript/src/narrative-action-state-link-discovery.ts`. Añade una capa que conecta candidatos de acción del extractor de observaciones con afirmaciones explícitas de estado de personajes.
+
+**Criterios de propuesta:**
+- Las acciones y estados deben pertenecer al mismo proyecto, documento y revisión.
+- La evidencia literal del verbo y del predicado de estado se valida contra el texto recibido, incluyendo offsets absolutos UTF-16 y `baseOffset`.
+- Debe existir un personaje compartido entre las menciones de la observación y la identidad del estado, o una interacción dirigida cuyo destinatario sea ese personaje.
+- Un marcador causal explícito debe aparecer entre la evidencia verbal y la evidencia del estado, con una distancia máxima acotada.
+- Se conserva si la acción aparece antes o después de la mención del estado, sin convertir esa posición en una dirección causal confirmada.
+
+**Marcadores causales:** incluye conectores como `porque`, `ya que`, `debido a`, `a causa de`, `por culpa de`, `gracias a`, `a raíz de`, `por eso`, `por lo tanto`, `como resultado` y `en consecuencia`.
+
+**Salida:** cada candidato conserva los IDs de la acción y de la afirmación de estado, la entidad asociada, la base de asociación, el marcador y su evidencia exacta, la posición relativa de ambas menciones y las evidencias originales de acción y estado. La salida queda en estado `candidate`.
+
+**Pruebas añadidas:** marcador causal con el estado antes y después de la acción, rechazo de mera proximidad sin conector, aislamiento de personajes no compartidos, offsets UTF-16 con prefijo y emoji, evidencia que no coincide con el texto y candidatos duplicados.
+
+**Límite semántico:** el módulo identifica una asociación textual con marcador causal, no demuestra causalidad real ni decide si el narrador informa un hecho, expresa una hipótesis o reproduce la creencia de un personaje. Tampoco asigna agente, paciente o beneficiario por mera mención. La revisión humana y la atribución de enunciador siguen siendo necesarias.
+

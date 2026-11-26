@@ -735,4 +735,8 @@ El anfitrión debe reconciliar el editor y el motor desde el mismo snapshot dura
 
 **Pruebas de regresión:** buffer estrictamente limitado; ausencia de admisiones posteriores al desbordamiento; notificación de secuencia excedente; pausa del source; retry bloqueado; re-suscripción tras snapshot común; validación de configuración; proveedor que emite sincrónicamente durante la suscripción y debe quedar desconectado al desbordarse.
 
-**Estado:** implementación incluida en TypeScript puro y pruebas añadidas. Pendiente verificar la ejecución automática de GitHub Actions para este commit.
+**Estado:** implementación incluida en TypeScript puro; el archivo de pruebas del enlace contiene 15 casos. Los checks del último commit aún no están disponibles, por lo que queda pendiente la validación de GitHub Actions.
+
+**Commits del avance:** [475dd63 — limitar el backlog FIFO](https://github.com/jmpixelapp-jpg/desarrollo/commit/475dd639231229b86666ba0b8cdf5499b37f5b3a), [1f97dce — verificar la recuperación del buffer](https://github.com/jmpixelapp-jpg/desarrollo/commit/1f97dce81838a512dfdd37b8c78debd8d5a4a5b2), [4ca4897 — cubrir emisiones síncronas durante el montaje](https://github.com/jmpixelapp-jpg/desarrollo/commit/4ca4897e12dc2b5769a2faa57ff9b3abafddab88).
+
+**CI:** la consulta de checks del último commit 4ca4897e12dc2b5769a2faa57ff9b3abafddab88 todavía no devuelve resultados. No se declara validación CI aprobada para esta entrega. La última validación registrada antes de estos cambios fue 128/128 pruebas del monitor, en el commit 12a754203130e82bea7808763319143243898fc1.

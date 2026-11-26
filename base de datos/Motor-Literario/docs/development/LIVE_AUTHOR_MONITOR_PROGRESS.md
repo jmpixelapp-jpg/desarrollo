@@ -513,6 +513,10 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 
 **Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, `docs/development/LIVE_AUTHOR_MONITOR_EDITOR_ADAPTER_GUIDE.md`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
 
-**Estado de validación:** los tests de regresión quedan incluidos en el workflow específico del Live Author Monitor. La integración se considera pendiente de CI hasta observar el resultado de GitHub Actions sobre este commit.
+**Estado de validación:** se añadieron 3 regresiones a la suite de enlace editor→motor (15 pruebas totales en ese archivo).
+
+**Commits del avance:** [475dd63 — limitar el backlog FIFO](https://github.com/jmpixelapp-jpg/desarrollo/commit/475dd639231229b86666ba0b8cdf5499b37f5b3a), [1f97dce — verificar la recuperación del buffer](https://github.com/jmpixelapp-jpg/desarrollo/commit/1f97dce81838a512dfdd37b8c78debd8d5a4a5b2), [4ca4897 — cubrir emisiones síncronas durante el montaje](https://github.com/jmpixelapp-jpg/desarrollo/commit/4ca4897e12dc2b5769a2faa57ff9b3abafddab88).
+
+**CI:** la consulta de checks del último commit 4ca4897e12dc2b5769a2faa57ff9b3abafddab88 todavía no devuelve resultados. No se declara validación CI aprobada para esta entrega. La última validación registrada antes de estos cambios fue 128/128 pruebas del monitor, en el commit 12a754203130e82bea7808763319143243898fc1.
 
 **Límite importante:** el evento que excede el buffer ya fue aplicado por el editor y no se conserva como delta individual; se recupera desde el snapshot común. El código no afirma que ese delta se haya admitido ni se haya persistido de forma incremental.

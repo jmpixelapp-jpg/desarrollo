@@ -589,3 +589,10 @@ Condiciones: mismo documento y revisión, participante compartido, marcador temp
 Los vínculos causales expresos mantienen `relationType: "explicit-consequence-marker"` y `causalStatus: "explicitly-signaled-candidate"`. Ninguno confirma causalidad objetiva: la primera categoría es solo proximidad temporal con participante compartido; la segunda es una señal lingüística expresa todavía revisable.
 
 Se añadieron tres pruebas para detección, abstención sin participante compartido y separación entre sucesión temporal y causalidad explícita.
+
+
+### Corrección de robustez de Fase AI
+
+La revisión posterior detectó que las expresiones regulares de la hipótesis temporal debían comprobarse con pruebas específicas de los escapes y los límites de párrafo. Se normalizaron para reconocer espacios y saltos de línea reales, y se añadieron salvaguardas de entrada: IDs de acontecimientos no vacíos y únicos, participantes como colección válida de identificadores y evidencia textual coincidente. Se agregaron pruebas para impedir hipótesis que crucen párrafos y para rechazar eventos duplicados o malformados.
+
+Esta corrección fortalece la abstención: una hipótesis no se crea si el contexto estructural o la identidad de los participantes no es fiable.

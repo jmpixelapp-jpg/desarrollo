@@ -3257,9 +3257,9 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-      } else if (referenceKind === "relatedIdeaIds" && linked) {
-        // Las ideas también pueden ser eliminadas por otra instancia. Validar
-        // un alta contra el snapshot caliente permitiría crear un vínculo colgante.
+      } else if (referenceKind === "relatedIdeaIds" && linked && this.ideasLoaded) {
+        // Solo se relee cuando el snapshot estaba caliente. Si la rama anterior
+        // acaba de cargarlo, esa lectura ya valida el destino sin duplicar I/O.
         const ideas = requireProjectScopedRecords(
           await store.loadIdeas(projectId), projectId, "ideas"
         );

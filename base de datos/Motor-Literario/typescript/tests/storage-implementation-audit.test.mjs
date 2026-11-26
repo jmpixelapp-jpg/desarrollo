@@ -229,6 +229,21 @@ test("la evolución de atributos localiza escenas mediante búsqueda binaria", (
 });
 
 
+test("la evolución de atributos procesa solo escenas con evidencia y mantiene su orden", () => {
+  const start = literaryAnalysisSource.indexOf("const sceneByIndex = new Map(scenes.map(");
+  const end = literaryAnalysisSource.indexOf("\\n    const transitions:", start + 10);
+  assert.notEqual(start, -1, "debe indexarse el catálogo de escenas por ID");
+  assert.ok(end > start, "la materialización de snapshots debe delimitarse");
+  const builder = literaryAnalysisSource.slice(start, end);
+
+  assert.ok(builder.includes("[...group.byScene.entries()]"));
+  assert.ok(builder.includes(".sort(([left],[right]) => left-right)"));
+  assert.ok(builder.includes(".map(([sceneIndex,entries]) =>"));
+  assert.ok(builder.includes("sceneByIndex.get(sceneIndex)!"));
+  assert.equal(builder.includes("scenes.flatMap("), false);
+});
+
+
 test("la evolución de atributos ordena buckets locales sin duplicar las colecciones completas", () => {
   const start = literaryAnalysisSource.indexOf("function buildCharacterAttributeEvolution(");
   const end = literaryAnalysisSource.indexOf("\nfunction ", start + 10);

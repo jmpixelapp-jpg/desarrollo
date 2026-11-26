@@ -263,3 +263,19 @@ test("integra atribución de hablantes de diálogo en el pipeline coordinado", (
     ["No volveré", "Te esperaré"]
   );
 });
+
+
+test("integra procedencia epistemológica sin convertir reportes en hechos", () => {
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-provenance-pipeline", revision:1,
+    text:"Elian le contó a Mara que el puente había caído. Mara vio que la torre ardía.",
+    entities
+  });
+  assert.equal(result.informationProvenance.length, 2);
+  assert.equal(result.informationProvenance[0].sourceEntityId, "elian");
+  assert.equal(result.informationProvenance[0].informationHolderEntityId, "mara");
+  assert.equal(result.informationProvenance[0].status, "reported");
+  assert.equal(result.informationProvenance[1].informationHolderEntityId, "mara");
+  assert.equal(result.informationProvenance[1].channel, "visual-observation");
+  assert.equal(result.informationProvenance[1].sourceEntityId, undefined);
+});

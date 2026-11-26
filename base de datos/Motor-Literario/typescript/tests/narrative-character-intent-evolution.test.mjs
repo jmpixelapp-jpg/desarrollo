@@ -101,3 +101,16 @@ test("no ordena automáticamente revisiones distintas del mismo documento", () =
   });
   assert.equal(result.transition, "chronology-unresolved");
 });
+
+test("detecta abandono explícito cuando se nombra la meta abandonada", () => {
+  const excerpt = "Mara renunció a buscar el trono y ahora quiere proteger a Elian.";
+  const prior = intent("old", "buscar el trono", "affirmed", "chapter-1", 10);
+  const current = intent("new", "proteger a Elian", "affirmed", "chapter-2", 48, excerpt);
+  const [result] = evolveNarrativeCharacterIntents({
+    projectId:"novel", entities, priorIntents:[prior], currentIntents:[current],
+    orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.transition, "withdrawn");
+  assert.deepEqual(result.priorIntentIds, ["old"]);
+  assert.match(result.transitionEvidence.excerpt, /renunció a/u);
+});

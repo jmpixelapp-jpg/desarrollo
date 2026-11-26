@@ -431,3 +431,13 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Se añadió una prueba para entradas con `actionEvidence` ausente y para IDs duplicados. El contrato es devolver un error de validación controlado, no una excepción interna de acceso a propiedades.
 - Commits de endurecimiento: `213bdc5` (validación), `fa23b37` (pruebas), `c56a1df` (documentación).
 - Las ejecuciones 2809 y 2810, para el endurecimiento y su prueba, seguían en curso en la última consulta. No se declara todavía validado ese último cambio.
+
+
+### Ampliación del futuro verbal y corrección de fixtures — 26-11-2026
+
+- Se amplió la detección de futuro de las observaciones vinculadas a personajes a partir de los infinitivos del inventario de acciones, con las terminaciones regulares del futuro simple y los radicales irregulares frecuentes de `decir` (`dir-`) y `salir` (`saldr-`).
+- Se añadieron pruebas para «abrirá», «responderá», «dirá», «saldrá» y «protegerá», además de un control para evitar coincidencias dentro de palabras más largas.
+- Durante la implementación, las ejecuciones 2817 y 2818 detectaron un fragmento de código residual mal formado en la construcción de la expresión futura. Se eliminó ese fragmento en el commit `4436e52`; no se da por validada esta ampliación hasta que CI complete el Type-check y las pruebas.
+- La ejecución 2815 mostró un fallo independiente en un fixture de acontecimientos: el test contenía los dos caracteres literales `\\n` en vez de un salto de línea real, por lo que el parser no podía separar la declaración de personaje y la etiqueta de acontecimiento. Corregido en `38373ee`.
+- Commits de esta tanda: `db9c668` (primera ampliación, reemplazada por la corrección), `cabe5c6` (reparación parcial), `4436e52` (eliminación del fragmento residual), `dcd94b6` (pruebas futuras), `38373ee` (fixture) y `e45586e` (documentación de extracción).
+- Se mantienen como requisitos: límites Unicode de palabra, evidencia literal y offsets UTF-16; tiempo futuro es forma verbal y no prueba que el acontecimiento haya ocurrido.

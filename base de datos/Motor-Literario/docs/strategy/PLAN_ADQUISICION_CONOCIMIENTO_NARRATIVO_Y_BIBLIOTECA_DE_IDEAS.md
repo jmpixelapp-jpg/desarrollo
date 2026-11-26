@@ -248,3 +248,30 @@ La resolución de nombres aplica alias y rechaza nombres compartidos por varias 
 **Límites deliberados:** no se infieren turnos alternos, voces por proximidad entre párrafos, hablantes omitidos, vocativos, ni etiquetas sin verbo de habla reconocido. No se resuelven todavía diálogos multilínea, atribuciones intercaladas dentro de una misma línea, estilo indirecto libre, narrador no fiable ni citas anidadas. Los candidatos no son hechos canónicos y requieren revisión.
 
 Se añadieron pruebas para las tres estructuras, offsets absolutos, procedencia, hablantes ambiguos, ausencia de etiqueta y la integración del pipeline.
+
+
+## Fase Q: procedencia epistemológica explícita de la información
+
+Se añadió `narrative-information-provenance.ts` para conservar cómo llega una información a un personaje, sin convertir automáticamente su contenido en verdad narrativa.
+
+Canales reconocidos de forma conservadora:
+
+- `visual-observation`: «Mara vio que el puente había caído».
+- `auditory-observation`: «Mara escuchó que Elian había escapado».
+- `written-source`: «Elian leyó que la ciudad estaba sitiada».
+- `reported-speech`: «Elian le contó a Mara que el puente había caído».
+- `rumor`: «Se rumorea que el rey ha muerto».
+
+El modelo separa:
+- titular/receptor de la información (`informationHolderEntityId`);
+- fuente comunicadora (`sourceEntityId`), únicamente si está nombrada;
+- canal de acceso y estado epistemológico;
+- contenido y evidencia exacta;
+- evidencia independiente del receptor y de la fuente;
+- documento, revisión y offsets UTF-16 absolutos.
+
+La extracción solo atribuye identidades resueltas de forma única. Un rumor impersonal no recibe un personaje inventado como fuente o receptor. El resultado se integra en `understandNarrativeFragment` como `informationProvenance` y se exporta desde el índice público.
+
+**Límites:** catálogo limitado a construcciones explícitas en español; no identifica todavía fuentes implícitas, narrador, documentos citados como entidades, fuentes múltiples, ironía, mentira, fiabilidad del testigo ni contradicción entre percepción y realidad. «Vio» se registra como canal de observación, no como garantía de que la interpretación del personaje sea correcta. Los resultados son candidatos revisables, no hechos canónicos.
+
+Se añadieron pruebas para observación visual/auditiva, lectura, transmisión entre personajes, rumor impersonal, offsets, ambigüedad de nombres y la integración en el pipeline.

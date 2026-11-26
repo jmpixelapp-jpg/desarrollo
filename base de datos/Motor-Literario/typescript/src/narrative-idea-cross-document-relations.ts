@@ -90,6 +90,13 @@ function normalizeText(value: string): NormalizedIdeaText {
   return { phrase, tokens };
 }
 
+
+function containsTextWithWhitespace(excerpt: string, text: string): boolean {
+  const normalizedExcerpt = excerpt.replace(/\s+/gu, " ").trim();
+  const normalizedText = text.replace(/\s+/gu, " ").trim();
+  return normalizedText.length > 0 && normalizedExcerpt.includes(normalizedText);
+}
+
 function validateInput(input: NarrativeIdeaCrossDocumentAnalysisInput): void {
   if (!input || typeof input !== "object" ||
       typeof input.projectId !== "string" || !input.projectId.trim() ||
@@ -120,7 +127,7 @@ function validateInput(input: NarrativeIdeaCrossDocumentAnalysisInput): void {
         candidate.evidence.start < 0 || candidate.evidence.end <= candidate.evidence.start ||
         typeof candidate.evidence.excerpt !== "string" ||
         candidate.evidence.excerpt.length > 2_000_000 ||
-        !candidate.evidence.excerpt.includes(candidate.text)) {
+        !containsTextWithWhitespace(candidate.evidence.excerpt, candidate.text)) {
       throw new Error("Candidato de idea inválido, duplicado o ajeno al proyecto.");
     }
     candidateIds.add(candidate.id);

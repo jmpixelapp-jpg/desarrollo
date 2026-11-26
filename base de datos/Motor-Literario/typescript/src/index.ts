@@ -60,3 +60,4 @@ export * from "./narrative-pronoun-target-link";
 
 export * from "./narrative-dialogue-attribution";
 export * from "./narrative-information-provenance";
+export * from "./narrative-knowledge-evolution";

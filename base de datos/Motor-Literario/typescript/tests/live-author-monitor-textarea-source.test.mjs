@@ -37,7 +37,7 @@ class FakeTextArea {
   }
 
   emitCompositionEnd() {
-    for (const listener of [...(this.listeners.get("compositionend") ?? [])]) listener({});
+    for (const listener of [...(this.listeners.get("compositionend") ?? [])]) listener({ isTrusted: true });
   }
 
   edit({ start, end, nextValue, inputType = "insertText", isComposing = false }) {

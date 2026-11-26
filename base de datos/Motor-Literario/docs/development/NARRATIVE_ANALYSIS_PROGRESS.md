@@ -196,3 +196,30 @@ Se añadió `typescript/src/narrative-sync-consumer.ts` y su exportación públi
 **Límites preservados:** este consumidor integra el pipeline local, pero no implementa transporte remoto, autenticación/autorización del escritor, coordinación entre pestañas/dispositivos ni una transacción atómica entre el diario y las proyecciones narrativas. Los handlers de dominio deben ser idempotentes por `operationId` y aplicar sus mutaciones con CAS/transacciones propias. La entrega sigue siendo al menos una vez.
 
 **Validación:** los cambios de runtime y las nuevas pruebas están publicados en `main`; la ejecución de typecheck, build y suite completa queda pendiente de los checks de CI asociados al HEAD posterior a esta tanda. No se declara verde hasta observar esos resultados.
+
+
+## Continuación paralela: handlers de dominio y concurrencia por escritor (2026-11-26)
+
+### Frente A — persistencia real de ideas
+
+- Añadido `typescript/src/narrative-sync-domain-handlers.ts`.
+- `createNarrativeIdeaUpsertHandler` valida el payload, comprueba el aislamiento de `projectId`, carga el registro actual y aplica inserción/actualización mediante `saveIdeaIfUnchanged`.
+- La repetición de una operación ya aplicada se convierte en no-op si el registro persistido coincide exactamente. Esto cubre la ventana de caída entre el CAS de dominio y el acuse del diario.
+- Los conflictos CAS se propagan: el diario mantiene la operación pendiente y no se sobrescribe silenciosamente una edición concurrente.
+- Exportado desde `src/index.ts`.
+- Pruebas en `tests/narrative-sync-domain-handlers.test.mjs`: CAS, idempotencia ante reintento, conflicto y payload inválido.
+
+### Frente B — concurrencia de escritores
+
+- El replay ya no bloquea indiscriminadamente todo un proyecto cuando se procesan escritores diferentes.
+- Se serializa por pareja proyecto/escritor; escritores distintos pueden avanzar en paralelo.
+- Un replay de proyecto completo excluye cualquier replay específico del proyecto, evitando solapamientos ambiguos.
+- Las escrituras de dominio permanecen protegidas por CAS. Los locks solo existen en el runtime actual; no coordinan pestañas o dispositivos.
+- Pruebas en `tests/narrative-sync-writer-concurrency.test.mjs`.
+
+### Frente C — contrato y documentación
+
+- Añadido `docs/architecture/HANDLERS_DOMINIO_SINCRONIZACION_NARRATIVA.md` con payload, semántica CAS, reintentos, conflictos y límites de seguridad.
+- Se documenta que SHA-256 verifica integridad, no identidad del escritor, y que el handler implementado cubre ideas, no todas las entidades narrativas.
+
+**Validación pendiente:** estos cambios se han publicado en `main`, pero todavía no hay ejecuciones CI asociadas al commit de esta tanda. No se declaran typecheck, build ni suite aprobados hasta comprobarlos.

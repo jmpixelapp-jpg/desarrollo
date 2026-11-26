@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import "fake-indexeddb/auto";
 import {
   HostEngineApi,
+  IndexedDbNarrativeSyncOutbox,
   IndexedDbProjectStore
 } from "../dist/motor-literario.js";
 
@@ -643,6 +644,68 @@ test("recalcula cronología cuando cambia el orden editorial sin modificar los c
     assert.equal(second.occurrences[1].revision, 1);
   } finally {
     api.dispose();
+    await store.close();
+  }
+});
+
+
+test("HostEngineApi encola automáticamente cada generación en el outbox usando el writerId del proyecto", async () => {
+  const store = new IndexedDbProjectStore();
+  const outbox = new IndexedDbNarrativeSyncOutbox({
+    databaseName: "host-continuity-outbox-" + projectId()
+  });
+  const id = projectId();
+  const writerId = "writer-" + randomUUID();
+  const initialText = "El tema central es la memoria compartida que une a dos ciudades.";
+  const revisedText = "El tema central es la culpa compartida que divide a dos ciudades.";
+  const api = new HostEngineApi({
+    store,
+    continuityOutbox: outbox,
+    getOrderedDocumentIds: () => ["chapter-1", "chapter-2"]
+  });
+
+  try {
+    api.initializeProject({
+      projectId: id,
+      projectName: "Outbox integrado",
+      writerId
+    });
+    await api.openDocument({
+      documentId: "chapter-1", text: initialText, revision: 0, sequence: 0
+    });
+    await api.openDocument({
+      documentId: "chapter-2", text: initialText, revision: 0, sequence: 0
+    });
+    await api.flushPendingChanges();
+
+    const firstEntries = await outbox.loadEntries(id);
+    assert.equal(firstEntries.length, 1);
+    assert.equal(firstEntries[0].generation, 1);
+    assert.equal(firstEntries[0].writerId, writerId);
+    assert.equal(firstEntries[0].status, "pending");
+    assert.equal(api.getCapabilities().narrativeIdeaContinuityDurableOutbox, true);
+
+    api.onEditorChange({
+      documentId: "chapter-2",
+      sequence: 1,
+      baseRevision: 0,
+      start: 0,
+      end: initialText.length,
+      replacement: revisedText
+    });
+    await api.flushPendingChanges();
+
+    const entries = await outbox.loadEntries(id);
+    assert.deepEqual(entries.map(item => item.generation), [1, 2]);
+    assert.deepEqual(entries.map(item => item.sequence), [1, 2]);
+    assert.equal(entries[1].envelope.payload.expectedGeneration, 1);
+    assert.equal(entries[1].envelope.payload.index.occurrences.some(item =>
+      item.documentId === "chapter-2" && item.revision === 1 &&
+      item.text === "la culpa compartida que divide a dos ciudades"
+    ), true);
+  } finally {
+    api.dispose();
+    outbox.close();
     await store.close();
   }
 });

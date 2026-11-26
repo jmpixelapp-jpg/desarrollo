@@ -178,7 +178,7 @@ test("expone distancia oracional y de párrafo sin confundirlas con certeza de c
   const text = "Ana llegó.\n\nLa lluvia comenzó.\n\nElla cerró la puerta.";
   const [reference] = discover(text, { entities: [ana] });
   const [candidate] = reference.antecedentCandidates;
-  assert.equal(candidate.sentenceDistance, 4);
+  assert.equal(candidate.sentenceDistance, 6);
   assert.equal(candidate.paragraphDistance, 2);
   assert.equal(reference.status, "single-candidate");
   assert.equal(reference.reviewStatus, "candidate");

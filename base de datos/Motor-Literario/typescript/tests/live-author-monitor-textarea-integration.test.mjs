@@ -160,6 +160,8 @@ test("monta el textarea directamente contra HostEngineApi y entrega deltas únic
 
   f.integration.dispose();
   assert.equal(f.retryListeners.size, 0);
+  assert.equal(f.errors.length, 0,
+    "el desmontaje definitivo no debe reportar una discontinuidad recuperable");
   assert.equal(f.element.listeners.get("beforeinput").size, 0);
   assert.equal(f.element.listeners.get("input").size, 0);
 });

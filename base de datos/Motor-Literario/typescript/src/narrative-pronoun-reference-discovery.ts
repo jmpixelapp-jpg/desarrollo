@@ -52,6 +52,8 @@ export const MAX_NARRATIVE_PRONOUN_TEXT_UNITS = 2_000_000;
 export const MAX_NARRATIVE_PRONOUN_ENTITIES = 10_000;
 export const MAX_NARRATIVE_PRONOUN_ALIASES_PER_ENTITY = 100;
 export const MAX_NARRATIVE_PRONOUN_NAME_LENGTH = 256;
+/** Presupuesto máximo estimado de unidades recorridas por búsquedas de nombres. */
+export const MAX_NARRATIVE_PRONOUN_SCAN_UNITS = 25_000_000;
 
 const INITIAL_PERSONAL_PRONOUN =
   /^\s*(él|ella|ellos|ellas|usted|ustedes)\b/iu;
@@ -152,6 +154,7 @@ export function discoverNarrativePronounReferences(
   const maxDistance = input.maxAntecedentDistance ?? DEFAULT_NARRATIVE_PRONOUN_WINDOW;
   const spans = sentenceSpans(input.text);
   const results: NarrativePronounReferenceCandidate[] = [];
+  let scanUnits = 0;
 
   for (const span of spans) {
     if (results.length >= MAX_NARRATIVE_PRONOUN_REFERENCES) break;
@@ -165,9 +168,14 @@ export function discoverNarrativePronounReferences(
     const latestByEntity = new Map<string, NarrativePronounAntecedentCandidate>();
 
     for (const entity of input.entities) {
+      const names = [entity.canonicalName, ...entity.aliases];
+      scanUnits += (pronounStart - windowStart) * names.length;
+      if (scanUnits > MAX_NARRATIVE_PRONOUN_SCAN_UNITS) {
+        throw new Error("La búsqueda de antecedentes supera el presupuesto operativo de exploración.");
+      }
       const mention = findLastNameMention(
         input.text,
-        [entity.canonicalName, ...entity.aliases],
+        names,
         windowStart,
         pronounStart
       );

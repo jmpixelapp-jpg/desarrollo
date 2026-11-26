@@ -35,6 +35,12 @@ export interface NarrativeObservationCandidate {
     readonly marker: "por";
     readonly evidence: TextEvidence;
   };
+  /** Complemento personal explícito «a + personaje» tras el verbo; candidato sintáctico, no relación semántica. */
+  readonly personalObjectCandidate?: {
+    readonly entityId: string;
+    readonly marker: "a";
+    readonly evidence: TextEvidence;
+  };
   /** Referencia pronominal pendiente: nunca fusiona automáticamente el pronombre con una identidad. */
   readonly unresolvedReferences?: readonly {
     readonly pronoun: string;
@@ -369,6 +375,30 @@ export function discoverNarrativeObservationCandidates(
               };
             })()
           : undefined;
+        const personalObjectCandidate = (() => {
+          const afterVerb = sentence.slice(match.index + surface.length);
+          const objectMarker = /^\\s+a\\s+([\\p{Lu}ÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[\\p{Lu}ÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3})/u.exec(afterVerb);
+          if (!objectMarker) return undefined;
+          const matchedName = objectMarker[1]!;
+          const candidates = characters.filter(entity =>
+            [entity.canonicalName, ...entity.aliases].some(name =>
+              name.toLocaleLowerCase("es") === matchedName.toLocaleLowerCase("es")
+            )
+          );
+          if (candidates.length !== 1) return undefined;
+          const nameStart = match.index + surface.length + objectMarker.index + objectMarker[0].lastIndexOf(matchedName);
+          return {
+            entityId: candidates[0]!.id,
+            marker: "a" as const,
+            evidence: {
+              documentId: input.documentId,
+              revision: input.revision,
+              start: baseOffset + segment.start + nameStart,
+              end: baseOffset + segment.start + nameStart + matchedName.length,
+              excerpt: matchedName
+            }
+          };
+        })();
         const before = sentence.slice(0, match.index).match(/(?:\bno|\bnunca|\bjamás)\s*$/iu);
         const id = `observation:${input.documentId}:${localStart}:${signal.action}`;
         results.set(id, {
@@ -382,6 +412,7 @@ export function discoverNarrativeObservationCandidates(
           grammaticalTense: classifyGrammaticalTense(surface),
           ...(subjectCandidate ? { grammaticalSubjectCandidate: subjectCandidate } : {}),
           ...(passiveAgentCandidate ? { passiveAgentCandidate } : {}),
+          ...(personalObjectCandidate ? { personalObjectCandidate } : {}),
           ...(mentionedCharacters.length === 1
             ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),

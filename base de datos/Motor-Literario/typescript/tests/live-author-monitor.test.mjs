@@ -217,6 +217,38 @@ test("dispose descarta notificaciones reentrantes y no invoca listeners retirado
   assert.equal(monitor.getSnapshot("chapter-1"), undefined);
 });
 
+test("drena una ráfaga reentrante de 1000 snapshots sin recursión y en FIFO", () => {
+  const { monitor, open, change, queued } = fixture();
+  open();
+
+  let burstStarted = false;
+  const observedSequences = [];
+  monitor.subscribe(snapshot => {
+    if (snapshot.acceptedChanges !== 1 || burstStarted) return;
+    burstStarted = true;
+
+    for (let sequence = 2; sequence <= 1000; sequence++) {
+      const position = sequence + 4;
+      monitor.recordAdmission(
+        change(sequence, sequence - 1, position, position, "x"),
+        queued("t-" + sequence)
+      );
+    }
+  });
+  monitor.subscribe(snapshot => observedSequences.push(snapshot.latestSequence));
+
+  monitor.recordAdmission(change(1, 0, 5, 5, "a"), queued("t-1"));
+
+  assert.equal(observedSequences.length, 1000);
+  assert.equal(observedSequences[0], 1);
+  assert.equal(observedSequences.at(-1), 1000);
+  for (let index = 0; index < observedSequences.length; index++) {
+    assert.equal(observedSequences[index], index + 1);
+  }
+  assert.equal(monitor.getSnapshot("chapter-1").acceptedChanges, 1000);
+  assert.equal(monitor.getSnapshot("chapter-1").pendingChanges, 1000);
+});
+
 test("valida secuencias, límite de documentos y retroceso del reloj", () => {
   const { monitor, open, change, queued, setTime } = fixture({ maxOpenDocuments: 1 });
   open();

@@ -10,7 +10,8 @@
     "test": "npm run build && npm run validate:schema && node --test tests/*.test.mjs test/*.test.mjs",
     "bench": "npm run build && node bench/live-edit-benchmark.mjs",
     "validate:schema": "node scripts/validate-mldb-schema.mjs && node scripts/audit-storage-implementation.mjs",
-    "bridge": "npm run build && node bridge/stdio-server.mjs"
+    "bridge": "npm run build && node bridge/stdio-server.mjs",
+    "test:sync-lifecycle": "npx vite build && node --test --test-name-pattern=\"^IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libera suscripciones$\" tests/core.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

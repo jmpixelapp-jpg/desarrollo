@@ -205,6 +205,8 @@ export interface NarrativeDocumentProjectionManifest {
 }
 
 export interface ProjectStore {
+  /** True only when domain CAS and outbox writes share one local transaction. */
+  readonly supportsAtomicNarrativeSyncOutbox?: boolean;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */

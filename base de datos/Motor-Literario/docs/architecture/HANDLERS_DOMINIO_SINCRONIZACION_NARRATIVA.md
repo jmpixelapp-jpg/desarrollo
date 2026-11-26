@@ -118,3 +118,10 @@ Los hallazgos de referencias cruzadas incluyen ahora `referenceField`: `fromEnti
 ### Verificación de integridad del historial de reparaciones
 
 `verifyNarrativeReferenceRepairAuditIntegrity(store, projectId)` revisa las entradas persistidas, valida su estructura, la correspondencia entre `operationId` y los campos de la operación, y la coherencia de los valores `before`/`after`. También contrasta cada reparación con el estado actual de la ficha. Un registro ausente o modificado después se informa como estado histórico distinto, no como corrupción automática: la integridad del evento y el estado vivo son dimensiones separadas. La escritura IndexedDB aplica las mismas invariantes antes de insertar una entrada.
+
+
+### Recuperación de reparaciones interrumpidas
+
+La reparación aprobada se registra primero en `narrative-reference-repair-pending`, con identidad determinista de operación y propuesta suficiente para revalidar la correspondencia de fusión. Después se ejecuta el CAS del registro, se inserta la auditoría append-only y finalmente se elimina la intención. La secuencia no es una transacción única, pero cada frontera deja un estado recuperable: si falla el CAS, la intención permite reintentar; si falla la auditoría, el replay reconoce que el campo ya contiene la candidata y completa la auditoría; si falla el borrado, la auditoría idempotente evita duplicados.
+
+`recoverNarrativeReferenceRepairs(store, projectId)` procesa las intenciones pendientes, vuelve a validar identidad y CAS, y conserva los conflictos como pendientes con su error para revisión. La migración IndexedDB crea el almacén `narrative-reference-repair-pending` (versión 27). La intención se conserva hasta que la auditoría durable queda confirmada.

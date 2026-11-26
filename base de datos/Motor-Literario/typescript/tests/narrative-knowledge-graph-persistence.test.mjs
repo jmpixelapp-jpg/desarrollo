@@ -57,8 +57,11 @@ function createMemoryStore() {
   methods.saveNarrativeReferenceRepairPending = async entry => {
     const key = entry.projectId + "\\u0000" + entry.operationId;
     const current = tables.pendingRepairs.get(key);
-    if (current) assert.deepEqual(current, entry, "la intención pendiente es inmutable");
-    else tables.pendingRepairs.set(key, copy(entry));
+    if (current) {
+      const { appliedAt: _currentAt, ...currentOperation } = current;
+      const { appliedAt: _entryAt, ...newOperation } = entry;
+      assert.deepEqual(currentOperation, newOperation, "la intención pendiente es inmutable");
+    } else tables.pendingRepairs.set(key, copy(entry));
   };
   methods.loadNarrativeReferenceRepairPending = async projectId =>
     [...tables.pendingRepairs.values()].filter(item => item.projectId === projectId).map(copy);

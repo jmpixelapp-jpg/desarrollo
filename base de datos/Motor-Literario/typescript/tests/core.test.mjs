@@ -7624,10 +7624,10 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
       relatedEntities: []
     }
   }];
-  await assert.rejects(
-    api.getPersonalIdeaLibrary(),
-    /Violación de aislamiento/
-  );
+  const compatibleLargeContext = await api.getPersonalIdeaLibrary();
+  assert.equal(compatibleLargeContext.length, 1);
+  assert.equal(compatibleLargeContext[0].context.relatedIdeas.length, 502);
+  assert.equal(compatibleLargeContext[0].context.relatedIdeas[0].relatedIdeaIds.length, 501);
 });
 
 test("la API rechaza entradas de biblioteca con enlaces sin instantánea contextual", async () => {

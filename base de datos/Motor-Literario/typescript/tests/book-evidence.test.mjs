@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   ingestBookReaderBlocks,
   resolveBookEvidence,
-  resolveNarrativeTextEvidence
+  resolveNarrativeTextEvidence,
+  resolveNarrativeEvidenceCollection
 } from "../dist/motor-literario.js";
 
 test("resuelve evidencia literaria a bloques y localizadores originales", async () => {
@@ -67,5 +68,29 @@ test("resuelve evidencias persistidas del conocimiento narrativo con verificaci�
   assert.throws(() => resolveNarrativeTextEvidence(book, {
     documentId: "otro-documento", revision: 3, start: 0, end: 2, excerpt: "La"
   }), /no pertenece/u);
+});
+
+
+
+test("resuelve colecciones completas y no devuelve resultados parciales ante evidencia inválida", async () => {
+  const book = await ingestBookReaderBlocks({ sourceId: "b", sourceFormat: "fixture", revision: 7 }, [
+    { blockId: "p", sequence: 1, kind: "paragraph", text: "Una escena termina." }
+  ]);
+  const chapter = book.chapters[0];
+  const valid = { documentId: chapter.documentId, revision: 7, start: 0, end: 3, excerpt: "Una" };
+  const results = resolveNarrativeEvidenceCollection(book, [valid, { ...valid, start: 4, end: 9, excerpt: "escena" }]);
+  assert.equal(results.length, 2);
+  assert.deepEqual(results.map(item => item.excerpt), ["Una", "escena"]);
+  assert.throws(() => resolveNarrativeEvidenceCollection(book, [valid, { ...valid, excerpt: "otra" }]), /no coincide/u);
+});
+
+test("no resuelve evidencia narrativa si el snapshot no tiene revisión declarada", async () => {
+  const book = await ingestBookReaderBlocks({ sourceId: "b", sourceFormat: "fixture" }, [
+    { blockId: "p", sequence: 1, kind: "paragraph", text: "Texto." }
+  ]);
+  const chapter = book.chapters[0];
+  assert.throws(() => resolveNarrativeTextEvidence(book, {
+    documentId: chapter.documentId, revision: 1, start: 0, end: 5, excerpt: "Texto"
+  }), /no declara revisión/u);
 });
 

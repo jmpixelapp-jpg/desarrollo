@@ -627,3 +627,23 @@ test("cruza relaciones entre eventos con evidencia explícita de objetivo y acci
     link.intentEvidence.excerpt.includes("Mara quiere proteger a Elian")
   ));
 });
+
+test("integra conocimiento atribuido y acciones posteriores del mismo personaje",()=>{
+  const text="Mara vio que el puente había caído. Mara protegió a Elian.";
+  const result=understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-knowledge-action",revision:1,text,entities
+  });
+  const maraState=result.characterKnowledgeStates.find(item=>item.characterEntityId==="mara");
+  assert.ok(maraState);
+  assert.ok(maraState.items.length>=1);
+  assert.ok(result.actions.some(item=>item.actorEntityId==="mara"));
+  assert.ok(result.knowledgeActionLinks.length>=1);
+  const link=result.knowledgeActionLinks.find(item=>
+    item.characterEntityId==="mara" && item.actionEvidence.excerpt.includes("protegió")
+  );
+  assert.ok(link);
+  assert.equal(link.relation,"knowledge-precedes-action");
+  assert.equal(link.chronology,"same-document-position");
+  assert.ok(maraState.items.some(item=>item.informationId===link.informationId));
+  assert.ok(result.actions.some(item=>item.id===link.actionId));
+});

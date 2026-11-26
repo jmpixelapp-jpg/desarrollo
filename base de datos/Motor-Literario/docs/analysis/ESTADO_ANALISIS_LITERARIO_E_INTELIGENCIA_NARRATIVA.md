@@ -501,3 +501,13 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Nueva prueba entre dos instancias que solicitan simultáneamente el mismo `operationId`, con payloads JSON equivalentes pero distinto orden de claves. Ambas recuperan la misma secuencia y solo queda una operación.
 - La búsqueda de llamadas en el repositorio no permitió identificar un productor de dominio que genere actualmente operaciones para la outbox; el coordinador consume la interfaz, pero no crea operaciones. Por ello no se ha conectado artificialmente un flujo de escritura que no existe. El nuevo método queda expuesto en los contratos `ProjectStore` y `SyncOutboxPort`, listo para el próximo productor real.
 - **Validación pendiente:** no se ha ejecutado `npm test` ni `npm run typecheck` en este entorno. No hay checks/workflows reportados para los commits recientes.
+
+
+### Continuación — productor explícito en HostEngineApi
+
+- Implementado `HostEngineApi.enqueueNarrativeSyncOperation(input)`: obtiene el proyecto del contexto activo, exige `operationId` y `deviceId` proporcionados por el anfitrión, serializa el payload JSON y usa el asignador atómico del almacén.
+- El método falla de forma explícita si el adaptador no soporta asignación atómica; no utiliza `max(sequence)+1` fuera de la transacción.
+- Pruebas nuevas: operación de proyecto activo asignada con secuencia 1; repetición del mismo ID recupera la misma secuencia y deja un solo registro; adaptador sin asignador rechaza la operación.
+- README y contrato de transporte documentan que el anfitrión invoca el método después de confirmar el cambio local. La outbox y el journal del documento aún no comparten una transacción; la recuperación debe reconstruir la operación con el mismo ID estable. No se afirma atomicidad entre ambos.
+- **Pendiente:** integrar un productor concreto con los eventos/cambios del dominio y definir payloads versionados por tipo; resolver la ventana de fallo entre commit del journal y enqueue; probar recuperación end-to-end.
+- **Validación:** pruebas escritas; aún no ejecutadas. CI no confirmado.

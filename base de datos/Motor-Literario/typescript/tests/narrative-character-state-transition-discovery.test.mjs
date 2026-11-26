@@ -80,3 +80,18 @@ test("rechaza candidatos duplicados y evidencia incompatible con el documento", 
     evidence: { ...candidate.evidence, documentId: "other" }
   }]));
 });
+
+test("no mezcla una afirmación narratorial con una creencia al reconstruir el estado",()=>{
+ const candidates=states("Ana está herida. Ana creyó que Ana no estaba herida.");
+ const result=transitions(candidates);
+ assert.equal(result.length,0);
+});
+test("reconstruye cambios dentro de la misma perspectiva y conserva su fuente",()=>{
+ const candidates=states("Ana dijo que Ana estaba herida. Ana dijo que Ana ya no estaba herida.");
+ const result=transitions(candidates);
+ assert.equal(result.length,1);
+ assert.equal(result[0].epistemicFrame,"reported-speech");
+ assert.equal(result[0].epistemicSourceEntityId,ana.id);
+ assert.equal(result[0].previousEpistemicEvidence.excerpt,"dijo que ");
+ assert.equal(result[0].currentEpistemicEvidence.excerpt,"dijo que ");
+});

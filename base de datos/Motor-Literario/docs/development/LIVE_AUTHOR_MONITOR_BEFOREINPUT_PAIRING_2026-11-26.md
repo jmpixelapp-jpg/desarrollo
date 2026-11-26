@@ -133,3 +133,12 @@ Al ejecutar la suite completa, se aislaron problemas en pruebas de descubrimient
 
 Estos cambios corrigen fixtures y formato de pruebas, no amplían el clasificador lingüístico. La validación global debe repetirse sobre el commit resultante; todavía no se declara aprobada.
 Se afinó una última fixture de conectores concesivos para usar el mismo par de formas verbales ya comprobado por las pruebas base (`entró`/`corrió`). Así, esos casos aíslan el reconocimiento del conector y no dependen de variaciones en el inventario morfológico de acciones.
+
+
+## Procedencia del evento DOM: rechazo de eventos sintéticos
+
+El adaptador de `textarea` exige ahora `Event.isTrusted === true` en `beforeinput`, `input`, `compositionstart` y `compositionend`. Los eventos creados por código mediante `dispatchEvent()` no son evidencia de que el navegador haya recibido una acción real del usuario; el adaptador detiene el stream con el código `untrusted-event` y requiere un snapshot autoritativo para reanudarlo.
+
+Esto evita que un script simule una edición enviando un `InputEvent` con `inputType: "insertText"`. Los editores que actualicen el texto mediante transacciones programáticas deben conectarse por el adaptador transaccional y aportar origen explícito, no falsificar eventos DOM confiables.
+
+La prueba unitaria verifica que se rechacen tanto un `beforeinput` sintético como un `input` sintético posterior a un `beforeinput` confiable. La prueba Chromium ahora escribe una tecla mediante la automatización real del teclado del navegador y, por separado, intenta un `dispatchEvent()` sintético que debe bloquearse. La prueba de Chromium aún debe terminar en CI antes de considerar esta capa validada.

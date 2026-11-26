@@ -895,3 +895,21 @@ Los tres fallos se concentran en `restoreCheckpoint()` y devuelven `ReferenceErr
 **Archivos:** `src/live-author-monitor-panel.ts`, `src/live-author-monitor-workspace.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, guía operativa y registro de progreso.
 
 **Validación:** pendiente de CI para el commit de esta entrega.
+
+## 50. Resultado de validación de métricas visibles (25 de noviembre de 2026)
+
+**Commit validado:** `0ae59c239ac4326334729b7307cd2fb91b64d26f`.
+
+**Resultado de [Live Author Monitor — run 45745968724](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45745968724):**
+- Bundle aislado del monitor: aprobado.
+- Suite focalizada de panel/workspace: 5 pruebas, 5 aprobadas, 0 fallidas; duración reportada 105,97 ms.
+- Instalación de Chromium: aprobada.
+- Auditoría de esquema y mapeo físico: aprobada.
+- Build global: bloqueado por `src/narrative-history.ts:7:40 — Unterminated string literal`.
+- Suite completa del monitor y benchmark: omitidos porque el build global no terminó.
+
+**Resultado de [Motor Literario TypeScript — run 45745968749](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45745968749):** el typecheck global falló por `src/narrative-history.ts(7,41): TS1002`; la suite general y el benchmark fueron omitidos.
+
+**Conclusión:** el rechazo de arreglos dispersos y de valores `undefined` explícitos queda verificado en ambas vistas mediante las cinco regresiones de la lane aislada. La compilación global, los tests que dependen de `dist/motor-literario.js`, la integración IndexedDB/leases y el benchmark prolongado siguen sin certificación por el bloqueo narrativo externo.
+
+**Coordinación:** después de esta entrega, `main` recibió los commits `2f1820c`, `de8675e`, `9f7f94f`, `0b6fe55` y `d57a445` de sincronización narrativa. Esta documentación se añade sobre el HEAD actual para conservar esos cambios; no se modifica ningún archivo de esa área.

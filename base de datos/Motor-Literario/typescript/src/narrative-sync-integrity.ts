@@ -89,7 +89,7 @@ export function canonicalizeNarrativeSyncPayload(
           throw new TypeError("El payload contiene propiedades Symbol.");
         }
         const ownKeys = Reflect.ownKeys(value);
-        if (ownKeys.length !== value.length + 1 || !ownKeys.includes("length") ||
+        if (!ownKeys.includes("length") ||
             ownKeys.some(key => key !== "length" &&
               (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/u.test(key) ||
                 Number(key) >= value.length))) {

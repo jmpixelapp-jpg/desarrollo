@@ -77,6 +77,8 @@ interface SeenLiveAuthorMonitorTransaction {
   readonly replacementLength: number;
   readonly replacementHashA: number;
   readonly replacementHashB: number;
+  /** Categoría efectiva que consumen las métricas del monitor. */
+  readonly activityKind?: EditorChange["activityKind"];
 }
 
 export interface LiveAuthorMonitorEditorTransactionSourceOptions {
@@ -595,7 +597,10 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       end: change.end,
       replacementLength: replacement.length,
       replacementHashA: hashA,
-      replacementHashB: hashB
+      replacementHashB: hashB,
+      ...(transaction.kind === "undo" || transaction.kind === "redo"
+        ? { activityKind: transaction.kind }
+        : change.activityKind === undefined ? {} : { activityKind: change.activityKind })
     });
   }
 
@@ -610,7 +615,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       left.end === right.end &&
       left.replacementLength === right.replacementLength &&
       left.replacementHashA === right.replacementHashA &&
-      left.replacementHashB === right.replacementHashB;
+      left.replacementHashB === right.replacementHashB &&
+      left.activityKind === right.activityKind;
   }
 
   private readEditorState(): LiveAuthorMonitorEditorDocumentState | undefined {

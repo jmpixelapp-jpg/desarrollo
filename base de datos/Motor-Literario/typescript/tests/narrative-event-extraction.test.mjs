@@ -35,3 +35,42 @@ test("conserva offsets absolutos y no crea eventos sin acciones explícitas", ()
     ...context, text: "Mara estaba preocupada."
   }), []);
 });
+
+
+test("reconoce fechas explícitas y calcula un ordinal UTC reproducible", () => {
+  const events = extractNarrativeEventCandidates({
+    ...context, text: "El 2024-02-29 Mara encontró la Espada Solar."
+  });
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0].timeReference, {
+    basis: "calendar", precision: "date", raw: "2024-02-29",
+    orderValue: Math.floor(Date.UTC(2024, 1, 29) / 86400000)
+  });
+});
+
+test("reconoce día interno y año aislado sin inventar fecha completa", () => {
+  const storyDay = extractNarrativeEventCandidates({
+    ...context, text: "En el día 12 Mara encontró la Espada Solar."
+  });
+  assert.deepEqual(storyDay[0].timeReference, {
+    basis: "story-day", precision: "day-index", raw: "día 12", orderValue: 12
+  });
+  const year = extractNarrativeEventCandidates({
+    ...context, text: "En 1842 Mara encontró la Espada Solar."
+  });
+  assert.deepEqual(year[0].timeReference, {
+    basis: "calendar", precision: "year", raw: "1842",
+    orderValue: Math.floor(Date.UTC(1842, 0, 1) / 86400000)
+  });
+});
+
+test("no asigna fechas inválidas ni elige entre referencias temporales múltiples", () => {
+  const invalid = extractNarrativeEventCandidates({
+    ...context, text: "El 2023-02-29 Mara encontró la Espada Solar."
+  });
+  assert.equal(invalid[0].timeReference, undefined);
+  const ambiguous = extractNarrativeEventCandidates({
+    ...context, text: "En 1842, el día 12, Mara encontró la Espada Solar."
+  });
+  assert.equal(ambiguous[0].timeReference, undefined);
+});

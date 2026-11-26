@@ -388,3 +388,8 @@ El coordinador aplica backoff exponencial con jitter (1 segundo inicial y 5 minu
 
 
 La suite completa construye también el bundle aislado del monitor antes de ejecutar los tests: `npm run build:monitor-test` genera `dist-monitor/`, requerido por las regresiones de aislamiento de diagnósticos.
+### Captura transaccional de ediciones del manuscrito
+
+La opción `syncDeviceId` de `HostEngineApi` activa la captura automática de cambios confirmados por el motor. Debe ser un identificador estable de la instalación/dispositivo, distinto del ID del proyecto y del escritor. Cuando está configurada y el adaptador implementa el segundo argumento de `appendChange`, el motor registra el delta del journal y su operación `narrative-document-change.v1` en una sola transacción IndexedDB (`documents`, `changes` y `sync-outbox`). Si falla la inserción de la outbox, también se revierte el delta: el motor no anuncia el cambio como aplicado.
+
+El payload versionado contiene el delta de texto (documento, secuencia, revisiones, offsets UTF-16 y reemplazo). Por tanto, habilitar esta opción autoriza expresamente que el contenido editado se incluya en el transporte configurado por el anfitrión; el anfitrión debe aplicar autenticación, cifrado en tránsito, autorización, política de retención y controles de privacidad. Sin `syncDeviceId`, el motor conserva el comportamiento local anterior. El ID de operación se deriva de proyecto, documento y secuencia para que sea estable en la recuperación; la secuencia de salida se asigna dentro de la misma transacción. Esto proporciona atomicidad local de journal+outbox, no entrega exactamente-una-vez ni aceptación remota garantizada.

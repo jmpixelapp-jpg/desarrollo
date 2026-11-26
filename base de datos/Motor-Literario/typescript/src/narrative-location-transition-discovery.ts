@@ -103,8 +103,9 @@ function validate(input: NarrativeLocationTransitionDiscoveryInput): void {
       }
     }
     if (observation.grammaticalSubjectCandidate &&
-        !validEvidence(observation.grammaticalSubjectCandidate.evidence, input)) {
-      throw new Error("La evidencia del sujeto gramatical no es válida.");
+        (!validEvidence(observation.grammaticalSubjectCandidate.evidence, input) ||
+         !contained(observation.grammaticalSubjectCandidate.evidence, observation.evidence))) {
+      throw new Error("La evidencia del sujeto gramatical no está contenida en el contexto.");
     }
   }
 }

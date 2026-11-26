@@ -70,7 +70,14 @@ const IRREGULAR_FUTURE_STEMS: Readonly<Record<string, string>> = {
 
 function futureActionExpression(action: string): RegExp {
   const stem = IRREGULAR_FUTURE_STEMS[action] ?? action;
-  const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\const ACTION_SIGNALS: readonly ActionSignal[] = [");
+  return new RegExp(
+    "(?<![\\p{L}\\p{M}\\p{N}_])" + stem + FUTURE_ENDINGS +
+    "(?![\\p{L}\\p{M}\\p{N}_])",
+    "giu"
+  );
+}
+
+const ACTION_SIGNALS: readonly ActionSignal[] = [");
   return new RegExp(
     "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped + FUTURE_ENDINGS +
     "(?![\\p{L}\\p{M}\\p{N}_])",

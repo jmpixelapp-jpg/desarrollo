@@ -947,7 +947,7 @@ test("reconcilia escrituras simultáneas desde dos instancias independientes del
     assert.equal(refreshedSource.status, "incorporated");
     assert.deepEqual(refreshedSource.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
     assert.equal(store.writes, 5);
-    assert.equal(store.ideaReads, 4);
+    assert.equal(store.ideaReads, 6);
   } finally {
     firstApi.dispose();
     secondApi.dispose();

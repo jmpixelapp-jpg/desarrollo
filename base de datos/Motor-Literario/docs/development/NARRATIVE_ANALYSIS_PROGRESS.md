@@ -228,3 +228,18 @@ Se añadió `typescript/src/narrative-sync-consumer.ts` y su exportación públi
 ### Ajuste de tipos para handlers heterogéneos
 
 La integración reveló que un handler tipado como `NarrativeSyncOperationHandler<NarrativeIdeaUpsertPayload>` no debe forzarse al tipo genérico por defecto `NarrativeSyncOperationHandler<unknown>`: bajo `strictFunctionTypes`, el parámetro de `apply` es más específico. Se añadió el alias explícito `AnyNarrativeSyncOperationHandler` para el registro heterogéneo y se utilizó tanto en el dispatcher como en el consumidor. El tipo concreto del handler de ideas se conserva en su fábrica; el borrado de tipo queda limitado al registro interno.
+
+
+### Frente D — validación de manifiestos de proyección
+
+- Añadida `validateNarrativeDocumentProjectionManifest` y conectada a la confirmación CAS.
+- Verifica identidad, revisión, generación, fecha, inventarios acotados, IDs no vacíos y ausencia de duplicados.
+- Un manifiesto `deleted` debe tener inventarios vacíos; se rechazan tombstones que pretendan mantener referencias activas.
+- Pruebas añadidas a `tests/narrative-knowledge-graph-persistence.test.mjs`.
+
+### Corrección de compatibilidad TypeScript
+
+- El handler tipado de ideas se mantiene compatible con el registro heterogéneo del dispatcher mediante `AnyNarrativeSyncOperationHandler`.
+- Se ajustó la validación de estado para preservar el estrechamiento literal de TypeScript sin ensanchar la unión a `string`.
+
+**CI del HEAD observado:** GitHub devuelve listas vacías tanto para workflow runs asociados al commit como para estados de commit. El typecheck, build y suite de estas modificaciones continúan pendientes de ejecución automatizada; no se infiere aprobación por el hecho de que los commits estén publicados.

@@ -71,6 +71,11 @@ export interface NarrativeUnderstandingResult {
       readonly sceneId?: string;
       readonly sceneAssignment: "explicit" | "unassigned" | "crosses-boundary";
     }[];
+    readonly pronounActionCandidates: readonly {
+      readonly candidateId: string;
+      readonly sceneId?: string;
+      readonly sceneAssignment: "explicit" | "unassigned" | "crosses-boundary";
+    }[];
   };
 }
 
@@ -199,7 +204,8 @@ export function understandNarrativeFragment(
     sceneAssignments: {
       ideaCandidates: assign(ideas),
       actionCandidates: assign(actions),
-      eventCandidates: assign(events)
+      eventCandidates: assign(events),
+      pronounActionCandidates: assign(pronounActions)
     }
   };
 }

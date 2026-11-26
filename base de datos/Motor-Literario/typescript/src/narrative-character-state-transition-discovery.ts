@@ -25,12 +25,16 @@ export interface NarrativeCharacterStateTransitionCandidate {
   readonly revision: number;
   readonly entityId: string;
   readonly state: NarrativeCharacterStateCandidate["state"];
+  readonly epistemicFrame: NarrativeCharacterStateCandidate["epistemicFrame"];
+  readonly epistemicSourceEntityId?: string;
   readonly transition: NarrativeCharacterStateTransitionKind;
   readonly basis: NarrativeCharacterStateTransitionBasis;
   readonly previousCandidateId?: string;
   readonly currentCandidateId: string;
   readonly previousEvidence?: TextEvidence;
   readonly currentEvidence: TextEvidence;
+  readonly previousEpistemicEvidence?: TextEvidence;
+  readonly currentEpistemicEvidence?: TextEvidence;
   readonly evidence: TextEvidence;
   readonly reviewStatus: "candidate";
 }
@@ -72,6 +76,18 @@ function validate(input: NarrativeCharacterStateTransitionDiscoveryInput): void 
         candidate.evidence.documentId !== candidate.documentId ||
         candidate.evidence.revision !== candidate.revision ||
         !validEvidence(candidate.stateEvidence) ||
+        (candidate.epistemicFrameEvidence !== undefined &&
+          (!validEvidence(candidate.epistemicFrameEvidence) ||
+           candidate.epistemicFrameEvidence.documentId !== candidate.documentId ||
+           candidate.epistemicFrameEvidence.revision !== candidate.revision ||
+           candidate.epistemicFrameEvidence.start < candidate.evidence.start ||
+           candidate.epistemicFrameEvidence.end > candidate.evidence.end)) ||
+        (candidate.epistemicSourceCandidate !== undefined &&
+          (typeof candidate.epistemicSourceCandidate.entityId !== "string" ||
+           !candidate.epistemicSourceCandidate.entityId.trim() ||
+           !validEvidence(candidate.epistemicSourceCandidate.evidence) ||
+           candidate.epistemicSourceCandidate.evidence.documentId !== candidate.documentId ||
+           candidate.epistemicSourceCandidate.evidence.revision !== candidate.revision)) ||
         candidate.stateEvidence.documentId !== candidate.documentId ||
         candidate.stateEvidence.revision !== candidate.revision) {
       throw new Error("La trayectoria contiene candidatos duplicados, ajenos o sin evidencia válida.");
@@ -109,7 +125,8 @@ export function discoverNarrativeCharacterStateTransitions(
   const results: NarrativeCharacterStateTransitionCandidate[] = [];
 
   for (const current of ordered) {
-    const key = [current.documentId, current.revision, current.entityId, current.state].join(":");
+    const key = [current.documentId, current.revision, current.entityId, current.state,
+      current.epistemicFrame, current.epistemicSourceCandidate?.entityId ?? ""].join(":");
     const previous = previousByState.get(key);
     let transition: NarrativeCharacterStateTransitionKind | undefined;
     let basis: NarrativeCharacterStateTransitionBasis = "paired-assertions";
@@ -142,6 +159,8 @@ export function discoverNarrativeCharacterStateTransitions(
         revision: current.revision,
         entityId: current.entityId,
         state: current.state,
+        epistemicFrame: current.epistemicFrame,
+        ...(current.epistemicSourceCandidate ? { epistemicSourceEntityId: current.epistemicSourceCandidate.entityId } : {}),
         transition,
         basis,
         ...(previous ? {
@@ -150,6 +169,8 @@ export function discoverNarrativeCharacterStateTransitions(
         } : {}),
         currentCandidateId: current.id,
         currentEvidence: current.evidence,
+        ...(previous?.epistemicFrameEvidence ? { previousEpistemicEvidence: previous.epistemicFrameEvidence } : {}),
+        ...(current.epistemicFrameEvidence ? { currentEpistemicEvidence: current.epistemicFrameEvidence } : {}),
         evidence,
         reviewStatus: "candidate"
       });

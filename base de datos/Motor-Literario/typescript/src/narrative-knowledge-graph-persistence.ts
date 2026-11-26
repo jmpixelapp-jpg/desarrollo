@@ -78,6 +78,37 @@ export function createNarrativeDocumentProjectionManifest(
   };
 }
 
+/**
+ * Valida el contrato durable de un manifiesto antes de usarlo como estado CAS.
+ * Los inventarios deben ser únicos; un tombstone nunca puede conservar IDs activos.
+ */
+export function validateNarrativeDocumentProjectionManifest(
+  value: NarrativeDocumentProjectionManifest
+): void {
+  if (!value || typeof value !== "object" ||
+      typeof value.projectId !== "string" || !value.projectId.trim() || value.projectId.length > 256 ||
+      typeof value.documentId !== "string" || !value.documentId.trim() || value.documentId.length > 256 ||
+      !Number.isSafeInteger(value.revision) || value.revision < 0 ||
+      !Number.isSafeInteger(value.generation) || value.generation < 1 ||
+      (value.status !== "active" && value.status !== "deleted") ||
+      !Number.isFinite(value.updatedAt) || value.updatedAt < 0) {
+    throw new Error("Manifiesto de proyección narrativa inválido: identidad, versión o estado incorrectos.");
+  }
+  const inventories = [
+    value.entityIds, value.relationIds, value.eventIds, value.ideaIds, value.assertionIds
+  ];
+  for (const inventory of inventories) {
+    if (!Array.isArray(inventory) || inventory.length > 100_000 ||
+        inventory.some(id => typeof id !== "string" || !id.trim() || id.length > 512) ||
+        new Set(inventory).size !== inventory.length) {
+      throw new Error("El manifiesto contiene inventarios inválidos o IDs duplicados.");
+    }
+  }
+  if (value.status === "deleted" && inventories.some(inventory => inventory.length > 0)) {
+    throw new Error("Un tombstone documental debe tener inventarios vacíos.");
+  }
+}
+
 /** Crea el tombstone explícito de un documento retirado del proyecto. */
 export function createNarrativeDocumentProjectionTombstone(
   projectId: string,
@@ -112,12 +143,7 @@ export async function commitNarrativeDocumentProjectionManifest(
       typeof store.saveNarrativeDocumentProjectionManifestIfUnchanged !== "function") {
     throw new Error("El almacenamiento no implementa manifiestos documentales CAS.");
   }
-  if (!candidate || typeof candidate.projectId !== "string" || !candidate.projectId.trim() ||
-      typeof candidate.documentId !== "string" || !candidate.documentId.trim() ||
-      !Number.isSafeInteger(candidate.revision) || candidate.revision < 0 ||
-      (candidate.status !== "active" && candidate.status !== "deleted")) {
-    throw new Error("Candidato de manifiesto documental inválido.");
-  }
+  validateNarrativeDocumentProjectionManifest(candidate);
   const current = await store.loadNarrativeDocumentProjectionManifest(
     candidate.projectId, candidate.documentId
   );

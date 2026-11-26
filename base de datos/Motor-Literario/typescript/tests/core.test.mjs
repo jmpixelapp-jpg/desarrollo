@@ -2269,8 +2269,6 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "dictionary-entry-entities", keyPath: ["projectId", "entryId", "recordId"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
-      ["narrative-reference-repair-audits", "by-project"],
-      ["narrative-reference-repair-pending", "by-project"],
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
       ["language-profiles", "by-project-language"],
@@ -2350,7 +2348,9 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["dictionary-entries", "by-dictionary-normalized"],
       ["dictionary-entry-entities", "by-project"],
       ["dictionary-entry-entities", "by-entry"],
-      ["dictionary-entry-entities", "by-record"]
+      ["dictionary-entry-entities", "by-record"],
+      ["narrative-reference-repair-audits", "by-project"],
+      ["narrative-reference-repair-pending", "by-project"]
     ]);
     assert.equal(createdIndexes.find(index => index.name === "by-document-sequence")?.unique, true);
   } finally {

@@ -370,3 +370,11 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - El contrato ahora explicita entrega al menos una vez: una interrupción entre aceptación remota y borrado local puede provocar reenvío, por lo que el servidor debe deduplicar por `operationId`.
 - No se presenta la sincronización como entrega exactamente una vez.
 - **Validación:** prueba y documentación publicadas; ejecución de CI pendiente.
+
+### Tanda — auditoría de concurrencia entre contextos
+
+- Verificada la coalescencia actual: `inFlight` protege solo una instancia del coordinador, no varias pestañas o workers.
+- Se documenta explícitamente el riesgo de doble envío y la obligación de deduplicación atómica del servidor por `(projectId, operationId)`.
+- Se evita introducir un lease superficial sin migración durable, vencimiento y pruebas multi-contexto. La base IndexedDB sigue en versión 25 en esta rama.
+- **Pendiente técnico identificado:** reclamación durable/lease compartido para reducir envíos redundantes entre contextos. No es una garantía implementada.
+- **Validación:** auditoría de código y documentación publicadas; CI sigue pendiente.

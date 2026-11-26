@@ -9,6 +9,7 @@ import type { NarrativeEntity } from "./narrative-knowledge";
 import { discoverNarrativeIdeaCandidates } from "./narrative-idea-discovery";
 import { extractNarrativeActionCandidates } from "./narrative-action-extraction";
 import { extractNarrativeCharacterIntentCandidates, type NarrativeCharacterIntentCandidate } from "./narrative-character-intent-extraction";
+import { evolveNarrativeCharacterIntents, type NarrativeCharacterIntentEvolution } from "./narrative-character-intent-evolution";
 import { extractNarrativeAttributedClaims } from "./narrative-claim-extraction";
 import { extractNarrativeDialogueAttributions } from "./narrative-dialogue-attribution";
 import { extractNarrativeInformationProvenance } from "./narrative-information-provenance";
@@ -90,6 +91,8 @@ export interface NarrativeUnderstandingInput {
   readonly priorKnowledgeEvolution?: readonly NarrativeKnowledgeEvolution[];
   /** Eventos explícitos de memoria anteriores, conservados entre fragmentos. */
   readonly priorMemoryEvents?: readonly NarrativeMemoryEvent[];
+  /** Objetivos y motivaciones previos, conservados con su procedencia. */
+  readonly priorCharacterIntents?: readonly NarrativeCharacterIntentCandidate[];
   /** Orden cronológico de documentos conocido por el proyecto; si falta, no se inventa. */
   readonly orderedDocumentIds?: readonly string[];
 }
@@ -102,6 +105,7 @@ export interface NarrativeUnderstandingResult {
   readonly ideas: ReturnType<typeof discoverNarrativeIdeaCandidates>;
   readonly actions: ReturnType<typeof extractNarrativeActionCandidates>;
   readonly characterIntents: readonly NarrativeCharacterIntentCandidate[];
+  readonly characterIntentEvolution: readonly NarrativeCharacterIntentEvolution[];
   readonly attributedClaims: ReturnType<typeof extractNarrativeAttributedClaims>;
   readonly dialogueAttributions: ReturnType<typeof extractNarrativeDialogueAttributions>;
   readonly informationProvenance: ReturnType<typeof extractNarrativeInformationProvenance>;
@@ -179,6 +183,8 @@ function validate(input: NarrativeUnderstandingInput): void {
         (!Array.isArray(input.priorKnowledgeEvolution) || input.priorKnowledgeEvolution.length > 5000)) ||
       (input.priorMemoryEvents !== undefined &&
         (!Array.isArray(input.priorMemoryEvents) || input.priorMemoryEvents.length > 5000)) ||
+      (input.priorCharacterIntents !== undefined &&
+        (!Array.isArray(input.priorCharacterIntents) || input.priorCharacterIntents.length > 5000)) ||
       (input.orderedDocumentIds !== undefined && !Array.isArray(input.orderedDocumentIds))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
   }
@@ -250,6 +256,13 @@ export function understandNarrativeFragment(
   });
   const actions = extractNarrativeActionCandidates(extractionContext);
   const characterIntents = extractNarrativeCharacterIntentCandidates(extractionContext);
+  const characterIntentEvolution = evolveNarrativeCharacterIntents({
+    projectId: input.projectId,
+    entities: input.entities,
+    priorIntents: input.priorCharacterIntents,
+    currentIntents: characterIntents,
+    orderedDocumentIds: input.orderedDocumentIds
+  });
   const attributedClaims = extractNarrativeAttributedClaims(extractionContext);
   const dialogueAttributions = extractNarrativeDialogueAttributions(extractionContext);
   const informationProvenance = extractNarrativeInformationProvenance(extractionContext);
@@ -352,7 +365,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, characterIntents, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, characterIntents, characterIntentEvolution, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

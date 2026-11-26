@@ -95,3 +95,11 @@ test("no usa un verbo de habla que solo aparece dentro de las palabras citadas",
   assert.equal(segment.speakerStatus, "unattributed");
   assert.deepEqual(segment.speakerCandidates, []);
 });
+
+test("reconoce una forma frecuente adicional de verbo de habla", () => {
+  const text = "Ana habló: «No volveré»";
+  const [segment] = discover(text, [ana]);
+  assert.equal(segment.speakerStatus, "explicit-single");
+  assert.equal(segment.speakerCandidates[0].entityId, ana.id);
+  assert.equal(segment.speakerCandidates[0].speechVerbEvidence.excerpt, "habló");
+});

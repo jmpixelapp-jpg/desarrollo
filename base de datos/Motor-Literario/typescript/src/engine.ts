@@ -1,6 +1,6 @@
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, Diagnostic, DocumentSnapshot, DocumentSyncState, EditorChange, LiveEngineMetrics,
-  EngineOptions, ProjectIdentity, StoredChange
+  EngineOptions, ProjectIdentity, StoredChange, SyncOperationDraft
 } from "./contracts";
 import { proofreadFragment } from "./proofreading";
 import { PieceTable } from "./text-buffer";
@@ -509,9 +509,33 @@ export class LiteraryEngine {
           committedRevision: nextRevision,
           committedAt: Date.now()
         };
-        // El delta es el registro durable primario: una edición normal no
-        // obliga a serializar y reescribir el manuscrito completo.
-        await this.options.store.appendChange(journalEntry);
+        // Con deviceId, el delta y la operación saliente deben quedar
+        // confirmados en la misma transacción. Nunca degradar a appendChange
+        // porque dejaría una edición local que los demás dispositivos no verán.
+        if (project.deviceId) {
+          const appendAtomic = this.options.store.appendChangeAndEnqueueSyncOperation;
+          if (!this.options.store.supportsAtomicNarrativeSyncOutbox ||
+              typeof appendAtomic !== "function") {
+            throw new Error(
+              "Este adaptador no confirma el journal y la outbox en una sola transacción; no se guardará una edición no sincronizable."
+            );
+          }
+          const operationId = globalThis.crypto?.randomUUID?.();
+          if (!operationId) {
+            throw new Error("No hay un generador criptográfico UUID disponible para identificar la edición.");
+          }
+          const operation: SyncOperationDraft = {
+            operationId,
+            projectId: project.projectId,
+            deviceId: project.deviceId,
+            kind: "document.change",
+            payload: JSON.stringify({ change: journalEntry }),
+            createdAt: journalEntry.committedAt
+          };
+          await appendAtomic.call(this.options.store, journalEntry, operation);
+        } else {
+          await this.options.store.appendChange(journalEntry);
+        }
       } else {
         // Compatibilidad con adaptadores antiguos que solo guardan snapshots.
         await this.options.store.saveDocument({

@@ -147,7 +147,8 @@ function emDashSpans(text: string, maxDistance: number): readonly Span[] {
     const body = match[2]!;
     const closingTag = match[3];
     const bodyStart = lineStart + 1;
-    const tagOffset = closingTag ? bodyStart + body.lastIndexOf("—") + 1 : undefined;
+    const closingDashOffset = closingTag ? match[0].lastIndexOf("—") : -1;
+    const tagOffset = closingTag ? match.index! + closingDashOffset + 1 : undefined;
     const utterance = closingTag ? body.slice(0, body.lastIndexOf("—")).trimEnd() : body.trimEnd();
     const leadingTrim = body.length - body.trimStart().length;
     const contentStart = bodyStart + leadingTrim;
@@ -179,7 +180,13 @@ export function discoverNarrativeDialogueSpeakers(
   return spans.map((span, index) => {
     const attributionStart = span.attributionStart ?? Math.max(0, span.start - distance);
     const attributionEnd = span.attributionEnd ?? Math.min(input.text.length, span.end + distance);
-    const attributionText = input.text.slice(attributionStart, attributionEnd);
+    const attributionChars = input.text.slice(attributionStart, attributionEnd).split("");
+    const maskedStart = Math.max(attributionStart, span.contentStart);
+    const maskedEnd = Math.min(attributionEnd, span.contentEnd);
+    for (let offset = maskedStart; offset < maskedEnd; offset++) {
+      attributionChars[offset - attributionStart] = " ";
+    }
+    const attributionText = attributionChars.join("");
     const verbMatches = [...attributionText.matchAll(SPEECH_VERB)];
     const candidates = verbMatches.length === 0 ? [] : input.entities.flatMap(entity => {
       const mentions = nameMatches(attributionText, entity);

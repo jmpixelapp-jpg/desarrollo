@@ -812,3 +812,9 @@ La prueba persiste el checkpoint actualizado de A, recarga realmente la página 
 
 
 **Validación CI:** [run 45766901884](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766901884) aprobó el escenario de dos documentos en dos páginas Chromium; suite 182/182 y benchmark 100.000 commits.
+
+## 72. Coalescencia de eventos de reanudación
+
+`visibilitychange` y `pageshow` pueden ocurrir en una ventana breve al volver de background o BFCache. El host permite una renovación en vuelo por documento y coalesce eventos posteriores en un solo follow-up. Con varios documentos, cada clave conserva su propia renovación/follow-up; no hay un único mutex global que retrase capítulos no relacionados.
+
+La prueba demora las renovaciones iniciales de dos documentos, dispara ambos tipos de evento repetidamente, comprueba un solo follow-up por capítulo y después libera las respuestas. Cada documento debe registrar exactamente dos llamadas de renovación y conservar owner, fencing token y un único timer de heartbeat.

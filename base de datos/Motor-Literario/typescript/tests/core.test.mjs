@@ -3410,6 +3410,7 @@ test("transfiere ideas no incorporadas a una biblioteca aislada por escritor y c
   const api = new HostEngineApi({ store });
   api.initializeProject({ projectId: "finished-book", projectName: "El faro de invierno", writerId: "writer-17" });
   assert.equal(api.getCapabilities().personalIdeaLibrary, true);
+  assert.equal(api.getCapabilities().personalIdeaLibraryKeysetPagination, false);
   assert.equal(api.getCapabilities().explicitIdeaLinks, true);
   assert.equal(api.getCapabilities().explicitIdeaEntityLinks, true);
   await api.extractNarrativeKnowledge("chapter-1", 1,

@@ -820,3 +820,32 @@ test("inspecciona reparaciones pendientes y distingue listas, aplicadas y confli
   assert.equal(tables.pendingRepairs.size, 5, "la inspección no debe borrar ni mutar intenciones");
   assert.equal(tables.audits.size, 0, "la inspección no debe escribir auditoría");
 });
+
+
+test("usa Web Locks para serializar la recuperación por proyecto entre pestañas", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const requested = [];
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      locks: {
+        request: async (name, options, callback) => {
+          requested.push({ name, options });
+          return callback({ name, mode: options.mode });
+        }
+      }
+    }
+  });
+  try {
+    const { store } = createMemoryStore();
+    const result = await recoverNarrativeReferenceRepairs(store, "cross-tab-project");
+    assert.equal(result.checked, 0);
+    assert.deepEqual(requested, [{
+      name: "motor-literario:narrative-reference-repair:cross-tab-project",
+      options: { mode: "exclusive" }
+    }]);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "navigator", previous);
+    else delete globalThis.navigator;
+  }
+});

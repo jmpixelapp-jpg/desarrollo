@@ -242,6 +242,23 @@ test("el análisis de convergencia aplica un presupuesto agregado y marca los re
 });
 
 
+test("la continuidad entre documentos cuenta evidencias sin materializar arreglos intermedios", () => {
+  const start = literaryAnalysisSource.indexOf("const projectEventById = new Map(projectEvents.map(");
+  const end = literaryAnalysisSource.indexOf("\\n  const relationsByCharacter", start + 10);
+  assert.notEqual(start, -1, "debe indexarse el catálogo de eventos por ID");
+  assert.ok(end > start, "el bloque de continuidad debe delimitarse");
+  const builder = literaryAnalysisSource.slice(start, end);
+
+  assert.match(builder, /materializedEventIds\\s*\\n\\s*\\.map\\(eventId => projectEventById\\.get\\(eventId\\)\\)/);
+  assert.match(builder, /let crossDocumentEventEvidenceCount = 0;/);
+  assert.match(builder, /for \\(const evidence of event\\.evidence\\)/);
+  assert.match(builder, /crossDocumentEventEvidenceCount\\+\\+;/);
+  assert.match(builder, /crossDocumentEventIds\\.push\\(event\\.eventId\\)/);
+  assert.doesNotMatch(builder, /flatMap\\(event =>\\s*event\\.evidence/);
+  assert.doesNotMatch(builder, /projectEvents\\.filter\\(event =>\\s*materializedEventIds\\.includes/);
+});
+
+
 test("la auditoría de atomicidad detecta perder el almacén de entidades del alcance transaccional", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
   const weakenedWriter = writer.replace(

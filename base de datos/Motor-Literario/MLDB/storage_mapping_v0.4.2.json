@@ -880,6 +880,14 @@
             true
           ]
         ]
+      },
+      {
+        "name": "sync-device-sequences",
+        "keyPath": [
+          "projectId",
+          "deviceId"
+        ],
+        "indexes": []
       }
     ]
   },

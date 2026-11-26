@@ -529,6 +529,14 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 **Incidencias detectadas por CI y correcciones aplicadas:** la primera ejecución reveló que la evidencia histórica de acontecimientos declarados conserva el rango del rótulo pero el excerpt de la línea completa. La integración de auditoría ahora construye el fragmento exacto desde los offsets originales antes de validar. También se sustituyó la segmentación regex por un recorrido determinista UTF-16 para manejar puntuación, CRLF y líneas sin puntuación, y se optimizó la cobertura con un barrido de evidencias ordenadas. Se añadieron pruebas para colas limitadas y omisiones contabilizadas. Los runs iniciales con fallos no se consideran validación; la revisión posterior sigue pendiente de CI completa.
 
+### Estados explícitos de personajes y movimientos espaciales — 26-11-2026
+
+- Añadido `narrative-character-state-discovery.ts`: propone estados copulativos explícitos de personajes, con polaridad, tiempo verbal, aspecto, modo de afirmación y evidencias separadas para identidad, predicado y afirmación.
+- La CI detectó una regresión real: el patrón de espacios se había serializado como una barra invertida literal, por lo que no reconocía la separación entre nombre y cópula. Se corrigió en `7a704321`; run 2946 completó Type-check, build/pruebas y benchmark. La normalización Unicode NFC/NFD y el control de nombres ambiguos se añadieron después; run 2948 completó correctamente esos cambios.
+- Añadido `narrative-location-transition-discovery.ts` y su exportación pública. La ingesta ahora devuelve `locationTransitionCandidates` para llegada, salida, entrada, tránsito y regreso cuando hay una entidad de tipo `location` y una preposición explícita verificable.
+- Se añadieron pruebas unitarias de transiciones, negación, futuro, preposiciones incompatibles y evidencia fuera de contexto, además de una prueba de integración de ingesta. Estas últimas modificaciones están pendientes de CI completa.
+- Ninguna trayectoria de ubicación consolida la ubicación actual del personaje ni calcula rutas, distancias o geografía.
+
 ### Auditoría exhaustiva de cobertura de extracción — 26-11-2026
 
 - Nuevo módulo `typescript/src/narrative-extraction-audit.ts` (`53cb115c`): localiza frases del texto fuente que no se solapan con evidencia de acciones o acontecimientos extraídos.

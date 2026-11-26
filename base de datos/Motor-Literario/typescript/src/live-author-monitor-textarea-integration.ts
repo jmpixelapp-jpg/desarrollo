@@ -205,7 +205,10 @@ export function mountLiveAuthorMonitorTextArea(
         );
       }
       disposed = true;
-      try { binding(); } finally { source.dispose(); }
+      // Disponer primero marca la fuente como terminal. La desuscripción que
+      // hace el binding después no debe diagnosticarse como una pausa
+      // recuperable ni provocar un resync-required espurio al desmontar.
+      try { source.dispose(); } finally { binding(); }
     }
   };
 }

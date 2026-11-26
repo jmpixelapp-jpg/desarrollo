@@ -449,20 +449,20 @@ La validación de CI cubre automatización Chromium y el banco de metadatos. No 
 
 ## Preflight íntegro del snapshot y cierre seguro de la observación — 26 de noviembre de 2026
 
-Se añadió una barrera anterior a cada \`beforeinput\` confiable: antes de capturar selección, longitud, \`inputType\` o payload, el valor completo actual del textarea debe ser idéntico a la copia sombra efímera del último cambio aceptado, y su longitud debe seguir coincidiendo con \`documentLength\`.
+Se añadió una barrera anterior a cada `beforeinput` confiable: antes de capturar selección, longitud, `inputType` o payload, el valor completo actual del textarea debe ser idéntico a la copia sombra efímera del último cambio aceptado, y su longitud debe seguir coincidiendo con `documentLength`.
 
-Esto cierra un hueco de atribución que las validaciones posteriores de prefijo/sufijo no podían cerrar por sí solas. Si una mutación programática de igual longitud ocurre dentro de la selección que el autor va a reemplazar, el contenido modificado podría desaparecer bajo la edición legítima y no dejar rastro en el prefijo ni en el sufijo. La comparación íntegra se hace antes de iniciar la edición, por lo que el adaptador suspende el stream con \`resync-required\` sin emitir un delta especulativo.
+Esto cierra un hueco de atribución que las validaciones posteriores de prefijo/sufijo no podían cerrar por sí solas. Si una mutación programática de igual longitud ocurre dentro de la selección que el autor va a reemplazar, el contenido modificado podría desaparecer bajo la edición legítima y no dejar rastro en el prefijo ni en el sufijo. La comparación íntegra se hace antes de iniciar la edición, por lo que el adaptador suspende el stream con `resync-required` sin emitir un delta especulativo.
 
-También se endureció el ciclo de vida de \`subscribeChanges\`:
+También se endureció el ciclo de vida de `subscribeChanges`:
 
 - La primera suscripción valida que el textarea todavía coincida con el snapshot con el que se construyó el adaptador.
-- Al retirar la última suscripción, se desconectan los listeners y se invalida la continuidad. Si había un \`beforeinput\` pendiente, se informa \`missing-input\`; en otro caso se informa \`resync-required\`.
+- Al retirar la última suscripción, se desconectan los listeners y se invalida la continuidad. Si había un `beforeinput` pendiente, se informa `missing-input`; en otro caso se informa `resync-required`.
 - La copia sombra completa se libera al cerrar la observación. Una suscripción posterior permanece suspendida hasta recibir un snapshot autoritativo.
-- Para recuperar un stream interrumpido, primero se registra de nuevo el observador y luego se llama a \`resynchronize(snapshot)\`. La API rechaza intentar esa recuperación con cero observadores activos, evitando que la lectura del snapshot y la reanudación queden separadas por otra ventana sin captura.
+- Para recuperar un stream interrumpido, primero se registra de nuevo el observador y luego se llama a `resynchronize(snapshot)`. La API rechaza intentar esa recuperación con cero observadores activos, evitando que la lectura del snapshot y la reanudación queden separadas por otra ventana sin captura.
 
 ### Regresiones nuevas
 
-\`live-author-monitor-textarea-source.test.mjs\` añade cobertura para:
+`live-author-monitor-textarea-source.test.mjs` añade cobertura para:
 
 1. mutación programática de igual longitud dentro del mismo rango que el autor pretende reemplazar;
 2. modificación del textarea entre la construcción y la primera suscripción;
@@ -470,6 +470,6 @@ También se endureció el ciclo de vida de \`subscribeChanges\`:
 4. rechazo de resincronización cuando no existe observador activo;
 5. recuperación válida tras volver a suscribir, obtener el snapshot vigente y reanudar.
 
-Estas pruebas verifican tanto la ausencia de deltas falsos como la liberación del snapshot temporal y la continuidad de \`revision\`/\`sequence\` después de la recuperación.
+Estas pruebas verifican tanto la ausencia de deltas falsos como la liberación del snapshot temporal y la continuidad de `revision`/`sequence` después de la recuperación.
 
-**Estado:** los cambios de código y pruebas se han enviado a \`main\`. Esta documentación registra la nueva política; la ejecución de CI correspondiente a estos commits todavía debe confirmarse. Los resultados 209/209 y 1.206/1.206 de la sección anterior corresponden a la revisión anterior y no se atribuyen a esta iteración.
+**Estado:** los cambios de código y pruebas se han enviado a `main`. Esta documentación registra la nueva política; la ejecución de CI correspondiente a estos commits todavía debe confirmarse. Los resultados 209/209 y 1.206/1.206 de la sección anterior corresponden a la revisión anterior y no se atribuyen a esta iteración.

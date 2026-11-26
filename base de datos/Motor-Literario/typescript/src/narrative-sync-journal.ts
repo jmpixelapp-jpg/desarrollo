@@ -25,6 +25,15 @@ interface WriterCursor {
   readonly updatedAt: number;
 }
 
+/** Cursor durable de recepción, expuesto como snapshot de solo lectura. */
+export interface NarrativeSyncWriterCursor {
+  readonly projectId: string;
+  readonly writerId: string;
+  readonly lastSequence: number;
+  readonly lastOperationId: string;
+  readonly updatedAt: number;
+}
+
 /**
  * Diario durable de recepción. La inserción de operación y avance de cursor
  * se confirman en una única transacción IndexedDB.
@@ -243,6 +252,30 @@ export class IndexedDbNarrativeSyncJournal {
     });
   }
 
+  /** Recupera todos los cursores del proyecto para reconciliar diario e índices. */
+  async loadWriterCursors(projectId: string): Promise<readonly NarrativeSyncWriterCursor[]> {
+    if (!projectId.trim()) throw new TypeError("El proyecto es obligatorio.");
+    const database = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction("writer-cursors", "readonly");
+      const request = transaction.objectStore("writer-cursors").index("by-project").getAll(projectId);
+      let cursors: NarrativeSyncWriterCursor[] = [];
+      let ready = false;
+      request.onsuccess = () => {
+        cursors = (request.result as WriterCursor[]).sort((left, right) => left.writerId.localeCompare(right.writerId));
+        ready = true;
+      };
+      request.onerror = () => {
+        try { transaction.abort(); } catch { /* abortado */ }
+      };
+      transaction.oncomplete = () => ready
+        ? resolve(cursors)
+        : reject(new Error("No se pudieron recuperar los cursores del proyecto."));
+      transaction.onerror = () => reject(transaction.error ?? new Error("Falló la lectura de cursores."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura de cursores."));
+    });
+  }
+
   async getLastSequence(projectId: string, writerId: string): Promise<number> {
     if (!projectId.trim() || !writerId.trim()) throw new TypeError("Proyecto y escritor son obligatorios.");
     const database = await this.open();
@@ -313,7 +346,11 @@ export type NarrativeSyncJournalIntegrityIssueCode =
   | "invalid-applied-at"
   | "duplicate-operation"
   | "duplicate-writer-sequence"
-  | "sequence-gap";
+  | "sequence-gap"
+  | "cursor-without-operations"
+  | "cursor-ahead-of-journal"
+  | "cursor-behind-journal"
+  | "cursor-last-operation-mismatch";
 
 export interface NarrativeSyncJournalIntegrityIssue {
   readonly code: NarrativeSyncJournalIntegrityIssueCode;
@@ -392,6 +429,29 @@ export async function inspectNarrativeSyncJournalIntegrity(
         });
       }
       expected = Math.max(expected, entry.sequence + 1);
+    }
+  }
+  const cursors = await journal.loadWriterCursors(projectId);
+  for (const cursor of cursors) {
+    const entries = writers.get(cursor.writerId) ?? [];
+    const last = entries.reduce<NarrativeSyncJournalEntry | undefined>(
+      (current, entry) => !current || entry.sequence > current.sequence ? entry : current,
+      undefined
+    );
+    const addCursorIssue = (code: NarrativeSyncJournalIntegrityIssueCode, detail: string): void => {
+      issues.push({ code, operationId: cursor.lastOperationId, writerId: cursor.writerId, detail });
+    };
+    if (!last) {
+      addCursorIssue("cursor-without-operations", "Existe un cursor durable, pero no hay operaciones en el diario.");
+    } else {
+      if (cursor.lastSequence > last.sequence) {
+        addCursorIssue("cursor-ahead-of-journal", "El cursor avanza más allá de la última operación persistida.");
+      } else if (cursor.lastSequence < last.sequence) {
+        addCursorIssue("cursor-behind-journal", "El diario contiene una operación posterior al cursor durable.");
+      }
+      if (cursor.lastSequence === last.sequence && cursor.lastOperationId !== last.operationId) {
+        addCursorIssue("cursor-last-operation-mismatch", "El cursor no identifica la última operación de su secuencia.");
+      }
     }
   }
   return {

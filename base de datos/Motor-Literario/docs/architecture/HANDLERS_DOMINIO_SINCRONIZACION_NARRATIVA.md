@@ -209,3 +209,8 @@ La comprobación de cursores es bidireccional: un cursor sin operaciones se info
 ### Tolerancia ante registros de cursor malformados
 
 La auditoría normaliza de forma defensiva los campos de identidad de los cursores antes de agruparlos o emitir incidencias. Un `writerId` o `lastOperationId` corrupto no debe provocar una excepción durante el diagnóstico: se informa `invalid-cursor` y la inspección continúa. Además, el contrato de auditoría exige explícitamente ambos lectores (`loadOperations` y `loadWriterCursors`) antes de consultar el diario.
+
+
+### Plan consultivo de recuperación de cursores
+
+`planNarrativeSyncJournalCursorRecovery(journal, projectId)` clasifica cada escritor sin modificar IndexedDB. Devuelve `no-action` cuando el cursor coincide; propone `rebuild-cursor-from-complete-journal` únicamente si las operaciones forman una secuencia íntegra desde 1 y la única anomalía es la ausencia del cursor o su `lastOperationId` divergente en la misma secuencia; en los demás casos devuelve `manual-review`. El plan incluye la propuesta de identidad y secuencia final, códigos de incidencia, recuentos y `requiresManualReview`. Es una recomendación, no una reparación: antes de implementar cualquier escritura, el estado debe revalidarse dentro de una transacción que cubra diario y cursores.

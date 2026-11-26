@@ -77,3 +77,16 @@ test("rechaza observaciones de otra revisión o evidencia que no coincide con el
     text, observations: [{ ...found[0], actionEvidence: { ...found[0].actionEvidence, excerpt: "inventado" } }]
   }));
 });
+
+test("rechaza observaciones malformadas o IDs duplicados sin lanzar errores internos", () => {
+  const text = "Ana entró. Luego Ana corrió.";
+  const found = observations(text);
+  assert.throws(() => discoverNarrativeActionLinks({
+    projectId: "book-1", documentId: "chapter-1", revision: 4,
+    text, observations: [{ ...found[0], actionEvidence: undefined }]
+  }), /offsets verificables/);
+  assert.throws(() => discoverNarrativeActionLinks({
+    projectId: "book-1", documentId: "chapter-1", revision: 4,
+    text, observations: [found[0], found[0]]
+  }), /únicos/);
+});

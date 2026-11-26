@@ -459,3 +459,21 @@ Se amplió `live-author-monitor-browser.test.mjs`: tras el takeover y guardado d
 **CI general:** [45728632512](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45728632512) sigue mostrando errores TypeScript únicamente en `src/literary-analysis.ts` (TS2322, TS2677, TS18047 y TS2345).
 
 **Límite transparente:** el puente es código reusable probado con un editor falso controlado por tests. No equivale a una integración de producción. La app aún debe conectar el callback real de transacciones del editor anfitrión.
+
+
+
+## 22. Nueva entrega — huellas de transacción para deduplicación segura (26 de noviembre de 2026)
+
+**Problema corregido:** la deduplicación anterior ignoraba cualquier segundo evento con el mismo transactionId y secuencia, incluso si el proveedor enviaba por error un delta distinto.
+
+**Implementación:** el source conserva una firma compacta acotada por transactionId: secuencia, tipo, revisión base, rango, longitud del reemplazo y dos hashes de 32 bits sobre el reemplazo. Los duplicados exactos se descartan; una reutilización con otra secuencia o payload genera `transaction-id-reused` y suspende el source. No se conserva el manuscrito ni el reemplazo original.
+
+Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malformado produce `invalid-change-range` sin excepción no controlada hacia el callback nativo.
+
+**Pruebas:** objeto clonado con la misma transacción se ignora; misma identidad con otro delta obliga a resincronizar; reemplazo malformado no interrumpe el editor.
+
+**Archivos:** `typescript/src/live-author-monitor-editor-transaction-source.ts`, `typescript/tests/live-author-monitor-editor-transaction-source.test.mjs`; especificación sección 36.
+
+**Commits:** [b59a567 — huella compacta](https://github.com/jmpixelapp-jpg/desarrollo/commit/b59a567f6b39bebc48f00cc7d7ff9e067f7d34e8), [0776234 — validar reemplazo antes de firmar](https://github.com/jmpixelapp-jpg/desarrollo/commit/07762345d7c1ad41def908404bd921b5e802399b), [e1022ae — prueba de payload distinto](https://github.com/jmpixelapp-jpg/desarrollo/commit/e1022ae19518a4fa74c974277220a0c5048ce926), [d8642c6 — prueba de evento malformado](https://github.com/jmpixelapp-jpg/desarrollo/commit/d8642c6b83faa63959ca26e9775fae83ab0b1fdc).
+
+**Resultado CI:** [45729007367](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729007367): build Vite correcto, MLDB 0.4.2 válido, auditoría física de 25 tablas/34 almacenes y **124/124 pruebas aprobadas, 0 fallidas, 0 omitidas**.

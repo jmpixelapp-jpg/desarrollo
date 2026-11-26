@@ -340,3 +340,11 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Se añadió una regresión que rechaza un mensaje de conflicto de 2.049 caracteres, sin retirar la operación ni emitir un acuse.
 - Estas pruebas complementan el rechazo ya incorporado para códigos de 129 caracteres.
 - **Validación:** pruebas escritas y publicadas; todavía requieren ejecución CI sobre el HEAD actualizado.
+
+### Tanda — idempotencia estable de la bandeja tras reintentos
+
+- Se corrigió `enqueueSyncOperation`: el reencolado ya no compara el registro IndexedDB completo, porque los metadatos de reintento cambian después de un intento fallido.
+- La identidad ahora se determina por proyecto, dispositivo, secuencia, tipo, fecha de creación y payload. El payload se compara con claves de objeto ordenadas recursivamente; el orden de arrays se conserva.
+- Una repetición equivalente no sobrescribe el registro existente ni reinicia contador, último error o fecha del próximo intento.
+- Se añadió una prueba de integración IndexedDB que reencola la misma operación después de un fallo, con claves del payload reordenadas, y comprueba que se conserva el backoff.
+- **Validación:** cambios y regresión publicados; falta ejecutar typecheck y pruebas en CI sobre el nuevo HEAD.

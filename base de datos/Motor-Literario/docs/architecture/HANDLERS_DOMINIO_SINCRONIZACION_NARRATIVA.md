@@ -113,3 +113,8 @@ La API pública de aplicación exige que el almacenamiento ofrezca auditoría du
 ### Reparación vinculada al campo de referencia exacto
 
 Los hallazgos de referencias cruzadas incluyen ahora `referenceField`: `fromEntityId`, `toEntityId`, `participants`, `entityId` o `relatedEntityIds`. Las propuestas conservan ese campo y la aplicación lo vuelve a validar antes del CAS. En relaciones se modifica exclusivamente el extremo indicado; el hecho de que la entidad candidata aparezca en el otro extremo no se considera replay. Las relaciones reflexivas pueden producir dos propuestas independientes, una por extremo. El identificador determinista de auditoría incorpora también el campo.
+
+
+### Verificación de integridad del historial de reparaciones
+
+`verifyNarrativeReferenceRepairAuditIntegrity(store, projectId)` revisa las entradas persistidas, valida su estructura, la correspondencia entre `operationId` y los campos de la operación, y la coherencia de los valores `before`/`after`. También contrasta cada reparación con el estado actual de la ficha. Un registro ausente o modificado después se informa como estado histórico distinto, no como corrupción automática: la integridad del evento y el estado vivo son dimensiones separadas. La escritura IndexedDB aplica las mismas invariantes antes de insertar una entrada.

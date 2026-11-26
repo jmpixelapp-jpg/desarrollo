@@ -204,3 +204,43 @@ La auditoría también verifica la relación en ambos sentidos: no solo que cada
 ### Integridad bidireccional de cursores
 
 La comprobación de cursores es bidireccional: un cursor sin operaciones se informa como `cursor-without-operations`, y un escritor con operaciones pero sin cursor se informa como `cursor-missing-for-operations`. También se valida que cada cursor tenga secuencia positiva segura, identidad de última operación no vacía, proyecto correcto y marca temporal válida (`invalid-cursor`). Estos hallazgos se mantienen como diagnósticos de solo lectura: no se reconstruyen cursores ni se reescriben operaciones sin una política de reparación explícita y evidencia verificable.
+
+
+### Tolerancia ante registros de cursor malformados
+
+La auditoría normaliza de forma defensiva los campos de identidad de los cursores antes de agruparlos o emitir incidencias. Un `writerId` o `lastOperationId` corrupto no debe provocar una excepción durante el diagnóstico: se informa `invalid-cursor` y la inspección continúa. Además, el contrato de auditoría exige explícitamente ambos lectores (`loadOperations` y `loadWriterCursors`) antes de consultar el diario.
+
+
+### Plan consultivo de recuperación de cursores
+
+`planNarrativeSyncJournalCursorRecovery(journal, projectId)` clasifica cada escritor sin modificar IndexedDB. Devuelve `no-action` cuando el cursor coincide; propone `rebuild-cursor-from-complete-journal` únicamente si las operaciones forman una secuencia íntegra desde 1 y la única anomalía es la ausencia del cursor o su `lastOperationId` divergente en la misma secuencia; en los demás casos devuelve `manual-review`. El plan incluye la propuesta de identidad y secuencia final, códigos de incidencia, recuentos y `requiresManualReview`. Es una recomendación, no una reparación: antes de implementar cualquier escritura, el estado debe revalidarse dentro de una transacción que cubra diario y cursores.
+
+
+### Aplicación transaccional de propuestas de cursor
+
+`IndexedDbNarrativeSyncJournal.applyCursorRecoveryProposal(proposal)` implementa el paso de escritura explícito y separado del plan consultivo. Antes de abrir la transacción, vuelve a cargar el historial del escritor, comprueba que cubra exactamente las secuencias 1..N, valida los metadatos locales y verifica cada envoltura SHA-256. Después abre una única transacción `readwrite` sobre `operations` y `writer-cursors`, vuelve a leer ambos registros y compara el snapshot verificado con el contenido durable. Solo escribe el cursor si el historial no cambió y el cursor actual está ausente o conserva la misma secuencia con una identidad final divergente. Un cursor adelantado, retrasado, malformado o modificado concurrentemente provoca aborto; las operaciones nunca se reescriben.
+
+La respuesta distingue `applied`, `already-consistent` (reintento idempotente) y `rejected` con motivo. La verificación criptográfica se realiza fuera de la transacción para no dejar una transacción IndexedDB suspendida durante WebCrypto; la comparación exacta de los campos de identidad, digest y metadatos se repite dentro de la transacción para cerrar la ventana TOCTOU. La propuesta no es una autorización: el llamador debe decidir explícitamente cuándo invocar este método.
+
+
+### Integración de recuperación aprobada en el consumidor
+
+`createRecoveryFirstNarrativeSyncConsumer` genera el plan de cursores después de recuperar las reparaciones y antes de auditar el diario para replay. El anfitrión puede proporcionar `NarrativeSyncCursorRecoveryApproval` con una función `approve(proposal)`. Solo las propuestas aprobadas se envían a `applyCursorRecoveryProposal`; la aplicación vuelve a validar su snapshot dentro de la transacción. Sin callback de aprobación, el consumidor devuelve el plan sin modificar cursores. Si una propuesta queda sin aprobar, es rechazada o existe cualquier otra incidencia de integridad, el replay permanece bloqueado. Solo después de una auditoría íntegra se ejecutan los handlers.
+
+El resultado `RecoveryFirstNarrativeSyncResult.cursorRecovery` expone el plan y los resultados de aplicación para diagnóstico. La aprobación es explícita por propuesta y no reemplaza la autenticación/autorización del emisor, que sigue siendo responsabilidad del anfitrión/servidor.
+
+
+### Exclusión de replay entre pestañas
+
+El replay conserva los locks locales por proyecto/escritor y ahora usa Web Locks (`navigator.locks`) cuando el runtime los ofrece. El nombre del lock se deriva del proyecto, no del escritor, para que un replay completo y uno parcial no puedan ejecutarse simultáneamente en pestañas distintas. La adquisición usa `ifAvailable`: si otra pestaña posee el lock, el consumidor devuelve `consumer-already-running` y no ejecuta handlers. Si el backend de locks falla, devuelve `consumer-lock-failed` sin degradarse a ejecución desprotegida. En runtimes sin Web Locks se conserva explícitamente la garantía local; no se afirma exclusión entre pestañas ni entre dispositivos.
+
+El adaptador `NarrativeSyncReplayLockManager` es inyectable para probar contención, fallo del coordinador y mantenimiento del lock durante el callback. Esto no cambia la semántica de entrega al menos una vez: el handler sigue obligado a ser idempotente por `operationId`, porque el proceso puede interrumpirse después de la mutación de dominio y antes del acuse durable.
+
+
+### Recuperación de la ventana entre efecto de dominio y acuse
+
+La secuencia de replay es deliberadamente `apply(operation)` seguida de `markApplied(...)`. Si el proceso termina después de que el handler persiste el cambio y antes del acuse, la operación permanece pendiente y se vuelve a entregar. No existe una transacción atómica común entre el store de dominio y el diario IndexedDB, por lo que el protocolo no promete exactly-once.
+
+Los handlers de dominio incluidos aplican upserts mediante CAS y reconocen el caso en que el registro existente ya coincide exactamente con el payload. La identidad `operationId` se conserva en cada reentrega. Para efectos externos o no idempotentes, el adaptador del dominio debe persistir una bandeja de recibos/deduplicación por `operationId` dentro de la misma transacción que el efecto, o aceptar que la operación requiera reconciliación manual.
+
+`markApplied` es un acuse durable idempotente: comprueba proyecto, operación y digest; si ya existe `appliedAt`, una repetición no lo sobrescribe. Las pruebas nuevas simulan una interrupción justo después del efecto de dominio, verifican que el reintento reutiliza el mismo `operationId` sin duplicar el efecto cuando el handler mantiene un recibo durable, y ejercitan acuses desde dos instancias del diario compartiendo IndexedDB. Un digest incorrecto sigue siendo rechazado.

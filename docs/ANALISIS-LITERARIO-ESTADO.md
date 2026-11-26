@@ -368,3 +368,91 @@ Estas cuestiones quedan abiertas para la conversación de definición:
 - ¿Qué nivel de edición manual y exportación se espera para los resultados?
 
 **Nota de estado:** los requisitos de esta ampliación se documentan para definir el producto. No acreditan que existan ya los motores de traducción editorial, OCR, cartografía, generación visual o modelado 3D. Su implementación deberá planificarse por etapas y validarse individualmente.
+
+
+---
+
+## Ampliación del alcance: ilustración consistente de personajes, criaturas, animales y objetos
+**Estado: requisito propuesto en definición; todavía no implementado ni verificado.**
+
+### 1. Objetivo
+
+El sistema deberá poder generar o coordinar la creación de representaciones visuales de cualquier elemento importante de una historia, a partir de descripciones explícitas del texto, referencias aprobadas por el autor y fichas canónicas del universo narrativo.
+
+No se limitará a retratos: abarcará personajes, rostros, cuerpos, vestuario, animales, mascotas, criaturas, especies, objetos, artefactos, herramientas, armas, vehículos, edificios y otros elementos relevantes.
+
+### 2. Personajes y rostros
+
+Capacidades previstas:
+
+- Retratos de protagonistas, antagonistas y personajes secundarios.
+- Rostros desde vistas frontal, perfil y tres cuartos.
+- Expresiones y estados emocionales.
+- Rasgos faciales, cabello, ojos, marcas, cicatrices y accesorios descritos o aprobados.
+- Representación de distintas edades y etapas de vida.
+- Cuerpo completo, proporciones, postura, vestimenta y equipamiento.
+- Variantes de vestuario vinculadas a escenas, culturas, ocupaciones y épocas.
+- Hojas de diseño del personaje y referencias visuales reutilizables.
+
+### 3. Animales, mascotas y criaturas
+
+- Animales reales domésticos y salvajes.
+- Mascotas asociadas a personajes concretos.
+- Especies fantásticas, mitológicas y extraterrestres.
+- Criaturas originales inventadas para una obra.
+- Anatomía, dimensiones, locomoción, coloración y rasgos distintivos.
+- Comportamiento, hábitat, dieta y relación con otras especies cuando el canon lo establezca.
+- Vistas, poses y expresiones coherentes de una misma criatura.
+
+### 4. Objetos y artefactos
+
+- Armas, armaduras, escudos y equipamiento.
+- Joyas, reliquias, talismanes y objetos mágicos.
+- Libros, manuscritos, mapas e instrumentos.
+- Herramientas, utensilios y objetos cotidianos relevantes.
+- Dispositivos, máquinas, inventos y tecnología ficticia.
+- Objetos únicos con historia, propietario, procedencia y estado de conservación.
+- Vistas generales, detalles, escalas y variantes cuando resulten útiles.
+
+### 5. Continuidad e identidad visual
+
+Cada entidad ilustrable deberá poder tener una ficha canónica con:
+
+- Identificador estable y nombre.
+- Descripción textual y rasgos visuales aprobados.
+- Referencias de origen en capítulos, escenas y fragmentos.
+- Atributos explícitos, inferidos y decididos creativamente, claramente diferenciados.
+- Imágenes de referencia y versiones generadas.
+- Relaciones con personajes, lugares, especies, acontecimientos y objetos.
+- Variantes temporales: edad, heridas, cambios de vestuario, deterioro, transformaciones y evolución.
+- Historial de versiones y decisiones del autor.
+
+El sistema deberá reutilizar las referencias aprobadas para mantener la identidad visual entre capítulos, escenas, perspectivas y nuevas ilustraciones. Cuando una descripción nueva contradiga una ficha anterior, deberá señalar el conflicto y solicitar o registrar una decisión; no deberá cambiar silenciosamente la identidad canónica.
+
+### 6. Dirección artística y control del autor
+
+- Permitir seleccionar o definir estilos visuales por obra, universo o elemento.
+- Mantener coherencia de estilo cuando así se solicite.
+- Ofrecer variaciones controladas sin perder rasgos esenciales.
+- Distinguir entre representación fiel a lo descrito e interpretación creativa.
+- Permitir aprobar, corregir, descartar y versionar ilustraciones.
+- Vincular cada imagen a la entidad y a la versión de su descripción.
+- Permitir generar conjuntos coordinados: fichas de personaje, bestiarios, catálogos de artefactos y atlas visuales.
+
+### 7. Relación con el resto del motor
+
+La ilustración deberá compartir el modelo de conocimiento narrativo, geográfico y lingüístico. Una mascota debe conservar su aspecto y relación con su dueño; un arma debe conservar sus características y propietario; un personaje debe mantener sus rasgos a través del tiempo, salvo cambios narrativamente justificados.
+
+La extracción del libro debe identificar candidatos a ilustración y aportar evidencias. El motor podrá proponer detalles ausentes, pero deberá marcarlos como propuestas y no presentarlos como hechos del texto sin aprobación del autor.
+
+### 8. Requisitos técnicos y criterios de aceptación
+
+- Mantener contratos de datos independientes del proveedor de generación visual.
+- Admitir imágenes de referencia y versiones aprobadas.
+- Registrar prompts/configuración, proveedor, fecha, versión y entidad de destino cuando la infraestructura lo permita.
+- Verificar que las referencias visuales de una misma entidad se reutilicen correctamente.
+- Probar continuidad en distintos ángulos, poses, vestimentas y etapas temporales.
+- Medir y documentar limitaciones de consistencia, anatomía, texto dentro de imágenes y fidelidad a descripciones.
+- No considerar suficiente una imagen aislada: validar también la gestión de identidad, versiones y vínculos narrativos.
+
+**Nota de estado:** este apartado formaliza el alcance deseado. No acredita que el repositorio ya disponga de un motor de ilustración, generación de imágenes, almacenamiento de referencias visuales o control de consistencia entre imágenes. Esas piezas deberán diseñarse, implementarse e integrarse con pruebas propias.

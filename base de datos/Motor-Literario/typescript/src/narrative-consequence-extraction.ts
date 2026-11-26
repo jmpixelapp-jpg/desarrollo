@@ -105,7 +105,7 @@ export function extractNarrativeConsequenceCandidates(
     // Un salto de párrafo suele marcar cambio de escena o bloque narrativo;
     // no se debe enlazar a través de ese límite aunque aparezca un conector.
     const gap = input.text.slice(source.evidence.end, consequence.evidence.start);
-    if (/\\r?\\n[\\t ]*\\r?\\n/u.test(gap)) continue;
+    if (/\r?\n[\t ]*\r?\n/u.test(gap)) continue;
     const match = connectorPattern.exec(consequence.evidence.excerpt);
     if (!match) continue;
     const excerpt = match[1];

@@ -436,3 +436,13 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Añadida prueba con IndexedDB real donde el servidor simulado acepta el lote y falla la transacción local de acuses; la operación permanece en la outbox y se retira correctamente en el ciclo siguiente.
 - Documentado que timeout no equivale a rechazo, que el servidor debe deduplicar durablemente por proyecto y `operationId`, y que la garantía no es una transacción distribuida.
 - Las pruebas están escritas y publicadas; no se ha podido ejecutar el runner ni verificar CI en esta sesión.
+
+
+### Tanda — aislamiento causal de conflictos
+
+- Añadida prueba de conflicto en un dispositivo y operación independiente en otro.
+- Verificado que el conflicto permanece en outbox con código/mensaje y backoff.
+- Verificado que las operaciones posteriores del mismo dispositivo quedan retenidas hasta vencer el backoff.
+- Verificado que el dispositivo independiente puede progresar sin esperar la reconciliación del primero.
+- Documentado que el backoff no equivale a resolución de conflicto; la reconciliación semántica sigue requiriendo un contrato de dominio explícito.
+- Prueba publicada, pendiente de ejecución en entorno Node/IndexedDB y de CI.

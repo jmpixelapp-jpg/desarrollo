@@ -229,9 +229,10 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
       // adaptador; IndexedDB debe conservar el checkpoint y el lease vigente.
       await observerPage.reload();
       await observerPage.waitForFunction(() => window.__monitorLeaseHarness !== undefined);
-      const nativeCapture = await observerPage.evaluate(async () => {
+      await observerPage.evaluate(async () => {
         const { LiveAuthorMonitorTextAreaSource } = await import("/src/live-author-monitor-textarea-source.ts");
         const element = document.createElement("textarea");
+        element.id = "native-capture-textarea";
         element.value = "abc";
         document.body.append(element);
         const errors = [];
@@ -242,28 +243,34 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
           onError: error => errors.push(error.code)
         });
         source.subscribeChanges(change => changes.push(change));
+        window.__nativeCaptureHarness = { element, source, errors, changes };
+      });
 
-        element.setSelectionRange(3, 3);
-        element.dispatchEvent(new InputEvent("beforeinput", {
-          bubbles: true, cancelable: true, inputType: "insertText", data: "!"
-        }));
-        element.value = "abc!";
-        element.dispatchEvent(new InputEvent("input", {
-          bubbles: true, inputType: "insertText", data: "!"
-        }));
+      const nativeTextarea = observerPage.locator("#native-capture-textarea");
+      await nativeTextarea.focus();
+      await nativeTextarea.evaluate(element => element.setSelectionRange(3, 3));
+      await observerPage.keyboard.type("!");
 
-        element.setSelectionRange(4, 4);
-        element.dispatchEvent(new InputEvent("beforeinput", {
+      // dispatchEvent() no puede fabricar un evento confiable aunque copie InputEvent.
+      await observerPage.evaluate(() => {
+        const harness = window.__nativeCaptureHarness;
+        harness.element.setSelectionRange(4, 4);
+        harness.element.dispatchEvent(new InputEvent("beforeinput", {
           bubbles: true, cancelable: true, inputType: "insertText", data: "x"
         }));
-        element.dispatchEvent(new InputEvent("beforeinput", {
-          bubbles: true, cancelable: true, inputType: "insertText", data: "y"
-        }));
+      });
 
-        const state = source.getState();
-        source.dispose();
-        element.remove();
-        return { changes, errors, state };
+      const nativeCapture = await observerPage.evaluate(() => {
+        const harness = window.__nativeCaptureHarness;
+        const result = {
+          changes: harness.changes,
+          errors: harness.errors,
+          state: harness.source.getState()
+        };
+        harness.source.dispose();
+        harness.element.remove();
+        delete window.__nativeCaptureHarness;
+        return result;
       });
       assert.equal(nativeCapture.changes.length, 1,
         "el navegador debe producir un delta exacto para el par beforeinput/input válido");
@@ -276,9 +283,9 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
         replacement: "!",
         activityKind: "typing"
       });
-      assert.deepEqual(nativeCapture.errors, ["missing-input"]);
+      assert.deepEqual(nativeCapture.errors, ["untrusted-event"]);
       assert.equal(nativeCapture.state.needsResync, true,
-        "dos beforeinput consecutivos en un textarea real deben suspender la captura");
+        "un evento dispatchEvent sintético debe suspender la captura aunque copie inputType");
 
       assert.deepEqual(
         await invoke(observerPage, "loadCheckpoint", projectId, documentId),

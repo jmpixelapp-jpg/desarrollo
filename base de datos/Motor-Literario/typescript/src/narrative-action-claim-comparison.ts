@@ -55,6 +55,14 @@ function validEvidence(value: TextEvidence): boolean {
     value.status !== "stale";
 }
 
+function evidenceMatchesObservation(value: TextEvidence, item: NarrativeObservationCandidate): boolean {
+  return validEvidence(value) &&
+    value.documentId === item.evidence.documentId &&
+    value.revision === item.evidence.revision &&
+    value.start >= item.evidence.start &&
+    value.end <= item.evidence.end;
+}
+
 function claimKey(item: NarrativeObservationCandidate): string | undefined {
   const subject = item.grammaticalSubjectCandidate;
   if (!subject || subject.voice !== "active" || !subject.entityId.trim()) return undefined;
@@ -104,11 +112,14 @@ export function compareNarrativeActionClaims(
           !validEvidence(item.grammaticalSubjectCandidate.evidence)) ||
         (item.grammaticalObjectCandidate !== undefined &&
           !validEvidence(item.grammaticalObjectCandidate.evidence)) ||
-        (item.epistemicFrameEvidence !== undefined && !validEvidence(item.epistemicFrameEvidence)) ||
+        (item.epistemicFrameEvidence !== undefined &&
+          !evidenceMatchesObservation(item.epistemicFrameEvidence, item)) ||
         (item.epistemicSourceCandidate !== undefined &&
-          (!item.epistemicSourceCandidate.entityId.trim() ||
-           !validEvidence(item.epistemicSourceCandidate.evidence))) ||
-        (item.polarityEvidence !== undefined && !validEvidence(item.polarityEvidence))) {
+          (typeof item.epistemicSourceCandidate.entityId !== "string" ||
+           !item.epistemicSourceCandidate.entityId.trim() ||
+           !evidenceMatchesObservation(item.epistemicSourceCandidate.evidence, item))) ||
+        (item.polarityEvidence !== undefined &&
+          !evidenceMatchesObservation(item.polarityEvidence, item))) {
       throw new Error("Observación inválida: se requiere identidad única y evidencia textual vigente.");
     }
     ids.add(item.id);

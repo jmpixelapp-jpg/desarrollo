@@ -570,3 +570,19 @@ test("el pipeline conserva el verbo que expresa una motivación introducida por 
     "teme perder a su familia"
   );
 });
+
+test("el pipeline conserva por separado el objetivo y su motivo causal", () => {
+  const text = "Mara quiere proteger a Elian porque teme perderlo.";
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-goal-motive",revision:1,text,entities
+  });
+  assert.equal(result.characterIntents.length,2);
+  assert.ok(result.characterIntents.some(item =>
+    item.kind === "goal" && item.text === "proteger a Elian" &&
+    item.evidenceBasis === "explicit-goal-verb"
+  ));
+  assert.ok(result.characterIntents.some(item =>
+    item.kind === "motivation" && item.text === "teme perderlo" &&
+    item.evidenceBasis === "explicit-causal-motive"
+  ));
+});

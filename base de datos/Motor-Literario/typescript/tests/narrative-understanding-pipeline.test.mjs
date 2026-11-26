@@ -597,3 +597,33 @@ test("el pipeline conserva por separado el objetivo y su motivo causal", () => {
     item.evidenceBasis === "explicit-causal-motive"
   ));
 });
+
+test("cruza relaciones entre eventos con evidencia explícita de objetivo y acción",()=>{
+  const text="Mara quiere proteger a Elian. Mara protegió a Elian. Por eso Mara ayudó a Elian.";
+  const result=understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-intent-event-link",revision:1,text,entities
+  });
+  assert.equal(result.characterIntents.length,1);
+  assert.equal(result.events.length,2);
+  assert.equal(result.consequences.length,1);
+  assert.ok(result.consequenceIntentActionLinks.length >= 2);
+  const sourceActionIds=result.consequences[0].supportingActionCandidateIds.sourceEvent;
+  const consequenceActionIds=result.consequences[0].supportingActionCandidateIds.consequenceEvent;
+  const sourceLinks=result.consequenceIntentActionLinks.filter(link =>
+    link.consequenceCandidateId===result.consequences[0].id && link.eventRole==="source"
+  );
+  const consequenceLinks=result.consequenceIntentActionLinks.filter(link =>
+    link.consequenceCandidateId===result.consequences[0].id && link.eventRole==="consequence"
+  );
+  assert.deepEqual(sourceLinks.map(link=>link.actionId),sourceActionIds);
+  assert.deepEqual(consequenceLinks.map(link=>link.actionId),consequenceActionIds);
+  assert.ok(result.consequenceIntentActionLinks.every(link =>
+    result.intentActionConsistency.some(item=>item.id===link.intentActionConsistencyId)
+  ));
+  assert.ok(result.consequenceIntentActionLinks.every(link =>
+    link.consistencyRelation==="supports-intent"
+  ));
+  assert.ok(result.consequenceIntentActionLinks.every(link =>
+    link.intentEvidence.excerpt.includes("Mara quiere proteger a Elian")
+  ));
+});

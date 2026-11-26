@@ -56,3 +56,10 @@ Las suites relevantes cubren migración DB27→DB28 con datos anteriores preserv
 ## Límites actuales
 
 Esta capa implementa persistencia saliente local y contratos de transporte. No configura un servidor remoto, credenciales, sincronización incremental de descargas ni resolución automática de conflictos de edición entre escritores. Esas responsabilidades deben integrarse en el anfitrión y en el servicio remoto; no se declara sincronización multidispositivo completa solo por disponer de la outbox.
+
+
+### Exclusión de despacho entre pestañas
+
+El despachador usa Web Locks con un lock exclusivo por proyecto cuando el runtime lo ofrece. La exclusión cubre desde la lectura de pendientes hasta el envío y el acuse local, de modo que dos pestañas cooperantes no despachen simultáneamente el mismo proyecto. Si el lock está ocupado, el despachador no envía ni registra un intento; si el backend de Web Locks falla, devuelve `lock-failed` y bloquea ese ciclo sin degradar silenciosamente a ejecución sin lock. Puede inyectarse `NarrativeSyncOutboxLockManager` para pruebas y runtimes alternativos.
+
+En entornos sin Web Locks solo se garantiza exclusión dentro de una instancia del módulo. El protocolo sigue siendo al menos una vez, por lo que el servidor debe deduplicar `operationId` y digest incluso cuando varias pestañas o dispositivos reintenten.

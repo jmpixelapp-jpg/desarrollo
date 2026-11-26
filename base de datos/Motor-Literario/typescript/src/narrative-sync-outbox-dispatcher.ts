@@ -16,12 +16,23 @@ export interface NarrativeSyncOutboxTransport {
   send(operation: NarrativeSyncOperationEnvelope): Promise<NarrativeSyncRemoteAcknowledgement>;
 }
 
+/** Adaptador mínimo de Web Locks para impedir dos despachos salientes simultáneos entre pestañas. */
+export interface NarrativeSyncOutboxLockManager {
+  request<T>(
+    name: string,
+    options: { readonly mode: "exclusive"; readonly ifAvailable: true },
+    callback: (lock: unknown | null) => Promise<T>
+  ): Promise<T>;
+}
+
 export interface NarrativeSyncOutboxDispatchOptions {
   readonly store: NarrativeSyncOutboxStore;
   readonly transport: NarrativeSyncOutboxTransport;
   readonly projectId: string;
   readonly batchSize?: number;
   readonly now?: () => number;
+  /** Coordinador inyectable; por defecto usa navigator.locks cuando existe. */
+  readonly lockManager?: NarrativeSyncOutboxLockManager;
 }
 
 export type NarrativeSyncOutboxDispatchFailure =
@@ -31,7 +42,8 @@ export type NarrativeSyncOutboxDispatchFailure =
   | "invalid-remote-acknowledgement"
   | "attempt-persistence-failed"
   | "operation-no-longer-pending"
-  | "local-acknowledgement-failed";
+  | "local-acknowledgement-failed"
+  | "lock-failed";
 
 export interface NarrativeSyncOutboxDispatchResult {
   readonly processed: number;
@@ -98,7 +110,7 @@ export async function dispatchPendingNarrativeSyncOperations(
     return { processed: 0, remaining: 0, hasMore: false, failure: "already-running" };
   }
   activeProjectDispatches.add(options.projectId);
-  try {
+  const runDispatch = async (): Promise<NarrativeSyncOutboxDispatchResult> => {
     const pending = await options.store.loadPendingSyncOperations(options.projectId, batchSize);
     let processed = 0;
     for (const stored of pending) {
@@ -121,37 +133,129 @@ export async function dispatchPendingNarrativeSyncOperations(
         });
       } catch {
         try { await recordAttempt(options.store, stored.operationId, now, "INVALID_LOCAL_OPERATION"); }
-        catch { return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "attempt-persistence-failed" }; }
-        return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "invalid-local-operation" };
+        catch {
+          return {
+            processed, remaining: pending.length - processed,
+            hasMore: pending.length === batchSize,
+            stoppedAtOperationId: stored.operationId,
+            failure: "attempt-persistence-failed"
+          };
+        }
+        return {
+          processed, remaining: pending.length - processed,
+          hasMore: pending.length === batchSize,
+          stoppedAtOperationId: stored.operationId,
+          failure: "invalid-local-operation"
+        };
       }
       let acknowledgement: NarrativeSyncRemoteAcknowledgement;
       try {
         acknowledgement = await options.transport.send(envelope);
       } catch {
         try { await recordAttempt(options.store, stored.operationId, now, "TRANSPORT_ERROR"); }
-        catch { return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "attempt-persistence-failed" }; }
-        return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "transport-error" };
+        catch {
+          return {
+            processed, remaining: pending.length - processed,
+            hasMore: pending.length === batchSize,
+            stoppedAtOperationId: stored.operationId,
+            failure: "attempt-persistence-failed"
+          };
+        }
+        return {
+          processed, remaining: pending.length - processed,
+          hasMore: pending.length === batchSize,
+          stoppedAtOperationId: stored.operationId,
+          failure: "transport-error"
+        };
       }
       if (!isMatchingDurableAcknowledgement(acknowledgement, envelope)) {
         try { await recordAttempt(options.store, stored.operationId, now, "INVALID_REMOTE_ACK"); }
-        catch { return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "attempt-persistence-failed" }; }
-        return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "invalid-remote-acknowledgement" };
+        catch {
+          return {
+            processed, remaining: pending.length - processed,
+            hasMore: pending.length === batchSize,
+            stoppedAtOperationId: stored.operationId,
+            failure: "attempt-persistence-failed"
+          };
+        }
+        return {
+          processed, remaining: pending.length - processed,
+          hasMore: pending.length === batchSize,
+          stoppedAtOperationId: stored.operationId,
+          failure: "invalid-remote-acknowledgement"
+        };
       }
       let recorded: boolean;
       try { recorded = await recordAttempt(options.store, stored.operationId, now); }
-      catch { return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "attempt-persistence-failed" }; }
+      catch {
+        return {
+          processed, remaining: pending.length - processed,
+          hasMore: pending.length === batchSize,
+          stoppedAtOperationId: stored.operationId,
+          failure: "attempt-persistence-failed"
+        };
+      }
       if (!recorded) {
-        return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "operation-no-longer-pending" };
+        return {
+          processed, remaining: pending.length - processed,
+          hasMore: pending.length === batchSize,
+          stoppedAtOperationId: stored.operationId,
+          failure: "operation-no-longer-pending"
+        };
       }
       let acknowledged: boolean;
       try { acknowledged = await options.store.acknowledgeSyncOperation(acknowledgement); }
-      catch { return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "local-acknowledgement-failed" }; }
+      catch {
+        return {
+          processed, remaining: pending.length - processed,
+          hasMore: pending.length === batchSize,
+          stoppedAtOperationId: stored.operationId,
+          failure: "local-acknowledgement-failed"
+        };
+      }
       if (!acknowledged) {
-        return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "local-acknowledgement-failed" };
+        return {
+          processed, remaining: pending.length - processed,
+          hasMore: pending.length === batchSize,
+          stoppedAtOperationId: stored.operationId,
+          failure: "local-acknowledgement-failed"
+        };
       }
       processed++;
     }
     return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize };
+  };
+
+  try {
+    const runtimeLocks = (globalThis as unknown as {
+      navigator?: { locks?: unknown };
+    }).navigator?.locks as NarrativeSyncOutboxLockManager | undefined;
+    const locks = options.lockManager ?? runtimeLocks;
+    // En runtimes sin Web Locks queda activa la exclusión local. El servidor
+    // sigue obligado a deduplicar operationId porque la entrega es al menos una vez.
+    if (!locks) return await runDispatch();
+    try {
+      return await locks.request(
+        "motor-literario:narrative-outbox:" + encodeURIComponent(options.projectId),
+        { mode: "exclusive", ifAvailable: true },
+        async lock => {
+          if (!lock) {
+            const remaining = (await options.store.loadPendingSyncOperations(options.projectId, batchSize)).length;
+            return {
+              processed: 0, remaining, hasMore: remaining === batchSize,
+              failure: "already-running"
+            };
+          }
+          return runDispatch();
+        }
+      );
+    } catch {
+      let remaining = 0;
+      try {
+        remaining = (await options.store.loadPendingSyncOperations(options.projectId, batchSize)).length;
+      } catch { /* informa el fallo del lock */ }
+      return { processed: 0, remaining, hasMore: remaining === batchSize, failure: "lock-failed" };
+    }
   } finally {
     activeProjectDispatches.delete(options.projectId);
   }

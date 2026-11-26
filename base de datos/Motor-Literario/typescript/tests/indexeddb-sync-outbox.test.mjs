@@ -450,3 +450,106 @@ test("el acuse no elimina una operación si el contenido local cambió después 
     recordId: "different-content", revision: 99
   });
 });
+
+
+test("el despachador saliente no envía si otra pestaña mantiene el lock del proyecto", async () => {
+  const pending = operation({
+    operationId: "outbox-lock-busy",
+    projectId: "outbox-lock-project",
+    deviceId: "outbox-lock-device"
+  });
+  let sent = 0;
+  let lockName = "";
+  const store = {
+    async loadPendingSyncOperations() { return [pending]; },
+    async recordSyncOperationAttempt() { throw new Error("No debe registrar intentos"); },
+    async acknowledgeSyncOperation() { throw new Error("No debe confirmar"); }
+  };
+  const result = await dispatchPendingNarrativeSyncOperations({
+    store,
+    projectId: pending.projectId,
+    lockManager: {
+      async request(name, options, callback) {
+        lockName = name;
+        assert.deepEqual(options, { mode: "exclusive", ifAvailable: true });
+        return callback(null);
+      }
+    },
+    transport: { async send() { sent++; throw new Error("No debe enviar"); } }
+  });
+  assert.deepEqual(result, {
+    processed: 0, remaining: 1, hasMore: false, failure: "already-running"
+  });
+  assert.equal(lockName, "motor-literario:narrative-outbox:outbox-lock-project");
+  assert.equal(sent, 0);
+});
+
+test("un error de Web Locks bloquea el despacho saliente sin fallback inseguro", async () => {
+  const pending = operation({
+    operationId: "outbox-lock-error",
+    projectId: "outbox-lock-error-project",
+    deviceId: "outbox-lock-error-device"
+  });
+  let sent = 0;
+  const store = {
+    async loadPendingSyncOperations() { return [pending]; },
+    async recordSyncOperationAttempt() { throw new Error("No debe registrar intentos"); },
+    async acknowledgeSyncOperation() { throw new Error("No debe confirmar"); }
+  };
+  const result = await dispatchPendingNarrativeSyncOperations({
+    store,
+    projectId: pending.projectId,
+    lockManager: { async request() { throw new Error("lock backend unavailable"); } },
+    transport: { async send() { sent++; throw new Error("No debe enviar"); } }
+  });
+  assert.deepEqual(result, {
+    processed: 0, remaining: 1, hasMore: false, failure: "lock-failed"
+  });
+  assert.equal(sent, 0);
+});
+
+test("el despachador mantiene el lock durante transporte y acuse local", async () => {
+  const pending = operation({
+    operationId: "outbox-lock-held",
+    projectId: "outbox-lock-held-project",
+    deviceId: "outbox-lock-held-device"
+  });
+  let lockHeld = false;
+  const store = {
+    async loadPendingSyncOperations() { return [pending]; },
+    async recordSyncOperationAttempt() {
+      assert.equal(lockHeld, true);
+      return true;
+    },
+    async acknowledgeSyncOperation(acknowledgement) {
+      assert.equal(lockHeld, true);
+      assert.equal(acknowledgement.operationId, pending.operationId);
+      return true;
+    }
+  };
+  const result = await dispatchPendingNarrativeSyncOperations({
+    store,
+    projectId: pending.projectId,
+    lockManager: {
+      async request(_name, options, callback) {
+        assert.deepEqual(options, { mode: "exclusive", ifAvailable: true });
+        lockHeld = true;
+        try { return await callback({ name: "outbox-lock" }); }
+        finally { lockHeld = false; }
+      }
+    },
+    transport: {
+      async send(envelope) {
+        assert.equal(lockHeld, true);
+        return {
+          status: "accepted", durable: true, projectId: envelope.projectId,
+          operationId: envelope.operationId, writerId: envelope.writerId,
+          sequence: envelope.sequence, digest: envelope.digest
+        };
+      }
+    },
+    now: () => 500
+  });
+  assert.deepEqual(result, { processed: 1, remaining: 0, hasMore: false });
+  assert.equal(lockHeld, false);
+});

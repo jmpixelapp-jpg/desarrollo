@@ -615,3 +615,12 @@ El contrato de retirada ya no acepta únicamente un `operationId`. Recibe un acu
 La comprobación criptográfica se realiza antes de abrir la transacción de escritura para no mantener IndexedDB activo durante Web Crypto. Después, la transacción vuelve a leer la operación y compara su identidad estable con la instantánea verificada. Si el payload cambió entre el envío y el acuse, el acuse pertenece a otro proyecto/dispositivo/secuencia, no es durable o el digest no coincide, la operación permanece en la outbox.
 
 Se añadieron regresiones para acuses con identidad/digest incorrectos, acuses no durables, repetición del mismo acuse y contenido local alterado después del envío. Esto fortalece el borrado local condicionado al acuse, pero no autentica por sí solo al servidor: el transporte del anfitrión debe validar TLS, identidad y autorización, y el servidor debe conservar su deduplicación durable por operación.
+
+
+## Exclusión del despachador de outbox entre pestañas (26 de noviembre de 2026)
+
+El despachador saliente ahora solicita un Web Lock exclusivo por proyecto antes de leer la bandeja, transmitir operaciones y procesar sus acuses locales. El lock se mantiene durante toda la secuencia. Si otra pestaña lo posee, el ciclo termina con `already-running`, sin enviar ni incrementar intentos; si el coordinador falla, devuelve `lock-failed` sin fallback inseguro. El lock manager es inyectable para probar contención y fallos sin depender del navegador.
+
+La exclusión entre pestañas requiere Web Locks del mismo origen. En runtimes que no lo ofrecen, queda solamente la protección reentrante local y continúa siendo obligatorio que el servidor remoto deduplique por `operationId`/digest, porque la entrega es al menos una vez.
+
+Se agregan tres regresiones: lock ocupado sin envío, fallo del coordinador sin envío y retención del lock durante transporte y acuse.

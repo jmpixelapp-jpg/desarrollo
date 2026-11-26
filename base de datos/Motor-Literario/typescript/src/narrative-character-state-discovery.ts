@@ -9,7 +9,13 @@ import type { NarrativeEntity, TextEvidence } from "./narrative-knowledge";
 
 export type NarrativeCharacterState =
   | "injured" | "alive" | "dead" | "conscious" | "unconscious"
-  | "bound" | "free" | "sick" | "healthy" | "missing" | "present";
+  | "bound" | "free" | "sick" | "healthy" | "missing" | "present"
+  | "asleep" | "awake" | "exhausted" | "afraid" | "angry" | "calm"
+  | "pregnant" | "imprisoned" | "poisoned" | "blind" | "deaf" | "mute"
+  | "paralyzed" | "transformed" | "trapped" | "absent" | "lost" | "protected";
+
+export type NarrativeCharacterStateCategory =
+  | "vital" | "physical" | "cognitive" | "emotional" | "social" | "location" | "other";
 
 export interface NarrativeCharacterStateCandidate {
   readonly id: string;
@@ -18,6 +24,7 @@ export interface NarrativeCharacterStateCandidate {
   readonly revision: number;
   readonly entityId: string;
   readonly state: NarrativeCharacterState;
+  readonly category: NarrativeCharacterStateCategory;
   readonly polarity: "affirmed" | "negated";
   readonly grammaticalTense: "present" | "past" | "future" | "unknown";
   readonly aspect: "ordinary" | "ongoing" | "recurrent" | "ceased";
@@ -42,19 +49,38 @@ export const MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES = 200;
 
 const STATE_PATTERNS: readonly {
   readonly state: NarrativeCharacterState;
+  readonly category: NarrativeCharacterStateCategory;
   readonly expression: RegExp;
 }[] = [
-  { state: "injured", expression: /^(?:herid[oa]s?|lesionad[oa]s?|malherid[oa]s?)(?![\p{L}\p{M}])/iu },
-  { state: "alive", expression: /^viv[oa]s?(?![\p{L}\p{M}])/iu },
-  { state: "dead", expression: /^muert[oa]s?(?![\p{L}\p{M}])/iu },
-  { state: "conscious", expression: /^conscientes?(?![\p{L}\p{M}])/iu },
-  { state: "unconscious", expression: /^inconscientes?(?![\p{L}\p{M}])/iu },
-  { state: "bound", expression: /^(?:atad[oa]s?|encadenad[oa]s?)(?![\p{L}\p{M}])/iu },
-  { state: "free", expression: /^libres?(?![\p{L}\p{M}])/iu },
-  { state: "sick", expression: /^enferm[oa]s?(?![\p{L}\p{M}])/iu },
-  { state: "healthy", expression: /^san[oa]s?(?![\p{L}\p{M}])/iu },
-  { state: "missing", expression: /^desaparecid[oa]s?(?![\p{L}\p{M}])/iu },
-  { state: "present", expression: /^presentes?(?![\p{L}\p{M}])/iu }
+  { state: "injured", category: "physical", expression: /^(?:herid[oa]s?|lesionad[oa]s?|malherid[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "alive", category: "vital", expression: /^viv[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "dead", category: "vital", expression: /^muert[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "conscious", category: "cognitive", expression: /^conscientes?(?![\p{L}\p{M}])/iu },
+  { state: "unconscious", category: "cognitive", expression: /^inconscientes?(?![\p{L}\p{M}])/iu },
+  { state: "asleep", category: "cognitive", expression: /^dormid[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "awake", category: "cognitive", expression: /^despiert[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "bound", category: "social", expression: /^(?:atad[oa]s?|encadenad[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "free", category: "social", expression: /^libres?(?![\p{L}\p{M}])/iu },
+  { state: "imprisoned", category: "social", expression: /^(?:pres[oa]s?|encarcelad[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "trapped", category: "location", expression: /^atrapad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "sick", category: "physical", expression: /^enferm[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "healthy", category: "physical", expression: /^san[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "exhausted", category: "physical", expression: /^(?:agotad[oa]s?|exhaust[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "poisoned", category: "physical", expression: /^envenenad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "pregnant", category: "physical", expression: /^embarazad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "blind", category: "physical", expression: /^cieg[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "deaf", category: "physical", expression: /^sord[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "mute", category: "physical", expression: /^mud[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "paralyzed", category: "physical", expression: /^paralizad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "transformed", category: "other", expression: /^transformad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "afraid", category: "emotional", expression: /^(?:asustad[oa]s?|aterrorizad[oa]s?|temeros[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "angry", category: "emotional", expression: /^(?:enfadad[oa]s?|enojad[oa]s?|furios[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "calm", category: "emotional", expression: /^(?:tranquil[oa]s?|calmad[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "missing", category: "location", expression: /^desaparecid[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "present", category: "location", expression: /^presentes?(?![\p{L}\p{M}])/iu },
+  { state: "absent", category: "location", expression: /^(?:ausentes?|alejad[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "lost", category: "location", expression: /^perdid[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "protected", category: "social", expression: /^protegid[oa]s?(?![\p{L}\p{M}])/iu }
 ];
 
 const COPULA = /^(?<marker>volvi[oó]\s+a\s+|dej[oó]\s+de\s+|ya\s+no\s+|todav[ií]a\s+no\s+|a[uú]n\s+no\s+|no\s+)?(?<copula>est[aá]s?|est[aá]n?|estaba(?:n)?|estuv(?:o|ieron)|estar|estar[aá]n?|er(?:a|an)|fu(?:e|eron)|ser[aá]n?|es|son|sigu(?:e|en|i[oó]|ieron)|permanece(?:n)?|contin[uú](?:a|an|ó)|se\s+encuentra|se\s+encontraba|qued[oó]|parece(?:n)?)\s+(?<adverb>(?:(?:muy|bastante|gravemente|ligeramente)\s+)?)(?<adjective>[\p{L}\p{M}]+)(?![\p{L}\p{M}])/iu;
@@ -211,6 +237,7 @@ export function discoverNarrativeCharacterStateCandidates(
           revision: input.revision,
           entityId: entity.id,
           state: stateMatch.pattern.state,
+          category: stateMatch.pattern.category,
           polarity,
           grammaticalTense: tenseOf(copula, marker),
           aspect,

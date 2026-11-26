@@ -6504,22 +6504,20 @@ function isValidNarrativeIdeaStatusHistory(
   _writerDecisionCount: number,
   _omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
-  // Los historiales de libros importados son evidencia histórica, no comandos
-  // de escritura. Se aceptan ausencias, transiciones repetidas y relojes no
-  // monótonos para que el grafo pueda conservarlos y diagnosticarlos.
+  // Los historiales importados son datos históricos, no instrucciones nuevas.
+  // Se conservan aun cuando tengan marcas repetidas, retrocesos temporales,
+  // estados divergentes o estén ausentes; el grafo los clasifica como unknown
+  // o mismatch y mantiene las métricas observadas.
   if (value === undefined) return true;
   if (!Array.isArray(value) || value.length > 100) return false;
-  for (const change of value) {
-    if (!change ||
-        !["IDEA","incorporated","discarded"].includes(change.status) ||
-        !["initial","writer","text-revised"].includes(change.reason) ||
-        (change.changedAt !== undefined &&
-          (typeof change.changedAt !== "number" ||
-            !Number.isFinite(change.changedAt) || change.changedAt < 0))) {
-      return false;
-    }
-  }
-  return true;
+  return value.every((change: NarrativeIdeaStatusChange | null | undefined) =>
+    Boolean(change) &&
+    ["IDEA","incorporated","discarded"].includes(change!.status) &&
+    ["initial","writer","text-revised"].includes(change!.reason) &&
+    (change!.changedAt === undefined ||
+      (typeof change!.changedAt === "number" &&
+        Number.isFinite(change!.changedAt) && change!.changedAt >= 0))
+  );
 }
 function validateInput(input: LiteraryAnalysisInput): number {
   const baseOffset = input?.baseOffset ?? 0;
@@ -6598,7 +6596,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
   for (const event of input.knownProjectEvents ?? []) {
     if (!event || event.projectId !== input.projectId ||
         typeof event.eventId !== "string" || !event.eventId.trim() ||
-        projectEventIds.has(event.eventId) ||
         typeof event.label !== "string" || !event.label.trim() ||
         !Array.isArray(event.participants) || event.participants.length > 500 ||
         event.participants.some((participant: string) => typeof participant !== "string" || !participant.trim()) ||

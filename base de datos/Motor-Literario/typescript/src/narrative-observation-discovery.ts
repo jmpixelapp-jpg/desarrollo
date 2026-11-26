@@ -193,6 +193,14 @@ function classifyGrammaticalTense(surface: string): NarrativeObservationCandidat
   return "unknown";
 }
 
+const NEGATED_AUXILIARY_PREFIX = /(?:^|[^\p{L}\p{M}\p{N}_])(?:no|nunca|jamás)\s+(?:(?:ha|han|había|habían|habrá|habrán|habría|habrían|está|están|estaba|estaban|estuvo|estuvieron|fue|fueron|era|eran|es|son|será|serán|puede|pueden|podía|podían|pudo|pudieron|quiere|quieren|quería|querían)\s+){1,3}$/iu;
+
+function hasNegationBeforeAction(sentence: string, actionStart: number): boolean {
+  const prefix = sentence.slice(0, actionStart);
+  return /(?:^|[^\p{L}\p{M}\p{N}_])(?:no|nunca|jamás)\s*$/iu.test(prefix) ||
+    NEGATED_AUXILIARY_PREFIX.test(prefix);
+}
+
 function validateInput(input: NarrativeObservationDiscoveryInput): void {
   if (!input || typeof input !== "object" ||
       typeof input.projectId !== "string" || !input.projectId.trim() ||
@@ -480,9 +488,9 @@ export function discoverNarrativeObservationCandidates(
             }
           };
         })();
-        const before = sentence.slice(0, match.index).match(/(?:\bno|\bnunca|\bjamás)\s*$/iu);
+        const isNegated = hasNegationBeforeAction(sentence, match.index);
         const directedRelationCandidate = signal.action === "entregar" &&
-          !before &&
+          !isNegated &&
           subjectCandidate?.voice === "active" &&
           grammaticalObjectCandidate && personalObjectCandidate &&
           subjectCandidate.entityId !== personalObjectCandidate.entityId
@@ -511,7 +519,7 @@ export function discoverNarrativeObservationCandidates(
         } as const;
         const interactionRole = interactionRoles[signal.action as keyof typeof interactionRoles];
         const directedInteractionCandidate = interactionRole &&
-          !before &&
+          !isNegated &&
           subjectCandidate?.voice === "active" &&
           personalObjectCandidate &&
           subjectCandidate.entityId !== personalObjectCandidate.entityId
@@ -553,7 +561,7 @@ export function discoverNarrativeObservationCandidates(
           ...(unresolvedReferences.length > 0 ? { unresolvedReferences } : {}),
           mentionedEntityIds: mentionedOthers.map(entity => entity.id).sort(),
           entityMentionEvidence,
-          polarity: before ? "negated" : "affirmed",
+          polarity: isNegated ? "negated" : "affirmed",
           confidence: "medium",
           reviewStatus: "candidate",
           actionEvidence: {

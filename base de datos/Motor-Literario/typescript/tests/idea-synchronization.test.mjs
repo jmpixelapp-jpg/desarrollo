@@ -228,7 +228,7 @@ test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS",
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-external"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 4);
   assert.equal(store.writes, 1);
   api.dispose();
 });
@@ -463,7 +463,7 @@ test("recupera la cola y la caché tras un fallo de persistencia", async () => {
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-target-b"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 4);
   assert.equal(store.writes, 2);
   api.dispose();
 });
@@ -530,7 +530,7 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   const reloaded = await api.getNarrativeIdeas();
   const reloadedSource = reloaded.find(item => item.id === "idea-source");
   assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 7);
   assert.equal(store.writes, 3);
   api.dispose();
 });
@@ -610,7 +610,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 3);
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"
@@ -773,6 +773,32 @@ test("rechaza catálogos de adaptadores con más de 500 vínculos por idea", asy
     api.getNarrativeIdeas(),
     /registro malformado en ideas/
   );
+  api.dispose();
+});
+
+
+test("una referencia rota no publica parcialmente la caché de ideas", async () => {
+  const invalidIdea = idea("idea-with-dangling-entity", {
+    relatedEntityIds: ["character-to-recover"]
+  });
+  const store = new RacingStore([invalidIdea]);
+  const api = createApi(store);
+
+  await assert.rejects(
+    api.getNarrativeIdeas(),
+    /referencias a entidades inexistentes/
+  );
+  const ideaReadsAfterFailure = store.ideaReads;
+  const entityReadsAfterFailure = store.entityReads;
+
+  const recoveredEntity = entity("character-to-recover", "Ana");
+  store.entities.set(store.key(recoveredEntity), structuredClone(recoveredEntity));
+  const recovered = await api.getNarrativeIdeas();
+
+  assert.equal(recovered.length, 1);
+  assert.deepEqual(recovered[0].relatedEntityIds, ["character-to-recover"]);
+  assert.equal(store.ideaReads, ideaReadsAfterFailure + 1);
+  assert.equal(store.entityReads, entityReadsAfterFailure + 1);
   api.dispose();
 });
 

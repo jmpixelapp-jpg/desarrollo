@@ -1577,14 +1577,25 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   private publishNarrativeChange(projectId: string): void {
-    // Una escritura directa también debe avisar a otras pestañas aunque este
-    // almacén no tenga suscriptores locales.
-    const channel = this.ensureNarrativeChangeChannel();
-    if (!channel) return;
+    const message = { type: "motor-literario:narrative-change", projectId };
+    const subscribedChannel = this.narrativeChangeChannel;
+    if (subscribedChannel) {
+      try {
+        subscribedChannel.postMessage(message);
+      } catch {
+        // La sincronización es complementaria: nunca debe invalidar una escritura ya confirmada.
+      }
+      return;
+    }
+    if (typeof BroadcastChannel === "undefined") return;
+    let channel: BroadcastChannel | undefined;
     try {
-      channel.postMessage({ type: "motor-literario:narrative-change", projectId });
+      channel = new BroadcastChannel(DATABASE_NAME + ":narrative-changes:v1");
+      channel.postMessage(message);
     } catch {
       // La sincronización es complementaria: nunca debe invalidar una escritura ya confirmada.
+    } finally {
+      channel?.close();
     }
   }
 

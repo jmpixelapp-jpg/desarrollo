@@ -148,7 +148,7 @@ export function extractNarrativeConsequenceCandidates(
   // sugerir una conexión que merece revisión, pero jamás demuestra causalidad.
   // No se generan si ya existe un enlace explícito para el mismo par.
   const explicitPairs = new Set(results.map(item => item.sourceEventId + "=>" + item.consequenceEventId));
-  const temporalPattern = /^\\s*(?:[«(]+\\s*)?(poco\\s+después|inmediatamente\\s+después|al\\s+instante|acto\\s+seguido|a\\s+continuación|después|entonces)(?=\\s|[,;:.!?—–-]|$)/iu;
+  const temporalPattern = /^\s*(?:[«(]+\s*)?(poco\s+después|inmediatamente\s+después|al\s+instante|acto\s+seguido|a\s+continuación|después|entonces)(?=\s|[,;:.!?—–-]|$)/iu;
   for (let index = 1; index < events.length && results.length < MAX_NARRATIVE_CONSEQUENCES; index++) {
     const source = events[index - 1];
     const consequence = events[index];
@@ -162,7 +162,7 @@ export function extractNarrativeConsequenceCandidates(
       source.evidence.end - (input.baseOffset ?? 0),
       consequence.evidence.start - (input.baseOffset ?? 0)
     );
-    if (/\\r?\\n[\\t ]*\\r?\\n/u.test(gap)) continue;
+    if (/\r?\n[\t ]*\r?\n/u.test(gap)) continue;
     const match = temporalPattern.exec(consequence.evidence.excerpt);
     if (!match) continue;
     const excerpt = match[1];

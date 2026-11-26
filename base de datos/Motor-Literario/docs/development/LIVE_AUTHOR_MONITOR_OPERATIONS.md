@@ -847,3 +847,11 @@ No se debe llamar a source.resynchronize(snapshot) antes de discardPendingAfterR
 La regresión integrada en live-author-monitor-change-binding.test.mjs utiliza el adaptador de textarea real: provoca queue_full y overflow, confirma la liberación de la copia sombra, rearma el binding, comprueba que el adaptador continúa bloqueado, aplica el snapshot común mediante resynchronize() y verifica que el siguiente delta admitido conserva la secuencia/revisión esperadas.
 
 **Evidencia:** prueba automatizada añadida al repositorio. La ejecución CI correspondiente a este cambio permanece pendiente de confirmación.
+
+## 26. Desmontaje terminal sin diagnóstico de discontinuidad recuperable
+
+El cierre definitivo de mountLiveAuthorMonitorTextArea() no equivale a pausar temporalmente una fuente que podría volver a suscribirse. La integración dispone primero LiveAuthorMonitorTextAreaSource y después detiene el binding; de ese modo, la función de cancelación del binding reconoce que la fuente ya es terminal y no genera un resync-required artificial.
+
+Las pausas por overflow, rechazo permanente, pérdida de foco o ciclo de vida conservan el comportamiento contrario: la fuente no se dispone, libera su copia temporal, marca needsResync y espera una reconciliación autoritativa. El anfitrión debe usar integration.dispose() para el desmontaje definitivo y integration.resynchronize() para recuperar una fuente viva.
+
+La regresión de live-author-monitor-textarea-integration.test.mjs verifica que un montaje y edición válidos se pueden desmontar sin errores de captura adicionales, y que quedan retirados tanto los listeners DOM como las suscripciones de reintento.

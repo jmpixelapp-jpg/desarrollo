@@ -3895,7 +3895,9 @@ export class HostEngineApi {
     if (!identity || typeof identity.projectId !== "string" || !identity.projectId.trim() ||
         typeof identity.projectName !== "string" || !identity.projectName.trim() ||
         (identity.writerId !== undefined &&
-          (typeof identity.writerId !== "string" || !identity.writerId.trim() || identity.writerId.length > 256))) {
+          (typeof identity.writerId !== "string" || !identity.writerId.trim() || identity.writerId.length > 256)) ||
+        (identity.deviceId !== undefined &&
+          (typeof identity.deviceId !== "string" || !identity.deviceId.trim() || identity.deviceId.length > 256))) {
       throw new Error("La identidad del proyecto o del escritor es inválida.");
     }
     this.engine.initializeProject(identity);

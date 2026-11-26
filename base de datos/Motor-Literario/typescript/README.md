@@ -1,5 +1,7 @@
 # Motor Literario — núcleo TypeScript inicial
 
+> Persistencia y sincronización: [Bandeja durable DB26](../docs/architecture/SYNC_OUTBOX_Y_MIGRACION_INDEXEDDB_V26.md).
+
 Esta carpeta contiene la implementación definitiva en TypeScript. El código Rust anterior queda como referencia histórica y no forma parte del runtime del producto.
 
 **Integración con el programa anfitrión:** consulte la [Guía de integración TypeScript](../docs/integration/GUIA_INTEGRACION_ANFITRION_V1.md), que define el contrato público y los pasos de conexión.

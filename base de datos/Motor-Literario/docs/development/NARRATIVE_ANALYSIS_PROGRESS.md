@@ -372,3 +372,10 @@ Se ampliaron las pruebas para comprobar el campo emitido por el reconciliador, r
 
 
 La prueba de relación reflexiva ahora también aplica ambas propuestas, verifica que los dos extremos quedan reparados y comprueba que cada operación genera una auditoría distinta. Se confirma en GitHub el código y las pruebas modificadas; el estado de CI sigue sin reportar ejecuciones para el commit actual.
+
+
+## Verificación de integridad del historial de reparaciones
+
+Se añadió `verifyNarrativeReferenceRepairAuditIntegrity(store, projectId)`. La verificación comprueba la estructura de cada entrada, la correspondencia del identificador determinista con los datos operativos, la coherencia de las referencias anterior y posterior, y la unicidad de las operaciones. Además compara el destino registrado con la ficha actual. Los cambios posteriores y las fichas ausentes se presentan como estados históricos diferenciados, sin clasificarlos automáticamente como corrupción del registro.
+
+IndexedDB también valida el tipo de campo, los valores anterior/posterior y el ID determinista antes de aceptar una entrada. Se añadieron pruebas para auditoría íntegra, cambio posterior legítimo del registro y manipulación del ID de operación. **Pendiente:** ejecutar typecheck, suite completa y pruebas de migración IndexedDB en entorno compatible.

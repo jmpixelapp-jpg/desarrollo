@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
-import { IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
+const { IndexedDbProjectStore } = await import("../dist/motor-literario.js");
 
 const operation = (overrides = {}) => ({
   operationId: "op-1",

@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry, NarrativeReferenceRepairPendingEntry } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDocumentMetadata, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry, NarrativeReferenceRepairPendingEntry } from "../contracts";
 import type { NarrativeIdeaContinuityIndex } from "../narrative-idea-continuity-index";
 import { validateNarrativeIdeaContinuityIndex } from "../narrative-idea-continuity-index";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
@@ -6130,6 +6130,46 @@ export class IndexedDbProjectStore implements ProjectStore {
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudieron leer los diagnósticos."));
       transaction.onabort = () => reject(validationError ?? transaction.error ?? new Error("Se canceló la lectura de diagnósticos."));
     });
+  }
+
+  /**
+   * Enumera solo identidades y revisiones. El anfitrión puede detectar qué
+   * documentos cambiaron sin clonar o transferir todo el texto del proyecto.
+   */
+  async loadDocumentMetadata(projectId: string): Promise<readonly StoredDocumentMetadata[]> {
+    if (typeof projectId !== "string" || !projectId.trim() || projectId.length > 256) {
+      throw new Error("Identificador de proyecto inválido para enumerar metadatos documentales.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(DOCUMENTS, "readonly");
+    const request = transaction.objectStore(DOCUMENTS).index("by-project").getAll(projectId);
+    const documents = await readAfterTransaction(
+      transaction, request, "No se pudieron enumerar los metadatos documentales."
+    ) as StoredDocument[];
+    if (!Array.isArray(documents)) {
+      throw new Error("El almacenamiento devolvió metadatos documentales inválidos.");
+    }
+    const seen = new Set<string>();
+    const metadata: StoredDocumentMetadata[] = [];
+    for (const document of documents) {
+      if (!document || document.projectId !== projectId ||
+          typeof document.documentId !== "string" || !document.documentId.trim() ||
+          !Number.isSafeInteger(document.revision) || document.revision < 0 ||
+          !Number.isSafeInteger(document.sequence) || document.sequence < 0 ||
+          !Number.isFinite(document.updatedAt) || document.updatedAt < 0 ||
+          seen.has(document.documentId)) {
+        throw new Error("Los metadatos documentales contienen una identidad duplicada o inválida.");
+      }
+      seen.add(document.documentId);
+      metadata.push({
+        projectId,
+        documentId: document.documentId,
+        revision: document.revision,
+        sequence: document.sequence,
+        updatedAt: document.updatedAt
+      });
+    }
+    return metadata.sort((a, b) => a.documentId.localeCompare(b.documentId));
   }
 
   async loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined> {

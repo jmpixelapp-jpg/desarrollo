@@ -457,3 +457,8 @@ El proveedor puede omitir `activityKind`, o usar exactamente una de las siete et
 ## 29. Cierre reintentable del proveedor transaccional
 
 El handle de cancelación del proveedor se conserva hasta que `unsubscribe()` termina correctamente. Si falla, no se crea una segunda suscripción sobre la anterior y `attachProvider()` exige completar primero la retirada pendiente. Las llamadas repetidas a `source.dispose()` y a `integration.dispose()` reintentan la limpieza. Esto evita ocultar listeners todavía activos y evita que una reanudación abra duplicados tras un fallo transitorio del proveedor.
+
+
+## 30. Diferenciar listener activo de cancelación pendiente
+
+Un disposer presente no implica por sí solo que haya fallado: normalmente representa el listener activo del proveedor. `attachProvider()` no lo cancela ni crea otro. Solo cuando el último intento a `unsubscribe()` lanzó una excepción se activa `providerDetachFailed`, y en la siguiente reanudación se reintenta ese mismo handle antes de abrir una suscripción nueva. Un cierre correcto borra el handle y el flag; un fallo conserva ambos.

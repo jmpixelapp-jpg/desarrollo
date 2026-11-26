@@ -89,7 +89,21 @@ export function extractNarrativeAssertions(
           const start = baseOffset + localStart;
           const excerpt = text.slice(lineStart, lineEnd);
           const evidence: TextEvidence = { documentId, revision, start, end: baseOffset + localEnd, excerpt };
-          const timeReference = explicitTimeReference(excerpt, localStart - lineStart);
+          // Una fecha solo puede contextualizar esta afirmación si aparece
+          // en su misma oración. Nunca se toma la fecha más cercana de otra
+          // oración de la misma línea.
+          const sentenceStart = Math.max(
+            text.lastIndexOf(".", localStart - 1),
+            text.lastIndexOf("!", localStart - 1),
+            text.lastIndexOf("?", localStart - 1),
+            text.lastIndexOf("\\n", localStart - 1)
+          ) + 1;
+          const sentenceStops = [".", "!", "?", "\\n"]
+            .map(mark => text.indexOf(mark, localEnd))
+            .filter(index => index >= 0);
+          const sentenceEnd = sentenceStops.length ? Math.min(...sentenceStops) : text.length;
+          const sentence = text.slice(sentenceStart, sentenceEnd);
+          const timeReference = explicitTimeReference(sentence, localStart - sentenceStart);
           output.push({
             projectId, id: "assertion:" + entity.id + ":" + documentId + ":" + revision + ":" + start + ":" + definition.attribute,
             entityId: entity.id, entityName: entity.canonicalName, attribute: definition.attribute,

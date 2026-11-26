@@ -1238,3 +1238,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresión:** la prueba de resincronización transaccional confirma que se crea exactamente una nueva suscripción tras retirar la anterior; las pruebas de cancelación fallida siguen verificando reintento y `dispose()` repetido.
 
 **Validación:** [Live Author Monitor — run 45753400038](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753400038) aprobó todas las pruebas específicas del monitor y el benchmark. [Motor Literario TypeScript — run 45753400053](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753400053) pasó type-check; su suite global registró 847/849 pruebas aprobadas y falló solo en las dos pruebas de sincronización narrativa indicadas en la sección 73. La corrección de listener activo/failed-detach pasó la lane específica.
+
+
+## 75. Propagar fallos de limpieza al llamador sin perder el cancelador (26 de noviembre de 2026)
+
+**Hallazgo:** el source ya retenía el disposer después de una excepción del proveedor y una llamada posterior a `dispose()` podía reintentarla, pero la primera llamada devolvía éxito aunque el listener siguiera registrado. El consumidor no tenía una señal síncrona fiable de que debía repetir la limpieza.
+
+**Corrección:** `dispose()` ahora comprueba `providerDetachFailed` después del intento de cancelación y lanza un error explícito si el listener no pudo retirarse. El objeto queda marcado como dispuesto, borra sus colas internas y conserva el handle fallido. Una segunda llamada vuelve a intentar el mismo cancelador; si tiene éxito, `dispose()` vuelve a ser idempotente. La integración pública propaga ese error, pero también permite repetir su propio `dispose()` para finalizar la liberación.
+
+**Regresiones:** la prueba de source exige que la primera llamada lance cuando el proveedor falla una vez y que la segunda complete la retirada; la prueba de integración fuerza dos fallos transitorios (binding y source), exige el error al llamador y verifica que la segunda llamada pública elimina el último listener.
+
+**Validación:** pendiente de CI para este cambio.

@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { IDBFactory } from "fake-indexeddb";
 import { IndexedDbProjectStore } from "../dist/motor-literario.js";
+
+globalThis.indexedDB ??= new IDBFactory();
 
 const DATABASE_NAME = "motor-literario-local";
 const projectId = "indexeddb-idea-transaction";
@@ -41,9 +44,7 @@ function deleteDatabase() {
   });
 }
 
-test("IndexedDB revierte una idea inválida y conserva CAS frente a instantáneas obsoletas", {
-  skip: typeof indexedDB === "undefined" ? "Este runtime de Node no expone IndexedDB nativo." : false
-}, async () => {
+test("IndexedDB revierte una idea inválida y conserva CAS frente a instantáneas obsoletas", async () => {
   await deleteDatabase();
   const store = new IndexedDbProjectStore();
   const original = idea();
@@ -81,9 +82,7 @@ test("IndexedDB revierte una idea inválida y conserva CAS frente a instantánea
 });
 
 
-test("IndexedDB serializa dos CAS concurrentes sobre la misma idea y confirma solo uno", {
-  skip: typeof indexedDB === "undefined" ? "Este runtime de Node no expone IndexedDB nativo." : false
-}, async () => {
+test("IndexedDB serializa dos CAS concurrentes sobre la misma idea y confirma solo uno", async () => {
   await deleteDatabase();
   const firstStore = new IndexedDbProjectStore();
   const secondStore = new IndexedDbProjectStore();
@@ -112,9 +111,7 @@ test("IndexedDB serializa dos CAS concurrentes sobre la misma idea y confirma so
   }
 });
 
-test("IndexedDB valida destinos idea dentro del proyecto y revierte referencias inválidas", {
-  skip: typeof indexedDB === "undefined" ? "Este runtime de Node no expone IndexedDB nativo." : false
-}, async () => {
+test("IndexedDB valida destinos idea dentro del proyecto y revierte referencias inválidas", async () => {
   await deleteDatabase();
   const store = new IndexedDbProjectStore();
   const original = idea();

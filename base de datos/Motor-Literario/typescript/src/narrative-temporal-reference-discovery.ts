@@ -143,6 +143,9 @@ function discoverMatches(text: string): readonly Match[] {
     priority: number;
   }[] = [
     { expression: /\b(?:al\s+d[ií]a\s+siguiente|a\s+la\s+ma[nñ]ana\s+siguiente|el\s+d[ií]a\s+despu[eé]s)\b/giu, relation: "next-day-after", kind: "relative-order", priority: 85 },
+    { expression: /\b(?:anteayer|ayer|hoy|pasado\s+ma[nñ]ana|el\s+d[ií]a\s+de\s+ma[nñ]ana|la\s+v[ií]spera)\b/giu, relation: "unspecified", kind: "relative-order", priority: 88 },
+    { expression: /\b(?:a\s+lo\s+largo\s+de|desde\s+hace|durante|por)\s+(?:un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte|treinta|cuarenta|cincuenta|cien|varios?|\d+)\s+(?:segundos?|minutos?|horas?|d[ií]as?|semanas?|meses?|a[nñ]os?|d[eé]cadas?|siglos?|lustros?)\b/giu, relation: "duration", kind: "relative-duration", priority: 79 },
+    { expression: /\b(?:al\s+cabo\s+de|dentro\s+de|en|hace)\s+(?:un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte|treinta|cuarenta|cincuenta|cien|varios?|\d+)\s+(?:segundos?|minutos?|horas?|d[ií]as?|semanas?|meses?|a[nñ]os?|d[eé]cadas?|siglos?|lustros?)\b/giu, relation: "after", kind: "relative-duration", priority: 79 },
     { expression: /\b(?:una|dos|tres|cuatro|cinco|varios?)\s+(?:d[ií]as?|semanas?|meses?|a[nñ]os?)\s+(?:despu[eé]s|m[aá]s\s+tarde|antes)\b/giu, relation: "duration", kind: "relative-duration", priority: 80 },
     { expression: /\b(?:desde\s+hace|durante|por)\s+(?:un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|quince|veinte|treinta|cuarenta|cincuenta|cien|varios?|\d+)\s+(?:d[ií]as?|semanas?|meses?|a[nñ]os?)\b/giu, relation: "duration", kind: "relative-duration", priority: 78 },
     { expression: /\b(?:al\s+cabo\s+de|dentro\s+de|hace)\s+(?:un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|quince|veinte|treinta|cuarenta|cincuenta|cien|varios?|\d+)\s+(?:d[ií]as?|semanas?|meses?|a[nñ]os?)\b/giu, relation: "after", kind: "relative-duration", priority: 78 },
@@ -154,8 +157,8 @@ function discoverMatches(text: string): readonly Match[] {
   for (const item of relative) {
     add(item.expression, match => [{
       kind: item.kind,
-      relation: item.kind === "relative-duration"
-        ? /^(?:desde\s+hace|durante|por)\s+/iu.test(match[0]) ? "duration"
+      relation: item.kind === "relative-order" && /^(?:anteayer|ayer|la\s+v[ií]spera)$/iu.test(match[0]) ? "before"\n        : item.kind === "relative-order" && /^(?:pasado\s+ma[nñ]ana|el\s+d[ií]a\s+de\s+ma[nñ]ana)$/iu.test(match[0]) ? "after"\n        : item.kind === "relative-duration"
+        ? /^(?:a\s+lo\s+largo\s+de|desde\s+hace|durante|por)\s+/iu.test(match[0]) ? "duration"
           : /^(?:hace)\s+|antes$/iu.test(match[0]) ? "before" : "after"
         : item.relation,
       anchorRequired: true, absoluteResolution: "unresolved-relative", priority: item.priority

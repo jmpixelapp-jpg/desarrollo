@@ -608,3 +608,20 @@ El lease protege exclusivamente los checkpoints de métricas. No bloquea el edit
 Las pruebas cubren contienda de dos propietarios, renovación, incremento del token después de liberación/expiración, rechazo de escritura del propietario anterior, handoff en HostEngineApi, renovación con snapshot local antiguo y fallo temporal de liberación.
 
 **Validación CI verificada:** ejecución específica [45726102805](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726102805), commit `56f7269ba27afcd1883c3232c0968eef19ba76f2`: esquema MLDB 0.4.2 válido, auditoría física correcta (25 tablas y 34 almacenes), build Vite y **107 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye la regresión que fuerza un fallo de liberación y verifica que se conserva la reserva para reintentar.
+
+
+
+## 32. Prueba E2E de titularidad entre dos pestañas con Chromium
+
+Se añadió una prueba de navegador real para que la coordinación no dependa únicamente de `fake-indexeddb` en memoria:
+- `tests/browser/live-author-monitor-lease.html` es un harness exclusivo de pruebas. Carga directamente el adaptador TypeScript `IndexedDbProjectStore` desde Vite y no se copia al bundle de producción.
+- `tests/live-author-monitor-browser.test.mjs` inicia un servidor Vite de prueba, arranca Chromium mediante Playwright y abre dos páginas independientes dentro del mismo contexto/origen. Cada página crea su propia instancia de `IndexedDbProjectStore`; ambas comparten la base IndexedDB real del navegador.
+- Las dos páginas compiten simultáneamente por el mismo proyecto/documento. La prueba exige que solo una adquiera el lease inicial y que la otra no pueda adquirirlo mientras siga activo.
+- La primera página libera; la segunda adquiere el token siguiente. La escritura del checkpoint con el objeto de lease antiguo debe ser rechazada por fencing, mientras la nueva titularidad puede guardar y la página anterior lee el checkpoint compartido.
+- El workflow instala Chromium con `npx playwright install --with-deps chromium` antes de ejecutar la suite.
+
+Esta E2E valida el comportamiento de la capa IndexedDB y el fencing entre pestañas en un navegador real; no simula ni acredita un editor de manuscritos de producción. El HTML del harness es una fixture de tests, no una UI distribuida.
+
+**Validación CI verificada:** ejecución [45726598052](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726598052), commit `0d1448e8aa1d635cdd4cee8568c4b19e74738729`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 34 almacenes), build Vite y **108 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye la ejecución de la prueba en Chromium.
+
+**Límite pendiente de integración:** el árbol actual del repositorio no contiene páginas HTML de la aplicación, componentes de edición, ni dependencias de un editor como Monaco, CodeMirror, ProseMirror o Lexical. Por tanto, `LiveAuthorMonitorEditorTransactionProvider` sigue siendo el contrato correcto para el anfitrión, pero todavía no existe una API de transacciones de producción a la que conectar el adaptador. No se debe reconstruir undo/redo a partir de `input`/DOM ni presentar el harness como editor real.

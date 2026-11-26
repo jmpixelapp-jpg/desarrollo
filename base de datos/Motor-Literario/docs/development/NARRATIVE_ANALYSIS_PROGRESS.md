@@ -575,3 +575,12 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 **Límite de entrega:** el protocolo continúa siendo al menos una vez. Web Locks impide dos replays cooperantes simultáneos en el mismo origen/proyecto, pero no vuelve atómica una mutación de dominio externa con el acuse IndexedDB. Los handlers deben seguir siendo idempotentes por `operationId`.
 
 **Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado en este entorno; no se declara aprobada la compilación ni la suite.
+
+
+## Recuperación de interrupciones y acuses idempotentes
+
+- Se añadieron pruebas para la ventana crítica entre la persistencia del efecto de dominio y `markApplied`.
+- El escenario simula que el handler registra un recibo durable por `operationId` y luego falla antes del acuse. El replay conserva la operación pendiente, la vuelve a entregar con la misma identidad y el recibo evita repetir el efecto.
+- Se añadieron pruebas de acuse desde dos instancias `IndexedDbNarrativeSyncJournal` que comparten el mismo nombre de base de datos. El primer `appliedAt` durable se conserva ante acuses repetidos y un digest incorrecto se rechaza.
+- Esto no convierte el sistema en exactly-once: el efecto y el acuse siguen siendo dos escrituras separadas. Cada handler debe ofrecer idempotencia/CAS o una bandeja durable de deduplicación atómica con su efecto.
+- El archivo de pruebas del consumidor pasa a contener 14 pruebas declaradas. No se han ejecutado en este entorno; typecheck, build y suite completa continúan pendientes.

@@ -79,12 +79,12 @@ function validateOccurrence(
       !occurrence.evidence ||
       occurrence.evidence.documentId !== occurrence.documentId ||
       occurrence.evidence.revision !== occurrence.revision ||
+      typeof occurrence.evidence.excerpt !== "string" ||
       !occurrence.evidence.excerpt.includes(occurrence.text) ||
       !Number.isSafeInteger(occurrence.evidence.start) ||
       !Number.isSafeInteger(occurrence.evidence.end) ||
       occurrence.evidence.start < 0 ||
       occurrence.evidence.end <= occurrence.evidence.start ||
-      typeof occurrence.evidence.excerpt !== "string" ||
       occurrence.evidence.excerpt.length > MAX_EVIDENCE_UNITS) {
     throw new Error("La evolución contiene una aparición de idea inválida.");
   }

@@ -11,9 +11,10 @@ export type NarrativeSyncAcceptResult =
   | { readonly status: "accepted"; readonly nextSequence: number }
   | { readonly status: "duplicate"; readonly nextSequence: number };
 
-interface StoredOperation extends NarrativeSyncOperationEnvelope {
+export interface NarrativeSyncJournalEntry extends NarrativeSyncOperationEnvelope {
   readonly receivedAt: number;
 }
+type StoredOperation = NarrativeSyncJournalEntry;
 
 interface WriterCursor {
   readonly projectId: string;
@@ -120,6 +121,68 @@ export class IndexedDbNarrativeSyncJournal {
       };
       transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("Falló el diario de sincronización."));
       transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se abortó el diario de sincronización."));
+    });
+  }
+
+  /** Recupera operaciones recibidas para que un consumidor pueda procesarlas tras reiniciar. */
+  async loadOperations(
+    projectId: string,
+    writerId?: string
+  ): Promise<readonly NarrativeSyncJournalEntry[]> {
+    if (!projectId.trim() || (writerId !== undefined && !writerId.trim())) {
+      throw new TypeError("Proyecto y escritor deben ser identificadores no vacíos.");
+    }
+    const database = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction("operations", "readonly");
+      const request = transaction.objectStore("operations").index("by-project").getAll(projectId);
+      let entries: NarrativeSyncJournalEntry[] = [];
+      let ready = false;
+      request.onsuccess = () => {
+        entries = (request.result as StoredOperation[])
+          .filter(entry => writerId === undefined || entry.writerId === writerId)
+          .sort((left, right) =>
+            left.writerId.localeCompare(right.writerId) || left.sequence - right.sequence
+          );
+        ready = true;
+      };
+      request.onerror = () => {
+        try { transaction.abort(); } catch { /* abortado */ }
+      };
+      transaction.oncomplete = () => ready
+        ? resolve(entries)
+        : reject(new Error("No se pudieron recuperar las operaciones recibidas."));
+      transaction.onerror = () => reject(transaction.error ?? new Error("Falló la lectura del diario."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura del diario."));
+    });
+  }
+
+  /** Recupera una operación por su identidad durable dentro del proyecto. */
+  async loadOperation(
+    projectId: string,
+    operationId: string
+  ): Promise<NarrativeSyncJournalEntry | undefined> {
+    if (!projectId.trim() || !operationId.trim()) {
+      throw new TypeError("Proyecto y operationId deben ser identificadores no vacíos.");
+    }
+    const database = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction("operations", "readonly");
+      const request = transaction.objectStore("operations").get([projectId, operationId]);
+      let entry: StoredOperation | undefined;
+      let ready = false;
+      request.onsuccess = () => {
+        entry = request.result as StoredOperation | undefined;
+        ready = true;
+      };
+      request.onerror = () => {
+        try { transaction.abort(); } catch { /* abortado */ }
+      };
+      transaction.oncomplete = () => ready
+        ? resolve(entry)
+        : reject(new Error("No se pudo recuperar la operación solicitada."));
+      transaction.onerror = () => reject(transaction.error ?? new Error("Falló la lectura de la operación."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura de la operación."));
     });
   }
 

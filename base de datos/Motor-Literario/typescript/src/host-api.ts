@@ -787,7 +787,9 @@ export class HostEngineApi {
         ? async notice => {
             const operations: Promise<unknown>[] = [];
             if (continuityNoticeCallback) {
-              operations.push(Promise.resolve(continuityNoticeCallback(notice)));
+              // Un fallo síncrono del callback auxiliar no debe impedir que
+              // el outbox durable reciba la generación ya confirmada.
+              operations.push(Promise.resolve().then(() => continuityNoticeCallback(notice)));
             }
             if (options.continuityOutbox) {
               operations.push(options.continuityOutbox.enqueueContinuityIndex({

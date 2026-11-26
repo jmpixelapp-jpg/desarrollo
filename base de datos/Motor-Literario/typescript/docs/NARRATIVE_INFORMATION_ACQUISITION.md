@@ -123,3 +123,16 @@ El éxito del monitor no se mide por cuántos registros guarda. Se mide por cuá
 
 Las observaciones de acción del módulo de descubrimiento conservan un campo `actionEvidence` con el rango exacto del token verbal. Las señales generales de ingesta mantienen una ventana contextual alrededor del verbo; esa evidencia contextual permite ubicar el token dentro del texto fuente original, incluido un BOM UTF-8. No deben confundirse ambos contratos: uno sirve para atribución precisa de la acción y el otro para revisión contextual.
 
+## Relaciones dirigidas explícitas: transferencia
+
+En `src/narrative-observation-discovery.ts`, las acciones de transferencia `entregar` pueden producir `directedRelationCandidate` únicamente cuando coinciden todas estas condiciones en la misma oración:
+
+- sujeto gramatical candidato con patrón activo inequívoco;
+- una entidad de tipo objeto mencionada como complemento directo;
+- un personaje identificado como destinatario mediante el complemento explícito `a + nombre`;
+- emisor y destinatario distintos.
+
+La relación se etiqueta como `transfers-to` y conserva evidencias separadas del sujeto, objeto, destinatario y verbo. Sigue siendo candidata y nunca se confirma automáticamente. No se genera con sujeto pasivo, destinatario ausente, objeto no identificado o roles ambiguos. La negación se conserva en la observación y no debe interpretarse como una transferencia afirmada; la relación candidata requiere una acción no negada.
+
+Esta primera regla es deliberadamente estrecha: no generaliza el patrón a verbos como ayudar, atacar o hablar. Tampoco resuelve destinatarios implícitos ni referencias anafóricas. Los tests cubren el caso afirmativo y rechazan negación y estructuras incompletas/pasivas.
+

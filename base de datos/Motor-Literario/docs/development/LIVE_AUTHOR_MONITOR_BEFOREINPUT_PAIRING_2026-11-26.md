@@ -132,3 +132,4 @@ Al ejecutar la suite completa, se aislaron problemas en pruebas de descubrimient
 - Un caso temporal había sido incorporado con secuencias `\\n` literales dentro de una línea JavaScript; se restituyó el formato multilínea del test.
 
 Estos cambios corrigen fixtures y formato de pruebas, no amplían el clasificador lingüístico. La validación global debe repetirse sobre el commit resultante; todavía no se declara aprobada.
+Se afinó una última fixture de conectores concesivos para usar el mismo par de formas verbales ya comprobado por las pruebas base (`entró`/`corrió`). Así, esos casos aíslan el reconocimiento del conector y no dependen de variaciones en el inventario morfológico de acciones.

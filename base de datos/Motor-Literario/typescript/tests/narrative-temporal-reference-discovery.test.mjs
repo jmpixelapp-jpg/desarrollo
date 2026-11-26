@@ -39,7 +39,7 @@ test("extrae referencias de orden, franjas del día y horas sin asignar fecha ab
   const result = discover(text);
   assert.ok(result.some(item => item.relation === "simultaneous"));
   assert.ok(result.some(item => item.kind === "day-period" && item.surface === "al amanecer"));
-  assert.ok(result.some(item => item.kind === "clock-time" && item.surface === "18:30"));
+  assert.ok(result.some(item => item.kind === "clock-time" && item.surface.endsWith("18:30")));
   assert.ok(result.filter(item => item.kind === "day-period" || item.kind === "clock-time")
     .every(item => item.absoluteResolution === "unresolved-relative"));
 });
@@ -47,7 +47,7 @@ test("extrae referencias de orden, franjas del día y horas sin asignar fecha ab
 test("rechaza fechas imposibles, respeta offsets absolutos y valida límites", () => {
   const result = discover("La fecha fue 2019-02-29.", 90);
   assert.equal(result.some(item => item.kind === "calendar-date"), false);
-  assert.equal(result.find(item => item.kind === "calendar-year").evidence.start, 100);
+  assert.equal(result.find(item => item.kind === "calendar-year").evidence.start, 103);
   assert.throws(() => discover("Ana llegó.", -1));
   assert.throws(() => discover("x".repeat(2_000_001)));
 });

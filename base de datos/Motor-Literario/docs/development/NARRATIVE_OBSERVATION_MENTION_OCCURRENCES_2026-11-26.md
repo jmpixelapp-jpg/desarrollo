@@ -15,6 +15,7 @@ El campo previo `entityMentionEvidence` se mantiene sin cambios para compatibili
 - Los alias de una misma entidad que cubren exactamente el mismo intervalo se deduplican.
 - Si dos entidades diferentes comparten un alias, ambas menciones se conservan. La colisión no se resuelve por orden ni se fusionan las entidades.
 - Cada aparición conserva documento, revisión, offsets absolutos UTF-16 y fragmento literal.
+- Se limita a 20.000 menciones por frase; superar el límite produce un error explícito en vez de truncar silenciosamente los resultados.
 - La presencia de una entidad no asigna sujeto, agente, objeto ni causalidad.
 
 ## Cobertura de pruebas

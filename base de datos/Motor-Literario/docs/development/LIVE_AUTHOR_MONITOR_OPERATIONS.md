@@ -520,3 +520,6 @@ Estos datos son una medición de CI en Node.js 22.23.5, no una garantía univers
 ## 39. Ráfaga síncrona de notificaciones reentrantes
 
 La suite incluye un caso de carga que hace que el primer suscriptor produzca 999 admisiones adicionales durante la entrega del snapshot inicial. Un segundo suscriptor debe recibir exactamente 1.000 snapshots con secuencias consecutivas, sin invertir el orden ni desbordar la pila. Esta regresión valida que el drenaje FIFO es iterativo y no se implementa mediante llamadas recursivas anidadas.
+
+
+**Validación de carga adicional:** [Live Author Monitor — run 45755953392](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45755953392) aprobó 38/38 pruebas. La ráfaga de 1.000 snapshots se drenó en 2,31 ms y el benchmark de 100.000 commits terminó en 355,86 ms (~281.013 commits/s), con heap de 4,26 MiB al 50 % y al 100 % de carga y cero tickets pendientes. La conclusión global de Actions sigue siendo `failure` únicamente por controles de infraestructura/compilación compartidos fuera del núcleo del monitor.

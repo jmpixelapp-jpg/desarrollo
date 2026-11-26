@@ -737,3 +737,20 @@ La cronología solo se orienta cuando ambos documentos figuran en `orderedDocume
 Límites de recursos: máximo 200 candidatos, 500 unidades UTF-16 por texto de idea, 10.000 relaciones publicadas y señal explícita `truncated` si el límite de resultados recorta la lista. Se cuentan los pares comparados entre documentos para permitir diagnóstico del coste.
 
 Se agregan once pruebas para recurrencia normalizada, resonancia, coincidencia insuficiente, aislamiento por documento, cronología explícita/desconocida, filtrado de términos frecuentes, determinismo, cambios de modalidad, entradas inválidas, truncamiento e integración con candidatos previos en el pipeline.
+
+
+### Fase AR: reconstrucción de la evolución de ideas
+
+Se incorpora `narrative-idea-evolution.ts` y el resultado `ideaEvolution` al pipeline coordinado. La capa convierte las relaciones entre capítulos en eventos explícitos y resumidos:
+
+- `reappeared`: recurrencia de formulación normalizada con cronología documental explícita.
+- `echoed`: resonancia léxica con cronología documental explícita.
+- `observed-without-order`: relación comprobable entre dos apariciones, pero sin orden suficiente para afirmar cuál ocurrió primero.
+
+Cada evento conserva las dos apariciones, sus IDs, documentos, revisiones, textos y evidencias. Cuando existe orden explícito, publica `earlierOccurrence` y `laterOccurrence`. Los cambios de modalidad y de clase expresiva se muestran como señales separadas; no se denominan contradicción, sustitución ni cambio de significado confirmado.
+
+El resumen cuenta recurrencias, ecos, relaciones sin cronología, cambios de modalidad y cambios de clase. También propaga la señal de truncamiento del análisis de relaciones para que una vista parcial no se presente como historia completa.
+
+La capa solo lee candidatos y relaciones. No cambia el estado editorial `IDEA / incorporated / discarded`, no escribe `statusHistory`, no archiva ni elimina entradas y no modifica la biblioteca personal. La ausencia de una relación tampoco demuestra que una idea sea nueva, abandonada o inexistente: la memoria previa suministrada puede ser parcial.
+
+Se endureció la validación de relaciones para comprobar proyectos, IDs únicos, documentos diferentes, evidencia compatible, métricas y coherencia entre la modalidad de cada extremo y `polarityRelation`. Se agregaron diez pruebas para reaparición exacta, eco léxico, cronología desconocida, modalidad, tipo expresivo, truncamiento, determinismo, aislamiento de proyecto, referencias incoherentes e integración con el pipeline.

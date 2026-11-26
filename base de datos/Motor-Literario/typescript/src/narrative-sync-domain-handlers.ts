@@ -335,3 +335,19 @@ export function createNarrativeEntityUpsertHandler(
     }
   };
 }
+
+/**
+ * Registra el conjunto completo de handlers de dominio para el consumidor entrante.
+ * La construcción falla pronto si el almacén no proporciona todos los métodos CAS.
+ */
+export function createNarrativeSyncDomainHandlers(
+  store: ProjectStore
+): readonly NarrativeSyncOperationHandler[] {
+  return [
+    createNarrativeEntityUpsertHandler(store),
+    createNarrativeIdeaUpsertHandler(store),
+    createNarrativeAssertionUpsertHandler(store),
+    createNarrativeRelationUpsertHandler(store),
+    createNarrativeEventUpsertHandler(store)
+  ];
+}

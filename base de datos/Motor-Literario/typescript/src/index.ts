@@ -1,4 +1,5 @@
 export * from "./contracts";
+export * from "./book-ingestion";
 export * from "./engine";
 export * from "./proofreading";
 export * from "./persistence/indexeddb-store";

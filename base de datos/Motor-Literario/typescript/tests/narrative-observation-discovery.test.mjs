@@ -634,7 +634,7 @@ test("distingue acciones narradas de contenidos bajo creencia, memoria, deseo y 
 });
 
 test("marca como hipotético el contenido introducido por si y conserva narración no enmarcada", () => {
-  const hypotheticalText = "Si Ana llegara, Bruno huiría.";
+  const hypotheticalText = "Si Ana corre, Bruno huye.";
   const hypothetical = discoverNarrativeObservationCandidates({
     ...context, entities: [character, { ...character, id: "character:bruno", canonicalName: "Bruno" }],
     text: hypotheticalText

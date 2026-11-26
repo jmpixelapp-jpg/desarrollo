@@ -39,7 +39,7 @@ export const MAX_NARRATIVE_ELLIPTICAL_SUBJECT_CANDIDATES = 2_000;
 export const MAX_NARRATIVE_ELLIPTICAL_SUBJECT_TEXT_UNITS = 2_000_000;
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function containsCharacterMention(text: string, entities: readonly NarrativeEntity[]): boolean {
@@ -87,11 +87,18 @@ function validate(input: NarrativeEllipticalSubjectDiscoveryInput): void {
     if (!observation || observation.projectId !== input.projectId ||
         observation.documentId !== input.documentId || observation.revision !== input.revision ||
         observation.kind !== "action" ||
+        !observation.evidence || !observation.actionEvidence ||
+        !Array.isArray(observation.mentionedCharacterIds) ||
         !Number.isSafeInteger(observation.evidence.start) ||
         !Number.isSafeInteger(observation.evidence.end) ||
         observation.evidence.start < (input.baseOffset ?? 0) ||
         observation.evidence.end > (input.baseOffset ?? 0) + input.text.length ||
-        observation.evidence.end <= observation.evidence.start) {
+        observation.evidence.end <= observation.evidence.start ||
+        (observation.grammaticalSubjectCandidate !== undefined &&
+          (!observation.grammaticalSubjectCandidate.entityId ||
+            !observation.grammaticalSubjectCandidate.evidence ||
+            observation.grammaticalSubjectCandidate.evidence.documentId !== input.documentId ||
+            observation.grammaticalSubjectCandidate.evidence.revision !== input.revision))) {
       throw new Error("Las observaciones deben pertenecer al mismo documento, revisión y rango textual.");
     }
   }

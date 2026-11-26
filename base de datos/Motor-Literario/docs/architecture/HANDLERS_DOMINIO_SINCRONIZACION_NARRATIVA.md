@@ -165,3 +165,13 @@ Estas pruebas verifican coordinación a través de la transacción compartida de
 La entrada pública de recuperación usa Web Locks API cuando está disponible. Solicita un bloqueo exclusivo con nombre determinista por proyecto (`motor-literario:narrative-reference-repair:<projectId>`) y mantiene dentro del bloqueo la lectura de intenciones, revalidación, CAS, auditoría y eliminación de cada intención. Así, pestañas del mismo origen que compartan el gestor Web Locks no ejecutan simultáneamente el replay de un mismo proyecto.
 
 La API Web Locks es una mejora de coordinación, no un requisito para la persistencia: si el entorno no la expone, se conserva la serialización dentro del runtime y el CAS por registro. En ese fallback no se afirma exclusión entre pestañas. Si el gestor existe pero rechaza la solicitud, el error se propaga; no se degrada silenciosamente a una recuperación sin bloqueo.
+
+
+### Reconciliación de reparación, auditoría y sincronización
+
+La API `reconcileNarrativeRepairAndSyncState(store, projectId, journal)` produce un informe de solo lectura que combina:
+- estado de cada intención pendiente y si su `operationId` ya aparece en la auditoría;
+- integridad estructural de las auditorías y contraste de sus resultados con los registros actuales;
+- cantidad e identidades de operaciones remotas pendientes y ya aplicadas en el diario de sincronización.
+
+Una intención que conserva su auditoría indica que el proceso pudo interrumpirse después de escribirla y antes de borrar la intención. La recuperación existente puede completar esa ventana de forma idempotente. Los IDs del diario de sincronización se muestran separadamente: no se presupone que sean equivalentes a IDs de reparación. La API no corrige, confirma ni borra datos.

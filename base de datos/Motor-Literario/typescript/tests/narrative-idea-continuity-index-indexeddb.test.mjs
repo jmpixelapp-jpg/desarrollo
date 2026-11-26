@@ -14,12 +14,12 @@ const {
   hydrateNarrativeIdeaContinuityIndex
 } = await import("../dist/motor-literario.js");
 
-function idea(id, documentId, text, revision = 1) {
+function idea(id, documentId, text, revision = 1, projectId = "persisted-continuity-" + projectSuffix) {
   const excerpt = "La idea expresada es " + text + ".";
   const start = 10 + excerpt.indexOf(text);
   return {
     id,
-    projectId: "persisted-continuity-" + projectSuffix,
+    projectId,
     documentId,
     revision,
     kind: "theme",
@@ -33,7 +33,7 @@ function idea(id, documentId, text, revision = 1) {
 
 const projectSuffix = randomUUID();
 
-function result(candidates, orderedDocumentIds) {
+function result(candidates, orderedDocumentIds, projectId = "persisted-continuity-" + projectSuffix) {
   const relations = analyzeNarrativeIdeaCrossDocumentRelations({
     projectId: "persisted-continuity-" + projectSuffix,
     ideaCandidates: candidates,
@@ -53,10 +53,10 @@ test("IndexedDB conserva y rehidrata el índice compacto con aislamiento por pro
   const store = new IndexedDbProjectStore();
   const projectId = "persisted-continuity-" + projectSuffix;
   const candidates = [
-    idea("a", "chapter-1", "memoria antigua de la ciudad"),
-    idea("b", "chapter-2", "memoria antigua de la ciudad")
+    idea("a", "chapter-1", "memoria antigua de la ciudad", 1, projectId),
+    idea("b", "chapter-2", "memoria antigua de la ciudad", 1, projectId)
   ];
-  const source = result(candidates, ["chapter-1", "chapter-2"]);
+  const source = result(candidates, ["chapter-1", "chapter-2"], projectId);
   const sourceRevisions = [
     { documentId: "chapter-1", revision: 1, status: "active" },
     { documentId: "chapter-2", revision: 1, status: "active" }

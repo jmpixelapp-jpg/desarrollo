@@ -2,6 +2,7 @@ import {
   LIVE_AUTHOR_MONITOR_PANEL_STYLES,
   formatLiveAuthorMonitorCheckpointStatus,
   formatLiveAuthorMonitorLeaseStatus,
+  formatLiveAuthorMonitorListenerErrorStatus,
   readLiveAuthorMonitorPersistenceDiagnosticsSafely,
   scheduleLiveAuthorMonitorWhileVisible
 } from "./live-author-monitor-panel";
@@ -37,6 +38,7 @@ interface WorkspaceCard {
   readonly durability: HTMLElement;
   readonly persistence: HTMLElement;
   readonly coordination: HTMLElement;
+  readonly listenerErrors: HTMLElement;
   readonly progress: HTMLElement;
   readonly progressTrack: HTMLElement;
   readonly openButton?: HTMLButtonElement;
@@ -284,6 +286,10 @@ export function mountLiveAuthorMonitorWorkspace(
     coordination.setAttribute("data-diagnostic", "lease");
     coordination.setAttribute("role", "status");
     coordination.setAttribute("aria-live", "polite");
+    const listenerErrors = makeElement(document, "p", "ml-author-monitor__diagnostic");
+    listenerErrors.setAttribute("data-diagnostic", "listeners");
+    listenerErrors.setAttribute("role", "status");
+    listenerErrors.setAttribute("aria-live", "polite");
     const progressTrack = makeElement(document, "div", "ml-author-monitor__progress-track");
     progressTrack.setAttribute("role", "progressbar");
     progressTrack.setAttribute("aria-valuemin", "0");
@@ -304,7 +310,7 @@ export function mountLiveAuthorMonitorWorkspace(
       });
     }
 
-    cardRoot.append(cardHead, metricGrid, durability, persistence, coordination, progressTrack);
+    cardRoot.append(cardHead, metricGrid, durability, persistence, coordination, listenerErrors, progressTrack);
     if (openButton) cardRoot.append(openButton);
     grid.append(cardRoot);
     return {
@@ -316,6 +322,7 @@ export function mountLiveAuthorMonitorWorkspace(
       durability,
       persistence,
       coordination,
+      listenerErrors,
       progress,
       progressTrack,
       ...(openButton === undefined ? {} : { openButton })
@@ -341,6 +348,8 @@ export function mountLiveAuthorMonitorWorkspace(
     card.coordination.setAttribute("data-level", !diagnostics ? "warning" :
       diagnostics.leaseState === "error" || diagnostics.leaseState === "lost" ||
         diagnostics.leaseState === "expired" ? "error" : "info");
+    card.listenerErrors.textContent = formatLiveAuthorMonitorListenerErrorStatus(snapshot);
+    card.listenerErrors.setAttribute("data-level", snapshot.listenerErrors > 0 ? "warning" : "info");
     const latest = Math.max(0, snapshot.latestSequence);
     const durable = Math.max(0, snapshot.durableSequence);
     const percentage = latest === 0 ? 100 : Math.max(0, Math.min(100, durable / latest * 100));

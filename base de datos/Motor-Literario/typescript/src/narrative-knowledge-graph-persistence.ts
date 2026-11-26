@@ -777,7 +777,34 @@ export interface NarrativeReferenceRepairRecoveryResult {
  * si el cambio ya ocurrió, la aplicación devuelve replay y completa la
  * auditoría; si no ocurrió, intenta aplicarlo. Conflictos quedan pendientes.
  */
-export async function recoverNarrativeReferenceRepairs(
+const activeNarrativeReferenceRepairRecoveries = new Map<string, Promise<NarrativeReferenceRepairRecoveryResult>>();
+
+/**
+ * Serializa la recuperación del mismo proyecto dentro del runtime. Dos
+ * consumidores locales comparten la misma promesa y no compiten por el CAS
+ * de una misma intención. Esta coordinación no se extiende a otras pestañas.
+ */
+export function recoverNarrativeReferenceRepairs(
+  store: ProjectStore,
+  projectId: string
+): Promise<NarrativeReferenceRepairRecoveryResult> {
+  if (typeof projectId !== "string" || !projectId.trim()) {
+    return Promise.reject(new Error("Identificador de proyecto inválido para recuperar reparaciones."));
+  }
+  const active = activeNarrativeReferenceRepairRecoveries.get(projectId);
+  if (active) return active;
+
+  const recovery = recoverNarrativeReferenceRepairsUnlocked(store, projectId);
+  activeNarrativeReferenceRepairRecoveries.set(projectId, recovery);
+  void recovery.finally(() => {
+    if (activeNarrativeReferenceRepairRecoveries.get(projectId) === recovery) {
+      activeNarrativeReferenceRepairRecoveries.delete(projectId);
+    }
+  }).catch(() => { /* La promesa original conserva el error para quien la espera. */ });
+  return recovery;
+}
+
+async function recoverNarrativeReferenceRepairsUnlocked(
   store: ProjectStore,
   projectId: string
 ): Promise<NarrativeReferenceRepairRecoveryResult> {

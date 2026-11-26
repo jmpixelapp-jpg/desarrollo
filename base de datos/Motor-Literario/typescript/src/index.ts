@@ -52,3 +52,4 @@ export * from "./narrative-sync-domain-handlers";
 export * from "./narrative-action-link-discovery";
 export * from "./narrative-action-state-link-discovery";
 export * from "./narrative-event-chain-discovery";
+export * from "./narrative-pronoun-reference-discovery";

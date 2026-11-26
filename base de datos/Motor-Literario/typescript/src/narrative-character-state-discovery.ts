@@ -294,6 +294,9 @@ export function discoverNarrativeCharacterStateCandidates(
         const mode = /^(?:parece|se siente|se ve)/iu.test(copula) ? "perceptual" : "copular";
         const base = input.baseOffset ?? 0;
 
+        if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES) {
+          throw new Error("La extracción supera el límite de estados; divide el manuscrito por bloques o capítulos.");
+        }
         results.push({
           id: "character-state:" + input.documentId + ":" + (base + nameStart) + ":" + stateMatch.pattern.state,
           projectId: input.projectId,
@@ -313,9 +316,6 @@ export function discoverNarrativeCharacterStateCandidates(
           predicateEvidence: evidence(input, predicateStart, predicateEnd, predicateText),
           evidence: evidence(input, nameStart, assertionEnd, sentence.slice(match.index, assertionEnd - span.start))
         });
-        if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES) {
-          throw new Error("La extracción supera el límite de estados; divide el manuscrito por bloques o capítulos.");
-        }
       }
     }
   }

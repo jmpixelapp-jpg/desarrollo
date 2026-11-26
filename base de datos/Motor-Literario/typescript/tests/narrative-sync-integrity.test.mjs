@@ -267,3 +267,33 @@ test("diario mantiene secuencias aisladas por proyecto y escritor", async () => 
     });
   }
 });
+
+
+test("diario serializa recepciones concurrentes para una misma secuencia", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const { createNarrativeSyncOperationEnvelope, IndexedDbNarrativeSyncJournal } =
+    await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-race-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const make = operationId => createNarrativeSyncOperationEnvelope({
+      operationId, projectId: "project-race", writerId: "writer-race",
+      sequence: 1, createdAt: 300, kind: "idea-upsert", payload: { id: operationId }
+    });
+    const [left, right] = await Promise.all([make("race-left"), make("race-right")]);
+    const results = await Promise.allSettled([journal.accept(left), journal.accept(right)]);
+    assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+    assert.equal(results.filter(result => result.status === "rejected").length, 1);
+    assert.equal(await journal.getLastSequence("project-race", "writer-race"), 1);
+    assert.equal((await journal.loadOperations("project-race", "writer-race")).length, 1);
+    journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});

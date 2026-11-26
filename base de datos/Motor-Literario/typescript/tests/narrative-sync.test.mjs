@@ -1,6 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NarrativeSyncCoordinator } from "../dist/motor-literario.js";
+import { NarrativeSyncCoordinator, validateNarrativeDocumentChangePayloadV1 } from "../dist/motor-literario.js";
+
+
+test("valida payloads narrative-document-change.v1 y rechaza revisiones/offsets inconsistentes", () => {
+  const valid = {
+    schemaVersion: 1, documentId: "chapter-1", sequence: 3,
+    baseRevision: 8, committedRevision: 9, start: 4, end: 7,
+    replacement: "texto"
+  };
+  assert.doesNotThrow(() => validateNarrativeDocumentChangePayloadV1(valid));
+  assert.throws(() => validateNarrativeDocumentChangePayloadV1({ ...valid, schemaVersion: 2 }), /esquema 1/);
+  assert.throws(() => validateNarrativeDocumentChangePayloadV1({ ...valid, committedRevision: 10 }), /esquema 1/);
+  assert.throws(() => validateNarrativeDocumentChangePayloadV1({ ...valid, end: 2 }), /esquema 1/);
+  assert.throws(() => validateNarrativeDocumentChangePayloadV1({ ...valid, sequence: 0 }), /esquema 1/);
+  assert.throws(() => validateNarrativeDocumentChangePayloadV1(null), /objeto JSON/);
+});
 
 function operation(operationId, sequence, extra = {}) {
   return {

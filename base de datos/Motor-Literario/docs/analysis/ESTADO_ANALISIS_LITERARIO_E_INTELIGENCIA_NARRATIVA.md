@@ -729,6 +729,8 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Pruebas añadidas:** enlaces temporales entre párrafos, clasificación causal y adversativa, ausencia de enlace por mera proximidad, no saltar una acción intermedia, personajes no compartidos, offsets absolutos y rechazo de evidencias manipuladas o revisiones ajenas.
 
+**Validación CI de cadenas de acontecimientos:** ejecución `45785439588` finalizada con éxito. Pasaron la comprobación de tipos, la compilación y las pruebas automatizadas, así como el benchmark de edición en vivo. La validación corresponde al estado del repositorio en el commit `edca68bfc94f870f2058c0cbfef8ad9cae94738f`.
+
 **Límites:** el módulo reconstruye continuidad textual explícita, no una cronología absoluta del mundo narrado. El orden de aparición es orden del discurso; puede diferir del orden de los hechos en analepsis, prolepsis, recuerdos o relatos insertos. Los marcadores se registran como señales del texto y requieren validación narrativa.
 
 **Exportación:** el módulo y el extractor de enlaces entre acciones se exportan desde `src/index.ts` para que estén disponibles en el punto público de entrada del motor.

@@ -144,6 +144,17 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     };
   };
 
+  // Perder el foco durante una composición o entre beforeinput/input puede
+  // dejar un candidato o una operación sin confirmación observable.
+  private readonly handleBlur = (): void => {
+    if (this.disposed || this.needsResync) return;
+    if (!this.pendingInput && !this.compositionActive) return;
+    this.fail(
+      this.pendingInput ? "missing-input" : "resync-required",
+      "El textarea perdió el foco durante una edición o composición incompleta; se requiere un snapshot autoritativo."
+    );
+  };
+
   private readonly handleCompositionStart = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
     if (event.isTrusted !== true) {
@@ -448,6 +459,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       }
       this.element.addEventListener("beforeinput", this.handleBeforeInput);
       this.element.addEventListener("input", this.handleInput);
+      this.element.addEventListener("blur", this.handleBlur);
       this.element.addEventListener("compositionstart", this.handleCompositionStart);
       this.element.addEventListener("compositionend", this.handleCompositionEnd);
       this.element.ownerDocument?.addEventListener("freeze", this.handlePageFreeze);
@@ -462,6 +474,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       if (this.listeners.size === 0) {
         this.element.removeEventListener("beforeinput", this.handleBeforeInput);
         this.element.removeEventListener("input", this.handleInput);
+        this.element.removeEventListener("blur", this.handleBlur);
         this.element.removeEventListener("compositionstart", this.handleCompositionStart);
         this.element.removeEventListener("compositionend", this.handleCompositionEnd);
         this.element.ownerDocument?.removeEventListener("freeze", this.handlePageFreeze);
@@ -539,6 +552,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.disposed = true;
     this.element.removeEventListener("beforeinput", this.handleBeforeInput);
     this.element.removeEventListener("input", this.handleInput);
+    this.element.removeEventListener("blur", this.handleBlur);
     this.element.removeEventListener("compositionstart", this.handleCompositionStart);
     this.element.removeEventListener("compositionend", this.handleCompositionEnd);
     this.element.ownerDocument?.removeEventListener("freeze", this.handlePageFreeze);

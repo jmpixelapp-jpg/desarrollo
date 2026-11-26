@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 26;
+const DATABASE_VERSION = 27;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const SYNC_OUTBOX = "sync-outbox";

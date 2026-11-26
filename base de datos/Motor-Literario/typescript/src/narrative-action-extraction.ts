@@ -6,6 +6,9 @@ import type { NarrativeEntity, TextEvidence } from "./narrative-knowledge";
 
 export const MAX_NARRATIVE_ACTIONS = 200;
 const MAX_TEXT_UNITS = 2_000_000;
+const MAX_ENTITIES = 500;
+const MAX_ALIASES_PER_ENTITY = 20;
+const MAX_NAME_UNITS = 120;
 
 export interface NarrativeActionCandidate {
   readonly id: string;
@@ -48,7 +51,7 @@ function validate(input: NarrativeActionExtractionInput): void {
       typeof input.documentId !== "string" || !input.documentId.trim() ||
       !Number.isSafeInteger(input.revision) || input.revision < 0 ||
       typeof input.text !== "string" || input.text.length > MAX_TEXT_UNITS ||
-      !Array.isArray(input.entities) ||
+      !Array.isArray(input.entities) || input.entities.length > MAX_ENTITIES ||
       (input.baseOffset !== undefined &&
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
           input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {
@@ -58,9 +61,9 @@ function validate(input: NarrativeActionExtractionInput): void {
     if (!entity || entity.projectId !== input.projectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
         typeof entity.kind !== "string" ||
-        typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
-        !Array.isArray(entity.aliases) ||
-        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim())) {
+        typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() || entity.canonicalName.length > MAX_NAME_UNITS ||
+        !Array.isArray(entity.aliases) || entity.aliases.length > MAX_ALIASES_PER_ENTITY ||
+        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim() || alias.length > MAX_NAME_UNITS)) {
       throw new Error("Las entidades deben ser válidas y pertenecer al proyecto.");
     }
   }
@@ -98,7 +101,9 @@ export function extractNarrativeActionCandidates(
   for (const line of input.text.matchAll(/[^\n]+/gu)) {
     const lineText = line[0];
     const lineStart = line.index ?? 0;
+    const normalizedLine = lineText.toLocaleLowerCase("es");
     for (const actor of actors) {
+      if (!normalizedLine.includes(actor.name.toLocaleLowerCase("es"))) continue;
       const expression = new RegExp(
         "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(actor.name) +
         "(?![\\p{L}\\p{M}\\p{N}_])\\s+(no\\s+)?(" + actionPattern +

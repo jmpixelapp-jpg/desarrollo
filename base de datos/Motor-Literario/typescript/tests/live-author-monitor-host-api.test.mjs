@@ -1320,6 +1320,86 @@ test("coalesce visibilitychange y pageshow por documento durante renovaciones si
   }
 });
 
+test("disposeSafely persiste y libera todos los leases de varios documentos", async () => {
+  const store = new MemoryDocumentStore();
+  const api = new HostEngineApi({ store });
+  const projectId = "monitor-safe-dispose-multiple-documents";
+  const documents = [
+    { documentId: "chapter-a", text: "Alpha" },
+    { documentId: "chapter-b", text: "Beta" },
+    { documentId: "chapter-c", text: "Gamma" },
+    { documentId: "chapter-d", text: "Delta" }
+  ];
+
+  api.initializeProject({ projectId, projectName: "Safe dispose multiple documents" });
+
+  try {
+    for (const document of documents) {
+      await api.openDocument({
+        documentId: document.documentId,
+        text: document.text,
+        revision: 0,
+        sequence: 0
+      });
+    }
+    await api.flushPendingChanges();
+    await Promise.all([...api.liveMonitorCheckpointTails.values()]);
+
+    const initialLeases = new Map(documents.map(({ documentId }) => [
+      documentId,
+      structuredClone(store.monitorLeases.get(projectId + ":" + documentId))
+    ]));
+    assert.equal(initialLeases.size, documents.length);
+    for (const [documentId, lease] of initialLeases) {
+      assert.ok(lease, "cada documento debe tener lease antes del cierre seguro");
+      assert.equal(api.liveMonitorLeaseHeartbeats.has(documentId), true);
+    }
+
+    for (const document of documents) {
+      const admission = api.onEditorChange({
+        documentId: document.documentId,
+        sequence: 1,
+        baseRevision: 0,
+        start: document.text.length,
+        end: document.text.length,
+        replacement: "!"
+      });
+      assert.equal(admission.status, "queued");
+    }
+
+    await api.flushPendingChanges();
+    for (const { documentId } of documents) {
+      const tail = api.liveMonitorCheckpointTails.get(documentId);
+      if (tail) await tail;
+    }
+
+    await api.disposeSafely();
+
+    assert.equal(api.disposed, true);
+    assert.equal(api.liveMonitorLeases.size, 0);
+    assert.equal(api.liveMonitorLeaseHeartbeats.size, 0);
+    assert.equal(api.liveMonitorCheckpointErrors.size, 0);
+
+    for (const document of documents) {
+      const key = projectId + ":" + document.documentId;
+      const saved = store.monitorCheckpoints.get(key);
+      const released = store.monitorLeases.get(key);
+      assert.ok(saved, "todos los documentos deben conservar un checkpoint final");
+      assert.equal(saved.revision, 1);
+      assert.equal(saved.sequence, 1);
+      assert.equal(saved.committedChanges, 1);
+      assert.equal(saved.currentDocumentLength, document.text.length + 1);
+      assert.ok(released);
+      assert.equal(released.ownerId, initialLeases.get(document.documentId).ownerId);
+      assert.equal(released.fencingToken, initialLeases.get(document.documentId).fencingToken);
+      assert.equal(released.expiresAt <= Date.now(), true,
+        "cada lease debe quedar liberado después del checkpoint final");
+    }
+  } finally {
+    api.dispose();
+  }
+});
+
 test("configura retención de checkpoints, la ejecuta al inicializar y permite desactivarla", async () => {
   class RetentionStore extends MemoryDocumentStore {
     cleanupCalls = [];

@@ -2290,6 +2290,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["event-lifecycles", "by-subject-revision"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"],
       ["narrative-entities", "by-project"],
       ["narrative-relations", "by-project"],
       ["narrative-events", "by-project"],
@@ -2413,7 +2415,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
-    "live-author-monitor-checkpoints", "live-author-monitor-leases",
+    "live-author-monitor-checkpoints", "live-author-monitor-leases", "sync-outbox",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
@@ -2466,7 +2468,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 24);
+    assert.equal(openedVersion, 25);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],

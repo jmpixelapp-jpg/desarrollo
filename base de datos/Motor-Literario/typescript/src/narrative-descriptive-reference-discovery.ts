@@ -434,3 +434,133 @@ export function discoverNarrativeRelativeClauseCandidates(
     a.anchorEntityId.localeCompare(b.anchorEntityId)
   );
 }
+
+
+export interface NarrativeRelationalAppositionCandidate {
+  readonly id: string;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly relationText: string;
+  readonly relationEvidence: TextEvidence;
+  readonly anchorEntityId: string;
+  readonly anchorEvidence: TextEvidence;
+  readonly targetMentionEvidence: TextEvidence;
+  readonly targetEntityCandidates: readonly string[];
+  readonly relation: "relational-apposition";
+  readonly reviewStatus: "candidate";
+}
+
+export interface NarrativeRelationalAppositionCandidateInput extends NarrativeDescriptiveLabelCandidateInput {
+  readonly maxCandidates?: number;
+}
+
+export const MAX_NARRATIVE_RELATIONAL_APPOSITION_CANDIDATES = 2_000;
+export const MAX_NARRATIVE_RELATIONAL_APPOSITION_ENTITIES = 2_000;
+
+/**
+ * Detecta aposiciones relacionales con objetivo nominal explícito:
+ * «Bruno, hermano menor de Ana, volvió». El objetivo se resuelve solo contra
+ * nombres/alias registrados y conserva todas las coincidencias ambiguas.
+ */
+export function discoverNarrativeRelationalAppositionCandidates(
+  input: NarrativeRelationalAppositionCandidateInput
+): readonly NarrativeRelationalAppositionCandidate[] {
+  const maxCandidates = input?.maxCandidates ?? MAX_NARRATIVE_RELATIONAL_APPOSITION_CANDIDATES;
+  if (!input || typeof input !== "object" ||
+      typeof input.projectId !== "string" || !input.projectId.trim() ||
+      typeof input.documentId !== "string" || !input.documentId.trim() ||
+      !Number.isSafeInteger(input.revision) || input.revision < 0 ||
+      typeof input.text !== "string" || input.text.length > MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_TEXT_UNITS ||
+      !Array.isArray(input.entities) || input.entities.length > MAX_NARRATIVE_RELATIONAL_APPOSITION_ENTITIES ||
+      !Number.isSafeInteger(maxCandidates) || maxCandidates < 1 ||
+      maxCandidates > MAX_NARRATIVE_RELATIONAL_APPOSITION_CANDIDATES ||
+      (input.baseOffset !== undefined && (!Number.isSafeInteger(input.baseOffset) ||
+        input.baseOffset < 0 || input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {
+    throw new Error("Contexto inválido para descubrir aposiciones relacionales.");
+  }
+  const base = input.baseOffset ?? 0;
+  const entities = new Map<string, NarrativeEntity>();
+  const nameToEntities = new Map<string, Set<string>>();
+  for (const entity of input.entities) {
+    if (!entity || entity.projectId !== input.projectId || typeof entity.id !== "string" ||
+        !entity.id.trim() || entities.has(entity.id) || typeof entity.canonicalName !== "string" ||
+        !entity.canonicalName.trim() || entity.canonicalName.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIAS_LENGTH ||
+        !Array.isArray(entity.aliases) || entity.aliases.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIASES_PER_ENTITY) {
+      throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
+    }
+    entities.set(entity.id, entity);
+    const aliases = new Set<string>();
+    for (const name of [entity.canonicalName, ...entity.aliases]) {
+      if (typeof name !== "string" || !name.trim() ||
+          name.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIAS_LENGTH) {
+        throw new Error("Los nombres y alias deben ser textos válidos y estar dentro del límite de longitud.");
+      }
+      const normalized = normalizeLabel(name);
+      if (aliases.has(normalized)) continue;
+      aliases.add(normalized);
+      const ids = nameToEntities.get(normalized) ?? new Set<string>();
+      ids.add(entity.id);
+      nameToEntities.set(normalized, ids);
+    }
+  }
+
+  const relationHeads = "(?:hermano|hermana|hermanos|hermanas|hijo|hija|hijos|hijas|padre|madre|esposo|esposa|marido|mujer|compañero|compañera|amigo|amiga|primo|prima|tío|tía|abuelo|abuela|sobrino|sobrina|maestro|maestra|discípulo|discípula|jefe|jefa|capitán|capitana|rey|reina|duque|duquesa|conde|condesa)";
+  const results = new Map<string, NarrativeRelationalAppositionCandidate>();
+  let scanUnits = 0;
+  for (const anchor of input.entities) {
+    for (const anchorName of [anchor.canonicalName, ...anchor.aliases]) {
+      scanUnits += input.text.length;
+      if (scanUnits > MAX_NARRATIVE_DESCRIPTIVE_LABEL_SCAN_UNITS) {
+        throw new Error("La extracción de aposiciones relacionales supera el presupuesto operativo de exploración.");
+      }
+      const expression = new RegExp(
+        "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(anchorName) +
+        "(?![\\p{L}\\p{M}\\p{N}_])\\s*,\\s*(" + relationHeads +
+        "(?:\\s+[\\p{L}][\\p{L}\\p{M}-]*){0,2}\\s+de\\s+([^,;.!?]+?))\\s*,",
+        "giu"
+      );
+      for (const match of input.text.matchAll(expression)) {
+        const relationText = match[1]!.trim();
+        const targetName = match[2]!.trim();
+        const targetIds = [...(nameToEntities.get(normalizeLabel(targetName)) ?? [])]
+          .filter(id => id !== anchor.id)
+          .sort((a, b) => a.localeCompare(b));
+        if (targetIds.length === 0) continue;
+        const anchorStart = match.index!;
+        const anchorEnd = anchorStart + anchorName.length;
+        const relationStart = anchorStart + match[0].indexOf(match[1]!);
+        const relationEnd = relationStart + match[1]!.length;
+        const targetStart = relationStart + match[1]!.lastIndexOf(match[2]!);
+        const targetEnd = targetStart + match[2]!.length;
+        const key = anchor.id + ":" + relationStart + ":" + relationEnd;
+        if (results.has(key)) {
+          const existing = results.get(key)!;
+          const merged = [...new Set([...existing.targetEntityCandidates, ...targetIds])].sort();
+          results.set(key, { ...existing, targetEntityCandidates: merged });
+          continue;
+        }
+        results.set(key, {
+          id: "relational-apposition-candidate:" + input.documentId + ":" + input.revision + ":" + (base + relationStart) + ":" + anchor.id,
+          projectId: input.projectId, documentId: input.documentId, revision: input.revision,
+          relationText,
+          relationEvidence: { documentId: input.documentId, revision: input.revision, start: base + relationStart, end: base + relationEnd, excerpt: relationText },
+          anchorEntityId: anchor.id,
+          anchorEvidence: { documentId: input.documentId, revision: input.revision, start: base + anchorStart, end: base + anchorEnd, excerpt: anchorName },
+          targetMentionEvidence: { documentId: input.documentId, revision: input.revision, start: base + targetStart, end: base + targetEnd, excerpt: match[2]! },
+          targetEntityCandidates: targetIds,
+          relation: "relational-apposition",
+          reviewStatus: "candidate"
+        });
+        if (results.size > maxCandidates) {
+          throw new Error("La extracción supera el máximo de aposiciones relacionales; no se devuelve un resultado parcial.");
+        }
+      }
+    }
+  }
+  return [...results.values()].sort((a, b) =>
+    a.relationEvidence.start - b.relationEvidence.start ||
+    a.relationEvidence.end - b.relationEvidence.end ||
+    a.anchorEntityId.localeCompare(b.anchorEntityId)
+  );
+}

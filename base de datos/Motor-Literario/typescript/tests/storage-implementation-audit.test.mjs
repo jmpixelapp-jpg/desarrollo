@@ -198,7 +198,7 @@ test("la cronología conserva solo una muestra acotada de evidencia durante la a
 
 test("los vínculos de escena limitan la evidencia intermedia a veinte muestras", () => {
   const start = literaryAnalysisSource.indexOf("function findSceneEventLinks(");
-  const end = literaryAnalysisSource.indexOf("\\nfunction summarizeSceneDialogueFlow", start + 10);
+  const end = literaryAnalysisSource.indexOf("\nfunction summarizeSceneDialogueFlow", start + 10);
   assert.notEqual(start, -1, "debe existir el constructor de vínculos de escena");
   assert.ok(end > start, "el constructor debe delimitarse para auditar sus muestras");
   const builder = literaryAnalysisSource.slice(start, end);

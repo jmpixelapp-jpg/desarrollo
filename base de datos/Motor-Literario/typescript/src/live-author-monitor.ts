@@ -40,8 +40,16 @@ export interface LiveAuthorMonitorSnapshot {
   readonly committedChanges: number;
   readonly failedChanges: number;
   readonly pendingChanges: number;
+  /** All admitted insertions/deletions, including every provisional IME candidate delta. */
   readonly insertedCharacters: number;
   readonly deletedCharacters: number;
+  /** UTF-16 units from changes explicitly classified as ordinary typing. */
+  readonly typingInsertedCharacters: number;
+  /** Raw UTF-16 units across applied provisional/committed IME composition deltas. */
+  readonly compositionInsertedCharacters: number;
+  readonly compositionDeletedCharacters: number;
+  /** False when a legacy checkpoint lacked unit-provenance counters. */
+  readonly activityUnitMetricsComplete: boolean;
   readonly netCharacterDelta: number;
   readonly currentDocumentLength: number;
   readonly estimatedWordsPerMinute: number;
@@ -104,6 +112,10 @@ interface DocumentSession {
   listenerErrors: number;
   insertedCharacters: number;
   deletedCharacters: number;
+  typingInsertedCharacters: number;
+  compositionInsertedCharacters: number;
+  compositionDeletedCharacters: number;
+  activityUnitMetricsComplete: boolean;
   currentDocumentLength: number;
   latestRevision: number;
   durableRevision: number;
@@ -225,6 +237,10 @@ export class LiveAuthorMonitor {
       listenerErrors: 0,
       insertedCharacters: 0,
       deletedCharacters: 0,
+      typingInsertedCharacters: 0,
+      compositionInsertedCharacters: 0,
+      compositionDeletedCharacters: 0,
+      activityUnitMetricsComplete: true,
       currentDocumentLength: snapshot.text.length,
       latestRevision: snapshot.revision,
       durableRevision: snapshot.revision,
@@ -271,9 +287,17 @@ export class LiveAuthorMonitor {
     }
 
     session.acceptedChanges++;
-    switch (classifyActivityKind(change)) {
-      case "typing": session.typingChanges++; break;
-      case "composition": session.compositionChanges++; break;
+    const activityKind = classifyActivityKind(change);
+    switch (activityKind) {
+      case "typing":
+        session.typingChanges++;
+        session.typingInsertedCharacters += change.replacement.length;
+        break;
+      case "composition":
+        session.compositionChanges++;
+        session.compositionInsertedCharacters += change.replacement.length;
+        session.compositionDeletedCharacters += change.end - change.start;
+        break;
       case "paste": session.pasteChanges++; break;
       case "deletion": session.deletionChanges++; break;
       case "correction": session.correctionChanges++; break;
@@ -433,6 +457,10 @@ export class LiveAuthorMonitor {
       failedChanges: session.failedChanges,
       insertedCharacters: session.insertedCharacters,
       deletedCharacters: session.deletedCharacters,
+      typingInsertedCharacters: session.typingInsertedCharacters,
+      compositionInsertedCharacters: session.compositionInsertedCharacters,
+      compositionDeletedCharacters: session.compositionDeletedCharacters,
+      activityUnitMetricsComplete: session.activityUnitMetricsComplete,
       currentDocumentLength: session.currentDocumentLength,
       revision: session.latestRevision,
       sequence: session.latestSequence,
@@ -484,6 +512,22 @@ export class LiveAuthorMonitor {
     );
     const classifiedCountTotal = classifiedActivityCounts.reduce<number>((sum, value) => sum + (value ?? 0), 0) +
       (checkpoint.compositionChanges ?? 0);
+    const hasAnyUnitMetrics = checkpoint.typingInsertedCharacters !== undefined ||
+      checkpoint.compositionInsertedCharacters !== undefined ||
+      checkpoint.compositionDeletedCharacters !== undefined;
+    const hasAllUnitMetrics = checkpoint.typingInsertedCharacters !== undefined &&
+      checkpoint.compositionInsertedCharacters !== undefined &&
+      checkpoint.compositionDeletedCharacters !== undefined;
+    const validUnitMetrics = !hasAnyUnitMetrics || (hasAllUnitMetrics &&
+      integerNonNegative(checkpoint.typingInsertedCharacters!) &&
+      integerNonNegative(checkpoint.compositionInsertedCharacters!) &&
+      integerNonNegative(checkpoint.compositionDeletedCharacters!) &&
+      Number.isSafeInteger(checkpoint.typingInsertedCharacters! + checkpoint.compositionInsertedCharacters!) &&
+      checkpoint.typingInsertedCharacters! + checkpoint.compositionInsertedCharacters! <= checkpoint.insertedCharacters &&
+      checkpoint.compositionDeletedCharacters! <= checkpoint.deletedCharacters);
+    const validUnitMetricsCompleteness = checkpoint.activityUnitMetricsComplete === undefined ||
+      typeof checkpoint.activityUnitMetricsComplete === "boolean";
+    const validUnitMetricsFlag = checkpoint.activityUnitMetricsComplete !== true || hasAllUnitMetrics;
     const validCompositionCount = checkpoint.compositionChanges === undefined ||
       integerNonNegative(checkpoint.compositionChanges);
     const activityCountTotal = classifiedCountTotal +
@@ -506,6 +550,7 @@ export class LiveAuthorMonitor {
         !integerNonNegative(checkpoint.pauseCount) ||
         !integerNonNegative(checkpoint.acceptedChanges) ||
         (hasActivityCounts && (!validActivityCounts || activityCountTotal !== checkpoint.acceptedChanges)) ||
+        !validUnitMetrics || !validUnitMetricsCompleteness || !validUnitMetricsFlag ||
         !integerNonNegative(checkpoint.rejectedChanges) ||
         checkpoint.pauseCount > checkpoint.acceptedChanges + checkpoint.rejectedChanges ||
         !integerNonNegative(checkpoint.committedChanges) ||
@@ -580,6 +625,10 @@ export class LiveAuthorMonitor {
       listenerErrors: 0,
       insertedCharacters: checkpoint.insertedCharacters,
       deletedCharacters: checkpoint.deletedCharacters,
+      typingInsertedCharacters: checkpoint.typingInsertedCharacters ?? 0,
+      compositionInsertedCharacters: checkpoint.compositionInsertedCharacters ?? 0,
+      compositionDeletedCharacters: checkpoint.compositionDeletedCharacters ?? 0,
+      activityUnitMetricsComplete: checkpoint.activityUnitMetricsComplete ?? hasAllUnitMetrics,
       currentDocumentLength: snapshot.text.length,
       latestRevision: snapshot.revision,
       durableRevision: snapshot.revision,
@@ -630,11 +679,14 @@ export class LiveAuthorMonitor {
       : Math.max(0, now - Math.max(session.lastObservedAt, session.lastActivityAt + this.idleAfterMs));
     const activeDurationMs = session.activeDurationMs + extraActive;
     const idleDurationMs = session.idleDurationMs + extraIdle;
+    // El ritmo se calcula solo con unidades de operaciones que el editor clasificó
+    // explícitamente como typing. Pegados, correcciones, undo/redo y candidatos IME
+    // se mantienen en sus contadores, pero no se presentan como escritura normal.
     const wordsPerMinute = activeDurationMs > 0
-      ? (session.insertedCharacters / 5) * 60_000 / activeDurationMs
+      ? (session.typingInsertedCharacters / 5) * 60_000 / activeDurationMs
       : 0;
     const charactersPerMinute = activeDurationMs > 0
-      ? session.insertedCharacters * 60_000 / activeDurationMs
+      ? session.typingInsertedCharacters * 60_000 / activeDurationMs
       : 0;
     const totalCommitResults = session.committedChanges + session.failedChanges;
     const averageCommitLatencyMs = totalCommitResults > 0
@@ -675,6 +727,10 @@ export class LiveAuthorMonitor {
       pendingChanges: session.pendingTickets.size,
       insertedCharacters: session.insertedCharacters,
       deletedCharacters: session.deletedCharacters,
+      typingInsertedCharacters: session.typingInsertedCharacters,
+      compositionInsertedCharacters: session.compositionInsertedCharacters,
+      compositionDeletedCharacters: session.compositionDeletedCharacters,
+      activityUnitMetricsComplete: session.activityUnitMetricsComplete,
       netCharacterDelta: session.insertedCharacters - session.deletedCharacters,
       currentDocumentLength: session.currentDocumentLength,
       estimatedWordsPerMinute: wordsPerMinute,

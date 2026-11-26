@@ -6,13 +6,15 @@ import {
   createNarrativeDocumentProjectionManifest,
   createNarrativeDocumentProjectionTombstone,
   commitNarrativeDocumentProjectionManifest,
+  persistNarrativeKnowledgeGraphSnapshotWithManifests,
+  retireNarrativeDocumentProjection,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
 function createMemoryStore() {
   const tables = {
     entities: new Map(), relations: new Map(), events: new Map(),
-    ideas: new Map(), assertions: new Map()
+    ideas: new Map(), assertions: new Map(), manifests: new Map()
   };
   const copy = value => structuredClone(value);
   const methods = {};
@@ -33,6 +35,16 @@ function createMemoryStore() {
       table.set(next.id, copy(next));
     };
   }
+  methods.loadNarrativeDocumentProjectionManifest = async (projectId, documentId) =>
+    copy(tables.manifests.get(projectId + "\\u0000" + documentId));
+  methods.saveNarrativeDocumentProjectionManifestIfUnchanged = async (manifest, expectedGeneration) => {
+    const key = manifest.projectId + "\\u0000" + manifest.documentId;
+    const current = tables.manifests.get(key);
+    assert.equal(current?.generation, expectedGeneration, "manifiesto CAS por generación");
+    tables.manifests.set(key, copy(manifest));
+  };
+  methods.loadNarrativeDocumentProjectionManifests = async projectId =>
+    [...tables.manifests.values()].filter(item => item.projectId === projectId).map(copy);
   return { store: methods, tables };
 }
 
@@ -187,4 +199,38 @@ test("valida inventarios únicos y tombstones sin referencias activas", () => {
   assert.throws(() => validateNarrativeDocumentProjectionManifest({
     ...valid, generation: 0
   }), /Manifiesto/u);
+});
+
+
+test("publica manifiestos activos después de persistir el grafo y reutiliza revisiones idénticas", async () => {
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-manifests", [
+    { documentId: "chapter-1", revision: 3, text: "personaje Mara aparece." },
+    { documentId: "chapter-2", revision: 2, text: "personaje Leo aparece." }
+  ], { now: 300 });
+  const { store, tables } = createMemoryStore();
+  const first = await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 301);
+  assert.equal(first.manifests.length, 2);
+  assert.ok(first.manifests.every(item => item.manifest.status === "active"));
+  assert.equal(tables.manifests.size, 2);
+  const second = await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 302);
+  assert.ok(second.manifests.every(item => item.reused));
+  assert.equal(tables.manifests.size, 2);
+});
+
+test("retira un documento con tombstone CAS y rechaza una retirada obsoleta", async () => {
+  const { store, tables } = createMemoryStore();
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-delete", [
+    { documentId: "chapter-1", revision: 4, text: "personaje Mara aparece." }
+  ], { now: 400 });
+  await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 401);
+  const retired = await retireNarrativeDocumentProjection(store, "novel-delete", "chapter-1", 5, 402);
+  assert.equal(retired.manifest.status, "deleted");
+  assert.deepEqual(retired.manifest.entityIds, []);
+  const replay = await retireNarrativeDocumentProjection(store, "novel-delete", "chapter-1", 5, 403);
+  assert.equal(replay.reused, true);
+  assert.equal(tables.manifests.size, 1);
+  await assert.rejects(
+    retireNarrativeDocumentProjection(store, "novel-delete", "chapter-1", 4, 404),
+    /posterior al manifiesto vigente/u
+  );
 });

@@ -13,6 +13,10 @@ import {
   discoverNarrativeActionLinks,
   type NarrativeActionLinkCandidate
 } from "./narrative-action-link-discovery";
+import {
+  discoverNarrativeObjectTransitionCandidates,
+  type NarrativeObjectTransitionCandidate
+} from "./narrative-object-state-discovery";
 
 /**
  * Ingesta estructural de texto de libros para el Motor Literario.
@@ -100,6 +104,8 @@ export interface NarrativeBookIngestionResult {
   readonly observations: readonly NarrativeObservationCandidate[];
   /** Vínculos temporales/causales/contrastivos explícitos entre acciones; requieren revisión. */
   readonly actionLinks: readonly NarrativeActionLinkCandidate[];
+  /** Cambios candidatos de objetos derivados de acciones y participantes explícitos. */
+  readonly objectTransitionCandidates: readonly NarrativeObjectTransitionCandidate[];
   readonly observationStatus: "extracted" | "no-entities" | "omitted-text-budget";
   readonly coverage: {
     readonly chapterCount: number;
@@ -433,6 +439,14 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
         baseOffset: input.baseOffset ?? 0
       })
     : [];
+  const objectTransitionCandidates = observations.length > 0
+    ? discoverNarrativeObjectTransitionCandidates({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        revision: input.revision,
+        observations
+      })
+    : [];
   // Los acontecimientos se extraen solo cuando el escritor usa una etiqueta explícita.
   // Las entidades locales sirven para sugerir participantes, nunca para confirmar roles.
   const eventCandidates = input.text.length <= MAX_NARRATIVE_BOOK_TEXT_UNITS
@@ -459,6 +473,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     entityCandidates,
     observations,
     actionLinks,
+    objectTransitionCandidates,
     eventCandidates,
     observationStatus,
     coverage: {

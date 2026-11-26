@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { extractNarrativeConsequenceCandidates } from "../dist/motor-literario.js";
 
-function event(id, start, end, excerpt, participants = []) {
+function event(id, start, end, excerpt, participants = [], characterParticipants = participants) {
   return {
     id, projectId: "book-1", label: excerpt,
-    participantEntityIds: participants, actionCandidateIds: [],
+    participantEntityIds: participants, characterParticipantEntityIds: characterParticipants, actionCandidateIds: [],
     reviewStatus: "candidate",
     evidence: { documentId: "chapter-1", revision: 2, start, end, excerpt }
   };
@@ -167,4 +167,20 @@ test("mantiene offsets absolutos al analizar una ventana del documento",()=>{
   assert.equal(result.evidence.start,b);
   assert.equal(result.evidence.end,b+"Poco después".length);
   assert.equal(text.slice(result.evidence.start,result.evidence.end), "Poco después");
+});
+
+test("un objeto compartido no se confunde con un personaje compartido",()=>{
+  const text="Mara abrió la puerta. Poco después, Elian escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Poco después");
+  const events=[
+    event("source-object",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara","door"],[]),
+    event("result-object",b,text.length,text.slice(b),["elian","door"],[])
+  ];
+  assert.deepEqual(extractNarrativeConsequenceCandidates(input(text,events)),[]);
+});
+test("valida que los participantes-personaje pertenezcan al conjunto de participantes",()=>{
+  const text="Mara abrió la puerta. Después, Mara escapó.";
+  const a=text.indexOf("Mara");
+  const malformed=event("invalid-character-participant",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"],["ghost"]);
+  assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[malformed])),/únicos, válidos/);
 });

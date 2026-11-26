@@ -362,3 +362,44 @@ test("un cambio externo que no modifica documentos reutiliza candidatos y no rel
     await store.close();
   }
 });
+
+
+test("detecta cambios de snapshot aunque un adaptador conserve revisión y secuencia", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  const firstText = "El tema central es la memoria compartida que une a dos ciudades.";
+  const nextText = "El tema central es la culpa compartida que divide a dos ciudades.";
+  const api = new HostEngineApi({ store });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Revisión de metadatos" });
+    await api.openDocument({
+      documentId: "chapter-same-revision",
+      text: firstText,
+      revision: 4,
+      sequence: 9
+    });
+    await api.flushPendingChanges();
+    const before = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(before);
+
+    await store.saveDocument({
+      projectId: id,
+      documentId: "chapter-same-revision",
+      text: nextText,
+      revision: 4,
+      sequence: 9,
+      updatedAt: Date.now() + 1
+    });
+    await api.invalidateNarrativeKnowledgeFromExternalChange();
+
+    const after = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(after);
+    assert.ok(after.generation > before.generation);
+    assert.equal(after.occurrences[0].revision, 4);
+    assert.equal(after.occurrences[0].text, "la culpa compartida que divide a dos ciudades");
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});

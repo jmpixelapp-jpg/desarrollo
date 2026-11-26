@@ -74,6 +74,34 @@ test("la bandeja durable es idempotente, ordenada y conserva operaciones hasta e
   }
 });
 
+test("la idempotencia ignora metadatos mutables y orden de claves del payload", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    const original = operation({
+      payload: JSON.stringify({ ideaId: "idea-1", text: "La memoria persiste." })
+    });
+    await store.enqueueSyncOperation(original);
+    await store.recordSyncOperationAttempt(original.operationId, 300, "timeout", 600);
+
+    // Repetir la misma operación tras un intento es seguro aunque el payload
+    // llegue con las propiedades en otro orden.
+    await store.enqueueSyncOperation({
+      ...original,
+      payload: JSON.stringify({ text: "La memoria persiste.", ideaId: "idea-1" })
+    });
+
+    const pending = await store.loadPendingSyncOperations("sync-outbox-project");
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].attemptCount, 1);
+    assert.equal(pending[0].lastError, "timeout");
+    assert.equal(pending[0].nextAttemptAt, 600);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
 test("la bandeja aísla proyectos y valida el payload antes de persistir", async () => {
   await deleteDatabase();
   const store = new IndexedDbProjectStore();

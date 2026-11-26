@@ -618,3 +618,6 @@ La validación general posterior del HEAD actual falla por una aserción de `tes
 ## 53. Ráfagas reentrantes del puente de eventos del editor
 
 `LiveAuthorMonitorEditorTransactionBridge` serializa publicaciones reentrantes mediante una cola FIFO y un guard `dispatching`, evitando recursión y reordenamientos. La prueba de estrés crea 1.000 transacciones: el primer listener genera 999 emisiones adicionales al recibir la primera; ambos observadores deben ver las mismas secuencias y en el mismo orden. La prueba se ejecuta dentro de la suite aislada del editor y no requiere el runtime narrativo completo.
+
+
+**Validación del estrés FIFO:** [run 45759874190](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759874190) terminó con todos los pasos aprobados. La suite aislada terminó en 162/162; la suite host/editor/browser, en 168/168. La regresión de 1.000 publicaciones reentrantes pasó en ambos comandos. También pasaron el build de runtime, type-check, auditoría MLDB y Page Lifecycle/IndexedDB en Chromium. El benchmark registró 100.000 commits en 655,47 ms, heap estable de 4,39 MiB y cero pendientes.

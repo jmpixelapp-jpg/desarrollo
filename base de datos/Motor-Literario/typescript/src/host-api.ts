@@ -3507,6 +3507,137 @@ export class HostEngineApi {
   }
 
 
+  /**
+   * Consulta una página de la biblioteca privada del escritor autenticado.
+   * Los cursores de IndexedDB incluyen la generación durable y se invalidan
+   * automáticamente cuando una transferencia o consolidación modifica la biblioteca.
+   */
+  async getPersonalIdeaLibraryPage(
+    cursor: PersonalIdeaLibraryCursor | null = null,
+    limit = 50
+  ): Promise<PersonalIdeaLibraryPage> {
+    const writerId = this.requireWriterId();
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+        (cursor !== null && (!cursor || cursor.writerId !== writerId ||
+          typeof cursor.sourceProjectId !== "string" || !cursor.sourceProjectId.trim() ||
+          typeof cursor.ideaId !== "string" || !cursor.ideaId.trim() ||
+          (cursor.libraryVersion !== undefined &&
+            (!Number.isSafeInteger(cursor.libraryVersion) || cursor.libraryVersion < 0))))) {
+      throw new Error("Parámetros de paginación de biblioteca inválidos.");
+    }
+
+    const work = this.knowledgeTail.then(async () => {
+      if (this.store.loadPersonalIdeasPage) {
+        const rawPage = await this.store.loadPersonalIdeasPage(writerId, cursor, limit);
+        const checked = validatePersonalIdeaLibraryPage(rawPage, writerId, cursor, limit);
+
+        if (checked.page.restartRequired) {
+          return {
+            items: [],
+            nextCursor: null,
+            libraryVersion: checked.page.libraryVersion,
+            restartRequired: true
+          };
+        }
+
+        if (checked.unresolved.length > 0) {
+          const requested = new Map(checked.unresolved.map(reference => [
+            JSON.stringify([reference.sourceProjectId, reference.ideaId]), reference
+          ]));
+          const resolved = new Set<string>();
+
+          if (this.store.loadPersonalIdeasByKeys) {
+            for (let offset = 0; offset < checked.unresolved.length; offset += 128) {
+              const batch = checked.unresolved.slice(offset, offset + 128);
+              const targets = await this.store.loadPersonalIdeasByKeys(writerId, batch);
+              if (!Array.isArray(targets)) {
+                throw new Error("La lectura agrupada de la biblioteca devolvió una colección inválida.");
+              }
+              for (const target of targets) {
+                if (!isValidPersonalIdeaEntry(target, writerId) ||
+                    typeof target.sourceProjectId !== "string" ||
+                    target.idea.projectId !== target.sourceProjectId) {
+                  throw new Error("Una idea relacionada está malformada o pertenece a otro escritor.");
+                }
+                const key = JSON.stringify([target.sourceProjectId, target.idea.id]);
+                const expected = requested.get(key);
+                if (!expected || target.idea.id !== expected.ideaId || resolved.has(key)) {
+                  throw new Error("La lectura agrupada devolvió un destino ajeno o duplicado.");
+                }
+                resolved.add(key);
+              }
+            }
+          } else if (this.store.loadPersonalIdeas) {
+            // Adaptadores antiguos validan los vínculos leyendo la colección completa.
+            const allEntries = requireUniquePersonalIdeaEntries(
+              await this.store.loadPersonalIdeas(writerId), writerId
+            );
+            for (const entry of allEntries) {
+              resolved.add(JSON.stringify([entry.sourceProjectId, entry.idea.id]));
+            }
+          } else {
+            throw new Error("El almacenamiento no permite resolver vínculos a ideas fuera de la página.");
+          }
+
+          if (resolved.size < requested.size ||
+              [...requested.keys()].some(key => !resolved.has(key))) {
+            throw new Error("Una idea relacionada no existe en la biblioteca privada del escritor.");
+          }
+        }
+
+        return {
+          items: cloneNarrativeRecords(checked.page.items.map(entry => entry.context
+            ? entry
+            : { ...entry, contextStatus: "missing-legacy-context" as const }
+          )),
+          nextCursor: checked.page.nextCursor
+            ? cloneNarrativeRecord(checked.page.nextCursor)
+            : null,
+          libraryVersion: checked.page.libraryVersion
+        };
+      }
+
+      // Compatibilidad: los adaptadores sin lectura keyset conservan la API,
+      // pero se materializa la biblioteca completa y no se ofrece versión durable.
+      if (cursor?.libraryVersion !== undefined) {
+        throw new Error("El adaptador no admite continuar una lectura versionada de biblioteca.");
+      }
+      if (!this.store.loadPersonalIdeas) {
+        throw new Error("El almacenamiento no admite la biblioteca personal de ideas.");
+      }
+      const allEntries = requireUniquePersonalIdeaEntries(
+        await this.store.loadPersonalIdeas(writerId), writerId
+      );
+      const ordered = [...allEntries].sort((first, second) =>
+        comparePersonalIdeaLibraryCursor(
+          { sourceProjectId: first.sourceProjectId, ideaId: first.idea.id },
+          { sourceProjectId: second.sourceProjectId, ideaId: second.idea.id }
+        )
+      );
+      const remaining = cursor
+        ? ordered.filter(entry => comparePersonalIdeaLibraryCursor(
+            { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }, cursor
+          ) > 0)
+        : ordered;
+      const items = remaining.slice(0, limit);
+      const last = items[items.length - 1];
+      const nextCursor: PersonalIdeaLibraryCursor | null =
+        remaining.length > items.length && last
+          ? { writerId, sourceProjectId: last.sourceProjectId, ideaId: last.idea.id }
+          : null;
+      return {
+        items: cloneNarrativeRecords(items.map(entry => entry.context
+          ? entry
+          : { ...entry, contextStatus: "missing-legacy-context" as const }
+        )),
+        nextCursor
+      };
+    });
+
+    this.knowledgeTail = work.then(() => undefined, () => undefined);
+    return work;
+  }
+
   /** Consulta el recibo durable que demuestra la transferencia de cierre de este libro. */
   async getProjectFinalizationReceipt(): Promise<StoredProjectFinalizationReceipt | undefined> {
     const project = this.requireProject();

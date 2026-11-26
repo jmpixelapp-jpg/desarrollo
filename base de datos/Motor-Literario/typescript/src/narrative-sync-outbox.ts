@@ -62,7 +62,6 @@ export interface ClaimNarrativeSyncOutboxInput {
   readonly projectId: string;
   readonly workerId: string;
   readonly now?: number;
-  readonly limit?: number;
   readonly leaseMs?: number;
 }
 
@@ -159,7 +158,7 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
       envelope.payload?.index?.projectId !== value.projectId ||
       envelope.payload?.index?.generation !== value.generation ||
       envelope.payload?.index?.fingerprint !== value.fingerprint ||
-      envelope.payload?.expectedGeneration !== value.generation - 1 ||
+      (envelope.payload?.expectedGeneration ?? 0) !== value.generation - 1 ||
       envelope.createdAt !== value.createdAt) {
     throw new Error("La envoltura no coincide con la identidad persistida del outbox.");
   }
@@ -337,10 +336,8 @@ export class IndexedDbNarrativeSyncOutbox {
     validateIdentifier(input?.projectId, "projectId");
     validateIdentifier(input?.workerId, "workerId", MAX_WRITER_ID_UNITS);
     const now = input.now ?? Date.now();
-    const limit = input.limit ?? 1;
     const leaseMs = input.leaseMs ?? 30_000;
     if (!Number.isFinite(now) || now < 0 ||
-        limit !== 1 ||
         !Number.isFinite(leaseMs) || leaseMs < 1_000 || leaseMs > 3_600_000) {
       throw new RangeError("Parámetros de reclamación del outbox fuera de rango.");
     }

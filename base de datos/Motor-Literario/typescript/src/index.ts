@@ -1,5 +1,6 @@
 export * from "./contracts";
 export * from "./book-ingestion";
+export * from "./book-evidence";
 export * from "./epub-reader";
 export * from "./engine";
 export * from "./proofreading";

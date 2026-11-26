@@ -175,3 +175,11 @@ Se añade `HostEngineApi.enqueueNarrativeSyncOperation(input)`. El método obtie
 El método es deliberadamente explícito: el anfitrión lo invoca después de confirmar el cambio local que desea sincronizar. Todavía no existe una transacción conjunta entre el journal de cambios del documento y `SYNC_OUTBOX`; por tanto, no se debe describir este paso como una captura automática ni como atomicidad entre contenido y outbox. El anfitrión debe poder reconstruir la operación desde su journal durable si falla entre el commit local y el encolado. El `operationId` debe ser reproducible/estable en esa recuperación para que el encolado sea idempotente.
 
 Pruebas añadidas: la API usa el proyecto activo, recibe secuencia 1, devuelve la misma secuencia al repetir el ID y deja un único registro; un almacén sin asignador atómico produce error en lugar de fallback inseguro.
+
+### Captura atómica del journal del manuscrito
+
+La configuración opcional `syncDeviceId` en `EngineOptions` / `HostEngineApi` activa la producción automática de operaciones al confirmar una edición del motor. En IndexedDB, `appendChange(change, syncDraft)` abre una única transacción `readwrite` sobre `documents`, `changes` y `sync-outbox`: comprueba snapshot y continuidad del journal, añade el delta, asigna la siguiente secuencia por proyecto/dispositivo y añade la operación `narrative-document-change.v1`. Un fallo al insertar la operación aborta toda la transacción, incluido el delta. El motor solo actualiza su estado vivo después de que la transacción complete.
+
+El identificador estable se deriva de `projectId`, `documentId` y la secuencia del documento. El payload usa `schemaVersion: 1` e incluye el delta textual y sus revisiones/offsets UTF-16. Esta captura es opt-in porque contiene texto del manuscrito; habilitarla autoriza su inclusión en el payload que el anfitrión enviará al transporte. El anfitrión sigue siendo responsable de autenticación, cifrado, autorización y privacidad. Adaptadores antiguos reciben la llamada de un solo argumento cuando no se configura `syncDeviceId`.
+
+Alcance de garantía: atomicidad local entre journal y outbox en IndexedDB. No es una transacción distribuida ni garantiza que el servidor acepte el cambio; el transporte conserva entrega al menos una vez y el servidor debe deduplicar por `operationId`.

@@ -10,7 +10,7 @@ Módulo: `typescript/src/narrative-book-ingestion.ts`
 
 API pública: `ingestNarrativeBookText(input)`
 
-La función recibe texto Unicode ya decodificado por el anfitrión y produce:
+La función `ingestNarrativeBookText(input)` recibe texto Unicode ya decodificado y produce. La función asíncrona `readNarrativeBookFile(file)` ya permite adquirir archivos TXT y Markdown UTF-8 mediante `arrayBuffer` y `TextDecoder` estándar, sin bibliotecas de terceros:
 
 - Segmentación de capítulos a partir de encabezados explícitos (Capítulo/Chapter/Parte/Libro/Prólogo/Epílogo y variantes reconocidas).
 - Segmentación de párrafos con offsets UTF-16 y clasificación inicial de narración, diálogo o contenido mixto.
@@ -33,6 +33,7 @@ La función recibe texto Unicode ya decodificado por el anfitrión y produce:
 
 ## Límites de procesamiento
 
+- Archivos TXT/Markdown: 20.000.000 bytes como máximo; UTF-8 estricto, extensiones y MIME validados, bytes nulos rechazados.
 - Texto de entrada: 5.000.000 unidades UTF-16.
 - Capítulos: 2.000.
 - Párrafos: 100.000.
@@ -41,7 +42,7 @@ La función recibe texto Unicode ya decodificado por el anfitrión y produce:
 
 ## Próximas etapas técnicas
 
-1. Adaptadores de lectura para TXT/Markdown y formatos de libro, preservando el mapa entre texto extraído y ubicación original.
+1. Adaptadores de lectura para EPUB, PDF y DOCX, preservando el mapa entre texto extraído y ubicación original; TXT/Markdown ya dispone de lector estándar.
 2. Resolución de capítulos y secciones con encabezados no convencionales, numeración y metadatos.
 3. Resolución de menciones a entidades con alias, pronombres y referencias entre párrafos, manteniendo candidatos y evidencia.
 4. Extracción de acontecimientos con participantes y roles gramaticales separados de los personajes meramente mencionados.

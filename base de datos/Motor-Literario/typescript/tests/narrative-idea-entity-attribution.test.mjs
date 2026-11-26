@@ -140,3 +140,30 @@ test("el pipeline publica atribuciones de ideas con procedencia compartida", () 
   assert.equal(result.ideaEntityAttributions[0].entityId, "mara");
   assert.deepEqual(result.ideaEntityAttributions[0].evidence, result.ideas[0].evidence);
 });
+
+
+test("atribuye correctamente cuando la evidencia conserva espacios repetidos del manuscrito", () => {
+  const excerpt = "Mara desea proteger   a Elian.";
+  const originalSpan = "proteger   a Elian";
+  const start = 50 + excerpt.indexOf("proteger");
+  const candidate = {
+    ...idea("idea-whitespace", "Mara desea proteger a Elian.", "proteger a Elian"),
+    evidence: {
+      documentId: "chapter-1",
+      revision: 3,
+      start,
+      end: start + originalSpan.length,
+      excerpt
+    }
+  };
+
+  const result = attributeNarrativeIdeasToEntities({
+    projectId: "book-1",
+    ideas: [candidate],
+    entities: [entity("mara", "Mara"), entity("elian", "Elian")]
+  });
+
+  assert.equal(result[0].status, "attributed");
+  assert.equal(result[0].entityId, "mara");
+  assert.equal(result[0].evidence.excerpt, excerpt);
+});

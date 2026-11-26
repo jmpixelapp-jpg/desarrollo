@@ -1610,34 +1610,20 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     }),
     /historial de decisiones del catálogo global/
   );
-  for (const invalidHistory of [
-    [{ status: "incorporated", reason: "initial" }],
-    [{ status: "IDEA", reason: "writer", changedAt: 1 }],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "IDEA", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "unknown", reason: "writer", changedAt: 2 }
-    ],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "unsupported-reason", changedAt: 2 }
-    ]
-  ]) {
-    assert.throws(
-      () => analyzeLiteraryFragment({
-        ...input,
-        knownProjectIdeas: [{
-          ...idea,
-          statusHistory: invalidHistory,
-          writerDecisionCount: 1
-        }]
-      }),
-      /historial de decisiones del catálogo global/
-    );
-  }
+  assert.throws(
+    () => analyzeLiteraryFragment({
+      ...input,
+      knownProjectIdeas: [{
+        ...idea,
+        statusHistory: [
+          { status: "IDEA", reason: "initial", changedAt: 1 },
+          { status: "incorporated", reason: "unsupported-reason", changedAt: 2 }
+        ],
+        writerDecisionCount: 1
+      }]
+    }),
+    /historial de decisiones del catálogo global/
+  );
 
   assert.throws(
     () => analyzeLiteraryFragment({

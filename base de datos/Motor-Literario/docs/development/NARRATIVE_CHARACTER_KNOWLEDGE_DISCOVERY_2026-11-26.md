@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-El módulo `narrative-character-knowledge-discovery.ts` identifica afirmaciones textuales de adquisición, descubrimiento, sospecha, creencia, recuerdo, olvido y transferencia explícita de información. No construye por sí solo una base de hechos conocidos ni decide si una proposición es verdadera.
+El módulo `narrative-character-knowledge-discovery.ts` identifica afirmaciones textuales de adquisición, conocimiento ya poseído, recepción oral o escrita, descubrimiento, sospecha, creencia, recuerdo, olvido y transferencia explícita de información. No construye por sí solo una base de hechos conocidos ni decide si una proposición es verdadera.
 
 ## Contrato y trazabilidad
 
@@ -23,7 +23,7 @@ Texto máximo: 2.000.000 unidades UTF-16; 5.000 entidades; 100 alias por entidad
 
 ## Límites lingüísticos
 
-La detección usa patrones léxicos en español y límites aproximados de oración. No resuelve subordinación compleja, discurso libre indirecto, ironía, elipsis, correferencia pronominal, citas anidadas ni alcance completo de negación. La transferencia, el descubrimiento, la creencia y el recuerdo permanecen diferenciados.
+La detección usa patrones léxicos en español y límites aproximados de oración. No resuelve subordinación compleja, discurso libre indirecto, ironía, elipsis, correferencia pronominal, citas anidadas ni alcance completo de negación. La adquisición, el conocimiento previo, la recepción oral, la lectura, el descubrimiento, la creencia y el recuerdo permanecen diferenciados.
 
 ## Siguiente capa
 

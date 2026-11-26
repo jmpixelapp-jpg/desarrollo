@@ -282,9 +282,67 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       );
       return;
     }
-    this.pendingTransactions.push(transaction);
+    let retained: LiveAuthorMonitorEditorTransaction;
+    try {
+      retained = this.snapshotTransaction(transaction);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.fail(
+        "invalid-transaction",
+        "El proveedor modificó o no permitió copiar una transacción de forma segura: " + detail
+      );
+      return;
+    }
+    this.pendingTransactions.push(retained);
     this.drainTransactionQueue();
   };
+
+  /**
+   * Retiene el payload al cruzar la frontera del proveedor. Los eventos
+   * reentrantes pueden permanecer en cola mientras otro callback sigue activo;
+   * nunca conservamos referencias mutables al objeto entregado por el editor.
+   */
+  private snapshotTransaction(transaction: unknown): LiveAuthorMonitorEditorTransaction {
+    if (!transaction || typeof transaction !== "object") {
+      return transaction as LiveAuthorMonitorEditorTransaction;
+    }
+
+    const candidate = transaction as Record<string, unknown>;
+    const transactionId = candidate["transactionId"];
+    const kind = candidate["kind"];
+    const rawChange = candidate["change"];
+    if (!rawChange || typeof rawChange !== "object") {
+      return Object.freeze({
+        transactionId,
+        kind,
+        change: rawChange
+      }) as unknown as LiveAuthorMonitorEditorTransaction;
+    }
+
+    const change = rawChange as Record<string, unknown>;
+    const documentId = change["documentId"];
+    const sequence = change["sequence"];
+    const baseRevision = change["baseRevision"];
+    const start = change["start"];
+    const end = change["end"];
+    const replacement = change["replacement"];
+    const activityKind = change["activityKind"];
+    const retainedChange = Object.freeze({
+      documentId,
+      sequence,
+      baseRevision,
+      start,
+      end,
+      replacement,
+      ...(activityKind === undefined ? {} : { activityKind })
+    });
+
+    return Object.freeze({
+      transactionId,
+      kind,
+      change: retainedChange
+    }) as unknown as LiveAuthorMonitorEditorTransaction;
+  }
 
   private drainTransactionQueue(): void {
     if (this.processingTransactions || this.disposed) return;

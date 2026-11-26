@@ -440,3 +440,10 @@ Durante `retryPending()`, `queue_full` informa el rechazo una sola vez y conserv
 ## 26. Criterio del fixture de reentrancia tras recuperación
 
 La prueba de reentrancia debe modelar la recuperación completa: la primera secuencia queda en `queue_full`, el reintento de esa cabeza devuelve `unknown_document`, la fuente se pausa antes del callback y el callback no consigue introducir la secuencia siguiente. Tras validar el snapshot, el sink del fixture vuelve a admitir secuencias nuevas; no debe simular un rechazo permanente para siempre. La notificación `unknown_document` se verifica como exactamente una.
+
+
+## 27. Inmutabilidad de eventos retenidos del editor
+
+Cada evento que cruza `subscribeTransactions` se convierte en una copia plana y congelada con solo `transactionId`, `kind` y los campos definidos de `EditorChange`. Esto es importante para eventos reentrantes: permanecen esperando mientras se termina de notificar una transacción anterior, por lo que no deben depender de un objeto que el proveedor pueda reutilizar o mutar.
+
+Los getters fallidos y proxies hostiles se convierten en un error `invalid-transaction` y provocan la pausa del source. El monitor no permite que una excepción del proveedor escape al callback nativo del editor. El test de reentrancia verifica que la mutación posterior del objeto original no cambia el delta procesado.

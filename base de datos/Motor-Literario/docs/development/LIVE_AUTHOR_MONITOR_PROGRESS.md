@@ -1194,3 +1194,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Evidencia:** [Motor Literario TypeScript — run 45752135449](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752135449) pasó type-check y ejecutó 819/820 pruebas; la única fallida fue este fixture con un sink de prueba que rechazaba también la edición posterior. La lane específica [Live Author Monitor — run 45752135425](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752135425) ya había completado las regresiones aisladas; el conjunto de monitor seguía avanzando en Chromium al último chequeo.
 
 **Validación:** pendiente de una nueva ejecución con el fixture corregido.
+
+
+## 71. Snapshot inmutable de eventos transaccionales reentrantes (26 de noviembre de 2026)
+
+**Hallazgo:** `handleTransaction()` colocaba en `pendingTransactions` la referencia original del proveedor. Cuando un suscriptor del monitor provoca otra transacción sincrónicamente, el segundo evento queda en cola hasta terminar la primera entrega; un proveedor que reutiliza o modifica el objeto después de `publish()` podía alterar el reemplazo, rango o revisión que finalmente procesaba el monitor.
+
+**Corrección:** al entrar en la frontera del proveedor se copia una sola vez el identificador, tipo y todos los campos del contrato `EditorChange`. Tanto el contenedor de transacción como el delta retenido se congelan. Si la lectura de un getter/proxy falla durante la copia, el source entra en `invalid-transaction` y desacopla el proveedor sin propagar la excepción al editor.
+
+**Regresión:** un suscriptor del source provoca una segunda transacción mientras se procesa la primera y modifica el reemplazo del objeto original antes de que se drene la cola. El monitor debe entregar el texto original (`B`), conservar la longitud UTF-16 y seguir sincronizado.
+
+**Validación:** pendiente de CI para el commit que añade esta frontera defensiva.

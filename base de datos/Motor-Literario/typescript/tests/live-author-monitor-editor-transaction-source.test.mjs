@@ -609,3 +609,37 @@ test("un getter defectuoso del provider se contiene en la frontera transaccional
   f.stop();
   f.source.dispose();
 });
+
+
+test("captura una copia inmutable de transacciones reentrantes antes de que el proveedor mute el objeto", () => {
+  const f = fixture();
+  let nested;
+  const stopReentrant = f.source.subscribeChanges(change => {
+    if (change.sequence !== 1) return;
+    nested = f.editor.apply("edit", "tx-reentrant-mutable", {
+      start: 4,
+      end: 4,
+      replacement: "B"
+    });
+    // handleTransaction ya encoló este evento, pero todavía procesa la secuencia 1.
+    // La mutación del objeto original no debe reescribir la cola interna.
+    nested.change.replacement = "Z";
+  });
+
+  f.editor.apply("edit", "tx-first", {
+    start: 3,
+    end: 3,
+    replacement: "A"
+  });
+
+  assert.deepEqual(f.changes.map(change => [change.sequence, change.replacement]), [
+    [1, "A"],
+    [2, "B"]
+  ]);
+  assert.equal(f.editor.getSnapshot("chapter-1").text, "abcAB");
+  assert.equal(f.source.getState().sequence, 2);
+  assert.equal(f.source.getState().needsResync, false);
+  stopReentrant();
+  f.stop();
+  f.source.dispose();
+});

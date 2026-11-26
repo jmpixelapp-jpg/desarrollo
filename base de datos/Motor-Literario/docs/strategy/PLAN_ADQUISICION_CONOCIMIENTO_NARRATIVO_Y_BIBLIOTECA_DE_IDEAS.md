@@ -225,3 +225,26 @@ Esto impide tratar ambas frases como si expresaran la misma estructura lógica.
 Esto evita que el extractor de atribuciones exista como capacidad aislada que la aplicación principal nunca consulta.
 
 **Límite actual:** los verbos y patrones de atribución siguen siendo un catálogo español acotado; la atribución de citas anidadas, discurso indirecto libre, ironía, narrador no fiable, diálogos sin etiqueta y cambios de hablante todavía requiere módulos específicos y no se debe inferir por proximidad.
+
+
+## Fase P: atribución explícita de hablantes en diálogos
+
+Se incorporó `narrative-dialogue-attribution.ts` para detectar intervenciones con etiqueta de habla explícita en tres estructuras españolas:
+
+1. Diálogo con raya seguido de atribución: `—No volveré —dijo Mara.`
+2. Cita seguida de atribución: `«La puerta está abierta», respondió Elian.`
+3. Personaje antes de la cita: `Mara preguntó: «¿Quién ha entrado?»`
+
+Cada candidato conserva por separado:
+- identidad del hablante;
+- texto exacto de la intervención;
+- evidencia completa de la línea;
+- rango exacto de la intervención;
+- rango exacto del nombre que identifica al hablante;
+- documento, revisión y offsets UTF-16 absolutos.
+
+La resolución de nombres aplica alias y rechaza nombres compartidos por varias identidades. Se integra el resultado como `dialogueAttributions` en `understandNarrativeFragment` y se exporta desde el índice público.
+
+**Límites deliberados:** no se infieren turnos alternos, voces por proximidad entre párrafos, hablantes omitidos, vocativos, ni etiquetas sin verbo de habla reconocido. No se resuelven todavía diálogos multilínea, atribuciones intercaladas dentro de una misma línea, estilo indirecto libre, narrador no fiable ni citas anidadas. Los candidatos no son hechos canónicos y requieren revisión.
+
+Se añadieron pruebas para las tres estructuras, offsets absolutos, procedencia, hablantes ambiguos, ausencia de etiqueta y la integración del pipeline.

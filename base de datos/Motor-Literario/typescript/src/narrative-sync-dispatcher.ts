@@ -10,6 +10,9 @@ export interface NarrativeSyncOperationHandler<T = unknown> {
   readonly apply: (operation: NarrativeSyncOperationEnvelope<T>) => Promise<void>;
 }
 
+/** Tipo borrado usado por el registro heterogéneo de handlers. */
+export type AnyNarrativeSyncOperationHandler = NarrativeSyncOperationHandler<any>;
+
 export interface NarrativeSyncDispatchOptions {
   /** Permite que el anfitrión audite operaciones rechazadas sin exponer payloads. */
   readonly onRejected?: (operation: NarrativeSyncOperationEnvelope, reason: string) => void;
@@ -27,13 +30,13 @@ export type NarrativeSyncDispatchFailure =
  * ofrece entrega al menos una vez, no una transacción con las proyecciones.
  */
 export function createNarrativeSyncOperationDispatcher(
-  handlers: readonly NarrativeSyncOperationHandler[],
+  handlers: readonly AnyNarrativeSyncOperationHandler[],
   options: NarrativeSyncDispatchOptions = {}
 ): (operation: NarrativeSyncOperationEnvelope) => Promise<void> {
   if (!Array.isArray(handlers)) {
     throw new TypeError("Los handlers de sincronización deben ser una lista.");
   }
-  const registry = new Map<string, NarrativeSyncOperationHandler>();
+  const registry = new Map<string, AnyNarrativeSyncOperationHandler>();
   for (const handler of handlers) {
     if (!handler || typeof handler.kind !== "string" || !handler.kind.trim() ||
         typeof handler.validate !== "function" || typeof handler.apply !== "function") {

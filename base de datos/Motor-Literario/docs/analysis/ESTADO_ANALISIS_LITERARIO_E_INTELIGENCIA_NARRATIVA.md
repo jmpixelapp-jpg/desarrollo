@@ -246,6 +246,7 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `28dc439`: impide que la extracción de participantes de acontecimientos confunda un nombre con el prefijo de otro nombre que continúa con una marca combinante Unicode.
 - `999a03b`: añade regresiones para rechazar coincidencias parciales con marcas combinantes y aceptar nombres completos que contienen esas marcas.
 - `0e1f609`: sustituye la secuencia escapada del fixture por una marca combinante real construida con `String.fromCodePoint`, para que la regresión pruebe Unicode efectivo.
+- `b4389d7`: extiende las regresiones a los diagnósticos de estado vital, verificando tanto el rechazo de prefijos con marcas combinantes como la detección con nombres canónicos completos.
 
 La extensión de límites Unicode se aplica ahora también a la asociación de participantes de acontecimientos y al reconocimiento de nombres en diagnósticos de estado vital. La implementación y sus pruebas se presentan en la rama `work/narrative-unicode-event-boundaries`; no se consideran integradas en `main` hasta completar revisión y CI.
 

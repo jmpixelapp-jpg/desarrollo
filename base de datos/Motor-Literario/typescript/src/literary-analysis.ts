@@ -6527,12 +6527,11 @@ function collectSensorySignals(
 function isValidNarrativeIdeaStatusHistory(
   value: unknown,
   _currentStatus: NarrativeIdea["status"],
-  _writerDecisionCount: number,
-  _omittedStatusHistoryCount: number
+  writerDecisionCount: number,
+  omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
-  // El análisis lee archivos importados y registros históricos, no aplica las
-  // reglas de escritura a posteriori. Vacíos, retrocesos y divergencias se
-  // conservan para que summarizeStatusHistory los clasifique explícitamente.
+  // El análisis conserva historiales importados vacíos, repetidos o divergentes,
+  // pero no permite que sus contadores contradigan las decisiones visibles.
   if (!Array.isArray(value) || value.length > 100) return false;
   for (const item of value) {
     const change = item as NarrativeIdeaStatusChange | null | undefined;
@@ -6545,7 +6544,12 @@ function isValidNarrativeIdeaStatusHistory(
       return false;
     }
   }
-  return true;
+  const visibleWriterDecisionCount = value.filter(
+    (change: NarrativeIdeaStatusChange) => change.reason === "writer"
+  ).length;
+  return Number.isSafeInteger(writerDecisionCount) &&
+    writerDecisionCount >= visibleWriterDecisionCount &&
+    writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
 }
 function validateInput(input: LiteraryAnalysisInput): number {
   const baseOffset = input?.baseOffset ?? 0;

@@ -264,7 +264,7 @@ export function extractNarrativeEntities(
     return [];
   }
   const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3}";
-  const prefixCharacter = String.raw`\b(?:personaje|protagonista|antagonista)\s+(?:el|la|a)?\s*`;
+  const prefixCharacter = String.raw`\b(?:personaje|protagonista|antagonista)\s+(?:(?:el|la|a)\s+)?`;
   const prefixPlace = String.raw`\b(?:ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar)\s+(?:de|del|de la|de los|de las)?\s*`;
   const prefixObject = String.raw`\b(?:objeto|espada|arma|reliquia|amuleto|anillo|libro)\s+(?:llamado|llamada)?\s*`;
   const suffix = String.raw`(?=$|[^\p{L}\p{M}\p{N}_])`;

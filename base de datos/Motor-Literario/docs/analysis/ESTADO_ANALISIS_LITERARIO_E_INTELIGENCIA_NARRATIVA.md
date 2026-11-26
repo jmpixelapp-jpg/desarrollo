@@ -538,7 +538,7 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Nuevo `narrative-temporal-reference-discovery.ts`: extrae fechas ISO, fechas escritas en español, años, fechas numéricas ambiguas, relaciones de orden, duraciones, franjas del día y horas.
 - Valida fechas de calendario y normaliza solo valores inequívocos. Las fechas numéricas con orden día/mes no establecido quedan ambiguas; las referencias relativas requieren ancla y no se convierten en fechas absolutas.
 - Integrado en la ingesta como `temporalReferences` y `temporalReferenceStatus`, y en la auditoría global con evidencias exactas.
-- Añadidas pruebas unitarias para fechas válidas/imposibles, ambigüedad numérica, referencias relativas, franjas horarias y offsets, además de integración con ingesta. CI pendiente.
+- Añadidas pruebas unitarias para fechas válidas/imposibles, ambigüedad numérica, referencias relativas, dirección de duraciones, franjas horarias y offsets, además de integración con ingesta. En run 3031 (`83ba3087`) Type-check y las pruebas temporales (incluida integración) pasaron; el workflow completo quedó en fallo por una prueba ajena de `live-author-monitor-textarea-source.test.mjs` (resincronización de textarea, línea 348), no por el extractor temporal.
 
 ### Presencia explícita de personajes en ubicaciones — 26-11-2026
 

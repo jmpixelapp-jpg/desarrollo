@@ -127,6 +127,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   private needsResync = false;
   private disposed = false;
   private unsubscribeProvider: (() => void) | undefined;
+  /** true solo cuando unsubscribeProvider sigue retenido por una cancelación fallida. */
+  private providerDetachFailed = false;
 
   constructor(options: LiveAuthorMonitorEditorTransactionSourceOptions) {
     if (!options || typeof options.documentId !== "string" || !options.documentId.trim()) {
@@ -518,11 +520,12 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   private attachProvider(): void {
     if (this.disposed || this.needsResync || this.listeners.size === 0) return;
 
-    // No se crea una suscripción nueva mientras el disposer de la anterior
-    // siga retenido por un fallo de cancelación.
+    // Un disposer presente normalmente representa la suscripción activa.
+    // Solo se reintenta cuando el cierre anterior falló explícitamente.
     if (this.unsubscribeProvider) {
+      if (!this.providerDetachFailed) return;
       this.detachProvider();
-      if (this.unsubscribeProvider) {
+      if (this.providerDetachFailed) {
         throw new Error("La suscripción anterior del editor aún no pudo cerrarse.");
       }
     }
@@ -538,6 +541,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       throw new TypeError("subscribeTransactions debe devolver una función de cancelación.");
     }
     this.unsubscribeProvider = unsubscribe;
+    this.providerDetachFailed = false;
     if (this.disposed || this.needsResync || this.listeners.size === 0) {
       this.detachProvider();
     }
@@ -548,10 +552,14 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     if (!unsubscribe) return;
     try {
       unsubscribe();
-      if (this.unsubscribeProvider === unsubscribe) this.unsubscribeProvider = undefined;
+      if (this.unsubscribeProvider === unsubscribe) {
+        this.unsubscribeProvider = undefined;
+        this.providerDetachFailed = false;
+      }
     } catch (error) {
-      // Mantener el handle es esencial: el proveedor puede seguir conservando
-      // el listener y la siguiente reanudación debe intentar cerrarlo de nuevo.
+      // Mantener el handle y marcar el fallo: la próxima reanudación debe
+      // reintentar solo este cancelador, nunca cancelar uno que sigue activo.
+      this.providerDetachFailed = true;
       this.report(error instanceof Error ? error : new Error(String(error)));
     }
   }

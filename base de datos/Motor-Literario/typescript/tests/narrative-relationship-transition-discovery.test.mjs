@@ -15,3 +15,12 @@ test("no genera autorrelaciones",()=>{assert.deepEqual(run("Ana se hizo amiga de
 test("rechaza entidades y alias malformados",()=>{assert.throws(()=>run("Ana y Bruno se hicieron amigos.",[{...ana,projectId:"otro"},bruno]),/únicos y válidos/);assert.throws(()=>run("Ana y Bruno se hicieron amigos.",[{...ana,aliases:[""]},bruno]),/únicos y válidos/);});
 test("no devuelve resultados parciales al superar máximo",()=>{assert.throws(()=>run("Ana y Bruno se hicieron amigos. Ana y Bruno se reconciliaron.",[ana,bruno],{maxCandidates:1}),/no se devuelve un resultado parcial/);});
 test("ordena cronológicamente independientemente del orden de entidades",()=>{const text="Ana y Bruno se hicieron amigos. Carla y Ana se reconciliaron.";const a=run(text,[ana,bruno,carla]);const b=run(text,[carla,bruno,ana]);assert.deepEqual(a.map(x=>x.triggerEvidence.start),b.map(x=>x.triggerEvidence.start));});
+
+test("no crea vínculos cuando ambos IDs comparten exactamente el mismo nombre ambiguo",()=>{
+ const duplicate={...ana,id:"ana-2"};
+ assert.deepEqual(run("Ana y Ana se hicieron amigas.",[ana,duplicate]),[]);
+});
+test("solo admite entidades de tipo personaje",()=>{
+ const object={...bruno,kind:"object"};
+ assert.throws(()=>run("Ana y Bruno se hicieron amigos.",[ana,object]),/únicos y válidos/);
+});

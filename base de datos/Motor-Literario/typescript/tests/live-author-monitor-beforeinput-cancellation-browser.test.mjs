@@ -165,12 +165,12 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
     await page.waitForFunction(() => {
       const test = window.__beforeinputCancellationTest;
       return test?.source.getState().pendingInput === false;
-    }, { timeout: 5_000 });
+    }, null, { timeout: 5_000 });
     await page.waitForFunction(() =>
       window.__beforeinputCancellationTest?.eventTrace.some(
         event => event.type === "timer-after-host-listener"
       ) === true
-    , { timeout: 5_000 });
+    , null, { timeout: 5_000 });
 
     const afterCancellation = await page.evaluate(() => {
       const test = window.__beforeinputCancellationTest;

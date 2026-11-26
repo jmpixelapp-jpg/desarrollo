@@ -220,7 +220,7 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `0ccc036`: añade auditoría estática para evitar regresiones que vuelvan a duplicar esos buckets.
 - `5335e5b`: corrige el delimitador de la auditoría de evolución de atributos.
 - `6693c59`: indexa acontecimientos por ID y cuenta evidencias externas directamente, evitando escanear el catálogo completo por cada decisión y materializar arreglos de evidencia.
-- `95daff5`: añade una prueba de estrés autocontenida con cinco fuentes, quinientos intermediarios y quinientos destinos; comprueba el truncamiento tras 
+- `95daff5`: añade una prueba de estrés autocontenida con cinco fuentes, quinientos intermediarios y quinientos destinos; cuatro fuentes completan un millón de expansiones y la quinta activa el truncamiento.
 - `f9af2b0`: añade auditoría estática del recorrido acotado de continuidad entre documentos.
 - `98f31e0`: corrige el delimitador de la auditoría de continuidad.
 ## 7. Pendientes y siguiente secuencia de trabajo

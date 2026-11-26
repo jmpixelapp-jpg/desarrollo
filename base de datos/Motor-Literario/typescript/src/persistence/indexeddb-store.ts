@@ -6094,7 +6094,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
   }
 
-  /** Recupera pendientes en orden de creación sin retirarlos del almacén. */
+  /** Recupera pendientes en orden FIFO por dispositivo/secuencia sin retirarlos. */
   async loadPendingSyncOperations(projectId: string, limit = 100): Promise<readonly StoredSyncOperation[]> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         !Number.isSafeInteger(limit) || limit < 1 || limit > 1_000) {

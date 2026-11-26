@@ -82,6 +82,12 @@ test("conecta snapshot y metadatos nativos y entrega edit/undo/redo en el orden 
   assert.equal(source.getState().lastTransactionKind, "redo");
   assert.equal(native.snapshot.text, "abc!");
   assert.equal(source.getState().documentLength, native.snapshot.text.length);
+  assert.deepEqual(bridge.getDocumentState("chapter-1"), {
+    documentId: "chapter-1",
+    revision: 3,
+    sequence: 3,
+    documentLength: 4
+  });
 
   stop();
   source.dispose();

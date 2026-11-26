@@ -59,3 +59,4 @@ export * from "./narrative-dialogue-speaker-discovery";
 export * from "./narrative-elliptical-subject-discovery";
 export * from "./narrative-descriptive-reference-discovery";
 export * from "./narrative-relationship-discovery";
+export * from "./narrative-relationship-transition-discovery";

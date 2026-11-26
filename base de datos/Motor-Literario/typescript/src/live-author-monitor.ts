@@ -813,8 +813,12 @@ export function subscribeLiveAuthorMonitorWithRefresh(
   }
 
   const documentId = options.documentId;
-  if (documentId !== undefined && !documentId.trim()) {
-    throw new TypeError("documentId no puede estar vacío.");
+  if (documentId !== undefined &&
+      (typeof documentId !== "string" || !documentId.trim())) {
+    throw new TypeError("documentId debe ser una cadena no vacía.");
+  }
+  if (options.onListenerError !== undefined && typeof options.onListenerError !== "function") {
+    throw new TypeError("onListenerError debe ser una función.");
   }
 
   const schedule = options.schedule ?? defaultMonitorRefreshScheduler;

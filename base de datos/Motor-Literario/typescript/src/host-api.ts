@@ -4167,12 +4167,19 @@ export class HostEngineApi {
 
   private async releaseLiveAuthorMonitorLease(documentId: string): Promise<void> {
     const lease = this.liveMonitorLeases.get(documentId);
+    if (!lease || !this.store.releaseLiveAuthorMonitorLease) return;
     const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
     if (timer) clearInterval(timer);
     this.liveMonitorLeaseHeartbeats.delete(documentId);
-    this.liveMonitorLeases.delete(documentId);
-    if (!lease || !this.store.releaseLiveAuthorMonitorLease) return;
-    await this.store.releaseLiveAuthorMonitorLease.call(this.store, lease, Date.now());
+    try {
+      await this.store.releaseLiveAuthorMonitorLease.call(this.store, lease, Date.now());
+      this.liveMonitorLeases.delete(documentId);
+    } catch (error) {
+      // Si el almacén no confirmó la liberación, conservamos la titularidad local
+      // y reanudamos el heartbeat para evitar una expiración accidental.
+      this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
+      throw error;
+    }
   }
 
   private scheduleLiveAuthorMonitorCheckpoint(documentId: string): void {

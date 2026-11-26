@@ -358,6 +358,36 @@ test("IndexedDB aborta una transacción tras validar lease sin confirmar un chec
   }
 });
 
+test("IndexedDB reabre tras el evento close externo e intacta el checkpoint durable", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-external-close-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const lease = await acquireLease(store, projectId, documentId);
+  const durable = checkpoint(projectId, documentId, Date.now());
+  await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
+
+  try {
+    // open() es un método privado de TypeScript, accesible en la clase compilada;
+    // se usa aquí para simular la conexión cerrada por el navegador/entorno.
+    const connection = await store.open();
+    connection.close();
+    connection.dispatchEvent(new Event("close"));
+
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "la siguiente operación debe crear una conexión nueva y restaurar el checkpoint"
+    );
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "la conexión recuperada debe poder reutilizarse"
+    );
+  } finally {
+    await store.close();
+  }
+});
+
 test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";

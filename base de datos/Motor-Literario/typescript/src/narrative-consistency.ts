@@ -17,6 +17,12 @@ export interface NarrativeConsistencyFinding {
   readonly explanation: string;
 }
 
+function sameValue(left: string | number, right: string | number): boolean {
+  if (typeof left === "number" || typeof right === "number") return Object.is(left, right);
+  return left.normalize("NFKC").trim().toLocaleLowerCase("es") ===
+    right.normalize("NFKC").trim().toLocaleLowerCase("es");
+}
+
 function sameEvidence(left: TextEvidence, right: TextEvidence): boolean {
   return left.documentId === right.documentId &&
     left.revision === right.revision &&
@@ -94,7 +100,7 @@ export function analyzeNarrativeConsistency(
       for (let j = i + 1; j < group.length; j++) {
         const second = group[j]!;
         if (sameEvidence(first.evidence, second.evidence) ||
-            Object.is(first.value, second.value)) continue;
+            sameValue(first.value, second.value)) continue;
 
         const firstTime = first.timeReference;
         const secondTime = second.timeReference;

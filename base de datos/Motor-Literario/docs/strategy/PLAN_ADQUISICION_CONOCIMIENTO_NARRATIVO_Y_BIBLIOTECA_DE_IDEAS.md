@@ -224,7 +224,7 @@ Los alias solo se utilizan si resuelven a una única identidad. Si dos personaje
 
 **Límite conocido:** todavía no resuelve citas indirectas complejas, cambios de hablante entre turnos, pronombres (“él dijo…”) ni distingue automáticamente narrador de personaje. Tampoco infiere quién realiza una acción descrita sin un verbo de atribución explícito. Esas capacidades requieren contexto de discurso y análisis de eventos en pasos separados.
 
-Se añadieron pruebas para atribución, tipos de voz, negación, offsets, alias ambiguos y aislamiento por proyecto. La implementación queda pendiente de validación integral en CI.
+Se añadieron pruebas para atribución, tipos de voz, negación, offsets, alias ambiguos y aislamiento por proyecto. La implementación queda pendiente de validación integral en CI. El workflow del repositorio está configurado para pull requests, pero no hay una ejecución/check nuevo asociado al último head; no se considera validada.
 
 ## 9. Cómo informar el progreso
 

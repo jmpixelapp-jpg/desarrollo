@@ -92,6 +92,8 @@ Los campos nuevos son opcionales en checkpoints v1 para conservar compatibilidad
 
 `estimatedWordsPerMinute` y `insertedCharactersPerMinute` usan solo `typingInsertedCharacters` en el numerador. Su denominador sigue siendo el tiempo activo total de la sesión, que puede incluir pegados, correcciones o composición IME; son estimaciones sobre tiempo activo total, no una medición pura del tiempo de teclado ni una confirmación de palabras finales.
 
+La fuente textarea compara el `inputType` de ambos eventos cuando los dos están disponibles: si difieren, rechaza el delta con `input-type-mismatch` y pide snapshot. Si `input` no informa el tipo, conserva como fuente la declaración de `beforeinput`; la traza manual lo identifica como `paired-inputtype-unavailable` en lugar de declarar una comparación completa.
+
 El monitor no guarda el contenido de las transacciones. Solo recibe posiciones, longitudes, secuencia, revisión, categoría y el identificador nativo acotado necesarios para contabilizar. Los rangos y longitudes se expresan en unidades UTF-16, no en grafemas lingüísticos.
 
 ## 4. Configuración y retención de datos

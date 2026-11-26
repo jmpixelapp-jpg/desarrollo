@@ -2,7 +2,13 @@ import type { NarrativeIdeaOccurrenceReference } from "./narrative-idea-cross-do
 import type { NarrativeIdeaEvolutionEvent } from "./narrative-idea-evolution";
 import type { NarrativeIdeaContinuityLine, NarrativeIdeaContinuityLinesResult, NarrativeIdeaContinuityLinesSummary } from "./narrative-idea-continuity-lines";
 import type { ProjectStore } from "./contracts";
-import { canonicalizeNarrativeSyncPayload, fingerprintNarrativeSyncPayload } from "./narrative-sync-integrity";
+import {
+  createNarrativeSyncOperationEnvelope,
+  canonicalizeNarrativeSyncPayload,
+  fingerprintNarrativeSyncPayload,
+  type CreateNarrativeSyncOperationEnvelopeInput,
+  type NarrativeSyncOperationEnvelope
+} from "./narrative-sync-integrity";
 
 export interface NarrativeIdeaContinuitySourceRevision {
   readonly documentId: string;
@@ -545,4 +551,40 @@ export async function commitNarrativeIdeaContinuityIndex(
   }
   await store.saveNarrativeIdeaContinuityIndexIfUnchanged(candidate, current?.generation);
   return { index: candidate, reused: false };
+}
+
+
+/** Payload versionado del handler de réplica para la proyección derivada. */
+export interface NarrativeIdeaContinuityIndexSyncPayload {
+  readonly index: NarrativeIdeaContinuityIndex;
+  readonly expectedGeneration?: number;
+}
+
+/**
+ * Crea la envoltura SHA-256 del índice con los mismos límites amplios que
+ * deberán configurarse en el diario receptor mediante
+ * NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS. No cambia la política por defecto
+ * para el resto de operaciones narrativas.
+ */
+export function createNarrativeIdeaContinuityIndexSyncEnvelope(
+  input: Omit<CreateNarrativeSyncOperationEnvelopeInput<NarrativeIdeaContinuityIndexSyncPayload>, "kind"> 
+): Promise<NarrativeSyncOperationEnvelope<NarrativeIdeaContinuityIndexSyncPayload>> {
+  if (!input || !input.payload ||
+      input.payload.index.projectId !== input.projectId) {
+    throw new Error("La envoltura de continuidad debe usar el mismo proyecto que el índice.");
+  }
+  validateNarrativeIdeaContinuityIndex(input.payload.index);
+  if (input.payload.expectedGeneration !== undefined &&
+      (!Number.isSafeInteger(input.payload.expectedGeneration) ||
+        input.payload.expectedGeneration < 0 ||
+        input.payload.index.generation !== input.payload.expectedGeneration + 1)) {
+    throw new Error("La generación base del índice de continuidad no es válida.");
+  }
+  if (input.payload.index.generation !== (input.payload.expectedGeneration ?? 0) + 1) {
+    throw new Error("La primera generación del índice debe ser uno y las siguientes consecutivas.");
+  }
+  return createNarrativeSyncOperationEnvelope({
+    ...input,
+    kind: "idea-continuity-index-upsert"
+  }, NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS);
 }

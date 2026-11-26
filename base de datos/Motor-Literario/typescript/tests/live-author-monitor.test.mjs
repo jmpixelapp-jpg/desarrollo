@@ -528,7 +528,7 @@ test("encadena dos recuperaciones tras cierres abruptos sin duplicar métricas n
   first.open("chapter-1", "seed");
   first.setTime(5);
   first.monitor.recordAdmission(
-    first.change(1, 0, 4, 4, "!"),
+    { ...first.change(1, 0, 4, 4, "!"), activityKind: "typing" },
     first.queued("takeover-1")
   );
   first.setTime(8);
@@ -563,7 +563,7 @@ test("encadena dos recuperaciones tras cierres abruptos sin duplicar métricas n
 
   second.setTime(10);
   const next = second.monitor.recordAdmission(
-    second.change(2, 1, 5, 5, "x"),
+    { ...second.change(2, 1, 5, 5, "x"), activityKind: "typing" },
     second.queued("takeover-2")
   );
   assert.equal(next.pauseCount, firstCheckpoint.pauseCount + 1);
@@ -856,6 +856,28 @@ test("mantiene métricas acotadas tras más de ocho horas y 40.000 cambios en oc
   }
   assert.equal(JSON.stringify(snapshots).includes(privateSentinel), false,
     "los snapshots del monitor no deben retener ni exponer el texto del manuscrito");
+});
+
+
+test("no inventa categorías de actividad cuando el adaptador omite activityKind", () => {
+  const { monitor, open, change, queued } = fixture();
+  open("chapter-1", "hello");
+
+  const operations = [
+    change(1, 0, 5, 5, "!"),     // Inserción sin procedencia.
+    change(2, 1, 0, 1, "H"),     // Reemplazo de selección sin procedencia.
+    change(3, 2, 5, 6, "")       // Eliminación sin procedencia.
+  ];
+  operations.forEach((operation, index) => {
+    monitor.recordAdmission(operation, queued("unknown-origin-" + index));
+  });
+
+  const snapshot = monitor.getSnapshot("chapter-1");
+  assert.equal(snapshot.acceptedChanges, 3);
+  assert.equal(snapshot.typingChanges, 0);
+  assert.equal(snapshot.correctionChanges, 0);
+  assert.equal(snapshot.deletionChanges, 0);
+  assert.equal(snapshot.otherChanges, 3);
 });
 
 test("clasifica escritura, pegado, borrado, corrección, deshacer y rehacer; los conserva al restaurar", () => {

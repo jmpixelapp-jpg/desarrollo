@@ -321,3 +321,116 @@ export function discoverNarrativeDescriptiveLabelCandidates(
     a.anchorEntityId.localeCompare(b.anchorEntityId)
   );
 }
+
+
+export interface NarrativeRelativeClauseCandidate {
+  readonly id: string;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly clauseText: string;
+  readonly clauseEvidence: TextEvidence;
+  readonly anchorEntityId: string;
+  readonly anchorEvidence: TextEvidence;
+  readonly relation: "relative-clause";
+  readonly reviewStatus: "candidate";
+}
+
+export interface NarrativeRelativeClauseCandidateInput extends NarrativeDescriptiveLabelCandidateInput {
+  readonly maxClauseLength?: number;
+}
+
+export const DEFAULT_NARRATIVE_RELATIVE_CLAUSE_LENGTH = 240;
+export const MAX_NARRATIVE_RELATIVE_CLAUSE_LENGTH = 600;
+export const MAX_NARRATIVE_RELATIVE_CLAUSE_CANDIDATES = 2_000;
+
+/**
+ * Detecta incisos relativos explícitos del tipo «Ana, que conocía la ciudad, ...».
+ * Conserva la cláusula como texto literal: no interpreta su contenido como hecho
+ * ni lo incorpora a la ficha de la entidad.
+ */
+export function discoverNarrativeRelativeClauseCandidates(
+  input: NarrativeRelativeClauseCandidateInput
+): readonly NarrativeRelativeClauseCandidate[] {
+  const maxCandidates = input?.maxCandidates ?? MAX_NARRATIVE_RELATIVE_CLAUSE_CANDIDATES;
+  const maxClauseLength = input?.maxClauseLength ?? DEFAULT_NARRATIVE_RELATIVE_CLAUSE_LENGTH;
+  if (!input || typeof input !== "object" ||
+      typeof input.projectId !== "string" || !input.projectId.trim() ||
+      typeof input.documentId !== "string" || !input.documentId.trim() ||
+      !Number.isSafeInteger(input.revision) || input.revision < 0 ||
+      typeof input.text !== "string" || input.text.length > MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_TEXT_UNITS ||
+      !Array.isArray(input.entities) || input.entities.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ENTITIES ||
+      !Number.isSafeInteger(maxCandidates) || maxCandidates < 1 ||
+      maxCandidates > MAX_NARRATIVE_RELATIVE_CLAUSE_CANDIDATES ||
+      !Number.isSafeInteger(maxClauseLength) || maxClauseLength < 20 ||
+      maxClauseLength > MAX_NARRATIVE_RELATIVE_CLAUSE_LENGTH ||
+      (input.baseOffset !== undefined && (!Number.isSafeInteger(input.baseOffset) ||
+        input.baseOffset < 0 || input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {
+    throw new Error("Contexto inválido para descubrir cláusulas relativas candidatas.");
+  }
+
+  const base = input.baseOffset ?? 0;
+  const results = new Map<string, NarrativeRelativeClauseCandidate>();
+  const entityIds = new Set<string>();
+  let scanUnits = 0;
+  // Requiere una forma verbal finita reconocible; evita tratar cualquier «que»
+  // como relativa. Es una heurística de alta precisión, no un analizador sintáctico.
+  const finiteVerb = String.raw`(?:es|son|era|eran|fue|fueron|ha|han|había|habían|habrá|habrán|está|están|estaba|estaban|estuvo|estuvieron|puede|pueden|podía|podían|quiere|quieren|quería|querían|debe|deben|debía|debían|tiene|tienen|tenía|tenían|hace|hacen|hacía|hacían|dijo|dijeron|llegó|llegaron|vivía|vivían|conocía|conocían|llevaba|llevaban|guardaba|guardaban|(?:[\\p{L}\\p{M}]+(?:aba|aban|ía|ían|aron|ieron|ó|ió|ará|erá|irá|arán|erán|irán)))`;
+  for (const entity of input.entities) {
+    if (!entity || entity.projectId !== input.projectId || typeof entity.id !== "string" ||
+        !entity.id.trim() || entityIds.has(entity.id) || typeof entity.canonicalName !== "string" ||
+        !entity.canonicalName.trim() || entity.canonicalName.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIAS_LENGTH ||
+        !Array.isArray(entity.aliases) || entity.aliases.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIASES_PER_ENTITY) {
+      throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
+    }
+    entityIds.add(entity.id);
+    const aliasKeys = new Set<string>();
+    for (const alias of entity.aliases) {
+      if (typeof alias !== "string" || !alias.trim() ||
+          alias.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIAS_LENGTH ||
+          aliasKeys.has(alias.normalize("NFC").toLocaleLowerCase("es").trim())) {
+        throw new Error("Los alias deben ser textos válidos, únicos y estar dentro del límite de longitud.");
+      }
+      aliasKeys.add(alias.normalize("NFC").toLocaleLowerCase("es").trim());
+    }
+    for (const name of [entity.canonicalName, ...entity.aliases]) {
+      scanUnits += input.text.length;
+      if (scanUnits > MAX_NARRATIVE_DESCRIPTIVE_LABEL_SCAN_UNITS) {
+        throw new Error("La extracción de cláusulas relativas supera el presupuesto operativo de exploración.");
+      }
+      const expression = new RegExp(
+        "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(name) +
+        "(?![\\p{L}\\p{M}\\p{N}_])\\s*,\\s*(que\\s+(?:(?!" + // no cruzar cierre
+        "[.!?;])[^,]){1," + maxClauseLength + "}?)\\s*,",
+        "giu"
+      );
+      for (const match of input.text.matchAll(expression)) {
+        const clause = match[1]!;
+        if (!new RegExp("\\b" + finiteVerb + "\\b", "iu").test(clause)) continue;
+        const anchorStart = match.index!;
+        const anchorEnd = anchorStart + name.length;
+        const clauseStart = anchorStart + match[0].indexOf(clause);
+        const clauseEnd = clauseStart + clause.length;
+        const key = entity.id + ":" + clauseStart + ":" + clauseEnd;
+        if (results.has(key)) continue;
+        results.set(key, {
+          id: "relative-clause-candidate:" + input.documentId + ":" + input.revision + ":" + (base + clauseStart) + ":" + entity.id,
+          projectId: input.projectId, documentId: input.documentId, revision: input.revision,
+          clauseText: clause,
+          clauseEvidence: { documentId: input.documentId, revision: input.revision, start: base + clauseStart, end: base + clauseEnd, excerpt: clause },
+          anchorEntityId: entity.id,
+          anchorEvidence: { documentId: input.documentId, revision: input.revision, start: base + anchorStart, end: base + anchorEnd, excerpt: name },
+          relation: "relative-clause", reviewStatus: "candidate"
+        });
+        if (results.size > maxCandidates) {
+          throw new Error("La extracción supera el máximo de cláusulas; no se devuelve un resultado parcial.");
+        }
+      }
+    }
+  }
+  return [...results.values()].sort((a, b) =>
+    a.clauseEvidence.start - b.clauseEvidence.start ||
+    a.clauseEvidence.end - b.clauseEvidence.end ||
+    a.anchorEntityId.localeCompare(b.anchorEntityId)
+  );
+}

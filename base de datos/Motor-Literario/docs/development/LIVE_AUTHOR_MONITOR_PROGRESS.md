@@ -1174,3 +1174,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Reentrancia:** la fuente queda pausada antes de notificar `onAdmission`, por lo que callbacks síncronos no pueden adelantar una nueva transacción.
 
 **Validación previa:** [Live Author Monitor — run 45751720044](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751720044) ejecutó build, Chromium y auditoría correctamente, pero falló una prueba de integración transaccional porque esperaba el delta rechazado en el backlog. La corrección conserva explícitamente ese contrato; el nuevo commit queda pendiente de CI.
+
+
+## 69. Notificación única después de pausar durante retry FIFO (26 de noviembre de 2026)
+
+**Fallo detectado en CI:** la regresión reentrante mostró que `retryPending()` notificaba `onAdmission` dos veces para un rechazo permanente: una vez antes de pausar y otra después. La primera notificación todavía permitía que una emisión síncrona del callback se incorporara al backlog detrás del delta bloqueado.
+
+**Corrección:** el camino `queue_full` notifica una sola vez y mantiene el estado recuperable. Para los rechazos permanentes, primero ejecuta la transición `resync-required` y desacopla la fuente, y luego notifica `onAdmission` una única vez. El cambio conserva el delta rechazado y el resto del backlog hasta el snapshot común.
+
+**Regresión:** el test `un onAdmission reentrante no puede adelantar cambios al rechazo permanente durante retryPending` falla con la implementación duplicada y valida el orden de notificación después de esta corrección.
+
+**CI:** la ejecución [Live Author Monitor — run 45751943626](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751943626) falló 1/185 pruebas (184 aprobadas); la ejecución general [Motor Literario TypeScript — run 45751943629](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751943629) falló la misma regresión (815/816). Build aislado, type-check y demás pruebas finalizaron correctamente. El nuevo commit queda pendiente de CI.

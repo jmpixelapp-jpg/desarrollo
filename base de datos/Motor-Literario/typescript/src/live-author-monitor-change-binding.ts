@@ -347,15 +347,15 @@ export function bindLiveAuthorMonitorEditorChanges(
           continue;
         }
 
-        reportAdmission(change, admission);
         if (admission.reason === "queue_full") {
           pendingReason = "queue_full";
           publishBackpressure();
+          reportAdmission(change, admission);
           break;
         }
 
-        // Pausar y desacoplar antes del callback: un onAdmission reentrante no
-        // debe introducir otra secuencia mientras la cabeza FIFO exige snapshot.
+        // Pausar y desacoplar antes de notificar. El callback debe ejecutarse
+        // una sola vez y no puede introducir otra secuencia en un stream pausado.
         pauseForResynchronization(
           change,
           admission.reason,

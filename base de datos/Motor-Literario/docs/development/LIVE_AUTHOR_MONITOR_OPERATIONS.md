@@ -430,3 +430,8 @@ Un rechazo permanente no se reintenta, pero el delta causante sí queda en el ba
 El anfitrión compara el snapshot durable del motor con el editor. Solo después de confirmar que el snapshot común cubre la transacción rechazada llama a `discardPendingAfterResynchronization()`; entonces el binding limpia el delta y rearma el listener. El delta que desbordaría un buffer ya lleno sigue fuera de la cola y se identifica mediante `overflowSequence`.
 
 Esta distinción permite conservar la trazabilidad sin reintentar una edición que el motor ya clasificó como inválida/no recuperable mediante capacidad.
+
+
+## 25. Una sola notificación de admisión tras pausar un rechazo permanente
+
+Durante `retryPending()`, `queue_full` informa el rechazo una sola vez y conserva la cola para otro intento cuando haya capacidad. Un motivo permanente primero pausa y desuscribe la fuente, y solo después emite `onAdmission` una vez. Esto es necesario porque el callback de la aplicación puede provocar emisiones síncronas; nunca debe ejecutarse una vez antes y otra después de entrar en `resync-required`.

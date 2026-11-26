@@ -1,0 +1,22 @@
+# Descubrimiento de transiciones relacionales — 26 de noviembre de 2026
+
+## Propósito
+El descubrimiento de relaciones existente identifica vínculos nominales. Este módulo añade una capa distinta: detecta expresiones que narran cambios en esos vínculos. No modifica ni reemplaza la relación base.
+
+## API
+discoverNarrativeRelationshipTransitionCandidates devuelve candidatos con dos entidades explícitamente nombradas, familia relacional, tipo de transición, disparador y evidencias separadas para ambas entidades, el disparador y el contexto.
+
+Familias iniciales: amistad, enemistad, matrimonio, confianza y alianza. Transiciones: formed, ended y reconciled. La cobertura léxica es acotada y ampliable mediante corpus y pruebas.
+
+## Salvaguardas
+- Requiere dos nombres/alias registrados en la misma oración y dentro de una ventana local máxima de 180 unidades.
+- Los resultados son siempre candidatos; no alteran automáticamente el grafo.
+- Conserva offsets UTF-16 absolutos y evidencia literal.
+- Valida proyecto, IDs, alias, longitud de nombres, límites de texto, candidatos y presupuesto de exploración.
+- Ante exceso de candidatos o presupuesto, lanza error y no devuelve una lista truncada.
+
+## Interpretación
+«Ana y Bruno se hicieron amigos» propone el inicio de una amistad; «Ana rompió su amistad con Bruno» propone su terminación; «se reconciliaron» propone reconciliación. Los rótulos describen el disparador textual, no prueban que el cambio sea objetivo, permanente o aceptado por ambos. El marco epistémico y la temporalidad global deben combinarse después desde los extractores correspondientes antes de consolidar una cronología relacional.
+
+## Pruebas
+Pruebas para inicio y ruptura de amistad, reconciliación, matrimonio, offsets Unicode, límites de oración, autorrelaciones, validación, exhaustividad y orden determinista. No se declara ejecución satisfactoria sin CI verificable.

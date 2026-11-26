@@ -150,3 +150,31 @@ test("sin orden editorial explícito conserva cronología desconocida", async ()
     await store.close();
   }
 });
+
+
+test("el índice de metadatos enumera revisiones sin exponer cuerpos documentales", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  try {
+    await store.saveDocument({
+      projectId: id,
+      documentId: "metadata-chapter",
+      text: "Este cuerpo debe permanecer fuera del inventario.",
+      revision: 4,
+      sequence: 9,
+      updatedAt: 1234
+    });
+    const metadata = await store.loadDocumentMetadata(id);
+    assert.deepEqual(metadata, [{
+      projectId: id,
+      documentId: "metadata-chapter",
+      revision: 4,
+      sequence: 9,
+      updatedAt: 1234
+    }]);
+    assert.equal(Object.hasOwn(metadata[0], "text"), false);
+    assert.deepEqual(await store.loadDocumentMetadata(id + "-other"), []);
+  } finally {
+    await store.close();
+  }
+});

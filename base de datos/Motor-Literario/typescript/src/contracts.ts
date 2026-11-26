@@ -119,6 +119,15 @@ export interface StoredLiveAuthorMonitorCheckpoint {
   readonly typingChanges?: number;
   /** Raw composition update deltas; absent in older v1 checkpoints. */
   readonly compositionChanges?: number;
+  /**
+   * Unit counters split by event provenance. These are UTF-16 units, not graphemes.
+   * Absent in older v1 checkpoints; restores then report incomplete historical coverage.
+   */
+  readonly typingInsertedCharacters?: number;
+  readonly compositionInsertedCharacters?: number;
+  readonly compositionDeletedCharacters?: number;
+  /** false means the unit counters cover only the period since restoring a legacy checkpoint. */
+  readonly activityUnitMetricsComplete?: boolean;
   readonly pasteChanges?: number;
   readonly deletionChanges?: number;
   readonly correctionChanges?: number;

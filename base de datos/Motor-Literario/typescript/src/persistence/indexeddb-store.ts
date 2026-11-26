@@ -2556,8 +2556,11 @@ export class IndexedDbProjectStore implements ProjectStore {
     const db = await this.open();
     const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_PENDING, "readonly");
     const request = transaction.objectStore(NARRATIVE_REFERENCE_REPAIR_PENDING).index("by-project").getAll(projectId);
-    const records = await readAfterTransaction(transaction, request, "No se pudieron leer las intenciones pendientes.")
-      as NarrativeReferenceRepairPendingEntry[];
+    const records = (await readAfterTransaction(
+      transaction,
+      request,
+      "No se pudieron leer las intenciones pendientes."
+    )) as NarrativeReferenceRepairPendingEntry[];
     return records.map(item => structuredClone(item));
   }
 

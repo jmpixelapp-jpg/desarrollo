@@ -283,3 +283,8 @@ La tanda incluye:
 **Estado de validación:** la ejecución anterior confirmó que el typecheck pasa, pero falló en dos pruebas de lease. La cola de seguimiento, por sí sola, no resolvió esas pruebas; la corrección de generación en `1cfe39d` aborda el origen confirmado. Se trasladaron los cambios a esta rama nueva para incorporar el `main` reciente. Aún falta una ejecución CI sobre el nuevo HEAD para validar conjuntamente typecheck, suite y pruebas de navegador.
 
 **Límite funcional:** la bandeja durable de IndexedDB del PR #52 todavía no está integrada en `main`. El coordinador define el puerto compatible con ella, pero la integración final exige incorporar esa bandeja y un transporte remoto real. Siguen pendientes autenticación/autorización, API versionada, idempotencia del servidor, backoff y resolución explícita de conflictos. No se declara sincronización multidispositivo terminada.
+
+
+### Ajuste de regresión del workspace tras cambios de accesibilidad
+
+La ejecución de CI sobre el merge commit confirmó que los dos tests de fencing ya no fallan. El job del monitor encontró, en cambio, que el helper `findCards` de `live-author-monitor-workspace.test.mjs` contaba todos los nodos `role=listitem`, incluidos los elementos de la lista accesible de métricas. El test ahora identifica tarjetas de documento por la presencia de `data-document-id`, manteniendo la semántica accesible de las métricas y verificando el número real de capítulos. Corrección añadida en `4682e21`; requiere nueva ejecución CI.

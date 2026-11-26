@@ -161,6 +161,8 @@ export interface StoredProjectFinalizationReceipt {
 export interface ProjectStore {
   /** Bandeja de salida durable para sincronización; no implica transporte remoto. */
   enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
+  /** Asigna la siguiente secuencia y encola atómicamente en el almacenamiento compartido. */
+  enqueueNextSyncOperation?(draft: Omit<StoredSyncOperation, "sequence">): Promise<StoredSyncOperation>;
   loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
   recordSyncOperationAttempt?(
     operationId: string,

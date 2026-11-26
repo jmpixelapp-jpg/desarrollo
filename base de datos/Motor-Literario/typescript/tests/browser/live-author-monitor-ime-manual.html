@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Author Monitor — prueba manual de IME</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { max-width: 900px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    textarea { box-sizing: border-box; width: 100%; min-height: 12rem; padding: .8rem; font: inherit; }
+    button { margin: .5rem .5rem .5rem 0; padding: .55rem .9rem; font: inherit; cursor: pointer; }
+    pre { overflow: auto; white-space: pre-wrap; padding: .8rem; border: 1px solid currentColor; border-radius: .4rem; }
+    .muted { opacity: .78; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Prueba manual de composición IME</h1>
+    <p>Usa esta página en el navegador y el sistema operativo donde esté instalado el IME real que quieres validar. El texto permanece en el textarea; el informe exportado contiene únicamente longitudes, tipos de evento, marcas de confianza, offsets y códigos de error.</p>
+    <h2>1. Texto de referencia</h2>
+    <label for="editor">Escribe aquí una frase de prueba antes de iniciar la captura. El texto no se exporta.</label>
+    <textarea id="editor" spellcheck="false">Texto de referencia para la prueba IME.</textarea>
+    <div>
+      <button id="start" type="button">Iniciar captura</button>
+      <button id="export" type="button" disabled>Exportar traza sin contenido</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">Captura sin iniciar.</p>
+    <h2>2. Contadores de sesión</h2>
+    <pre id="metrics">Aún no hay datos.</pre>
+    <h2>3. Secuencia observada</h2>
+    <p class="muted">Se muestran solo metadatos. No se registran letras, candidatos, teclas, valores de data ni fragmentos del documento.</p>
+    <pre id="trace" aria-live="polite">Inicia la captura para comenzar.</pre>
+    <h2>4. Secuencia recomendada</h2>
+    <ol>
+      <li>Activa el IME del sistema operativo y comienza una composición.</li>
+      <li>Escribe una forma fonética y cambia entre al menos dos candidatos.</li>
+      <li>Confirma un candidato y comprueba visualmente el texto final.</li>
+      <li>Repite otra composición y cancélala con la tecla de cancelación del IME.</li>
+      <li>Prueba composición junto a texto existente, sustitución de una selección y composición al principio/final del textarea.</li>
+      <li>Exporta la traza y revisa si hubo pares incompletos, errores o necesidad de resincronización.</li>
+    </ol>
+    <p class="muted">La exportación es local: el archivo JSON se descarga desde el navegador. No se envía al servidor. No compartas el texto del textarea; el archivo solo contiene metadatos de eventos.</p>
+  </main>
+  <script type="module" src="./live-author-monitor-ime-manual.js"></script>
+</body>
+</html>

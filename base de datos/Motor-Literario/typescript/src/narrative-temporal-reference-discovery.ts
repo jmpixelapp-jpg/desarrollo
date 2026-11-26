@@ -156,7 +156,7 @@ function discoverMatches(text: string): readonly Match[] {
       kind: item.kind,
       relation: item.kind === "relative-duration"
         ? /^(?:durante|por)\s+/iu.test(match[0]) ? "duration"
-          : /(?:antes|hace)$/iu.test(match[0]) ? "before" : "after"
+          : /^(?:hace)\s+|antes$/iu.test(match[0]) ? "before" : "after"
         : item.relation,
       anchorRequired: true, absoluteResolution: "unresolved-relative", priority: item.priority
     }]);

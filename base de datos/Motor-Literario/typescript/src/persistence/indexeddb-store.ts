@@ -5947,10 +5947,15 @@ export class IndexedDbProjectStore implements ProjectStore {
         sequenceRequest.onsuccess = () => {
           const stored = sequenceRequest.result as { readonly lastSequence?: unknown } | undefined;
           const lastSequence = stored?.lastSequence ?? 0;
-          if (!Number.isSafeInteger(lastSequence) || (lastSequence as number) < 0 ||
-              normalized.sequence !== (lastSequence as number) + 1) {
+          if (!Number.isSafeInteger(lastSequence) || (lastSequence as number) < 0) {
+            validationError = new Error("El cursor de secuencia del dispositivo está corrupto.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            return;
+          }
+          const expectedSequence = (lastSequence as number) + 1;
+          if (normalized.sequence !== expectedSequence) {
             validationError = new Error(
-              "Secuencia fuera de orden: se esperaba " + ((lastSequence as number) + 1) +
+              "Secuencia fuera de orden: se esperaba " + expectedSequence +
               " y se recibió " + normalized.sequence + "."
             );
             try { transaction.abort(); } catch { /* transacción ya abortada */ }
@@ -6031,6 +6036,12 @@ export class IndexedDbProjectStore implements ProjectStore {
       request.onsuccess = () => {
         const existing = request.result as StoredSyncOperation | undefined;
         if (!existing) return;
+        if (!Number.isSafeInteger(existing.attemptCount) ||
+            existing.attemptCount < 0 || existing.attemptCount >= Number.MAX_SAFE_INTEGER) {
+          validationError = new Error("El contador de intentos de sincronización está fuera de rango.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
         found = true;
         const updated: StoredSyncOperation = {
           ...existing, attemptCount: existing.attemptCount + 1, lastAttemptAt: attemptedAt,

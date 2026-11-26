@@ -6684,7 +6684,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (idea.textOmitted !== undefined && idea.textOmitted !== "budget") ||
         (idea.textOmitted === "budget" && idea.text !== undefined) ||
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
-        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 20_000 ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||

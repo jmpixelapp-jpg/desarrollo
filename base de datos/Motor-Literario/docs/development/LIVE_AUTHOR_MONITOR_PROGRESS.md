@@ -1587,3 +1587,18 @@ La suite general del motor se valida por separado; este resultado certifica la l
 **Validación CI dedicada:** la misma ejecución [run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913) terminó `success`. La regresión conjunta de pausas, balance de caracteres, resultados de commit y coherencia de latencias aprobó como test 113. La prueba de balance de caracteres en restauración aprobó como test 164. No hubo fallos en las suites específicas ni en las integraciones Chromium.
 
 **Límite de validación global:** la suite general del mismo checkout, [run 45764587878](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587878), registró 949/950 por un único fallo preexistente y ajeno al monitor en `tests/narrative-unicode-boundaries.test.mjs:107` (marcas combinantes).
+
+
+## 103. Propagación de errores de escritura IndexedDB y agotamiento de cuota (26 de noviembre de 2026)
+
+**Hallazgo:** `saveLiveAuthorMonitorCheckpoint()` capturaba excepciones síncronas de `put()`, pero no almacenaba expresamente `IDBRequest.error` cuando la escritura fallaba de forma asíncrona. En ese caso, el caller dependía solo de `transaction.error`, pudiendo perder el código exacto de la solicitud que falló.
+
+**Corrección:** se conserva el request devuelto por `checkpointStore.put()` y se instala su handler `onerror`. El error original (por ejemplo, `QuotaExceededError` o `DataCloneError`) se captura y se aborta la transacción; `onabort` rechaza con ese mismo error en vez de sustituirlo por uno genérico. Las excepciones síncronas siguen pasando por el guard existente.
+
+**Regresión:** una solicitud de escritura simulada entrega un `QuotaExceededError` asíncrono. La transacción debe abortarse, la promesa debe rechazar conservando `error.name`, y el checkpoint durable anterior debe permanecer intacto. El test no llena físicamente el disco ni pretende medir el límite real de cuota del navegador; simula la interfaz de error del request para verificar la ruta de propagación.
+
+**Diagnóstico de host:** la prueba existente `publica el error de cuota del checkpoint sin exponer el texto interno` verifica que el anfitrión muestre `checkpointState: error` y `checkpointErrorCode: QuotaExceededError` sin serializar el mensaje privado ni contenido del manuscrito.
+
+**Compatibilidad:** no modifica el esquema IndexedDB ni el formato del checkpoint v1. La transacción completa (lease y checkpoint) se aborta como unidad; ningún checkpoint parcial se considera guardado.
+
+**Validación:** pendiente de GitHub Actions.

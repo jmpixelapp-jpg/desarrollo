@@ -775,3 +775,47 @@ test("rechaza catálogos de adaptadores con más de 500 vínculos por idea", asy
   );
   api.dispose();
 });
+
+test("agota los tres intentos CAS sin perder cambios concurrentes y refresca la caché", async () => {
+  const store = new RacingStore([
+    idea("idea-source"),
+    idea("idea-concurrent-1"),
+    idea("idea-concurrent-2"),
+    idea("idea-concurrent-3"),
+    idea("idea-local-target")
+  ]);
+  const api = createApi(store);
+  await api.getNarrativeIdeas();
+
+  const concurrentIds = [
+    "idea-concurrent-1",
+    "idea-concurrent-2",
+    "idea-concurrent-3"
+  ];
+  const installConflict = index => {
+    store.onNextConflict = current => {
+      const next = {
+        ...current,
+        relatedIdeaIds: [...current.relatedIdeaIds, concurrentIds[index]]
+      };
+      if (index + 1 < concurrentIds.length) installConflict(index + 1);
+      return next;
+    };
+  };
+  installConflict(0);
+
+  await assert.rejects(
+    api.setNarrativeIdeaLink("idea-source", "idea-local-target", true),
+    /cambió en otra instancia/
+  );
+
+  const durable = store.ideas.get(projectId + ":idea-source");
+  assert.deepEqual(durable.relatedIdeaIds, concurrentIds);
+  assert.equal(store.writes, 3);
+
+  const refreshed = await api.getNarrativeIdeas();
+  const source = refreshed.find(item => item.id === "idea-source");
+  assert.deepEqual(source.relatedIdeaIds, concurrentIds);
+  assert.equal(store.ideaReads, 4);
+  api.dispose();
+});

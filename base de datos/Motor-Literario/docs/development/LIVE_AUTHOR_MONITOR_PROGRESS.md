@@ -1670,3 +1670,14 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Valor añadido:** complementa la prueba IndexedDB de aislamiento de fencing por documento; esta prueba cubre la coordinación de nivel host y la independencia de las colas automáticas de persistencia.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+## 109. Reanudación de varios documentos con expiración parcial de leases (26 de noviembre de 2026)
+
+**Objetivo:** garantizar que la reanudación de la página revalide todos los documentos en paralelo sin mezclar sus ciclos de lease.
+
+**Regresión:** dos documentos permanecen abiertos durante una suspensión simulada. Solo expira el lease de A; el de B continúa válido. Al dispararse `visibilitychange` a `visible`, A debe adquirir el siguiente fencing token mientras B renueva con el mismo owner/token. Ambos deben seguir con la misma `sessionId`, conservar su heartbeat y terminar con diagnóstico de titularidad.
+
+**Invariante:** la revalidación del conjunto de documentos no convierte un lease todavía válido en takeover ni hace que un documento herede la generación de otro.
+
+**Validación:** pendiente de GitHub Actions.

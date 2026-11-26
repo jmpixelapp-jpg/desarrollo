@@ -2102,6 +2102,53 @@ test("la cronología de proyecto excluye posiciones temporales no finitas", () =
 });
 
 
+test("la cronología conserva totales completos al truncar muestras de puntos y transiciones", () => {
+  const evidence = {
+    documentId: "chapter-one",
+    revision: 1,
+    start: 0,
+    end: 4,
+    excerpt: "Ana."
+  };
+  const events = Array.from({ length: 202 }, (_, index) => ({
+    projectId: "literary-analysis-test",
+    eventId: "timeline-event-" + String(index).padStart(3, "0"),
+    label: "Acontecimiento " + index,
+    participants: ["ana-id"],
+    timelineTrackId: "main",
+    timeReference: {
+      basis: "calendar",
+      precision: "year",
+      raw: String(1800 + index),
+      orderValue: 1800 + index
+    },
+    evidence: [evidence]
+  }));
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Ana.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownProjectEvents: events
+  });
+  const timeline = result.characterNarrativeTrajectories.trajectories[0].projectEventTimeline;
+
+  assert.equal(timeline.sourceEventCount, 202);
+  assert.equal(timeline.timedEventCount, 202);
+  assert.equal(timeline.pointCount, 202);
+  assert.equal(timeline.omittedPointCount, 2);
+  assert.equal(timeline.points.length, 200);
+  assert.equal(timeline.points[0].orderValue, 1800);
+  assert.equal(timeline.points.at(-1).orderValue, 1999);
+  assert.equal(timeline.transitionCount, 201);
+  assert.equal(timeline.omittedTransitionCount, 1);
+  assert.equal(timeline.transitions.length, 200);
+  assert.equal(timeline.transitions[0].fromOrderValue, 1800);
+  assert.equal(timeline.transitions.at(-1).toOrderValue, 2000);
+});
+
+
 test("la cronología excluye IDs de acontecimiento con posiciones incompatibles", () => {
   const evidence = {
     documentId: "chapter-one",

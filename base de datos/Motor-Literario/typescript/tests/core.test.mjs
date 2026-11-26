@@ -2217,7 +2217,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 25);
+      assert.equal(version, 27);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2230,6 +2230,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("fresh-database"), []);
     assert.deepEqual(createdStores, [
+      { name: "narrative-reference-repair-audits", keyPath: ["projectId", "operationId"] },
+      { name: "narrative-reference-repair-pending", keyPath: ["projectId", "operationId"] },
       { name: "project-settings", keyPath: ["projectId", "key"] },
       { name: "language-profiles", keyPath: ["projectId", "id"] },
       { name: "language-resource-refs", keyPath: ["projectId", "id"] },
@@ -2267,6 +2269,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "dictionary-entry-entities", keyPath: ["projectId", "entryId", "recordId"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
+      ["narrative-reference-repair-audits", "by-project"],
+      ["narrative-reference-repair-pending", "by-project"],
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
       ["language-profiles", "by-project-language"],

@@ -219,7 +219,7 @@ export class LiveAuthorMonitor {
       committedChanges: 0,
       failedChanges: 0,
       listenerErrors: 0,
-      insertedCharacters: 0;
+      insertedCharacters: 0,
       deletedCharacters: 0,
       currentDocumentLength: snapshot.text.length,
       latestRevision: snapshot.revision,

@@ -146,3 +146,8 @@ Esta compuerta no convierte el diario y el grafo en una transacción distribuida
 Las llamadas concurrentes a `recoverNarrativeReferenceRepairs` para el mismo proyecto dentro de un mismo runtime comparten una única promesa. Así, dos consumidores locales no leen y procesan simultáneamente la misma cola ni compiten innecesariamente por el CAS de una misma intención. La coordinación se libera tanto si la recuperación termina correctamente como si falla, permitiendo reintentos posteriores.
 
 El bloqueo es deliberadamente local al runtime: no coordina pestañas, procesos ni dispositivos. La persistencia IndexedDB conserva la protección CAS para escrituras concurrentes externas; un conflicto entre contextos puede quedar pendiente y requerir un nuevo intento.
+
+
+### Inspección previa de conflictos pendientes
+
+`inspectNarrativeReferenceRepairPending(store, projectId)` ofrece un diagnóstico de solo lectura de cada intención durable. Clasifica las entradas como `ready-to-recover`, `already-applied`, `record-missing`, `record-changed`, `replacement-not-proven` o `invalid-intent`. Contrasta el registro actual y la procedencia `mergedFromIds` de la entidad sustituta. No modifica el grafo, no escribe auditorías y no elimina intenciones; la resolución sigue siendo una acción explícita del flujo de recuperación o del anfitrión.

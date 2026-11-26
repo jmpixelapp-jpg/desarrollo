@@ -90,11 +90,11 @@ function transitionSignal(
   for (const pattern of patterns) {
     const match = pattern.regex.exec(excerpt);
     if (!match) continue;
-    const offset = intent.evidence.start - excerpt.indexOf(excerpt.trimStart());
-    // La evidencia original es el fragmento completo de la oración; el índice
-    // del marcador se calcula dentro de ese fragmento y se mantiene absoluto.
-    const start = Math.max(0, intent.evidence.start - intent.text.length);
-    void offset;
+    // El extractor conserva la oración completa en excerpt y el rango de la
+    // intención dentro de ella; así se recupera el inicio absoluto de la oración.
+    const intentOffset = excerpt.indexOf(intent.text);
+    if (intentOffset < 0) continue;
+    const start = intent.evidence.start - intentOffset;
     return {
       kind: pattern.kind,
       evidence: {

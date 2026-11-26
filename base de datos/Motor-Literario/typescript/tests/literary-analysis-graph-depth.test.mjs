@@ -151,7 +151,7 @@ test("rechaza catálogos globales por encima del límite documentado de 12.000 i
     revision: 1,
     text: "El catálogo supera el máximo admitido.",
     knownProjectIdeas: ideas
-  }), /catálogo de ideas y decisiones/);
+  }), /Contexto de análisis literario inválido/);
 });
 
 test("limita escenas explícitas a 2.000 sin recorrer encabezados ilimitados", () => {

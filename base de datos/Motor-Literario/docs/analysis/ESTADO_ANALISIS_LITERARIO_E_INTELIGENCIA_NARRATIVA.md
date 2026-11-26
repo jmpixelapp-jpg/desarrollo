@@ -376,3 +376,15 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - CI: las ejecuciones 2782–2784 estaban en curso o cola antes de esta tanda; las nuevas modificaciones generan validaciones posteriores. La suite completa aún no se declara aprobada.
 
 **Límite explícito:** el inventario verbal sigue siendo léxico y parcial, no un analizador morfológico completo del español. No se debe inferir el tiempo de la historia solo a partir de una forma verbal aislada. La siguiente ampliación debe incluir pruebas por verbo y variedad, así como resolución contextual de sujeto y participantes.
+
+
+### Tanda 26-11-2026 — corrección de falsos positivos en menciones de personajes
+
+- El análisis de CI 2784 encontró dos regresiones en referencias pronominales. La causa raíz estaba en `includesName`: una expresión regular construida desde una cadena usaba `\\p` con escape insuficiente, por lo que JavaScript no interpretaba las propiedades Unicode como límites de letra.
+- Efecto reproducible: el nombre «Ana» podía coincidir dentro de «ventana». Esto podía asociar falsamente una acción al personaje Ana y, en consecuencia, impedir que «Ella» se conservara como referencia pronominal pendiente.
+- Se corrigió el escape de la expresión regular construida dinámicamente, de forma que el motor recibe las propiedades Unicode reales `\\p{L}`, `\\p{M}` y `\\p{N}`.
+- Se añadió una regresión explícita para «La ventana se abrió» y se espera que los dos casos de pronombres vuelvan a conservar candidatos de antecedente sin resolverlos automáticamente.
+- Commits: `db82b9e` (primer intento de corrección), `1edc636` (escape final correcto), `f2883f4` (prueba anti-subcadena), `e39c227` (documentación). El commit `db82b9e` fue seguido por `1edc636` porque la primera escritura dejó un literal de plantilla mal formado; la versión vigente es la segunda.
+- CI 2784: Type-check correcto; 996 pruebas aprobadas y 2 fallidas, ambas de pronombres, lo que permitió aislar esta causa. La suite del commit correctivo y la nueva prueba anti-subcadena están pendientes de CI.
+
+**Implicación de calidad:** el reconocimiento de entidades debe ser por token Unicode, nunca por subcadena; los pronombres deben permanecer referencias sin resolver hasta que un componente contextual aporte evidencia suficiente. Esta regla es prioritaria para evitar contaminación del grafo narrativo.

@@ -188,7 +188,6 @@ function collectSignals(
     const end = paragraph.start + match.end;
     const contextStart = Math.max(paragraph.start, start - 100);
     const contextEnd = Math.min(paragraph.end, end + 100);
-    const context = input.text.slice(contextStart, contextEnd);
     const negated = /\b(?:no|nunca|jam[aá]s|tampoco)\b/iu.test(input.text.slice(Math.max(paragraph.start, start - 36), start));
     output.push({
       id: "nbs-" + input.documentId + "-" + input.revision + "-" + (input.baseOffset ?? 0) + "-" + start + "-" + match.kind,
@@ -219,7 +218,6 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
   const paragraphs: NarrativeBookParagraph[] = [];
   const signals: NarrativeBookSignal[] = [];
   let omittedSignals = 0;
-  let lineCursor = 0;
   let paragraphIndex = 0;
 
   const boundaries = chapterStarts.length
@@ -259,7 +257,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
       pending = undefined;
     };
     for (const line of chapterLines) {
-      if (pending && /(?:\\r?\\n)[ \\t]*(?:\\r?\\n)/u.test(input.text.slice(pending.end, line.start))) flush();
+      if (pending && /(?:\r?\n)[ \t]*(?:\r?\n)/u.test(input.text.slice(pending.end, line.start))) flush();
       if (!pending) pending = { ...line };
       else pending = { start: pending.start, end: line.end, text: pending.text + "\n" + line.text };
     }
@@ -279,7 +277,6 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
       wordCount: countWords(contentText),
       evidence: evidence(input, start, end)
     });
-    lineCursor = chapterIndex;
   }
 
   const totalWords = countWords(input.text);

@@ -833,6 +833,8 @@ test("el presupuesto léxico del anfitrión incluye texto enlazado y limita el t
   // Se conserva la lectura de fichas, pero se evita activar extracción asíncrona
   // de conocimiento durante esta prueba específica del presupuesto.
   store.saveEntity = undefined;
+  store.loadDocumentWithChanges = async () => ({ document: undefined, changes: [] });
+  store.saveDocument = async () => {};
   const api = createApi(store);
 
   try {

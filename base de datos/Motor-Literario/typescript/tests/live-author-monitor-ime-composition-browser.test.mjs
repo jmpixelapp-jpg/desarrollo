@@ -209,7 +209,8 @@ test("Chromium conserva la continuidad ante candidatos IME provisionales y cance
       "la secuencia de deltas debe reconstruir el estado final del textarea");
     assert.equal(afterCancel.state.compositionActive, false);
     assert.equal(afterCancel.state.pendingInput, false);
-    assert.equal(afterCancel.state.needsResync, false);
+    assert.equal(afterCancel.state.needsResync, false,
+      "la traza IME debe ser continua: " + JSON.stringify({ errors: afterCancel.errors, events: afterCancel.events, deltas: afterCancel.deltas }));
     assert.deepEqual(afterCancel.errors, [],
       "una cancelación IME válida no debe requerir resincronización");
     assert.ok(afterCancel.deltas.length >= 2,

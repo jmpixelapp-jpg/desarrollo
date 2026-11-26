@@ -12,6 +12,7 @@ import {
   repairNarrativeDocumentProjectionManifest,
   proposeNarrativeReferenceRepairs,
   applyNarrativeReferenceRepair,
+  verifyNarrativeReferenceRepairAuditIntegrity,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
@@ -539,6 +540,47 @@ test("aplica reparación aprobada de relación mediante CAS y devuelve auditorí
   assert.equal(replay.replayed, true);
   assert.equal((await store.loadNarrativeReferenceRepairAudits("novel-apply")).length, 1,
     "un reintento no debe duplicar la auditoría");
+});
+
+test("verifica integridad durable y distingue cambios posteriores del registro", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-audit-check", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:audit", {
+    projectId: "novel-audit-check", id: "relation:audit",
+    fromEntityId: "entity:legacy", toEntityId: "entity:other",
+    relationType: "knows", evidence: []
+  });
+  const proposal = {
+    projectId: "novel-audit-check", issueCode: "missing-relation-entity",
+    recordType: "relation", recordId: "relation:audit",
+    missingReferenceId: "entity:legacy", referenceField: "fromEntityId",
+    candidateEntityId: "entity:canonical", resolution: "explicit-merge-match"
+  };
+  await applyNarrativeReferenceRepair(store, proposal, true, 21);
+  const verified = await verifyNarrativeReferenceRepairAuditIntegrity(store, "novel-audit-check");
+  assert.equal(verified.checkedEntries, 1);
+  assert.equal(verified.intact, true);
+  assert.deepEqual(verified.integrityIssues, []);
+  assert.equal(verified.recordChecks[0].status, "matches-current-state");
+
+  tables.relations.set("relation:audit", {
+    ...tables.relations.get("relation:audit"), fromEntityId: "entity:later-change"
+  });
+  const historical = await verifyNarrativeReferenceRepairAuditIntegrity(store, "novel-audit-check");
+  assert.equal(historical.intact, true, "un cambio posterior no altera la integridad histórica de la entrada");
+  assert.equal(historical.recordChecks[0].status, "record-state-changed");
+
+  const key = [...tables.audits.keys()][0];
+  const entry = tables.audits.get(key);
+  tables.audits.set(key, { ...entry, operationId: "tampered-operation-id" });
+  const tampered = await verifyNarrativeReferenceRepairAuditIntegrity(store, "novel-audit-check");
+  assert.equal(tampered.intact, false);
+  assert.ok(tampered.integrityIssues.some(issue => issue.code === "operation-id-mismatch"));
 });
 
 test("rechaza aplicar propuesta si la procedencia de fusión ya no la respalda", async () => {

@@ -2,7 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 const monitorModule = await import("../dist-monitor/live-author-monitor.js")
   .catch(() => import("../dist/motor-literario.js"));
-const { bindLiveAuthorMonitorEditorChanges, LiveAuthorMonitorBackpressureOverflowError, LiveAuthorMonitorAdmissionResynchronizationError } = monitorModule;
+const {
+  bindLiveAuthorMonitorEditorChanges,
+  LiveAuthorMonitorTextAreaSource,
+  LiveAuthorMonitorBackpressureOverflowError,
+  LiveAuthorMonitorAdmissionResynchronizationError
+} = monitorModule;
 
 function sourceFixture() {
   const listeners = new Set();
@@ -24,6 +29,59 @@ function sourceFixture() {
     }
   };
 }
+class FakeEventTarget {
+  listeners = new Map();
+  hidden = false;
+  defaultView;
+
+  addEventListener(type, listener) {
+    const current = this.listeners.get(type) ?? new Set();
+    current.add(listener);
+    this.listeners.set(type, current);
+  }
+
+  removeEventListener(type, listener) {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  emit(type, event = {}) {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) listener(event);
+  }
+}
+
+class FakeTextArea extends FakeEventTarget {
+  value;
+  selectionStart = 0;
+  selectionEnd = 0;
+  ownerDocument;
+
+  constructor(value) {
+    super();
+    this.value = value;
+    this.ownerDocument = new FakeEventTarget();
+    this.ownerDocument.defaultView = new FakeEventTarget();
+  }
+
+  edit(start, end, nextValue, data) {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+    this.emit("beforeinput", {
+      isTrusted: true,
+      defaultPrevented: false,
+      inputType: "insertText",
+      isComposing: false,
+      data
+    });
+    this.value = nextValue;
+    this.emit("input", {
+      isTrusted: true,
+      inputType: "insertText",
+      isComposing: false,
+      data
+    });
+  }
+}
+
 function change(sequence = 1) {
   return {
     documentId: "chapter-1",
@@ -327,6 +385,75 @@ test("publica snapshots inmutables del backlog al entrar en contrapresión y al 
   assert.equal(states.at(-1).reason, undefined);
   stop();
   assert.equal(states.length, 4, "el desmontaje no debe repetir el estado clear");
+});
+
+test("el enlace FIFO solo reanuda TextAreaSource después de volver a suscribir y resincronizar", () => {
+  const element = new FakeTextArea("abc");
+  const sourceErrors = [];
+  const source = new LiveAuthorMonitorTextAreaSource({
+    element,
+    initialSnapshot: {
+      documentId: "chapter-1",
+      text: "abc",
+      revision: 0,
+      sequence: 0
+    },
+    onError: error => sourceErrors.push(error.code)
+  });
+  const submitted = [];
+  const admissions = [];
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source,
+    sink: {
+      onEditorChange(change) {
+        submitted.push(change.sequence);
+        return change.sequence <= 2
+          ? { status: "rejected", reason: "queue_full" }
+          : { status: "queued", ticketId: "ticket-" + change.sequence };
+      }
+    },
+    maxPendingChanges: 1,
+    onAdmission: (change, admission) => admissions.push([change.sequence, admission.status]),
+    onError: () => {}
+  });
+
+  element.edit(3, 3, "abcx", "x");
+  element.edit(4, 4, "abcxy", "y");
+
+  assert.equal(source.getState().needsResync, true,
+    "el overflow detiene la captura nativa");
+  assert.equal(source.previousText, "",
+    "la copia temporal se libera mientras el host reconcilia");
+  assert.equal(stop.getPendingChanges().length, 1);
+  assert.equal(stop.getPendingChanges()[0].sequence, 1);
+  assert.equal(submitted.length, 1);
+  assert.equal(sourceErrors.length, 1);
+  assert.equal(sourceErrors[0], "resync-required");
+
+  // El host ha reconciliado editor y motor con este snapshot común. Primero
+  // rearma el enlace (la fuente aún ignora eventos), después revalida el texto.
+  const snapshot = {
+    documentId: "chapter-1",
+    text: "abcxy",
+    revision: 2,
+    sequence: 2
+  };
+  stop.discardPendingAfterResynchronization();
+  assert.equal(source.getState().needsResync, true,
+    "reattach no debe reanudar por sí solo el adaptador");
+  assert.equal(element.listeners.get("beforeinput").size, 1);
+
+  const recovered = source.resynchronize(snapshot);
+  assert.equal(recovered.needsResync, false);
+
+  element.edit(5, 5, "abcxyz", "z");
+  assert.deepEqual(submitted, [1, 3]);
+  assert.deepEqual(admissions, [[3, "queued"]]);
+  assert.equal(source.getState().sequence, 3);
+  assert.equal(source.getState().revision, 3);
+
+  stop();
+  source.dispose();
 });
 
 test("un rechazo resync_required pausa la fuente sin reintentar y se limpia tras el snapshot común", () => {

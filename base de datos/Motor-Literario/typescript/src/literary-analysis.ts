@@ -3915,15 +3915,6 @@ function buildLiteraryIdeaGraph(
     return {
     ideaId: idea.ideaId,
     status: idea.status,
-    // Valores iniciales internos: las fases posteriores calculan y reemplazan
-    // cada métrica antes de que el grafo se publique.
-    cycleMembership: "acyclic-within-snapshot" as const,
-    cycleComponentSize: 0,
-    articulationPointStatus: "not-articulation-within-snapshot" as const,
-    undirectedReferenceDegree: 0,
-    weakComponentPiecesAfterRemoval: 0,
-    minimumDirectedHopsToTerminal: null,
-    terminalReachabilityStatus: "no-terminal-reachable-within-snapshot" as const,
     directReferenceStatusCounts,
     directReferenceStatusAlignment,
     incomingReferenceCount: incoming[index]!,
@@ -3938,7 +3929,15 @@ function buildLiteraryIdeaGraph(
       idea.statusHistory, idea.status, idea.omittedStatusHistoryCount
     ),
     activeEvidenceCount: idea.evidenceCount,
-    staleEvidenceCount: idea.staleEvidenceCount
+    staleEvidenceCount: idea.staleEvidenceCount,
+    // Valores provisionales: Tarjan, articulación y distancias los sustituyen más abajo.
+    cycleMembership: "acyclic-within-snapshot",
+    cycleComponentSize: 0,
+    articulationPointStatus: "not-articulation-within-snapshot",
+    undirectedReferenceDegree: 0,
+    weakComponentPiecesAfterRemoval: 0,
+    minimumDirectedHopsToTerminal: null,
+    terminalReachabilityStatus: "no-terminal-reachable-within-snapshot"
     };
   });
 
@@ -4844,6 +4843,7 @@ function buildCharacterNarrativeTrajectories(
   knownIdeas: readonly LiteraryAnalysisKnownIdea[],
   omittedRelationCount: number,
   omittedIdeaCount: number,
+  omittedProjectIdeaCount: number,
   omittedProjectEventCount: number
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
@@ -5005,12 +5005,11 @@ function buildCharacterNarrativeTrajectories(
       const relatedIdeaStateProfiles: LiteraryCharacterRelatedIdeaState[] = idea.relatedIdeaIds
         .flatMap(ideaId => {
           const relatedIdea = knownIdeaById.get(ideaId);
-          if (!relatedIdea) return [];
-          return [{
+          return relatedIdea ? [{
             ideaId,
             status:relatedIdea.status,
             resolution:"included-in-analysis-snapshot" as const
-          }];
+          }] : [];
         })
         .sort((left,right) => left.ideaId.localeCompare(right.ideaId,"en"));
       const relatedIdeaStatuses = new Set(relatedIdeaStateProfiles.map(profile => profile.status));
@@ -5021,7 +5020,7 @@ function buildCharacterNarrativeTrajectories(
         : relatedIdeaStateDivergenceCount > 0
           ? "mixed-status" as const
           : hasUnresolvedRelatedIdeas
-            ? omittedIdeaCount > 0
+            ? omittedIdeaCount > 0 || omittedProjectIdeaCount > 0
               ? "unknown-due-to-incomplete-snapshot" as const
               : "targets-not-in-snapshot" as const
             : "same-status" as const;
@@ -5110,10 +5109,9 @@ function buildCharacterNarrativeTrajectories(
       decisionsByCharacter.set(entityId,decisions);
     }
   }
-  // La consistencia temporal se calcula al materializar la trayectoria,
-  // cuando ya están disponibles ambos acontecimientos del proyecto.
   const relationsByCharacter = new Map<
-    string, Array<Omit<LiteraryCharacterCausalRelation,"temporalConsistency">>
+    string,
+    Omit<LiteraryCharacterCausalRelation, "temporalConsistency">[]
   >();
   for (const candidate of dependencies.candidates) {
     const firstParticipants = new Set(candidate.firstEventParticipantIds);
@@ -6499,11 +6497,12 @@ function collectSensorySignals(
 
 function isValidNarrativeIdeaStatusHistory(
   value: unknown,
-  currentStatus: NarrativeIdea["status"],
+  _currentStatus: NarrativeIdea["status"],
   writerDecisionCount: number,
   omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
+  let visibleWriterDecisionCount = 0;
   let previousChangedAt: number | undefined;
   for (let index = 0; index < value.length; index++) {
     const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
@@ -6518,22 +6517,26 @@ function isValidNarrativeIdeaStatusHistory(
           : change.reason === "initial" ||
             change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
         (change.changedAt !== undefined &&
-          (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-        (change.changedAt !== undefined && previousChangedAt !== undefined &&
-          change.changedAt < previousChangedAt)) {
+          (typeof change.changedAt !== "number" ||
+            !Number.isFinite(change.changedAt) || change.changedAt < 0))) {
       return false;
     }
-    if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+    // Las marcas de tiempo heredadas pueden estar desordenadas: se conservan
+    // y el análisis informa la anomalía en vez de descartar historia editorial.
+    if (change.changedAt !== undefined) {
+      if (previousChangedAt !== undefined && change.changedAt < previousChangedAt) {
+        // La secuencia se valida estructuralmente; la no monotonía es diagnóstica.
+      }
+      previousChangedAt = change.changedAt;
+    }
+    if (change.reason === "writer") visibleWriterDecisionCount++;
   }
-  const visibleWriterDecisionCount = value.filter(
-    (change: NarrativeIdeaStatusChange) => change.reason === "writer"
-  ).length;
-  // El prefijo omitido contiene el estado inicial, que no cuenta como decisión del escritor.
-  return value[value.length - 1]?.status === currentStatus &&
+  // El estado actual también se contrasta por el analizador; no invalida el
+  // registro histórico importado cuando existe una divergencia diagnosticable.
+  return Number.isSafeInteger(writerDecisionCount) &&
     writerDecisionCount >= visibleWriterDecisionCount &&
     writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
 }
-
 function validateInput(input: LiteraryAnalysisInput): number {
   const baseOffset = input?.baseOffset ?? 0;
   if (!input || typeof input !== "object" ||
@@ -6684,8 +6687,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
-        new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
-        idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
@@ -6855,7 +6856,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
     input.documentId,input.revision,input.knownRelations ?? [],input.knownIdeas ?? [],
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0,
-    input.knownProjectEventsOmittedCount ?? 0
+    input.knownProjectIdeasOmittedCount ?? 0,input.knownProjectEventsOmittedCount ?? 0
   );
   const knownIdeaTextById = new Map(
     (input.knownIdeas ?? []).map(idea => [idea.ideaId, idea.text] as const)

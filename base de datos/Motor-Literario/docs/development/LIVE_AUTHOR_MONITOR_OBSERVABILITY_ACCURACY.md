@@ -167,7 +167,7 @@ La fuente textarea identifica estos deltas como `activityKind: "composition"`. E
 - `typingInsertedCharacters`: unidades UTF-16 insertadas por operaciones identificadas explícitamente como `typing`.
 - `compositionInsertedCharacters`: suma de unidades insertadas por cada delta IME aplicado, incluidos todos los candidatos provisionales.
 - `compositionDeletedCharacters`: suma de las unidades sustituidas por cada delta IME aplicado.
-- `activityUnitMetricsComplete`: false después de restaurar un checkpoint histórico sin desglose por procedencia o después de resincronizar desde snapshot. El snapshot confirma el texto actual, pero no permite reconstruir los tipos/rangos de deltas que pudieron faltar.
+- `activityUnitMetricsComplete`: false después de restaurar un checkpoint histórico sin desglose por procedencia, después de resincronizar desde snapshot o cuando se admite una edición sin `activityKind` reconocida explícitamente. El snapshot confirma el texto actual, pero no permite reconstruir los tipos/rangos de deltas que pudieron faltar; una operación sin procedencia no debe atribuirse como escritura normal ni como composición.
 
 Estas métricas no representan longitud final confirmada: reemplazar varios candidatos puede sumar las mismas posiciones más de una vez, y una cancelación puede restaurar el texto original después de varios deltas. El total bruto no se cambia, porque cada operación aplicada forma parte de la secuencia que sincroniza el documento.
 

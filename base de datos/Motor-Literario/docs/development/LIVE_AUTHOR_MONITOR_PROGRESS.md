@@ -687,3 +687,13 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **Validación:** pendiente de GitHub Actions.
 
 - Se amplía la cobertura de retención en HostEngineApi: valor configurable, limpieza automática al iniciar, llamada manual, desactivación con `0` y rechazo de límites inválidos. La fixture de lease vencido conserva fechas internamente válidas para probar expiración real y no corrupción.
+
+## 13. Resultado de CI y protección conservadora (25 de noviembre de 2026)
+
+La ejecución asociada al commit `ac86d54472e982148a3e7a818ac01b2b6024fc69` terminó con estos bloqueos:
+
+- [Live Author Monitor — run 45742276468](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45742276468): el paso `Build runtime bundle` se detuvo antes de ejecutar pruebas por `src/narrative-history.ts:7:40 — Unterminated string literal`.
+- [Motor Literario TypeScript — run 45742276528](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45742276528): `Type-check` se detuvo por el mismo error `TS1002`.
+- En el workflow específico, el paso de pruebas del monitor quedó omitido porque la compilación previa no produjo el bundle. No hay evidencia de aprobación ni de fallo de las pruebas nuevas.
+
+El archivo que bloquea la compilación pertenece al área de historial narrativo y no se modifica en esta entrega para evitar interferir con el trabajo paralelo. Se añade además una prueba fail-safe: si el lease de un checkpoint es malformado, la limpieza conserva ese checkpoint en lugar de inferir que puede borrarlo.

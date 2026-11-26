@@ -588,3 +588,54 @@ test("retención valida límites temporales antes de abrir IndexedDB", async () 
   );
   await store.close();
 });
+
+test("retención conserva un checkpoint antiguo cuando su lease está malformado", async () => {
+  globalThis.indexedDB = new IDBFactory();
+  const store = new IndexedDbProjectStore();
+  const projectId = "monitor-retention-invalid-lease-" + randomUUID();
+  const documentId = "chapter-protected";
+  const now = Date.now();
+  let lease;
+  try {
+    lease = await acquireLease(store, projectId, documentId, "owner-" + randomUUID(), now, 30_000);
+    await store.saveLiveAuthorMonitorCheckpoint(
+      checkpoint(projectId, documentId, now - 100_000), lease
+    );
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("motor-literario-local");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction("live-author-monitor-leases", "readwrite");
+        const leases = transaction.objectStore("live-author-monitor-leases");
+        const request = leases.get([projectId, documentId]);
+        let failure;
+        request.onsuccess = () => {
+          if (!request.result) {
+            failure = new Error("No se encontró el lease que se debe corromper.");
+            try { transaction.abort(); } catch {}
+            return;
+          }
+          leases.put({ ...request.result, ownerId: "" });
+        };
+        request.onerror = () => {
+          failure = request.error ?? new Error("No se pudo leer el lease.");
+          try { transaction.abort(); } catch {}
+        };
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(failure ?? transaction.error);
+        transaction.onabort = () => reject(failure ?? transaction.error);
+      });
+    } finally {
+      db.close();
+    }
+
+    assert.equal(await store.cleanupLiveAuthorMonitorCheckpoints(projectId, now - 50_000, now), 0);
+    assert.ok(await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      "un lease malformado no se interpreta como permiso para borrar métricas");
+  } finally {
+    await store.close();
+  }
+});

@@ -15,7 +15,7 @@ const entities = [
   },
   {
     projectId: "book-1", id: "object:espada", kind: "object",
-    canonicalName: "Espada Solar", normalizedName: "espada solar", aliases: ["la Solar"],
+    canonicalName: "Espada Solar", normalizedName: "espada solar", aliases: ["Solar"],
     evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
   },
   {

@@ -728,9 +728,20 @@ export async function applyNarrativeReferenceRepair(
     throw new Error("El almacenamiento debe ofrecer intención pendiente y auditoría durable antes de reparar.");
   }
   if (!approved) throw new Error("La reparación requiere aprobación explícita.");
-  if (!proposal || !proposal.candidateEntityId) {
-    throw new Error("La propuesta no contiene una entidad candidata aprobada.");
+  if (!proposal || !proposal.candidateEntityId ||
+      typeof proposal.projectId !== "string" || !proposal.projectId.trim() ||
+      !proposal.recordId || !proposal.missingReferenceId ||
+      proposal.resolution !== "explicit-merge-match" ||
+      !Number.isFinite(appliedAt) || appliedAt < 0) {
+    throw new Error("La propuesta o el instante de aplicación no son válidos.");
   }
+  const validField =
+    (proposal.recordType === "relation" &&
+      (proposal.referenceField === "fromEntityId" || proposal.referenceField === "toEntityId")) ||
+    (proposal.recordType === "event" && proposal.referenceField === "participants") ||
+    (proposal.recordType === "assertion" && proposal.referenceField === "entityId") ||
+    (proposal.recordType === "idea" && proposal.referenceField === "relatedEntityIds");
+  if (!validField) throw new Error("El campo de referencia no corresponde al tipo de registro.");
   const pending: NarrativeReferenceRepairPendingEntry = {
     operationId: [
       "reference-repair", proposal.projectId, proposal.recordType,

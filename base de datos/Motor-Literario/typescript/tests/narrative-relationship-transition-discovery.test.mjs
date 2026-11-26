@@ -48,3 +48,31 @@ test("prefiere el par de personajes más próximo al disparador frente a un pers
  assert.equal(c.firstEntityId,"ana");
  assert.equal(c.secondEntityId,"bruno");
 });
+
+test("conserva la negación y su evidencia sin convertir la transición en un hecho",()=>{
+ const [candidate]=run("Ana y Bruno no se hicieron amigos.");
+ assert.equal(candidate.polarity,"negated");
+ assert.equal(candidate.reviewStatus,"candidate");
+ assert.equal(candidate.polarityEvidence.excerpt,"no ");
+});
+test("clasifica la transición como creencia y conserva el marcador epistémico",()=>{
+ const [candidate]=run("Ana creyó que Bruno y ella se reconciliaron.");
+ assert.equal(candidate.epistemicFrame,"character-belief");
+ assert.equal(candidate.epistemicFrameEvidence.excerpt,"creyó que ");
+});
+test("atribuye una transición referida a un personaje explícito",()=>{
+ const [candidate]=run("Ana dijo que ella y Bruno se reconciliaron.");
+ assert.equal(candidate.epistemicFrame,"reported-speech");
+ assert.equal(candidate.epistemicSourceCandidate?.entityId,"ana");
+ assert.equal(candidate.epistemicSourceCandidate?.evidence.excerpt,"Ana");
+});
+test("no inventa emisor cuando la transición es discurso referido impersonal",()=>{
+ const [candidate]=run("Se dijo que Ana y Bruno se reconciliaron.");
+ assert.equal(candidate.epistemicFrame,"reported-speech");
+ assert.equal(candidate.epistemicSourceCandidate,undefined);
+});
+test("mantiene hipótesis como hipótesis y no como ruptura confirmada",()=>{
+ const [candidate]=run("Quizá Ana y Bruno rompieron su amistad.");
+ assert.equal(candidate.epistemicFrame,"hypothetical");
+ assert.equal(candidate.reviewStatus,"candidate");
+});

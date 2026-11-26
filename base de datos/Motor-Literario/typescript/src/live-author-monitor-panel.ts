@@ -10,12 +10,15 @@ export interface LiveAuthorMonitorPanelOptions {
   readonly intervalMs?: number;
   readonly title?: string;
   readonly locale?: string;
+  /** Lista opcional de métricas visibles; por defecto se muestran todas. */
+  readonly visibleMetrics?: readonly LiveAuthorMonitorPanelMetric[];
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
-type MetricKey = "session" | "active" | "idle" | "pauses" | "wordsPerMinute" | "charactersPerMinute" |
+export type LiveAuthorMonitorPanelMetric = "session" | "active" | "idle" | "pauses" | "wordsPerMinute" | "charactersPerMinute" |
   "inserted" | "deleted" | "accepted" | "typing" | "paste" | "deletion" | "correction" |
   "undo" | "redo" | "other" | "committed" | "pending" | "failed" |
   "revision" | "commitP95";
+type MetricKey = LiveAuthorMonitorPanelMetric;
 interface MetricNode { readonly value: HTMLElement; }
 interface PanelNodes {
   readonly status: HTMLElement;
@@ -52,6 +55,24 @@ const METRICS: readonly MetricDefinition[] = [
   { key: "revision", label: "Revisión guardada / actual" },
   { key: "commitP95", label: "Latencia de guardado p95" }
 ];
+
+function resolveVisibleMetrics(
+  requested: readonly LiveAuthorMonitorPanelMetric[] | undefined
+): readonly MetricDefinition[] {
+  if (requested === undefined) return METRICS;
+  if (!Array.isArray(requested)) {
+    throw new TypeError("visibleMetrics debe ser una lista de métricas del panel.");
+  }
+  const definitions = new Map<string, MetricDefinition>(METRICS.map(metric => [metric.key, metric]));
+  const selected = new Set<string>();
+  return requested.map(key => {
+    const definition = definitions.get(key);
+    if (!definition) throw new RangeError("Métrica de panel desconocida: " + String(key) + ".");
+    if (selected.has(key)) throw new TypeError("visibleMetrics no puede repetir la métrica " + key + ".");
+    selected.add(key);
+    return definition;
+  });
+}
 
 /** Estilos autocontenidos: el anfitrión no necesita instalar CSS ni un framework. */
 export const LIVE_AUTHOR_MONITOR_PANEL_STYLES = [
@@ -226,6 +247,7 @@ export function mountLiveAuthorMonitorPanel(
   const document = container.ownerDocument;
   const title = options.title ?? "Actividad del autor";
   const locale = options.locale ?? "es";
+  const visibleMetrics = resolveVisibleMetrics(options.visibleMetrics);
   const integer = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
   const decimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
@@ -250,9 +272,11 @@ export function mountLiveAuthorMonitorPanel(
   header.append(heading, status);
 
   const grid = makeElement(document, "div", "ml-author-monitor__grid");
+  grid.setAttribute("role", "list");
   const metricNodes = new Map<MetricKey, MetricNode>();
-  for (const metric of METRICS) {
+  for (const metric of visibleMetrics) {
     const card = makeElement(document, "div", "ml-author-monitor__metric");
+    card.setAttribute("role", "listitem");
     const label = makeElement(document, "span", "ml-author-monitor__label");
     label.textContent = metric.label;
     const value = makeElement(document, "strong", "ml-author-monitor__value");

@@ -242,3 +242,35 @@ test("presenta las siete categorías de actividad en el panel de capítulo", () 
   assert.equal(panel.textContent.includes("contenido privado"), false);
   unmount();
 });
+
+test("permite limitar las métricas visibles y conserva la semántica de lista", () => {
+  const f = fixture();
+  const unmount = mountLiveAuthorMonitorPanel(f.container, f.api, {
+    documentId: "chapter-1",
+    visibleMetrics: ["session", "paste", "redo"],
+    schedule: () => () => {}
+  });
+  const panel = f.container.children[0];
+  const grid = findNode(panel, node => node.className === "ml-author-monitor__grid");
+  assert.equal(grid.getAttribute("role"), "list");
+  assert.equal(metric(panel, "session").getAttribute("data-metric"), "session");
+  assert.equal(metric(panel, "paste").getAttribute("data-metric"), "paste");
+  assert.equal(metric(panel, "redo").getAttribute("data-metric"), "redo");
+  assert.equal(metric(panel, "typing"), undefined);
+  assert.equal(metric(panel, "commitP95"), undefined);
+  unmount();
+});
+
+test("rechaza métricas duplicadas o desconocidas antes de insertar el panel", () => {
+  const f = fixture();
+  assert.throws(() => mountLiveAuthorMonitorPanel(f.container, f.api, {
+    documentId: "chapter-1",
+    visibleMetrics: ["paste", "paste"]
+  }), /no puede repetir/);
+  assert.equal(f.container.children.length, 0);
+  assert.throws(() => mountLiveAuthorMonitorPanel(f.container, f.api, {
+    documentId: "chapter-1",
+    visibleMetrics: ["private-manuscript"]
+  }), /desconocida/);
+  assert.equal(f.container.children.length, 0);
+});

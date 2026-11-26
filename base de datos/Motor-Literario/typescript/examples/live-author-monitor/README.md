@@ -51,3 +51,6 @@ El panel individual y el tablero por capítulos muestran el estado de checkpoint
 La política de retención configurable se explica en `docs/development/LIVE_AUTHOR_MONITOR_OPERATIONS.md`. Por defecto se conservan 90 días de checkpoints; el anfitrión puede cambiarlo mediante `liveAuthorMonitorCheckpointRetentionMs` o desactivar la limpieza con `0`. Los registros de fencing no se eliminan.
 
 La última CI integral aprobada corresponde al baseline anterior, no a las mejoras recientes. Los workflows más nuevos se detuvieron antes de ejecutar tests por `TS1002` en `src/narrative-history.ts:7`; consulta el registro de fase 3 y la guía operativa para ver los runs exactos.
+
+ 
+El anfitrión puede reducir la densidad del panel pasando `visibleMetrics` al panel individual o al workspace; las claves permitidas están documentadas en `LIVE_AUTHOR_MONITOR_OPERATIONS.md`. Esta opción no cambia los contadores ni los checkpoints.

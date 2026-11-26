@@ -872,3 +872,8 @@ La integración específica con un editor enriquecido de producción también co
 ## 48. Verificación DOM de estadísticas por sesión y capítulo
 
 La suite confirma que las siete categorías aparecen en el panel individual y en la tarjeta de workspace correspondiente. No basta con que los contadores existan en el snapshot del motor: las pruebas montan la interfaz DOM y comprueban los valores renderizados, además de confirmar que no aparece el contenido privado del documento.
+
+ 
+## 49. Configuración de densidad visual
+
+`mountLiveAuthorMonitorPanel()` acepta `visibleMetrics?: readonly LiveAuthorMonitorPanelMetric[]`; `mountLiveAuthorMonitorWorkspace()` acepta `visibleMetrics?: readonly LiveAuthorMonitorWorkspaceMetric[]`. Sin la opción se muestran todas las métricas. Una lista personalizada cambia únicamente la presentación de esa instancia y no altera la recolección, la persistencia ni los cálculos. Las claves duplicadas o desconocidas se rechazan antes de insertar el DOM; los grids exponen semántica de lista.

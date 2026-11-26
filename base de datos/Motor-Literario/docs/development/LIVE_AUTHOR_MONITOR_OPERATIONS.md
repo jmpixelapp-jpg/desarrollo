@@ -196,3 +196,20 @@ No marcar una tarea como validada cuando el workflow se haya detenido antes de e
 ### Presentación comprobada de categorías
 
 Las pruebas `live-author-monitor-panel.test.mjs` y `live-author-monitor-workspace.test.mjs` montan el DOM con las siete categorías (seis operaciones y `other`) y verifican que cada valor se muestre como `1` en el capítulo correcto. También verifican que el texto privado no aparezca en la interfaz.
+
+## Configuración de las métricas visibles del panel
+
+El panel individual y el workspace aceptan `visibleMetrics`. Si no se proporciona, muestran todas las métricas. Una selección personalizada puede reducir la densidad visual:
+
+```ts
+mountLiveAuthorMonitorPanel(container, api, {
+  documentId,
+  visibleMetrics: ["session", "active", "typing", "paste", "undo", "redo", "pending"]
+});
+
+mountLiveAuthorMonitorWorkspace(workspaceContainer, api, {
+  visibleMetrics: ["typing", "paste", "deletion", "undo", "redo", "pending"]
+});
+```
+
+Cada tipo exporta su unión de claves permitidas. En runtime, claves desconocidas o duplicadas se rechazan antes de insertar elementos DOM. La selección no cambia las métricas calculadas o persistidas; solo reduce lo que esa vista renderiza. Las métricas se conservan con semántica de lista para tecnologías de asistencia.

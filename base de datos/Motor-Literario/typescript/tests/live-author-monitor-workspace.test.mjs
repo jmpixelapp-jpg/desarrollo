@@ -280,3 +280,34 @@ test("presenta las siete categorías de actividad en la tarjeta del capítulo co
   assert.equal(root.textContent.includes("texto privado"), false);
   unmount();
 });
+
+test("permite configurar métricas compactas por tarjeta de documento", () => {
+  const f = fixture();
+  f.monitor.openDocument({ documentId: "chapter-2", text: "dos", revision: 0, sequence: 0 }, "book-1");
+  const unmount = mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    visibleMetrics: ["typing", "redo", "pending"]
+  });
+  const root = f.container.children[0];
+  const card = cardFor(root, "chapter-1");
+  assert.equal(metric(card, "typing").getAttribute("data-metric"), "typing");
+  assert.equal(metric(card, "redo").getAttribute("data-metric"), "redo");
+  assert.equal(metric(card, "pending").getAttribute("data-metric"), "pending");
+  assert.equal(metric(card, "wordsPerMinute"), undefined);
+  assert.equal(metric(card, "paste"), undefined);
+  const secondCard = cardFor(root, "chapter-2");
+  assert.ok(secondCard);
+  assert.equal(metric(secondCard, "typing").getAttribute("data-metric"), "typing");
+  unmount();
+});
+
+test("rechaza selección de métricas inválidas antes de crear el workspace", () => {
+  const f = fixture();
+  assert.throws(() => mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    visibleMetrics: ["typing", "typing"]
+  }), /no puede repetir/);
+  assert.equal(f.container.children.length, 0);
+  assert.throws(() => mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    visibleMetrics: ["unknown"]
+  }), /desconocida/);
+  assert.equal(f.container.children.length, 0);
+});

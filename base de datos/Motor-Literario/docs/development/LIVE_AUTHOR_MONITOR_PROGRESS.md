@@ -743,3 +743,15 @@ Se añaden dos regresiones de presentación DOM:
 - El workspace debe mostrar esos mismos siete valores en la tarjeta del documento correcto, sin trasladarlos a otro capítulo ni exponer el texto privado.
 
 Las pruebas crean operaciones válidas, admiten y confirman cada cambio, montan el panel después de generar las métricas y verifican los siete valores visibles. La validación CI queda pendiente de la ejecución del nuevo commit.
+
+## 39. Nueva entrega — selección configurable de métricas en panel y workspace (25 de noviembre de 2026)
+
+Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace. El anfitrión puede mostrar solo las métricas relevantes para una vista reducida o para la lectura de capítulos. Si omite la opción, se mantiene la presentación completa.
+
+- Se exportan los tipos `LiveAuthorMonitorPanelMetric` y `LiveAuthorMonitorWorkspaceMetric`.
+- Las selecciones personalizadas se validan antes de crear o insertar el DOM. Claves desconocidas y duplicadas producen error explícito sin dejar un contenedor parcialmente montado.
+- Los paneles conservan roles semánticos de lista y elemento de lista para accesibilidad.
+- La opción solo controla la presentación; no modifica contadores, checkpoints ni el motor.
+- Se añaden pruebas de selección, ocultación de métricas no solicitadas y rechazo de configuración inválida para ambos componentes.
+
+**Validación:** pendiente de CI para este commit.

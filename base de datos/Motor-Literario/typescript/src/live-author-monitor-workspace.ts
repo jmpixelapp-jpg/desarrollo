@@ -13,6 +13,8 @@ export interface LiveAuthorMonitorWorkspaceOptions {
   readonly intervalMs?: number;
   readonly title?: string;
   readonly locale?: string;
+  /** Lista opcional de métricas compactas visibles por capítulo; por defecto todas. */
+  readonly visibleMetrics?: readonly LiveAuthorMonitorWorkspaceMetric[];
   /** Etiqueta visual opcional para el ID del documento. */
   readonly getDocumentLabel?: (documentId: string) => string;
   /** El anfitrión cambia de capítulo desde esta callback; el motor no abre documentos aquí. */
@@ -21,8 +23,9 @@ export interface LiveAuthorMonitorWorkspaceOptions {
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
 
-type CompactMetricKey = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95" |
+export type LiveAuthorMonitorWorkspaceMetric = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95" |
   "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
+type CompactMetricKey = LiveAuthorMonitorWorkspaceMetric;
 interface WorkspaceCard {
   readonly root: HTMLElement;
   readonly heading: HTMLElement;
@@ -53,6 +56,26 @@ const WORKSPACE_METRICS: readonly { readonly key: CompactMetricKey; readonly lab
   { key: "revision", label: "Revisión guardada / actual" },
   { key: "commitP95", label: "Latencia p95" }
 ];
+
+function resolveVisibleWorkspaceMetrics(
+  requested: readonly LiveAuthorMonitorWorkspaceMetric[] | undefined
+): readonly (typeof WORKSPACE_METRICS)[number][] {
+  if (requested === undefined) return WORKSPACE_METRICS;
+  if (!Array.isArray(requested)) {
+    throw new TypeError("visibleMetrics debe ser una lista de métricas del workspace.");
+  }
+  const definitions = new Map<string, (typeof WORKSPACE_METRICS)[number]>(
+    WORKSPACE_METRICS.map(metric => [metric.key, metric])
+  );
+  const selected = new Set<string>();
+  return requested.map(key => {
+    const definition = definitions.get(key);
+    if (!definition) throw new RangeError("Métrica de workspace desconocida: " + String(key) + ".");
+    if (selected.has(key)) throw new TypeError("visibleMetrics no puede repetir la métrica " + key + ".");
+    selected.add(key);
+    return definition;
+  });
+}
 
 const WORKSPACE_STYLES = [
   ".ml-author-workspace{box-sizing:border-box;width:100%;color:#172033;background:#fff;border:1px solid #dbe2ea;border-radius:14px;padding:16px;font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}",
@@ -182,6 +205,7 @@ export function mountLiveAuthorMonitorWorkspace(
 
   const document = container.ownerDocument;
   const locale = options.locale ?? "es";
+  const visibleMetrics = resolveVisibleWorkspaceMetrics(options.visibleMetrics);
   const title = options.title ?? "Documentos en escritura";
   const integer = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
   const decimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
@@ -229,9 +253,11 @@ export function mountLiveAuthorMonitorWorkspace(
     cardHead.append(cardHeading, status);
 
     const metricGrid = makeElement(document, "div", "ml-author-workspace__metrics");
+    metricGrid.setAttribute("role", "list");
     const values = new Map<CompactMetricKey, HTMLElement>();
-    for (const metric of WORKSPACE_METRICS) {
+    for (const metric of visibleMetrics) {
       const item = makeElement(document, "div", "ml-author-workspace__metric");
+      item.setAttribute("role", "listitem");
       const label = makeElement(document, "span", "ml-author-workspace__metric-label");
       label.textContent = metric.label;
       const value = makeElement(document, "strong", "ml-author-workspace__metric-value");

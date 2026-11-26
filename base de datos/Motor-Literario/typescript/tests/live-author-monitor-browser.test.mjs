@@ -165,6 +165,16 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
       assert.deepEqual(observedByFormerOwner, checkpoint,
         "ambas páginas deben observar el mismo checkpoint persistido en IndexedDB");
 
+      // La segunda pestaña recarga el documento y crea una instancia nueva del
+      // adaptador; IndexedDB debe conservar el checkpoint y el lease vigente.
+      await observerPage.reload();
+      await observerPage.waitForFunction(() => window.__monitorLeaseHarness !== undefined);
+      assert.deepEqual(
+        await invoke(observerPage, "loadCheckpoint", projectId, documentId),
+        checkpoint,
+        "el checkpoint debe sobrevivir a una recarga real de la página"
+      );
+
       assert.equal(await invoke(observerPage, "release", observerLease, Date.now()), true);
       await Promise.all([
         invoke(firstPage, "close"),

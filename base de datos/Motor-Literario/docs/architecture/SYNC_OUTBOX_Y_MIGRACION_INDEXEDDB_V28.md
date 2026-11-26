@@ -23,6 +23,8 @@ Las ediciones del editor usan `appendChangeAndEnqueueSyncOperation`: el delta de
 
 Las mutaciones CAS de entidades, ideas, afirmaciones, relaciones, acontecimientos y fusiones de entidades aceptan un `SyncOperationDraft`. Cuando se proporciona, la escritura del registro de dominio, la operación saliente y el avance de secuencia comparten transacción. Una colisión, error de índice o error de escritura aborta todo el conjunto.
 
+El cierre de libro mediante `archiveUnincorporatedIdeas()` también puede ser saliente. Con `deviceId` activo, el store confirma en una única transacción el traslado de ideas a la biblioteca personal, la eliminación de las entradas del proyecto, el recibo de finalización, la operación `personal-idea-archive` y la secuencia del dispositivo. El payload conserva el escritor, el título de origen, la fecha, la lista ordenada de IDs y el checksum. En el receptor, el handler solo se registra con `resolveAuthorizedWriterId`; antes de confirmar valida que el conjunto local de ideas `IDEA` y el recibo coincidan exactamente. Si el libro cambió, el replay se detiene y permanece pendiente.
+
 Las operaciones recibidas desde otro dispositivo no se reencolan al aplicar el handler. El consumidor entrante usa CAS sin `SyncOperationDraft`, evitando ecos de sincronización.
 
 Si el adaptador no puede ofrecer atomicidad, el anfitrión no debe configurar `deviceId`; la API rechaza de forma segura las mutaciones sincronizables en vez de confirmar cambios que no podrá replicar.
@@ -49,7 +51,7 @@ Si el proceso se cierra entre etapas, la intención permanece y `repairNarrative
 
 ## Validación
 
-Las suites relevantes cubren migración DB27→DB28 con datos anteriores preservados, creación de almacenes, CAS/outbox atómico para editor y grafo, rechazo por colisión, envío y acuse durable, replay idempotente de fusiones y recuperación de intenciones de reparación. La CI ejecuta typecheck, build, validación física del esquema, pruebas y benchmarks.
+Las suites relevantes cubren migración DB27→DB28 con datos anteriores preservados, creación de almacenes, CAS/outbox atómico para editor y grafo, rechazo por colisión, envío y acuse durable, replay idempotente de fusiones y recuperación de intenciones de reparación. También verifican la transferencia de biblioteca personal y su recibo exacto durante la sincronización. La CI ejecuta typecheck, build, validación física del esquema, pruebas y benchmarks.
 
 ## Límites actuales
 

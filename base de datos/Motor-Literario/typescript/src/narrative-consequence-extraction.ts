@@ -66,7 +66,7 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
     throw new Error("Contexto inválido para extraer consecuencias narrativas.");
   }
   for (const event of input.events) {
-    if (!event || event.projectId !== input.projectId ||
+    if (!event || !event.evidence || event.projectId !== input.projectId ||
         event.evidence.documentId !== input.documentId ||
         event.evidence.revision !== input.revision ||
         !Number.isSafeInteger(event.evidence.start) ||
@@ -91,7 +91,7 @@ export function extractNarrativeConsequenceCandidates(
     a.evidence.start - b.evidence.start || a.id.localeCompare(b.id)
   );
   const connectorPattern = new RegExp(
-    "^\\s*(?:[«\\"'([{]+\\s*)?(" +
+    "^\\s*(?:[«(]+\\s*)?(" +
       [...CONNECTORS].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|") +
       ")(?=\\s|[,;:.!?—–-]|$)",
     "iu"

@@ -86,7 +86,7 @@ export interface NarrativeBookIngestionResult {
 
 interface Span { start: number; end: number; text: string; }
 
-const CHAPTER_HEADING = /^\s*(?:(?:cap[ií]tulo|chapter|parte|part|libro|book)\s+(?:[ivxlcdm]+|\d+|[a-záéíóúñ-]+)(?:\s*[:.—-]\s*.*)?|pr[oó]logo|ep[ií]logo|introducci[oó]n|interludio)\s*$/iu;
+const CHAPTER_HEADING = /^\s*(?:#{1,6}\s*)?(?:(?:cap[ií]tulo|chapter|parte|part|libro|book)\s+(?:[ivxlcdm]+|\d+|[a-záéíóúñ-]+)(?:\s*[:.—-]\s*.*)?|pr[oó]logo|ep[ií]logo|introducci[oó]n|interludio)\s*$/iu;
 const ACTIONS: readonly { label: string; expression: RegExp }[] = [
   { label: "death", expression: /(?<![\p{L}\p{M}\p{N}_])(?:muri[oó]|falleci[oó]|mat[oó]|asesin[oó]|pereci[oó])(?![\p{L}\p{M}\p{N}_])/giu },
   { label: "arrival", expression: /(?<![\p{L}\p{M}\p{N}_])(?:lleg[oó]|arrib[oó]|regres[oó]|volvi[oó])(?![\p{L}\p{M}\p{N}_])/giu },

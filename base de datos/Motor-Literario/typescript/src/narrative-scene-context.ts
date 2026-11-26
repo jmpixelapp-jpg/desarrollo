@@ -146,6 +146,8 @@ export interface NarrativeSceneContinuityEvent {
   readonly id: string;
   readonly participants: readonly string[];
   readonly evidence: readonly {
+    readonly documentId: string;
+    readonly revision: number;
     readonly start: number;
     readonly end: number;
     readonly excerpt: string;
@@ -217,7 +219,10 @@ export function buildNarrativeCharacterSceneContinuity(
     const sceneIds = new Set(assignments.map(item => item.sceneId!));
     if (sceneIds.size !== 1) continue;
     const scene = sceneById.get([...sceneIds][0]!);
-    if (!scene || scene.projectId !== event.projectId) continue;
+    if (!scene || scene.projectId !== event.projectId ||
+        event.evidence.some(evidence =>
+          evidence.documentId !== scene.documentId || evidence.revision !== scene.revision
+        )) continue;
 
     for (const characterId of new Set(event.participants)) {
       const key = event.projectId + ":" + characterId;

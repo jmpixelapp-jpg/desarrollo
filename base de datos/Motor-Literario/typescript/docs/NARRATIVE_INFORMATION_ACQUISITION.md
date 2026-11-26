@@ -142,3 +142,18 @@ El descubrimiento de acciones analiza también el último fragmento aunque todav
 
 Esta detección no afirma que la oración esté terminada. La interfaz debe presentar el resultado como candidato revisable y sustituirlo al llegar una revisión posterior del texto. Se añadieron pruebas para una forma verbal completa sin puntuación y para un verbo todavía incompleto.
 
+## Interacciones dirigidas entre personajes
+
+El descubrimiento de observaciones puede proponer `directedInteractionCandidate` para cuatro patrones activos y explícitos:
+
+| Verbo | Relación candidata | Papel del segundo personaje |
+|---|---|---|
+| atacar | `attacks` | objetivo |
+| ayudar | `helps` | beneficiario |
+| proteger | `protects` | protegido |
+| salvar | `saves` | beneficiario |
+
+La regla exige un sujeto gramatical activo identificado al inicio de la oración y un segundo personaje explícito en el complemento `a + nombre`. Emisor y destino deben ser distintos. Cada candidato conserva evidencia separada del sujeto, destino y forma verbal. No se emite con negación, pasiva, destino ausente o identidad coincidente.
+
+Estos papeles son etiquetas operativas de extracción, no conclusiones definitivas sobre motivaciones, consentimiento, éxito o consecuencias. Por ejemplo, `Ana intentó salvar a Bruno` no demuestra que Bruno haya sido salvado: el patrón léxico actual solo registra la acción verbal y el participante como beneficiario candidato. Todas las relaciones siguen con `reviewStatus: candidate`.
+

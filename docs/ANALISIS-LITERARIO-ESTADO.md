@@ -102,7 +102,7 @@ npm test
 npm run bench
 ```
 
-No se marca ninguna de estas suites como aprobada por ejecución en este registro: el estado consultable de CI para los commits recientes no contiene checks.
+En el momento de redactar esta matriz todavía no había resultados de ejecución asociados a estas suites; la primera ejecución integral queda registrada en la sección siguiente.
 
 ### Primera validación integral en GitHub Actions
 

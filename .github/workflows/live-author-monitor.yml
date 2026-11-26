@@ -75,7 +75,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run isolated monitor unit and diagnostic tests
         if: ${{ !cancelled() }}
-        run: node --test tests/live-author-monitor.test.mjs tests/live-author-monitor-panel.test.mjs tests/live-author-monitor-workspace.test.mjs tests/live-author-monitor-diagnostics-isolation.test.mjs
+        run: node --test tests/live-author-monitor.test.mjs tests/live-author-monitor-panel.test.mjs tests/live-author-monitor-workspace.test.mjs tests/live-author-monitor-visibility.test.mjs tests/live-author-monitor-diagnostics-isolation.test.mjs
       - name: Run host, editor and browser integration tests
         if: ${{ !cancelled() && steps.runtime-build.outcome == 'success' }}
         run: node --test tests/live-author-monitor-*.test.mjs

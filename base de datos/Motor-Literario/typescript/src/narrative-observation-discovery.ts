@@ -63,7 +63,7 @@ interface ActionSignal {
 }
 
 const ACTION_SIGNALS: readonly ActionSignal[] = [
-  { action: "cruzar", expression: /(?<![\\p{L}\\p{M}\\p{N}_])cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando)(?![\\p{L}\\p{M}\\p{N}_])/giu },
+  { action: "cruzar", expression: /(?<![\\p{L}\\p{M}\\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando))(?![\\p{L}\\p{M}\\p{N}_])/giu },
   { action: "entrar", expression: /(?<![\p{L}\p{M}\p{N}_])entr(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "salir", expression: /(?<![\p{L}\p{M}\p{N}_])sal(?:ió|ía|ieron|e|en|ir|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "llegar", expression: /(?<![\p{L}\p{M}\p{N}_])lleg(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },

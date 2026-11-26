@@ -116,3 +116,17 @@ test("el orden de capítulos permite reconstruir la evaluación posterior", () =
   const item = states.find(state => state.characterEntityId === "mara").items[0];
   assert.equal(item.currentAssessment,"refuted-by-character");
 });
+
+
+test("una evaluación anterior a la recepción no modifica el estado posterior", () => {
+  const before = {...evaluation,id:"eval:before",evaluation:"refuted",
+    evidence:ev("chapter-1",0,"Mara refutó que el puente había caído.")};
+  const states = buildNarrativeCharacterKnowledgeStates({
+    projectId:"story",entities,
+    information:[{...received,evidence:ev("chapter-1",90,"Elian le contó a Mara que el puente había caído.")}],
+    evaluations:[before]
+  });
+  const item = states.find(state => state.characterEntityId === "mara").items[0];
+  assert.equal(item.evaluations.length,1);
+  assert.equal(item.currentAssessment,"unassessed");
+});

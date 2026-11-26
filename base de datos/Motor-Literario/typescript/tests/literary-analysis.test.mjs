@@ -2898,3 +2898,56 @@ test("ancla eventos en offsets absolutos UTF-16 y excluye revisiones obsoletas",
     baseOffset + text.indexOf("el derrumbe") + "el derrumbe".length);
   assert.equal(candidate.status, "candidate-needs-review");
 });
+
+test("el análisis léxico conserva el recuento de ideas omitidas por presupuesto de texto", () => {
+  const projectId = "literary-analysis-test";
+  const makeIdea = (ideaId, text, extra = {}) => ({
+    projectId,
+    ideaId,
+    text,
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [{ status: "IDEA", reason: "initial" }],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0,
+    ...extra
+  });
+  const includedA = makeIdea(
+    "included-a",
+    "aurora misterio permanece"
+  );
+  const includedB = makeIdea(
+    "included-b",
+    "misterio aurora regresa"
+  );
+  const omitted = makeIdea(
+    "omitted-by-host",
+    undefined,
+    { textOmitted: "budget" }
+  );
+
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-lexical-budget",
+    revision: 1,
+    text: "Escena 1\\nLa aurora regresa.",
+    knownProjectIdeas: [includedA, omitted, includedB]
+  }).ideaGraph.lexicalResonances;
+
+  assert.equal(result.inputIdeaCount, 3);
+  assert.equal(result.analyzedIdeaCount, 2);
+  assert.equal(result.ideasWithoutTextCount, 0);
+  assert.equal(result.omittedTextBudgetIdeaCount, 1);
+  assert.equal(
+    result.tokenizedTextUnitCount,
+    includedA.text.length + includedB.text.length
+  );
+  assert.ok(result.resonances.some(pair =>
+    pair.leftIdeaId === "included-a" &&
+    pair.rightIdeaId === "included-b" &&
+    pair.sharedTerms.includes("aurora") &&
+    pair.sharedTerms.includes("misterio")
+  ));
+});

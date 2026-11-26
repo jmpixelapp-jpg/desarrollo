@@ -532,3 +532,12 @@ El monitor cuenta por documento las excepciones de callbacks de suscriptores sin
 `subscribeLiveAuthorMonitorWithRefresh` acepta `onListenerError(snapshot)` para avisar de fallos del callback de una vista sin entregar el objeto Error. El panel muestra tanto los fallos registrados por el monitor como los fallos locales de su propio renderizado. El workspace presenta el contador del monitor en la tarjeta del capítulo correspondiente.
 
 Los avisos son genéricos, accesibles y no muestran mensajes internos ni texto del manuscrito. La prueba del núcleo verifica el aislamiento entre documentos; las pruebas de panel y workspace fuerzan fallos de visualización y comprueban que la escritura sigue admitiéndose y que la alerta se muestra en la tarjeta correcta.
+
+
+## 41. Validación de diagnóstico de errores de vistas (run 45756516860)
+
+El 26 de noviembre de 2026, la lane aislada pasó el bundle reducido, 17/17 pruebas diagnósticas y 59/59 pruebas del núcleo, panel y workspace. Las regresiones nuevas verifican que (a) un listener defectuoso incrementa el contador solo del documento afectado, (b) el texto de excepción no se presenta ni se retiene, (c) un fallo del callback de la vista se expone mediante `onListenerError(snapshot)` y (d) el panel/workspace muestran un estado de advertencia accesible sin interrumpir la admisión de escritura.
+
+El benchmark procesó 100.000 commits en 499,17 ms (~200.332 commits/s). Tras GC, el heap fue 4,26 MiB a mitad y al final de la carga; 0,50 MiB quedaron retenidos por las sesiones abiertas y no hubo cambios pendientes. La lectura corresponde a Node.js 22.23.5 y ocho documentos con 1.048.576 unidades UTF-16 cada uno.
+
+La lane completa mantiene fallo porque la auditoría de esquema y la compilación del bundle runtime general detectan problemas en la línea de persistencia concurrente. No se modificaron esos archivos desde el desarrollo del monitor; las integraciones dependientes del motor completo siguen pendientes.

@@ -243,6 +243,20 @@ Los alias solo se utilizan si resuelven a una única identidad. Si dos personaje
 
 Se añadieron pruebas para atribución, tipos de voz, negación, offsets, alias ambiguos y aislamiento por proyecto. La implementación queda pendiente de validación integral en CI. El workflow del repositorio está configurado para pull requests, pero no hay una ejecución/check nuevo asociado al último head; no se considera validada.
 
+
+### Fase B: agrupación de acciones en acontecimientos candidatos
+
+Se añadió `extractNarrativeEventCandidates` en `typescript/src/narrative-event-extraction.ts`. Agrupa acciones explícitas ya extraídas cuando aparecen dentro de la misma oración y construye un candidato de acontecimiento con:
+- fragmento de la oración como etiqueta provisional;
+- participantes identificados a partir de actores y objetivos de las acciones;
+- referencias a los candidatos de acción que forman el grupo;
+- evidencia, documento, revisión y offsets UTF-16;
+- estado `candidate`, pendiente de revisión humana.
+
+La agrupación es deliberadamente estructural: compartir oración no significa que dos acciones ocurran simultáneamente, que una cause la otra ni que pertenezcan a una única escena. No se inventan fechas, orden narrativo ni relaciones causales. Si una oración no contiene acciones reconocidas, no se crea un acontecimiento.
+
+También se reforzó el prefiltrado del extractor de acciones para normalizar Unicode NFKC antes de comparar nombres, evitando descartar prematuramente menciones con formas Unicode equivalentes. La normalización solo se usa como filtro; los offsets y fragmentos siguen calculándose sobre el texto original.
+
 ## 9. Cómo informar el progreso
 
 Cada entrega debe indicar claramente:

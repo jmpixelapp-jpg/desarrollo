@@ -23,6 +23,8 @@ export interface LiveAuthorMonitorEditorTransactionIntegrationOptions {
   readonly onBackpressure?: (snapshot: LiveAuthorMonitorBackpressureSnapshot) => void;
   /** Máximo de deltas externos retenidos antes de exigir snapshot común; predeterminado: 4096. */
   readonly maxPendingChanges?: number;
+  /** Máximo total de unidades UTF-16 de eventos reentrantes retenidos; predeterminado: 4194304. */
+  readonly maxQueuedTextUnits?: number;
   readonly onError?: (
     error: unknown,
     change?: EditorChange
@@ -80,6 +82,10 @@ export function mountLiveAuthorMonitorEditorTransactions(
        options.maxPendingChanges < 1 || options.maxPendingChanges > 65536)) {
     throw new RangeError("maxPendingChanges debe ser un entero entre 1 y 65536.");
   }
+  if (options.maxQueuedTextUnits !== undefined &&
+      (!Number.isSafeInteger(options.maxQueuedTextUnits) || options.maxQueuedTextUnits < 1)) {
+    throw new RangeError("maxQueuedTextUnits debe ser un entero positivo.");
+  }
 
   if (!options.editor ||
       typeof options.editor.getSnapshot !== "function" ||
@@ -115,6 +121,7 @@ export function mountLiveAuthorMonitorEditorTransactions(
     documentId: options.documentId,
     initialSnapshot: snapshot,
     provider: options.editor,
+    ...(options.maxQueuedTextUnits === undefined ? {} : { maxQueuedTextUnits: options.maxQueuedTextUnits }),
     onError: (error: LiveAuthorMonitorEditorTransactionSourceError) => {
       try { options.onError?.(error); } catch {
         // La interfaz de diagnóstico no debe interrumpir el editor.

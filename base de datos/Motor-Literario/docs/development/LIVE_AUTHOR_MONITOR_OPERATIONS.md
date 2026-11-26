@@ -827,3 +827,6 @@ La prueba demora las renovaciones iniciales de dos documentos, dispara ambos tip
 `disposeSafely()` espera el motor y las colas existentes, persiste el último checkpoint de cada documento que conserva un lease, vuelve a esperar las escrituras y después libera cada lease antes de disponer el host. Una falla de persistencia debe impedir declarar un cierre seguro.
 
 La regresión abre cuatro capítulos, admite una edición en cada uno y llama a `disposeSafely()`. Debe comprobar cuatro checkpoints finales con las nuevas revisiones, cuatro leases liberados con sus owner/fencing tokens, cero heartbeats activos, cero leases locales y cero errores.
+
+
+**Validación general:** [run 45767527107](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45767527107) aprobó el nuevo test `disposeSafely` multi-documento (test 677); el único fallo de las 960 pruebas fue la prueba Unicode narrativa ajena al monitor. La lane dedicada permanece pendiente de completar Chromium.

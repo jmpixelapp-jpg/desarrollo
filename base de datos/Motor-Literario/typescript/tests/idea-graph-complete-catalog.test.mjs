@@ -89,8 +89,8 @@ test("el grafo global actualiza la sincronización al ampliarse el historial de 
   }
 });
 
-test("el analizador descriptivo rechaza historiales editoriales no válidos", () => {
-  assert.throws(() => analyzeLiteraryFragment({
+test("el analizador conserva y diagnostica historiales editoriales no monótonos", () => {
+  const result = analyzeLiteraryFragment({
     projectId,
     documentId: "chapter",
     revision: 1,
@@ -111,7 +111,11 @@ test("el analizador descriptivo rechaza historiales editoriales no válidos", ()
       writerDecisionCount: 2,
       omittedStatusHistoryCount: 0
     }]
-  }), /historial de decisiones del catálogo global de ideas es inválido/);
+  });
+  const node = result.ideaGraph.nodes[0];
+  assert.equal(node.nonMonotonicStatusTimestampCount, 1);
+  assert.equal(node.observedStatusTransitionCount, 3);
+  assert.equal(node.currentStatusHistoryConsistency, "mismatch");
 });
 test("la caché del grafo no expone arrays mutables de su instantánea", async () => {
   const api = new HostEngineApi({ store: { ...store, documents: new Map() } });
@@ -300,8 +304,8 @@ test("separa componentes cíclicos ante aristas cruzadas entre subgrafos", async
     c: ["a"],
     d: ["e"],
     e: ["d", "f"],
-    f: ["f"],
-    g: ["a"],
+    f: ["g"],
+    g: ["f"],
     h: ["g"]
   };
   const ideas = Object.entries(links).map(([id, relatedIdeaIds]) => ({
@@ -335,7 +339,7 @@ test("separa componentes cíclicos ante aristas cruzadas entre subgrafos", async
     assert.deepEqual(graph.cycles.map(cycle => cycle.ideaIds), [
       ["a", "b", "c"],
       ["d", "e"],
-      ["f"]
+      ["f", "g"]
     ]);
     assert.equal(graph.weakComponentCount, 1);
     assert.equal(graph.largestWeakComponentSize, 8);
@@ -658,7 +662,7 @@ test("contrasta los componentes de Tarjan con un oráculo de alcanzabilidad en g
     const links = ids.map(() => []);
     for (let from = 0; from < nodesPerGraph; from++) {
       for (let to = 0; to < nodesPerGraph; to++) {
-        if (random() < 0.24) links[from].push(ids[to]);
+        if (from !== to && random() < 0.24) links[from].push(ids[to]);
       }
     }
 
@@ -1493,19 +1497,20 @@ test("la caché del grafo se invalida cuando cambian los vínculos declarados", 
   });
   try {
     const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(before.referenceCount, 6);
-    assert.equal(before.includedReferenceCount, 5);
-    assert.equal(before.cycleCount, 2);
+    assert.equal(before.referenceCount, 5);
+    assert.equal(before.includedReferenceCount, 4);
+    assert.equal(before.cycleCount, 1);
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.relatedIdeaIds = [];
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(after.referenceCount, 4);
-    assert.equal(after.includedReferenceCount, 3);
+    assert.equal(after.referenceCount, 3);
+    assert.equal(after.includedReferenceCount, 2);
     assert.equal(after.notIncludedReferenceCount, 1);
-    assert.equal(after.cycleCount, 1);
-    assert.deepEqual(after.cycles.map(cycle => cycle.ideaIds), [["solo"]]);
+    assert.equal(after.cycleCount, 0);
+    assert.deepEqual(after.cycles, []);
     assert.equal(
       after.references.some(reference =>
         reference.fromIdeaId === "bridge" &&
@@ -1582,12 +1587,13 @@ test("el grafo resuelve referencias externas cuando el catálogo incorpora el de
       relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 8 }]
     });
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     const ghostReferenceAfter = after.references.find(reference => reference.toIdeaId === "ghost");
     assert.equal(after.ideaCount, 5);
-    assert.equal(after.referenceCount, 6);
-    assert.equal(after.includedReferenceCount, 6);
+    assert.equal(after.referenceCount, 5);
+    assert.equal(after.includedReferenceCount, 5);
     assert.equal(after.notIncludedReferenceCount, 0);
     assert.equal(after.missingFromProjectReferenceCount, 0);
     assert.equal(ghostReferenceAfter.resolution, "included-in-snapshot");
@@ -1615,11 +1621,12 @@ test("el grafo reclasifica como externas las referencias al retirar una idea del
 
     const bridgeIndex = ideas.findIndex(idea => idea.id === "bridge");
     ideas.splice(bridgeIndex, 1);
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.ideaCount, 3);
-    assert.equal(after.referenceCount, 4);
-    assert.equal(after.includedReferenceCount, 2);
+    assert.equal(after.referenceCount, 3);
+    assert.equal(after.includedReferenceCount, 1);
     assert.equal(after.notIncludedReferenceCount, 2);
     assert.equal(after.missingFromProjectReferenceCount, 2);
     assert.deepEqual(
@@ -1653,6 +1660,7 @@ test("la caché del grafo incorpora cambios de texto en el análisis de resonanc
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.text = "nube azul horizonte distante";
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(after.lexicalResonances.analyzedIdeaCount, 4);
@@ -1667,6 +1675,9 @@ test("la caché del grafo incorpora cambios de texto en el análisis de resonanc
 
 test("la caché del grafo actualiza perfiles al cambiar el estado editorial actual", async () => {
   const ideas = structuredClone(store.ideas);
+  const bridgeInitial = ideas.find(idea => idea.id === "bridge");
+  bridgeInitial.status = "IDEA";
+  bridgeInitial.statusHistory = bridgeInitial.statusHistory.slice(0, 3);
   const api = new HostEngineApi({
     store: { ...store, documents: new Map(), ideas }
   });
@@ -1680,10 +1691,15 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
   try {
     const before = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     assert.equal(before.statusProfiles.find(profile => profile.status === "IDEA").ideaCount, 4);
-    assert.equal(before.statusProfiles.some(profile => profile.status === "incorporated"), false);
+    assert.equal(before.statusProfiles.find(profile => profile.status === "incorporated").ideaCount, 0);
 
     const bridge = ideas.find(idea => idea.id === "bridge");
     bridge.status = "discarded";
+    bridge.statusHistory = [
+      ...bridge.statusHistory,
+      { status: "discarded", reason: "writer", changedAt: 4 }
+    ];
+    await api.refreshNarrativeKnowledge();
 
     const after = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
     const discardedProfile = after.statusProfiles.find(profile => profile.status === "discarded");
@@ -1694,8 +1710,8 @@ test("la caché del grafo actualiza perfiles al cambiar el estado editorial actu
     assert.equal(bridgeNode.status, "discarded");
     assert.equal(bridgeNode.currentStatusHistoryConsistency, "consistent");
     assert.equal(after.statusHistoryConsistency.mismatchIdeaCount, 0);
-    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 3);
-    assert.equal(after.statusHistoryConsistency.unknownIdeaCount, 1);
+    assert.equal(after.statusHistoryConsistency.consistentIdeaCount, 4);
+    assert.equal(after.statusHistoryConsistency.unknownIdeaCount, 0);
   } finally {
     api.dispose();
   }

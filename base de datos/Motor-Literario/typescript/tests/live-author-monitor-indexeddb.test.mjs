@@ -68,7 +68,9 @@ test("IndexedDB conserva las unidades typing e IME y la cobertura histórica del
     assert.deepEqual(loaded, complete);
     assert.notEqual(loaded, complete);
 
-    const legacy = checkpoint(projectId, documentId, Date.now() + 1);
+    const legacy = checkpoint(projectId, documentId, Date.now() + 1, {
+      sessionId: "legacy-session-" + projectId
+    });
     await store.saveLiveAuthorMonitorCheckpoint(legacy, lease);
     const legacyLoaded = await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
     assert.deepEqual(legacyLoaded, legacy,
@@ -194,12 +196,12 @@ test("IndexedDB rechaza balances imposibles de pausas, caracteres, commits y lat
       {
         label: "activity-unit-metrics.partial",
         overrides: { typingInsertedCharacters: 1 },
-        expected: /activity-unit-metrics\\.partial/
+        expected: /activity-unit-metrics\.partial/
       },
       {
         label: "activity-unit-metrics.missing",
         overrides: { activityUnitMetricsComplete: true },
-        expected: /activity-unit-metrics\\.missing/
+        expected: /activity-unit-metrics\.missing/
       },
       {
         label: "activity-unit-metrics.values",
@@ -209,7 +211,7 @@ test("IndexedDB rechaza balances imposibles de pausas, caracteres, commits y lat
           compositionDeletedCharacters: 0,
           activityUnitMetricsComplete: true
         },
-        expected: /activity-unit-metrics\\.values/
+        expected: /activity-unit-metrics\.values/
       },
       {
         label: "activity-unit-metrics.balance",
@@ -219,7 +221,7 @@ test("IndexedDB rechaza balances imposibles de pausas, caracteres, commits y lat
           compositionDeletedCharacters: 0,
           activityUnitMetricsComplete: true
         },
-        expected: /activity-unit-metrics\\.balance/
+        expected: /activity-unit-metrics\.balance/
       },
       {
         label: "activity-unit-metrics.deleted-balance",

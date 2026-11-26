@@ -378,3 +378,13 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Se evita introducir un lease superficial sin migración durable, vencimiento y pruebas multi-contexto. La base IndexedDB sigue en versión 25 en esta rama.
 - **Pendiente técnico identificado:** reclamación durable/lease compartido para reducir envíos redundantes entre contextos. No es una garantía implementada.
 - **Validación:** auditoría de código y documentación publicadas; CI sigue pendiente.
+
+
+### Tanda — puerto de exclusión compartida
+
+- Añadido `SyncExecutionLock` como puerto opcional y agnóstico del entorno en el coordinador.
+- Cada sincronización solicita exclusión con clave estable `narrative-sync:<projectId>`; los coordinadores que comparten proveedor pueden serializar la lectura, el envío y la confirmación de la bandeja.
+- Se conserva la coalescencia `inFlight` por instancia y el paralelismo entre proyectos con claves distintas.
+- Añadida prueba de dos coordinadores concurrentes con proveedor de lock compartido: una única operación llega al transporte y el segundo coordinador observa la bandeja ya confirmada.
+- El núcleo no afirma tener bloqueo multi-pestaña por defecto. La integración debe inyectar un adaptador real (Web Locks o lease IndexedDB); sin él, la protección sigue siendo local a la instancia.
+- CI y ejecución local de pruebas no verificados desde esta operación.

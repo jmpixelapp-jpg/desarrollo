@@ -150,6 +150,9 @@ export function discoverNarrativeCharacterStateTransitions(
     }
 
     if (transition) {
+      if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_TRANSITIONS) {
+        throw new Error("La reconstrucción supera el límite de transiciones; divide el manuscrito por bloques o capítulos.");
+      }
       const evidence = current.evidence;
       results.push({
         id: "character-state-transition:" + current.documentId + ":" +
@@ -174,9 +177,6 @@ export function discoverNarrativeCharacterStateTransitions(
         evidence,
         reviewStatus: "candidate"
       });
-      if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_TRANSITIONS) {
-        throw new Error("La reconstrucción supera el límite de transiciones; divide el manuscrito por bloques o capítulos.");
-      }
     }
     previousByState.set(key, current);
   }

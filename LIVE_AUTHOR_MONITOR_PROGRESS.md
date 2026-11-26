@@ -1905,3 +1905,29 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Bloqueo externo separado:** el workflow general `Motor Literario TypeScript` continúa fallando solo en el paso de typecheck por errores preexistentes fuera del monitor: `narrative-action-claim-comparison.ts` (propiedad `polarityEvidence` inexistente en el tipo), `narrative-character-knowledge-discovery.ts`, `narrative-evidence-context-expansion.ts`, `narrative-information-concealment-discovery.ts`, `narrative-information-exposure-discovery.ts`, `narrative-information-reception-discovery.ts`, `narrative-knowledge-dialogue-link.ts` (`exactOptionalPropertyTypes`) y `narrative-relationship-transition-discovery.ts` (parámetros `any`). En ese job, el build/tests del paquete completo quedan omitidos por el typecheck; no se atribuye ese fallo al Live Author Monitor. El bundle runtime del monitor y su integración sí aprobaron el run 45813045173.
 
 **Alcance pendiente:** la prueba CDP no sustituye validación con IME físico en Windows/macOS/Linux y los eventos de `compositionend` de CDP pueden ser no confiables. El repositorio sigue sin contener el editor enriquecido final de producción; debe conectarse el adaptador transaccional al editor real antes de afirmar cobertura de historial/undo/redo de producción.
+## 123. inputType nativo en deltas, deduplicación y traza manual v3 (26 de noviembre de 2026)
+
+**Contrato y captura:** `EditorChange` ahora admite `inputType?: string`, el token exacto de `InputEvent.inputType` cuando la fuente lo conoce. La fuente textarea y el adaptador transaccional lo conservan; ambos rechazan tokens vacíos cuando se declaran explícitamente en una transacción, excesivos (más de 128 caracteres) o con caracteres de control. El campo no copia `InputEvent.data` ni texto del manuscrito.
+
+**Clasificación conservadora:** `insertText`/`insertLineBreak`/`insertParagraph` => `typing`; `insertFromPaste`/`insertFromPasteAsQuotation` => `paste`; `insertReplacementText` => `correction`; `delete*` => `deletion`; `insertCompositionText` => `composition`; `insertFromDrop`/`insertFromYank`/`insertFromDictation` y otros tokens no vacíos => `other`. `historyUndo`/`historyRedo` requieren el adaptador del historial real. Si el textarea recibe inputType vacío, suspende y pide snapshot porque no puede verificar si el tipo de operación/rango es seguro. Un proveedor transaccional puede publicar un delta sin categoría, pero la cobertura por procedencia queda parcial.
+
+**Integridad de transacciones:** el adaptador transaccional incluye `inputType` en su snapshot inmutable y en la firma de deduplicación. Reutilizar el mismo `transactionId` cambiando `insertText` por `insertFromPaste` provoca `transaction-id-reused` y suspensión, no una retransmisión aceptada.
+
+**Privacidad y traza:** la página local de prueba IME exporta ahora `live-author-monitor-ime-trace-v3`. Los eventos y deltas incluyen el token `inputType`; `InputEvent.data` continúa reducido a longitud UTF-16 y no se exporta como contenido. La traza sigue excluyendo manuscrito, candidatos IME, texto tecleado y payloads de evento. `inputType` no se serializa en checkpoints, snapshots ni diagnósticos persistentes.
+
+**Precisión de offsets narrativos:** se corrigió la prueba de Host API para distinguir `mention.start` (posición del término detectado, 19) de `evidence.start` (inicio de la oración contextual, 0). La implementación del extractor no necesitó cambio: la evidencia contextual era correcta y la aserción estaba comparando dos campos distintos.
+
+**Validación integral aprobada:** [Live Author Monitor — run 45815528664](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45815528664), commit `eeab5fac7bf799b98238abdcf0d3e52bd588957a`, resultado `success`.
+- Diagnósticos de recuperación: **17/17**.
+- Suite aislada de monitor y UI: **202/202**, 0 fallos.
+- Page Lifecycle Chromium: **1/1**.
+- Cancelación tardía `beforeinput`: **1/1**.
+- Composición IME mediante CDP: **1/1**, con `inputType=insertCompositionText` comprobado en los deltas.
+- Integración host/editor/browser: **230/230**, 0 fallos. Incluye descarga y validación del informe manual IME v3.
+- Benchmark: 100.000 commits en 654,82 ms (~152.713 commits/s), ocho documentos de 1 MiB, heap 4,42 MiB a media y carga completa (0 MiB de crecimiento), 0,5 MiB retenidos por sesiones abiertas, 71,15 MiB RSS final y 0 pendientes.
+
+**Validación focalizada:** [run 45815415190](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45815415190) concluyó `success`; cancelación `beforeinput` 1/1 y composición IME 1/1.
+
+**Typecheck global externo:** [Motor Literario TypeScript — run 45815610213](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45815610213) continúa fallando en `tsc --noEmit` con 11 diagnósticos en ocho módulos narrativos no pertenecientes al monitor: `narrative-action-claim-comparison.ts` (4 referencias a `polarityEvidence` inexistente), `narrative-character-knowledge-discovery.ts`, `narrative-evidence-context-expansion.ts`, `narrative-information-concealment-discovery.ts`, `narrative-information-exposure-discovery.ts`, `narrative-information-reception-discovery.ts`, `narrative-knowledge-dialogue-link.ts` (`exactOptionalPropertyTypes`) y `narrative-relationship-transition-discovery.ts`. El workflow propio del Live Author Monitor sí superó su typecheck aislado, bundle runtime y las 230 pruebas integradas.
+
+**Pendiente:** ampliar la matriz de `inputType` menos comunes por navegador y ejecutar la página manual con IME físico en Windows, macOS y Linux. El identificador nativo describe la señal del navegador; no demuestra por sí solo dispositivo físico, intención humana ni texto final confirmado.

@@ -23,12 +23,12 @@ class FakeTextArea {
   }
 
   beforeInput(inputType = "insertText") {
-    const event = { defaultPrevented: false, inputType };
+    const event = { defaultPrevented: false, inputType, isTrusted: true };
     for (const listener of [...(this.listeners.get("beforeinput") ?? [])]) listener(event);
   }
 
   input() {
-    for (const listener of [...(this.listeners.get("input") ?? [])]) listener({ inputType: "" });
+    for (const listener of [...(this.listeners.get("input") ?? [])]) listener({ inputType: "", isTrusted: true });
   }
 
   edit(start, end, nextValue, inputType = "insertText") {

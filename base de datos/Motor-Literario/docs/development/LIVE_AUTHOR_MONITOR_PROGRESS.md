@@ -1322,3 +1322,12 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Ajuste:** se mueve la instalación de Chromium después de `runtime-build` y se condiciona a su resultado `success`. Las pruebas unitarias FIFO y el benchmark ocurren antes, independientemente del fallo de auditoría o del runtime; las pruebas de integración multi-pestaña conservan Chromium cuando realmente pueden ejecutarse.
 
 **Validación:** comprobada en [Live Author Monitor — run 45755687906](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45755687906): como `runtime-build` falló, la instalación de Chromium y las pruebas host/editor/browser se omitieron; la suite aislada (37/37) y el benchmark se ejecutaron y aprobaron.
+
+
+## 82. Drenaje FIFO bajo una ráfaga de 1.000 ediciones reentrantes (26 de noviembre de 2026)
+
+**Motivación:** las tres pruebas anteriores verificaban una única edición reentrante, altas/bajas de listeners y desmontaje durante la publicación. Se añade una regresión de carga para evitar que una futura implementación vuelva a introducir drenaje recursivo o invierta el orden bajo una ráfaga síncrona.
+
+**Prueba:** el primer suscriptor genera 999 admisiones adicionales durante la notificación de la secuencia 1. El segundo debe recibir exactamente 1.000 snapshots, desde secuencia 1 hasta secuencia 1.000, sin saltos ni retrocesos. Se verifican también 1.000 admisiones aceptadas y 1.000 tickets pendientes al terminar; el test no simula commits ni limpieza que pudieran esconder pérdidas de eventos.
+
+**Validación:** pendiente de GitHub Actions para esta regresión de carga.

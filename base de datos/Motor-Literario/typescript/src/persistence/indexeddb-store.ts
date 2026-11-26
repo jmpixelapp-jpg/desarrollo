@@ -1576,6 +1576,18 @@ function validateLiveAuthorMonitorLeaseRequest(
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
+/**
+ * Estado observable del almacenamiento IndexedDB sin exponer contenido narrativo.
+ */
+export interface IndexedDbStorageHealthReport {
+  readonly databaseName: string;
+  readonly databaseVersion: number;
+  readonly usageBytes: number | null;
+  readonly quotaBytes: number | null;
+  readonly persistentStorage: boolean | null;
+  readonly recordCounts: Readonly<Record<string, number>>;
+}
+
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;
@@ -5733,4 +5745,88 @@ export class IndexedDbProjectStore implements ProjectStore {
       );
     });
   }
+
+  /**
+   * Inspección de solo lectura del almacenamiento local.
+   * Las cifras de quota/usage son estimaciones del navegador y pueden no estar disponibles.
+   */
+  async inspectStorageHealth(): Promise<IndexedDbStorageHealthReport> {
+    const db = await this.open();
+    const storeNames = Array.from(db.objectStoreNames);
+    const recordCounts: Record<string, number> = Object.create(null) as Record<string, number>;
+
+    await new Promise<void>((resolve, reject) => {
+      let transaction: IDBTransaction;
+      try {
+        if (storeNames.length === 0) {
+          resolve();
+          return;
+        }
+        transaction = db.transaction(storeNames, "readonly");
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error("No se pudo inspeccionar IndexedDB."));
+        return;
+      }
+
+      for (const storeName of storeNames) {
+        const request = transaction.objectStore(storeName).count();
+        request.onsuccess = () => { recordCounts[storeName] = request.result; };
+        request.onerror = () => {
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        };
+      }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("Falló el conteo de almacenes IndexedDB."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la inspección de IndexedDB."));
+    });
+
+    let usageBytes: number | null = null;
+    let quotaBytes: number | null = null;
+    let persistentStorage: boolean | null = null;
+
+    if (typeof navigator !== "undefined" && navigator.storage) {
+      if (typeof navigator.storage.estimate === "function") {
+        try {
+          const estimate = await navigator.storage.estimate();
+          usageBytes = typeof estimate.usage === "number" && Number.isFinite(estimate.usage)
+            ? estimate.usage : null;
+          quotaBytes = typeof estimate.quota === "number" && Number.isFinite(estimate.quota)
+            ? estimate.quota : null;
+        } catch {
+          // La API de cuota es informativa; su fallo no invalida el diagnóstico de IndexedDB.
+        }
+      }
+      if (typeof navigator.storage.persisted === "function") {
+        try {
+          persistentStorage = await navigator.storage.persisted();
+        } catch {
+          persistentStorage = null;
+        }
+      }
+    }
+
+    return {
+      databaseName: db.name,
+      databaseVersion: db.version,
+      usageBytes,
+      quotaBytes,
+      persistentStorage,
+      recordCounts
+    };
+  }
+
+  /**
+   * Solicita al navegador almacenamiento persistente para el origen.
+   * El navegador puede denegar la solicitud; false no implica pérdida de datos.
+   */
+  async requestPersistentStorage(): Promise<boolean> {
+    if (typeof navigator === "undefined" || !navigator.storage ||
+        typeof navigator.storage.persist !== "function") return false;
+    try {
+      return await navigator.storage.persist();
+    } catch {
+      return false;
+    }
+  }
+
 }

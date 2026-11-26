@@ -491,13 +491,14 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           });
           source.subscribeChanges(change => changes.push(change));
           element.addEventListener("beforeinput", event => {
+            if (event.inputType === "insertText") event.preventDefault();
             observed.push({
               inputType: event.inputType,
               data: event.data,
               isTrusted: event.isTrusted,
-              cancelable: event.cancelable
+              cancelable: event.cancelable,
+              defaultPrevented: event.defaultPrevented
             });
-            if (event.inputType === "insertText") event.preventDefault();
           });
           element.addEventListener("input", () => { inputEvents += 1; });
           window.__blurRecoveryHarness = { element, source, errors, changes, observed, get inputEvents() { return inputEvents; } };
@@ -517,6 +518,8 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
         assert.equal(beforeBlur.observed[0].isTrusted, true,
           "beforeinput debe proceder del teclado real del navegador");
         assert.equal(beforeBlur.observed[0].cancelable, true);
+        assert.equal(beforeBlur.observed[0].defaultPrevented, true,
+          "el listener posterior debe cancelar el evento que el adaptador ya observó");
         assert.equal(beforeBlur.inputEvents, 0,
           "preventDefault posterior debe impedir el input correspondiente");
         assert.equal(beforeBlur.value, "abc");

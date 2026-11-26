@@ -1,7 +1,7 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
   "mapping_version": 14,
-  "schema_version": "0.4.2",
+  "schema_version": "0.4.3",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",

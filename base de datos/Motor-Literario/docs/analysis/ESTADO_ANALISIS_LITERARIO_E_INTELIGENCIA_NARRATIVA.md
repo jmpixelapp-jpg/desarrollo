@@ -418,3 +418,13 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Añadida prueba de excepción de tarea que verifica liberación y adquisición posterior por otro propietario.
 - Ampliado el contrato con el ciclo de vida de renovación, espera de renovaciones en vuelo, liberación y límites ante suspensión del navegador.
 - Pruebas añadidas al repositorio; ejecución local y CI no verificados desde esta sesión.
+
+
+### Tanda — acuses locales atómicos
+
+- Extendido `SyncOutboxPort` con capacidad opcional para confirmar lotes.
+- El coordinador prefiere la confirmación por lote cuando el almacén la implementa y conserva fallback compatible para adaptadores antiguos.
+- IndexedDB retira todas las operaciones confirmadas en una sola transacción `readwrite`; los errores revierten la transacción completa.
+- Añadidas pruebas de idempotencia, IDs duplicados, lista vacía y uso real del camino atómico desde el coordinador.
+- La atomicidad local no elimina la necesidad de deduplicación remota: una interrupción entre aceptación del servidor y commit local puede provocar reenvío seguro.
+- Pruebas incorporadas, pero no ejecutadas/verificadas en CI desde esta sesión.

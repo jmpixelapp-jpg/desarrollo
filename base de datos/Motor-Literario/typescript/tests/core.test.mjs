@@ -5112,7 +5112,7 @@ test("las afirmaciones no reconocen nombres parciales antes de una marca combina
     canonicalName: "Ana", normalizedName: "ana", aliases: [], evidence: [],
     firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
   };
-  const text = "Ana\\u0301 tiene 30 años.";
+  const text = "Ana\u0301 tiene 30 años.";
   const assertions = extractNarrativeAssertions(
     "assertion-combining-mark", "chapter", 1, text, [entity], 0, 1234
   );

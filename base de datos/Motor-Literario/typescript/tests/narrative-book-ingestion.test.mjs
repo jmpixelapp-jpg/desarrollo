@@ -86,6 +86,36 @@ test("rechaza extensiones no admitidas, MIME incompatibles y UTF-8 inválido", a
   }));
 });
 
+
+test("descubre personajes etiquetados en el texto y extrae sus acciones sin fichas previas", () => {
+  const text = "Personaje Ana cruzó el puente.";
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "self-discovery", revision: 3,
+    text, baseOffset: 50
+  });
+  assert.equal(result.observationStatus, "extracted");
+  assert.equal(result.entityCandidates.length, 1);
+  assert.equal(result.entityCandidates[0].kind, "character");
+  assert.equal(result.entityCandidates[0].canonicalName, "Ana");
+  assert.equal(result.entityCandidates[0].evidence[0].start, 60);
+  assert.equal(result.entityCandidates[0].evidence[0].end, 63);
+  assert.equal(result.observations.length, 1);
+  assert.equal(result.observations[0].action, "cruzar");
+  assert.equal(result.observations[0].singleMentionedCharacterId, result.entityCandidates[0].id);
+  assert.equal(result.observations[0].actionEvidence.start, 64);
+  assert.equal(result.observations[0].reviewStatus, "candidate");
+});
+
+test("no infiere entidades de nombres propios sin etiqueta explícita", () => {
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "no-name-guess", revision: 1,
+    text: "Ana cruzó el puente."
+  });
+  assert.deepEqual(result.entityCandidates, []);
+  assert.equal(result.observationStatus, "no-entities");
+  assert.deepEqual(result.observations, []);
+});
+
 test("enriquece la ingesta con acciones vinculadas a personajes ya identificados", () => {
   const character = {
     projectId: "p", id: "character:ana", kind: "character",

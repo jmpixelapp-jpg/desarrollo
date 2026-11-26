@@ -18,7 +18,7 @@ export interface LiveAuthorMonitorPanelOptions {
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
 export type LiveAuthorMonitorPanelMetric = "session" | "active" | "idle" | "pauses" | "wordsPerMinute" | "charactersPerMinute" |
-  "inserted" | "deleted" | "accepted" | "typing" | "paste" | "deletion" | "correction" |
+  "inserted" | "deleted" | "accepted" | "typing" | "composition" | "paste" | "deletion" | "correction" |
   "undo" | "redo" | "other" | "committed" | "pending" | "failed" |
   "revision" | "commitP95";
 type MetricKey = LiveAuthorMonitorPanelMetric;
@@ -47,6 +47,7 @@ const METRICS: readonly MetricDefinition[] = [
   { key: "deleted", label: "Caracteres eliminados" },
   { key: "accepted", label: "Ediciones aceptadas" },
   { key: "typing", label: "Escritura" },
+  { key: "composition", label: "Composición IME" },
   { key: "paste", label: "Pegados" },
   { key: "deletion", label: "Borrados" },
   { key: "correction", label: "Correcciones" },
@@ -140,6 +141,7 @@ function formatMetric(
     case "deleted": return integer.format(snapshot.deletedCharacters);
     case "accepted": return integer.format(snapshot.acceptedChanges);
     case "typing": return integer.format(snapshot.typingChanges);
+    case "composition": return integer.format(snapshot.compositionChanges);
     case "paste": return integer.format(snapshot.pasteChanges);
     case "deletion": return integer.format(snapshot.deletionChanges);
     case "correction": return integer.format(snapshot.correctionChanges);

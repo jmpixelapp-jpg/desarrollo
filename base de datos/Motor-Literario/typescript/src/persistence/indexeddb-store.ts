@@ -4137,6 +4137,28 @@ export class IndexedDbProjectStore implements ProjectStore {
     return result;
   }
 
+  async loadNarrativeDocumentProjectionManifests(
+    projectId: string
+  ): Promise<readonly NarrativeDocumentProjectionManifest[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para enumerar manifiestos narrativos.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_PROJECTION_MANIFESTS, "readonly");
+    const request = transaction.objectStore(NARRATIVE_PROJECTION_MANIFESTS).index("by-project").getAll(projectId);
+    const records = await readAfterTransaction(
+      transaction, request, "No se pudieron enumerar los manifiestos de proyección narrativa."
+    ) as NarrativeDocumentProjectionManifest[];
+    if (!Array.isArray(records)) throw new Error("La colección de manifiestos narrativos es inválida.");
+    const seen = new Set<string>();
+    for (const record of records) {
+      validateNarrativeDocumentProjectionManifest(record, projectId, record.documentId);
+      if (seen.has(record.documentId)) throw new Error("Hay manifiestos documentales duplicados en el proyecto.");
+      seen.add(record.documentId);
+    }
+    return records;
+  }
+
   async saveNarrativeDocumentProjectionManifestIfUnchanged(
     manifest: NarrativeDocumentProjectionManifest,
     expectedGeneration?: number

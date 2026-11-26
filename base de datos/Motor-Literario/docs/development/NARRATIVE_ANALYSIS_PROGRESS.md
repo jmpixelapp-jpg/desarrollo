@@ -283,3 +283,14 @@ Handlers implementados para `idea-upsert`, `assertion-upsert`, `relation-upsert`
 **Límite deliberado:** el upsert no consolida identidades ni redirige referencias. La consolidación requiere el flujo atómico ya definido por el store, pues una fusión afecta relaciones, afirmaciones, vínculos y snapshots archivados. No se sustituye esa operación compleja por un merge superficial.
 
 **Validación automatizada:** commits recientes aún sin workflow runs ni estados de CI reportados. No se declara typecheck/build/tests ejecutados.
+
+
+## Sincronización de consolidación de identidades
+
+Se añadió `createNarrativeEntityMergeHandler` y el kind `entity-merge`. El handler valida IDs de origen/destino y delega la operación completa en `ProjectStore.mergeNarrativeEntityIdentity`; no intenta reconstruir la fusión con upserts separados.
+
+La implementación IndexedDB existente ejecuta la consolidación en una única transacción sobre entidades, relaciones, acontecimientos, afirmaciones, ideas y biblioteca personal. Antes de mutar, valida integridad referencial del grafo, compatibilidad de tipo de entidad y colisiones de alias. Si el escritor no se proporciona, detecta la presencia de ideas archivadas que exigirían actualizar snapshots y rechaza la operación cuando no puede mantenerlas coherentes.
+
+También se corrigió la validación de `mergedFromIds`: son identificadores (comparación exacta y límite de 512 caracteres), no nombres que deban normalizarse como alias. La prueba nueva cubre delegación atómica, rechazo de payloads inválidos y ausencia de soporte en el store.
+
+**Límite de verificación:** el cambio se publicó en `main`, pero no se ejecutó localmente `npm test` ni `npm run typecheck` en esta sesión. No se debe considerar CI aprobado hasta observar una ejecución real.

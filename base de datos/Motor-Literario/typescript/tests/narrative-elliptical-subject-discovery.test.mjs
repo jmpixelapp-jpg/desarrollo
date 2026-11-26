@@ -100,3 +100,32 @@ test("rechaza evidencia de sujeto antecedente de otro documento", () => {
   assert.throws(() => discover("Ana abrió la puerta. Después salió.", [first, second]),
     /mismo documento/);
 });
+
+test("trata metacaracteres del nombre como texto literal al buscar menciones intermedias", () => {
+  const special = {
+    ...ana,
+    id: "character:special",
+    canonicalName: "A.*",
+    normalizedName: "a.*"
+  };
+  const text = "Ana abrió la puerta. Ax se escondió. Después salió.";
+  const first = observation("o1", 0, 20, ana.id, [ana.id]);
+  const second = observation("o2", text.indexOf("Después"), text.length, undefined, []);
+  assert.equal(discover(text, [first, second], [ana, special]).length, 1,
+    "A.* no debe comportarse como una expresión comodín que coincida con Ax");
+});
+
+test("reconoce la mención literal de un nombre que contiene metacaracteres", () => {
+  const special = {
+    ...ana,
+    id: "character:special",
+    canonicalName: "A.*",
+    normalizedName: "a.*"
+  };
+  const text = "Ana abrió la puerta. A.* se escondió. Después salió.";
+  const first = observation("o1", 0, 20, ana.id, [ana.id]);
+  const second = observation("o2", text.indexOf("Después"), text.length, undefined, []);
+  assert.deepEqual(discover(text, [first, second], [ana, special]), [],
+    "la mención literal del personaje intermedio debe impedir la propagación");
+});
+

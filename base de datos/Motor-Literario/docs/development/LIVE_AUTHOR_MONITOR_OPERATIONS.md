@@ -741,3 +741,5 @@ La regresión de cuota inyecta un error request-level asíncrono en el límite d
 
 
 **Validación CI:** [run 45765001413](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001413) aprobó el request-level `QuotaExceededError` como test 114 y la suite host/editor/browser 175/175. La ruta conserva el checkpoint previo y no expone el mensaje de error del manuscrito. La simulación no sustituye una prueba física de cuota agotada en navegador.
+
+La prueba de aborto fuerza `transaction.abort()` después de que el adaptador haya encolado el `put`, antes de completar la transacción. Se comprueba que el commit de checkpoint sea atómico (el registro previo permanece) y que una escritura nueva funcione después de restaurar el método nativo.

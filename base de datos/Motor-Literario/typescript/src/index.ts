@@ -35,3 +35,4 @@ export * from "./narrative-knowledge-graph-persistence";
 
 export * from "./narrative-sync-journal";
 export * from "./narrative-sync-dispatcher";
+export * from "./narrative-sync-consumer";

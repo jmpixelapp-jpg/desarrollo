@@ -178,3 +178,17 @@ La suite global detectó que el patrón emocional incluía `felices?`, que no cu
 
 La referencia `previousText` se limpia ahora inmediatamente cuando el adaptador entra en `needsResync` y también en `dispose()`. La instancia ya no retiene el contenido completo mientras espera un snapshot autoritativo o cuando el anfitrión mantiene una referencia a una instancia desmontada. Solo `resynchronize()` puede volver a cargar el texto desde un snapshot verificado. Se añadió una regresión que comprueba suspensión, recuperación y disposición.
 
+## Validación global completa — ejecución 45783004619
+
+En el commit `28afb9067c17a3b8e5d4d720cc0c819569f2dbdc`, el workflow general **Motor Literario TypeScript** (ejecución **45783004619**) terminó en `success`: type-check, build y suite automatizada. Resultado de la suite: **1.118 pruebas aprobadas, 0 fallidas**. El benchmark global también terminó correctamente.
+
+## Validación final del monitor con liberación del snapshot — ejecución 45783004474
+
+En el mismo commit `28afb9067c17a3b8e5d4d720cc0c819569f2dbdc`, el workflow **Live Author Monitor** (ejecución **45783004474**) terminó en `success` en todos sus pasos: type-check aislado, bundle, recuperación de diagnósticos, esquema, runtime, suite unitaria/diagnóstica, Chromium Page Lifecycle, integración host/editor/navegador y benchmark.
+
+- Suite de integración: **197 pruebas aprobadas, 0 fallidas**.
+- Prueba Chromium: teclado real de navegador aceptado y `dispatchEvent()` sintético rechazado por `untrusted-event`.
+- Prueba de privacidad: la copia temporal del manuscrito se limpia al suspender y al disponer; solo se vuelve a cargar desde snapshot autoritativo.
+- Benchmark del monitor: 8 documentos; 1.048.576 unidades UTF-16 iniciales por documento; 12.500 cambios por documento; 100.000 commits; 496,77 ms; 201.298,76 commits/s; 0,5 MB retenidos por las sesiones abiertas; 0 MB de crecimiento adicional del heap de media a carga completa; RSS 71,73 MB.
+
+**Límite de interpretación del benchmark:** mide el núcleo `LiveAuthorMonitor` y sus sesiones/contadores; no es una medición aislada del costo de comparación de texto del adaptador `textarea`. Las cifras son específicas de ese runner Node v22.23.5 y no deben generalizarse como latencia garantizada por pulsación.

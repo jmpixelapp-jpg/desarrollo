@@ -99,6 +99,10 @@ Cada propuesta conserva IDs, revisión, acción, lugar, sujeto gramatical activo
 
 **Límites deliberados:** no se infiere ubicación actual, coordenadas, distancia, ruta, dirección geográfica, estancia continua ni presencia posterior. Una mención cercana no basta: si falta la preposición esperada o la entidad no está tipada como lugar, no se crea una transición. Los movimientos con pronombres o sujeto ambiguo pueden conservar el lugar y la acción, pero no reciben actor inventado.
 
+Módulo complementario: `typescript/src/narrative-location-trajectory.ts`
+
+`buildNarrativeLocationTrajectories()` agrupa movimientos por personaje y los ordena exclusivamente con un mapa de orden editorial de capítulos suministrado por el proyecto. Puede señalar una secuencia textual de salida seguida de llegada cuando ambas transiciones son afirmadas y candidatas. La secuencia conserva las dos evidencias y las ubicaciones de origen/destino mencionadas; no infiere trayecto directo, transporte, distancia, continuidad del viaje ni paradas intermedias. Los capítulos entre dos movimientos sin candidatos se muestran como huecos de cobertura, nunca como prueba de que el personaje no se movió.
+
 ### Auditoría de cobertura: localizar lo que el extractor todavía no comprende
 
 Módulo: `typescript/src/narrative-extraction-audit.ts`

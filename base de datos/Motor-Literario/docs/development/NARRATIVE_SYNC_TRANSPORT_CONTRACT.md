@@ -62,3 +62,7 @@ La clave `operationId` identifica el contenido inmutable de una operación: proy
 ## Orden causal durante la recuperación
 
 La recuperación de pendientes usa el índice `by-project-device-sequence`, no el índice temporal. `createdAt` es metadato de auditoría y puede verse afectado por desfases o ajustes del reloj local; no es una fuente fiable del orden causal. El lote queda ordenado por escritor/dispositivo y secuencia ascendente dentro de cada escritor. Las secuencias de dispositivos distintos son flujos independientes y no se interpretan como un reloj global.
+
+## Aislamiento del backoff entre escritores
+
+El orden y el bloqueo por reintento se aplican dentro de cada flujo `(projectId, deviceId)`. Una operación retrasada bloquea las secuencias posteriores de ese mismo dispositivo, pero no impide que otros dispositivos del proyecto envíen sus propios flujos independientes. El servidor sigue siendo responsable de deduplicar `operationId` y aplicar autorización por proyecto.

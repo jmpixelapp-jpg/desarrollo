@@ -616,6 +616,10 @@ async function applyNarrativeReferenceRepairWithoutAudit(
   if (matches.length !== 1) throw new Error("La correspondencia de fusión cambió o dejó de ser única.");
   const candidate = matches[0]!;
   const auditBase = {
+    operationId: [
+      "reference-repair", proposal.projectId, proposal.recordType,
+      proposal.recordId, proposal.missingReferenceId, candidate.id
+    ].join("|"),
     operation: "narrative-reference-repair" as const,
     projectId: proposal.projectId,
     recordType: proposal.recordType,
@@ -712,14 +716,8 @@ export async function applyNarrativeReferenceRepair(
     throw new Error("El almacenamiento debe ofrecer auditoría durable antes de aplicar reparaciones.");
   }
   const result = await applyNarrativeReferenceRepairWithoutAudit(store, proposal, approved, appliedAt);
-  const operationId = [
-    "reference-repair", result.audit.projectId, result.audit.recordType,
-    result.audit.recordId, result.audit.referenceField,
-    result.audit.missingReferenceId, result.audit.replacementEntityId
-  ].join("|");
-  const audit: NarrativeReferenceRepairAudit = { ...result.audit, operationId };
-  await store.appendNarrativeReferenceRepairAudit(audit);
-  return { ...result, audit };
+  await store.appendNarrativeReferenceRepairAudit!(result.audit);
+  return result;
 }
 
 export interface NarrativeKnowledgeGraphPersistenceResult {

@@ -79,7 +79,7 @@ test("no enlaza entidades que no aparecen como participantes compartidos", () =>
 
 test("conserva offsets absolutos UTF-16 con prefijo y emoji", () => {
   const prefix = "😀 Prólogo.\n";
-  const text = "Ana quedó herida porque Ana corrió.";
+  const text = "Ana corrió porque Ana estaba herida.";
   const found = discover(text, prefix.length);
   assert.equal(found.length, 1);
   assert.equal(found[0].markerEvidence.start, prefix.length + text.indexOf("porque"));

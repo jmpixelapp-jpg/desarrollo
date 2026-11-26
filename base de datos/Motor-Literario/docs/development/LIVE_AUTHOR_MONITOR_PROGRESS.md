@@ -757,3 +757,15 @@ Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace
 **Validación:** pendiente de CI para este commit.
 
 - Ajuste de tipado preventivo: los mapas de claves visibles se construyen mediante `Map.set()` explícito para mantener la inferencia de tuplas estable en TypeScript estricto.
+
+## 40. Nueva entrega — benchmark de heap reproducible para sesiones de monitor (25 de noviembre de 2026)
+
+- Se añade `bench/live-author-monitor-memory-benchmark.mjs`, con ocho sesiones predeterminadas, documentos iniciales de 1 MiB y 12.500 commits por documento (100.000 en total).
+- El script fuerza GC antes de sus lecturas y captura heap inicial, después de abrir sesiones, a mitad de carga y al finalizar. Reporta heap retenido por sesiones, crecimiento de mitad a carga completa, RSS y throughput del runner.
+- Verifica por documento que los 12.500 commits se confirmaron, no quedan pendientes/fallos y la ventana de latencias se mantiene en 64 muestras.
+- Se añade `npm run bench:monitor`; el benchmark general `npm run bench` lo ejecuta después del benchmark de edición y el workflow específico lo ejecuta tras los tests.
+- Las dimensiones del benchmark son configurables mediante variables de entorno y el script valida sus límites.
+
+**Límite de medición:** esta medición es heap/RSS del proceso Node en CI, no heap de Chromium ni RAM del editor en producción. No se fija un umbral global arbitrario; se publica el valor observado y se conserva la verificación estructural de las ventanas acotadas.
+
+**Validación:** pendiente de CI para este commit.

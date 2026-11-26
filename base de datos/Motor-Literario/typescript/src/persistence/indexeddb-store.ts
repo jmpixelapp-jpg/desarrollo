@@ -1772,6 +1772,7 @@ function syncOperationFingerprint(operation: StoredSyncOperation): string {
  * No transmite manuscritos ni depende de servicios de terceros.
  */
 export class IndexedDbProjectStore implements ProjectStore {
+  readonly supportsAtomicNarrativeSyncOutbox = true;
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;
   private readonly narrativeChangeListeners = new Set<(projectId: string) => void>();

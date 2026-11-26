@@ -90,3 +90,16 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Contrato y límites: [Actualización incremental del grafo narrativo](../architecture/GRAFO_CONOCIMIENTO_NARRATIVO_INCREMENTAL.md).
 
 **Límite:** el snapshot retiene texto en memoria y no se persiste ni transmite. La extracción se limita a documentos invalidados, pero la agregación y la consistencia global siguen recorriendo el snapshot completo.
+
+
+## 8. Integración inicial con persistencia
+
+- Nuevo módulo `typescript/src/narrative-knowledge-graph-persistence.ts`.
+- API `persistNarrativeKnowledgeGraphSnapshot(store, snapshot)` que integra el snapshot incremental con `ProjectStore`.
+- Exige lecturas y escrituras compare-and-swap para las cinco colecciones; ordena dependencias guardando entidades antes de relaciones, eventos e ideas.
+- Conserva evidencias cruzadas mediante las funciones de fusión del dominio y evita escrituras idénticas.
+- Las operaciones son secuenciales e idempotentes ante reintento, pero no constituyen una transacción global.
+- Pruebas: `tests/narrative-knowledge-graph-persistence.test.mjs`.
+- Contrato: [Persistencia del grafo narrativo](../architecture/PERSISTENCIA_DEL_GRAFO_NARRATIVO.md).
+
+**Limitación crítica documentada:** el contrato actual no ofrece borrado ni reemplazo transaccional por documento. La persistencia inicial puede conservar evidencias antiguas tras una revisión y no elimina registros que desaparecen del análisis. No se afirma reconciliación completa hasta implementar tombstones y reemplazo atómico por documento.

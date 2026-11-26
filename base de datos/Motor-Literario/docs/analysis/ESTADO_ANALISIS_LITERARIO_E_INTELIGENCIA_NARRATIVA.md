@@ -399,3 +399,5 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Añadidas pruebas de integración con dos instancias de IndexedDB y propietarios distintos, y de reentrada local.
 - Cada contexto debe usar un `ownerId` único. Los leases pueden expirar si una pestaña queda suspendida; no eliminan la necesidad de deduplicación remota por `operationId`.
 - **Validación:** pruebas añadidas al repositorio; no se ha ejecutado npm/TypeScript ni se dispone de resultados de CI desde esta operación.
+
+- Ampliación de pruebas: recuperación de un lease vencido cuyo propietario anterior dejó de ejecutarse; el nuevo contexto puede reclamarlo mediante el mecanismo transaccional y avanzar el fencing token.

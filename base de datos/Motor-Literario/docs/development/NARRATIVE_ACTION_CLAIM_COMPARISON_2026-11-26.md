@@ -27,8 +27,9 @@ La implementación no contiene todavía una resolución temporal de estas accion
 ## Límites y protección
 
 - Máximo 10.000 observaciones de entrada.
-- Máximo 50.000 parejas examinadas y 2.000 discrepancias devueltas; al alcanzar cualquiera de los límites, el resultado es parcial y permanece marcado como candidato.
-- Los grupos y sus elementos se ordenan antes de comparar para que el recorte sea reproducible. La salida final se ordena por ID.
+- Máximo 50.000 parejas potenciales y 2.000 discrepancias por llamada.
+- Si se supera cualquiera de esos límites, la función lanza un error explícito y no devuelve una lista parcial que pudiera confundirse con un resultado completo.
+- Los grupos y sus elementos se ordenan antes de comparar; la salida final se ordena por ID.
 - IDs duplicados, proyecto ajeno, polaridad inválida y evidencias obsoletas o incoherentes provocan error.
 - Las dos pruebas completas se conservan en cada resultado.
 

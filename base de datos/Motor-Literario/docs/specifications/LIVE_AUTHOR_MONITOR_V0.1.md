@@ -661,3 +661,13 @@ Una instancia que no posee el lease conserva un heartbeat de sondeo cada 10 segu
 - pérdida del propietario sin release(): el heartbeat de la instancia observadora adquiere al expirar el TTL y guarda el checkpoint con el nuevo fencing token.
 
 **Validación CI verificada:** ejecución específica [45727622443](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727622443), commit `2f78c0b542b8146a8924b5b980c05cc090ddc986`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes), build Vite y **112 pruebas aprobadas, 0 fallidas y 0 omitidas**. La CI general [45727622233](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727622233) continúa bloqueada solo por errores TypeScript en `src/literary-analysis.ts`; no reporta errores del monitor.
+
+
+
+## 34. Cancelación de restauración cuando dispose() gana la carrera
+
+Además de evitar adquisiciones tardías, la recuperación vuelve a comprobar el ciclo de vida después de cargar el checkpoint compartido. Una lectura IndexedDB puede terminar después de que la instancia haya sido dispuesta; en ese caso se abandona la restauración antes de llamar a restoreCheckpoint/openDocument sobre LiveAuthorMonitor.
+
+La regresión usa un almacén de prueba que retiene la promesa de loadLiveAuthorMonitorCheckpoint: el HostEngineApi inicia recoverDocument, la prueba llama dispose() mientras la lectura está pendiente y luego libera la promesa. Al finalizar la recuperación no debe existir snapshot de métricas ni heartbeat local.
+
+**Validación CI:** ejecución [45727834409](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727834409), commit `351f2232822a8a7005ff5df7675f044537db7cab`: build Vite, MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes) y **113 pruebas aprobadas, 0 fallidas y 0 omitidas**.

@@ -1529,7 +1529,9 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 
 **Evidencia anterior:** [Live Author Monitor — run 45762924927](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924927) validó la primera iteración, pero no certifica la desigualdad corregida. No se reutiliza esa ejecución como evidencia del criterio actual.
 
-**Validación de la fórmula corregida:** pendiente de GitHub Actions para los commits de corrección y regresión.
+**Validación CI dedicada de la fórmula corregida:** [Live Author Monitor — run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913), checkout exacto `94ca02416c626a7b5a7340252a8754f6e1b457ab`, terminó `success`. La regresión de longitud inicial negativa aprobó como test 164/167 en la suite aislada. También pasaron diagnósticos 17/17, auditoría MLDB/almacenamiento, Page Lifecycle Chromium 1/1 e integración host/editor/browser **174/174**. El benchmark de 100.000 commits terminó en **641,12 ms** (~155.978 commits/s), heap de 4,39 MiB a mitad y al 100 % de la carga, crecimiento medido 0 MiB, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+**Suite general:** [Motor Literario TypeScript — run 45764587878](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587878) terminó 949/950. El único fallo fue el test de marcas combinantes del extractor narrativo en `tests/narrative-unicode-boundaries.test.mjs:107`; es ajeno al monitor y a la persistencia IndexedDB. Type-check aprobó. No se modificó esa área paralela.
 
 ## 99. Respuestas asíncronas de lease cercadas por generación (26 de noviembre de 2026)
 
@@ -1569,7 +1571,7 @@ La suite general del motor se valida por separado; este resultado certifica la l
 
 **Compatibilidad:** no cambia la versión ni la forma almacenada de los checkpoints; no requiere migración. Los campos de actividad continúan siendo opcionales en v1 para leer registros históricos.
  
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [Live Author Monitor — run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913), checkout `94ca02416c626a7b5a7340252a8754f6e1b457ab`, terminó `success`. Las regresiones de muestras dispersas, retroceso de categorías y compatibilidad de checkpoints históricos aprobaron (tests 112, 116 y 117 de la suite host/editor/browser). La suite aislada del monitor quedó 167/167; Page Lifecycle Chromium 1/1; integraciones host/editor/browser **174/174**.
 
 
 ## 102. Reglas de métricas completas antes de persistir checkpoints (26 de noviembre de 2026)
@@ -1582,4 +1584,6 @@ La suite general del motor se valida por separado; este resultado certifica la l
 
 **Compatibilidad:** son guards de lectura/escritura sobre la versión v1 existente; no cambian el formato ni exigen migración. Los checkpoints generados por `createCheckpoint()` cumplen estos invariantes porque solo se crean al no haber tickets pendientes.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** la misma ejecución [run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913) terminó `success`. La regresión conjunta de pausas, balance de caracteres, resultados de commit y coherencia de latencias aprobó como test 113. La prueba de balance de caracteres en restauración aprobó como test 164. No hubo fallos en las suites específicas ni en las integraciones Chromium.
+
+**Límite de validación global:** la suite general del mismo checkout, [run 45764587878](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587878), registró 949/950 por un único fallo preexistente y ajeno al monitor en `tests/narrative-unicode-boundaries.test.mjs:107` (marcas combinantes).

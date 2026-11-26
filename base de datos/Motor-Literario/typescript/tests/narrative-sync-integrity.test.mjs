@@ -59,6 +59,10 @@ test("rechaza ciclos, arrays dispersos y prototipos personalizados", () => {
   sparse[1] = "idea";
   assert.throws(() => canonicalizeNarrativeSyncPayload(sparse), /disperso/u);
 
+  const hiddenProperty = ["idea"];
+  Object.defineProperty(hiddenProperty, "private", { value: "ignored", enumerable: false });
+  assert.throws(() => canonicalizeNarrativeSyncPayload(hiddenProperty), /propiedades adicionales/u);
+
   const custom = Object.create({ inherited: true });
   custom.id = "idea";
   assert.throws(() => canonicalizeNarrativeSyncPayload(custom), /prototipo/u);

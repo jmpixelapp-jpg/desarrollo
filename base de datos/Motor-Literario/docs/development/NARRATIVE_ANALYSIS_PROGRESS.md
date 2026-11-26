@@ -561,3 +561,17 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - Pruebas nuevas verifican que sin aprobación no se modifica el cursor y que, con aprobación, se reconstruye antes de ejecutar el handler.
 
 **Validación pendiente:** `npm run typecheck` y `npm test` siguen sin ejecutarse en este entorno. No hay una ejecución de CI confirmada para estos commits.
+
+
+## Exclusión de replay entre pestañas
+
+- El replay ahora adquiere `navigator.locks` cuando está disponible, usando un lock exclusivo por proyecto que coordina tanto replays completos como parciales.
+- Si el lock ya está ocupado, devuelve `consumer-already-running` y no ejecuta handlers.
+- Si el coordinador Web Locks falla, devuelve `consumer-lock-failed` y no cae silenciosamente en un replay sin exclusión.
+- En runtimes sin Web Locks se mantiene solo la exclusión local ya existente; no se promete coordinación cross-tab ni entre dispositivos.
+- Se añadió el adaptador `NarrativeSyncReplayLockManager` para poder probar la política de exclusión sin depender del navegador.
+- Pruebas nuevas cubren lock ocupado, error de adquisición y callback ejecutado mientras el lock permanece retenido.
+
+**Límite de entrega:** el protocolo continúa siendo al menos una vez. Web Locks impide dos replays cooperantes simultáneos en el mismo origen/proyecto, pero no vuelve atómica una mutación de dominio externa con el acuse IndexedDB. Los handlers deben seguir siendo idempotentes por `operationId`.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado en este entorno; no se declara aprobada la compilación ni la suite.

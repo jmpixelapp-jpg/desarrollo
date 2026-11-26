@@ -192,10 +192,13 @@ La ejecución CI observada para esa rama completó el type-check, pero falló la
 La primera implementación ya no se limita a tema/premisa/conflicto declarados. Se amplió el descubrimiento de prosa natural para reconocer:
 - objetivos expresados mediante verbos como querer, desear, pretender, intentar y buscar;
 - motivaciones declaradas mediante “su motivación/razón es…” o construcciones “lo hace porque…”;
+- semillas creativas en expresiones como “me gustaría explorar…”, “sería interesante que…” e “imagina una historia…”;
+- temas planteados mediante “la trama/la historia gira en torno a…”;
+- objetivos y deseos expresados mediante “necesita…” y “sueña con…”;
 - dilemas expresados mediante elecciones entre alternativas;
 - modalidad lingüística: afirmada, negada, condicional o hipotética.
 
-La propiedad `polarity` describe la forma lingüística detectada; no certifica que el contenido sea verdad ni que sea canon. En particular, una negación no debe convertirse en un deseo afirmado y una hipótesis no debe convertirse en hecho. Los detectores siguen siendo conservadores y no resuelven por sí solos quién es el sujeto de cada intención ni si el deseo pertenece al autor o a un personaje. Esa atribución contextual corresponde a la Fase B.
+La propiedad `polarity` describe la forma lingüística detectada; no certifica que el contenido sea verdad ni que sea canon. En particular, una negación no debe convertirse en un deseo afirmado (la detección contempla negadores separados del verbo de intención), y una hipótesis no debe convertirse en hecho. Los detectores siguen siendo conservadores y no resuelven por sí solos quién es el sujeto de cada intención ni si el deseo pertenece al autor o a un personaje. Esa atribución contextual corresponde a la Fase B.
 
 Se añadieron pruebas para objetivos, motivaciones, dilemas, negación y modalidad hipotética. La suite anterior detectó un defecto real en el extractor de entidades: el pre-filtro de marcadores era sensible a mayúsculas y rechazaba encabezados como “Personaje Aná”; además, el prefijo opcional podía consumir la primera letra del nombre cuando se hacía insensible a mayúsculas. Se corrigieron ambos problemas manteniendo los límites de nombre sensibles a mayúsculas y aceptando variantes de capitalización únicamente en los marcadores. La prueba Unicode existente cubre el caso afectado. La validación completa de esta corrección y de los nuevos detectores sigue pendiente de una ejecución CI verde.
 

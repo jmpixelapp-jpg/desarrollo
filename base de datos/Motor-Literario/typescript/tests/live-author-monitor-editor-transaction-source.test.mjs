@@ -556,3 +556,26 @@ test("exige resincronización si el mismo ID y secuencia reaparecen con otro del
   f.stop();
   f.source.dispose();
 });
+
+
+test("un duplicado malformado no escapa al callback nativo ni interrumpe el editor", () => {
+  const f = fixture();
+  const accepted = f.editor.apply("edit", "tx-malformed-replay", {
+    start: 3, end: 3, replacement: "x"
+  });
+  assert.doesNotThrow(() => f.editor.publish({
+    transactionId: accepted.transactionId,
+    kind: accepted.kind,
+    change: {
+      ...accepted.change,
+      replacement: 42
+    }
+  }));
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "invalid-change-range");
+  assert.equal(f.editor.listeners.size, 0);
+  f.stop();
+  f.source.dispose();
+});

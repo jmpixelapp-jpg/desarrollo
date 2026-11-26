@@ -30,3 +30,7 @@ Si una misma forma nominal pertenece a más de una ficha de personaje, esa forma
 
 La ventana máxima de contexto sigue siendo de 180 unidades UTF-16. El presupuesto de exploración contabiliza la longitud de cada oración multiplicada por el número de nombres elegibles y por los patrones de transición inspeccionados. Se amplió la regresión para cubrir disparador posterior a ambos nombres, verbo antes de la segunda mención, orden inverso y colisión de nombres.
 
+
+## Reducción de asociaciones incidentales
+
+Cuando una oración menciona más de dos personajes, el extractor ya no genera todas las combinaciones posibles. Para cada disparador selecciona el par cuyo fragmento conjunto —dos menciones y disparador— ocupa la menor ventana textual, con desempate determinista por ID. Esto reduce falsos vínculos con personajes que solo aparecen como testigos o en una cláusula lateral. Sigue siendo una heurística de proximidad, no un análisis sintáctico; por ello los resultados permanecen como candidatos revisables.

@@ -606,3 +606,10 @@ Se documenta como evidencia válida del checkout `948408ae9e9519495dc8df97f48abc
 El único harness Chromium que importa exclusivamente `live-author-monitor-visibility.ts` se ejecuta aunque falle la compilación general. Así se obtiene evidencia real de `pagehide/pageshow`, `freeze/resume` y `visibilitychange` en navegador incluso durante una regresión de persistencia. El workflow instala Chromium después de la suite de unidad; el browser test aislado no abre IndexedDB ni carga el motor narrativo. Las integraciones browser que requieren persistencia/editor siguen detrás de `runtime-build == success`.
 
 El paso Chromium independiente debe considerarse validado solo cuando `Run isolated Page Lifecycle regression in Chromium` termine con `success`; la ejecución inicial queda registrada por separado.
+
+
+## 52. Estado de validación cruzada del HEAD actual
+
+La ejecución integral verde [45759321606](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759321606) aprobó los 17 diagnósticos, 161 tests aislados y 167 tests host/editor/browser; además, Chromium aprobó Page Lifecycle y las pruebas de dos pestañas/IndexedDB, y el benchmark de 100.000 commits dejó heap estable de 4,39 MiB y cero pendientes. Los SHA de núcleo, panel, workspace, visibility scheduler, entrypoint, suites de integración editor y workflow se compararon con `main` y son idénticos al checkout `e951f9a` usado por ese run.
+
+La validación general posterior del HEAD actual falla por una aserción de `tests/core.test.mjs:2163` que aún espera el esquema inicial anterior a los dos almacenes DB27; después de esa primera falla el runner cancela 235 tests. Esto no es un error del monitor y no se parchea desde este módulo. La prueba aislada de Page Lifecycle también pasó de manera independiente en el run 45758203803, pese a que aquel checkout sí tenía el runtime general bloqueado.

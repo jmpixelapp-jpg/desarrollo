@@ -1,6 +1,7 @@
 import {
   replayPendingNarrativeSyncOperations,
   inspectNarrativeSyncJournalIntegrity,
+  planNarrativeSyncJournalCursorRecovery,
   type IndexedDbNarrativeSyncJournal,
   type NarrativeSyncJournalIntegrityReport,
   type NarrativeSyncReplayResult,
@@ -104,7 +105,6 @@ export function createRecoveryFirstNarrativeSyncConsumer(
         journalIntegrity: await inspectNarrativeSyncJournalIntegrity(journal, projectId)
       };
     }
-    const { planNarrativeSyncJournalCursorRecovery } = await import("./narrative-sync-journal");
     const cursorPlan = await planNarrativeSyncJournalCursorRecovery(journal, projectId);
     const cursorApplications: NarrativeSyncCursorRecoveryApplyResult[] = [];
     if (cursorRecoveryApproval) {

@@ -1604,3 +1604,16 @@ La suite general del motor se valida por separado; este resultado certifica la l
 **Validación CI dedicada:** [Live Author Monitor — run 45765001413](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001413), checkout `01b7eb3927a920cea809cc5cd7949a2ab6c4e9bf`, terminó `success`. La regresión `IndexedDB propaga QuotaExceededError del request y aborta sin reemplazar el checkpoint anterior` pasó como test 114. Type-check estricto, bundle aislado, diagnósticos 17/17, auditoría MLDB/almacenamiento, runtime build y monitor/panel/workspace/adaptadores **167/167** aprobados; Page Lifecycle Chromium 1/1; integración host/editor/browser **175/175**. El benchmark procesó 100.000 commits en **649,99 ms** (~153.848 commits/s), heap de 4,39 MiB a mitad y al final, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
 
 La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001099) terminó 950/951 por el mismo fallo aislado de extracción de marcas combinantes en `tests/narrative-unicode-boundaries.test.mjs:107`. Type-check general aprobó. No se alteró el código Unicode paralelo.
+
+
+## 104. Recuperación tras abortar transacciones y cerrar conexiones externamente (26 de noviembre de 2026)
+
+**Objetivo:** verificar el comportamiento después de validar el lease y comenzar la escritura, cuando el navegador aborta la transacción o cierra la conexión IndexedDB fuera del ciclo normal del almacén.
+
+**Regresión A — aborto antes del commit:** la prueba encola el `put` y aborta la transacción antes de que complete. La operación debe rechazar, el checkpoint durable previo debe conservarse y una escritura posterior debe funcionar en la misma instancia.
+
+**Regresión B — cierre externo:** se cierra una conexión obtenida del almacén y se despacha el evento `close` para representar el aviso anormal del navegador. El listener `IDBDatabase.onclose` debe invalidar la promesa de conexión cacheada; las lecturas posteriores deben abrir otra conexión, recuperar el checkpoint y reutilizar la nueva conexión.
+
+**Alcance:** ambas pruebas usan `fake-indexeddb` para controlar de forma determinista abortos/eventos. No sustituyen las pruebas de crash real de proceso o pérdida física del perfil en Chromium/OS.
+
+**Validación:** pendiente de GitHub Actions.

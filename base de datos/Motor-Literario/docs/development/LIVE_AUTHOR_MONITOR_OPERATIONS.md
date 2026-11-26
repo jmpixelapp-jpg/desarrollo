@@ -585,3 +585,10 @@ La inicialización es transaccional respecto de los listeners: si el registro pa
 La lane de Live Author Monitor aprobó el type-check estricto, build aislado, 17/17 pruebas de recuperación y 69/69 pruebas combinadas. Las ocho pruebas dedicadas a visibilidad/Page Lifecycle cubren `visibilitychange`, `pagehide/pageshow`, `freeze/resume`, ticks obsoletos, transiciones síncronas durante el montaje, rollback por alta de listeners o scheduler defectuoso, limpieza parcial, modo sin Page Visibility y desmontaje idempotente.
 
 El benchmark midió 100.000 commits en 660,83 ms (~151.325 commits/s); el heap tras GC quedó en 4,27 MiB a mitad y 4,26 MiB al final, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes. La ejecución global sigue roja por la auditoría IndexedDB y el error de compilación de la ruta de persistencia compartida; las pruebas aisladas del monitor sí pasaron.
+
+
+## 49. Integración del editor validada sin el runtime narrativo completo
+
+Las suites de los adaptadores del editor se ejecutan desde el bundle aislado del monitor, no desde el bundle principal del motor. El entrypoint de pruebas exporta ahora el binding de cambios, la fuente transaccional nativa, su bridge y su integración, la integración del panel de pestaña activa y las fuentes/integración del textarea. TypeScript estricto comprueba sus dependencias transitivas, y Vite genera el bundle reducido antes de ejecutar las pruebas.
+
+La evidencia del run 45758057459 es 161/161 pruebas y type-check estricto aprobados. Esto valida contratos y comportamiento determinista de los adaptadores con editores fake que emiten eventos nativos controlados; no sustituye aún las pruebas de navegador con IndexedDB real ni demuestra compatibilidad con una implementación externa concreta de editor. Las integraciones browser/host siguen condicionadas a que el bundle completo y la auditoría de persistencia pasen.

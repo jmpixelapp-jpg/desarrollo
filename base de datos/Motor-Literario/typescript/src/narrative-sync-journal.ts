@@ -63,7 +63,7 @@ export class IndexedDbNarrativeSyncJournal {
   constructor(options: NarrativeSyncJournalOptions = {}) {
     this.databaseName = options.databaseName ?? "motor-literario-sync-journal";
     if (!this.databaseName.trim()) throw new TypeError("El nombre de la base de sincronización es obligatorio.");
-    this.canonicalizationLimits = options.canonicalizationLimits ?? {};
+    this.canonicalizationLimits = Object.freeze({ ...(options.canonicalizationLimits ?? {}) });
     // Valida los límites al construir el diario, no durante la primera recepción.
     canonicalizeNarrativeSyncPayload(null, this.canonicalizationLimits);
   }

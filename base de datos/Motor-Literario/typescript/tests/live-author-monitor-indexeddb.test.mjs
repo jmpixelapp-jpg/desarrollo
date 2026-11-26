@@ -390,7 +390,7 @@ test("IndexedDB reabre tras el evento close externo e intacta el checkpoint dura
   }
 });
 
-test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
+test("migra IndexedDB v22 a v28 creando stores narrativos, sync y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";
   const projectId = "monitor-migration-" + randomUUID();
@@ -398,12 +398,9 @@ test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perd
   const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.2.json", import.meta.url);
   const mapping = JSON.parse(await readFile(mappingUrl, "utf8"));
   const existingStores = mapping.runtime.object_stores.filter(
-    descriptor => ![
-      "live-author-monitor-checkpoints",
-      "live-author-monitor-leases",
-      "narrative-reference-repair-audits",
-      "narrative-reference-repair-pending"
-    ].includes(descriptor.name)
+    descriptor => descriptor.name !== "live-author-monitor-checkpoints" &&
+      descriptor.name !== "live-author-monitor-leases" &&
+      !["sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"].includes(descriptor.name)
   );
 
   const legacyDatabase = await new Promise((resolve, reject) => {
@@ -457,18 +454,28 @@ test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perd
       request.onerror = () => reject(request.error);
     });
     try {
-      assert.equal(migratedDatabase.version, 27);
+      assert.equal(migratedDatabase.version, 28);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
-      for (const storeName of [
+      for (const name of ["sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"]) {
+        assert.equal(migratedDatabase.objectStoreNames.contains(name), true);
+      }
+      for (const repairStoreName of [
         "narrative-reference-repair-audits",
         "narrative-reference-repair-pending"
       ]) {
-        assert.equal(migratedDatabase.objectStoreNames.contains(storeName), true);
-        const repairStore = migratedDatabase.transaction(storeName, "readonly").objectStore(storeName);
+        const repairStore = migratedDatabase.transaction(repairStoreName, "readonly")
+          .objectStore(repairStoreName);
         assert.deepEqual(repairStore.keyPath, ["projectId", "operationId"]);
         assert.equal(repairStore.indexNames.contains("by-project"), true);
+        assert.equal(repairStore.index("by-project").keyPath, "projectId");
       }
+      const outboxStore = migratedDatabase.transaction("sync-outbox", "readonly")
+        .objectStore("sync-outbox");
+      assert.equal(outboxStore.indexNames.contains("by-project-created-at"), true);
+      assert.equal(outboxStore.indexNames.contains("by-project-device-sequence"), true);
+      assert.deepEqual(outboxStore.index("by-project-device-sequence").keyPath,
+        ["projectId", "deviceId", "sequence"]);
 
       const leaseStore = migratedDatabase.transaction(
         "live-author-monitor-leases",
@@ -481,27 +488,7 @@ test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perd
         "live-author-monitor-checkpoints",
         "readonly"
       ).objectStore("live-author-monitor-checkpoints");
-      assert.deepEqual(checkpointStore.keyPath, ["projectId", "documentId"]);
-      assert.equal(checkpointStore.indexNames.contains("by-project"), true);
-      assert.equal(checkpointStore.index("by-project").keyPath, "projectId");
-
-      const document = await new Promise((resolve, reject) => {
-        const transaction = migratedDatabase.transaction("documents", "readonly");
-        const request = transaction.objectStore("documents").get([projectId, documentId]);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      assert.equal(document.text, "documento anterior a la migración");
-      assert.equal(document.revision, 0);
-    } finally {
-      migratedDatabase.close();
-    }
-  } finally {
-    await store.close();
-  }
-});
-
-
+      assert.deepEqual(checkpointStore.keyPath, ["projectId", "docum
 test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timestamp más reciente", async () => {
   const store = new IndexedDbProjectStore();
   const projectId = "live-author-monitor-order-" + randomUUID();

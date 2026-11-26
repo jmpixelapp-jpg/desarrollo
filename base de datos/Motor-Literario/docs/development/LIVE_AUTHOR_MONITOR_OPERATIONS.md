@@ -773,8 +773,6 @@ El fencing se valida en el punto de escritura durable, no solo al iniciar el tra
 La regresión pausa una escritura del propietario A, deja expirar su lease, permite que el observador B adquiera el siguiente token y confirme su checkpoint, y luego reanuda A. La escritura de A debe rechazarse y nunca sustituir el checkpoint de B. Este escenario verifica el orden adverso en la capa del anfitrión; las transacciones IndexedDB reales conservan adicionalmente el bloqueo serializable de su transacción readwrite.
 
 
-
-**Validación CI:** [run 45766086566](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766086566) aprobó la transferencia con escritura antigua en vuelo como test 106 y completó 179/179 integraciones host/editor/browser.
 ## 68. Aislamiento del fencing por documento
 
 Los leases se direccionan por la clave compuesta `(projectId, documentId)`. En un proyecto con varios capítulos abiertos, el cambio de propietario de A no debe cambiar el fencing token de B. El lease de B puede renovarse y su checkpoint puede persistirse mientras A pertenece a otra pestaña.

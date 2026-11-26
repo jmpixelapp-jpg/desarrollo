@@ -480,3 +480,79 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
   }
 });
 
+test("la página manual de IME exporta metadatos sin incluir el manuscrito ni InputEvent.data", {
+  timeout: 120_000
+}, async () => {
+  const port = await reservePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const harnessUrl = origin + "/tests/browser/live-author-monitor-ime-manual.html";
+  const viteCli = resolve(process.cwd(), "node_modules/vite/bin/vite.js");
+  const server = spawn(
+    process.execPath,
+    [viteCli, "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
+    { cwd: process.cwd(), stdio: "ignore" }
+  );
+  let browser;
+
+  try {
+    await waitForVite(harnessUrl, server);
+    browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+    const page = await browser.newPage();
+    try {
+      await page.goto(harnessUrl);
+      const textarea = page.locator("#editor");
+      const privateSentinel = "PRIVATE_MANUSCRIPT_EXPORT_SENTINEL";
+      await textarea.fill(privateSentinel);
+      await page.getByRole("button", { name: "Iniciar captura" }).click();
+      await textarea.evaluate(element => element.setSelectionRange(
+        element.value.length, element.value.length
+      ));
+      await page.keyboard.type("Z");
+      await page.waitForFunction(() =>
+        document.querySelector("#metrics")?.textContent?.includes('"typingDeltas": 1')
+      );
+
+      const downloadPromise = page.waitForEvent("download");
+      await page.getByRole("button", { name: "Exportar traza sin contenido" }).click();
+      const download = await downloadPromise;
+      assert.equal(download.suggestedFilename(), "live-author-monitor-ime-trace.json");
+      const stream = await download.createReadStream();
+      assert.ok(stream, "el informe debe estar disponible para descarga");
+      const chunks = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      const serialized = Buffer.concat(chunks).toString("utf8");
+      const report = JSON.parse(serialized);
+
+      assert.equal(report.privacy.manuscriptContentIncluded, false);
+      assert.equal(report.privacy.inputEventDataIncluded, false);
+      assert.equal(report.privacy.keystrokesIncluded, false);
+      assert.equal(report.privacy.localOnlyDownload, true);
+      assert.equal(report.baselineLengthUtf16, privateSentinel.length);
+      assert.equal(report.finalLengthUtf16, privateSentinel.length + 1);
+      assert.ok(report.events.some(event =>
+        event.type === "beforeinput" && event.dataLengthUtf16 === 1
+      ));
+      assert.ok(report.events.some(event =>
+        event.type === "input" && event.dataLengthUtf16 === 1
+      ));
+      assert.ok(report.deltas.some(delta =>
+        delta.activityKind === "typing" && delta.replacementLengthUtf16 === 1
+      ));
+      assert.equal(serialized.includes(privateSentinel), false,
+        "el texto inicial privado nunca debe aparecer en el archivo exportado");
+      assert.equal(serialized.includes('"data":"Z"'), false,
+        "InputEvent.data debe exportarse solo como longitud, nunca como contenido");
+    } finally {
+      await page.close();
+    }
+  } finally {
+    if (browser) await browser.close();
+    server.kill("SIGTERM");
+    await Promise.race([
+      new Promise(resolveExit => server.once("exit", resolveExit)),
+      delay(3_000)
+    ]);
+    if (server.exitCode === null) server.kill("SIGKILL");
+  }
+});
+

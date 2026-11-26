@@ -709,3 +709,22 @@ test("HostEngineApi encola automáticamente cada generación en el outbox usando
     await store.close();
   }
 });
+
+
+test("exige writerId estable al configurar el outbox automático", async () => {
+  const store = new IndexedDbProjectStore();
+  const outbox = new IndexedDbNarrativeSyncOutbox({
+    databaseName: "host-continuity-outbox-invalid-" + projectId()
+  });
+  const api = new HostEngineApi({ store, continuityOutbox: outbox });
+  try {
+    assert.throws(() => api.initializeProject({
+      projectId: projectId(),
+      projectName: "Outbox sin escritor"
+    }), /writerId estable/u);
+  } finally {
+    api.dispose();
+    outbox.close();
+    await store.close();
+  }
+});

@@ -1534,7 +1534,7 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 
 **Hallazgo:** el heartbeat ya protegía sus respuestas tardías con una generación y comprobaba si seguía siendo titular. Sin embargo, la ruta compartida `acquireOrRenewLiveAuthorMonitorLease()`, utilizada también por guardados automáticos y cierres seguros, podía recibir una renovación después de que otro flujo hubiera liberado el lease. Al no comprobar la generación, podía volver a insertar en memoria el lease anterior y reactivar el heartbeat después del cierre.
 
-**Corrección:** cada operación genérica de adquisición/renovación obtiene una generación al comenzar. Antes de publicar el resultado o informar un error, verifica que la generación siga vigente y que no haya comenzado una liberación. Una respuesta invalidada devuelve `undefined` y no restaura la titularidad local.
+**Corrección:** cada operación genérica captura la generación de ciclo de vida vigente (e inicializa una si aún no existe). Las renovaciones legítimas concurrentes comparten esa misma generación; una liberación o pérdida de titularidad la cambia. Antes de publicar el resultado o informar un error, la operación comprueba que la generación siga vigente y que no haya comenzado una liberación. Una respuesta invalidada devuelve `undefined` y no restaura la titularidad local.
 
 **Regresión:** un almacén determinista confirma la renovación, pero demora la entrega de su respuesta. Mientras tanto, el cierre seguro completa el checkpoint y libera el lease. Al desbloquear la respuesta antigua, se exige que no se repongan el lease local ni el heartbeat y que el registro persistido permanezca vencido.
 

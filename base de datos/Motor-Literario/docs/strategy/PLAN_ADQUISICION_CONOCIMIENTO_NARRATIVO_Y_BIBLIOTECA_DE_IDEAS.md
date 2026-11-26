@@ -281,3 +281,6 @@ El extractor de acontecimientos ahora reconoce referencias temporales conservado
 Cada referencia conserva el texto original, su precisión y un valor ordinal determinista (días UTC desde epoch para calendario; entero explícito para día interno). No se comparan escalas distintas como si fueran equivalentes. Si una oración contiene más de una referencia temporal distinta, el extractor deja el campo vacío en lugar de escoger una arbitrariamente. Una fecha ausente, inválida o ambigua no se completa por contexto.
 
 Se añadieron pruebas para año bisiesto, fecha inválida, año aislado, día interno y referencias múltiples. Estas pruebas están escritas pero todavía requieren ejecución en CI; no se declara validación hasta que el workflow complete la suite.
+
+
+La lectura temporal también reconoce fechas escritas en español (por ejemplo, `12 de marzo de 1842`), incluyendo las variantes `septiembre` y `setiembre`. Se valida el día contra el calendario antes de producir el ordinal; una fecha escrita imposible no se degrada a un año aislado. Las pruebas cubren fechas válidas, variantes regionales e imposibles.

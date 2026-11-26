@@ -50,6 +50,10 @@ export interface NarrativeCharacterStateDiscoveryInput {
 }
 
 export const MAX_NARRATIVE_CHARACTER_STATE_CANDIDATES = 200;
+export const MAX_NARRATIVE_CHARACTER_STATE_ENTITIES = 5_000;
+export const MAX_NARRATIVE_CHARACTER_STATE_ALIASES_PER_ENTITY = 100;
+export const MAX_NARRATIVE_CHARACTER_STATE_NAME_LENGTH = 256;
+export const MAX_NARRATIVE_CHARACTER_STATE_SCAN_UNITS = 25_000_000;
 
 const STATE_EPISTEMIC_SIGNALS: readonly {
   readonly frame: Exclude<NarrativeCharacterStateCandidate["epistemicFrame"], "narrator-asserted">;
@@ -199,6 +203,7 @@ function validate(input: NarrativeCharacterStateDiscoveryInput): void {
       typeof input.text !== "string" ||
       input.text.length > 2_000_000 ||
       !Array.isArray(input.entities) ||
+      input.entities.length > MAX_NARRATIVE_CHARACTER_STATE_ENTITIES ||
       (input.baseOffset !== undefined &&
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0))) {
     throw new Error("Contexto inválido para descubrir estados de personajes.");
@@ -209,7 +214,11 @@ function validate(input: NarrativeCharacterStateDiscoveryInput): void {
         typeof entity.id !== "string" || !entity.id.trim() || ids.has(entity.id) ||
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
         !Array.isArray(entity.aliases) ||
-        entity.aliases.some((alias: unknown) => typeof alias !== "string")) {
+        entity.aliases.length > MAX_NARRATIVE_CHARACTER_STATE_ALIASES_PER_ENTITY ||
+        entity.canonicalName.length > MAX_NARRATIVE_CHARACTER_STATE_NAME_LENGTH ||
+        entity.aliases.some((alias: unknown) =>
+          typeof alias !== "string" || !alias.trim() ||
+          alias.length > MAX_NARRATIVE_CHARACTER_STATE_NAME_LENGTH)) {
       throw new Error("La lista de entidades contiene identidades inválidas o ajenas al proyecto.");
     }
     ids.add(entity.id);
@@ -231,10 +240,18 @@ export function discoverNarrativeCharacterStateCandidates(
       nameOwners.set(normalized, owners);
     }
   }
+  const spans = sentenceSpans(input.text);
+  const distinctNames = characters.reduce((total, entity) =>
+    total + new Set([entity.canonicalName, ...entity.aliases]).size, 0);
+  const scanUnits = spans.reduce((total, span) =>
+    total + (span.end - span.start) * distinctNames, 0);
+  if (!Number.isSafeInteger(scanUnits) || scanUnits > MAX_NARRATIVE_CHARACTER_STATE_SCAN_UNITS) {
+    throw new Error("La búsqueda de estados supera el presupuesto de análisis; divide el manuscrito por bloques o capítulos.");
+  }
   const results: NarrativeCharacterStateCandidate[] = [];
   const seen = new Set<string>();
 
-  for (const span of sentenceSpans(input.text)) {
+  for (const span of spans) {
     const sentence = input.text.slice(span.start, span.end);
     for (const entity of characters) {
       const names = [...new Set([entity.canonicalName, ...entity.aliases]

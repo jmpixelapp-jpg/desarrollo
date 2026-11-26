@@ -491,3 +491,38 @@ test("acepta inserción legítima cuando hay caracteres repetidos alrededor del 
   f.stop();
   f.source.dispose();
 });
+
+test("no clasifica como corrección una sustitución de selección mediante insertText", () => {
+  const f = fixture("abcd", 0, 0);
+
+  // El autor selecciona texto y escribe encima: el navegador informa insertText.
+  f.element.edit({
+    start: 1,
+    end: 3,
+    nextValue: "aXd",
+    inputType: "insertText"
+  });
+  // Solo el inputType específico insertReplacementText activa la categoría correction.
+  f.element.edit({
+    start: 1,
+    end: 2,
+    nextValue: "aYd",
+    inputType: "insertReplacementText"
+  });
+  // Los mecanismos de inserción no reconocidos no se elevan a escritura manual.
+  f.element.edit({
+    start: 1,
+    end: 2,
+    nextValue: "aZd",
+    inputType: "insertFromDictation"
+  });
+
+  assert.deepEqual(f.changes.map(change => change.activityKind), [
+    "typing",
+    "correction",
+    "other"
+  ]);
+  assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});

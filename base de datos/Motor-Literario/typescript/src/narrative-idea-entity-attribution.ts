@@ -53,7 +53,9 @@ function validate(input: NarrativeIdeaEntityAttributionInput): void {
     if (!entity || entity.projectId !== input.projectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
         entityIds.has(entity.id) || typeof entity.canonicalName !== "string" ||
-        !Array.isArray(entity.aliases) || entity.aliases.length > 100) {
+        !entity.canonicalName.trim() || entity.canonicalName.length > MAX_NAME_UNITS ||
+        !Array.isArray(entity.aliases) || entity.aliases.length > 100 ||
+        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim() || alias.length > MAX_NAME_UNITS)) {
       throw new Error("El catálogo contiene entidades inválidas o duplicadas.");
     }
     entityIds.add(entity.id);
@@ -62,10 +64,12 @@ function validate(input: NarrativeIdeaEntityAttributionInput): void {
   for (const idea of input.ideas) {
     if (!idea || idea.projectId !== input.projectId ||
         typeof idea.id !== "string" || !idea.id.trim() ||
-        ideaIds.has(idea.id) || typeof idea.documentId !== "string" ||
+        ideaIds.has(idea.id) || typeof idea.documentId !== "string" || !idea.documentId.trim() ||
         !Number.isSafeInteger(idea.revision) || idea.revision < 0 ||
-        !idea.evidence || typeof idea.evidence.excerpt !== "string" ||
+        !idea.evidence || idea.evidence.documentId !== idea.documentId ||
+        idea.evidence.revision !== idea.revision || typeof idea.evidence.excerpt !== "string" ||
         idea.evidence.excerpt.length > MAX_EVIDENCE_UNITS ||
+        !containsTextWithWhitespace(idea.evidence.excerpt, idea.text) ||
         !Number.isSafeInteger(idea.evidence.start) ||
         !Number.isSafeInteger(idea.evidence.end) ||
         idea.evidence.start < 0 || idea.evidence.end <= idea.evidence.start ||

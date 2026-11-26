@@ -24,7 +24,8 @@ test("el diagnóstico de IndexedDB cuenta registros sin mutar el manuscrito", as
   const after = await store.loadDocument(projectId, documentId);
 
   assert.equal(report.databaseName, "motor-literario-local");
-  assert.equal(report.databaseVersion, 24);
+  assert.equal(report.databaseVersion, 25);
+  assert.equal(report.recordCounts["sync-outbox"], 0);
   assert.equal(report.recordCounts.documents, 1);
   assert.equal(report.recordCounts.changes, 0);
   assert.deepEqual(after, before);

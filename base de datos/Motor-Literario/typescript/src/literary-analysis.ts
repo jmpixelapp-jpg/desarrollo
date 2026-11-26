@@ -5653,7 +5653,9 @@ function buildCharacterAttributeEvolution(
     const sceneSnapshots = scenes.flatMap(scene => {
       const entries = group.byScene.get(scene.sceneIndex);
       if (!entries?.length) return [];
-      const ordered = [...entries].sort((a,b) =>
+      // El arreglo pertenece al grupo local y ya no se reutiliza: ordenar
+      // in situ evita duplicar todas las aserciones para exponer veinte muestras.
+      const ordered = entries.sort((a,b) =>
         a.evidence.start-b.evidence.start || a.id.localeCompare(b.id,"en")
       );
       const values = new Map<string,string | number>();
@@ -5716,7 +5718,9 @@ function buildCharacterAttributeEvolution(
       const values = new Map<string,string | number>();
       const rawReferences = new Set<string>();
       const documents = new Set<string>();
-      const ordered = [...entries].sort((a,b) =>
+      // entries es un bucket local de esta cronología; ordenar in situ
+      // evita mantener una segunda copia completa de las aserciones.
+      const ordered = entries.sort((a,b) =>
         a.evidence.documentId.localeCompare(b.evidence.documentId,"en") ||
         a.evidence.revision-b.evidence.revision ||
         a.evidence.start-b.evidence.start ||

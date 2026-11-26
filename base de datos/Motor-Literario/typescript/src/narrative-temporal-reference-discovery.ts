@@ -101,7 +101,7 @@ function discoverMatches(text: string): readonly Match[] {
     }
   };
 
-  add(/(?<![\p{L}\p{M}\p{N}_])(?<year>1[0-9]{3}|20[0-9]{2})-(?<month>0?[1-9]|1[0-2])-(?<day>0?[1-9]|[12][0-9]|3[01])(?![\p{L}\p{M}\p{N}_])/gu, match => {
+  add(/(?<![\p{L}\p{M}\p{N}_])(?<year>[0-9]{4})-(?<month>0?[1-9]|1[0-2])-(?<day>0?[1-9]|[12][0-9]|3[01])(?![\p{L}\p{M}\p{N}_])/gu, match => {
     const year = Number(match.groups!.year);
     const month = Number(match.groups!.month);
     const day = Number(match.groups!.day);
@@ -148,8 +148,11 @@ function discoverMatches(text: string): readonly Match[] {
     { expression: /\b(?:al\s+amanecer|al\s+atardecer|al\s+anochecer|al\s+mediod[ií]a|a\s+medianoche|por\s+la\s+ma[nñ]ana|por\s+la\s+tarde|por\s+la\s+noche|esa\s+noche|aquella\s+ma[nñ]ana)\b/giu, relation: "time-of-day", kind: "day-period", priority: 70 }
   ];
   for (const item of relative) {
-    add(item.expression, () => [{
-      kind: item.kind, relation: item.relation,
+    add(item.expression, match => [{
+      kind: item.kind,
+      relation: item.kind === "relative-duration"
+        ? /antes$/iu.test(match[0]) ? "before" : "after"
+        : item.relation,
       anchorRequired: true, absoluteResolution: "unresolved-relative", priority: item.priority
     }]);
   }

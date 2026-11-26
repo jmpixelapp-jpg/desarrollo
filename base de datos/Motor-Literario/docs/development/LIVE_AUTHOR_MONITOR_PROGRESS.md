@@ -1525,4 +1525,6 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 
 **Regresión:** se crea un checkpoint válido para un documento de cinco caracteres sin ediciones; se altera `deletedCharacters` a seis. La restauración debe rechazarlo sin crear una sesión parcial.
 
-**Validación:** pendiente de GitHub Actions para el commit de esta sección.
+**Validación CI dedicada:** [Live Author Monitor — run 45762924927](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924927), checkout exacto `fcb4ebca52dd43105f170d7b1621fd66da13c76e`, terminó `success`. Type-check estricto, bundle aislado, 17/17 diagnósticos, auditoría MLDB/almacenamiento y runtime build aprobados; suite monitor/panel/workspace/adaptadores **167/167**, incluida la nueva regresión (test 164); Page Lifecycle Chromium 1/1; host/editor/browser **168/168**. El benchmark procesó 100.000 commits en **502,47 ms** (~199.016 commits/s), heap 4,39 MiB a mitad y al final, crecimiento medido 0 MiB, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+**Estado separado de la suite general:** [Motor Literario TypeScript — run 45762924925](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924925), sobre el mismo commit, terminó con 943/944. El único fallo fue `tests/narrative-unicode-boundaries.test.mjs:107` (test de extracción de entidades y marcas combinantes), fuera del módulo del monitor y perteneciente a cambios paralelos. Type-check aprobó. No se modificaron esos archivos ni se atribuye ese fallo al monitor.

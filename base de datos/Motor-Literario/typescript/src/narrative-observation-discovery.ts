@@ -218,50 +218,59 @@ function classifyEpistemicFrame(
   cue?: { start: number; end: number; excerpt: string };
   source?: { entityId: string; start: number; end: number; excerpt: string };
 } {
-  let selected: { frame: NarrativeObservationCandidate["epistemicFrame"]; start: number; end: number; excerpt: string } | undefined;
+  let selected: {
+    frame: NarrativeObservationCandidate["epistemicFrame"];
+    start: number;
+    end: number;
+    excerpt: string;
+  } | undefined;
+
   for (const signal of EPISTEMIC_FRAME_SIGNALS) {
     signal.expression.lastIndex = 0;
     for (const match of sentence.matchAll(signal.expression)) {
       if (match.index! >= actionStart) break;
-      const candidate = { frame: signal.frame, start: match.index!, end: match.index! + match[0].length, excerpt: match[0] };
+      const candidate = {
+        frame: signal.frame,
+        start: match.index!,
+        end: match.index! + match[0].length,
+        excerpt: match[0]
+      };
       if (!selected || candidate.start > selected.start) selected = candidate;
     }
   }
+
   if (!selected) return { frame: "narrator-asserted" };
-  if (selected.frame !== "reported-speech") return { frame: selected.frame, cue: selected };
+  if (selected.frame !== "reported-speech") {
+    return { frame: selected.frame, cue: selected };
+  }
 
   const possibleSources = characters.flatMap(entity =>
     [entity.canonicalName, ...entity.aliases].flatMap(name => {
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  sentence: string,
-  actionStart: number
-): { frame: NarrativeObservationCandidate["epistemicFrame"]; cue?: { start: number; end: number; excerpt: string } } {
-  let selected: { frame: NarrativeObservationCandidate["epistemicFrame"]; start: number; end: number; excerpt: string } | undefined;
-  for (const signal of EPISTEMIC_FRAME_SIGNALS) {
-    signal.expression.lastIndex = 0;
-    for (const match of sentence.matchAll(signal.expression)) {
-      if (match.index! >= actionStart) break;
-      const candidate = { frame: signal.frame, start: match.index!, end: match.index! + match[0].length, excerpt: match[0] };
-      if (!selected || candidate.start > selected.start) selected = candidate;
-    }
-  }
-  return selected ? { frame: selected.frame, cue: selected } : { frame: "narrator-asserted" };
-}");
-      const expression = new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
-        "(?![\\p{L}\\p{M}\\p{N}_])", "giu");
+      const escaped = name.replace(/[.*+?^$()|[\]{}\\]/gu, "\\$&");
+      const expression = new RegExp(
+        "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
+        "(?![\\p{L}\\p{M}\\p{N}_])",
+        "giu"
+      );
       return [...sentence.slice(0, selected!.start).matchAll(expression)].map(match => ({
-        entityId: entity.id, start: match.index!, end: match.index! + match[0].length,
+        entityId: entity.id,
+        start: match.index!,
+        end: match.index! + match[0].length,
         excerpt: match[0]
       }));
     })
   ).sort((a, b) => b.end - a.end || b.start - a.start);
+
   const nearest = possibleSources[0];
-  const equallyNear = nearest ? possibleSources.filter(item => item.end === nearest.end) : [];
+  const equallyNear = nearest
+    ? possibleSources.filter(item => item.end === nearest.end)
+    : [];
   return {
     frame: selected.frame,
     cue: selected,
     ...(nearest && equallyNear.every(item => item.entityId === nearest.entityId)
-      ? { source: nearest } : {})
+      ? { source: nearest }
+      : {})
   };
 }
 

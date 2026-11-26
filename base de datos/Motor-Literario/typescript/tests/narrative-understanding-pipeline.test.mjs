@@ -674,3 +674,28 @@ test("triangula conocimiento, objetivo y acción en el resultado narrativo princ
   assert.ok(result.characterIntents.some(intent=>intent.id===context.intentId));
   assert.ok(result.actions.some(action=>action.id===context.actionId));
 });
+
+test("integra la detección de cambio de conducta entre capítulos ordenados",()=>{
+  const previous={
+    id:"prior-action:mara:attack",projectId:"novel",actorEntityId:"mara",
+    action:"atacó",targetEntityId:"elian",polarity:"affirmed",reviewStatus:"candidate",
+    evidence:{
+      documentId:"chapter-before",revision:1,start:0,end:20,
+      excerpt:"Mara atacó a Elian."
+    }
+  };
+  const result=understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-after",revision:1,
+    text:"Mara ayudó a Elian.",entities,
+    priorActions:[previous],
+    orderedDocumentIds:["chapter-before","chapter-after"]
+  });
+  const shift=result.behaviorShifts.find(item=>
+    item.characterEntityId==="mara" && item.targetEntityId==="elian"
+  );
+  assert.ok(shift);
+  assert.equal(shift.shift,"hostile-to-supportive");
+  assert.equal(shift.chronology,"explicit-document-order");
+  assert.equal(shift.previousActionId,"prior-action:mara:attack");
+  assert.ok(result.actions.some(item=>item.id===shift.currentActionId));
+});

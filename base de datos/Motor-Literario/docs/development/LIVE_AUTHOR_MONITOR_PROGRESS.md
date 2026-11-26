@@ -1551,7 +1551,9 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 
 **Regresión:** se demora la respuesta de la primera renovación después de que el almacén la confirma; se completa una segunda renovación más reciente y luego se libera la respuesta antigua. El estado local debe conservar la expiración y actualización más nuevas.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [Live Author Monitor — run 45764124473](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764124473), checkout `63f7ac27ad9491be76a1448b3415a62f06b2ae18` (incluye la validación de IndexedDB `e66ba8ea` y la suite `6691fae7`), terminó `success`. Type-check estricto, bundle aislado, diagnósticos 17/17, auditoría MLDB/almacenamiento, runtime build y monitor/panel/workspace/adaptadores **167/167** aprobaron. Page Lifecycle Chromium, 1/1; integración host/editor/browser, **173/173**, con las tres nuevas regresiones aprobadas (tests 112, 115 y 116). El benchmark procesó 100.000 commits en **493,40 ms** (~202.677 commits/s), heap 4,39 MiB a mitad y final, crecimiento medido 0 MiB, 0,50 MiB retenidos y cero tickets pendientes.
+
+La suite general del motor se valida por separado; este resultado certifica la lane completa del monitor y su persistencia IndexedDB, no sustituye el estado global de todas las áreas del repositorio.
 
 
 ## 101. Integridad de muestras y clasificación al persistir checkpoints (26 de noviembre de 2026)

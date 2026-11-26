@@ -4064,6 +4064,9 @@ export class HostEngineApi {
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),
       projectWideNarrativeIdeaGraph: Boolean(this.store.loadIdeas && this.store.loadEntities),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
+      personalIdeaLibraryKeysetPagination: Boolean(
+        this.store.loadPersonalIdeasPage && this.store.loadPersonalIdeasByKeys
+      ),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
       ),

@@ -520,6 +520,9 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           element.value.length, element.value.length
         ));
         await page.keyboard.type("X");
+        await page.waitForFunction(() =>
+          window.__blurRecoveryHarness?.source.getState().pendingInput === false
+        , null, { timeout: 5_000 });
         const beforeBlur = await page.evaluate(() => ({
           observed: [...window.__blurRecoveryHarness.observed],
           inputEvents: window.__blurRecoveryHarness.inputEvents,
@@ -541,7 +544,7 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
           "el listener posterior debe desenfocar el textarea dentro de la misma propagación");
         assert.equal(beforeBlur.value, "abc");
         assert.equal(beforeBlur.pendingInput, false,
-          "la microtarea debe liberar la pareja que un listener posterior canceló");
+          "la tarea de respaldo debe liberar la pareja que un listener posterior canceló");
         assert.equal(beforeBlur.state.needsResync, false,
           "la cancelación final no debe suspender una fuente que sigue sincronizada");
 

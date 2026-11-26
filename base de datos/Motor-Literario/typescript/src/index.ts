@@ -8,6 +8,7 @@ export * from "./narrative-knowledge";
 export * from "./narrative-idea-discovery";
 export * from "./narrative-observation-discovery";
 export * from "./narrative-object-state-discovery";
+export * from "./narrative-character-state-discovery";
 export * from "./narrative-object-trajectory";
 export * from "./narrative-book-ingestion";
 export * from "./narrative-extraction-audit";

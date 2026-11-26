@@ -269,6 +269,54 @@ function makeAssertion({
   };
 }
 
+test("ubica afirmaciones de atributo entre muchas escenas sin recorrer el catálogo completo", () => {
+  const sceneCount = 1_200;
+  const lines = [];
+  const knownAssertions = [];
+  for (let index = 0; index < sceneCount; index++) {
+    lines.push("Escena " + (index + 1));
+    const phrase = "Ana tenía " + index + " años.";
+    lines.push(phrase);
+    knownAssertions.push(makeAssertion({
+      id: "age-" + index,
+      value: index,
+      text: phrase,
+      phrase,
+      revision: 2
+    }));
+  }
+  const text = lines.join("\\n");
+  // makeAssertion usa offsets locales al texto; ajustar cada evidencia al rango global.
+  let cursor = 0;
+  for (let index = 0; index < sceneCount; index++) {
+    const phrase = "Ana tenía " + index + " años.";
+    const start = text.indexOf(phrase, cursor);
+    assert.notEqual(start, -1);
+    knownAssertions[index] = {
+      ...knownAssertions[index],
+      evidence: { ...knownAssertions[index].evidence, start, end: start + phrase.length }
+    };
+    cursor = start + phrase.length;
+  }
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 2,
+    text,
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownAssertions
+  });
+  const profile = result.characterAttributeEvolution.profiles.find(item => item.attribute === "age");
+
+  assert.ok(profile);
+  assert.equal(profile.assertionCount, sceneCount);
+  assert.equal(profile.sceneCount, sceneCount);
+  assert.equal(profile.scenes[0].values[0], 0);
+  assert.equal(profile.scenes.at(-1).values[0], sceneCount - 1);
+  assert.equal(result.characterAttributeEvolution.unmappedCurrentAssertionCount, 0);
+});
+
+
 test("compara cambios y permanencias de atributos únicos entre escenas", () => {
   const text = [
     "Escena 1",

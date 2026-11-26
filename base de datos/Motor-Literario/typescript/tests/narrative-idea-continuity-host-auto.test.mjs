@@ -266,3 +266,99 @@ test("reparte 200 candidatos entre más de 200 documentos y señala cobertura pa
     await store.close();
   }
 });
+
+
+test("si un capítulo avanza mientras se analiza, no confirma un índice de revisiones mezcladas", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  const originalText = "El tema central es la memoria compartida que une a dos ciudades.";
+  const revisedText = "El tema central es la culpa compartida que divide a dos ciudades.";
+  await store.saveDocument({
+    projectId: id,
+    documentId: "chapter-race",
+    text: originalText,
+    revision: 0,
+    sequence: 0,
+    updatedAt: 1
+  });
+  const api = new HostEngineApi({ store });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Reconciliación concurrente" });
+    await api.flushPendingChanges();
+    const before = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(before);
+
+    const originalLoadDocument = store.loadDocument.bind(store);
+    let injected = false;
+    store.loadDocument = async (projectId, documentId) => {
+      const snapshot = await originalLoadDocument(projectId, documentId);
+      if (!injected) {
+        injected = true;
+        await store.saveDocument({
+          ...snapshot,
+          text: revisedText,
+          revision: snapshot.revision + 1,
+          sequence: snapshot.sequence + 1,
+          updatedAt: 2
+        });
+      }
+      return snapshot;
+    };
+
+    await assert.rejects(
+      api.invalidateNarrativeKnowledgeFromExternalChange(),
+      /revisión avanzó|conjunto documental cambió/u
+    );
+    const afterRejectedRefresh = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.equal(afterRejectedRefresh.generation, before.generation);
+    assert.equal(afterRejectedRefresh.occurrences[0].text, "la memoria compartida que une a dos ciudades");
+
+    await api.invalidateNarrativeKnowledgeFromExternalChange();
+    const afterRetry = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.equal(afterRetry.sourceRevisions[0].revision, 1);
+    assert.equal(afterRetry.occurrences[0].text, "la culpa compartida que divide a dos ciudades");
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});
+
+test("un cambio externo que no modifica documentos reutiliza candidatos y no relee el manuscrito", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  await store.saveDocument({
+    projectId: id,
+    documentId: "chapter-stable",
+    text: "El tema central es la memoria compartida que une a dos ciudades.",
+    revision: 3,
+    sequence: 7,
+    updatedAt: 1
+  });
+  let documentReads = 0;
+  const originalLoadDocument = store.loadDocument.bind(store);
+  store.loadDocument = async (projectId, documentId) => {
+    documentReads++;
+    return originalLoadDocument(projectId, documentId);
+  };
+  const api = new HostEngineApi({ store });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Caché de candidatos" });
+    await api.flushPendingChanges();
+    const before = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(before);
+    const readsAfterInitialBuild = documentReads;
+    assert.equal(readsAfterInitialBuild, 1);
+
+    await api.invalidateNarrativeKnowledgeFromExternalChange();
+    const after = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(after);
+    assert.equal(documentReads, readsAfterInitialBuild);
+    assert.equal(after.generation, before.generation);
+    assert.equal(after.fingerprint, before.fingerprint);
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});

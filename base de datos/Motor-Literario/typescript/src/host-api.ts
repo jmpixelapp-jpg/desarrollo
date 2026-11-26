@@ -882,24 +882,7 @@ export class HostEngineApi {
       }
       const seenDocuments = new Set<string>();
       const candidatesByDocument = new Map<string, readonly NarrativeIdeaCandidate[]>();
-      const documentsNeedingDiscovery = metadata.filter(item => {
-        const cached = this.continuityCandidatesByDocument.get(item.documentId);
-        return !cached || cached.revision !== item.revision ||
-          cached.sequence !== item.sequence || cached.updatedAt !== item.updatedAt;
-      }).length;
-      // Presupuesto agregado: evita escanear 2 MB por cada uno de miles de
-      // capítulos en una sola reconciliación. Los límites se reparten de forma
-      // determinista entre los documentos que realmente necesitan relectura.
-      const perDocumentTextBudget = Math.max(
-        1,
-        Math.min(
-          MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
-          Math.floor(
-            MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS /
-            Math.max(1, documentsNeedingDiscovery)
-          )
-        )
-      );
+      const documentsToDiscover: typeof metadata[number][] = [];
       const sourceRevisions: Array<{
         documentId: string;
         revision: number;
@@ -908,6 +891,8 @@ export class HostEngineApi {
       const changedDocumentIds = new Set<string>();
       let anyDocumentTruncated = false;
 
+      // Primero valida el inventario completo y reutiliza cachés que coincidan
+      // en revisión, secuencia y updatedAt. Ningún cuerpo se lee en esta fase.
       for (const item of metadata) {
         if (!item || item.projectId !== project.projectId ||
             typeof item.documentId !== "string" || !item.documentId.trim() ||
@@ -930,46 +915,80 @@ export class HostEngineApi {
             cached.sequence === item.sequence && cached.updatedAt === item.updatedAt) {
           candidatesByDocument.set(item.documentId, cached.candidates);
           anyDocumentTruncated ||= cached.truncated;
-          continue;
+        } else {
+          changedDocumentIds.add(item.documentId);
+          documentsToDiscover.push(item);
         }
+      }
 
-        changedDocumentIds.add(item.documentId);
-        const document = await store.loadDocument(project.projectId, item.documentId);
-        if (!document || document.projectId !== project.projectId ||
-            document.documentId !== item.documentId || document.revision !== item.revision ||
-            typeof document.text !== "string") {
-          throw new Error(
-            "La revisión documental cambió durante la reconciliación; se conserva el índice anterior para reintentar."
-          );
-        }
+      // Presupuesto agregado: evita escanear 2 MB por cada uno de miles de
+      // capítulos en una sola reconciliación. Los límites se reparten de forma
+      // determinista entre los documentos que realmente necesitan relectura.
+      const perDocumentTextBudget = Math.max(
+        1,
+        Math.min(
+          MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
+          Math.floor(
+            MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS /
+            Math.max(1, documentsToDiscover.length)
+          )
+        )
+      );
 
-        let discoveryText = document.text;
-        const documentTextTruncated = discoveryText.length > perDocumentTextBudget;
-        if (documentTextTruncated) {
-          let end = perDocumentTextBudget;
-          const lastUnit = discoveryText.charCodeAt(end - 1);
-          if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF) end--;
-          discoveryText = discoveryText.slice(0, end);
+      // Lectura por lotes acotados: evita abrir miles de transacciones IndexedDB
+      // secuenciales y limita a 16 los snapshots completos retenidos a la vez.
+      const DOCUMENT_READ_BATCH_SIZE = 16;
+      for (let batchStart = 0;
+           batchStart < documentsToDiscover.length;
+           batchStart += DOCUMENT_READ_BATCH_SIZE) {
+        const batch = documentsToDiscover.slice(
+          batchStart, batchStart + DOCUMENT_READ_BATCH_SIZE
+        );
+        const discoveredBatch = await Promise.all(batch.map(async item => {
+          const document = await store.loadDocument(project.projectId, item.documentId);
+          if (!document || document.projectId !== project.projectId ||
+              document.documentId !== item.documentId ||
+              document.revision !== item.revision ||
+              document.sequence !== item.sequence ||
+              document.updatedAt !== item.updatedAt ||
+              typeof document.text !== "string") {
+            throw new Error(
+              "El snapshot documental cambió durante la lectura; se conserva el índice anterior para reintentar."
+            );
+          }
+
+          let discoveryText = document.text;
+          const documentTextTruncated = discoveryText.length > perDocumentTextBudget;
+          if (documentTextTruncated) {
+            let end = perDocumentTextBudget;
+            const lastUnit = discoveryText.charCodeAt(end - 1);
+            if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF) end--;
+            discoveryText = discoveryText.slice(0, end);
+          }
+          const candidates = discoverNarrativeIdeaCandidates({
+            projectId: project.projectId,
+            documentId: item.documentId,
+            revision: item.revision,
+            text: discoveryText
+          });
+          // El extractor tiene su propio tope. Alcanzarlo implica que pudo
+          // haber más señales al final del fragmento examinado.
+          const truncated = documentTextTruncated ||
+            candidates.length === MAX_NARRATIVE_IDEA_DISCOVERY_CANDIDATES;
+          return { item, candidates, truncated };
+        }));
+
+        for (const discovered of discoveredBatch) {
+          this.continuityCandidatesByDocument.set(discovered.item.documentId, {
+            revision: discovered.item.revision,
+            sequence: discovered.item.sequence,
+            updatedAt: discovered.item.updatedAt,
+            candidates: discovered.candidates,
+            truncated: discovered.truncated
+          });
+          candidatesByDocument.set(discovered.item.documentId, discovered.candidates);
+          anyDocumentTruncated ||= discovered.truncated;
         }
-        const candidates = discoverNarrativeIdeaCandidates({
-          projectId: project.projectId,
-          documentId: item.documentId,
-          revision: item.revision,
-          text: discoveryText
-        });
-        // El extractor tiene su propio tope. Alcanzarlo implica que pudo haber
-        // más señales al final del documento, así que no proclamamos cobertura total.
-        const truncated = documentTextTruncated ||
-          candidates.length === MAX_NARRATIVE_IDEA_DISCOVERY_CANDIDATES;
-        this.continuityCandidatesByDocument.set(item.documentId, {
-          revision: item.revision,
-          sequence: item.sequence,
-          updatedAt: item.updatedAt,
-          candidates,
-          truncated
-        });
-        candidatesByDocument.set(item.documentId, candidates);
-        anyDocumentTruncated ||= truncated;
       }
 
       // Los documentos retirados dejan de aportar candidatos. La comparación

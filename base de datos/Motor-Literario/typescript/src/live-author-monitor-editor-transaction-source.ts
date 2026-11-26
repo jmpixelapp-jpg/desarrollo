@@ -79,6 +79,8 @@ interface SeenLiveAuthorMonitorTransaction {
   readonly replacementHashB: number;
   /** Categoría efectiva que consumen las métricas del monitor. */
   readonly activityKind?: EditorChange["activityKind"];
+  /** Identificador InputEvent.inputType nativo, sin payload textual. */
+  readonly inputType?: string;
 }
 
 export interface LiveAuthorMonitorEditorTransactionSourceOptions {
@@ -377,6 +379,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     const end = change["end"];
     const replacement = change["replacement"];
     const activityKind = change["activityKind"];
+    const inputType = change["inputType"];
     const retainedChange = Object.freeze({
       documentId,
       sequence,
@@ -384,7 +387,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       start,
       end,
       replacement,
-      ...(activityKind === undefined ? {} : { activityKind })
+      ...(activityKind === undefined ? {} : { activityKind }),
+      ...(inputType === undefined ? {} : { inputType })
     });
 
     return Object.freeze({
@@ -464,6 +468,13 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       this.fail("invalid-transaction", "El editor emitió una categoría activityKind desconocida.");
       return;
     }
+    const inputType: unknown = change.inputType;
+    if (inputType !== undefined &&
+        (typeof inputType !== "string" || !inputType.length || inputType.length > 128 ||
+         /[\\u0000-\\u001f\\u007f]/.test(inputType))) {
+      this.fail("invalid-transaction", "El editor emitió un inputType nativo inválido.");
+      return;
+    }
 
     const previousSignature = this.seenTransactions.get(transaction.transactionId);
     if (previousSignature !== undefined) {
@@ -529,7 +540,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       replacement: change.replacement,
       ...(transaction.kind === "undo" || transaction.kind === "redo"
         ? { activityKind: transaction.kind }
-        : change.activityKind === undefined ? {} : { activityKind: change.activityKind })
+        : change.activityKind === undefined ? {} : { activityKind: change.activityKind }),
+      ...(change.inputType === undefined ? {} : { inputType: change.inputType })
     });
 
     this.sequence = normalized.sequence;
@@ -646,7 +658,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       replacementHashB: hashB,
       ...(transaction.kind === "undo" || transaction.kind === "redo"
         ? { activityKind: transaction.kind }
-        : change.activityKind === undefined ? {} : { activityKind: change.activityKind })
+        : change.activityKind === undefined ? {} : { activityKind: change.activityKind }),
+      ...(change.inputType === undefined ? {} : { inputType: change.inputType })
     });
   }
 
@@ -662,7 +675,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       left.replacementLength === right.replacementLength &&
       left.replacementHashA === right.replacementHashA &&
       left.replacementHashB === right.replacementHashB &&
-      left.activityKind === right.activityKind;
+      left.activityKind === right.activityKind &&
+      left.inputType === right.inputType;
   }
 
   private readEditorState(): LiveAuthorMonitorEditorDocumentState | undefined {

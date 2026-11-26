@@ -215,7 +215,7 @@ test("los vínculos de escena limitan la evidencia intermedia a veinte muestras"
 
 test("la evolución de atributos ordena buckets locales sin duplicar las colecciones completas", () => {
   const start = literaryAnalysisSource.indexOf("function buildCharacterAttributeEvolution(");
-  const end = literaryAnalysisSource.indexOf("\\nfunction ", start + 10);
+  const end = literaryAnalysisSource.indexOf("\nfunction ", start + 10);
   assert.notEqual(start, -1, "debe existir el análisis de evolución de atributos");
   assert.ok(end > start, "el análisis debe delimitarse para auditar sus buckets");
   const builder = literaryAnalysisSource.slice(start, end);

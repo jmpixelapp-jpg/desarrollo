@@ -125,3 +125,10 @@ Los hallazgos de referencias cruzadas incluyen ahora `referenceField`: `fromEnti
 La reparación aprobada se registra primero en `narrative-reference-repair-pending`, con identidad determinista de operación y propuesta suficiente para revalidar la correspondencia de fusión. Después se ejecuta el CAS del registro, se inserta la auditoría append-only y finalmente se elimina la intención. La secuencia no es una transacción única, pero cada frontera deja un estado recuperable: si falla el CAS, la intención permite reintentar; si falla la auditoría, el replay reconoce que el campo ya contiene la candidata y completa la auditoría; si falla el borrado, la auditoría idempotente evita duplicados.
 
 `recoverNarrativeReferenceRepairs(store, projectId)` procesa las intenciones pendientes, vuelve a validar identidad y CAS, y conserva los conflictos como pendientes con su error para revisión. La migración IndexedDB crea el almacén `narrative-reference-repair-pending` (versión 27). La intención se conserva hasta que la auditoría durable queda confirmada.
+
+
+### Integración con el ciclo de carga del proyecto
+
+`loadNarrativeProjectAfterRepairRecovery(store, projectId, loadProject)` ofrece el punto de entrada para la hidratación del proyecto: primero inspecciona y recupera la cola durable; sólo después ejecuta el callback de carga/hidratación. Si no puede inspeccionar IndexedDB, rechaza la operación y no entrega un proyecto parcialmente inicializado. Los conflictos de reparación no fuerzan escrituras ni impiden consultar el proyecto: quedan en `recovery.pending` para que la interfaz los presente como incidencias revisables.
+
+El anfitrión debe utilizar esta función en su límite de apertura/selección de proyecto en lugar de invocar directamente su hidratador. La biblioteca no contiene un arranque global de aplicación que permita imponer esa sustitución desde el motor; por ello, la función constituye el contrato público de integración, no una afirmación de que todas las aplicaciones consumidoras ya lo estén invocando.

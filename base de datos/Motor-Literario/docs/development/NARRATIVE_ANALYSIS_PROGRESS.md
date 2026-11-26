@@ -362,3 +362,10 @@ Se amplió `ProjectStore` con operaciones append-only para guardar y consultar a
 La API pública `applyNarrativeReferenceRepair` ahora exige soporte de auditoría durable, asigna un ID determinista a la operación y guarda el registro antes de devolver éxito. La escritura de la referencia y la auditoría no son una única transacción; si falla la auditoría después del CAS, el reintento completa el registro pendiente.
 
 Se añadieron pruebas de persistencia y consulta de la auditoría usando el almacén de memoria. **Pendiente:** validar typecheck, suite completa y migración IndexedDB real en navegador/Node 22.13+.
+
+
+## Precisión de reparaciones por campo
+
+Se corrigió una ambigüedad importante del flujo de reparación: un hallazgo ahora conserva el campo exacto donde se detectó la referencia ausente. Las propuestas exigen ese campo y la aplicación valida exclusivamente la referencia correspondiente. Una relación ya no se considera reparada sólo porque la entidad candidata aparezca en el extremo contrario. El ID de operación de auditoría incorpora el campo para distinguir reparaciones independientes; las relaciones reflexivas pueden producir dos propuestas separadas.
+
+Se ampliaron las pruebas para comprobar el campo emitido por el reconciliador, rechazar un falso replay en el extremo opuesto y distinguir ambos extremos de una relación reflexiva. **Pendiente de validación:** typecheck, suite completa y pruebas de IndexedDB real; no se dispone de resultados CI para este lote.

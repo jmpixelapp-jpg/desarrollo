@@ -277,7 +277,7 @@ export interface ProjectStore {
     readonly changes: readonly StoredChange[];
   }>;
   /** Opcional: almacenamiento incremental de cambios. */
-  appendChange?(change: StoredChange): Promise<void>;
+  appendChange?(change: StoredChange, syncDraft?: Omit<StoredSyncOperation, "sequence">): Promise<void>;
   /** Lee deltas posteriores al snapshot, ordenados por secuencia ascendente. */
   loadChanges?(projectId: string, documentId: string, afterSequence: number): Promise<readonly StoredChange[]>;
   /** Opcional: elimina del journal los deltas ya incluidos en un snapshot durable. */
@@ -386,6 +386,8 @@ export interface EngineOptions {
   readonly maxQueuedTextUnits?: number;
   readonly onAnalysis?: (result: AnalysisResult) => void;
   readonly onCommit?: (result: CommitResult) => void;
+  /** Activa la captura transaccional de deltas en la outbox para este dispositivo. */
+  readonly syncDeviceId?: string;
 }
 
 

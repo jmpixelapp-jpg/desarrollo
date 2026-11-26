@@ -92,3 +92,24 @@ test("reconoce propósitos con marcadores compuestos",()=>{
     assert.equal(found[0].text,"encontrar la cura",text);
   }
 });
+
+test("separa una meta explícita de la motivación causal en la misma oración",()=>{
+  const text="Mara quiere proteger a Elian porque teme perderlo.";
+  const found=extractNarrativeCharacterIntentCandidates(input(text));
+  assert.equal(found.length,2);
+  const goal=found.find(item=>item.kind==="goal");
+  const motive=found.find(item=>item.kind==="motivation");
+  assert.equal(goal.text,"proteger a Elian");
+  assert.equal(goal.evidenceBasis,"explicit-goal-verb");
+  assert.equal(motive.text,"teme perderlo");
+  assert.equal(motive.evidenceBasis,"explicit-causal-motive");
+  assert.equal(text.slice(goal.evidence.start,goal.evidence.end),goal.text);
+  assert.equal(text.slice(motive.evidence.start,motive.evidence.end),motive.text);
+});
+test("separa un objetivo de su propósito final explícito",()=>{
+  const text="Mara quiere proteger a Elian para salvar el reino.";
+  const found=extractNarrativeCharacterIntentCandidates(input(text));
+  assert.equal(found.length,2);
+  assert.ok(found.some(item=>item.kind==="goal" && item.evidenceBasis==="explicit-goal-verb" && item.text==="proteger a Elian"));
+  assert.ok(found.some(item=>item.kind==="goal" && item.evidenceBasis==="explicit-purpose" && item.text==="salvar el reino"));
+});

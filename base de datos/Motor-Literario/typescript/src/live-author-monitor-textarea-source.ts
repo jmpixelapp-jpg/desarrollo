@@ -117,6 +117,13 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     }
 
     const inputType = typeof input.inputType === "string" ? input.inputType : "";
+    if (inputType.length > 128 || /[\\u0000-\\u001f\\u007f]/.test(inputType)) {
+      this.fail(
+        "unsupported-input-type",
+        "El inputType nativo excede el formato de metadatos admitido."
+      );
+      return;
+    }
     if (input.isComposing === true) this.compositionActive = true;
     const isComposing = this.compositionActive || input.isComposing === true;
     if (inputType === "insertCompositionText" && !isComposing) {
@@ -447,7 +454,8 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       start,
       end,
       replacement: insertedText,
-      ...(activityKind === undefined ? {} : { activityKind })
+      ...(activityKind === undefined ? {} : { activityKind }),
+      ...(before.inputType ? { inputType: before.inputType } : {})
     });
 
     this.sequence = change.sequence;

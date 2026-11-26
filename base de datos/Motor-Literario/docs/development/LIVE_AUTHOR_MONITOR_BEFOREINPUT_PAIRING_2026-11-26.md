@@ -102,3 +102,11 @@ La categoría `typing` no prueba que se haya usado un teclado físico, y `correc
 Se añadió una regresión que compara tres casos: sustitución de selección con `insertText` (typing), sustitución con `insertReplacementText` (correction) y mecanismo de inserción no reconocido (other).
 
 También se corrigió la documentación del adaptador: la copia sombra completa introducida para comprobar prefijo/sufijo es efímera y reside en memoria mientras la instancia está montada. No se guarda en IndexedDB ni se envía en diagnósticos; la memoria se libera al disponer la instancia.
+
+## Fallback conservador del monitor central
+
+La misma protección se aplica ahora a cualquier adaptador, no solo al textarea: si un `EditorChange` llega sin `activityKind`, el monitor central lo cuenta como `other`. Ya no deduce `typing`, `correction` o `deletion` por la forma del rango y del reemplazo. Un reemplazo de selección puede proceder de escritura, pegado, dictado, autocorrección o una transacción programática; sin metadatos de origen no hay evidencia suficiente para distinguirlos.
+
+Los adaptadores que sí conocen el evento deben proporcionar `activityKind` explícitamente. El adaptador nativo del textarea lo hace usando el `inputType` observado. Esta decisión es deliberadamente conservadora: puede dejar parte de la actividad en `other`, pero evita presentar como hecho una categoría que el motor no observó.
+
+Se añadió una prueba para tres deltas sin procedencia (inserción, sustitución y eliminación); los tres deben incrementar solo `otherChanges`. Los casos de takeover que esperan métricas de escritura ahora declaran `activityKind: "typing"` expresamente.

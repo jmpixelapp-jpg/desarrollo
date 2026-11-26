@@ -25,6 +25,13 @@ test("la migración DB25 → DB26 conserva datos anteriores y crea las dos estru
     oldRequest.onsuccess = () => resolve(oldRequest.result);
     oldRequest.onerror = () => reject(oldRequest.error);
   });
+  const seedTransaction = oldDatabase.transaction("migration-sentinel", "readwrite");
+  seedTransaction.objectStore("migration-sentinel").put("dato-preservado", "key");
+  await new Promise((resolve, reject) => {
+    seedTransaction.oncomplete = resolve;
+    seedTransaction.onerror = () => reject(seedTransaction.error);
+    seedTransaction.onabort = () => reject(seedTransaction.error);
+  });
   oldDatabase.close();
 
   const store = new IndexedDbProjectStore();
@@ -38,6 +45,13 @@ test("la migración DB25 → DB26 conserva datos anteriores y crea las dos estru
   assert.equal(migrated.objectStoreNames.contains("migration-sentinel"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-outbox"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-device-sequences"), true);
+  const preserved = await new Promise((resolve, reject) => {
+    const request = migrated.transaction("migration-sentinel", "readonly")
+      .objectStore("migration-sentinel").get("key");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  assert.equal(preserved, "dato-preservado");
   migrated.close();
 });
 test("la outbox es idempotente, rechaza colisiones y aísla secuencias por dispositivo", async () => {
@@ -57,7 +71,14 @@ test("la outbox es idempotente, rechaza colisiones y aísla secuencias por dispo
     })),
     /Secuencia fuera de orden/
   );
-  assert.equal((await store.loadPendingSyncOperations("project-a")).length, 1);
+  await store.enqueueSyncOperation(operation({
+    operationId: "op-device-b",
+    deviceId: "device-b",
+    sequence: 1
+  }));
+  assert.equal(await store.loadLastSyncOperationSequence("project-a", "device-a"), 1);
+  assert.equal(await store.loadLastSyncOperationSequence("project-a", "device-b"), 1);
+  assert.equal((await store.loadPendingSyncOperations("project-a")).length, 2);
 });
 
 test("la outbox pagina por proyecto, conserva pendientes y registra reintentos", async () => {

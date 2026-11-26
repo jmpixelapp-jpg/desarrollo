@@ -120,3 +120,13 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Corregido el acceso al ID documental desde `snapshot.documents[].input.documentId` según el contrato real del snapshot incremental.
 - Las afirmaciones narrativas contienen una única evidencia (`TextEvidence`), no una lista. La persistencia actualiza afirmaciones entrantes por CAS, pero conserva las antiguas que no aparecen en el snapshot; no se declara reconciliación de afirmaciones hasta disponer de tombstones/borrado transaccional.
 - La reconciliación de evidencias por colección queda limitada a entidades, relaciones, acontecimientos e ideas.
+
+## 10. Manifiestos durables de proyección documental
+
+- Añadido `NarrativeDocumentProjectionManifest` al contrato `ProjectStore`: proyecto/documento, revisión, generación CAS, estado activo/eliminado e inventarios de IDs por colección.
+- IndexedDB sube a versión 25 y crea `narrative-document-projection-manifests`, indexado por proyecto.
+- Lectura aislada por proyecto/documento y escritura `readwrite` con comparación de generación dentro de la transacción. Dos escritores que compiten por la misma generación no pueden confirmar ambos.
+- Tombstones persistentes con inventarios vacíos; validación de IDs duplicados, generaciones y estados.
+- Actualizado el mapa físico MLDB y agregadas pruebas de CAS, aislamiento, tombstone y concurrencia.
+
+**Alcance real:** el manifiesto es durable y su propia escritura es atómica, pero aún no coordina automáticamente las cinco colecciones del grafo. No se afirma reemplazo transaccional integral ni borrado de proyecciones; ese es el siguiente bloque.

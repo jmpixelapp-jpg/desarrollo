@@ -54,3 +54,16 @@ Se amplió la prueba de grafos profundos con un catálogo de 6.002 ideas en cade
 Commit de ampliación: `32e493d2bcc7c70f350b9a427b4f5d667b188c2f`.
 
 La regresión sigue pendiente de ejecución mediante `npm test` en el entorno del paquete/CI; el commit no se considera validación de ejecución.
+
+### Muestreo determinista de ciclos
+
+Se añadió una segunda regresión de presupuesto con 120 auto-ciclos independientes. Comprueba que el analizador:
+
+- Cuenta los 120 ciclos, aunque expone solo 100 muestras.
+- Informa los 20 ciclos omitidos por límite.
+- Mantiene 120 componentes débiles independientes.
+- Produce exactamente el mismo resultado cuando el catálogo de entrada se entrega en orden inverso.
+
+Commit: `a11415208d05db535f68307adb8ebffb066ad312`.
+
+La validación de ejecución continúa pendiente: los commits están registrados en GitHub, pero los estados de CI consultables no muestran checks para estos cambios.

@@ -50,3 +50,12 @@ test("rechaza entidades inválidas y exceso de tamaño",()=>{
 test("no genera proposiciones vacías ni excede la frase",()=>{
  assert.deepEqual(discover({...base,text:"El secreto era que ."}),[]);
 });
+
+test("no interpreta una negación doble como ignorancia del personaje",()=>{
+ assert.deepEqual(discover({...base,text:"Ana salió sin que Ana no supiera que Bruno había vuelto."}),[]);
+});
+test("rechaza una exclusión con extracto no textual",()=>{
+ assert.throws(()=>discover({...base,text:"El secreto era que huyó.",excludedDialogueEvidence:[
+  {documentId:"chapter-1",revision:1,start:0,end:4,excerpt:null}
+ ]}));
+});

@@ -97,3 +97,27 @@ test("reemplaza la evidencia de una revisión por la vigente del mismo documento
   assert.equal(mara.evidence.some(x => x.documentId === "chapter-a" && x.revision === 1), false);
   assert.ok(mara.evidence.some(x => x.documentId === "chapter-b" && x.revision === 1));
 });
+
+test("marca como histórica una afirmación del documento reemplazado sin alterar otros documentos", async () => {
+  const { store, tables } = createMemoryStore();
+  const initial = createNarrativeKnowledgeGraphSnapshot("novel-a", [
+    { documentId: "chapter-a", revision: 1, text: "Personaje Mara. Mara tiene 24 años." },
+    { documentId: "chapter-b", revision: 1, text: "Personaje Mara. Mara es la reina." }
+  ], { now: 100 });
+  await persistNarrativeKnowledgeGraphSnapshot(store, initial);
+
+  const update = createNarrativeKnowledgeGraphSnapshot("novel-a", [
+    { documentId: "chapter-a", revision: 2, text: "Personaje Mara vuelve a casa." }
+  ], { now: 200 });
+  await persistNarrativeKnowledgeGraphSnapshot(store, update);
+
+  const assertions = [...tables.assertions.values()];
+  const age = assertions.find(item => item.attribute === "age");
+  const role = assertions.find(item => item.attribute === "role");
+  assert.ok(age);
+  assert.equal(age.evidence.documentId, "chapter-a");
+  assert.equal(age.evidence.status, "stale");
+  assert.ok(role);
+  assert.equal(role.evidence.documentId, "chapter-b");
+  assert.equal(role.evidence.status, undefined);
+});

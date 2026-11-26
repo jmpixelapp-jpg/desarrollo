@@ -25,8 +25,15 @@ function withoutDocumentEvidence<T extends { readonly evidence: readonly { reado
 }
 
 function snapshotDocumentIds(snapshot: NarrativeKnowledgeGraphSnapshot): readonly string[] {
-  const ids = snapshot.documents.map(document => document.documentId);
-  if (ids.some(id => typeof id !== "string" || !id.trim()) || new Set(ids).size !== ids.length) {
+  const ids = snapshot.documents.map(contribution => {
+    const documentId = contribution?.input?.documentId;
+    if (typeof documentId !== "string" || !documentId.trim() ||
+        !contribution.graph || contribution.graph.projectId !== snapshot.projectId) {
+      throw new Error("El snapshot contiene una contribución documental inválida.");
+    }
+    return documentId;
+  });
+  if (new Set(ids).size !== ids.length) {
     throw new Error("El snapshot contiene documentos duplicados o inválidos.");
   }
   return ids;
@@ -84,6 +91,8 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
 
   const projectId = snapshot.projectId;
   const graph = snapshot.graph;
+  const documentIds = snapshotDocumentIds(snapshot);
+  const replacedDocumentIds = new Set(documentIds);
   const saved = { entities: 0, relations: 0, events: 0, ideas: 0, assertions: 0 };
   const reused = { entities: 0, relations: 0, events: 0, ideas: 0, assertions: 0 };
 
@@ -168,8 +177,13 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
   const incomingAssertions = new Map(graph.assertions.map(item => [item.id, item]));
   for (const current of existingAssertions) {
     const incoming = incomingAssertions.get(current.id);
-    const base = documentIds.reduce((record, documentId) => withoutDocumentEvidence(record, documentId), current);
-    const next = incoming ? { ...incoming, evidence: [...base.evidence, ...incoming.evidence] } : base;
+    // NarrativeAssertion carries one evidence span, unlike graph nodes which
+    // aggregate evidence arrays. Replaced source documents make unmatched
+    // assertions historical instead of trying to iterate a singular span.
+    const base = replacedDocumentIds.has(current.evidence.documentId)
+      ? { ...current, evidence: { ...current.evidence, status: "stale" as const } }
+      : current;
+    const next = incoming ?? base;
     if (JSON.stringify(current) === JSON.stringify(next)) { reused.assertions++; continue; }
     await store.saveAssertionIfUnchanged!(next, current);
     assertionMap.set(next.id, next);

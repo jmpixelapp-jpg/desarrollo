@@ -410,6 +410,30 @@ test("reconcilia referencias cruzadas rotas sin modificar el grafo", async () =>
 });
 
 
+test("distingue ambos extremos rotos de una relación reflexiva", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-self", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:self", {
+    projectId: "novel-self", id: "relation:self",
+    fromEntityId: "entity:legacy", toEntityId: "entity:legacy",
+    relationType: "knows", evidence: []
+  });
+  const report = await reconcileNarrativeDocumentProjections(store, "novel-self");
+  const issues = report.issues.filter(issue => issue.recordId === "relation:self");
+  assert.deepEqual(issues.map(issue => issue.referenceField).sort(), ["fromEntityId", "toEntityId"]);
+  const proposals = await proposeNarrativeReferenceRepairs(store, report);
+  assert.deepEqual(proposals.map(item => item.referenceField).sort(), ["fromEntityId", "toEntityId"]);
+  assert.notEqual(
+    proposals.find(item => item.referenceField === "fromEntityId").referenceField,
+    proposals.find(item => item.referenceField === "toEntityId").referenceField
+  );
+});
+
 test("propone reparación sólo ante una correspondencia de merge explícita y única", async () => {
   const { store, tables } = createMemoryStore();
   tables.entities.set("entity:canonical", {

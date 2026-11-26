@@ -587,10 +587,34 @@ export class LiveAuthorMonitor {
  * Superficie pública de HostEngineApi necesaria para conectar un panel.
  * No expone ni conserva el texto del manuscrito.
  */
+export type LiveAuthorMonitorCheckpointState =
+  | "unavailable" | "not-saved" | "waiting-for-durability" | "saving" | "saved" | "error";
+
+export type LiveAuthorMonitorLeaseState =
+  | "unsupported" | "uninitialized" | "owner" | "observer" | "lost"
+  | "expired" | "releasing" | "error";
+
+/**
+ * Diagnóstico operativo local. Solo expone códigos de error, timestamps y
+ * metadatos de coordinación; nunca mensajes arbitrarios ni texto del manuscrito.
+ */
+export interface LiveAuthorMonitorPersistenceDiagnostics {
+  readonly documentId: string;
+  readonly checkpointState: LiveAuthorMonitorCheckpointState;
+  readonly lastCheckpointAt?: number;
+  readonly checkpointErrorCode?: string;
+  readonly leaseState: LiveAuthorMonitorLeaseState;
+  readonly fencingToken?: number;
+  readonly leaseExpiresAt?: number;
+  readonly leaseErrorCode?: string;
+}
+
 export interface LiveAuthorMonitorHostApi {
   /** Reanuda de forma idempotente las métricas desde el snapshot durable del motor. */
   ensureLiveAuthorMonitorDocument?(documentId: string): LiveAuthorMonitorSnapshot;
   getLiveAuthorMonitorSnapshot(documentId: string): LiveAuthorMonitorSnapshot | undefined;
+  /** Estado de persistencia y coordinación, sin datos del manuscrito. */
+  getLiveAuthorMonitorPersistenceDiagnostics?(documentId: string): LiveAuthorMonitorPersistenceDiagnostics | undefined;
   getLiveAuthorMonitorSnapshots(): readonly LiveAuthorMonitorSnapshot[];
   subscribeLiveAuthorMonitor(listener: LiveAuthorMonitorListener, documentId?: string): () => void;
 }

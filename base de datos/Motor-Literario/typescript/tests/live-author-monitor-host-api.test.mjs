@@ -570,3 +570,54 @@ test("dispose durante la lectura de checkpoint no restaura métricas después de
   assert.equal(second.liveMonitorLeaseHeartbeats.size, 0);
   second.dispose();
 });
+
+test("publica el error de cuota del checkpoint sin exponer el texto interno", async () => {
+  class QuotaExceededCheckpointStore extends MemoryDocumentStore {
+    async saveLiveAuthorMonitorCheckpoint() {
+      throw new DOMException("PRIVATE_MANUSCRIPT_TEXT", "QuotaExceededError");
+    }
+  }
+
+  const api = new HostEngineApi({ store: new QuotaExceededCheckpointStore() });
+  api.initializeProject({ projectId: "monitor-diagnostics-quota", projectName: "Monitor diagnostics quota" });
+  await api.openDocument({
+    documentId: "chapter-1",
+    text: "PRIVATE_MANUSCRIPT_TEXT",
+    revision: 0,
+    sequence: 0
+  });
+
+  const diagnostics = api.getLiveAuthorMonitorPersistenceDiagnostics("chapter-1");
+  assert.equal(diagnostics.checkpointState, "error");
+  assert.equal(diagnostics.checkpointErrorCode, "QuotaExceededError");
+  assert.equal(diagnostics.leaseState, "owner");
+  assert.equal(JSON.stringify(diagnostics).includes("PRIVATE_MANUSCRIPT_TEXT"), false);
+  api.dispose();
+});
+
+test("informa pérdida del lease cuando otra pestaña sustituye el fencing token", async () => {
+  const store = new MemoryDocumentStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "monitor-diagnostics-lease", projectName: "Monitor diagnostics lease" });
+  await api.openDocument({
+    documentId: "chapter-1",
+    text: "private",
+    revision: 0,
+    sequence: 0
+  });
+
+  const key = "monitor-diagnostics-lease:chapter-1";
+  const current = store.monitorLeases.get(key);
+  assert.ok(current);
+  store.monitorLeases.set(key, {
+    ...current,
+    ownerId: "replacement-tab",
+    fencingToken: current.fencingToken + 1
+  });
+  await api.renewLiveAuthorMonitorLeaseFromHeartbeat("chapter-1");
+
+  const diagnostics = api.getLiveAuthorMonitorPersistenceDiagnostics("chapter-1");
+  assert.equal(diagnostics.leaseState, "lost");
+  assert.equal(diagnostics.fencingToken, undefined);
+  api.dispose();
+});

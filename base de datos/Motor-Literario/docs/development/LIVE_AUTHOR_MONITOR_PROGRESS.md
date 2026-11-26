@@ -624,3 +624,16 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **CI general TypeScript:** [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738), mismo commit: Type-check, build, validación MLDB y benchmark completados; **718/718 pruebas aprobadas, 0 fallidas y 0 omitidas**.
 
 **Benchmark del runner CI:** 40 ediciones a 10.000 palabras: commit p95 5,76 ms / extremo a extremo p95 6,29 ms; 100.000 palabras: 2,69 ms / 3,35 ms; 500.000 palabras: 4,11 ms / 4,71 ms. Línea única de 20.000 palabras: extremo a extremo p95 65,15 ms. Cuatro documentos con diez ediciones por documento: extremo a extremo p95 1,39 ms. Son mediciones de este runner, no garantías universales.
+
+## 8. Entrega — diagnóstico operativo visible (25 de noviembre de 2026)
+
+- Se añade el contrato LiveAuthorMonitorPersistenceDiagnostics, consultable por documento desde HostEngineApi.
+- El estado de checkpoint diferencia almacén no compatible, no guardado, espera de durabilidad, guardado en curso, éxito y error.
+- El estado del lease diferencia coordinación no compatible, inicialización pendiente, titular, observador, pérdida, expiración, liberación y error.
+- Se registran los timestamps de checkpoints confirmados y se detecta explícitamente cuándo una renovación pierde el fencing token.
+- El panel individual muestra ambos estados con anuncios accesibles.
+- Los errores se reducen al nombre de su clase (por ejemplo, QuotaExceededError). No se publica el mensaje del error ni contenido del manuscrito.
+- Se añaden pruebas de panel, cuota de almacenamiento y sustitución del fencing token.
+- Archivos modificados limitados al monitor y su bitácora; no se modifican módulos narrativos ni archivos ajenos al módulo.
+
+**Validación:** pendiente de GitHub Actions para este commit. El resultado se añadirá en una entrada posterior tras comprobar el workflow.

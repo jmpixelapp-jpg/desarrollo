@@ -55,12 +55,18 @@ function fixture() {
   const document = new FakeDocument();
   const container = document.createElement("div");
   monitor.openDocument({ documentId: "chapter-1", text: "contenido privado", revision: 0, sequence: 0 }, "book-1");
+  let diagnostics;
   const api = {
     getLiveAuthorMonitorSnapshot: id => monitor.getSnapshot(id),
     getLiveAuthorMonitorSnapshots: () => monitor.getSnapshots(),
+    getLiveAuthorMonitorPersistenceDiagnostics: () => diagnostics,
     subscribeLiveAuthorMonitor: (listener, id) => monitor.subscribe(listener, id)
   };
-  return { monitor, container, api, setTime(value) { time = value; } };
+  return {
+    monitor, container, api,
+    setTime(value) { time = value; },
+    setDiagnostics(value) { diagnostics = value; }
+  };
 }
 function metric(root, key) {
   return findNode(root, node => node.getAttribute("data-metric") === key);
@@ -159,4 +165,40 @@ test("rechaza un documento inválido antes de insertar elementos DOM", () => {
   const f = fixture();
   assert.throws(() => mountLiveAuthorMonitorPanel(f.container, f.api, { documentId: " " }), /documentId/);
   assert.equal(f.container.children.length, 0);
+});
+
+test("presenta el estado del checkpoint y del lease sin revelar mensajes internos", () => {
+  const f = fixture();
+  let refresh;
+  f.setDiagnostics({
+    documentId: "chapter-1",
+    checkpointState: "saved",
+    lastCheckpointAt: 1_800_000_000_000,
+    leaseState: "owner",
+    fencingToken: 4,
+    leaseExpiresAt: 1_800_000_030_000
+  });
+  const unmount = mountLiveAuthorMonitorPanel(f.container, f.api, {
+    documentId: "chapter-1",
+    schedule(callback) { refresh = callback; return () => {}; }
+  });
+  const panel = f.container.children[0];
+  const checkpoint = findNode(panel, node => node.getAttribute("data-diagnostic") === "checkpoint");
+  const lease = findNode(panel, node => node.getAttribute("data-diagnostic") === "lease");
+  assert.match(checkpoint.textContent, /checkpoint guardado/);
+  assert.match(lease.textContent, /esta pestaña posee el lease/);
+
+  f.setDiagnostics({
+    documentId: "chapter-1",
+    checkpointState: "error",
+    checkpointErrorCode: "QuotaExceededError",
+    leaseState: "lost",
+    leaseErrorCode: "DoNotExposePrivateErrorMessage"
+  });
+  refresh();
+  assert.match(checkpoint.textContent, /cuota de almacenamiento/);
+  assert.match(lease.textContent, /se perdió el lease/);
+  assert.equal(panel.textContent.includes("DoNotExposePrivateErrorMessage"), false);
+  assert.equal(panel.textContent.includes("contenido privado"), false);
+  unmount();
 });

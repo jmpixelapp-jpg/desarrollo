@@ -1,6 +1,9 @@
 name: Personal idea library pagination
 
 on:
+  push:
+    branches:
+      - work/personal-library-keyset-latest-20261126
   pull_request:
     branches:
       - main

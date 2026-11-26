@@ -57,16 +57,19 @@ function validate(input: NarrativeIntentActionConsistencyInput): void {
       !Array.isArray(input.actions) ||
       (input.priorIntents !== undefined && !Array.isArray(input.priorIntents)) ||
       (input.orderedDocumentIds !== undefined && (!Array.isArray(input.orderedDocumentIds) ||
-        input.orderedDocumentIds.some(id => typeof id !== "string" || !id.trim()))) ||
+        input.orderedDocumentIds.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(input.orderedDocumentIds).size !== input.orderedDocumentIds.length)) ||
       input.intents.length + (input.priorIntents?.length ?? 0) + input.actions.length > MAX_ITEMS) {
     throw new Error("Contexto inválido para comparar intenciones y acciones.");
   }
   const characters = new Set(input.entities
     .filter(entity => entity && entity.projectId === input.projectId && entity.kind === "character")
     .map(entity => entity.id));
+  const intentIds = new Set<string>();
   for (const intent of [...(input.priorIntents ?? []), ...input.intents]) {
     if (!intent || intent.projectId !== input.projectId ||
         !characters.has(intent.characterEntityId) ||
+        typeof intent.id !== "string" || !intent.id.trim() || intentIds.has(intent.id) ||
         !["goal", "motivation"].includes(intent.kind) ||
         !["affirmed", "negated", "conditional"].includes(intent.polarity) ||
         !intent.evidence || typeof intent.evidence.documentId !== "string" ||
@@ -76,6 +79,7 @@ function validate(input: NarrativeIntentActionConsistencyInput): void {
         intent.evidence.start < 0 || intent.evidence.end < intent.evidence.start) {
       throw new Error("Intención inválida o atribuida a un personaje desconocido.");
     }
+    intentIds.add(intent.id);
   }
   for (const action of input.actions) {
     if (!action || action.projectId !== input.projectId ||

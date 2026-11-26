@@ -9,6 +9,7 @@ import type { NarrativeEntity } from "./narrative-knowledge";
 import { discoverNarrativeIdeaCandidates, type NarrativeIdeaCandidate } from "./narrative-idea-discovery";
 import { analyzeNarrativeIdeaCrossDocumentRelations, type NarrativeIdeaCrossDocumentAnalysis } from "./narrative-idea-cross-document-relations";
 import { buildNarrativeIdeaEvolution, type NarrativeIdeaEvolutionResult } from "./narrative-idea-evolution";
+import { buildNarrativeIdeaContinuityLines, type NarrativeIdeaContinuityLinesResult } from "./narrative-idea-continuity-lines";
 import { attributeNarrativeIdeasToEntities, type NarrativeIdeaEntityAttribution } from "./narrative-idea-entity-attribution";
 import { extractNarrativeActionCandidates, type NarrativeActionCandidate } from "./narrative-action-extraction";
 import { extractNarrativeCharacterIntentCandidates, type NarrativeCharacterIntentCandidate } from "./narrative-character-intent-extraction";
@@ -118,6 +119,8 @@ export interface NarrativeUnderstandingResult {
   readonly ideaCrossDocumentAnalysis: NarrativeIdeaCrossDocumentAnalysis;
   /** Eventos derivados de recurrencia y resonancia; nunca modifica el historial editorial. */
   readonly ideaEvolution: NarrativeIdeaEvolutionResult;
+  /** Componentes de continuidad estructural; no declaran equivalencia semántica. */
+  readonly ideaContinuityLines: NarrativeIdeaContinuityLinesResult;
   /** Atribuciones explícitas y ambiguas de candidatos de idea a fichas; no canoniza vínculos. */
   readonly ideaEntityAttributions: readonly NarrativeIdeaEntityAttribution[];
   readonly actions: ReturnType<typeof extractNarrativeActionCandidates>;
@@ -306,6 +309,10 @@ export function understandNarrativeFragment(
     projectId: input.projectId,
     crossDocumentAnalysis: ideaCrossDocumentAnalysis
   });
+  const ideaContinuityLines = buildNarrativeIdeaContinuityLines({
+    projectId: input.projectId,
+    evolution: ideaEvolution
+  });
   const actions = extractNarrativeActionCandidates(extractionContext);
   const characterIntents = extractNarrativeCharacterIntentCandidates(extractionContext);
   const characterIntentEvolution = evolveNarrativeCharacterIntents({
@@ -478,7 +485,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, ideaEntityAttributions, ideaCrossDocumentAnalysis, ideaEvolution, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, behaviorShifts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, ideaEntityAttributions, ideaCrossDocumentAnalysis, ideaEvolution, ideaContinuityLines, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, behaviorShifts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

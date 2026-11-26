@@ -687,3 +687,12 @@ El checkpoint conserva los totales acumulados insertados, borrados y la longitud
 Esta longitud no puede ser negativa. El validador aplica la forma equivalente `deletedCharacters <= currentDocumentLength + insertedCharacters`, después de exigir que cada contador sea un entero seguro no negativo. La regla permite reemplazos, borrados seguidos de inserciones y cualquier secuencia válida de deltas; solo rechaza balances imposibles.
 
 La regresión parte de un documento de cinco caracteres sin ediciones y manipula el total borrado a seis. La restauración debe fallar antes de registrar la sesión. No se almacena ni vuelve a leer el manuscrito para realizar esta comprobación y no se requiere migración del checkpoint v1.
+
+
+## 60. Generaciones para renovaciones y adquisiciones asíncronas
+
+Las rutas genéricas de adquisición/renovación pueden solaparse con checkpoints automáticos, cierres seguros y revalidaciones del heartbeat. Cada operación captura una generación al iniciarse; solo puede publicar su lease o su error mientras esa generación siga vigente y no haya comenzado una liberación.
+
+Un cierre seguro incrementa la generación antes de liberar el registro. Cualquier renovación que devuelva después queda invalidada: no repuebla `liveMonitorLeases`, no reactiva el heartbeat y devuelve `undefined`. La regla también evita que un error tardío de una operación antigua sobrescriba el diagnóstico de una operación posterior.
+
+La regresión usa un almacén que completa la renovación pero retrasa la respuesta. El cierre libera el lease mientras la respuesta está suspendida; al reanudarla, la prueba verifica que no reaparezcan la titularidad local ni el temporizador, y que el registro persistido siga vencido.

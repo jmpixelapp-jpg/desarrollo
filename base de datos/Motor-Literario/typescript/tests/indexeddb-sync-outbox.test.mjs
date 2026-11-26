@@ -303,7 +303,7 @@ test("el CAS de entidad y su outbox se confirman juntos y una colisión revierte
   assert.deepEqual(JSON.parse(pending[0].payload), { entity: updated });
 
   await store.enqueueSyncOperation({
-    operationId: "entity-outbox-collision", projectId, deviceId, sequence: 999,
+    operationId: "entity-outbox-collision", projectId, deviceId, sequence: 2,
     kind: "entity-upsert", payload: JSON.stringify({ entity: updated }),
     createdAt: 21, attemptCount: 0
   });

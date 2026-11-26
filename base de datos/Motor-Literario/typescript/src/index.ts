@@ -40,6 +40,7 @@ export * from "./narrative-sync-domain-handlers";
 
 export * from "./narrative-idea-discovery";
 export * from "./narrative-idea-cross-document-relations";
+export * from "./narrative-idea-evolution";
 export * from "./narrative-idea-entity-attribution";
 
 export * from "./narrative-claim-extraction";

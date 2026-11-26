@@ -504,13 +504,17 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       const privateSentinel = "PRIVATE_MANUSCRIPT_EXPORT_SENTINEL";
       await textarea.fill(privateSentinel);
       await page.getByRole("button", { name: "Iniciar captura" }).click();
+      await textarea.focus();
       await textarea.evaluate(element => element.setSelectionRange(
         element.value.length, element.value.length
       ));
       await page.keyboard.type("Z");
-      await page.waitForFunction(() =>
-        document.querySelector("#metrics")?.textContent?.includes('"typingDeltas": 1')
-      );
+      await page.waitForFunction(() => {
+        const metrics = document.querySelector("#metrics")?.textContent ?? "";
+        try { return JSON.parse(metrics).totalEventCount >= 2; } catch { return false; }
+      }, undefined, { timeout: 5_000 });
+      const captureMetrics = JSON.parse(await page.locator("#metrics").textContent());
+      assert.equal(captureMetrics.typingDeltas, 1, JSON.stringify(captureMetrics));
 
       const downloadPromise = page.waitForEvent("download");
       await page.getByRole("button", { name: "Exportar traza sin contenido" }).click();

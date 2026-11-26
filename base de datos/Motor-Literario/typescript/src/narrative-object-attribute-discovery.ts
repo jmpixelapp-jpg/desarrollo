@@ -50,6 +50,7 @@ export function discoverNarrativeObjectAttributeCandidates(input:NarrativeObject
      new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])("+objectPattern+")(?![\\p{L}\\p{M}\\p{N}_])\\s+(?:de\\s+)?("+v+")(?![\\p{L}\\p{M}\\p{N}_])","giu"),
      new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])("+v+")(?![\\p{L}\\p{M}\\p{N}_])\\s+("+objectPattern+")(?![\\p{L}\\p{M}\\p{N}_])","giu")
     ];
+    if(kind==="material") patterns.push(new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])("+objectPattern+")(?![\\p{L}\\p{M}\\p{N}_])(?:\\s+[\\p{L}\\p{M}]+){0,3}\\s+de\\s+("+v+")(?![\\p{L}\\p{M}\\p{N}_])","giu"));
     for(const re of patterns){
      scan+=input.text.length;if(scan>MAX_OBJECT_ATTRIBUTE_SCAN_UNITS)throw new Error("Presupuesto de exploración de atributos excedido.");
      for(const m of input.text.matchAll(re)){

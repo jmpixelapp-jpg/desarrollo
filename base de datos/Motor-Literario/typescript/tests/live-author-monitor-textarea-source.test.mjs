@@ -320,6 +320,7 @@ test("visibilitychange oculta suspende una composición abierta sin reanudar al 
   assert.equal(f.source.getState().needsResync, true,
     "volver a mostrar la pestaña no demuestra que la composición se completó");
 
+  f.element.value = "abc日本";
   const recovered = f.source.resynchronize({
     documentId: "chapter-1",
     text: "abc日本",

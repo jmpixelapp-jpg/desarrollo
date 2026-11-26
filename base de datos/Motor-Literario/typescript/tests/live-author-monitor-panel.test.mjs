@@ -297,6 +297,30 @@ test("permite limitar las métricas visibles y conserva la semántica de lista",
   unmount();
 });
 
+test("muestra cobertura parcial cuando una edición llega sin activityKind explícito", () => {
+  const f = fixture();
+  f.monitor.recordAdmission({
+    documentId: "chapter-1",
+    sequence: 1,
+    baseRevision: 0,
+    start: "contenido privado".length,
+    end: "contenido privado".length,
+    replacement: "?"
+  }, { status: "queued", ticketId: "panel-unclassified" });
+
+  const unmount = mountLiveAuthorMonitorPanel(f.container, f.api, {
+    documentId: "chapter-1",
+    visibleMetrics: ["unitCoverage", "typingUnits"],
+    schedule: () => () => {}
+  });
+  const panel = f.container.children[0];
+  assert.equal(metric(panel, "unitCoverage").textContent,
+    "Parcial (procedencia histórica incompleta)");
+  assert.equal(metric(panel, "typingUnits").textContent, "0");
+  assert.equal(panel.textContent.includes("contenido privado"), false);
+  unmount();
+});
+
 test("rechaza métricas duplicadas o desconocidas antes de insertar el panel", () => {
   const f = fixture();
   assert.throws(() => mountLiveAuthorMonitorPanel(f.container, f.api, {

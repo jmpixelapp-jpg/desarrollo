@@ -1496,7 +1496,8 @@ function validateLiveAuthorMonitorCheckpoint(
         (checkpoint.otherChanges !== undefined && !integerNonNegative(checkpoint.otherChanges))) {
       invalid.push("activity-counts.values");
     } else if (integerNonNegative(checkpoint.acceptedChanges)) {
-      const classifiedTotal = classifiedActivityCounts.reduce((sum, value) => sum + (value as number), 0);
+      let classifiedTotal = 0;
+      for (const value of classifiedActivityCounts) classifiedTotal += value as number;
       const total = classifiedTotal + (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedTotal);
       if (total !== checkpoint.acceptedChanges) invalid.push("activity-counts.total");
     }

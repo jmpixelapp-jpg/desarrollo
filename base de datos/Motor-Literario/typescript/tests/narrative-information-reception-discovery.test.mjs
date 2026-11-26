@@ -58,3 +58,13 @@ test("valida entidades y límites de entrada",()=>{
 test("no genera candidatos cuando falta la proposición explícita",()=>{
  assert.deepEqual(discover({...base,text:"Ana entendió la situación."}),[]);
 });
+
+test("conserva la negación de creencias sin registrarlas como aceptación",()=>{
+ const [r]=discover({...base,text:"Ana no creyó que Bruno hubiera regresado."});
+ assert.equal(r.stage,"acceptance");assert.equal(r.polarity,"negated");
+ assert.equal(r.acceptanceEstablished,false);
+});
+test("no convierte una falta de escucha en exposición afirmada",()=>{
+ const [r]=discover({...base,text:"Ana nunca oyó que Bruno había vuelto."});
+ assert.equal(r.polarity,"negated");assert.equal(r.comprehensionEstablished,false);
+});

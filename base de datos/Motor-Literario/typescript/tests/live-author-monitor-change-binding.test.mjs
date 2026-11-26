@@ -408,7 +408,9 @@ test("acota el backlog y pausa la fuente al desbordarse hasta resincronizar el s
     sink: {
       onEditorChange(value) {
         attempts.push(value.sequence);
-        return { status: "rejected", reason: "queue_full" };
+        return value.sequence === 4
+          ? { status: "queued", ticketId: "ticket-4" }
+          : { status: "rejected", reason: "queue_full" };
       }
     },
     maxPendingChanges: 2,

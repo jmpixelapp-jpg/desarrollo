@@ -1,5 +1,7 @@
 import { performance } from "node:perf_hooks";
-import { LiveAuthorMonitor } from "../dist/motor-literario.js";
+const monitorModule = await import("../dist-monitor/live-author-monitor.js")
+  .catch(() => import("../dist/motor-literario.js"));
+const { LiveAuthorMonitor } = monitorModule;
 
 const DOCUMENT_COUNT = Number(process.env.MONITOR_BENCH_DOCUMENTS ?? 8);
 const CHANGES_PER_DOCUMENT = Number(process.env.MONITOR_BENCH_CHANGES_PER_DOCUMENT ?? 12_500);

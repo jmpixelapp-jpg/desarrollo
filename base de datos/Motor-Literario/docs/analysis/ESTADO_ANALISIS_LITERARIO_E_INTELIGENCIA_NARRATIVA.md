@@ -268,3 +268,20 @@ La rama `improvements/persistence-narrative-sync-v2` integra también el ajuste 
 En el PR #51, el workflow asociado al commit `fed95e9becdd47143c004eb6e597085be71efb09` falló durante `npm run typecheck` por `TS1002` en `src/narrative-history.ts`; las pruebas y el benchmark quedaron omitidos. Ese archivo se corrige de forma independiente en la rama `improvements/persistence-narrative-sync-v2`, dentro del PR #52. No se atribuye el fallo al cambio Unicode ni se declara resuelta la validación hasta observar el nuevo CI.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.
+
+## 9. Seguimiento de CI y correcciones de validación (26 de noviembre de 2026)
+
+Las ejecuciones de CI de los commits intermedios identificaron y permitieron corregir los siguientes puntos:
+
+- El fixture de inicialización de IndexedDB esperaba la versión 24 y omitía el almacén `sync-outbox` y sus dos índices. Se actualizó la expectativa a la versión 25 y se añadieron el almacén y los índices al contrato del test.
+- El typecheck detectó dos acumuladores de `reduce` inferidos como posiblemente indefinidos al sumar latencias. Se explicitó el tipo genérico numérico en ambos puntos; no se cambió el cálculo ni sus límites.
+- El diagnóstico del monitor podía conservar incorrectamente el estado `owner` cuando la generación de lease todavía no tenía entrada en el mapa. Se eliminó el valor por defecto artificial `0` al capturar la generación, de modo que una respuesta de heartbeat solo se invalida si la generación realmente cambió.
+- Una ejecución anterior del workflow del monitor también falló en la prueba de dos pestañas Chromium al validar un lease previamente liberado. Ese caso sigue bajo verificación; no se declara corregido hasta que una ejecución posterior del navegador lo apruebe.
+
+Commits de seguimiento:
+- `9a67ca4`: fixture de IndexedDB para la bandeja durable.
+- `1623046` y `d378d66`: acumuladores de latencias tipados explícitamente.
+- `46098b8`: corrección de generación durante heartbeat y pérdida de lease.
+
+La última ejecución observada para el HEAD `46098b8607020a5c32d94f242feac1614be93455` tenía los dos workflows en curso, todavía instalando Chromium. El estado de typecheck, suite completa, pruebas del monitor y benchmark queda pendiente de esos resultados. No se considera validación verde.
+

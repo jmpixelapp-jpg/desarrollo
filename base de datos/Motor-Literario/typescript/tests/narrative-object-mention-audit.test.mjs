@@ -5,7 +5,7 @@ const text="Ana encontró la espada. Después la escondió.";
 const ev=(start,excerpt)=>({documentId:"ch1",revision:1,start,end:start+excerpt.length,excerpt});
 const observations=[
  {id:"o1",projectId:"p",documentId:"ch1",revision:1,kind:"action",action:"encontrar",surface:"encontró",actionEvidence:ev(4,"encontró"),evidence:ev(0,"Ana encontró la espada."),entityMentionOccurrences:[{entityId:"sword",entityKind:"object",evidence:ev(13,"la espada")}]},
- {id:"o2",projectId:"p",documentId:"ch1",revision:1,kind:"action",action:"esconder",surface:"escondió",actionEvidence:ev(34,"escondió"),evidence:ev(25,"Después la escondió."),entityMentionOccurrences:[{entityId:"sword",entityKind:"object",evidence:ev(33,"la")}]}];
+ {id:"o2",projectId:"p",documentId:"ch1",revision:1,kind:"action",action:"esconder",surface:"escondió",actionEvidence:ev(35,"escondió"),evidence:ev(24,"Después la escondió."),entityMentionOccurrences:[{entityId:"sword",entityKind:"object",evidence:ev(32,"la")}]}];
 const transition={id:"t1",projectId:"p",documentId:"ch1",revision:1,observationId:"o1",objectEntityId:"sword",transition:"discovered",polarity:"affirmed",grammaticalTense:"past-preterite",effectStatus:"candidate",actionEvidence:ev(4,"encontró"),objectEvidence:ev(13,"la espada"),contextEvidence:ev(0,"Ana encontró la espada."),reviewStatus:"candidate"};
 const input={projectId:"p",documentId:"ch1",revision:1,text,observations,transitions:[transition]};
 test("marca menciones cubiertas y menciones de objeto sin transición extraída",()=>{
@@ -15,7 +15,7 @@ test("marca menciones cubiertas y menciones de objeto sin transición extraída"
  assert.equal(result[1].interpretation,"coverage-gap-not-semantic-absence");
 });
 test("no enlaza por identidad sola si la evidencia textual no coincide",()=>{
- const result=audit({...input,transitions:[{...transition,objectEvidence:ev(13,"espada")}]});
+ const result=audit({...input,transitions:[{...transition,objectEvidence:ev(16,"espada")}]});
  assert.equal(result[0].status,"object-mention-without-transition");
 });
 test("separa entidades distintas aunque compartan una misma oración",()=>{

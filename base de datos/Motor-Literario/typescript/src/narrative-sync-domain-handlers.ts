@@ -427,7 +427,11 @@ export function createNarrativeIdeaContinuityIndexUpsertHandler(
         throw new Error("El índice de continuidad del sobre pertenece a otro proyecto.");
       }
       const current = await store.loadNarrativeIdeaContinuityIndex!(operation.projectId);
-      if (current && areNarrativeIdeaContinuityIndexesEquivalent(current, index)) return;
+      // Solo un replay de la misma generación es idempotente. Una generación
+      // consecutiva puede tener idéntico contenido derivado y aun así debe
+      // avanzar el cursor CAS del receptor para no bloquear la siguiente.
+      if (current?.generation === index.generation &&
+          areNarrativeIdeaContinuityIndexesEquivalent(current, index)) return;
       if (current?.generation !== expectedGeneration) {
         throw new Error("Conflicto CAS al sincronizar el índice de continuidad; requiere reconciliación.");
       }

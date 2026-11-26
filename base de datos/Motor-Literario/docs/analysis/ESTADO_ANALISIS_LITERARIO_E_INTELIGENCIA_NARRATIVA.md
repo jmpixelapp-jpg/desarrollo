@@ -297,3 +297,18 @@ La ejecución de CI del commit de código/pruebas `4682e21c9f29a61f803c0877f4cf1
 - **Live Author Monitor:** validación de esquema/almacenamiento, build, pruebas específicas del monitor y benchmark de heap aprobados.
 
 La suite completa ya no reproduce los fallos de fencing ni el recuento erróneo de tarjetas del workspace. Después de ese commit se añadió únicamente documentación de seguimiento (`054e1b5`); no se modificó código ni pruebas. El PR #56 permanece abierto como borrador y no se ha fusionado.
+
+
+### Integración de bandeja durable con el coordinador (IndexedDB v25)
+
+Se incorporó a esta rama la implementación de `StoredSyncOperation` y los métodos de `IndexedDbProjectStore`:
+- `enqueueSyncOperation`: inserción idempotente por `operationId`, rechazo de colisiones y unicidad de secuencia por proyecto/dispositivo.
+- `loadPendingSyncOperations`: lectura ordenada sin retirar operaciones.
+- `recordSyncOperationAttempt`: persistencia de intentos y último error.
+- `acknowledgeSyncOperation`: retirada únicamente tras acuse remoto.
+- Migración de IndexedDB v24 a v25 con almacén `sync-outbox` e índices por proyecto/fecha y proyecto/dispositivo/secuencia.
+- MLDB 0.4.3 y manifiesto físico actualizados; el contrato de puerto del coordinador es estructuralmente compatible con `IndexedDbProjectStore`.
+
+Se añadieron pruebas de bandeja real, idempotencia, conservación hasta acuse, aislamiento, validación de payload, inspección de almacenamiento y una prueba de integración que usa el coordinador contra IndexedDB: acepta una operación, conserva el conflicto, registra el intento y lo retira solo después del segundo acuse.
+
+**Límite:** sigue sin existir transporte remoto real, autenticación/autorización, política de backoff ni reconciliación de conflictos. La bandeja es durable y está conectada al coordinador en el núcleo; la sincronización entre dispositivos aún depende del adaptador remoto.

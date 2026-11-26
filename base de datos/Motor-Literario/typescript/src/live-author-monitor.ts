@@ -659,6 +659,12 @@ export class LiveAuthorMonitor {
     });
   }
 
+  /**
+   * Entrega snapshots inmutables en un único drenaje FIFO por instancia.
+   * Los callbacks pueden reentrar en el monitor: esas publicaciones se
+   * encolan y esperan a que termine la notificación actual. Los destinatarios
+   * se fijan por snapshot y se comprueba la suscripción antes de cada llamada.
+   */
   private publish(session: DocumentSession): LiveAuthorMonitorSnapshot {
     const snapshot = this.createSnapshot(session, this.readClock(session));
     this.notificationQueue.push({

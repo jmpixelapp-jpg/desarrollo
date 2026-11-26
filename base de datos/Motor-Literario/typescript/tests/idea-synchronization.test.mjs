@@ -859,7 +859,7 @@ test("no crea vínculos colgantes si el destino desaparece durante un conflicto 
     assert.deepEqual(persisted.relatedIdeaIds, []);
     assert.deepEqual(persisted.relatedEntityIds, []);
     assert.equal(store.writes, 1);
-    assert.equal(store.ideaReads, targetKind === "idea" ? 3 : 2);
+    assert.equal(store.ideaReads, targetKind === "idea" ? 4 : 2);
     if (targetKind === "entity") assert.equal(store.entityReads, 2);
     api.dispose();
   }

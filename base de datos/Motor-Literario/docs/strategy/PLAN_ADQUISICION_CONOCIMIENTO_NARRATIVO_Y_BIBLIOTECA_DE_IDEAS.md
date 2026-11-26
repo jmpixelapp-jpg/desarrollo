@@ -1,0 +1,201 @@
+# Plan de trabajo: adquisición de conocimiento narrativo y biblioteca de ideas
+
+**Estado:** hoja de ruta activa de implementación  
+**Prioridad:** máxima para el siguiente ciclo de desarrollo  
+**Implementación:** TypeScript / JavaScript puro en `base de datos/Motor-Literario/typescript/`  
+**Rama inicial:** `feat/narrative-idea-discovery-v1`  
+**Regla de alcance:** primero aprender a obtener y organizar conocimiento del texto; almacenamiento y sincronización quedan subordinados a esa necesidad.
+
+## 1. Qué problema estamos resolviendo
+
+El objetivo principal no es guardar más datos. Es conseguir que el motor pueda leer el material narrativo que escribe o incorpora el usuario, reconocer qué información contiene, separar lo explícito de lo interpretado y convertirlo en conocimiento útil para el proyecto.
+
+La biblioteca de ideas debe poder alimentarse del manuscrito, notas, fragmentos, conversaciones de trabajo y material de referencia que el usuario incorpore. No debe depender de que el usuario recuerde escribir etiquetas como `IDEA:`, `EVENTO:` o `PERSONAJE:`.
+
+El motor no debe limitarse a buscar palabras clave. Debe construir una representación trazable de lo leído y relacionar sus hallazgos con el contexto del proyecto.
+
+## 2. Resultado que queremos conseguir
+
+Al analizar un texto, el sistema deberá poder:
+
+1. Reconocer menciones de personajes, lugares, objetos, grupos y conceptos.
+2. Detectar acciones, acontecimientos, estados, objetivos, intenciones, motivaciones y conflictos.
+3. Identificar ideas narrativas: temas, premisas, preguntas, hipótesis, giros posibles, motivos y propuestas.
+4. Reconocer relaciones entre entidades y entre ideas, indicando qué evidencia respalda cada vínculo.
+5. Situar acontecimientos en el tiempo cuando el texto aporte referencias suficientes, sin inventar fechas ni ordenar lo que no pueda ordenarse.
+6. Detectar repeticiones, variaciones, desarrollos, contradicciones y posibles conexiones entre fragmentos o documentos.
+7. Distinguir lo que el autor afirma, lo que un personaje cree, lo que se pregunta, lo que se supone y lo que el motor solo propone como interpretación.
+8. Incorporar hallazgos a una biblioteca consultable, agrupable y revisable, conservando su origen y su historial.
+
+## 3. Principios que no se pueden romper
+
+- **Evidencia primero:** cada hallazgo debe apuntar al documento, revisión, rango y fragmento que lo respalda.
+- **No inventar:** una asociación probable no se presenta como hecho; una coincidencia de palabras no demuestra que dos ideas sean iguales.
+- **Separar voces:** lo que dice o cree un personaje no se convierte automáticamente en verdad del mundo narrativo ni en opinión del autor.
+- **Certeza explícita:** clasificar los resultados como explícitos, inferidos/candidatos, ambiguos o desconocidos. La confianza expresa claridad de la señal, no verdad objetiva.
+- **Revisión humana:** el sistema propone; el usuario confirma, corrige, descarta o fusiona. No reescribe el manuscrito ni decide el canon por su cuenta.
+- **No perder contradicciones:** conservar afirmaciones incompatibles con sus fuentes y fechas; no borrar una para hacer que la historia parezca coherente.
+- **Contexto de proyecto:** evitar mezclar libros, proyectos, versiones, personajes homónimos o notas de distinto origen.
+- **Determinismo y límites:** misma entrada y misma versión del analizador deben producir resultados reproducibles; procesar documentos grandes con límites explícitos y resultados parciales identificados.
+- **Tecnología:** TypeScript/JavaScript puro, sin depender de servicios externos, APIs de IA ni infraestructura remota para que la lectura básica funcione.
+
+## 4. Arquitectura lógica prevista
+
+El flujo de adquisición será:
+
+`fuente → segmentación → extracción → interpretación tipada → resolución de identidad → relaciones → biblioteca → revisión del usuario`
+
+### 4.1 Fuentes y segmentación
+
+Entradas: manuscritos completos, capítulos, escenas, notas, fichas, resúmenes y textos importados. Cada entrada conserva proyecto, documento, revisión, tipo de fuente y ubicación.
+
+La segmentación debe respetar párrafos, oraciones, encabezados y escenas explícitas. Los fragmentos analizados deben conservar offsets que permitan volver al texto exacto. No se inventarán límites de escena por cambios vagos de tema.
+
+### 4.2 Extracción de señales
+
+Detectores especializados identificarán:
+- entidades y alias;
+- acciones y acontecimientos;
+- relaciones y participantes;
+- atributos y estados;
+- expresiones temporales;
+- objetivos, deseos, intenciones y motivaciones;
+- temas, premisas, conflictos, preguntas e hipótesis;
+- motivos, símbolos y recurrencias.
+
+Cada detector debe declarar qué patrones reconoce, qué no puede reconocer y sus posibles falsos positivos. La extracción léxica actual es una base inicial, no la meta final.
+
+### 4.3 Interpretación y clasificación
+
+Cada afirmación debe llevar tipo, sujeto, predicado, objeto/valor cuando corresponda, voz o fuente de atribución, polaridad, modalidad, temporalidad, estado de revisión y evidencia.
+
+Ejemplos de distinciones obligatorias:
+- “El rey murió” = afirmación narrativa explícita.
+- “El rey podría estar vivo” = hipótesis o posibilidad.
+- “Mara cree que el rey murió” = creencia atribuida a Mara, no hecho confirmado.
+- “¿Y si el rey fuera el padre?” = pregunta/idea candidata.
+- “El rey no murió” = afirmación que puede contradecir otra; ambas deben conservarse.
+
+### 4.4 Resolución de identidad y contexto
+
+El motor propondrá si “Mara”, “la capitana” y “ella” se refieren a la misma entidad solo cuando exista evidencia contextual suficiente. Las resoluciones ambiguas deben permanecer separadas o pendientes de revisión. Nunca fusionar automáticamente dos personajes solo porque comparten nombre.
+
+### 4.5 Biblioteca de ideas
+
+La biblioteca no será una lista plana de frases. Cada elemento tendrá:
+- identidad estable;
+- título o formulación original;
+- categoría (tema, premisa, conflicto, personaje, mundo, escena, giro, pregunta, hipótesis, motivo u otra categoría extensible);
+- descripción y variantes originales;
+- estado (candidata, aceptada, descartada, incorporada, en pausa o sustituida);
+- procedencia y evidencias;
+- documentos y escenas relacionadas;
+- relaciones con otras ideas;
+- historial de cambios y decisiones del usuario.
+
+Debe permitir descubrir ideas repetidas o similares, agruparlas como familia y mostrar diferencias. La similitud nunca implica fusión automática. Una idea descartada debe seguir recuperable y no reaparecer como nueva sin explicar por qué.
+
+## 5. Fases de implementación y criterios de aceptación
+
+### Fase A — Descubrimiento de ideas desde prosa natural
+
+**Trabajo:** ampliar el primer módulo `narrative-idea-discovery.ts` para detectar señales naturales en español y, posteriormente, patrones configurables por idioma. Añadir pruebas con prosa realista, frases negativas, preguntas, diálogos, citas y ambigüedad.
+
+**Se acepta cuando:**
+- no exige etiquetas manuales;
+- conserva offsets y fragmentos exactos;
+- distingue pregunta, hipótesis, tema, premisa, conflicto y objetivo;
+- no clasifica una frase sin señal suficiente como idea;
+- documenta límites y falsos positivos;
+- pruebas nuevas y suite completa pasan.
+
+### Fase B — Lectura de entidades y acontecimientos en contexto
+
+**Trabajo:** mejorar la extracción de nombres, alias, pronombres, acciones, participantes, estados y acontecimientos en prosa corriente. Incorporar atribución de voz y contexto de escena.
+
+**Se acepta cuando:**
+- las menciones y las identidades consolidadas son conceptos separados;
+- una creencia de personaje no se convierte en hecho;
+- negación, condicional, pregunta y cita se conservan;
+- cada resultado tiene evidencia trazable;
+- los casos ambiguos se marcan, no se resuelven por adivinación.
+
+### Fase C — Relaciones, motivaciones y causalidad
+
+**Trabajo:** identificar relaciones explícitas y candidatas entre personajes, ideas y acontecimientos; detectar objetivos, deseos, obstáculos, decisiones y consecuencias expresadas.
+
+**Se acepta cuando:**
+- se distingue relación explícita de relación inferida;
+- se distingue sucesión temporal de causalidad;
+- se conservan actor, acción, objeto, polaridad y atribución cuando estén disponibles;
+- no se declara causa por simple proximidad entre dos frases;
+- contradicciones y evidencia opuesta permanecen consultables.
+
+### Fase D — Biblioteca inteligente de ideas
+
+**Trabajo:** convertir candidatos revisados en elementos de biblioteca; agrupar temas y variantes, enlazar ideas con personajes/escenas/eventos y facilitar búsqueda por significado estructural y evidencia.
+
+**Se acepta cuando:**
+- existe flujo candidato → aceptar/corregir/descartar/fusionar;
+- la fusión conserva fuentes e historial;
+- las ideas relacionadas no se confunden con ideas idénticas;
+- el usuario puede rastrear cada elemento hasta el texto fuente;
+- las ideas descartadas no se eliminan silenciosamente.
+
+### Fase E — Evolución del conocimiento narrativo
+
+**Trabajo:** comparar revisiones y documentos para detectar desarrollo, cambios, contradicciones, duplicados probables y cabos sueltos.
+
+**Se acepta cuando:**
+- se informa qué cambió y en qué revisión;
+- se conserva el estado anterior;
+- se diferencia contradicción real de cambio deliberado en la historia;
+- el motor puede señalar preguntas abiertas sin inventar respuestas;
+- el análisis parcial o limitado se declara como tal.
+
+### Fase F — Integración y rendimiento
+
+**Trabajo:** conectar el motor de lectura y la biblioteca con la persistencia existente, y después con sincronización. Optimizar análisis incremental sin cambiar el significado de los resultados.
+
+**Se acepta cuando:**
+- la lógica funciona antes de activar sincronización remota;
+- la persistencia almacena hallazgos con procedencia y versión del analizador;
+- reanalizar un documento no duplica conocimiento;
+- una revisión nueva invalida o revalida evidencia de forma explícita;
+- pruebas de regresión, integración, rendimiento y recuperación pasan.
+
+## 6. Qué no se hará todavía
+
+- No se priorizará añadir más tablas, índices o mecanismos de sincronización por sí solos.
+- No se declarará “comprensión semántica completa” por añadir expresiones regulares.
+- No se enviará el manuscrito a servicios externos ni se requerirán claves/API para la lectura local.
+- No se fusionarán ideas, entidades o personajes automáticamente por similitud superficial.
+- No se marcará como completada una fase sin código, pruebas y validación CI verificables.
+- No se abrirán nuevas líneas de almacenamiento hasta que la fase lógica activa tenga criterios de aceptación satisfechos, salvo correcciones necesarias para ejecutar esa lógica.
+
+## 7. Estado inicial y siguiente trabajo concreto
+
+La rama de trabajo incorpora un primer descubridor de candidatos de ideas desde frases declarativas y preguntas en español, con evidencia y offsets. Es solo un prototipo funcional inicial de la Fase A.
+
+La ejecución CI observada para esa rama completó el type-check, pero falló la suite global: 965 de 966 pruebas pasaron. El fallo corresponde a una prueba existente de extracción de entidades con marcas Unicode combinantes (`narrative-unicode-boundaries.test.mjs`), no a las seis pruebas nuevas del descubridor. Por tanto, la rama no debe considerarse validada ni lista para fusionar.
+
+**Siguiente orden de trabajo obligatorio:**
+1. Aislar y corregir el fallo Unicode sin debilitar la prueba.
+2. Volver a ejecutar CI y exigir suite completa aprobada.
+3. Revisar la cobertura de Fase A con casos narrativos naturales más amplios.
+4. Ampliar la lectura contextual para entidades, acciones, atribución, negación y acontecimientos.
+5. Continuar con relaciones/motivaciones y, después, biblioteca de ideas.
+6. Actualizar este documento con cada cambio real, pruebas y límites observados.
+
+## 8. Cómo informar el progreso
+
+Cada entrega debe indicar claramente:
+- archivos y funciones modificados;
+- comportamiento nuevo que ya existe;
+- pruebas añadidas;
+- pruebas ejecutadas y resultado exacto;
+- fallos pendientes y su causa;
+- qué criterio de aceptación se cumplió y cuál no;
+- siguiente cambio concreto.
+
+No usar porcentajes estimados como sustituto de estos datos. Distinguir siempre código escrito, pruebas aprobadas, CI aprobado y cambios fusionados en `main`.

@@ -27,7 +27,8 @@ export interface LiveAuthorMonitorWorkspaceOptions {
 }
 
 export type LiveAuthorMonitorWorkspaceMetric = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95" |
-  "typing" | "composition" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
+  "typing" | "composition" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other" |
+  "typingUnits" | "compositionInserted" | "compositionDeleted" | "unitCoverage";
 type CompactMetricKey = LiveAuthorMonitorWorkspaceMetric;
 interface WorkspaceCard {
   readonly root: HTMLElement;
@@ -45,8 +46,12 @@ interface WorkspaceCard {
 }
 
 const WORKSPACE_METRICS: readonly { readonly key: CompactMetricKey; readonly label: string }[] = [
-  { key: "wordsPerMinute", label: "Palabras/min (bruto)" },
-  { key: "inserted", label: "Caracteres insertados brutos (UTF-16)" },
+  { key: "wordsPerMinute", label: "Palabras/min (solo typing)" },
+  { key: "inserted", label: "Inserciones brutas (UTF-16; incluye IME)" },
+  { key: "typingUnits", label: "Unidades typing (UTF-16)" },
+  { key: "compositionInserted", label: "Unidades insertadas IME (UTF-16)" },
+  { key: "compositionDeleted", label: "Unidades sustituidas IME (UTF-16)" },
+  { key: "unitCoverage", label: "Cobertura de métricas por unidad" },
   { key: "typing", label: "Escritura" },
   { key: "composition", label: "Composición IME" },
   { key: "paste", label: "Pegados" },
@@ -150,6 +155,10 @@ function metricValue(
   switch (key) {
     case "wordsPerMinute": return decimal.format(snapshot.estimatedWordsPerMinute);
     case "inserted": return integer.format(snapshot.insertedCharacters);
+    case "typingUnits": return integer.format(snapshot.typingInsertedCharacters);
+    case "compositionInserted": return integer.format(snapshot.compositionInsertedCharacters);
+    case "compositionDeleted": return integer.format(snapshot.compositionDeletedCharacters);
+    case "unitCoverage": return snapshot.activityUnitMetricsComplete ? "Completa" : "Parcial (desde recuperación)";
     case "typing": return integer.format(snapshot.typingChanges);
     case "composition": return integer.format(snapshot.compositionChanges);
     case "paste": return integer.format(snapshot.pasteChanges);

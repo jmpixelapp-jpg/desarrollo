@@ -4294,6 +4294,10 @@ export class HostEngineApi {
           (typeof identity.writerId !== "string" || !identity.writerId.trim() || identity.writerId.length > 256))) {
       throw new Error("La identidad del proyecto o del escritor es inválida.");
     }
+    if (this.hasNarrativeContinuityOutbox &&
+        (typeof identity.writerId !== "string" || !identity.writerId.trim())) {
+      throw new Error("El outbox de continuidad requiere un writerId estable en la identidad del proyecto.");
+    }
     this.engine.initializeProject(identity);
     this.unsubscribeNarrativeChanges?.();
     this.continuityCandidatesByDocument.clear();

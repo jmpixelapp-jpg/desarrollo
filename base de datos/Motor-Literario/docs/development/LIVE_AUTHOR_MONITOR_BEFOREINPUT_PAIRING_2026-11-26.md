@@ -477,28 +477,31 @@ Estas pruebas verifican tanto la ausencia de deltas falsos como la liberación d
 
 ## Suspensión de captura ante Page Lifecycle y restauración BFCache — 26 de noviembre de 2026
 
-Se conectó el adaptador de captura del textarea a las señales de ciclo de vida de su propio documento:
+Se conectó el adaptador de captura del textarea a las señales de ciclo de vida y foco:
 
 - pagehide se escucha en element.ownerDocument.defaultView.
-- freeze se escucha en element.ownerDocument.
+- freeze y visibilitychange se escuchan en element.ownerDocument.
+- blur se escucha en el textarea.
 - Los listeners se instalan al iniciar la primera suscripción y se retiran al terminar la última o al disponer el adaptador.
 
-Ante cualquiera de esas señales, el adaptador utiliza el mismo camino conservador de resync-required: invalida cualquier beforeinput todavía pendiente, cierra el estado de composición y libera la copia sombra completa previousText. No emite un delta inferido para completar una composición cuyo input pudo quedar interrumpido.
+Ante pagehide o freeze, el adaptador suspende siempre la captura. Ante visibilitychange a oculto o blur, la suspende solo si existe un beforeinput pendiente o una composición activa; perder el foco o esconder una pestaña sin una operación abierta no rompe por sí solo la continuidad. Si el evento interrumpe un beforeinput/input pendiente, el diagnóstico es missing-input; si interrumpe solo una composición abierta, es resync-required. En todos los casos se cierran los estados incompletos y se libera la copia sombra previousText.
 
-**No hay reanudación automática en pageshow ni resume.** La vista y su polling pueden volver a estar activos, pero la fuente del documento permanece suspendida hasta que el anfitrión vuelva a suscribirse, lea el snapshot autoritativo más reciente y llame a resynchronize(snapshot). Esto evita tratar una restauración BFCache como prueba de que no hubo cambios fuera de la secuencia observada.
+**No hay reanudación automática en pageshow ni resume.** La vista y su polling pueden volver a estar activos, pero la fuente del documento permanece suspendida hasta que el anfitrión obtenga un snapshot autoritativo que coincida con el contenido visible y llame a resynchronize(snapshot) con el observador activo. Esto evita tratar una restauración BFCache o un regreso al foco como prueba de que no hubo cambios fuera de la secuencia observada.
 
 ### Regresión añadida
 
 live-author-monitor-textarea-source.test.mjs cubre:
 
-1. composición activa al recibir pagehide;
-2. liberación de previousText y descarte del estado pendiente;
-3. señal freeze duplicada sin duplicar errores;
-4. eventos de edición ignorados durante el estado suspendido;
-5. recuperación explícita desde un snapshot actualizado mientras la suscripción sigue activa;
-6. aceptación de una edición posterior con sequence y baseRevision consecutivos;
-7. retirada de listeners pagehide y freeze al cerrar la suscripción.
+1. composición activa al recibir pagehide y freeze;
+2. ocultación de la pestaña durante una composición abierta;
+3. blur durante una composición y durante un par beforeinput/input incompleto;
+4. no interrumpir la continuidad cuando blur ocurre sin operación abierta;
+5. liberación de previousText y descarte del estado pendiente;
+6. eventos repetidos sin duplicar diagnósticos;
+7. edición ignorada hasta recibir un snapshot que coincide con el textarea visible;
+8. aceptación de una edición posterior con sequence y baseRevision consecutivos;
+9. retirada de listeners blur, visibilitychange, pagehide y freeze al cerrar la suscripción.
 
-La prueba usa EventTargets controlados para verificar la máquina de estados del adaptador. No simula un congelamiento físico de Chromium, una salida real a BFCache ni un proveedor IME del sistema operativo. La prueba Chromium existente del scheduler de visibilidad/ciclo de vida sigue siendo una validación separada de la capa visual.
+Las pruebas de esta máquina usan EventTargets controlados. No simulan un congelamiento físico de Chromium, una salida real a BFCache ni un proveedor IME del sistema operativo. La prueba Chromium existente del scheduler de visibilidad/ciclo de vida sigue siendo una validación separada de la capa visual.
 
 **Estado de validación:** el código y la regresión se publicaron en main; la ejecución CI sobre estos commits no está confirmada todavía. No se extrapolan aquí los resultados de CI de revisiones anteriores.

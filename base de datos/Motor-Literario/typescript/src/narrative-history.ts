@@ -103,7 +103,7 @@ export function extractNarrativeAssertions(
             .filter(index => index >= 0);
           const sentenceEnd = sentenceStops.length ? Math.min(...sentenceStops) : text.length;
           const sentence = text.slice(sentenceStart, sentenceEnd);
-          const timeReference = explicitTimeReference(sentence, localStart - sentenceStart);
+          const timeReference = explicitTimeReference(sentence);
           output.push({
             projectId, id: "assertion:" + entity.id + ":" + documentId + ":" + revision + ":" + start + ":" + definition.attribute,
             entityId: entity.id, entityName: entity.canonicalName, attribute: definition.attribute,
@@ -117,7 +117,7 @@ export function extractNarrativeAssertions(
 }
 
 function explicitTimeReference(
-  text: string, _anchorOffset = 0
+  text: string
 ): NarrativeTimeReference | undefined {
   const candidates: { readonly index: number; readonly reference: NarrativeTimeReference }[] = [];
   const addCalendarDate = (raw: string, index: number, year: number, month: number, day: number) => {

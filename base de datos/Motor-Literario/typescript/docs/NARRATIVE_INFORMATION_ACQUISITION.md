@@ -121,5 +121,5 @@ El éxito del monitor no se mide por cuántos registros guarda. Se mide por cuá
 
 ### Offsets exactos de acciones durante la ingesta
 
-Las señales de acción exponen como evidencia el rango exacto del token verbal, no el inicio de la ventana del párrafo. Esto mantiene offsets UTF-16 directamente navegables incluso cuando el texto fuente conserva un BOM UTF-8. Los marcadores temporales, causales y de contraste mantienen contexto alrededor de su aparición para facilitar la revisión.
+Las observaciones de acción del módulo de descubrimiento conservan un campo `actionEvidence` con el rango exacto del token verbal. Las señales generales de ingesta mantienen una ventana contextual alrededor del verbo; esa evidencia contextual permite ubicar el token dentro del texto fuente original, incluido un BOM UTF-8. No deben confundirse ambos contratos: uno sirve para atribución precisa de la acción y el otro para revisión contextual.
 

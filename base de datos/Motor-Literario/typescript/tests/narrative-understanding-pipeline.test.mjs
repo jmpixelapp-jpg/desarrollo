@@ -31,7 +31,7 @@ test("coordina ideas, acciones, eventos, consecuencias y escenas con una procede
 });
 
 test("propaga baseOffset sin alterar offsets absolutos de evidencia", () => {
-  const text = "Mara ayudó a Elian.";
+  const text = "Mara ayudó a Elian. Como consecuencia, Mara protegió a Elian.";
   const result = understandNarrativeFragment({
     projectId:"novel", documentId:"chapter-2", revision:4,
     text, entities, baseOffset:1200
@@ -39,6 +39,8 @@ test("propaga baseOffset sin alterar offsets absolutos de evidencia", () => {
   assert.equal(result.analyzedRange.start, 1200);
   assert.equal(result.analyzedRange.end, 1200 + text.length);
   assert.equal(result.actions[0].evidence.start, 1200);
+  assert.equal(result.consequences.length, 1);
+  assert.equal(result.consequences[0].evidence.start, 1200 + text.indexOf("Como consecuencia"));
   assert.equal(result.sceneAssignments.actionCandidates[0].sceneAssignment, "unassigned");
 });
 

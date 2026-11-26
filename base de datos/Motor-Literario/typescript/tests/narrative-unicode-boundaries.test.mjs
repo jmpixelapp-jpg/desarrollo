@@ -8,7 +8,7 @@ function character(id, canonicalName) {
     id,
     kind: "character",
     canonicalName,
-    normalizedName: canonicalName.normalize("NFKC").trim().replace(/\\s+/gu, " ").toLocaleLowerCase("es"),
+    normalizedName: canonicalName.normalize("NFKC").trim().toLocaleLowerCase("es"),
     aliases: [],
     evidence: [],
     firstSeenAt: 1,
@@ -18,7 +18,8 @@ function character(id, canonicalName) {
 }
 
 test("un nombre no coincide parcialmente antes de una marca combinante en participantes", () => {
-  const text = "ACONTECIMIENTO: Ana\\u0301 desaparece.";
+  const combiningMark = String.fromCodePoint(0x0301);
+  const text = "ACONTECIMIENTO: Ana" + combiningMark + " desaparece.";
   const events = extractNarrativeEvents(
     "unicode-event-boundaries",
     "chapter",
@@ -32,7 +33,7 @@ test("un nombre no coincide parcialmente antes de una marca combinante en partic
 });
 
 test("un nombre que contiene una marca combinante sí coincide de forma completa", () => {
-  const decomposedName = "Ana\\u0301";
+  const decomposedName = "Ana" + String.fromCodePoint(0x0301);
   const text = `ACONTECIMIENTO: ${decomposedName} desaparece.`;
   const events = extractNarrativeEvents(
     "unicode-event-boundaries",

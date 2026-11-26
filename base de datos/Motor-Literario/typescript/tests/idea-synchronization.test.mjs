@@ -902,3 +902,54 @@ test("no crea vínculos colgantes si el destino desaparece durante un conflicto 
     api.dispose();
   }
 });
+
+test("reconcilia escrituras simultáneas desde dos instancias independientes del anfitrión", async () => {
+  const store = new RacingStore([
+    idea("idea-source"),
+    idea("idea-target-a"),
+    idea("idea-target-b")
+  ]);
+  const firstApi = createApi(store);
+  const secondApi = createApi(store);
+
+  try {
+    const [firstSnapshot, secondSnapshot] = await Promise.all([
+      firstApi.getNarrativeIdeas(),
+      secondApi.getNarrativeIdeas()
+    ]);
+    assert.equal(firstSnapshot.length, 3);
+    assert.equal(secondSnapshot.length, 3);
+    assert.equal(store.ideaReads, 2);
+
+    const [firstResult, secondResult] = await Promise.all([
+      firstApi.setNarrativeIdeaLink("idea-source", "idea-target-a", true),
+      secondApi.setNarrativeIdeaLink("idea-source", "idea-target-b", true)
+    ]);
+
+    const persisted = store.ideas.get(projectId + ":idea-source");
+    assert.deepEqual(persisted.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+    assert.deepEqual(firstResult.relatedIdeaIds, ["idea-target-a"]);
+    assert.deepEqual(secondResult.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+    assert.equal(store.writes, 3);
+    assert.equal(store.ideaReads, 3);
+
+    // La primera instancia conserva una instantánea anterior a la escritura
+    // de la segunda. Su siguiente mutación debe detectar CAS, recargar y
+    // preservar ambos vínculos antes de aplicar el cambio editorial.
+    const statusResult = await firstApi.setNarrativeIdeaStatus(
+      "idea-source", "incorporated"
+    );
+    assert.equal(statusResult.status, "incorporated");
+    assert.deepEqual(statusResult.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+
+    const refreshed = await firstApi.getNarrativeIdeas();
+    const refreshedSource = refreshed.find(item => item.id === "idea-source");
+    assert.equal(refreshedSource.status, "incorporated");
+    assert.deepEqual(refreshedSource.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+    assert.equal(store.writes, 5);
+    assert.equal(store.ideaReads, 4);
+  } finally {
+    firstApi.dispose();
+    secondApi.dispose();
+  }
+});

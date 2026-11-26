@@ -142,12 +142,24 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
   }
   if (value.status === "leased" &&
       (typeof value.leaseOwner !== "string" || !value.leaseOwner.trim() ||
-       !Number.isFinite(value.leaseExpiresAt) || (value.leaseExpiresAt ?? -1) < 0)) {
-    throw new Error("Una entrada reclamada del outbox perdió su lease.");
+       !Number.isFinite(value.leaseExpiresAt) || (value.leaseExpiresAt ?? -1) < 0 ||
+       !Number.isFinite(value.lastAttemptAt) || (value.lastAttemptAt ?? -1) < value.createdAt ||
+       value.attempts < 1)) {
+    throw new Error("Una entrada reclamada del outbox perdió su lease o sus metadatos de intento.");
+  }
+  if (value.status === "pending" &&
+      (value.leaseOwner !== undefined || value.leaseExpiresAt !== undefined)) {
+    throw new Error("Una entrada pendiente no puede conservar un lease activo.");
   }
   if (value.status === "delivered" &&
-      (!Number.isFinite(value.deliveredAt) || (value.deliveredAt ?? -1) < value.createdAt)) {
-    throw new Error("Una entrada entregada del outbox perdió su fecha de confirmación.");
+      (!Number.isFinite(value.deliveredAt) || (value.deliveredAt ?? -1) < value.createdAt ||
+       (value.lastAttemptAt !== undefined && (value.deliveredAt ?? -1) < value.lastAttemptAt) ||
+       value.leaseOwner !== undefined || value.leaseExpiresAt !== undefined)) {
+    throw new Error("Una entrada entregada tiene fechas o metadatos de lease inconsistentes.");
+  }
+  if (value.lastError !== undefined &&
+      (typeof value.lastError !== "string" || value.lastError.length > MAX_ERROR_UNITS)) {
+    throw new Error("El último error del outbox excede el formato o límite permitido.");
   }
   const envelope = value.envelope;
   if (!envelope || envelope.projectId !== value.projectId ||
@@ -162,6 +174,12 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
       envelope.createdAt !== value.createdAt) {
     throw new Error("La envoltura no coincide con la identidad persistida del outbox.");
   }
+  validateIdentifier(value.writerId, "writerId", MAX_WRITER_ID_UNITS);
+  if (value.operationId !==
+      "continuity-index:" + encodeURIComponent(value.projectId) + ":" + value.generation) {
+    throw new Error("El operationId del outbox no coincide con el proyecto y la generación.");
+  }
+  validateNarrativeIdeaContinuityIndex(envelope.payload.index);
 }
 
 /**

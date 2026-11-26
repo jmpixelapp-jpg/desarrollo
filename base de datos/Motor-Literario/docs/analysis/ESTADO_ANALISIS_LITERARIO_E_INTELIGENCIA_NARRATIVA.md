@@ -401,3 +401,12 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - **Validación:** pruebas añadidas al repositorio; no se ha ejecutado npm/TypeScript ni se dispone de resultados de CI desde esta operación.
 
 - Ampliación de pruebas: recuperación de un lease vencido cuyo propietario anterior dejó de ejecutarse; el nuevo contexto puede reclamarlo mediante el mecanismo transaccional y avanzar el fencing token.
+
+
+### Tanda — integración real y fencing
+
+- Añadida prueba end-to-end de dos coordinadores completos, dos instancias de almacén IndexedDB y propietarios independientes: se comparte la misma bandeja, se serializa el acceso y solo se produce un envío.
+- Añadida prueba de fencing takeover: un propietario nuevo adquiere un lease vencido con token superior; el propietario antiguo ya no puede renovarlo ni liberarlo.
+- Corregida la documentación que todavía describía la ausencia de leases; ahora refleja el adaptador opcional disponible, la configuración por contexto y la semántica de resultado incierto al perder titularidad.
+- Se mantiene la exigencia de idempotencia remota por `operationId`.
+- No se ha ejecutado el conjunto de pruebas ni se dispone de resultados de CI en esta sesión.

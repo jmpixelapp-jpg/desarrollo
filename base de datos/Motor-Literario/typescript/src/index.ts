@@ -40,3 +40,4 @@ export * from "./narrative-sync-journal";
 export * from "./narrative-sync-dispatcher";
 export * from "./narrative-sync-consumer";
 export * from "./narrative-sync-domain-handlers";
+export * from "./narrative-action-link-discovery";

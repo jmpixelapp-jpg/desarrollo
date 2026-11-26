@@ -66,7 +66,8 @@ test("conserva evidencia de otros documentos al fusionar una proyección", async
 
   const mara = [...tables.entities.values()].find(x => x.canonicalName === "Mara");
   assert.ok(mara.evidence.some(x => x.documentId === "chapter-a"));
-  assert.ok(mara.evidence.some(x => x.documentId === "chapter-b"));
+  assert.ok(mara.evidence.some(x => x.documentId === "chapter-b" && x.revision === 2));
+  assert.equal(mara.evidence.some(x => x.documentId === "chapter-b" && x.revision === 1), false);
 });
 
 test("rechaza un store sin las operaciones CAS requeridas", async () => {
@@ -75,4 +76,24 @@ test("rechaza un store sin las operaciones CAS requeridas", async () => {
     persistNarrativeKnowledgeGraphSnapshot({}, snapshot),
     /persistencia CAS completa/u
   );
+});
+
+test("reemplaza la evidencia de una revisión por la vigente del mismo documento", async () => {
+  const { store, tables } = createMemoryStore();
+  const first = createNarrativeKnowledgeGraphSnapshot("novel-a", [
+    { documentId: "chapter-a", revision: 1, text: "personaje Mara aparece." },
+    { documentId: "chapter-b", revision: 1, text: "personaje Mara regresa." }
+  ], { now: 100 });
+  await persistNarrativeKnowledgeGraphSnapshot(store, first);
+
+  const revised = createNarrativeKnowledgeGraphSnapshot("novel-a", [
+    { documentId: "chapter-a", revision: 2, text: "personaje Mara desaparece." },
+    { documentId: "chapter-b", revision: 1, text: "personaje Mara regresa." }
+  ], { now: 200 });
+  await persistNarrativeKnowledgeGraphSnapshot(store, revised);
+
+  const mara = [...tables.entities.values()].find(x => x.canonicalName === "Mara");
+  assert.ok(mara.evidence.some(x => x.documentId === "chapter-a" && x.revision === 2));
+  assert.equal(mara.evidence.some(x => x.documentId === "chapter-a" && x.revision === 1), false);
+  assert.ok(mara.evidence.some(x => x.documentId === "chapter-b" && x.revision === 1));
 });

@@ -486,3 +486,11 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Prueba de regresión añadida en `f414c53`: verifica el encabezado tras BOM y que el offset de «llegó» sigue coincidiendo con el texto fuente.
 - Documentación de BOM y offsets actualizada en `d6eabd0`.
 - Runs 2839–2841 cubrían la corrección del complemento personal y documentación; la nueva prueba de BOM y el cambio de segmentación se sometieron a CI en runs posteriores, todavía sin resultado final en el momento de registrar esta nota.
+
+
+### Precisión de prueba: sujeto activo y objeto personal — 26-11-2026
+
+- La corrección del patrón personal ya detectaba correctamente «a Ana» en «Bruno encontró a Ana», pero la prueba negativa conservaba una expectativa contradictoria: exigía que no hubiera sujeto gramatical candidato, aunque «Bruno» está explícitamente antes del verbo y cumple el patrón activo.
+- No se debilitó la extracción. Se corrigió la prueba en `ae52a39` para exigir ambos datos: Bruno como sujeto gramatical activo candidato y Ana como complemento personal explícito con marcador «a».
+- Así se comprueba la separación que interesa al motor: el rol gramatical de sujeto y el complemento personal no se confunden ni se intercambian.
+- La validación completa de esta revisión y de la ingesta con BOM UTF-8 sigue pendiente de los runs 2844–2847.

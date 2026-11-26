@@ -820,3 +820,30 @@ test("no rechaza un pegado grande que llega con la cola reentrante vacía", () =
   f.stop();
   f.source.dispose();
 });
+
+
+test("suma el texto de varios eventos reentrantes antes de admitirlos en la cola", () => {
+  const f = fixture("abc", 0, 0, { maxQueuedTextUnits: 1 });
+  const stopReentrant = f.source.subscribeChanges(change => {
+    if (change.sequence !== 1) return;
+    f.editor.apply("edit", "tx-reentrant-one-unit-a", {
+      start: 4, end: 4, replacement: "X"
+    });
+    f.editor.apply("edit", "tx-reentrant-one-unit-b", {
+      start: 5, end: 5, replacement: "Y"
+    });
+  });
+
+  f.editor.apply("edit", "tx-first-before-aggregate-overflow", {
+    start: 3, end: 3, replacement: "!"
+  });
+
+  assert.deepEqual(f.changes.map(change => change.sequence), [1]);
+  assert.equal(f.source.getState().sequence, 1);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "transaction-backlog-overflow");
+  assert.equal(f.editor.listeners.size, 0);
+  stopReentrant();
+  f.stop();
+  f.source.dispose();
+});

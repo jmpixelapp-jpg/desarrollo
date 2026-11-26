@@ -818,3 +818,34 @@ Se incorpora la persistencia del índice de continuidad como proyección derivad
 - Total: 25 pruebas nuevas de Fase AT.
 
 El índice sigue siendo una vista derivada. No cambia estados editoriales, no fusiona ideas y no reemplaza el historial de la biblioteca. Debe poder descartarse y reconstruirse desde documentos, candidatos y revisiones fuente.
+
+
+### Fase AU: actualización automática desde el ciclo de vida documental (26-11-2026)
+
+Se conecta el índice de continuidad con el anfitrión del motor. La aplicación ya no necesita invocar manualmente el cálculo después de cada edición local.
+
+**Inventario documental ligero**
+- Se añade `StoredDocumentMetadata` y `ProjectStore.loadDocumentMetadata(projectId)`.
+- IndexedDB enumera `documentId`, `revision`, `sequence` y `updatedAt` sin devolver cuerpos de manuscrito.
+- El método valida identidad de proyecto, IDs duplicados, revisiones y secuencias, y ordena el resultado de forma determinista.
+
+**Activadores automáticos**
+- Al inicializar un proyecto, se reconcilia el índice durable existente.
+- Al abrir o recuperar un documento, se actualiza la proyección desde los snapshots realmente persistidos.
+- Después de cada análisis de una edición confirmada, se refresca el índice aunque el adaptador no ofrezca extracción clásica de entidades.
+- Los avisos de cambios externos entre instancias invalidan el conocimiento en caché y ejecutan la reconciliación.
+- `flushPendingChanges()` espera también la cola de continuidad, de modo que al regresar no queda una actualización local pendiente.
+
+**Consistencia y eficiencia**
+- Los candidatos se conservan en caché por documento y se reutilizan mientras coincidan revisión y secuencia; una edición solo obliga a redescubrir el documento afectado.
+- Después de leer los cuerpos, se vuelve a enumerar el inventario. Si cambió el conjunto, la revisión o la secuencia durante el análisis, se aborta esa generación y se conserva el índice anterior.
+- El muestreo de hasta 200 candidatos se distribuye a lo largo del inventario documental, en lugar de favorecer siempre los primeros IDs. Si se alcanza el límite de candidatos por documento, el presupuesto total o el límite de tamaño del texto, se propaga `sourceAnalysisTruncated`.
+- Sin una lista editorial explícita suministrada por `HostEngineOptions.getOrderedDocumentIds`, la cronología entre documentos queda desconocida. No se infiere a partir de nombres, IDs, fechas de guardado ni orden alfabético.
+- El anfitrión recibe `onNarrativeIdeaContinuityIndexUpdated` únicamente cuando se confirma una generación nueva. El callback debe insertar la operación en su outbox durable; el envío de red corresponde al trabajador de transporte. La operación puede construirse con `createNarrativeIdeaContinuityIndexSyncEnvelope` y debe conservar `expectedGeneration`.
+- Los cambios de la proyección no crean, confirman ni modifican registros `NarrativeIdea`; los candidatos siguen siendo señales analíticas revisables.
+
+**Pruebas añadidas**
+- 6 pruebas de actualización automática al abrir documentos, editar y confirmar revisiones, cronología desconocida sin orden explícito, inventario sin cuerpos y cobertura parcial de proyectos de más de 200 documentos.
+- Total: 6 pruebas nuevas de Fase AU.
+
+La actualización local de la proyección queda automatizada. La entrega a otros dispositivos utiliza el callback/outbox del anfitrión; no se afirma que exista un transporte de red universal integrado en el motor.

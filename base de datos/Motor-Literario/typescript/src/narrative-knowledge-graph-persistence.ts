@@ -1125,6 +1125,77 @@ export async function verifyNarrativeReferenceRepairAuditIntegrity(
   };
 }
 
+export interface NarrativeRepairSyncJournalReader {
+  loadOperations(projectId: string): Promise<readonly {
+    readonly operationId: string;
+    readonly writerId: string;
+    readonly sequence: number;
+    readonly digest: string;
+    readonly appliedAt?: number;
+  }[]>;
+}
+
+export interface NarrativeRepairSyncReconciliationReport {
+  readonly projectId: string;
+  readonly pendingRepairs: readonly (NarrativeReferenceRepairPendingInspection & {
+    readonly auditAlreadyRecorded: boolean;
+  })[];
+  readonly auditIntegrity: NarrativeReferenceRepairAuditIntegrityReport;
+  readonly syncJournal: {
+    readonly checkedOperations: number;
+    readonly pendingCount: number;
+    readonly appliedCount: number;
+    readonly pendingOperationIds: readonly string[];
+  };
+  readonly repairQueueConsistent: boolean;
+}
+
+/**
+ * Diagnóstico de solo lectura que cruza cola de reparaciones, auditoría y
+ * diario de sincronización. Una intención con auditoría ya escrita señala
+ * la ventana de fallo anterior al borrado de cola y puede recuperarse de forma
+ * idempotente. El diario remoto se informa por separado: sus operationId no
+ * se equiparan con IDs de reparación salvo que el contrato lo establezca.
+ */
+export async function reconcileNarrativeRepairAndSyncState(
+  store: ProjectStore,
+  projectId: string,
+  journal: NarrativeRepairSyncJournalReader
+): Promise<NarrativeRepairSyncReconciliationReport> {
+  if (!journal || typeof journal.loadOperations !== "function") {
+    throw new TypeError("Se requiere un lector válido del diario de sincronización.");
+  }
+  const [pending, auditIntegrity, operations] = await Promise.all([
+    inspectNarrativeReferenceRepairPending(store, projectId),
+    verifyNarrativeReferenceRepairAuditIntegrity(store, projectId),
+    journal.loadOperations(projectId)
+  ]);
+  const auditOperationIds = new Set(
+    (await store.loadNarrativeReferenceRepairAudits!(projectId)).map(entry => entry.operationId)
+  );
+  const pendingRepairs = pending.map(entry => ({
+    ...entry,
+    auditAlreadyRecorded: auditOperationIds.has(entry.operationId)
+  }));
+  const pendingOperations = operations.filter(operation => operation.appliedAt === undefined);
+  return {
+    projectId,
+    pendingRepairs,
+    auditIntegrity,
+    syncJournal: {
+      checkedOperations: operations.length,
+      pendingCount: pendingOperations.length,
+      appliedCount: operations.length - pendingOperations.length,
+      pendingOperationIds: pendingOperations.map(operation => operation.operationId)
+    },
+    repairQueueConsistent: auditIntegrity.intact &&
+      pendingRepairs.every(entry =>
+        entry.status !== "invalid-intent" &&
+        !(entry.auditAlreadyRecorded && entry.status === "record-changed")
+      )
+  };
+}
+
 export interface NarrativeKnowledgeGraphPersistenceResult {
   readonly projectId: string;
   readonly saved: {

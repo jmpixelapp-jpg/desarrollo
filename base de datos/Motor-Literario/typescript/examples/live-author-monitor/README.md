@@ -37,3 +37,8 @@ La aplicación anfitriona final del proyecto y el editor enriquecido de producci
 ## Prueba automatizada
 
 `tests/live-author-monitor-writing-browser.test.mjs` inicia Vite y Chromium, edita dos capítulos, verifica métricas independientes, cambia entre documentos, cierra de forma durable, recarga, restaura ambas sesiones y vuelve a escribir en una de ellas.
+
+
+## Validación CI de la entrega multi-documento
+
+La CI específica [45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764) aprobó **141/141 pruebas** y la suite general [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738) aprobó **718/718 pruebas**, con benchmark completado. Se incluyen las pruebas Chromium de dos capítulos, restauración independiente, continuidad tras recuperar y checkpoints inmediatos válidos.

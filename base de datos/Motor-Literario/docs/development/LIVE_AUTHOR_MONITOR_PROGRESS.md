@@ -609,3 +609,18 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **Corrección:** la edad restaurada ahora es exactamente `checkpoint.lastActivityAgeMs + downtime`. El downtime ya se incorpora íntegramente a `idleDurationMs`; no se necesita alterar la antigüedad de la última pulsación ni fabricar tiempo anterior al inicio de sesión.
 
 **Regresión:** se crea una sesión de 3 ms con umbral de inactividad de 10 ms, se restaura tras 1 ms y se crea un segundo checkpoint. La prueba verifica que la última actividad (3 ms de antigüedad) sigue dentro de la sesión (4 ms), y que el checkpoint posterior es válido.
+
+
+## 30. Validación final multi-documento y regresiones de persistencia (26 de noviembre de 2026)
+
+**Carrera de admisión/persistencia corregida:** al terminar un `appendChange()` lento, el motor ahora instala el buffer/revisión confirmados conservando el `pendingSequence` más reciente de la instancia viva. La regresión bloquea la primera escritura, admite 40 deltas y confirma que la secuencia pendiente no retrocede y que todos los commits quedan aplicados.
+
+**Restauración inmediata corregida:** `restoreCheckpoint()` ya no fuerza la última actividad a ser más antigua que `idleAfterMs` cuando la sesión restaurada dura menos que ese umbral. El downtime se contabiliza en `idleDurationMs` y la antigüedad de actividad permanece dentro de la duración real de la sesión. La regresión crea una sesión de 3 ms, restaura después de 1 ms y confirma que el siguiente checkpoint sigue siendo válido.
+
+**Prueba real Chromium multi-documento:** dos capítulos abiertos en paralelo mantienen textos y métricas independientes; la navegación vacía la cola anterior, actualiza el editor/panel activo, conserva ambas sesiones, cierra de forma durable, recarga y restaura ambos checkpoints y permite seguir escribiendo después de la recuperación.
+
+**CI específica del monitor:** [45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764), commit `d728593bd4f9758e85a4b16ce5ab1480d330f4bc`: build Vite correcto, esquema MLDB 0.4.2 válido (26 tablas), auditoría física correcta (25 tablas y 34 almacenes IndexedDB), Chromium completado y **141/141 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+**CI general TypeScript:** [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738), mismo commit: Type-check, build, validación MLDB y benchmark completados; **718/718 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+**Benchmark del runner CI:** 40 ediciones a 10.000 palabras: commit p95 5,76 ms / extremo a extremo p95 6,29 ms; 100.000 palabras: 2,69 ms / 3,35 ms; 500.000 palabras: 4,11 ms / 4,71 ms. Línea única de 20.000 palabras: extremo a extremo p95 65,15 ms. Cuatro documentos con diez ediciones por documento: extremo a extremo p95 1,39 ms. Son mediciones de este runner, no garantías universales.

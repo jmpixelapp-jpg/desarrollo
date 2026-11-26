@@ -827,3 +827,12 @@ Se corrige una carrera entre la admisión sincrónica y la persistencia asíncro
 La restauración suma el downtime completo a `idleDurationMs` y conserva la edad de última actividad como `lastActivityAgeMs + downtime`. No impone un mínimo artificial de `idleAfterMs + 1`, porque una sesión abierta durante menos tiempo que ese umbral no podría contener una última actividad más antigua que su propio inicio.
 
 La regresión cubre una sesión de 3 ms, umbral de inactividad de 10 ms y downtime de 1 ms. El checkpoint restaurado conserva 4 ms de duración, 3 ms de edad de última actividad y puede volver a persistirse sin vulnerar el contrato.
+
+
+## 46. Validación integral aprobada tras las correcciones de secuencia y restauración
+
+**CI específica Live Author Monitor:** [45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764), commit `d728593bd4f9758e85a4b16ce5ab1480d330f4bc`: Vite, Chromium, MLDB 0.4.2, auditoría de 25 tablas/34 almacenes y **141 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+**CI general TypeScript:** [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738): typecheck, build, **718 pruebas aprobadas, 0 fallidas y 0 omitidas** y benchmark correcto.
+
+La prueba multi-documento ejecuta escritura, cambio entre capítulos, persistencia, cierre, recuperación de ambos checkpoints y nueva edición posterior. Las regresiones separadas cubren la carrera entre secuencia admitida y persistencia asíncrona y la restauración inmediata de una sesión más corta que `idleAfterMs`.

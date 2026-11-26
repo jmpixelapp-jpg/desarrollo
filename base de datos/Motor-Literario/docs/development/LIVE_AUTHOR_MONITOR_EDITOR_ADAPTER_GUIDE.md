@@ -189,3 +189,10 @@ Esta regla es esencial cuando el editor cambia de capítulo: el anfitrión debe 
 ## 14. Restauración de sesiones de duración inferior al umbral de inactividad
 
 Al recuperar un checkpoint, sumar el downtime a `idleDurationMs` ya garantiza que el tiempo fuera del proceso nunca se contabilice como tiempo escribiendo. No se debe forzar `lastActivityAgeMs` a `idleAfterMs + 1`: para sesiones recién abiertas puede superar la duración total y volver inválido el siguiente checkpoint. Se conserva `edadAnterior + downtime`, sin inventar actividad anterior al inicio de la sesión.
+
+
+## 15. Validación final del motor y workspace multi-documento
+
+En el commit `d728593bd4f9758e85a4b16ce5ab1480d330f4bc`, la CI específica [45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764) aprobó **141/141 pruebas**, con Chromium real, MLDB 0.4.2 y auditoría IndexedDB (25 tablas / 34 almacenes). Se cubren el cambio entre dos capítulos, sus checkpoints independientes, recuperación inmediata y recuperación posterior al cierre.
+
+La suite general [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738) también quedó verde: Type-check, build, **718/718 pruebas** y benchmark completos. Las mediciones de CI no sustituyen el benchmark en el equipo final del autor.

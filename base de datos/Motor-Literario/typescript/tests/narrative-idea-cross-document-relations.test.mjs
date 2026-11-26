@@ -194,3 +194,41 @@ test("rechaza evidencia de un candidato cuya identidad documental no coincide", 
     idea("valid-second", "chapter-2", "la memoria de la ciudad")
   ]));
 });
+
+
+test("acepta ideas con espacios normalizados y conserva la evidencia literal original", () => {
+  const first = idea("space-one", "chapter-1", "la memoria de la ciudad");
+  const second = idea("space-two", "chapter-2", "la memoria de la ciudad");
+  const firstExcerpt = "La idea expresada es la memoria   de la ciudad.";
+  const secondExcerpt = "La idea expresada es la memoria de   la ciudad.";
+  const firstTextStart = firstExcerpt.indexOf("la memoria");
+  const secondTextStart = secondExcerpt.indexOf("la memoria");
+  const candidates = [
+    {
+      ...first,
+      evidence: {
+        documentId: "chapter-1",
+        revision: 1,
+        start: 10 + firstTextStart,
+        end: 10 + firstTextStart + "la memoria   de la ciudad".length,
+        excerpt: firstExcerpt
+      }
+    },
+    {
+      ...second,
+      evidence: {
+        documentId: "chapter-2",
+        revision: 1,
+        start: 10 + secondTextStart,
+        end: 10 + secondTextStart + "la memoria de   la ciudad".length,
+        excerpt: secondExcerpt
+      }
+    }
+  ];
+  const result = analyze(candidates);
+
+  assert.equal(result.relations.length, 1);
+  assert.equal(result.relations[0].relationType, "exact-recurrence");
+  assert.equal(result.relations[0].first.evidence.excerpt, firstExcerpt);
+  assert.equal(result.relations[0].second.evidence.excerpt, secondExcerpt);
+});

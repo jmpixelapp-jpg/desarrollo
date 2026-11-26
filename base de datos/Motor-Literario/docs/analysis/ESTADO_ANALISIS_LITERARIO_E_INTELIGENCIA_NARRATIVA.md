@@ -243,6 +243,10 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `4461a68`: corrige el escape de expresiones regulares y los límites Unicode de los nombres.
 - `ee0464d`: añade regresiones para evitar coincidencias parciales con marcas combinantes.
 - `df1a10a`: corrige el fixture para incluir una marca combinante Unicode real, no una secuencia literal escapada.
+- `28dc439`: impide que la extracción de participantes de acontecimientos confunda un nombre con el prefijo de otro nombre que continúa con una marca combinante Unicode.
+- `999a03b`: añade regresiones para rechazar coincidencias parciales con marcas combinantes y aceptar nombres completos que contienen esas marcas.
+
+La extensión de límites Unicode se aplica ahora también a la asociación de participantes de acontecimientos y al reconocimiento de nombres en diagnósticos de estado vital. La implementación y sus pruebas se presentan en la rama `work/narrative-unicode-event-boundaries`; no se consideran integradas en `main` hasta completar revisión y CI.
 
 Esta tanda se concentra en la integridad de la evidencia textual: los rangos deben permanecer en unidades UTF-16, respetar saltos LF/CRLF y no aceptar prefijos de nombres cuando el carácter siguiente sea una marca combinante. Los commits están publicados en `main`; no se atribuyen a esta tanda cambios de otras ramas ni se consideran validados por CI sin checks observables.
 ## 7. Pendientes y siguiente secuencia de trabajo
@@ -259,7 +263,7 @@ Esta tanda se concentra en la integridad de la evidencia textual: los rangos deb
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualización es `df1a10ab423f222d652349453d2a496cb1a206f3` (26 de noviembre de 2026). La consulta de checks y de ejecuciones de workflow para ese SHA devolvió colecciones vacías. Por tanto, **los commits de esta tanda están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para el HEAD observado**. Las pruebas de Unicode, límites de nombres y offsets UTF-16 están escritas en el repositorio; su presencia no demuestra que se hayan ejecutado.
+La rama principal observada antes de esta tanda es `main`, con el commit documental `bd3d4c5101277a03f0df3f81a026573b92be5368` (26 de noviembre de 2026). La consulta de checks y de ejecuciones de workflow para ese SHA devolvió colecciones vacías. La ampliación de límites Unicode de participantes está en `work/narrative-unicode-event-boundaries` y aún no se integra en `main`. Sus commits `28dc439` y `999a03b` añaden el cambio de reconocimiento y dos regresiones; la suite de esta rama todavía debe ejecutarse en CI. No se afirma que estas pruebas estén aprobadas.
 
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 

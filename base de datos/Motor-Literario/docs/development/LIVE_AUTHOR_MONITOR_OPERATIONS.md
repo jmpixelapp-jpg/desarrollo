@@ -232,3 +232,18 @@ Las dimensiones pueden variarse con `MONITOR_BENCH_DOCUMENTS`, `MONITOR_BENCH_CH
 Este benchmark mide el heap del proceso Node del runner, no memoria de Chromium ni consumo de la aplicación de producción. Reporta la medición sin umbral universal fijo para evitar fallos por diferencias de V8/runner. El job del monitor lo ejecuta después de la suite automatizada, y el benchmark general lo incluye como parte de `npm run bench`.
 
 El benchmark `bench:monitor` requiere que `npm run build` haya generado `dist/`; emite un único JSON con longitudes UTF-16, total de commits, heap/RSS, throughput y la ventana acotada. El campo de tamaño es `initialCodeUnitsPerDocument`, no una afirmación de bytes físicos por documento.
+
+
+## 13. Aislamiento de fallos al consultar diagnósticos
+
+La lectura de `getLiveAuthorMonitorPersistenceDiagnostics(documentId)` es observabilidad auxiliar y no debe convertirse en una dependencia del flujo de eventos del monitor. Los adaptadores del anfitrión pueden fallar temporalmente al consultar IndexedDB, el estado del checkpoint o la coordinación entre pestañas.
+
+El panel y cada tarjeta del workspace usan `readLiveAuthorMonitorPersistenceDiagnosticsSafely()`:
+
+- captura excepciones del proveedor de diagnósticos sin propagar mensajes internos;
+- descarta una respuesta cuyo `documentId` no coincide con la tarjeta solicitada;
+- muestra checkpoint y coordinación como **no disponibles** con nivel visual de advertencia;
+- continúa actualizando estado de actividad, cambios pendientes, revisiones y métricas de cada documento;
+- permite recuperar la visualización normal cuando vuelve a funcionar el proveedor, sin desmontar el panel.
+
+La regresión `tests/live-author-monitor-diagnostics-isolation.test.mjs` cubre excepciones, recuperación, aislamiento entre documentos y rechazo de diagnósticos cruzados. No valida por sí sola la persistencia durable del checkpoint ni sustituye las pruebas de IndexedDB y leases.

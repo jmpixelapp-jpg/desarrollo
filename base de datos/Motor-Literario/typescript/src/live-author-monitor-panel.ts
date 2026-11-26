@@ -195,6 +195,24 @@ export function formatLiveAuthorMonitorLeaseStatus(
   }
 }
 
+/**
+ * Aísla la telemetría del flujo de escritura. Un adaptador de diagnósticos que
+ * falle o devuelva datos de otro documento no debe bloquear métricas válidas.
+ * No se propaga el mensaje original para evitar filtrar datos del anfitrión.
+ */
+export function readLiveAuthorMonitorPersistenceDiagnosticsSafely(
+  hostApi: LiveAuthorMonitorHostApi,
+  documentId: string
+): LiveAuthorMonitorPersistenceDiagnostics | undefined {
+  try {
+    const diagnostics = hostApi.getLiveAuthorMonitorPersistenceDiagnostics?.(documentId);
+    if (!diagnostics || diagnostics.documentId !== documentId) return undefined;
+    return diagnostics;
+  } catch {
+    return undefined;
+  }
+}
+
 function updatePanel(
   nodes: PanelNodes, snapshot: LiveAuthorMonitorSnapshot,
   integer: Intl.NumberFormat, decimal: Intl.NumberFormat,
@@ -215,11 +233,13 @@ function updatePanel(
   }
   nodes.durability.textContent = durabilityMessage(snapshot, integer);
   nodes.persistence.textContent = formatLiveAuthorMonitorCheckpointStatus(diagnostics, locale);
-  nodes.persistence.setAttribute("data-level", diagnostics?.checkpointState === "error" ? "error" :
-    diagnostics?.checkpointState === "waiting-for-durability" ? "warning" : "info");
+  nodes.persistence.setAttribute("data-level", !diagnostics ? "warning" :
+    diagnostics.checkpointState === "error" ? "error" :
+      diagnostics.checkpointState === "waiting-for-durability" ? "warning" : "info");
   nodes.coordination.textContent = formatLiveAuthorMonitorLeaseStatus(diagnostics);
-  nodes.coordination.setAttribute("data-level", diagnostics?.leaseState === "error" ||
-    diagnostics?.leaseState === "lost" || diagnostics?.leaseState === "expired" ? "error" : "info");
+  nodes.coordination.setAttribute("data-level", !diagnostics ? "warning" :
+    diagnostics.leaseState === "error" || diagnostics.leaseState === "lost" ||
+      diagnostics.leaseState === "expired" ? "error" : "info");
   const latest = Math.max(0, snapshot.latestSequence);
   const durable = Math.max(0, snapshot.durableSequence);
   const percentage = latest === 0 ? 100 : Math.max(0, Math.min(100, durable / latest * 100));
@@ -319,7 +339,7 @@ export function mountLiveAuthorMonitorPanel(
     unsubscribe = subscribeLiveAuthorMonitorWithRefresh(hostApi, snapshot => {
       if (!disposed) updatePanel(
         nodes, snapshot, integer, decimal,
-        hostApi.getLiveAuthorMonitorPersistenceDiagnostics?.(options.documentId),
+        readLiveAuthorMonitorPersistenceDiagnosticsSafely(hostApi, options.documentId),
         locale
       );
     }, {

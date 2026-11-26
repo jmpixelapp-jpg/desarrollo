@@ -797,3 +797,22 @@ Las ejecuciones más recientes completadas verificadas:
 - [Live Author Monitor — run 45743497335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743497335), commit `ab624b7a6b5e9bd393aaf42624335ee66b02ed6d`: completó setup, instalación de Chromium y validación del esquema físico; falló en `Build runtime bundle` por `src/narrative-history.ts:7:40 — Unterminated string literal`.
 
 El monitor y los tests del panel, workspace y benchmark siguen sin una ejecución completa posterior a estas entregas. El bloqueo es anterior a esos pasos y pertenece al archivo narrativo externo; no se modificó para no interferir con el trabajo paralelo.
+
+
+## 44. Aislamiento de fallos de telemetría del monitor (25 de noviembre de 2026)
+
+**Objetivo:** impedir que un error al leer diagnósticos operativos bloquee la actualización de las métricas de escritura.
+
+**Cambios:**
+- Se incorpora `readLiveAuthorMonitorPersistenceDiagnosticsSafely()` en la capa de panel.
+- El panel individual y el workspace aíslan excepciones de `getLiveAuthorMonitorPersistenceDiagnostics`; los errores internos no se propagan ni se imprimen.
+- Las respuestas asociadas a otro `documentId` se descartan para evitar mezclar diagnósticos de capítulos.
+- Los diagnósticos ausentes pasan a nivel visual de advertencia; las métricas y el progreso durable continúan actualizándose.
+- La recuperación del proveedor restablece los mensajes de checkpoint y lease sin remontar las vistas.
+- Se añade una suite independiente con tres regresiones: error/recuperación del panel, aislamiento multi-documento y rechazo de diagnósticos cruzados.
+
+**Archivos:** `src/live-author-monitor-panel.ts`, `src/live-author-monitor-workspace.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, esta guía y la guía operativa.
+
+**Commit de implementación:** se incorporará en la nota de verificación posterior a la creación del commit.
+
+**Validación:** pendiente de CI. El baseline documentado sigue bloqueado antes de las pruebas del monitor por el error sintáctico externo `src/narrative-history.ts(7,41): TS1002`. No se modifica ese módulo ni se atribuye aprobación a tests que el workflow no haya ejecutado.

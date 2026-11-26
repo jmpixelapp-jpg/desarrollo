@@ -1,7 +1,8 @@
 import {
   LIVE_AUTHOR_MONITOR_PANEL_STYLES,
   formatLiveAuthorMonitorCheckpointStatus,
-  formatLiveAuthorMonitorLeaseStatus
+  formatLiveAuthorMonitorLeaseStatus,
+  readLiveAuthorMonitorPersistenceDiagnosticsSafely
 } from "./live-author-monitor-panel";
 import type {
   LiveAuthorMonitorHostApi,
@@ -324,13 +325,15 @@ export function mountLiveAuthorMonitorWorkspace(
       node.textContent = metricValue(key, snapshot, integer, decimal);
     }
     card.durability.textContent = cardDurability(snapshot, integer);
-    const diagnostics = hostApi.getLiveAuthorMonitorPersistenceDiagnostics?.(snapshot.documentId);
+    const diagnostics = readLiveAuthorMonitorPersistenceDiagnosticsSafely(hostApi, snapshot.documentId);
     card.persistence.textContent = formatLiveAuthorMonitorCheckpointStatus(diagnostics, locale);
-    card.persistence.setAttribute("data-level", diagnostics?.checkpointState === "error" ? "error" :
-      diagnostics?.checkpointState === "waiting-for-durability" ? "warning" : "info");
+    card.persistence.setAttribute("data-level", !diagnostics ? "warning" :
+      diagnostics.checkpointState === "error" ? "error" :
+        diagnostics.checkpointState === "waiting-for-durability" ? "warning" : "info");
     card.coordination.textContent = formatLiveAuthorMonitorLeaseStatus(diagnostics);
-    card.coordination.setAttribute("data-level", diagnostics?.leaseState === "error" ||
-      diagnostics?.leaseState === "lost" || diagnostics?.leaseState === "expired" ? "error" : "info");
+    card.coordination.setAttribute("data-level", !diagnostics ? "warning" :
+      diagnostics.leaseState === "error" || diagnostics.leaseState === "lost" ||
+        diagnostics.leaseState === "expired" ? "error" : "info");
     const latest = Math.max(0, snapshot.latestSequence);
     const durable = Math.max(0, snapshot.durableSequence);
     const percentage = latest === 0 ? 100 : Math.max(0, Math.min(100, durable / latest * 100));

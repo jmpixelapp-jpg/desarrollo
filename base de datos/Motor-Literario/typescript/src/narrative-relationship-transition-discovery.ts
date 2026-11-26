@@ -54,7 +54,7 @@ export function discoverNarrativeRelationshipTransitionCandidates(input:Narrativ
  input.baseOffset>Number.MAX_SAFE_INTEGER-input.text.length))) throw new Error("Contexto inválido para descubrir cambios de relaciones narrativas.");
  const ids=new Set<string>(); const names:{entity:NarrativeEntity;name:string}[]=[];
  for(const entity of input.entities){
-  if(!entity||entity.projectId!==input.projectId||typeof entity.id!=="string"||!entity.id.trim()||ids.has(entity.id)||
+  if(!entity||entity.kind!=="character"||entity.projectId!==input.projectId||typeof entity.id!=="string"||!entity.id.trim()||ids.has(entity.id)||
   typeof entity.canonicalName!=="string"||!entity.canonicalName.trim()||
   entity.canonicalName.length>MAX_NARRATIVE_RELATIONSHIP_TRANSITION_NAME_LENGTH||
   !Array.isArray(entity.aliases)||entity.aliases.length>MAX_NARRATIVE_RELATIONSHIP_TRANSITION_ALIASES||
@@ -65,7 +65,7 @@ export function discoverNarrativeRelationshipTransitionCandidates(input:Narrativ
  names.sort((a,b)=>b.name.length-a.name.length||a.entity.id.localeCompare(b.entity.id));
  const results=new Map<string,NarrativeRelationshipTransitionCandidate>(); let scanUnits=0; const base=input.baseOffset??0;
  for(const signal of SIGNALS) for(const left of names) for(const right of names){
-  if(left.entity.id===right.entity.id) continue;
+  if(left.entity.id===right.entity.id||normalize(left.name)===normalize(right.name)) continue;
   scanUnits+=input.text.length;
   if(scanUnits>MAX_NARRATIVE_RELATIONSHIP_TRANSITION_SCAN_UNITS) throw new Error("La búsqueda de cambios relacionales supera el presupuesto operativo de exploración.");
   const pair=new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])"+escapeRegExp(left.name)+

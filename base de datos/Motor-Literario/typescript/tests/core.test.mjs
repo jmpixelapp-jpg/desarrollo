@@ -10254,6 +10254,11 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
       type: "motor-literario:narrative-change",
       projectId: "book-a"
     }]);
+    assert.equal(
+      FakeBroadcastChannel.instances[1].closed,
+      true,
+      "una instancia que solo publica debe cerrar el canal temporal"
+    );
 
     unsubscribe();
     assert.equal(FakeBroadcastChannel.instances[0].closed, true);

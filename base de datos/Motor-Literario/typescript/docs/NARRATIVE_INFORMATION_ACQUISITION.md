@@ -54,6 +54,7 @@ Callback: `onNarrativeObservationCandidates(analysis, candidates)`.
 - El vocabulario verbal es deliberadamente finito y debe ampliarse con pruebas por idioma y morfología.
 - La extracción actual de entidades nuevas depende de expresiones de identificación explícitas (por ejemplo, "personaje Ana"). Una mención aislada de nombre propio no basta para crear una ficha automáticamente.
 - Los callbacks incrementales reciben el fragmento afectado; para comprender referencias anafóricas y contexto de escena se necesita una capa contextual que consulte un snapshot coherente de la revisión.
+- El callback de acciones se ejecuta después de la extracción de conocimiento en el flujo que requiere un adaptador con `saveEntity` y `loadEntities`; sin ese contrato de almacenamiento, el flujo actual de extracción narrativa no se activa.
 - Los eventos de la base actual requieren marcadores explícitos `EVENTO:` o `ACONTECIMIENTO:`; no se debe confundir esa extracción editorial con comprensión libre de acontecimientos narrados.
 - Las relaciones se reconocen con patrones explícitos limitados; la ausencia de una relación extraída no prueba que no exista.
 - El análisis de estados emocionales, objetivos implícitos, causalidad y evolución psicológica requiere candidatos separados, evidencias múltiples y validación humana.

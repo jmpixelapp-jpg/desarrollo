@@ -40,24 +40,24 @@ test("la outbox es idempotente, rechaza colisiones y aísla secuencias por dispo
 
 test("la outbox pagina por proyecto, conserva pendientes y registra reintentos", async () => {
   const store = new IndexedDbProjectStore();
-  await store.enqueueSyncOperation(operation({ operationId: "op-later", sequence: 2, createdAt: 300 }));
-  await store.enqueueSyncOperation(operation({ operationId: "op-first", sequence: 1, createdAt: 100 }));
+  await store.enqueueSyncOperation(operation({ operationId: "op-later", projectId: "project-b", deviceId: "device-b", sequence: 2, createdAt: 300 }));
+  await store.enqueueSyncOperation(operation({ operationId: "op-first", projectId: "project-b", deviceId: "device-b", sequence: 1, createdAt: 100 }));
   await store.enqueueSyncOperation(operation({
     operationId: "op-other-project",
-    projectId: "project-b",
+    projectId: "project-c",
     sequence: 1,
     createdAt: 50
   }));
 
-  const firstPage = await store.loadPendingSyncOperations("project-a", 1);
+  const firstPage = await store.loadPendingSyncOperations("project-b", 1);
   assert.deepEqual(firstPage.map(item => item.operationId), ["op-first"]);
   assert.deepEqual(
-    (await store.loadPendingSyncOperations("project-a")).map(item => item.operationId),
+    (await store.loadPendingSyncOperations("project-b")).map(item => item.operationId),
     ["op-first", "op-later"]
   );
 
   assert.equal(await store.recordSyncOperationAttempt("op-first", 500, "network unavailable"), true);
-  const retried = await store.loadPendingSyncOperations("project-a");
+  const retried = await store.loadPendingSyncOperations("project-b");
   assert.equal(retried[0].attemptCount, 1);
   assert.equal(retried[0].lastAttemptAt, 500);
   assert.equal(retried[0].lastError, "network unavailable");
@@ -67,15 +67,15 @@ test("la outbox pagina por proyecto, conserva pendientes y registra reintentos",
 test("el acuse elimina únicamente la operación confirmada y valida el payload", async () => {
   const store = new IndexedDbProjectStore();
   await assert.rejects(
-    store.enqueueSyncOperation(operation({ payload: "{invalid-json" })),
+    store.enqueueSyncOperation(operation({ projectId: "project-c", deviceId: "device-c", payload: "{invalid-json" })),
     /JSON válido/
   );
   await assert.rejects(
-    store.enqueueSyncOperation(operation({ payload: "[]" })),
+    store.enqueueSyncOperation(operation({ projectId: "project-c", deviceId: "device-c", payload: "[]" })),
     /objeto JSON/
   );
 
-  await store.enqueueSyncOperation(operation());
+  await store.enqueueSyncOperation(operation({ projectId: "project-c", deviceId: "device-c" }));
   assert.equal(await store.acknowledgeSyncOperation("op-1"), true);
   assert.equal(await store.acknowledgeSyncOperation("op-1"), false);
   assert.deepEqual(await store.loadPendingSyncOperations("project-a"), []);

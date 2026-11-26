@@ -1,0 +1,185 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { createServer } from "node:net";
+import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
+import { resolve } from "node:path";
+import { chromium } from "playwright";
+
+async function reservePort() {
+  const listener = createServer();
+  await new Promise((resolveListen, reject) => {
+    listener.once("error", reject);
+    listener.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = listener.address();
+  if (!address || typeof address === "string") {
+    await new Promise(resolveClose => listener.close(resolveClose));
+    throw new Error("No se pudo reservar un puerto TCP para Vite.");
+  }
+  const port = address.port;
+  await new Promise((resolveClose, reject) => listener.close(error => error ? reject(error) : resolveClose()));
+  return port;
+}
+
+async function waitForVite(url, child) {
+  let lastError;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (child.exitCode !== null) {
+      throw new Error(`Vite terminó antes de estar listo (código ${child.exitCode}).`);
+    }
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+      lastError = new Error(`Vite respondió HTTP ${response.status}.`);
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(150);
+  }
+  throw new Error("Vite no respondió dentro del límite de arranque.", { cause: lastError });
+}
+
+async function invoke(page, operation, ...args) {
+  return page.evaluate(
+    ({ operation, args }) => {
+      const harness = window.__monitorLeaseHarness;
+      if (!harness || typeof harness[operation] !== "function") {
+        throw new Error("El harness IndexedDB no está listo.");
+      }
+      return harness[operation](...args);
+    },
+    { operation, args }
+  );
+}
+
+test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease", {
+  timeout: 120_000
+}, async () => {
+  const port = await reservePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const harnessUrl = origin + "/tests/browser/live-author-monitor-lease.html";
+  const viteCli = resolve(process.cwd(), "node_modules/vite/bin/vite.js");
+  const server = spawn(
+    process.execPath,
+    [viteCli, "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
+    { cwd: process.cwd(), stdio: "ignore" }
+  );
+  let browser;
+
+  try {
+    await waitForVite(harnessUrl, server);
+    browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+    const context = await browser.newContext();
+    const firstPage = await context.newPage();
+    const secondPage = await context.newPage();
+
+    try {
+      await Promise.all([firstPage.goto(harnessUrl), secondPage.goto(harnessUrl)]);
+      await Promise.all([
+        firstPage.waitForFunction(() => window.__monitorLeaseHarness !== undefined),
+        secondPage.waitForFunction(() => window.__monitorLeaseHarness !== undefined)
+      ]);
+
+      const projectId = "browser-monitor-" + randomUUID();
+      const documentId = "chapter-" + randomUUID();
+      const firstOwner = "tab-a-" + randomUUID();
+      const secondOwner = "tab-b-" + randomUUID();
+      const now = Date.now();
+      const attempts = await Promise.all([
+        invoke(firstPage, "acquire", projectId, documentId, firstOwner, now, 30_000),
+        invoke(secondPage, "acquire", projectId, documentId, secondOwner, now, 30_000)
+      ]);
+
+      assert.equal(attempts.filter(Boolean).length, 1, "solo una página debe adquirir el lease inicial");
+      const firstWon = Boolean(attempts[0]);
+      const ownerPage = firstWon ? firstPage : secondPage;
+      const observerPage = firstWon ? secondPage : firstPage;
+      const ownerLease = attempts[firstWon ? 0 : 1];
+      const ownerId = firstWon ? firstOwner : secondOwner;
+      const observerId = firstWon ? secondOwner : firstOwner;
+
+      assert.equal(ownerLease.ownerId, ownerId);
+      assert.equal(ownerLease.fencingToken, 1);
+      assert.equal(
+        await invoke(observerPage, "acquire", projectId, documentId, observerId, now + 1, 30_000),
+        undefined,
+        "la segunda página no debe robar un lease activo"
+      );
+
+      assert.equal(await invoke(ownerPage, "release", ownerLease, Date.now()), true);
+      const takeoverTime = Date.now() + 5;
+      const observerLease = await invoke(
+        observerPage,
+        "acquire",
+        projectId,
+        documentId,
+        observerId,
+        takeoverTime,
+        30_000
+      );
+      assert.ok(observerLease);
+      assert.equal(observerLease.ownerId, observerId);
+      assert.equal(observerLease.fencingToken, ownerLease.fencingToken + 1);
+
+      const checkpoint = {
+        version: 1,
+        projectId,
+        documentId,
+        sessionId: "browser-session-" + randomUUID(),
+        savedAt: Date.now(),
+        sessionDurationMs: 0,
+        activeDurationMs: 0,
+        idleDurationMs: 0,
+        lastActivityAgeMs: null,
+        pauseCount: 0,
+        acceptedChanges: 0,
+        rejectedChanges: 0,
+        committedChanges: 0,
+        failedChanges: 0,
+        insertedCharacters: 0,
+        deletedCharacters: 0,
+        currentDocumentLength: 0,
+        revision: 0,
+        sequence: 0,
+        resynchronizations: 0,
+        lastCommitLatencyMs: 0,
+        totalCommitLatencyMs: 0,
+        commitLatencies: []
+      };
+
+      await assert.rejects(
+        invoke(ownerPage, "saveCheckpoint", checkpoint, ownerLease),
+        /fencing token/,
+        "la página anterior debe quedar cercada aunque conserve el objeto de lease"
+      );
+
+      await invoke(observerPage, "saveCheckpoint", checkpoint, observerLease);
+      const observedByFormerOwner = await invoke(
+        ownerPage,
+        "loadCheckpoint",
+        projectId,
+        documentId
+      );
+      assert.deepEqual(observedByFormerOwner, checkpoint,
+        "ambas páginas deben observar el mismo checkpoint persistido en IndexedDB");
+
+      assert.equal(await invoke(observerPage, "release", observerLease, Date.now()), true);
+      await Promise.all([
+        invoke(firstPage, "close"),
+        invoke(secondPage, "close")
+      ]);
+    } finally {
+      await context.close();
+    }
+  } finally {
+    if (browser) await browser.close();
+    server.kill("SIGTERM");
+    await Promise.race([
+      new Promise(resolveExit => server.once("exit", resolveExit)),
+      delay(3_000)
+    ]);
+    if (server.exitCode === null) server.kill("SIGKILL");
+  }
+});

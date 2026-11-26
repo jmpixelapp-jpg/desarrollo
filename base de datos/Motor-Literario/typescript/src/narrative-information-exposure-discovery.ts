@@ -88,7 +88,8 @@ function validate(input: NarrativeInformationExposureDiscoveryInput): void {
         !Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end) ||
         item.start < (input.baseOffset ?? 0) ||
         item.end > (input.baseOffset ?? 0) + input.text.length ||
-        item.end <= item.start || item.excerpt.length !== item.end - item.start ||
+        item.end <= item.start || typeof item.excerpt !== "string" ||
+        item.excerpt.length !== item.end - item.start ||
         item.excerpt !== input.text.slice(item.start - (input.baseOffset ?? 0), item.end - (input.baseOffset ?? 0)) ||
         item.status === "stale") {
       throw new Error("La evidencia de diálogo excluida no pertenece al fragmento actual.");
@@ -149,7 +150,7 @@ export function discoverNarrativeInformationExposureCandidates(
   for (const entity of characters) {
     for (const name of new Set([entity.canonicalName,...entity.aliases])) {
       const expression = new RegExp("\\bsin\\s+que\\s+("+escapeRegExp(name)+
-        ")\\s+(?:no\\s+)?(?:supiera|supiese|sab[ií]a|conociera|conociese)\\s+que\\s+","giu");
+        ")\\s+(?:supiera|supiese|sab[ií]a|conociera|conociese)\\s+que\\s+","giu");
       expression.lastIndex = 0;
       for (const match of input.text.matchAll(expression)) {
         const start = match.index!;

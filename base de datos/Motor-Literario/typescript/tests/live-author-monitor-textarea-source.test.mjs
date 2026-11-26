@@ -42,6 +42,7 @@ class FakeTextArea extends FakeEventTarget {
   emitBeforeInput(inputType, isComposing = false, isTrusted = true, data = null) {
     const event = { defaultPrevented: false, inputType, isComposing, isTrusted, data };
     for (const listener of [...(this.listeners.get("beforeinput") ?? [])]) listener(event);
+    return event;
   }
 
   emitInput(isComposing = false, inputType = "", isTrusted = true, data = null) {
@@ -200,6 +201,46 @@ test("exige resincronización para undo/redo y no emite deltas inventados", () =
   f.element.edit({ start: 4, end: 4, nextValue: "alha!", inputType: "insertText" });
   assert.equal(f.changes[0].sequence, 7);
   assert.equal(f.changes[0].baseRevision, 3);
+  f.stop();
+  f.source.dispose();
+});
+
+test("libera after-dispatch un beforeinput cancelado por un listener posterior", async () => {
+  const f = fixture("abc", 0, 0);
+  const cancelLater = event => { event.defaultPrevented = true; };
+  f.element.addEventListener("beforeinput", cancelLater);
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+
+  const observed = f.element.emitBeforeInput("insertText", false, true, "x");
+  assert.equal(observed.defaultPrevented, true);
+  assert.ok(f.source.pendingInput,
+    "el adaptador registra provisionalmente antes de que se ejecuten los listeners posteriores");
+
+  // La microtarea comprueba el resultado final de la propagación síncrona.
+  await Promise.resolve();
+  assert.equal(f.source.pendingInput, undefined,
+    "un evento cancelado no debe quedarse esperando un input que el navegador no emitirá");
+  assert.equal(f.source.getState().needsResync, false);
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.errors.length, 0);
+
+  f.element.emitBlur();
+  assert.equal(f.source.getState().needsResync, false,
+    "el blur posterior no debe confundir una cancelación voluntaria con una operación incompleta");
+
+  f.element.removeEventListener("beforeinput", cancelLater);
+  f.element.edit({
+    start: 3,
+    end: 3,
+    nextValue: "abcx",
+    inputType: "insertText",
+    data: "x"
+  });
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].replacement, "x");
+  assert.equal(f.source.getState().needsResync, false);
+
   f.stop();
   f.source.dispose();
 });

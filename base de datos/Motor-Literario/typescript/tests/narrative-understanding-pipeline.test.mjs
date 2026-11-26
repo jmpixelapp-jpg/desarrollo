@@ -393,3 +393,14 @@ test("el pipeline conserva evaluaciones previas y actualiza la valoración del p
   assert.equal(mara.items[0].evaluations.length,2);
   assert.equal(mara.items[0].currentAssessment,"refuted-by-character");
 });
+
+
+test("el pipeline expone eventos explícitos de memoria con evidencia", () => {
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-memory",revision:1,
+    text:"Mara olvidó que Elian había salido. Después, Mara recordó que la puerta estaba abierta.",
+    entities
+  });
+  assert.deepEqual(result.memoryEvents.map(item => item.kind),["forgetting","remembering"]);
+  assert.ok(result.memoryEvents.every(item => item.evidence.documentId === "chapter-memory"));
+});

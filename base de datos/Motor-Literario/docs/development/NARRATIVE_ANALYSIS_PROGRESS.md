@@ -444,3 +444,12 @@ Se añadieron pruebas con dos instancias independientes de `IndexedDbProjectStor
 **Límite:** esto valida la persistencia idempotente entre instancias para intención y auditoría; no afirma que exista un mutex global para todo el algoritmo de recuperación.
 
 **Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. CI aún no se ha confirmado para este HEAD.
+
+
+## Coordinación de recuperación entre pestañas
+
+La recuperación durable ahora solicita un Web Lock exclusivo por proyecto cuando el navegador implementa Web Locks API. El bloqueo cubre la lectura y el procesamiento completo de la cola, incluida la validación de identidad, el CAS, la escritura append-only de auditoría y el borrado de la intención. Se añadió una prueba que verifica el nombre del bloqueo y el modo exclusivo.
+
+En entornos sin Web Locks, se mantiene la coordinación local y las escrituras CAS; la exclusión mutua entre pestañas queda explícitamente fuera de la garantía. No se usa un fallback de lease casero porque una concesión con expiración sin renovación/recuperación de propietario podría permitir dos recuperadores activos.
+
+**Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. CI aún no está configurado o no ha reportado ejecuciones para el HEAD revisado.

@@ -228,3 +228,20 @@ test("rechaza afirmaciones previas de personajes que no pertenecen al contexto d
     }]
   }), /personajes conocidos/i);
 });
+
+
+test("integra afirmaciones atribuidas y separa negación del hablante y del contenido", () => {
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-claims", revision:1,
+    text:"Mara no cree que Elian sea culpable. Elian afirma que Mara nunca regresará.",
+    entities
+  });
+  assert.equal(result.attributedClaims.length, 2);
+  assert.equal(result.attributedClaims[0].speakerEntityId, "mara");
+  assert.equal(result.attributedClaims[0].attributionPolarity, "negated");
+  assert.equal(result.attributedClaims[0].contentPolarity, "affirmed");
+  assert.equal(result.attributedClaims[1].speakerEntityId, "elian");
+  assert.equal(result.attributedClaims[1].attributionPolarity, "affirmed");
+  assert.equal(result.attributedClaims[1].contentPolarity, "negated");
+  assert.equal(result.attributedClaims[1].evidence.documentId, "chapter-claims");
+});

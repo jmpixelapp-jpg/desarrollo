@@ -39,7 +39,12 @@ export const MAX_NARRATIVE_ELLIPTICAL_SUBJECT_CANDIDATES = 2_000;
 export const MAX_NARRATIVE_ELLIPTICAL_SUBJECT_TEXT_UNITS = 2_000_000;
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const metacharacters = new Set([".", "+", "*", "?", "^", "$", "(", ")", "|", "[", "]", "{", "}"]);
+  return Array.from(value, character =>
+    metacharacters.has(character) || character.charCodeAt(0) === 92
+      ? String.fromCharCode(92) + character
+      : character
+  ).join("");
 }
 
 function containsCharacterMention(text: string, entities: readonly NarrativeEntity[]): boolean {
@@ -48,8 +53,8 @@ function containsCharacterMention(text: string, entities: readonly NarrativeEnti
     for (const name of [entity.canonicalName, ...entity.aliases]) {
       if (!name.trim()) continue;
       const expression = new RegExp(
-        "(?<![\p{L}\p{M}\p{N}_])" + escapeRegExp(name) +
-        "(?![\p{L}\p{M}\p{N}_])",
+        "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(name) +
+        "(?![\\p{L}\\p{M}\\p{N}_])",
         "iu"
       );
       if (expression.test(text)) return true;

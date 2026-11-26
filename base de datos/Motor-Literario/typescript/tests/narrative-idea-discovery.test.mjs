@@ -138,3 +138,27 @@ test("descubre semillas de historia y temas sugeridos en formulaciones explorato
     "regresar a su hogar"
   ]);
 });
+
+
+test("clasifica objetivos dentro de condiciones como condicionales", () => {
+  const found = discoverNarrativeIdeaCandidates({
+    ...context,
+    text: "Si Mara quiere escapar, deberá encontrar la llave."
+  });
+
+  assert.equal(found.length, 1);
+  assert.equal(found[0].kind, "goal");
+  assert.equal(found[0].polarity, "conditional");
+});
+
+test("respeta el límite de candidatos sin recorrer todas las señales del documento", () => {
+  const text = Array.from(
+    { length: 140 },
+    (_, index) => `La historia trata sobre la memoria ${index}.`
+  ).join("\\n");
+
+  const found = discoverNarrativeIdeaCandidates({ ...context, text });
+  assert.equal(found.length, 100);
+  assert.equal(found[0].text, "la memoria 0");
+  assert.equal(found.at(-1).text, "la memoria 99");
+});

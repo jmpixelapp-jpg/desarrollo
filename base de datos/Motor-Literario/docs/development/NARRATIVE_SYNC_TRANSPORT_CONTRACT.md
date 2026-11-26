@@ -183,3 +183,10 @@ La configuración opcional `syncDeviceId` en `EngineOptions` / `HostEngineApi` a
 El identificador estable se deriva de `projectId`, `documentId` y la secuencia del documento. El payload usa `schemaVersion: 1` e incluye el delta textual y sus revisiones/offsets UTF-16. Esta captura es opt-in porque contiene texto del manuscrito; habilitarla autoriza su inclusión en el payload que el anfitrión enviará al transporte. El anfitrión sigue siendo responsable de autenticación, cifrado, autorización y privacidad. Adaptadores antiguos reciben la llamada de un solo argumento cuando no se configura `syncDeviceId`.
 
 Alcance de garantía: atomicidad local entre journal y outbox en IndexedDB. No es una transacción distribuida ni garantiza que el servidor acepte el cambio; el transporte conserva entrega al menos una vez y el servidor debe deduplicar por `operationId`.
+
+
+### Validación del payload narrativo v1 en el coordinador
+
+El coordinador exporta `validateNarrativeDocumentChangePayloadV1(value)` y aplica esa validación al cargar cualquier operación cuyo tipo sea `narrative-document-change.v1`. Exige `schemaVersion: 1`, `documentId` no vacío, secuencia positiva, revisión base no negativa, revisión confirmada exactamente igual a base + 1, offsets UTF-16 enteros no negativos y `end >= start`, y reemplazo textual. Los demás tipos de operación mantienen el contrato JSON genérico para no romper productores existentes.
+
+El transporte anfitrión puede reutilizar el validador antes de serializar/deserializar mensajes de red. Un payload narrativo v1 malformado se rechaza antes de enviarse y no se confirma ni se elimina de la outbox.

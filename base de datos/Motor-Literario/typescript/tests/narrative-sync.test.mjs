@@ -487,3 +487,63 @@ test("un conflicto aplica backoff al flujo causal del dispositivo sin frenar otr
     "device-a-op-1", "device-a-op-2"
   ]);
 });
+
+test("reintenta un conflicto al vencer el backoff y acepta solo la reclasificación explícita", async () => {
+  const original = operation("op-conflict-recovered", 1);
+  const outbox = createOutbox([original]);
+  let now = 5_000;
+  let pushes = 0;
+  const received = [];
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push(_projectId, operations) {
+      pushes++;
+      received.push(operations.map(item => ({
+        operationId: item.operationId,
+        payload: item.payload,
+        attemptCount: item.attemptCount
+      })));
+      if (pushes === 1) {
+        return {
+          acknowledgedOperationIds: [],
+          conflicts: [{ operationId: "op-conflict-recovered", code: "revision_conflict", message: "La revisión remota cambió" }],
+          retryableOperationIds: []
+        };
+      }
+      return {
+        acknowledgedOperationIds: ["op-conflict-recovered"],
+        conflicts: [],
+        retryableOperationIds: []
+      };
+    }
+  }, {
+    now: () => now,
+    retryBaseDelayMs: 2_000,
+    retryMaxDelayMs: 2_000,
+    random: () => 1
+  });
+
+  const conflicted = await coordinator.syncOnce("project-a");
+  assert.equal(conflicted.conflicted, 1);
+  assert.equal(conflicted.remaining, 1);
+  assert.equal(original.nextAttemptAt, 7_000);
+  assert.match(original.lastError, /^conflict: revision_conflict/);
+
+  now = 6_999;
+  const deferred = await coordinator.syncOnce("project-a");
+  assert.equal(deferred.sent, 0);
+  assert.equal(deferred.remaining, 1);
+  assert.equal(pushes, 1, "no debe consultar al transporte antes del backoff");
+
+  now = 7_000;
+  const recovered = await coordinator.syncOnce("project-a");
+  assert.equal(recovered.sent, 1);
+  assert.equal(recovered.acknowledged, 1);
+  assert.equal(recovered.conflicted, 0);
+  assert.equal(recovered.remaining, 0);
+  assert.deepEqual(received, [
+    [{ operationId: "op-conflict-recovered", payload: original.payload, attemptCount: 0 }],
+    [{ operationId: "op-conflict-recovered", payload: original.payload, attemptCount: 1 }]
+  ]);
+  assert.deepEqual(outbox.acknowledged, ["op-conflict-recovered"]);
+  assert.equal(outbox.pending.length, 0);
+});

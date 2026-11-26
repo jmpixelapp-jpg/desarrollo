@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {expandNarrativeEvidenceContext as expand} from "../dist/motor-literario.js";
 const text="Ana encontró una carta. La leyó detenidamente. Después comprendió por qué Bruno había desaparecido. Al amanecer salió.";
-const anchor={id:"knowledge-1",kind:"comprehension",entityIds:["ana"],evidence:{documentId:"ch1",revision:2,start:48,end:94,excerpt:"Después comprendió por qué Bruno había desaparecido."}};
+const anchor={id:"knowledge-1",kind:"comprehension",entityIds:["ana"],evidence:{documentId:"ch1",revision:2,start:47,end:99,excerpt:"Después comprendió por qué Bruno había desaparecido."}};
 const input={projectId:"book",documentId:"ch1",revision:2,text,anchors:[anchor]};
 test("recupera contexto anterior y posterior sin fusionar las evidencias",()=>{
  const [x]=expand(input);assert.deepEqual(x.precedingContext.map(e=>e.excerpt),["La leyó detenidamente."]);

@@ -410,3 +410,12 @@ Se incorporó `loadNarrativeProjectAfterRepairRecovery(store, projectId, loadPro
 **Límite de integración:** el paquete de motor no contiene un arranque global común a todas las aplicaciones consumidoras. Por eso el helper proporciona un contrato verificable que el anfitrión debe invocar al abrir o seleccionar cada proyecto; no se declara que las interfaces externas ya estén conectadas a él. La recuperación no se ejecuta dentro de `IndexedDbProjectStore.open()`, evitando recursión porque sus propias operaciones usan `open()`.
 
 **Validación pendiente:** ejecutar typecheck y suite completa en Node 22.13+. No hay ejecuciones de CI confirmadas para estos commits.
+
+
+## Sincronización entrante condicionada por recuperación
+
+Se añadió `createRecoveryFirstNarrativeSyncConsumer` en el consumidor de sincronización. El flujo recupera primero las intenciones locales de reparación; sólo cuando no quedan conflictos ejecuta el replay del diario remoto. Si una intención no supera la revalidación, el consumidor devuelve `blockedByPendingRepairs: true`, deja las operaciones remotas pendientes y devuelve el detalle del conflicto. Se añadieron pruebas de orden recuperación→handler y de retención del replay ante una intención manipulada.
+
+La API queda exportada por el barrel existente. No se declara una transacción distribuida ni un bloqueo global entre pestañas: el diario sigue siendo al menos una vez y los handlers conservan su obligación de idempotencia. La nueva garantía se limita al orden del consumidor protegido.
+
+**Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. CI no informa ejecuciones para el HEAD consultado.

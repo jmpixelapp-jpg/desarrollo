@@ -370,19 +370,6 @@ function findAllNameMatches(sentence: string, name: string): { start: number; en
   }));
 }
 
-function includesName(sentence: string, name: string): boolean {");
-  const expression = new RegExp(
-    "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
-    "(?![\\p{L}\\p{M}\\p{N}_])",
-    "giu"
-  );
-  return [...sentence.matchAll(expression)].map(match => ({
-    start: match.index!,
-    end: match.index! + match[0].length,
-    excerpt: match[0]
-  }));
-}
-
 function includesName(sentence: string, name: string): boolean {
   return findNameMatch(sentence, name) !== undefined;
 }

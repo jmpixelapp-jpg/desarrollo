@@ -1248,7 +1248,7 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresiones:** la prueba de source exige que la primera llamada lance cuando el proveedor falla una vez y que la segunda complete la retirada; la prueba de integración fuerza dos fallos transitorios (binding y source), exige el error al llamador y verifica que la segunda llamada pública elimina el último listener.
 
-**Validación específica del monitor:** aprobada en [Live Author Monitor — run 45753736832](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753736832). Pasaron build aislado, regresiones diagnósticas, Chromium, auditoría MLDB, build runtime, suite completa del monitor y benchmark de memoria. La lane general de TypeScript correspondiente a `fac9cc8` todavía estaba ejecutándose al registrar esta entrada.
+**Validación:** [Live Author Monitor — run 45753736832](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753736832) aprobó build aislado, regresiones diagnósticas, Chromium, auditoría MLDB, build runtime, suite completa del monitor y benchmark de memoria. La lane posterior [Live Author Monitor — run 45753916861](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753916861) también terminó correctamente con las aserciones de error visibles en ambos niveles (`source.dispose()` e integración). [Motor Literario TypeScript — run 45753916798](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753916798) pasó type-check y ejecutó 857 pruebas: 855 aprobadas y 2 fallidas en los handlers de sincronización narrativa `assertion-upsert` y `entity-upsert`, fuera de los archivos del monitor.
 
 
 ## 76. Incluir `activityKind` en la firma de deduplicación (26 de noviembre de 2026)
@@ -1259,4 +1259,4 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresión:** el mismo transactionId, secuencia y texto retransmitidos con `activityKind: "paste"` después de la transacción original sin categoría dejan de pasar como duplicado; el source pausa con `transaction-id-reused`.
 
-**Validación:** pendiente de CI para este commit.
+**Validación:** aprobada en [Live Author Monitor — run 45753916861](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753916861), que completó build, suite específica, Chromium y benchmark. [Motor Literario TypeScript — run 45753916798](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753916798) pasó type-check; la suite general mantiene los dos fallos ajenos al monitor indicados en la sección 75.

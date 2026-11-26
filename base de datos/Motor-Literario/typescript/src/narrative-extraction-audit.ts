@@ -41,25 +41,37 @@ interface Span { readonly start: number; readonly end: number; }
 
 function sentenceSpans(text: string): readonly Span[] {
   const spans: Span[] = [];
-  // Conserva offsets UTF-16; separa por puntuación terminal y saltos de línea.
-  // Es una segmentación operativa para cobertura, no un analizador sintáctico.
-  const expression = /[^.!?\r\n]+(?:[.!?]+|$)/gu;
-  for (const line of text.split(/(?<=\n)/u)) {
-    const lineStart = text.indexOf(line, spans.length ? spans[spans.length - 1]!.end : 0);
-    for (const match of line.matchAll(expression)) {
-      const raw = match[0];
-      const leading = raw.search(/\S/u);
-      const trailing = raw.trimEnd().length;
-      const candidate = raw.slice(leading, trailing).trim();
-      const structuralHeading = /^(?:#{1,6}\s*)?(?:(?:cap[ií]tulo|chapter|parte|part|libro|book)\s+(?:[ivxlcdm]+|\d+|[a-záéíóúñ-]+)(?:\s*[:.—-].*)?|pr[oó]logo|ep[ií]logo|introducci[oó]n|interludio)$/iu.test(candidate);
-      if (leading < 0 || trailing <= leading || !/[\p{L}\p{N}]/u.test(raw) || structuralHeading) continue;
-      spans.push({
-        start: lineStart + (match.index ?? 0) + leading,
-        end: lineStart + (match.index ?? 0) + trailing
-      });
-      if (spans.length >= MAX_NARRATIVE_AUDIT_SENTENCES) return spans;
+  const structuralHeading = /^(?:#{1,6}\s*)?(?:(?:cap[ií]tulo|chapter|parte|part|libro|book)\s+(?:[ivxlcdm]+|\d+|[a-záéíóúñ-]+)(?:\s*[:.—-].*)?|pr[oó]logo|ep[ií]logo|introducci[oó]n|interludio)$/iu;
+  let segmentStart = 0;
+
+  const append = (rawStart: number, rawEnd: number): boolean => {
+    let start = rawStart;
+    let end = rawEnd;
+    while (start < end && /\s/u.test(text[start]!)) start += 1;
+    while (end > start && /\s/u.test(text[end - 1]!)) end -= 1;
+    if (end <= start) return false;
+    const excerpt = text.slice(start, end);
+    if (!/[\p{L}\p{N}]/u.test(excerpt) || structuralHeading.test(excerpt)) return false;
+    spans.push({ start, end });
+    return spans.length >= MAX_NARRATIVE_AUDIT_SENTENCES;
+  };
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index]!;
+    if (character !== "." && character !== "!" && character !== "?" &&
+        character !== "\\n" && character !== "\\r") continue;
+    if (character === "." || character === "!" || character === "?") {
+      let end = index + 1;
+      while (end < text.length && /[.!?]/u.test(text[end]!)) end += 1;
+      if (append(segmentStart, end)) return spans;
+      segmentStart = end;
+      index = end - 1;
+    } else {
+      if (append(segmentStart, index)) return spans;
+      segmentStart = index + 1;
     }
   }
+  append(segmentStart, text.length);
   return spans;
 }
 

@@ -689,3 +689,17 @@ Se añade la guía `docs/development/LIVE_AUTHOR_MONITOR_EDITOR_ADAPTER_GUIDE.md
 **Validación CI verificada:** ejecución específica [45728632431](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45728632431), commit `608f8e2a45a7bdff95db2e829dfa4eedb6a2050b`: build Vite, MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes) y **120 pruebas aprobadas, 0 fallidas y 0 omitidas**.
 
 **Límite de integración:** todavía no hay un editor de producción en el árbol del repositorio. El bridge hace reusable la conexión, pero queda pendiente enlazar los callbacks reales del editor anfitrión y ejecutar undo/redo sobre ese editor en navegador.
+
+
+
+## 36. Deduplicación con huella compacta de transacción
+
+La ventana acotada de deduplicación guarda una huella compacta por transactionId: secuencia, tipo, revisión base, rango, longitud de reemplazo y dos hashes de 32 bits sobre las unidades UTF-16 del reemplazo. No conserva el texto completo ni las cadenas de reemplazo.
+
+Una notificación repetida con el mismo transactionId y la misma firma se descarta como duplicado. Si el ID reaparece con otra secuencia o payload, el source suspende la captura con `transaction-id-reused` y requiere un snapshot común. La ventana sigue limitada por `duplicateWindowSize`; una transacción fuera de esa ventana se protege mediante las comprobaciones ordinarias de secuencia/revisión.
+
+El reemplazo se valida como cadena antes de calcular la firma. Un evento duplicado malformado detiene la captura con `invalid-change-range` sin dejar escapar una excepción por el callback del editor.
+
+**Regresiones:** retransmisión como objeto clonado idéntico; mismo ID y secuencia con contenido distinto; reemplazo de tipo inválido durante una retransmisión.
+
+**Validación CI verificada:** ejecución [45729007367](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729007367), commit `d8642c6b83faa63959ca26e9775fae83ab0b1fdc`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes), build Vite y **124 pruebas aprobadas, 0 fallidas y 0 omitidas**.

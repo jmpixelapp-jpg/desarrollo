@@ -20,3 +20,13 @@ Familias iniciales: amistad, enemistad, matrimonio, confianza y alianza. Transic
 
 ## Pruebas
 Pruebas para inicio y ruptura de amistad, reconciliación, matrimonio, offsets Unicode, límites de oración, autorrelaciones, validación, exhaustividad y orden determinista. No se declara ejecución satisfactoria sin CI verificable.
+
+
+## Corrección de orden y desambiguación
+
+La búsqueda se reorganizó por oración: primero recoge las menciones explícitas de personajes y después localiza los disparadores de transición. Así admite tanto «Ana se casó con Bruno» como «Bruno y Ana se reconciliaron», sin exigir que el verbo aparezca entre los dos nombres ni que el orden de mención coincida con el orden gramatical del sujeto.
+
+Si una misma forma nominal pertenece a más de una ficha de personaje, esa forma se excluye de la resolución automática para esa pasada. No se elige arbitrariamente una identidad. También se exige que las fichas de entrada sean de tipo \`character\`.
+
+La ventana máxima de contexto sigue siendo de 180 unidades UTF-16. El presupuesto de exploración contabiliza la longitud de cada oración multiplicada por el número de nombres elegibles y por los patrones de transición inspeccionados. Se amplió la regresión para cubrir disparador posterior a ambos nombres, verbo antes de la segunda mención, orden inverso y colisión de nombres.
+

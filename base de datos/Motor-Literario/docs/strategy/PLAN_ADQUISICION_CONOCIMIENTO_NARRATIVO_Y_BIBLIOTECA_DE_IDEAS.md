@@ -754,3 +754,28 @@ El resumen cuenta recurrencias, ecos, relaciones sin cronología, cambios de mod
 La capa solo lee candidatos y relaciones. No cambia el estado editorial `IDEA / incorporated / discarded`, no escribe `statusHistory`, no archiva ni elimina entradas y no modifica la biblioteca personal. La ausencia de una relación tampoco demuestra que una idea sea nueva, abandonada o inexistente: la memoria previa suministrada puede ser parcial.
 
 Se endureció la validación de relaciones para comprobar proyectos, IDs únicos, documentos diferentes, evidencia compatible, métricas y coherencia entre la modalidad de cada extremo y `polarityRelation`. Se agregaron trece pruebas para reaparición exacta, eco léxico, cronología desconocida, modalidad, tipo expresivo, truncamiento, determinismo, aislamiento de proyecto, referencias incoherentes, texto normalizado incompatible, modalidad inconsistente, conservación de espacios literales e integración con el pipeline.
+
+
+### Fase AS: reconstrucción de líneas de continuidad entre apariciones
+
+Se incorpora `narrative-idea-continuity-lines.ts` y el resultado `ideaContinuityLines` al pipeline `understandNarrativeFragment`.
+
+La capa agrupa por componentes conectados las apariciones y relaciones calculadas en las fases AQ y AR. Cada línea mantiene las apariciones únicas, sus documentos, revisiones, textos y evidencias, además de los eventos y relaciones que justifican el agrupamiento.
+
+Se distinguen tres clases de línea:
+- `exact-recurrence-line`: el componente contiene exclusivamente recurrencias de formulación normalizada.
+- `lexical-resonance-line`: el componente contiene exclusivamente ecos léxicos.
+- `mixed-signal-line`: conviven recurrencias exactas y ecos léxicos.
+
+La topología se informa como `linear`, `branching`, `converging`, `network` o `undirected`. Bifurcación y convergencia describen la forma de los enlaces dirigidos, no demuestran que una idea se haya dividido conceptualmente ni que varias ideas se hayan fusionado. Una red de recurrencias tampoco prueba identidad semántica.
+
+La cronología se clasifica como:
+- `complete`: todos los vínculos tienen dirección y existe un único orden total compatible; se entrega `orderedOccurrenceIds`.
+- `partial`: hay datos direccionales, pero no alcanza para un orden total único o parte de las relaciones carece de dirección.
+- `unknown`: ninguna relación aporta dirección temporal.
+
+Una cronología parcial nunca se fuerza a una secuencia lineal. Los ciclos dirigidos imposibles se rechazan. Las apariciones repetidas en diferentes relaciones deben conservar exactamente la misma identidad, procedencia y evidencia.
+
+La salida es una proyección analítica de solo lectura. No consolida candidatos, no crea equivalencias canónicas, no decide si una idea fue dividida, fusionada, abandonada o recuperada y no modifica el historial editorial ni la biblioteca personal. Los componentes sin conexiones no se presentan como líneas.
+
+Límites: máximo 10.000 eventos y 200 apariciones únicas por reconstrucción. Se propagan los indicadores de truncamiento de las fases anteriores. Se añadieron quince pruebas para orden único, redes de recurrencia, bifurcación, convergencia, componentes separados, cronología desconocida/parcial, resonancia léxica, grupos mixtos, propagación de truncamiento, procedencia cambiante, duplicados, referencias cronológicas incoherentes, ciclos imposibles e integración con el pipeline.

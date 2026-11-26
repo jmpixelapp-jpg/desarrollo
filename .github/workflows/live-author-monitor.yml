@@ -76,7 +76,9 @@ jobs:
       - name: Install Chromium for Page Lifecycle and editor integration tests
         id: chromium-install
         if: ${{ !cancelled() }}
-        run: npx playwright install --with-deps chromium
+        run: |
+          sudo apt-get update
+          npx playwright install --with-deps chromium
       - name: Run isolated Page Lifecycle regression in Chromium
         if: ${{ !cancelled() && steps.chromium-install.outcome == 'success' }}
         run: node --test tests/live-author-monitor-lifecycle-browser.test.mjs

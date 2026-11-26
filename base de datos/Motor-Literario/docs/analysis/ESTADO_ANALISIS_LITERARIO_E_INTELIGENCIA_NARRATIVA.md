@@ -274,3 +274,20 @@ La documentación debe seguir separando tres estados: implementación presente, 
 - Se añadió una regresión de `idea-upsert` que invierte deliberadamente el orden de las propiedades y comprueba que no se invoca la escritura.
 - Commits publicados en `main`: `bffa0bd` (implementación) y `d466c34` (regresión).
 - **Validación pendiente:** el cambio y la prueba están publicados; todavía no se declara que typecheck, build o suite completa hayan pasado hasta observar GitHub Actions o ejecutar las órdenes en el entorno Node del proyecto.
+
+### Tanda 26-11-2026 — recuperación durable e integridad de nombres Unicode
+
+**Frente A — sincronización y recuperación**
+- `applyCursorRecoveryProposal` compara la instantánea releída del diario mediante `areNarrativeSyncPayloadsEquivalent`, evitando falsos cambios de diario por el mero orden de propiedades JSON.
+- Se añadió una prueba con IndexedDB simulado que reordena deliberadamente las propiedades del registro persistido y exige que la recuperación lo reconozca como `already-consistent`.
+- Esto complementa la comparación canónica de los cinco handlers de dominio y cierra otra ruta de comparación sensible al orden de claves.
+
+**Frente B — análisis de acontecimientos y continuidad de personajes**
+- Los límites de nombre de `unicodeNamePattern` incluyen ahora `\\p{M}` además de letras, números y guion bajo. Una marca combinante ya no permite que el nombre base coincida falsamente como prefijo.
+- Se incorporaron cuatro regresiones: falso prefijo en participantes, nombre descompuesto completo, falso positivo en contradicciones vitales y contradicción válida para el nombre completo.
+- La corrección conserva el texto original y los offsets UTF-16; no normaliza ni modifica el manuscrito.
+
+**Frentes en curso**
+- La PR #59 trabaja en la integración de la outbox saliente con mutaciones CAS y migración IndexedDB DB27→DB28; sigue separada de la descarga remota y de la resolución de conflictos.
+- Continúan pendientes la reconciliación de escrituras concurrentes entre dispositivos, el transporte autenticado proporcionado por el anfitrión y las pruebas de integración extremo a extremo.
+- La suite completa, typecheck, build y benchmarks deben ejecutarse y observarse antes de marcar estos avances como verificados.

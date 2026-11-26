@@ -9,6 +9,7 @@ import {
   persistNarrativeKnowledgeGraphSnapshotWithManifests,
   retireNarrativeDocumentProjection,
   reconcileNarrativeDocumentProjections,
+  repairNarrativeDocumentProjectionManifest,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
@@ -280,4 +281,58 @@ test("detecta tombstones con evidencia residual y documentos sin manifiesto", as
   assert.ok(missing.issues.some(issue =>
     issue.code === "missing-manifest" && issue.documentId === "chapter-gone"
   ));
+});
+
+
+test("repara el inventario activo desde evidencia persistida mediante CAS", async () => {
+  const { store, tables } = createMemoryStore();
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-repair", [
+    { documentId: "chapter-r", revision: 7, text: "personaje Mara aparece." }
+  ], { now: 700 });
+  await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 701);
+  const key = "novel-repair" + "\\u0000" + "chapter-r";
+  const original = tables.manifests.get(key);
+  const evidenceIds = [...original.entityIds];
+  tables.manifests.set(key, {
+    ...original, entityIds: [...original.entityIds, "entity:ghost"], relationIds: ["relation:ghost"]
+  });
+  const before = [...tables.entities.values()].map(item => structuredClone(item));
+  const repaired = await repairNarrativeDocumentProjectionManifest(
+    store, "novel-repair", "chapter-r", 702
+  );
+  assert.equal(repaired.changed, true);
+  assert.equal(repaired.manifest.generation, original.generation + 1);
+  assert.deepEqual(repaired.manifest.entityIds, evidenceIds);
+  assert.deepEqual(repaired.manifest.relationIds, []);
+  assert.deepEqual([...tables.entities.values()], before);
+  const clean = await reconcileNarrativeDocumentProjections(store, "novel-repair");
+  assert.equal(clean.issues.length, 0);
+  const replay = await repairNarrativeDocumentProjectionManifest(
+    store, "novel-repair", "chapter-r", 703
+  );
+  assert.equal(replay.changed, false);
+  assert.equal(replay.reused, true);
+});
+
+test("rechaza reparar tombstones o manifiestos inexistentes sin mutar datos", async () => {
+  const { store, tables } = createMemoryStore();
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-repair-guard", [
+    { documentId: "chapter-t", revision: 2, text: "personaje Mara aparece." }
+  ], { now: 800 });
+  await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 801);
+  const key = "novel-repair-guard" + "\\u0000" + "chapter-t";
+  const active = tables.manifests.get(key);
+  tables.manifests.set(key, {
+    ...active, generation: active.generation + 1, revision: 3,
+    status: "deleted", entityIds: [], relationIds: [], eventIds: [], ideaIds: [], assertionIds: []
+  });
+  await assert.rejects(
+    repairNarrativeDocumentProjectionManifest(store, "novel-repair-guard", "chapter-t", 802),
+    /No se reparan tombstones/u
+  );
+  await assert.rejects(
+    repairNarrativeDocumentProjectionManifest(store, "novel-repair-guard", "missing", 802),
+    /manifiesto inexistente/u
+  );
+  assert.equal(tables.manifests.get(key).status, "deleted");
 });

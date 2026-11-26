@@ -136,3 +136,5 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Registrada la tabla lógica `narrative_document_projection_manifests` en el esquema declarativo MLDB 0.4.2; se detectó y resolvió el requisito del validador de no declarar tablas físicas fuera del esquema lógico.
 
 - Añadido `commitNarrativeDocumentProjectionManifest`: coordina lectura y escritura CAS, asigna generación, hace idempotentes los reintentos de una misma revisión y rechaza revisiones obsoletas o manifiestos divergentes para una revisión ya confirmada. Se añadieron pruebas específicas de estas reglas.
+
+- Corrección posterior a CI: se actualizaron las expectativas de versión IndexedDB 25 y de las 27 tablas declarativas MLDB. En la reconciliación del grafo se elimina cada ID de la colección entrante al encontrar su registro actual, incluso si la fusión no produce cambios; así se evita volver a insertar con CAS vacío una entidad ya existente durante reintentos idempotentes. Se aclaró el error de generación como conflicto CAS.

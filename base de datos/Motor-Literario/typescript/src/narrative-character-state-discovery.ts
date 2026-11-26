@@ -167,7 +167,7 @@ export function discoverNarrativeCharacterStateCandidates(
       matches.sort((a, b) => a.index - b.index || (b.end - b.index) - (a.end - a.index));
       for (const match of matches) {
         const tail = sentence.slice(match.end);
-        const leadingWhitespace = tail.match(/^\\s*/u)?.[0].length ?? 0;
+        const leadingWhitespace = tail.match(/^\s*/u)?.[0].length ?? 0;
         const predicateTail = tail.slice(leadingWhitespace);
         const predicate = COPULA.exec(predicateTail);
         if (!predicate?.groups) continue;

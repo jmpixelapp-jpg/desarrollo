@@ -17,6 +17,7 @@ import {
   discoverNarrativeObjectTransitionCandidates,
   type NarrativeObjectTransitionCandidate
 } from "./narrative-object-state-discovery";
+import { auditNarrativeExtractionCoverage, type NarrativeExtractionAudit } from "./narrative-extraction-audit";
 
 /**
  * Ingesta estructural de texto de libros para el Motor Literario.
@@ -106,6 +107,8 @@ export interface NarrativeBookIngestionResult {
   readonly actionLinks: readonly NarrativeActionLinkCandidate[];
   /** Cambios candidatos de objetos derivados de acciones y participantes explícitos. */
   readonly objectTransitionCandidates: readonly NarrativeObjectTransitionCandidate[];
+  /** Pasajes no cubiertos por las extracciones actuales, expuestos para revisión humana. */
+  readonly extractionAudit: NarrativeExtractionAudit;
   readonly observationStatus: "extracted" | "no-entities" | "omitted-text-budget";
   readonly coverage: {
     readonly chapterCount: number;
@@ -459,6 +462,14 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
         input.baseOffset ?? 0
       )
     : [];
+  const extractionAudit = auditNarrativeExtractionCoverage({
+    documentId: input.documentId,
+    revision: input.revision,
+    text: input.text,
+    baseOffset: input.baseOffset ?? 0,
+    observations: observations.map(observation => ({ evidence: observation.actionEvidence })),
+    events: eventCandidates.map(event => ({ evidence: event.evidence }))
+  });
   return {
     version: 1,
     projectId: input.projectId,
@@ -475,6 +486,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     actionLinks,
     objectTransitionCandidates,
     eventCandidates,
+    extractionAudit,
     observationStatus,
     coverage: {
       chapterCount: chapters.length,

@@ -521,6 +521,8 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 
 
+**Incidencia detectada y corregida durante CI:** los primeros runs de la nueva corroboración fallaron en Type-check porque TypeScript no estrechaba los elementos obtenidos por índice dentro del bucle. Se añadió una guarda explícita para ambos elementos (`8989b47c`). También se endureció la validación para exigir que la evidencia específica de acción/objeto/participantes esté contenida literalmente en el contexto de origen (`6fdcae4a`), y se ajustaron los fixtures para representar offsets coherentes (`d6f97d0f`). La nueva revisión sigue pendiente de CI completa.
+
 ### Corroboración de transferencias entre capítulos — 26-11-2026
 
 - Se confirmó que los runs 2885–2894 terminaron correctamente, incluyendo Type-check, compilación/pruebas y benchmark en los flujos correspondientes. En particular, el run 2894 (`09004672`) valida la documentación de la tanda anterior; los runs 2887–2890 cubren módulos/exports previos.

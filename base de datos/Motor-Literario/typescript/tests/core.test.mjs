@@ -2470,7 +2470,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 25);
+    assert.equal(openedVersion, 26);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],

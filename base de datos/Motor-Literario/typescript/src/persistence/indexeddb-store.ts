@@ -4388,14 +4388,15 @@ export class IndexedDbProjectStore implements ProjectStore {
 
   async saveAssertionIfUnchanged(
     assertion: NarrativeAssertion,
-    expectedCurrent?: NarrativeAssertion
+    expectedCurrent?: NarrativeAssertion,
+    syncOperation?: SyncOperationDraft
   ): Promise<void> {
     validateNarrativeAssertionRecord(assertion, "afirmación narrativa");
     if (expectedCurrent !== undefined) validateNarrativeAssertionRecord(expectedCurrent, "afirmación anterior");
     const db = await this.open();
     await saveNarrativeRecordWithEntityReferences(
       db, ASSERTIONS, assertion, [assertion.entityId],
-      "No se pudo guardar la afirmación narrativa.", expectedCurrent, true
+      "No se pudo guardar la afirmación narrativa.", expectedCurrent, true, syncOperation
     );
     this.publishNarrativeChange(assertion.projectId);
   }
@@ -4420,11 +4421,15 @@ export class IndexedDbProjectStore implements ProjectStore {
     this.publishNarrativeChange(event.projectId);
   }
 
-  async saveEventIfUnchanged(event: NarrativeEvent, expectedCurrent?: NarrativeEvent): Promise<void> {
+  async saveEventIfUnchanged(
+    event: NarrativeEvent,
+    expectedCurrent?: NarrativeEvent,
+    syncOperation?: SyncOperationDraft
+  ): Promise<void> {
     validateNarrativeEventRecord(event, "acontecimiento");
     if (expectedCurrent !== undefined) validateNarrativeEventRecord(expectedCurrent, "acontecimiento anterior");
     const db = await this.open();
-    await saveNarrativeEventWithReferences(db, event, expectedCurrent, true);
+    await saveNarrativeEventWithReferences(db, event, expectedCurrent, true, syncOperation);
     this.publishNarrativeChange(event.projectId);
   }
 
@@ -4496,11 +4501,15 @@ export class IndexedDbProjectStore implements ProjectStore {
     this.publishNarrativeChange(idea.projectId);
   }
 
-  async saveIdeaIfUnchanged(idea: NarrativeIdea, expectedCurrent?: NarrativeIdea): Promise<void> {
+  async saveIdeaIfUnchanged(
+    idea: NarrativeIdea,
+    expectedCurrent?: NarrativeIdea,
+    syncOperation?: SyncOperationDraft
+  ): Promise<void> {
     validateNarrativeIdeaRecord(idea, "idea narrativa");
     if (expectedCurrent !== undefined) validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
-    await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
+    await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true, syncOperation);
     this.publishNarrativeChange(idea.projectId);
   }
 
@@ -4511,12 +4520,13 @@ export class IndexedDbProjectStore implements ProjectStore {
    */
   async updateIdeaIfUnchanged(
     idea: NarrativeIdea,
-    expectedCurrent: NarrativeIdea
+    expectedCurrent: NarrativeIdea,
+    syncOperation?: SyncOperationDraft
   ): Promise<void> {
     validateNarrativeIdeaRecord(idea, "idea narrativa");
     validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
     const db = await this.open();
-    await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
+    await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true, syncOperation);
     this.publishNarrativeChange(idea.projectId);
   }
 
@@ -4543,14 +4553,15 @@ export class IndexedDbProjectStore implements ProjectStore {
 
   async saveRelationIfUnchanged(
     relation: NarrativeRelation,
-    expectedCurrent?: NarrativeRelation
+    expectedCurrent?: NarrativeRelation,
+    syncOperation?: SyncOperationDraft
   ): Promise<void> {
     validateNarrativeRelationRecord(relation, "relación narrativa");
     if (expectedCurrent !== undefined) validateNarrativeRelationRecord(expectedCurrent, "relación anterior");
     const db = await this.open();
     await saveNarrativeRecordWithEntityReferences(
       db, RELATIONS, relation, [relation.fromEntityId, relation.toEntityId],
-      "No se pudo guardar la relación narrativa.", expectedCurrent, true
+      "No se pudo guardar la relación narrativa.", expectedCurrent, true, syncOperation
     );
     this.publishNarrativeChange(relation.projectId);
   }
@@ -4573,11 +4584,15 @@ export class IndexedDbProjectStore implements ProjectStore {
     this.publishNarrativeChange(entity.projectId);
   }
 
-  async saveEntityIfUnchanged(entity: NarrativeEntity, expectedCurrent?: NarrativeEntity): Promise<void> {
+  async saveEntityIfUnchanged(
+    entity: NarrativeEntity,
+    expectedCurrent?: NarrativeEntity,
+    syncOperation?: SyncOperationDraft
+  ): Promise<void> {
     validateNarrativeEntityRecord(entity, "entidad narrativa");
     if (expectedCurrent !== undefined) validateNarrativeEntityRecord(expectedCurrent, "entidad anterior");
     const db = await this.open();
-    await saveNarrativeEntityRecord(db, entity, expectedCurrent, true);
+    await saveNarrativeEntityRecord(db, entity, expectedCurrent, true, syncOperation);
     this.publishNarrativeChange(entity.projectId);
   }
 

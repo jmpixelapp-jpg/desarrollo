@@ -658,3 +658,10 @@ Estos invariantes protegen solo la lectura/recuperación de checkpoint. No cambi
 
 
 **Validación CI de los invariantes:** [Live Author Monitor — run 45761138764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45761138764) terminó success con 164/164 pruebas aisladas, Page Lifecycle Chromium 1/1 y 168/168 pruebas host/editor/browser; el test de outcomes y latencias incoherentes pasó como test 161. La suite general [run 45761138762](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45761138762) aprobó 928/928, cero fallos y cero cancelaciones. El benchmark de 100.000 commits dejó heap estable de 4,39 MiB y cero tickets pendientes.
+
+
+## 57. Integridad densa de las muestras de latencia
+
+La ventana `commitLatencies` es una secuencia ordenada de muestras, no solo un array cuya propiedad `length` sea correcta. Cada posición entre cero y `length - 1` debe contener un número finito no negativo. No se aceptan arrays dispersos: los métodos nativos `some()` y `reduce()` omiten huecos y pueden validar accidentalmente una suma incompleta. La restauración materializa los elementos con `Array.from()`, convirtiendo cada hueco en `undefined` para que falle la validación numérica.
+
+La regresión asociada crea tres commits confirmados y un checkpoint correcto, elimina una muestra intermedia y exige que `restoreCheckpoint()` lo rechace sin registrar una sesión. Este guard es de solo lectura; no cambia la versión ni la estructura durable del checkpoint.

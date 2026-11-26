@@ -260,3 +260,26 @@ El test de navegador `Chromium captura candidatos IME y separa la confirmación 
 La confirmación de texto CDP se verifica por separado después de disponer la fuente. En este runner, `Input.insertText` deja el texto final correcto pero genera un `compositionend` que el adaptador clasifica como no confiable y rechaza. No se relajó `isTrusted` para hacer pasar el test: ese rechazo protege la captura frente a eventos que no prueban una entrada confiable. La prueba deja explícito que este comando de automatización no puede sustituir la validación de un commit realizado por un IME físico.
 
 **Límite de automatización:** `Input.imeSetComposition` es un comando experimental del protocolo de Chromium; la prueba verifica el pipeline de edición del navegador, no el comportamiento de un proveedor IME concreto ni del sistema operativo. La API CDP tampoco garantiza estabilidad entre versiones. Referencias: [definición de Input.imeSetComposition](https://chromedevtools.github.io/devtools-protocol/tot/Input/#method-imeSetComposition), [Input Events Level 2: orden de eventos durante la composición](https://www.w3.org/TR/input-events-2/#event-order-during-composition) y [Chrome DevTools Protocol: alcance y estabilidad](https://chromedevtools.github.io/devtools-protocol/).
+
+
+## Validación Chromium IME y cierre de CI — 26 de noviembre de 2026
+
+La prueba de candidatos por CDP terminó correctamente en ambos flujos:
+
+- **[Live Author Monitor — run 45787445618](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45787445618)**, sobre el commit `5b67ce0f3abdf63f02bc9e015f52c1d09d016b4c`: type-check aislado, build del bundle del monitor, pruebas de recuperación/diagnóstico y almacenamiento; Chromium Page Lifecycle; test nuevo de composición IME; integración anfitrión/editor/navegador. Resultado final: **199/199 pruebas, 0 fallos**.
+- **[Motor Literario TypeScript — run 45787488579](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45787488579)**, en el commit descendiente `1db3ff013b151d875d9dd20d41561535df1f238c` que conserva el test IME: type-check, build y suite global **1.156/1.156 pruebas, 0 fallos**. El log confirma explícitamente `Chromium captura candidatos IME y separa la confirmación de texto por CDP` como aprobado.
+
+### Benchmark del monitor en la validación dedicada
+
+Escenario `live-author-monitor-bounded-heap`: 8 documentos, 1.048.576 unidades UTF-16 iniciales por documento, 12.500 cambios por documento y 100.000 commits. Resultado observado: 388,61 ms, 257.324,3 commits/s, heap retenido por sesiones abiertas de 0,5 MB, crecimiento de heap media carga→carga completa de 0 MB y RSS final de 70,43 MB. Es una medición del núcleo `LiveAuthorMonitor` (sesiones, commits y contadores), no del coste completo de comparar el texto en `TextArea`; no debe interpretarse como garantía de rendimiento ni como benchmark aislado del adaptador.
+
+### Interpretación conjunta
+
+Queda cubierto en CI que Chromium:
+1. inicia una composición y emite eventos confiables de actualización de candidato;
+2. emite pares confiables `beforeinput`/`input` de tipo `insertCompositionText`;
+3. sustituye el candidato `に` por `日本` sin concatenarlo;
+4. produce deltas `composition` mientras el monitor permanece sincronizado;
+5. conserva el texto final después de la operación de confirmación de CDP, tratada aparte por la diferencia de confianza observada.
+
+La prueba no convierte esa confirmación de CDP en una edición capturada; el adaptador mantiene el rechazo de `compositionend` no confiable. Sigue pendiente validar commits con IME físicos en sistemas operativos, idiomas y navegadores reales. Esta es una limitación de cobertura de dispositivo, no un test fallido.

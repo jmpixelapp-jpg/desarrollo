@@ -19,3 +19,8 @@ La clasificación es léxica y local. No resuelve estilo indirecto libre, alcanc
 ## Pruebas añadidas
 
 Se cubren la separación narrador/creencia, la atribución de discurso referido, la ausencia de emisor en construcciones impersonales y la reconstrucción aislada de transiciones dentro de una misma perspectiva.
+
+
+## Integridad de límites
+
+Los extractores y reconstructores no devuelven resultados parciales cuando alcanzan sus presupuestos: admiten exactamente el máximo configurado y lanzan un error si se detecta un elemento adicional. Esto evita que una trayectoria parezca completa cuando en realidad fue truncada.

@@ -475,3 +475,14 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - La prueba positiva «Ana encontró a Bruno» comprueba el complemento posterior al verbo; la prueba de control «Bruno encontró a Ana» comprueba que no se asigna Bruno como objeto por aparecer antes del verbo.
 - La documentación funcional se actualizó en `9ba40a2`.
 - La corrección queda pendiente de CI completa; no se contabiliza como validada hasta que pase Type-check, las pruebas y el benchmark.
+
+
+### Corrección del complemento personal y adquisición UTF-8 — 26-11-2026
+
+- El run 2836 falló en dos pruebas nuevas de complemento personal (1012/1014); Type-check había pasado. La causa fue un literal regex con escapes duplicados en el patrón «verbo + a + nombre».
+- Corregido en `b83640a`, conservando la exigencia de entidad conocida única y evidencia literal; las pruebas distinguen «Ana encontró a Bruno» de «Bruno encontró a Ana».
+- Documentación funcional actualizada en `9ba40a2`.
+- Mejora adicional de adquisición: `737b91d` hace que la segmentación ignore un BOM UTF-8 inicial al reconocer encabezados Markdown/TXT, sin alterar el texto devuelto ni desplazar los offsets originales.
+- Prueba de regresión añadida en `f414c53`: verifica el encabezado tras BOM y que el offset de «llegó» sigue coincidiendo con el texto fuente.
+- Documentación de BOM y offsets actualizada en `d6eabd0`.
+- Runs 2839–2841 cubrían la corrección del complemento personal y documentación; la nueva prueba de BOM y el cambio de segmentación se sometieron a CI en runs posteriores, todavía sin resultado final en el momento de registrar esta nota.

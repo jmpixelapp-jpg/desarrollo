@@ -381,3 +381,6 @@ La bandeja `sync-outbox` conserva operaciones salientes hasta que el transporte 
 - `acknowledgeSyncOperation(operationId)`: elimina la operación solo tras el acuse remoto validado.
 
 Esta bandeja es infraestructura local durable; por sí sola no realiza llamadas de red ni sincroniza dispositivos. El anfitrión debe aportar autenticación, transporte, validación del lado servidor, política de backoff y resolución explícita de conflictos. Nunca debe confirmar una operación antes de que el servidor la haya aceptado.
+
+
+La suite completa construye también el bundle aislado del monitor antes de ejecutar los tests: `npm run build:monitor-test` genera `dist-monitor/`, requerido por las regresiones de aislamiento de diagnósticos.

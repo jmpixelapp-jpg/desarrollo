@@ -76,3 +76,10 @@ El servidor puede haber aceptado un lote completo aunque el cliente se interrump
 La coalescencia `inFlight` del coordinador evita envíos simultáneos del mismo proyecto únicamente dentro de una misma instancia JavaScript. No constituye un bloqueo compartido entre pestañas, workers o instancias del coordinador. Dos contextos pueden leer y enviar la misma operación antes de que cualquiera retire su acuse local. Por tanto, el transporte y el servidor deben admitir entregas duplicadas y deduplicar de forma atómica por `(projectId, operationId)`; una clave de idempotencia aislada en memoria no es suficiente.
 
 La bandeja actual no implementa leases distribuidos ni reclamación exclusiva de operaciones. No se debe afirmar exclusión mutua entre contextos. Una futura reclamación durable requiere una migración de esquema, vencimiento recuperable tras cierre abrupto y pruebas multi-contexto; no se añade implícitamente a la versión 25 de IndexedDB.
+
+
+## Bloqueo compartido del coordinador
+
+El coordinador admite ahora un puerto opcional `SyncExecutionLock` en sus opciones. Su método `runExclusive(key, task)` recibe una clave estable por proyecto (`narrative-sync:<projectId>`) y debe ejecutar la tarea en exclusión mutua entre todas las instancias que compartan el proveedor. La coalescencia local `inFlight` se mantiene para llamadas repetidas dentro de una instancia.
+
+El núcleo no depende de APIs del navegador. El anfitrión puede adaptar este puerto a Web Locks o a un lease IndexedDB durable. Si no se inyecta un proveedor compartido, se conserva el comportamiento anterior: exclusión solo por instancia. El puerto no convierte por sí solo la entrega en exactamente-una-vez; el servidor sigue obligado a deduplicar `operationId`. Los proveedores de lease deben contemplar vencimiento, liberación condicionada por propietario/fencing token y operaciones que superen la duración inicial del lease.

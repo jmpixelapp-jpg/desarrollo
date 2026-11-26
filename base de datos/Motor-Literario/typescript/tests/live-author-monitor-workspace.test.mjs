@@ -268,6 +268,44 @@ test("muestra fallos de suscriptores en la tarjeta correcta sin detener otras se
   unmount();
 });
 
+test("muestra y conserva el aviso si falla temporalmente getDocumentLabel durante la reconciliación", () => {
+  const f = fixture();
+  f.monitor.openDocument({ documentId: "chapter-2", text: "dos", revision: 0, sequence: 0 }, "book-1");
+  let refresh;
+  let failNextLabel = false;
+  const unmount = mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    getDocumentLabel(documentId) {
+      if (documentId === "chapter-1" && failNextLabel) {
+        failNextLabel = false;
+        throw new Error("private workspace label exception");
+      }
+      return "Capítulo " + documentId;
+    },
+    schedule(callback) { refresh = callback; return () => {}; }
+  });
+  const root = f.container.children[0];
+  const firstCard = cardFor(root, "chapter-1");
+  const secondCard = cardFor(root, "chapter-2");
+  const firstDiagnostic = findNode(firstCard, node => node.getAttribute("data-diagnostic") === "listeners");
+  const secondDiagnostic = findNode(secondCard, node => node.getAttribute("data-diagnostic") === "listeners");
+
+  failNextLabel = true;
+  refresh();
+
+  assert.match(firstDiagnostic.textContent, /1 fallo/);
+  assert.match(secondDiagnostic.textContent, /sin errores/);
+  assert.equal(root.textContent.includes("private workspace label exception"), false);
+
+  refresh();
+  const firstHeading = findNode(firstCard, node => node.tagName === "H3");
+  assert.equal(firstHeading.textContent, "Capítulo chapter-1");
+  assert.match(firstDiagnostic.textContent, /1 fallo/,
+    "el aviso local permanece visible después de que la tarjeta se recupera");
+  assert.equal(f.monitor.getSnapshot("chapter-1").listenerErrors, 0,
+    "el callback interno del workspace se aísla sin contabilizarse como listener externo");
+  unmount();
+});
+
 test("presenta las siete categorías de actividad en la tarjeta del capítulo correcto", () => {
   const f = fixture();
   let length = "uno".length;

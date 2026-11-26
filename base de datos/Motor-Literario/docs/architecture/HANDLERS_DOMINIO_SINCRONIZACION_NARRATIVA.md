@@ -89,3 +89,8 @@ La operación no repara manifiestos ausentes (no hay revisión fuente confiable)
 La reconciliación también verifica referencias internas: extremos de relaciones, participantes de acontecimientos, entidad propietaria de afirmaciones y vínculos explícitos entre ideas y entidades/otras ideas. Los códigos `missing-relation-entity`, `missing-event-participant`, `missing-assertion-entity`, `missing-related-entity` y `missing-related-idea` identifican la clase de inconsistencia.
 
 Cuando el registro no tiene evidencia documental, el diagnóstico usa `documentId: ""` para indicar alcance de proyecto y no atribuye el problema a un capítulo arbitrario. Estas incidencias no se reparan automáticamente: sin una fuente autoritativa no es seguro inventar, fusionar o reasignar identidades.
+
+
+### Propuestas conservadoras de reparación de referencias
+
+`proposeNarrativeReferenceRepairs(store, report)` transforma incidencias de referencias a entidades en propuestas no mutantes. Sólo propone un destino automático cuando exactamente una entidad del mismo proyecto declara el ID perdido dentro de `mergedFromIds`, evidencia explícita de una fusión anterior. Cero o varias coincidencias producen `manual-review`. Los enlaces a ideas no se resuelven por heurística. La función no guarda cambios ni sustituye la confirmación editorial.

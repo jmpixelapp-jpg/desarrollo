@@ -112,10 +112,20 @@ La operación devuelve un registro de auditoría con campo, valor anterior, valo
 
 ### Auditoría durable de reparaciones
 
-El contrato `ProjectStore` incorpora `appendNarrativeReferenceRepairAudit` y `loadNarrativeReferenceRepairAudits`. IndexedDB almacena los registros en `narrative-reference-repair-audits`, aislados por proyecto y operación, con inserción append-only e idempotente. La base avanza a la versión 26; las bases existentes crean el almacén durante la migración sin alterar los registros previos.
+El contrato `ProjectStore` incorpora `appendNarrativeReferenceRepairAudit` y `loadNarrativeReferenceRepairAudits`. IndexedDB almacena los registros en `narrative-reference-repair-audits`, aislados por proyecto y operación, con inserción append-only e idempotente. La base avanza a la versión 27; las bases existentes crean el almacén durante la migración sin alterar los registros previos.
 
 La API pública de aplicación exige que el almacenamiento ofrezca auditoría durable antes de iniciar una reparación. Después del CAS del registro, añade la auditoría antes de devolver éxito. Si la escritura de auditoría falla tras el CAS, el llamador puede reintentar la misma propuesta: la aplicación reconoce el estado ya actualizado y completa el registro pendiente. La mutación del grafo y la escritura de auditoría son dos transacciones, no una transacción IndexedDB conjunta.
 
 ## Recuperación durable de reparaciones de referencias
 
-Las reparaciones aprobadas usan una intención previa persistida (`narrative-reference-repair-pending`). Antes del CAS se guarda una entrada determinista por proyecto/tipo/registro/campo/referencia/entidad destino. Después de aplicar el cambio se escribe el recibo append-only en `narrative-reference-repair-audits` y recién entonces se retira la intención. Si el proceso se cierra entre pasos, la intención permanece y `repairNarrativeProjection` puede reanudar la operación idempotentemente. Las intenciones y auditorías están aisladas por `projectId` y se conservan en IndexedDB DB26.
+Las reparaciones aprobadas usan una intención previa persistida (`narrative-reference-repair-pending`). Antes del CAS se guarda una entrada determinista por proyecto/tipo/registro/campo/referencia/entidad destino. Después de aplicar el cambio se escribe el recibo append-only en `narrative-reference-repair-audits` y recién entonces se retira la intención. Si el proceso se cierra entre pasos, la intención permanece y `repairNarrativeProjection` puede reanudar la operación idempotentemente. Las intenciones y auditorías están aisladas por `projectId` y se conservan en IndexedDB DB27.
+
+## Outbox y transporte saliente (IndexedDB DB27)
+
+Con `ProjectIdentity.deviceId` estable, las ediciones de texto se confirman junto con su delta y operación `document.change` en una transacción. Las mutaciones locales de entidades, ideas, afirmaciones, relaciones y acontecimientos usan los métodos CAS con `SyncOperationDraft`: dominio, outbox y cursor por dispositivo se confirman o revierten juntos. La fusión local de entidades genera `entity-merge` en la misma transacción que redirige todas sus referencias.
+
+El adaptador IndexedDB anuncia `supportsAtomicNarrativeSyncOutbox`. Si el anfitrión configura `deviceId` y el adaptador no ofrece esa garantía, el motor rechaza la mutación en lugar de guardar un cambio que no pueda replicarse. Las operaciones entrantes no generan una nueva outbox, evitando bucles de eco.
+
+`dispatchPendingNarrativeSyncOperations` envuelve los pendientes con una huella SHA-256 y requiere un acuse remoto durable coincidente en proyecto, dispositivo, operación, secuencia y digest. Solo entonces elimina el pendiente local. El transporte lo proporciona el anfitrión; no se incluye un cliente HTTP ni se envían datos automáticamente.
+
+La entrega es al menos una vez. El servidor debe deduplicar `operationId`, autenticar el transporte y autorizar la relación entre usuario, dispositivo y proyecto. El digest detecta alteraciones, pero no autentica al emisor. Los payloads de `document.change` contienen texto del manuscrito y deben tratarse como contenido privado.

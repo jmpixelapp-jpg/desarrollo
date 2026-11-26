@@ -155,7 +155,8 @@ test("monta el textarea directamente contra HostEngineApi y entrega deltas únic
     start: 5,
     end: 5,
     replacement: " world",
-    activityKind: "typing"
+    activityKind: "typing",
+    inputType: "insertText"
   });
   assert.equal(f.admissions[0].status, "queued");
   assert.equal(f.integration.getState().revision, 1);

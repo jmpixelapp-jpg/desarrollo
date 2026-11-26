@@ -84,13 +84,14 @@ export function buildNarrativeKnowledgeGraph(
   const eventsById = new Map<string, NarrativeEvent>();
   const ideasById = new Map<string, NarrativeIdea>();
   const assertionsById = new Map<string, NarrativeAssertion>();
+  const extractionTime = options.now ?? Date.now();
   const orderedDocuments = [...documents].sort((a, b) =>
     a.documentId.localeCompare(b.documentId) || a.revision - b.revision
   );
 
   for (const document of orderedDocuments) {
     const offset = document.baseOffset ?? 0;
-    const now = options.now ?? Date.now();
+    const now = extractionTime;
     const extractedEntities = extractNarrativeEntities(
       projectId, document.documentId, document.revision, document.text, now, offset
     );
@@ -112,7 +113,7 @@ export function buildNarrativeKnowledgeGraph(
     }
     const ideas = extractNarrativeIdeas(
       projectId, document.documentId, document.revision, document.text, offset,
-      options.sourceProjectName ?? projectId
+      options.sourceProjectName ?? projectId, now
     );
     for (const idea of ideas) {
       ideasById.set(idea.id, mergeNarrativeIdea(ideasById.get(idea.id), idea));

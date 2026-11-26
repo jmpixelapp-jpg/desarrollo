@@ -739,6 +739,69 @@ test("dos pestañas compiten atómicamente y solo una adquiere el lease", async 
   }
 });
 
+test("los leases de documentos distintos mantienen fencing y escrituras independientes", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-independent-documents-" + randomUUID();
+  const documentA = "chapter-a";
+  const documentB = "chapter-b";
+  const now = Date.now();
+
+  try {
+    const [leaseA, leaseB] = await Promise.all([
+      acquireLease(store, projectId, documentA, "same-tab-owner", now, 30_000),
+      acquireLease(store, projectId, documentB, "same-tab-owner", now, 30_000)
+    ]);
+    assert.equal(leaseA.fencingToken, 1);
+    assert.equal(leaseB.fencingToken, 1);
+
+    const takeoverA = await store.acquireLiveAuthorMonitorLease(
+      projectId,
+      documentA,
+      "replacement-tab",
+      leaseA.expiresAt,
+      30_000
+    );
+    assert.ok(takeoverA);
+    assert.equal(takeoverA.fencingToken, leaseA.fencingToken + 1);
+
+    const renewedB = await store.renewLiveAuthorMonitorLease(leaseB, now + 1, 30_000);
+    assert.ok(renewedB);
+    assert.equal(renewedB.ownerId, leaseB.ownerId);
+    assert.equal(renewedB.fencingToken, leaseB.fencingToken);
+    assert.ok(renewedB.expiresAt > leaseB.expiresAt);
+
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(
+        checkpoint(projectId, documentA, now + 2, {
+          sessionId: "stale-document-a",
+          revision: 1,
+          sequence: 1
+        }),
+        leaseA
+      ),
+      /fencing token/
+    );
+
+    const checkpointB = checkpoint(projectId, documentB, now + 3);
+    await store.saveLiveAuthorMonitorCheckpoint(checkpointB, leaseB);
+    assert.equal(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentA),
+      undefined,
+      "la transferencia del documento A no puede escribir con el lease antiguo"
+    );
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentB),
+      checkpointB,
+      "el takeover de A no debe afectar la renovación ni la escritura independiente de B"
+    );
+
+    assert.equal(await store.releaseLiveAuthorMonitorLease(leaseA, now + 4), false);
+    assert.equal(await store.releaseLiveAuthorMonitorLease(leaseB, now + 5), true);
+  } finally {
+    await store.close();
+  }
+});
+
 test("el fencing token invalida escrituras del propietario anterior tras expirar el lease", async () => {
   const store = new IndexedDbProjectStore();
   const projectId = "live-author-monitor-fence-" + randomUUID();

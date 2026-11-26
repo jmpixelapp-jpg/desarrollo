@@ -6463,17 +6463,36 @@ function collectSensorySignals(
  * monótonas, decisiones truncadas o diferencias con el estado actual.
  * Las escrituras nuevas siguen aplicando las reglas estrictas del almacén.
  */
-function isValidNarrativeIdeaStatusHistory(value: unknown): boolean {
+function isValidNarrativeIdeaStatusHistory(
+  value: unknown,
+  _currentStatus: NarrativeIdea["status"],
+  writerDecisionCount: number,
+  omittedStatusHistoryCount: number
+): value is readonly NarrativeIdeaStatusChange[] {
   if (value === undefined) return true;
-  if (!Array.isArray(value) || value.length > 100) return false;
-  return value.every((change: unknown) => {
-    if (!change || typeof change !== "object") return false;
-    const item = change as Partial<NarrativeIdeaStatusChange>;
-    return ["IDEA","incorporated","discarded"].includes(item.status as string) &&
-      ["initial","writer","text-revised"].includes(item.reason as string) &&
-      (item.changedAt === undefined ||
-        typeof item.changedAt === "number" && Number.isFinite(item.changedAt) && item.changedAt >= 0);
-  });
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
+  let visibleWriterDecisionCount = 0;
+  for (let index = 0; index < value.length; index++) {
+    const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
+    if (!change ||
+        !["IDEA","incorporated","discarded"].includes(change.status) ||
+        !["initial","writer","text-revised"].includes(change.reason) ||
+        (change.reason === "text-revised" && change.status !== "IDEA") ||
+        (change.changedAt !== undefined &&
+          (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
+        (index === 0
+          ? omittedStatusHistoryCount === 0
+            ? change.reason !== "initial" || change.status !== "IDEA"
+            : change.reason === "initial"
+          : change.reason === "initial" ||
+            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status)) {
+      return false;
+    }
+    if (change.reason === "writer") visibleWriterDecisionCount++;
+  }
+  return Number.isSafeInteger(writerDecisionCount) &&
+    writerDecisionCount >= visibleWriterDecisionCount &&
+    writerDecisionCount - visibleWriterDecisionCount <= omittedStatusHistoryCount;
 }
 
 function validateInput(input: LiteraryAnalysisInput): number {
@@ -6630,7 +6649,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
       throw new Error("El catálogo global de ideas del análisis literario es inválido.");
     }
-    if (!isValidNarrativeIdeaStatusHistory(idea.statusHistory)) {
+    if (!isValidNarrativeIdeaStatusHistory(idea.statusHistory, idea.status, idea.writerDecisionCount, idea.omittedStatusHistoryCount)) {
       throw new Error("El historial de decisiones del catálogo global de ideas es inválido.");
     }
     projectIdeaIds.add(idea.ideaId);
@@ -6658,7 +6677,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !Number.isSafeInteger(idea.omittedStatusHistoryCount) || idea.omittedStatusHistoryCount < 0) {
       throw new Error("El catálogo de ideas y decisiones del análisis literario es inválido.");
     }
-    if (!isValidNarrativeIdeaStatusHistory(idea.statusHistory)) {
+    if (!isValidNarrativeIdeaStatusHistory(idea.statusHistory, idea.status, idea.writerDecisionCount, idea.omittedStatusHistoryCount)) {
       throw new Error("El historial de decisiones de una idea vinculada es inválido.");
     }
     ideaIds.add(idea.ideaId);

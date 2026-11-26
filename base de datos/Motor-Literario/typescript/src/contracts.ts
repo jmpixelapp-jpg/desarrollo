@@ -173,7 +173,25 @@ export interface NarrativeDocumentProjectionManifest {
   readonly updatedAt: number;
 }
 
+/** Registro append-only de una reparación de referencias del grafo narrativo. */
+export interface NarrativeReferenceRepairAuditEntry {
+  readonly operationId: string;
+  readonly operation: "narrative-reference-repair";
+  readonly projectId: string;
+  readonly recordType: "relation" | "event" | "assertion" | "idea";
+  readonly recordId: string;
+  readonly referenceField: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
+  readonly before: string | readonly string[];
+  readonly after: string | readonly string[];
+  readonly missingReferenceId: string;
+  readonly replacementEntityId: string;
+  readonly appliedAt: number;
+}
+
 export interface ProjectStore {
+  /** Auditoría append-only e idempotente de reparaciones narrativas. */
+  appendNarrativeReferenceRepairAudit?(entry: NarrativeReferenceRepairAuditEntry): Promise<void>;
+  loadNarrativeReferenceRepairAudits?(projectId: string): Promise<readonly NarrativeReferenceRepairAuditEntry[]>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */

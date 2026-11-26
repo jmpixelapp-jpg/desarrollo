@@ -688,6 +688,8 @@ La longitud inicial no puede ser negativa. La condición equivalente es `inserte
 
 Este balance no requiere leer el manuscrito original y permite borrados completos, reemplazos y cualquier secuencia válida de deltas. No cambia el formato v1 ni requiere migración.
 
+
+**Validación:** fórmula correcta y regresión de longitud inicial negativa aprobadas en [run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913), test 164 de la suite específica, junto con 174/174 integraciones y Chromium Page Lifecycle.
 ## 60. Generaciones para renovaciones y adquisiciones asíncronas
 
 Las rutas genéricas de adquisición/renovación pueden solaparse con checkpoints automáticos, cierres seguros y revalidaciones del heartbeat. Cada operación captura la generación de ciclo de vida vigente e inicializa una si todavía no existe. Las renovaciones normales concurrentes comparten esa época; solo una pérdida o liberación incrementa la generación. Una operación puede publicar su lease o error únicamente si la época sigue vigente y no comenzó una liberación.
@@ -713,7 +715,9 @@ Dentro de la misma `sessionId`, los contadores de tipo de actividad no pueden re
 Las pruebas trabajan sobre IndexedDB y verifican que una escritura inválida no deje checkpoint persistido, que una reclasificación se rechace preservando el registro anterior y que la evolución desde un checkpoint histórico siga permitida. No se modifica el esquema ni la versión v1.
 
 
-## 63. Validación integral de métricas antes de guardar un checkpoint
+
+
+**Validación:** muestras dispersas, monotonía de categorías y compatibilidad histórica v1 aprobadas en [run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913), tests 112, 116 y 117.## 63. Validación integral de métricas antes de guardar un checkpoint
 
 Antes de abrir la transacción IndexedDB, el validador comprueba que las métricas describan una sesión completa y alcanzable:
 
@@ -723,3 +727,6 @@ Antes de abrir la transacción IndexedDB, el validador comprueba que las métric
 - La ventana de latencias no supera el número de outcomes, contiene una muestra si existen outcomes, termina exactamente en `lastCommitLatencyMs` y tiene suma no superior a la latencia histórica acumulada.
 
 Los arrays de muestras también deben ser densos. La validación con `Array.from()` convierte los huecos en valores inválidos antes de persistir. Cualquier incumplimiento aborta la entrada antes de la escritura del checkpoint; no se modifica el lease ni se deja un registro durable parcial.
+
+
+**Validación:** los cinco balances imposibles se rechazaron antes de persistir en [run 45764587913](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45764587913), test 113. La suite dedicada completó 167/167, Chromium 1/1, host/editor/browser 174/174 y benchmark de 100.000 commits; heap 4,39 MiB estable desde mitad a fin y cero tickets pendientes.

@@ -102,6 +102,22 @@ test("biblioteca personal pagina por clave compuesta, valida vínculos externos 
     assert.equal(restarted.libraryVersion, 2);
     assert.ok(restarted.nextCursor);
 
+    const thirdPage = await api.getPersonalIdeaLibraryPage(restarted.nextCursor, 2);
+    assert.deepEqual(
+      thirdPage.items.map(entry => [entry.sourceProjectId, entry.idea.id]),
+      [[secondProjectId, "idea-c"]]
+    );
+    assert.equal(thirdPage.libraryVersion, 2);
+    assert.equal(thirdPage.nextCursor, null);
+
+    await assert.rejects(
+      store.loadPersonalIdeasByKeys(writerId, [{
+        sourceProjectId: firstProjectId,
+        ideaId: "idea-b"
+      }], 1),
+      /biblioteca cambió durante la resolución/
+    );
+
     // Un escritor diferente puede usar los mismos IDs sin contaminar esta biblioteca.
     await store.saveIdea(idea(foreignProjectId, "idea-a"));
     await store.archiveUnincorporatedIdeas(

@@ -5,12 +5,66 @@ import { HostEngineApi } from "../dist/motor-literario.js";
 class MemoryDocumentStore {
   documents = new Map();
   monitorCheckpoints = new Map();
+  monitorLeases = new Map();
 
-  async saveLiveAuthorMonitorCheckpoint(checkpoint) {
-    this.monitorCheckpoints.set(
-      checkpoint.projectId + ":" + checkpoint.documentId,
-      structuredClone(checkpoint)
-    );
+  async acquireLiveAuthorMonitorLease(projectId, documentId, ownerId, now, leaseDurationMs) {
+    const key = projectId + ":" + documentId;
+    const existing = this.monitorLeases.get(key);
+    if (existing && existing.expiresAt > now && existing.ownerId !== ownerId) return undefined;
+    const sameOwner = existing && existing.expiresAt > now && existing.ownerId === ownerId;
+    const lease = {
+      version: 1,
+      projectId,
+      documentId,
+      ownerId,
+      fencingToken: sameOwner ? existing.fencingToken : existing ? existing.fencingToken + 1 : 1,
+      acquiredAt: sameOwner ? existing.acquiredAt : now,
+      expiresAt: now + leaseDurationMs,
+      updatedAt: now
+    };
+    this.monitorLeases.set(key, structuredClone(lease));
+    return structuredClone(lease);
+  }
+
+  async renewLiveAuthorMonitorLease(lease, now, leaseDurationMs) {
+    const key = lease.projectId + ":" + lease.documentId;
+    const existing = this.monitorLeases.get(key);
+    if (!existing || existing.ownerId !== lease.ownerId ||
+        existing.fencingToken !== lease.fencingToken ||
+        existing.expiresAt <= now || lease.expiresAt <= now) return undefined;
+    const renewed = { ...existing, expiresAt: now + leaseDurationMs, updatedAt: now };
+    this.monitorLeases.set(key, structuredClone(renewed));
+    return structuredClone(renewed);
+  }
+
+  async releaseLiveAuthorMonitorLease(lease, now) {
+    const key = lease.projectId + ":" + lease.documentId;
+    const existing = this.monitorLeases.get(key);
+    if (!existing || existing.ownerId !== lease.ownerId ||
+        existing.fencingToken !== lease.fencingToken) return false;
+    this.monitorLeases.set(key, {
+      ...existing,
+      expiresAt: now,
+      updatedAt: Math.max(existing.acquiredAt, now)
+    });
+    return true;
+  }
+
+  async saveLiveAuthorMonitorCheckpoint(checkpoint, lease) {
+    const key = checkpoint.projectId + ":" + checkpoint.documentId;
+    const currentLease = this.monitorLeases.get(key);
+    if (!lease || !currentLease || currentLease.ownerId !== lease.ownerId ||
+        currentLease.fencingToken !== lease.fencingToken ||
+        currentLease.expiresAt <= Date.now() || lease.expiresAt <= Date.now()) {
+      throw new Error("lease/fencing token inválido para checkpoint");
+    }
+    const existing = this.monitorCheckpoints.get(key);
+    if (existing && (existing.revision > checkpoint.revision ||
+        existing.sequence > checkpoint.sequence ||
+        existing.savedAt > checkpoint.savedAt)) {
+      throw new Error("checkpoint atrasado");
+    }
+    this.monitorCheckpoints.set(key, structuredClone(checkpoint));
   }
 
   async loadLiveAuthorMonitorCheckpoint(projectId, documentId) {

@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createNarrativeKnowledgeGraphSnapshot,
-  persistNarrativeKnowledgeGraphSnapshot
+  persistNarrativeKnowledgeGraphSnapshot,
+  createNarrativeDocumentProjectionManifest,
+  createNarrativeDocumentProjectionTombstone
 } from "../dist/motor-literario.js";
 
 function createMemoryStore() {
@@ -96,4 +98,28 @@ test("reemplaza la evidencia de una revisión por la vigente del mismo documento
   assert.ok(mara.evidence.some(x => x.documentId === "chapter-a" && x.revision === 2));
   assert.equal(mara.evidence.some(x => x.documentId === "chapter-a" && x.revision === 1), false);
   assert.ok(mara.evidence.some(x => x.documentId === "chapter-b" && x.revision === 1));
+});
+
+test("construye manifiestos desde una contribución y tombstones explícitos", () => {
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-a", [
+    { documentId: "chapter-a", revision: 7, text: "personaje Mara aparece." },
+    { documentId: "chapter-b", revision: 3, text: "personaje Leo aparece." }
+  ], { now: 100 });
+  const manifest = createNarrativeDocumentProjectionManifest(snapshot, "chapter-a", 4, 200);
+  assert.equal(manifest.projectId, "novel-a");
+  assert.equal(manifest.revision, 7);
+  assert.equal(manifest.generation, 4);
+  assert.equal(manifest.status, "active");
+  assert.ok(manifest.entityIds.length > 0);
+  assert.deepEqual(manifest.relationIds, []);
+
+  const tombstone = createNarrativeDocumentProjectionTombstone("novel-a", "chapter-a", 8, 5, 300);
+  assert.equal(tombstone.status, "deleted");
+  assert.equal(tombstone.revision, 8);
+  assert.deepEqual(tombstone.entityIds, []);
+  assert.deepEqual(tombstone.assertionIds, []);
+  assert.throws(
+    () => createNarrativeDocumentProjectionManifest(snapshot, "missing", 1, 200),
+    /no forma parte/u
+  );
 });

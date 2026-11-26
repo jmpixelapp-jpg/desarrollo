@@ -235,3 +235,12 @@ El resultado `RecoveryFirstNarrativeSyncResult.cursorRecovery` expone el plan y 
 El replay conserva los locks locales por proyecto/escritor y ahora usa Web Locks (`navigator.locks`) cuando el runtime los ofrece. El nombre del lock se deriva del proyecto, no del escritor, para que un replay completo y uno parcial no puedan ejecutarse simultáneamente en pestañas distintas. La adquisición usa `ifAvailable`: si otra pestaña posee el lock, el consumidor devuelve `consumer-already-running` y no ejecuta handlers. Si el backend de locks falla, devuelve `consumer-lock-failed` sin degradarse a ejecución desprotegida. En runtimes sin Web Locks se conserva explícitamente la garantía local; no se afirma exclusión entre pestañas ni entre dispositivos.
 
 El adaptador `NarrativeSyncReplayLockManager` es inyectable para probar contención, fallo del coordinador y mantenimiento del lock durante el callback. Esto no cambia la semántica de entrega al menos una vez: el handler sigue obligado a ser idempotente por `operationId`, porque el proceso puede interrumpirse después de la mutación de dominio y antes del acuse durable.
+
+
+### Recuperación de la ventana entre efecto de dominio y acuse
+
+La secuencia de replay es deliberadamente `apply(operation)` seguida de `markApplied(...)`. Si el proceso termina después de que el handler persiste el cambio y antes del acuse, la operación permanece pendiente y se vuelve a entregar. No existe una transacción atómica común entre el store de dominio y el diario IndexedDB, por lo que el protocolo no promete exactly-once.
+
+Los handlers de dominio incluidos aplican upserts mediante CAS y reconocen el caso en que el registro existente ya coincide exactamente con el payload. La identidad `operationId` se conserva en cada reentrega. Para efectos externos o no idempotentes, el adaptador del dominio debe persistir una bandeja de recibos/deduplicación por `operationId` dentro de la misma transacción que el efecto, o aceptar que la operación requiera reconciliación manual.
+
+`markApplied` es un acuse durable idempotente: comprueba proyecto, operación y digest; si ya existe `appliedAt`, una repetición no lo sobrescribe. Las pruebas nuevas simulan una interrupción justo después del efecto de dominio, verifican que el reintento reutiliza el mismo `operationId` sin duplicar el efecto cuando el handler mantiene un recibo durable, y ejercitan acuses desde dos instancias del diario compartiendo IndexedDB. Un digest incorrecto sigue siendo rechazado.

@@ -234,7 +234,7 @@ test("presenta el estado del checkpoint y del lease sin revelar mensajes interno
   unmount();
 });
 
-test("presenta las siete categorías de actividad en el panel de capítulo", () => {
+test("presenta las ocho categorías de actividad en el panel de capítulo", () => {
   const f = fixture();
   let length = "contenido privado".length;
   const operations = [

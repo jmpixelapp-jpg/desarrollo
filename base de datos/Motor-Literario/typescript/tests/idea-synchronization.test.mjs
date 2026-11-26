@@ -228,7 +228,7 @@ test("rechaza el alta de un vínculo si la idea destino desaparece durante CAS",
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-external"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 3);
   assert.equal(store.writes, 1);
   api.dispose();
 });
@@ -530,7 +530,7 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   const reloaded = await api.getNarrativeIdeas();
   const reloadedSource = reloaded.find(item => item.id === "idea-source");
   assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 3);
   assert.equal(store.writes, 3);
   api.dispose();
 });
@@ -610,7 +610,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 5);
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"

@@ -669,3 +669,24 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Límite de interpretación:** «se siente preocupada» es una atribución textual del estado emocional, no una verdad psicológica externa. El extractor no deduce emociones a partir de diálogo, acciones, signos de puntuación ni contexto implícito. Los candidatos continúan sujetos a revisión y no sustituyen el texto fuente.
 
+## Reconstrucción de trayectorias de estados de personajes
+
+**Nuevo módulo:** `typescript/src/narrative-character-state-transition-discovery.ts`. Se añadió una etapa posterior al descubrimiento de estados explícitos. Recibe candidatos ya extraídos y propone transiciones sin modificar ni confirmar los estados originales.
+
+**Transiciones diferenciadas:**
+- `ceased`: una afirmación positiva previa del mismo estado va seguida de una afirmación negativa explícita.
+- `reappeared`: una afirmación negativa previa va seguida de una afirmación positiva.
+- `reaffirmed`: el mismo estado se vuelve a afirmar.
+- `remained-negated`: dos afirmaciones consecutivas del mismo estado permanecen negadas.
+- `recurred`: el texto contiene un marcador aspectual explícito de recurrencia («volvió a estar»), incluso si no se dispone de la primera aparición en el fragmento procesado.
+
+**Regla de orden y alcance:** solo se comparan menciones del mismo personaje y estado dentro del mismo documento y revisión. No se infiere cronología entre capítulos/documentos ni entre revisiones distintas: para ello hace falta una secuencia de lectura fiable y una política explícita de reconciliación de versiones.
+
+**Evidencia:** cada transición conserva el ID y la evidencia del candidato anterior (cuando existe), el candidato actual y la evidencia exacta de este último. No se fabrica un fragmento continuo que una dos citas separadas ni se asigna a una cita un rango de offsets que no le corresponde.
+
+**Validación de entrada:** se rechazan candidatos duplicados, ajenos al proyecto, con documento/revisión inconsistentes o con evidencia obsoleta/inválida. Las salidas permanecen en estado `candidate`, con límite explícito de resultados.
+
+**Pruebas añadidas:** cese tras afirmación positiva, recurrencia marcada explícitamente, reaparición tras negación, aislamiento entre documentos/revisiones, separación por personaje y tipo de estado, y rechazo de duplicados/evidencia incompatible.
+
+**Límite conocido:** el módulo propone relaciones locales entre afirmaciones; no demuestra causalidad médica, psicológica ni narrativa, ni decide por sí mismo si una negación expresa un cambio real, una creencia de un personaje o una afirmación de un narrador no fiable. La atribución de fuente/enunciador y el orden global entre capítulos siguen siendo tareas pendientes.
+

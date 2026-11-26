@@ -4237,7 +4237,7 @@ export class HostEngineApi {
         if (acquired && !this.disposed) this.scheduleLiveAuthorMonitorCheckpoint(documentId);
         return;
       }
-      const generation = this.liveMonitorLeaseGenerations.get(documentId) ?? 0;
+      const generation = this.liveMonitorLeaseGenerations.get(documentId);
       const renew = this.store.renewLiveAuthorMonitorLease;
       if (!renew) return;
       const renewed = await renew.call(

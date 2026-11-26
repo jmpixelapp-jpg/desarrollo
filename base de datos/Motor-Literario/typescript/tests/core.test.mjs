@@ -2217,7 +2217,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 24);
+      assert.equal(version, 25);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2240,6 +2240,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "event-lifecycles", keyPath: ["projectId", "id"] },
       { name: "documents", keyPath: ["projectId", "documentId"] },
       { name: "changes", keyPath: ["projectId", "documentId", "sequence"] },
+      // La bandeja de salida se crea en la misma migración v25 sin tocar datos anteriores.
+      { name: "sync-outbox", keyPath: "operationId" },
       { name: "narrative-entities", keyPath: ["projectId", "id"] },
       { name: "narrative-relations", keyPath: ["projectId", "id"] },
       { name: "narrative-events", keyPath: ["projectId", "id"] },
@@ -2288,6 +2290,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["event-lifecycles", "by-subject-revision"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"],
       ["narrative-entities", "by-project"],
       ["narrative-relations", "by-project"],
       ["narrative-events", "by-project"],

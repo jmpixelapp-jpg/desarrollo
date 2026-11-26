@@ -483,7 +483,7 @@ export class LiveAuthorMonitor {
         !Array.isArray(checkpoint.commitLatencies) ||
         checkpoint.commitLatencies.length > this.commitSampleWindow ||
         checkpoint.commitLatencies.some(value => !finiteNonNegative(value)) ||
-        checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
+        checkpoint.commitLatencies.reduce<number>((sum, value) => sum + value, 0) >
           checkpoint.totalCommitLatencyMs + 1) {
       throw new TypeError("El checkpoint del monitor contiene métricas o tiempos inválidos.");
     }

@@ -362,7 +362,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function unicodeNamePattern(name: string): string {
-  return `(?<![\\p{L}\\p{N}_])${escapeRegExp(name)}(?![\\p{L}\\p{N}_])`;
+  return `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegExp(name)}(?![\\p{L}\\p{M}\\p{N}_])`;
 }
 
 /**
@@ -698,6 +698,8 @@ export function detectExplicitStateContradictions(
     entity.projectId === projectId && entity.kind === "character"
   );
   const assertions = new Map<string, { entity: NarrativeEntity; value: "alive" | "dead"; evidence: TextEvidence; timeReference?: NarrativeTimeReference }[]>();
+  const explicitResurrections = new Map<string, NarrativeTimeReference[]>();
+  const resurrectionPattern = /(?:resucit[oó]|revivi[oó]|volvi[oó]\s+a\s+la\s+vida)/iu;
   const patterns = [
     { value: "alive" as const, expression: /(?:^|[^\p{L}\p{N}_])(?:está|sigue|permanece)\s+(?:vivo|viva)(?:$|[^\p{L}\p{N}_])/iu },
     { value: "dead" as const, expression: /(?:^|[^\p{L}\p{N}_])(?:está|permanece)\s+(?:muerto|muerta)(?:$|[^\p{L}\p{N}_])/iu },
@@ -713,6 +715,12 @@ export function detectExplicitStateContradictions(
       for (const entity of characters) {
         const names = [entity.canonicalName, ...entity.aliases];
         if (!names.some(value => new RegExp(unicodeNamePattern(value), "iu").test(event.label))) continue;
+        if (resurrectionPattern.test(event.label) && event.timeReference) {
+          const references = explicitResurrections.get(entity.id) ?? [];
+          references.push(event.timeReference);
+          explicitResurrections.set(entity.id, references);
+          continue;
+        }
         const state = patterns.find(pattern => pattern.expression.test(event.label));
         if (!state) continue;
         const list = assertions.get(entity.id) ?? [];
@@ -739,9 +747,15 @@ export function detectExplicitStateContradictions(
             alive.evidence.start === dead.evidence.start) continue;
         const aliveTime = alive.timeReference;
         const deadTime = dead.timeReference;
-        if (aliveTime && deadTime &&
-            aliveTime.basis === deadTime.basis &&
-            aliveTime.orderValue < deadTime.orderValue) continue;
+        if (aliveTime && deadTime && aliveTime.basis === deadTime.basis) {
+          if (aliveTime.orderValue < deadTime.orderValue) continue;
+          if (deadTime.orderValue < aliveTime.orderValue &&
+              (explicitResurrections.get(entityId) ?? []).some(reference =>
+                reference.basis === deadTime.basis &&
+                reference.orderValue > deadTime.orderValue &&
+                reference.orderValue <= aliveTime.orderValue
+              )) continue;
+        }
         conflictingPair = [alive, dead];
         break;
       }

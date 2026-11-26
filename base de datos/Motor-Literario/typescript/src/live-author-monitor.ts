@@ -500,7 +500,7 @@ export class LiveAuthorMonitor {
         !integerNonNegative(checkpoint.rejectedChanges) ||
         !integerNonNegative(checkpoint.committedChanges) ||
         !integerNonNegative(checkpoint.failedChanges) ||
-        checkpoint.committedChanges + checkpoint.failedChanges > checkpoint.acceptedChanges ||
+        checkpoint.committedChanges + checkpoint.failedChanges !== checkpoint.acceptedChanges ||
         !integerNonNegative(checkpoint.insertedCharacters) ||
         !integerNonNegative(checkpoint.deletedCharacters) ||
         !integerNonNegative(checkpoint.currentDocumentLength) ||
@@ -511,9 +511,14 @@ export class LiveAuthorMonitor {
         !finiteNonNegative(checkpoint.totalCommitLatencyMs) ||
         !Array.isArray(checkpoint.commitLatencies) ||
         checkpoint.commitLatencies.length > this.commitSampleWindow ||
+        checkpoint.commitLatencies.length > checkpoint.committedChanges + checkpoint.failedChanges ||
         checkpoint.commitLatencies.some(value => !finiteNonNegative(value)) ||
         checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
-          checkpoint.totalCommitLatencyMs + 1) {
+          checkpoint.totalCommitLatencyMs + 1 ||
+        (checkpoint.commitLatencies.length === 0
+          ? (checkpoint.committedChanges + checkpoint.failedChanges > 0 ||
+            checkpoint.lastCommitLatencyMs !== 0 || checkpoint.totalCommitLatencyMs !== 0)
+          : checkpoint.commitLatencies[checkpoint.commitLatencies.length - 1] !== checkpoint.lastCommitLatencyMs)) {
       throw new TypeError("El checkpoint del monitor contiene métricas o tiempos inválidos.");
     }
     if (this.sessions.has(snapshot.documentId)) {

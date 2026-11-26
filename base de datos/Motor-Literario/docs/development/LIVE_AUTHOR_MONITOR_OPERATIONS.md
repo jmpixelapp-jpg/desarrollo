@@ -303,3 +303,11 @@ Este scheduler afecta exclusivamente a la actualización visual de métricas y d
 Si el entorno no ofrece Page Visibility API, mantiene el polling convencional. Las opciones `schedule` permiten inyectar relojes deterministas y también se someten al ciclo visible/oculto. La regresión verifica montaje con la pestaña oculta, pausa, refresco inmediato al volver, reprogramación y cancelación al desmontar.
 
 La envoltura del callback también comprueba visibilidad y estado de desmontaje al ejecutarse. Así, un tick que ya estaba encolado en el event loop y llega después de `clearInterval()` no actualiza una vista oculta ni una instancia ya desmontada. La prueba invoca deliberadamente ambos callbacks antiguos para verificar que se descartan.
+
+## 20. CI del scheduler de visibilidad
+
+El commit `0a21f341ae1787a4ae82255295e4fdc79e3182cd` pasó el workflow [Live Author Monitor — run 45747598005](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598005): 10/10 regresiones aisladas y 169/169 pruebas del monitor. Chromium, esquema, build runtime y benchmark también se completaron correctamente.
+
+El benchmark de esta ejecución informó 274.897,17 commits/s para 100.000 cambios en 8 documentos; heap retenido de 0,48 MB, crecimiento de 0 MB entre mitad y final y RSS final de 73,89 MB. Valores medidos en el proceso Node del runner, no en Chromium.
+
+El workflow general [Motor Literario TypeScript — run 45747598008](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598008) permanecía en curso durante la instalación de Chromium al momento del registro. Consultar su estado antes de afirmar typecheck, suite general o benchmark general aprobados.

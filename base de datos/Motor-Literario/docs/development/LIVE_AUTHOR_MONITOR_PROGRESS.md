@@ -1002,3 +1002,15 @@ En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelap
 **Regresión:** se invocan deliberadamente callbacks guardados del intervalo después de ocultar y después de desmontar; ninguno puede actualizar métricas.
 
 **Validación:** pendiente de CI para esta corrección.
+
+## 56. CI del polling visible y descarte de ticks retrasados (25 de noviembre de 2026)
+
+**Commit de comportamiento:** `37282e3b50b19047f656084474cb7dae7337beb3` introduce el scheduler visible para panel/workspace. **Commit de endurecimiento:** `0a21f341ae1787a4ae82255295e4fdc79e3182cd` agrega una envoltura que descarta ticks que se ejecuten después de ocultar la pestaña o desmontar la vista.
+
+**CI de monitor aprobada:** [Live Author Monitor — run 45747598005](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598005), `success` sobre `0a21f34`. Bundle focalizado, 10/10 regresiones aisladas, Chromium, validación MLDB, build runtime, **169/169 pruebas del monitor** y benchmark en verde.
+
+**Benchmark específico:** Node.js v22.23.5; 8 documentos de 1.048.576 unidades UTF-16; 100.000 commits; 274.897,17 commits/s; 363,77 ms; heap 5,23 MB antes de carga y 5,71 MB a mitad/final; heap retenido por sesiones abiertas 0,48 MB; crecimiento de mitad a carga completa 0 MB; RSS final 73,89 MB; 12.500 commits confirmados y cero pendientes en cada documento.
+
+**CI general:** [Motor Literario TypeScript — run 45747598008](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598008) seguía `in_progress` en la instalación de Chromium cuando se registró este avance (última actualización del run: 03:14:12 UTC, 26 de noviembre). No se atribuye resultado de typecheck ni suite general a esta ejecución mientras ese paso no termine.
+
+**Alcance:** el scheduler opera solo sobre timers de refresco visual. Los checkpoints, los heartbeats y la propiedad del lease siguen activos independientemente de la visibilidad.

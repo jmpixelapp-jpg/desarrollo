@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
-import { IndexedDbProjectStore, IndexedDbSyncExecutionLock, NarrativeSyncCoordinator } from "../dist/motor-literario.js";
+import { HostEngineApi, IndexedDbProjectStore, IndexedDbSyncExecutionLock, NarrativeSyncCoordinator } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
@@ -733,5 +733,52 @@ test("dos instancias concurrentes recuperan la misma secuencia para un operation
   } finally {
     await Promise.all([firstStore.close(), secondStore.close()]);
     await deleteDatabase();
+  }
+});
+
+
+test("HostEngineApi encola operaciones narrativas con proyecto activo y secuencia asignada", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const api = new HostEngineApi({ store });
+  try {
+    api.initializeProject({ projectId: "host-sync-project", projectName: "Proyecto de sincronización" });
+    const input = {
+      operationId: "host-narrative-op-1",
+      deviceId: "host-device-1",
+      kind: "narrative-idea-upsert",
+      payload: { ideaId: "idea-host-1", text: "Una idea confirmada." },
+      createdAt: 900
+    };
+    const first = await api.enqueueNarrativeSyncOperation(input);
+    const retry = await api.enqueueNarrativeSyncOperation(input);
+    assert.equal(first.projectId, "host-sync-project");
+    assert.equal(first.sequence, 1);
+    assert.equal(retry.sequence, first.sequence);
+    assert.equal(JSON.parse(first.payload).ideaId, "idea-host-1");
+    assert.equal(await store.countPendingSyncOperations("host-sync-project"), 1);
+  } finally {
+    api.dispose();
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+test("HostEngineApi no calcula secuencias si el almacén carece del asignador atómico", async () => {
+  const api = new HostEngineApi({ store: {} });
+  try {
+    api.initializeProject({ projectId: "host-sync-no-allocator", projectName: "Proyecto sin asignador" });
+    await assert.rejects(
+      api.enqueueNarrativeSyncOperation({
+        operationId: "must-not-fallback",
+        deviceId: "device-1",
+        kind: "narrative-change",
+        payload: { revision: 1 },
+        createdAt: 1
+      }),
+      /no implementa asignación atómica/
+    );
+  } finally {
+    api.dispose();
   }
 });

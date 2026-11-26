@@ -104,7 +104,12 @@ export function reconstructNarrativeInformationChain(
     }
 
     const key = normalizeContent(record.content);
-    const candidates = prior.filter(previous =>
+    const predecessorPool = [...prior, ...current.filter(previous =>
+      previous.id !== record.id && previous.evidence.documentId === record.evidence.documentId &&
+      previous.evidence.revision === record.evidence.revision &&
+      previous.evidence.start < record.evidence.start
+    )];
+    const candidates = predecessorPool.filter(previous =>
       previous.informationHolderEntityId === record.sourceEntityId &&
       normalizeContent(previous.content) === key &&
       previous.id !== record.id

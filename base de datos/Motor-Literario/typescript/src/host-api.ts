@@ -4053,9 +4053,11 @@ export class HostEngineApi {
     if (!this.store.saveLiveAuthorMonitorCheckpoint) {
       throw new Error("El almacén no implementa persistencia de checkpoints del monitor.");
     }
-    if (this.supportsLiveAuthorMonitorLeases() &&
-        !this.liveMonitorLeases.has(documentId)) {
-      throw new Error("Esta pestaña no posee el lease del monitor y no puede confirmar el checkpoint compartido.");
+    if (this.supportsLiveAuthorMonitorLeases()) {
+      const lease = await this.acquireOrRenewLiveAuthorMonitorLease(documentId);
+      if (!lease) {
+        throw new Error("Esta pestaña no posee el lease del monitor y no puede confirmar el checkpoint compartido.");
+      }
     }
     await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
     await this.releaseLiveAuthorMonitorLease(documentId);
@@ -4175,9 +4177,14 @@ export class HostEngineApi {
 
   private scheduleLiveAuthorMonitorCheckpoint(documentId: string): void {
     if (!this.store.saveLiveAuthorMonitorCheckpoint) return;
-    if (this.supportsLiveAuthorMonitorLeases() && !this.liveMonitorLeases.has(documentId)) return;
     const previous = this.liveMonitorCheckpointTails.get(documentId) ?? Promise.resolve();
     const queued = previous.catch(() => undefined).then(async () => {
+      if (this.supportsLiveAuthorMonitorLeases() && !this.liveMonitorLeases.has(documentId)) {
+        // Las pestañas observadoras vuelven a competir solo en un punto seguro
+        // de persistencia; si el lease sigue ocupado, omiten este checkpoint.
+        const lease = await this.acquireOrRenewLiveAuthorMonitorLease(documentId);
+        if (!lease) return;
+      }
       const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
       if (checkpoint) await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
     });

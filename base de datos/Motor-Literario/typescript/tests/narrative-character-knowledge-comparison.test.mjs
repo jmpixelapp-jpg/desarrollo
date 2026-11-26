@@ -56,3 +56,17 @@ test("rechaza identificadores y órdenes duplicados",()=>{
  assert.throws(()=>compare({projectId:"book",candidates:[a],documentOrder:[
   {documentId:"ch1",order:1},{documentId:"ch2",order:1}]}));
 });
+
+test("normaliza mayúsculas, puntuación final y espacios sin equiparar sinónimos",()=>{
+ const r=compare({projectId:"book",candidates:[
+  item("a","ch1",1,0,"believed","uncertain-cognition","affirmed","Bruno había mentido"),
+  item("b","ch1",1,80,"known","asserted-cognition","negated","BRUNO HABÍA MENTIDO.")]});
+ assert.equal(r.length,1);assert.equal(r[0].kind,"polarity-disagreement");
+ assert.equal(r[0].propositionKey,"bruno había mentido");
+});
+test("no duplica un mismo fragmento ni acepta estados o fuentes malformados",()=>{
+ const a=item("a","ch1",1,0);
+ assert.deepEqual(compare({projectId:"book",candidates:[a,{...a,id:"b"}]}),[]);
+ assert.throws(()=>compare({projectId:"book",candidates:[{...a,kind:"unknown"}]}));
+ assert.throws(()=>compare({projectId:"book",candidates:[{...a,sourceEntityId:"speaker"}]}));
+});

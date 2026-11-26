@@ -500,3 +500,17 @@ Se añaden seis pruebas unitarias nuevas en total: dos de cronología entre cap�
 
 ### Nota de validación Unicode
 La ejecución anterior de CI falló en la prueba que extrae un nombre con marca combinante después del indicador capitalizado «Personaje». El fallo se originaba en el filtro preliminar, que buscaba los indicadores sin modo insensible a mayúsculas. En el código actual, ese filtro usa `iu`, y la prueba existente cubre la forma capitalizada. Esta corrección está presente en la rama, pero todavía necesita una ejecución nueva de CI para considerarse verificada.
+
+## Fase AD: adquisición de motivaciones indirectas explícitas
+
+Se amplía `extractNarrativeCharacterIntentCandidates` para reconocer construcciones causales y de propósito aunque no utilicen verbos directos como «quiere» o «desea».
+
+- Motivos causales expresos: «por miedo a», «por temor a», «por amor a», «por lealtad a», «por venganza contra», «por deber hacia», «por culpa de», «por compasión hacia» y formas verbales explícitas como «porque teme».
+- Propósitos expresos: «para», «a fin de» y «con el fin de».
+- Cada candidato incluye `evidenceBasis`: `explicit-goal-verb`, `explicit-causal-motive` o `explicit-purpose`.
+- Los rangos de evidencia conservan el texto que expresa el motivo o propósito; la evidencia de contexto conserva la oración completa.
+- Los propósitos se clasifican como objetivos, no como motivaciones psicológicas.
+- Una acción sin marcador causal o de propósito no genera una motivación inventada.
+- Se añaden tres pruebas unitarias y una prueba de integración en el pipeline.
+
+**Límite deliberado:** el sistema registra la relación causal o final expresada por el narrador/personaje, pero no decide si es verdadera, sincera, la causa principal o una racionalización. Tampoco infiere motivaciones a partir de conductas aisladas. Los candidatos siguen sujetos a revisión.

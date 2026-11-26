@@ -1,4 +1,4 @@
-import type { ProjectStore, NarrativeReferenceRepairAuditEntry } from "./contracts";
+import type { ProjectStore, NarrativeReferenceRepairAuditEntry, NarrativeReferenceRepairPendingEntry } from "./contracts";
 import {
   mergeNarrativeEntity,
   mergeNarrativeRelation,
@@ -722,12 +722,94 @@ export async function applyNarrativeReferenceRepair(
   approved: boolean,
   appliedAt = Date.now()
 ): Promise<NarrativeReferenceRepairResult> {
-  if (!store || typeof store.appendNarrativeReferenceRepairAudit !== "function") {
-    throw new Error("El almacenamiento debe ofrecer auditoría durable antes de aplicar reparaciones.");
+  if (!store || typeof store.appendNarrativeReferenceRepairAudit !== "function" ||
+      typeof store.saveNarrativeReferenceRepairPending !== "function" ||
+      typeof store.deleteNarrativeReferenceRepairPending !== "function") {
+    throw new Error("El almacenamiento debe ofrecer intención pendiente y auditoría durable antes de reparar.");
   }
-  const result = await applyNarrativeReferenceRepairWithoutAudit(store, proposal, approved, appliedAt);
+  if (!approved) throw new Error("La reparación requiere aprobación explícita.");
+  if (!proposal || !proposal.candidateEntityId) {
+    throw new Error("La propuesta no contiene una entidad candidata aprobada.");
+  }
+  const pending: NarrativeReferenceRepairPendingEntry = {
+    operationId: [
+      "reference-repair", proposal.projectId, proposal.recordType,
+      proposal.recordId, proposal.referenceField, proposal.missingReferenceId, proposal.candidateEntityId
+    ].join("|"),
+    projectId: proposal.projectId,
+    issueCode: proposal.issueCode,
+    recordType: proposal.recordType,
+    recordId: proposal.recordId,
+    referenceField: proposal.referenceField,
+    missingReferenceId: proposal.missingReferenceId,
+    replacementEntityId: proposal.candidateEntityId,
+    appliedAt
+  };
+  // La intención queda durable antes de tocar el grafo. Si el proceso cae en
+  // cualquier paso posterior, recoverNarrativeReferenceRepairs puede reanudar.
+  await store.saveNarrativeReferenceRepairPending!(pending);
+  const result = await applyNarrativeReferenceRepairWithoutAudit(store, proposal, true, appliedAt);
   await store.appendNarrativeReferenceRepairAudit!(result.audit);
+  await store.deleteNarrativeReferenceRepairPending!(proposal.projectId, pending.operationId);
   return result;
+}
+
+export interface NarrativeReferenceRepairRecoveryResult {
+  readonly projectId: string;
+  readonly checked: number;
+  readonly recovered: number;
+  readonly pending: readonly { readonly operationId: string; readonly error: string }[];
+}
+
+/**
+ * Reanuda intenciones previamente aprobadas. El CAS se vuelve a comprobar:
+ * si el cambio ya ocurrió, la aplicación devuelve replay y completa la
+ * auditoría; si no ocurrió, intenta aplicarlo. Conflictos quedan pendientes.
+ */
+export async function recoverNarrativeReferenceRepairs(
+  store: ProjectStore,
+  projectId: string
+): Promise<NarrativeReferenceRepairRecoveryResult> {
+  if (!store || typeof projectId !== "string" || !projectId.trim() ||
+      typeof store.loadNarrativeReferenceRepairPending !== "function" ||
+      typeof store.appendNarrativeReferenceRepairAudit !== "function" ||
+      typeof store.deleteNarrativeReferenceRepairPending !== "function") {
+    throw new Error("El almacenamiento no permite recuperar reparaciones narrativas pendientes.");
+  }
+  const pendingEntries = await store.loadNarrativeReferenceRepairPending(projectId);
+  let recovered = 0;
+  const failures: { operationId: string; error: string }[] = [];
+  for (const entry of pendingEntries) {
+    try {
+      const expectedId = [
+        "reference-repair", projectId, entry.recordType, entry.recordId,
+        entry.referenceField, entry.missingReferenceId, entry.replacementEntityId
+      ].join("|");
+      if (entry.projectId !== projectId || entry.operationId !== expectedId) {
+        throw new Error("La intención pendiente no supera la validación de identidad.");
+      }
+      const proposal: NarrativeReferenceRepairProposal = {
+        projectId,
+        issueCode: entry.issueCode as NarrativeProjectionReconciliationIssueCode,
+        recordType: entry.recordType,
+        recordId: entry.recordId,
+        missingReferenceId: entry.missingReferenceId,
+        referenceField: entry.referenceField,
+        candidateEntityId: entry.replacementEntityId,
+        resolution: "explicit-merge-match"
+      };
+      const result = await applyNarrativeReferenceRepairWithoutAudit(store, proposal, true, entry.appliedAt);
+      await store.appendNarrativeReferenceRepairAudit!(result.audit);
+      await store.deleteNarrativeReferenceRepairPending!(projectId, entry.operationId);
+      recovered++;
+    } catch (error) {
+      failures.push({
+        operationId: entry.operationId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  return { projectId, checked: pendingEntries.length, recovered, pending: failures };
 }
 
 export interface NarrativeReferenceRepairAuditIntegrityIssue {

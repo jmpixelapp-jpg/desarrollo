@@ -432,21 +432,22 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     // La categoría se deriva del inputType declarado por el navegador, nunca
     // de que el delta reemplace una selección. "typing" significa aquí entrada
     // de texto reportada por el navegador, no prueba de teclado físico o intención.
-    const activityKind =
-      before.inputType === "insertFromPaste" ||
-      before.inputType === "insertFromPasteAsQuotation"
-        ? "paste" as const
-        : before.inputType === "insertReplacementText"
-          ? "correction" as const
-          : before.inputType.startsWith("delete")
-            ? "deletion" as const
-            : before.inputType === "insertCompositionText"
-              ? "composition" as const
-              : before.inputType === "insertText" ||
-                before.inputType === "insertLineBreak" ||
-                before.inputType === "insertParagraph"
-                  ? "typing" as const
-                  : "other" as const;
+    const activityKind = before.inputType.length === 0
+      ? undefined
+      : before.inputType === "insertFromPaste" ||
+        before.inputType === "insertFromPasteAsQuotation"
+          ? "paste" as const
+          : before.inputType === "insertReplacementText"
+            ? "correction" as const
+            : before.inputType.startsWith("delete")
+              ? "deletion" as const
+              : before.inputType === "insertCompositionText"
+                ? "composition" as const
+                : before.inputType === "insertText" ||
+                  before.inputType === "insertLineBreak" ||
+                  before.inputType === "insertParagraph"
+                    ? "typing" as const
+                    : "other" as const;
     const change: EditorChange = Object.freeze({
       documentId: this.documentId,
       sequence: this.sequence + 1,

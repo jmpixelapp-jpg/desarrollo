@@ -690,5 +690,7 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Pruebas añadidas:** cese tras afirmación positiva, recurrencia marcada explícitamente, reaparición tras negación, aislamiento entre documentos/revisiones, separación por personaje y tipo de estado, y rechazo de duplicados/evidencia incompatible.
 
+**Validación CI de esta etapa:** la ejecución GitHub Actions del commit `ad652ee00559e935cf36983c92eb2eba511df4b5` terminó correctamente con `success` para el workflow de compilación TypeScript y pruebas automatizadas. Esta ejecución incluye el módulo de trayectorias, su exportación y las pruebas de separación entre documentos y revisiones. La documentación de la corrección también se ha actualizado después de esa validación.
+
 **Límite conocido:** el módulo propone relaciones locales entre afirmaciones; no demuestra causalidad médica, psicológica ni narrativa, ni decide por sí mismo si una negación expresa un cambio real, una creencia de un personaje o una afirmación de un narrador no fiable. La atribución de fuente/enunciador y el orden global entre capítulos siguen siendo tareas pendientes.
 

@@ -107,6 +107,10 @@ Las publicaciones del puente son síncronas y FIFO. Si un listener provoca una p
 
 El source acota la cola de transacciones reentrantes. Si supera su límite, pausa de forma explícita y requiere resincronización; nunca descarta cambios silenciosamente. La integración conserva el backlog FIFO cuando HostEngineApi aplica contrapresión.
 
+El enlace también limita su propio buffer con `maxPendingChanges` (predeterminado: 4096; rango permitido: 1–65536). Si llega un nuevo delta cuando el buffer ya está completo, no lo añade ni continúa consumiendo eventos: solicita `requireResynchronization()` a la fuente cuando está disponible, cancela la suscripción y publica el estado `resync-required` con la secuencia que provocó el desbordamiento. El backlog conservado queda inspeccionable, pero `retryPending()` no lo reenvía.
+
+Para reanudar, el anfitrión debe obtener y aplicar el mismo snapshot durable en editor y motor. Solo después llama a `discardPendingAfterResynchronization()`: el método limpia los deltas obsoletos y vuelve a suscribir la fuente. No usar ese método como atajo para liberar un `queue_full` temporal.
+
 Los errores de un listener o de una callback de diagnóstico no deben romper el ciclo de edición. Una discrepancia de secuencia, revisión o estado del editor sí detiene la captura para evitar corromper el historial.
 
 ## 7. Resincronización y ciclo de vida
@@ -121,6 +125,7 @@ Implementado:
 - Contrato transaccional con edición, undo y redo.
 - Validación y deduplicación de eventos.
 - Backpressure FIFO, reentrada y recuperación desde snapshot común.
+- Buffer externo acotado con pausa obligatoria al desbordarse y re-suscripción posterior a snapshot común.
 - Puente reusable con lectores de snapshot y metadatos nativos.
 - Validación de metadatos por transacción sin volver a materializar el texto.
 - Pruebas automatizadas del source, integración y puente.

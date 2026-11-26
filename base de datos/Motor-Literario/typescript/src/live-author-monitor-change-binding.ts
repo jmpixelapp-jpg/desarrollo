@@ -6,6 +6,8 @@ export interface LiveAuthorMonitorEditorChangeSource {
    * offsets UTF-16, revisión base y secuencia del documento correspondientes.
    */
   subscribeChanges(listener: (change: EditorChange) => void): () => void;
+  /** Pausa una fuente transaccional cuando el backlog perdió capacidad de retención. */
+  requireResynchronization?(reason?: string): void;
 }
 
 export interface LiveAuthorMonitorChangeSink {
@@ -13,15 +15,38 @@ export interface LiveAuthorMonitorChangeSink {
   onEditorChange(change: EditorChange): ChangeAdmission;
 }
 
-export type LiveAuthorMonitorBackpressureReason = "queue_full" | "rejected" | "sink_error";
+export type LiveAuthorMonitorBackpressureReason =
+  | "queue_full"
+  | "rejected"
+  | "sink_error"
+  | "resync_required";
 
 /** Estado observable del backlog FIFO; no contiene texto del manuscrito. */
 export interface LiveAuthorMonitorBackpressureSnapshot {
-  readonly status: "clear" | "backpressured";
+  readonly status: "clear" | "backpressured" | "resync-required";
   readonly pendingCount: number;
   readonly firstPendingSequence?: number;
   readonly lastPendingSequence?: number;
+  /** Secuencia que excedió el límite y no pudo retenerse; exige snapshot común. */
+  readonly overflowSequence?: number;
   readonly reason?: LiveAuthorMonitorBackpressureReason;
+}
+
+/** Error emitido cuando el buffer acotado ya no puede retener todos los deltas. */
+export class LiveAuthorMonitorBackpressureOverflowError extends Error {
+  readonly code = "pending-buffer-overflow";
+
+  constructor(
+    readonly maxPendingChanges: number,
+    readonly overflowSequence: number
+  ) {
+    super(
+      "El backlog del monitor alcanzó " + maxPendingChanges +
+      " cambios; se pausó la captura en la secuencia " + overflowSequence +
+      " y se requiere resincronización desde un snapshot autoritativo."
+    );
+    this.name = "LiveAuthorMonitorBackpressureOverflowError";
+  }
 }
 
 export interface LiveAuthorMonitorChangeBindingOptions {
@@ -41,7 +66,12 @@ export interface LiveAuthorMonitorChangeBindingOptions {
    * cuando una admisión/commit publique nuevas métricas.
    */
   readonly subscribeRetrySignal?: (listener: () => void) => () => void;
-  /** Recibe errores de envío o de la callback de admisión sin romper la notificación del editor. */
+  /**
+   * Máximo de deltas retenidos fuera de la cola del motor. Predeterminado: 4096.
+   * Al alcanzarlo, el enlace pausa la fuente y exige resincronización.
+   */
+  readonly maxPendingChanges?: number;
+  /** Recibe errores de envío, callbacks o desbordamiento sin romper el editor. */
   readonly onError: (error: unknown, change: EditorChange) => void;
 }
 
@@ -57,8 +87,9 @@ export interface LiveAuthorMonitorChangeBindingControl {
   /** Devuelve una copia inmutable de los deltas que aún no fueron admitidos. */
   getPendingChanges(): readonly EditorChange[];
   /**
-   * Descarta el backlog solo después de reconciliar editor y motor con un
-   * snapshot autoritativo. No debe usarse para ocultar un queue_full temporal.
+   * Descarta el backlog solo después de reconciliar editor y motor con el mismo
+   * snapshot autoritativo. Si el buffer se desbordó, vuelve a suscribir la fuente
+   * únicamente después de completar esa reconciliación.
    */
   discardPendingAfterResynchronization(): void;
 }
@@ -69,7 +100,12 @@ export interface LiveAuthorMonitorChangeBindingControl {
  * Si el motor devuelve queue_full, retiene el delta rechazado y todos los
  * eventos posteriores, sin enviarlos fuera de orden. El anfitrión llama a
  * retryPending cuando la cola del motor haya liberado capacidad. Si se aporta
- * subscribeRetrySignal, el enlace lo hace automáticamente y se desuscribe al parar.
+ * subscribeRetrySignal, el enlace lo hace automáticamente.
+ *
+ * El buffer externo es acotado por maxPendingChanges. Si llega otro delta cuando
+ * ya no cabe, el enlace no lo descarta silenciosamente: pausa la fuente, informa
+ * pending-buffer-overflow y exige resincronizar editor y motor desde un snapshot
+ * común antes de llamar discardPendingAfterResynchronization().
  *
  * onBackpressure permite reflejar el tamaño y la recuperación del backlog en
  * la interfaz sin exponer el texto ni acoplar el monitor a un framework visual.
@@ -94,10 +130,20 @@ export function bindLiveAuthorMonitorEditorChanges(
     throw new TypeError("onBackpressure debe ser una función cuando se proporciona.");
   }
 
+  const maxPendingChanges = options.maxPendingChanges ?? 4096;
+  if (!Number.isSafeInteger(maxPendingChanges) || maxPendingChanges < 1 || maxPendingChanges > 65536) {
+    throw new RangeError("maxPendingChanges debe ser un entero entre 1 y 65536.");
+  }
+
   let disposed = false;
   let retrying = false;
+  let resyncRequired = false;
+  let pausedForResynchronization = false;
+  let overflowSequence: number | undefined;
   let pendingReason: LiveAuthorMonitorBackpressureReason | undefined;
   let lastPublishedBackpressure: LiveAuthorMonitorBackpressureSnapshot | undefined;
+  let unsubscribeRetrySignal: (() => void) | undefined;
+  let unsubscribeSource: (() => void) | undefined;
   const pending: EditorChange[] = [];
 
   const reportError = (error: unknown, change: EditorChange): void => {
@@ -116,13 +162,17 @@ export function bindLiveAuthorMonitorEditorChanges(
     if (!options.onBackpressure) return;
     const first = pending[0];
     const last = pending[pending.length - 1];
-    const snapshot: LiveAuthorMonitorBackpressureSnapshot = pending.length === 0
+    const status = resyncRequired
+      ? "resync-required"
+      : pending.length === 0 ? "clear" : "backpressured";
+    const snapshot: LiveAuthorMonitorBackpressureSnapshot = status === "clear"
       ? Object.freeze({ status: "clear", pendingCount: 0 })
       : Object.freeze({
-          status: "backpressured",
+          status,
           pendingCount: pending.length,
           ...(first ? { firstPendingSequence: first.sequence } : {}),
           ...(last ? { lastPendingSequence: last.sequence } : {}),
+          ...(overflowSequence === undefined ? {} : { overflowSequence }),
           reason: pendingReason ?? "rejected"
         });
 
@@ -131,6 +181,7 @@ export function bindLiveAuthorMonitorEditorChanges(
         lastPublishedBackpressure.pendingCount === snapshot.pendingCount &&
         lastPublishedBackpressure.firstPendingSequence === snapshot.firstPendingSequence &&
         lastPublishedBackpressure.lastPendingSequence === snapshot.lastPendingSequence &&
+        lastPublishedBackpressure.overflowSequence === snapshot.overflowSequence &&
         lastPublishedBackpressure.reason === snapshot.reason) {
       return;
     }
@@ -144,9 +195,45 @@ export function bindLiveAuthorMonitorEditorChanges(
     }
   };
 
+  const detachSource = (): void => {
+    const unsubscribe = unsubscribeSource;
+    unsubscribeSource = undefined;
+    unsubscribe?.();
+  };
+
+  const pauseForResynchronization = (change: EditorChange): void => {
+    if (disposed || resyncRequired) return;
+    resyncRequired = true;
+    pausedForResynchronization = true;
+    pendingReason = "resync_required";
+    overflowSequence = change.sequence;
+
+    const error = new LiveAuthorMonitorBackpressureOverflowError(
+      maxPendingChanges,
+      change.sequence
+    );
+    try {
+      options.source.requireResynchronization?.(error.message);
+    } catch (pauseError) {
+      reportError(pauseError, change);
+    }
+    try {
+      detachSource();
+    } catch (unsubscribeError) {
+      reportError(unsubscribeError, change);
+    }
+    publishBackpressure();
+    reportError(error, change);
+  };
+
   const submitNewChange = (change: EditorChange): void => {
-    if (disposed) return;
+    if (disposed || resyncRequired) return;
     if (pending.length > 0) {
+      if (pending.length >= maxPendingChanges) {
+        // No se agrega el delta que desbordaría el buffer; se obliga a tomar un snapshot común.
+        pauseForResynchronization(change);
+        return;
+      }
       pending.push(change);
       publishBackpressure();
       return;
@@ -172,7 +259,7 @@ export function bindLiveAuthorMonitorEditorChanges(
   };
 
   const retryPending = (): void => {
-    if (disposed || retrying || pending.length === 0) return;
+    if (disposed || resyncRequired || retrying || pending.length === 0) return;
     retrying = true;
     try {
       while (!disposed && pending.length > 0) {
@@ -205,8 +292,19 @@ export function bindLiveAuthorMonitorEditorChanges(
     }
   };
 
-  let unsubscribeRetrySignal: (() => void) | undefined;
-  let unsubscribeSource: (() => void) | undefined;
+  const attachSource = (): void => {
+    const unsubscribe = options.source.subscribeChanges(submitNewChange);
+    if (typeof unsubscribe !== "function") {
+      throw new TypeError("subscribeChanges debe devolver una función de cancelación.");
+    }
+    // El proveedor puede emitir de forma síncrona durante la suscripción.
+    // Si esa emisión desborda el buffer, la nueva suscripción se cierra aquí.
+    if (disposed || resyncRequired) {
+      unsubscribe();
+      return;
+    }
+    unsubscribeSource = unsubscribe;
+  };
 
   try {
     if (options.subscribeRetrySignal) {
@@ -216,12 +314,9 @@ export function bindLiveAuthorMonitorEditorChanges(
       }
     }
 
-    unsubscribeSource = options.source.subscribeChanges(submitNewChange);
-    if (typeof unsubscribeSource !== "function") {
-      throw new TypeError("subscribeChanges debe devolver una función de cancelación.");
-    }
+    attachSource();
   } catch (error) {
-    try { unsubscribeSource?.(); } catch { /* Conserva el error original de montaje. */ }
+    try { detachSource(); } catch { /* Conserva el error original de montaje. */ }
     try { unsubscribeRetrySignal?.(); } catch { /* Conserva el error original de montaje. */ }
     throw error;
   }
@@ -242,10 +337,26 @@ export function bindLiveAuthorMonitorEditorChanges(
   stop.getPendingChanges = () => Object.freeze([...pending]);
   stop.discardPendingAfterResynchronization = () => {
     if (disposed) return;
-    const hadPending = pending.length > 0;
+    const shouldResume = pausedForResynchronization;
+    const hadState = pending.length > 0 || resyncRequired;
     pending.length = 0;
     pendingReason = undefined;
-    if (hadPending) publishBackpressure();
+    overflowSequence = undefined;
+    resyncRequired = false;
+    pausedForResynchronization = false;
+    if (hadState) publishBackpressure();
+
+    if (shouldResume) {
+      try {
+        attachSource();
+      } catch (error) {
+        resyncRequired = true;
+        pausedForResynchronization = true;
+        pendingReason = "resync_required";
+        publishBackpressure();
+        throw error;
+      }
+    }
   };
   return stop;
 }

@@ -1,15 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindLiveAuthorMonitorEditorChanges } from "../dist/motor-literario.js";
+import {
+  bindLiveAuthorMonitorEditorChanges,
+  LiveAuthorMonitorBackpressureOverflowError
+} from "../dist/motor-literario.js";
 
 function sourceFixture() {
   const listeners = new Set();
+  const resynchronizationRequests = [];
   return {
     listeners,
+    resynchronizationRequests,
     source: {
       subscribeChanges(listener) {
         listeners.add(listener);
         return () => listeners.delete(listener);
+      },
+      requireResynchronization(reason) {
+        resynchronizationRequests.push(reason);
       }
     },
     emit(change) {
@@ -386,4 +394,73 @@ test("expone sink_error, aísla fallos de la vista y conserva el FIFO durante la
   assert.deepEqual(errors, ["temporary_sink_failure"]);
   stop();
   assert.equal(states.length, 4);
+});
+
+
+test("acota el backlog y pausa la fuente al desbordarse hasta resincronizar el snapshot común", () => {
+  const f = sourceFixture();
+  const attempts = [];
+  const admissions = [];
+  const states = [];
+  const errors = [];
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        return { status: "rejected", reason: "queue_full" };
+      }
+    },
+    maxPendingChanges: 2,
+    onAdmission: (value, admission) => admissions.push([value.sequence, admission.status]),
+    onBackpressure: state => states.push(state),
+    onError: (error, value) => errors.push({ error, sequence: value.sequence })
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  f.emit(change(3));
+
+  assert.deepEqual(attempts, [1], "no se intenta reenviar mientras hay backlog");
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1, 2]);
+  assert.equal(stop.getPendingChanges().length, 2, "el buffer nunca supera su límite");
+  assert.deepEqual(admissions, [[1, "rejected"]]);
+  assert.equal(f.listeners.size, 0, "la fuente queda desuscrita al requerir snapshot común");
+  assert.equal(f.resynchronizationRequests.length, 1);
+  assert.equal(states.at(-1).status, "resync-required");
+  assert.equal(states.at(-1).pendingCount, 2);
+  assert.equal(states.at(-1).overflowSequence, 3);
+  assert.equal(states.at(-1).reason, "resync_required");
+  assert.equal(errors.at(-1).sequence, 3);
+  assert.equal(errors.at(-1).error instanceof LiveAuthorMonitorBackpressureOverflowError, true);
+  assert.equal(errors.at(-1).error.code, "pending-buffer-overflow");
+
+  stop.retryPending();
+  assert.deepEqual(attempts, [1], "retryPending no puede saltarse la resincronización");
+
+  // El anfitrión ya reconcilió editor y motor con un snapshot durable común.
+  stop.discardPendingAfterResynchronization();
+  assert.deepEqual(stop.getPendingChanges(), []);
+  assert.equal(f.listeners.size, 1, "la fuente se vuelve a suscribir después del snapshot común");
+  assert.equal(states.at(-1).status, "clear");
+
+  f.emit(change(4));
+  assert.equal(attempts.at(-1), 4);
+  assert.equal(f.listeners.size, 1);
+  stop();
+  assert.equal(f.listeners.size, 0);
+});
+
+test("valida maxPendingChanges antes de instalar listeners", () => {
+  const f = sourceFixture();
+  for (const maxPendingChanges of [0, -1, 1.5, 65537, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => bindLiveAuthorMonitorEditorChanges({
+      source: f.source,
+      sink: { onEditorChange: () => ({ status: "queued", ticketId: "ticket" }) },
+      maxPendingChanges,
+      onAdmission: () => {},
+      onError: () => {}
+    }), /maxPendingChanges/);
+    assert.equal(f.listeners.size, 0);
+  }
 });

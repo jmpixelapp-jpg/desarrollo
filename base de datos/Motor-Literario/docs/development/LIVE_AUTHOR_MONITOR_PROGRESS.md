@@ -496,3 +496,23 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 **Commits:** [991b1cb — contener eventos malformados en el bridge](https://github.com/jmpixelapp-jpg/desarrollo/commit/991b1cbe52ddbd50e76c8d8bde0132262eabf443), [a132a32 — probar null/Proxy en el bridge](https://github.com/jmpixelapp-jpg/desarrollo/commit/a132a32adbcc80418f6198de400b55a000d84db4), [183fc53 — contener payloads del proveedor directo](https://github.com/jmpixelapp-jpg/desarrollo/commit/183fc53c4aaeafa7c1dec107c60cdbfd746bf947), [b323c9a — probar null/getters en el source](https://github.com/jmpixelapp-jpg/desarrollo/commit/b323c9ab03abe6e3a7b7491280cdd118e3000e1d), [12a7542 — probar getters defectuosos también a través del bridge](https://github.com/jmpixelapp-jpg/desarrollo/commit/12a754203130e82bea7808763319143243898fc1).
 
 **Resultado CI:** [45729346603](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729346603): build Vite correcto, esquema MLDB 0.4.2 válido, auditoría de 25 tablas/34 almacenes y **128/128 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+
+## 24. Backlog FIFO acotado y pausa segura por desbordamiento (25 de noviembre de 2026)
+
+**Problema:** el enlace `bindLiveAuthorMonitorEditorChanges` conservaba en memoria todos los deltas posteriores a un `queue_full` o error de envío. Si el motor permanecía sin capacidad mientras el autor seguía escribiendo, el array `pending` podía crecer sin límite. Además de consumir memoria, un buffer sin límite no podía garantizar retención indefinida.
+
+**Implementación:**
+- Nuevo parámetro `maxPendingChanges`, predeterminado en 4096 y validado entre 1 y 65536.
+- Cuando el siguiente delta excedería el límite, el enlace conserva el backlog ya aceptado en su buffer, no añade el evento que desbordó, emite `LiveAuthorMonitorBackpressureOverflowError` (`pending-buffer-overflow`) y publica un snapshot `resync-required` con `overflowSequence`.
+- La fuente se pausa mediante `requireResynchronization()` cuando soporta ese método y la suscripción se cancela. Las señales automáticas de retry no pueden reanudar el envío durante esta condición.
+- Después de que el anfitrión reconcilia editor y motor con el mismo snapshot durable, `discardPendingAfterResynchronization()` limpia el backlog anterior y vuelve a suscribir la fuente.
+- La interfaz conserva compatibilidad con fuentes antiguas: `requireResynchronization` es opcional, pero la cancelación y la reanudación tras snapshot común siguen aplicándose.
+
+**Pruebas:** buffer de tamaño dos sin crecimiento adicional; evento excedente identificado; pausa/desuscripción; retry bloqueado durante la resincronización; limpieza y re-suscripción tras snapshot común; validación de límites antes de instalar listeners.
+
+**Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, `docs/development/LIVE_AUTHOR_MONITOR_EDITOR_ADAPTER_GUIDE.md`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
+
+**Estado de validación:** los tests de regresión quedan incluidos en el workflow específico del Live Author Monitor. La integración se considera pendiente de CI hasta observar el resultado de GitHub Actions sobre este commit.
+
+**Límite importante:** el evento que excede el buffer ya fue aplicado por el editor y no se conserva como delta individual; se recupera desde el snapshot común. El código no afirma que ese delta se haya admitido ni se haya persistido de forma incremental.

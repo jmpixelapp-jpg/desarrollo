@@ -718,3 +718,21 @@ Estas defensas complementan la validación semántica de IDs, secuencia, revisi�
 **Pruebas:** proveedor directo que emite `null`; provider Proxy con getter que lanza; bridge que recibe `null`; bridge que recibe un Proxy con getter que lanza; evento duplicado con replacement malformado.
 
 **Validación CI verificada:** ejecución [45729346603](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729346603), commit `12a754203130e82bea7808763319143243898fc1`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes), build Vite y **128 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+
+## 38. Límite del backlog externo y resincronización obligatoria
+
+El enlace editor→HostEngineApi mantiene un backlog FIFO para absorber contrapresión temporal. Ese almacenamiento ahora está acotado por `maxPendingChanges` (predeterminado 4096, rango 1–65536).
+
+Cuando llega un delta que excedería el límite:
+- se conservan únicamente los deltas previamente retenidos, sin superar el máximo;
+- el delta excedente se identifica mediante `overflowSequence`, pero no se afirma que haya sido admitido ni se guarda su texto en el buffer;
+- el enlace publica `status: "resync-required"` y el error `pending-buffer-overflow`;
+- cancela la suscripción y solicita `requireResynchronization()` a fuentes que implementan esa capacidad;
+- `retryPending()` queda inactivo mientras la resincronización sea obligatoria.
+
+El anfitrión debe reconciliar el editor y el motor desde el mismo snapshot durable. Solo entonces debe llamar a `discardPendingAfterResynchronization()`, que limpia los deltas de la generación anterior y vuelve a suscribir la fuente. Este método no sustituye la reconciliación y no debe usarse para resolver un `queue_full` temporal.
+
+**Pruebas de regresión:** buffer estrictamente limitado; ausencia de admisiones posteriores al desbordamiento; notificación de secuencia excedente; pausa del source; retry bloqueado; re-suscripción tras snapshot común; validación de configuración.
+
+**Estado:** implementación incluida en TypeScript puro y pruebas añadidas. Pendiente verificar la ejecución automática de GitHub Actions para este commit.

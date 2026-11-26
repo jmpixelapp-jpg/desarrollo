@@ -330,7 +330,12 @@ export class IndexedDbNarrativeSyncJournal {
       return { status: "rejected", reason: "transaction-failed" };
     }
 
-    const database = await this.open();
+    let database: IDBDatabase;
+    try {
+      database = await this.open();
+    } catch {
+      return { status: "rejected", reason: "transaction-failed" };
+    }
     return new Promise(resolve => {
       let settled = false;
       const finish = (result: NarrativeSyncCursorRecoveryApplyResult): void => {
@@ -366,13 +371,7 @@ export class IndexedDbNarrativeSyncJournal {
         const sameSnapshot = currentWriterOperations.length === snapshot.length &&
           currentWriterOperations.every((entry, index) => {
             const expected = snapshot[index];
-            return entry.operationId === expected.operationId &&
-              entry.digest === expected.digest &&
-              entry.sequence === expected.sequence &&
-              entry.receivedAt === expected.receivedAt &&
-              entry.appliedAt === expected.appliedAt &&
-              entry.projectId === expected.projectId &&
-              entry.writerId === expected.writerId;
+            return JSON.stringify(entry) === JSON.stringify(expected);
           });
         if (!sameSnapshot) {
           abortWith("journal-changed");

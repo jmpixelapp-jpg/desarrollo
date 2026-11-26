@@ -31,6 +31,16 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
+
+function locateUniqueIdeaText(excerpt: string, ideaText: string): number | undefined {
+  const parts = ideaText.trim().split(/\\s+/u).filter(Boolean).map(escapeRegExp);
+  if (!parts.length) return undefined;
+  const expression = new RegExp(parts.join("\\\\s+"), "gu");
+  const matches = [...excerpt.matchAll(expression)];
+  if (matches.length !== 1) return undefined;
+  return matches[0]!.index;
+}
+
 function validate(input: NarrativeIdeaEntityAttributionInput): void {
   if (!input || typeof input !== "object" ||
       typeof input.projectId !== "string" || !input.projectId.trim() ||
@@ -82,8 +92,8 @@ export function attributeNarrativeIdeasToEntities(
 
   for (const idea of input.ideas) {
     const excerpt = idea.evidence.excerpt;
-    const captureIndex = excerpt.indexOf(idea.text);
-    if (captureIndex < 0 || excerpt.indexOf(idea.text, captureIndex + 1) >= 0) {
+    const captureIndex = locateUniqueIdeaText(excerpt, idea.text);
+    if (captureIndex === undefined) {
       output.push({
         id: "idea-entity-attribution:" + idea.id,
         projectId: input.projectId,

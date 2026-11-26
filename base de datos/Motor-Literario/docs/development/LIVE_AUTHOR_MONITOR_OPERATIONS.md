@@ -503,3 +503,8 @@ La lane ahora separa tres grupos:
 - benchmark de heap del núcleo, usando el bundle aislado si está disponible.
 
 La auditoría MLDB continúa ejecutándose como control independiente. Sus errores siguen dejando la lane en rojo y no se ocultan con `continue-on-error`.
+
+
+## 37. Preparar Chromium solo para pruebas de integración
+
+La instalación de Chromium se ejecuta después del bundle runtime y únicamente si ese bundle terminó correctamente. Las pruebas unitarias del núcleo, recuperación diagnóstica y benchmark no dependen del navegador y deben ejecutarse antes, incluso cuando una dependencia compartida rompa la compilación completa. Si el runtime compila, Chromium se instala antes de los tests de editor, host y múltiples pestañas.

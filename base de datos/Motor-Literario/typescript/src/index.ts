@@ -22,3 +22,4 @@ export * from "./live-author-monitor-textarea-source";
 export * from "./live-author-monitor-textarea-integration";
 export * from "./live-author-monitor-editor-transaction-source";
 export * from "./live-author-monitor-editor-transaction-integration";
+export * from "./live-author-monitor-editor-transaction-bridge";

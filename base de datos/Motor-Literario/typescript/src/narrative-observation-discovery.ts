@@ -92,6 +92,8 @@ export interface NarrativeObservationCandidate {
   readonly epistemicFrame: "narrator-asserted" | "character-belief" | "character-memory" | "character-desire" | "reported-speech" | "hypothetical";
   /** Evidencia literal del disparador del marco, cuando existe. */
   readonly epistemicFrameEvidence?: TextEvidence;
+  /** Emisor candidato de discurso referido, solo si una entidad aparece inequívocamente antes del disparador. */
+  readonly epistemicSourceCandidate?: { readonly entityId: string; readonly evidence: TextEvidence };
   readonly polarity: "affirmed" | "negated";
   readonly confidence: "medium";
   readonly reviewStatus: "candidate";
@@ -202,6 +204,29 @@ const EPISTEMIC_FRAME_SIGNALS: readonly {
 
 function classifyEpistemicFrame(
   sentence: string,
+  actionStart: number,
+  characters: readonly NarrativeEntity[]
+): {
+  frame: NarrativeObservationCandidate["epistemicFrame"];
+  cue?: { start: number; end: number; excerpt: string };
+  source?: { entityId: string; start: number; end: number; excerpt: string };
+} {
+  let selected: { frame: NarrativeObservationCandidate["epistemicFrame"]; start: number; end: number; excerpt: string } | undefined;
+  for (const signal of EPISTEMIC_FRAME_SIGNALS) {
+    signal.expression.lastIndex = 0;
+    for (const match of sentence.matchAll(signal.expression)) {
+      if (match.index! >= actionStart) break;
+      const candidate = { frame: signal.frame, start: match.index!, end: match.index! + match[0].length, excerpt: match[0] };
+      if (!selected || candidate.start > selected.start) selected = candidate;
+    }
+  }
+  if (!selected) return { frame: "narrator-asserted" };
+  if (selected.frame !== "reported-speech") return { frame: selected.frame, cue: selected };
+
+  const possibleSources = characters.flatMap(entity =>
+    [entity.canonicalName, ...entity.aliases].flatMap(name => {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\function classifyEpistemicFrame(
+  sentence: string,
   actionStart: number
 ): { frame: NarrativeObservationCandidate["epistemicFrame"]; cue?: { start: number; end: number; excerpt: string } } {
   let selected: { frame: NarrativeObservationCandidate["epistemicFrame"]; start: number; end: number; excerpt: string } | undefined;
@@ -214,6 +239,23 @@ function classifyEpistemicFrame(
     }
   }
   return selected ? { frame: selected.frame, cue: selected } : { frame: "narrator-asserted" };
+}");
+      const expression = new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
+        "(?![\\p{L}\\p{M}\\p{N}_])", "giu");
+      return [...sentence.slice(0, selected!.start).matchAll(expression)].map(match => ({
+        entityId: entity.id, start: match.index!, end: match.index! + match[0].length,
+        excerpt: match[0]
+      }));
+    })
+  ).sort((a, b) => b.end - a.end || b.start - a.start);
+  const nearest = possibleSources[0];
+  const equallyNear = nearest ? possibleSources.filter(item => item.end === nearest.end) : [];
+  return {
+    frame: selected.frame,
+    cue: selected,
+    ...(nearest && equallyNear.every(item => item.entityId === nearest.entityId)
+      ? { source: nearest } : {})
+  };
 }
 
 function classifyGrammaticalTense(surface: string): NarrativeObservationCandidate["grammaticalTense"] {
@@ -531,13 +573,23 @@ export function discoverNarrativeObservationCandidates(
             }
           };
         })();
-        const epistemic = classifyEpistemicFrame(sentence, match.index);
+        const epistemic = classifyEpistemicFrame(sentence, match.index, characters);
         const epistemicFrameEvidence = epistemic.cue ? {
           documentId: input.documentId,
           revision: input.revision,
           start: baseOffset + segment.start + epistemic.cue.start,
           end: baseOffset + segment.start + epistemic.cue.end,
           excerpt: epistemic.cue.excerpt
+        } : undefined;
+        const epistemicSourceCandidate = epistemic.source ? {
+          entityId: epistemic.source.entityId,
+          evidence: {
+            documentId: input.documentId,
+            revision: input.revision,
+            start: baseOffset + segment.start + epistemic.source.start,
+            end: baseOffset + segment.start + epistemic.source.end,
+            excerpt: epistemic.source.excerpt
+          }
         } : undefined;
         const isNegated = hasNegationBeforeAction(sentence, match.index);
         const directedRelationCandidate = signal.action === "entregar" &&
@@ -614,6 +666,7 @@ export function discoverNarrativeObservationCandidates(
           entityMentionEvidence,
           epistemicFrame: epistemic.frame,
           ...(epistemicFrameEvidence ? { epistemicFrameEvidence } : {}),
+          ...(epistemicSourceCandidate ? { epistemicSourceCandidate } : {}),
           polarity: isNegated ? "negated" : "affirmed",
           confidence: "medium",
           reviewStatus: "candidate",

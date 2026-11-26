@@ -676,3 +676,14 @@ La regresión asociada crea tres commits confirmados y un checkpoint correcto, e
 La restauración aplica este límite junto con las validaciones enteras de ambos contadores. No se impone un mínimo de pausas: una sesión puede tener muchas admisiones consecutivas y ninguna pausa. Un valor superior al número de admisiones indica corrupción o una combinación de métricas que el monitor nunca habría producido.
 
 La prueba asociada altera el contador de un checkpoint real sin actividad y exige rechazo sin crear una sesión parcial. La regla no cambia el formato v1 ni requiere migración.
+
+
+## 59. Balance de caracteres recuperado
+
+El checkpoint conserva los totales acumulados insertados, borrados y la longitud actual, pero no copia el texto inicial. Por ello, al recuperar se puede reconstruir la longitud inicial implícita:
+
+`initialLength = currentDocumentLength + deletedCharacters - insertedCharacters`
+
+Esta longitud no puede ser negativa. El validador aplica la forma equivalente `deletedCharacters <= currentDocumentLength + insertedCharacters`, después de exigir que cada contador sea un entero seguro no negativo. La regla permite reemplazos, borrados seguidos de inserciones y cualquier secuencia válida de deltas; solo rechaza balances imposibles.
+
+La regresión parte de un documento de cinco caracteres sin ediciones y manipula el total borrado a seis. La restauración debe fallar antes de registrar la sesión. No se almacena ni vuelve a leer el manuscrito para realizar esta comprobación y no se requiere migración del checkpoint v1.

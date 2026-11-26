@@ -567,9 +567,10 @@ export function extractNarrativeIdeas(
   revision: number,
   text: string,
   baseOffset = 0,
-  sourceProjectName = projectId
+  sourceProjectName = projectId,
+  now = Date.now()
 ): readonly NarrativeIdea[] {
-  validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset);
+  validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset, undefined, now);
   if (typeof sourceProjectName !== "string" || !sourceProjectName.trim()) {
     throw new Error("El nombre del proyecto de origen de la idea es obligatorio.");
   }
@@ -591,7 +592,7 @@ export function extractNarrativeIdeas(
       status: "IDEA",
       originDocumentId: documentId,
       sourceProjectName,
-      statusHistory: [{ status: "IDEA", changedAt: Date.now(), reason: "initial" }],
+      statusHistory: [{ status: "IDEA", changedAt: now, reason: "initial" }],
       evidence: [{
         documentId, revision, start, end,
         excerpt: text.slice(lineStart, lineEnd)

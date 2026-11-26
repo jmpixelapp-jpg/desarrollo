@@ -64,7 +64,7 @@ test("rechaza acontecimientos de otro documento o revisión", () => {
 });
 
 test("no enlaza acontecimientos separados por un salto de párrafo", () => {
-  const text = "Mara abrió la puerta.\\n\\nPor eso Elian escapó.";
+  const text = "Mara abrió la puerta.\n\nPor eso Elian escapó.";
   const a = text.indexOf("Mara"), b = text.indexOf("Por eso");
   const events = [
     event("e1", a, text.indexOf(".") + 1, "Mara abrió la puerta."),

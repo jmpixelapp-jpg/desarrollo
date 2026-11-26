@@ -31,7 +31,7 @@ test("resuelve alias inequívoco",()=>{
 });
 test("se abstiene si aparecen dos personajes",()=>{
   const elian={...mara,id:"character:elian",canonicalName:"Elian",normalizedName:"elian",aliases:[]};
-  assert.deepEqual(extractNarrativeCharacterIntentCandidates(input("Mara desea ayudar a Elian.",[mara,elian])),[]);
+  assert.deepEqual(extractNarrativeCharacterIntentCandidates(input("Mara junto a Elian desea ayudar a la guardia.",[mara,elian])),[]);
 });
 test("no atribuye sujetos tácitos",()=>{
   assert.deepEqual(extractNarrativeCharacterIntentCandidates(input("Desea encontrar la llave.")),[]);
@@ -112,4 +112,13 @@ test("separa un objetivo de su propósito final explícito",()=>{
   assert.equal(found.length,2);
   assert.ok(found.some(item=>item.kind==="goal" && item.evidenceBasis==="explicit-goal-verb" && item.text==="proteger a Elian"));
   assert.ok(found.some(item=>item.kind==="goal" && item.evidenceBasis==="explicit-purpose" && item.text==="salvar el reino"));
+});
+
+test("distingue al personaje objetivo del actor de una intención",()=>{
+  const elian={...mara,id:"character:elian",canonicalName:"Elian",normalizedName:"elian",aliases:[]};
+  const text="Mara desea ayudar a Elian.";
+  const found=extractNarrativeCharacterIntentCandidates(input(text,[mara,elian]));
+  assert.equal(found.length,1);
+  assert.equal(found[0].characterEntityId,mara.id);
+  assert.equal(found[0].text,"ayudar a Elian");
 });

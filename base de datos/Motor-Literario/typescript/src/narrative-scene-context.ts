@@ -138,3 +138,121 @@ export function assignNarrativeEvidenceToScene<
     sceneAssignment: overlaps ? "crosses-boundary" : "unassigned"
   };
 }
+
+
+/** Evento con participantes ya extraídos explícitamente; no resuelve pronombres. */
+export interface NarrativeSceneContinuityEvent {
+  readonly projectId: string;
+  readonly id: string;
+  readonly participants: readonly string[];
+  readonly evidence: readonly {
+    readonly start: number;
+    readonly end: number;
+    readonly excerpt: string;
+  }[];
+}
+
+/** Apariciones verificadas de un personaje a través de escenas explícitas. */
+export interface NarrativeCharacterSceneContinuity {
+  readonly projectId: string;
+  readonly characterId: string;
+  readonly sceneIds: readonly string[];
+  readonly eventIds: readonly string[];
+  readonly appearanceCount: number;
+  readonly firstSceneOrdinal: number;
+  readonly lastSceneOrdinal: number;
+}
+
+/**
+ * Construye continuidad observable entre escenas a partir de participantes
+ * explícitos de eventos. Un evento solo cuenta si toda su evidencia queda en
+ * una misma escena; nunca se infiere identidad a partir de pronombres.
+ */
+export function buildNarrativeCharacterSceneContinuity(
+  events: readonly NarrativeSceneContinuityEvent[],
+  scenes: readonly NarrativeSceneSegment[]
+): readonly NarrativeCharacterSceneContinuity[] {
+  if (!Array.isArray(events) || !Array.isArray(scenes)) {
+    throw new Error("Eventos o escenas inválidos para continuidad narrativa.");
+  }
+  const sceneById = new Map<string, NarrativeSceneSegment>();
+  for (const scene of scenes) {
+    if (!scene || typeof scene.id !== "string" || !scene.id ||
+        typeof scene.projectId !== "string" || !scene.projectId ||
+        typeof scene.documentId !== "string" || !scene.documentId ||
+        !Number.isSafeInteger(scene.revision) || scene.revision < 0 ||
+        !Number.isSafeInteger(scene.ordinal) || scene.ordinal < 1 ||
+        sceneById.has(scene.id)) {
+      throw new Error("La colección contiene una escena inválida o duplicada.");
+    }
+    sceneById.set(scene.id, scene);
+  }
+
+  const appearances = new Map<string, {
+    projectId: string;
+    characterId: string;
+    sceneIds: Set<string>;
+    eventIds: Set<string>;
+    ordinals: number[];
+  }>();
+  const seenEvents = new Set<string>();
+
+  for (const event of events) {
+    if (!event || typeof event.projectId !== "string" || !event.projectId ||
+        typeof event.id !== "string" || !event.id ||
+        !Array.isArray(event.participants) ||
+        event.participants.some(id => typeof id !== "string" || !id) ||
+        !Array.isArray(event.evidence)) {
+      throw new Error("Evento inválido para continuidad narrativa.");
+    }
+    const eventKey = event.projectId + ":" + event.id;
+    if (seenEvents.has(eventKey)) throw new Error("Evento duplicado en continuidad narrativa.");
+    seenEvents.add(eventKey);
+    if (event.evidence.length === 0 || event.participants.length === 0) continue;
+
+    const assignments = event.evidence.map(evidence =>
+      assignNarrativeEvidenceToScene({ evidence }, scenes)
+    );
+    if (assignments.some(item => item.sceneAssignment !== "explicit")) continue;
+    const sceneIds = new Set(assignments.map(item => item.sceneId!));
+    if (sceneIds.size !== 1) continue;
+    const scene = sceneById.get([...sceneIds][0]!);
+    if (!scene || scene.projectId !== event.projectId) continue;
+
+    for (const characterId of new Set(event.participants)) {
+      const key = event.projectId + ":" + characterId;
+      const current = appearances.get(key) ?? {
+        projectId: event.projectId,
+        characterId,
+        sceneIds: new Set<string>(),
+        eventIds: new Set<string>(),
+        ordinals: []
+      };
+      if (!current.eventIds.has(event.id)) {
+        current.eventIds.add(event.id);
+        current.sceneIds.add(scene.id);
+        current.ordinals.push(scene.ordinal);
+      }
+      appearances.set(key, current);
+    }
+  }
+
+  return [...appearances.values()]
+    .map(item => {
+      const orderedSceneIds = [...item.sceneIds].sort((a, b) =>
+        (sceneById.get(a)?.ordinal ?? 0) - (sceneById.get(b)?.ordinal ?? 0)
+      );
+      const ordinals = [...item.ordinals].sort((a, b) => a - b);
+      return {
+        projectId: item.projectId,
+        characterId: item.characterId,
+        sceneIds: orderedSceneIds,
+        eventIds: [...item.eventIds],
+        appearanceCount: item.eventIds.size,
+        firstSceneOrdinal: ordinals[0]!,
+        lastSceneOrdinal: ordinals[ordinals.length - 1]!
+      };
+    })
+    .sort((a, b) => a.projectId.localeCompare(b.projectId) ||
+      a.characterId.localeCompare(b.characterId));
+}

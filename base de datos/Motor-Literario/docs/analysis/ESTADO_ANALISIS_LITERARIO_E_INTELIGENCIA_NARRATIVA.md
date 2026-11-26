@@ -533,6 +533,13 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 **Cobertura espacial ampliada:** se reconocen además los verbos explícitos `pasar por`, `atravesar` y `recorrer`, junto con `cruzar`; se admiten artículos y contracciones del español (`del`, `de la`, `por el`). Las pruebas detectaron y corrigieron un escape incorrecto en el patrón de espacios para complementos directos. La corrección está incluida en run 2985 aprobado.
 
+### Presencia explícita de personajes en ubicaciones — 26-11-2026
+
+- Nuevo `narrative-location-presence-discovery.ts`: extrae afirmaciones copulativas/perceptuales/modalizadas de presencia («Ana está en el castillo», «Ana parece estar cerca del puerto»), con personaje y lugar explícitos y no ambiguos.
+- Conserva evidencia separada de personaje, predicado, relación locativa, lugar y afirmación completa; distingue negación, futuro y condicional.
+- Integrado en la ingesta como `locationPresenceCandidates` y en la auditoría global mediante evidencia de afirmación. Añadidas pruebas unitarias y de integración.
+- Limitación explícita: exige un único personaje nombrado por oración; no resuelve pronombres, sujetos coordinados ni ubicación actual consolidada. CI pendiente para esta nueva capa.
+
 ### Trayectorias espaciales entre capítulos — 26-11-2026
 
 - Nuevo módulo `typescript/src/narrative-location-trajectory.ts`: agrupa movimientos por personaje, ordena por secuencia editorial explícita y señala secuencias candidatas de salida seguida de llegada.

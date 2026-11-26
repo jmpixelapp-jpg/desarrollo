@@ -101,9 +101,9 @@ export function extractNarrativeActionCandidates(
   for (const line of input.text.matchAll(/[^\n]+/gu)) {
     const lineText = line[0];
     const lineStart = line.index ?? 0;
-    const normalizedLine = lineText.toLocaleLowerCase("es");
+    const normalizedLine = lineText.normalize("NFKC").toLocaleLowerCase("es");
     for (const actor of actors) {
-      if (!normalizedLine.includes(actor.name.toLocaleLowerCase("es"))) continue;
+      if (!normalizedLine.includes(normalize(actor.name))) continue;
       const expression = new RegExp(
         "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(actor.name) +
         "(?![\\p{L}\\p{M}\\p{N}_])\\s+(no\\s+)?(" + actionPattern +

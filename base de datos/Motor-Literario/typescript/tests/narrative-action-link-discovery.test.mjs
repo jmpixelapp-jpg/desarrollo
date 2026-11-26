@@ -90,3 +90,57 @@ test("rechaza observaciones malformadas o IDs duplicados sin lanzar errores inte
     text, observations: [found[0], found[0]]
   }), /únicos/);
 });
+
+
+test("reconoce conectores temporales narrativos compuestos", () => {
+  for (const [text, marker] of [
+    ["Ana salió. Acto seguido, Bruno cerró la puerta.", "Acto seguido"],
+    ["Ana esperó. Al mismo tiempo, Bruno buscó ayuda.", "Al mismo tiempo"],
+    ["Ana cayó. Poco después, llegó el médico.", "Poco después"],
+    ["Ana abrió la carta. De inmediato, palideció.", "De inmediato"]
+  ]) {
+    const found = discoverNarrativeActionLinks({
+      projectId: "book-1", documentId: "chapter-1", revision: 4,
+      text, observations: observations(text)
+    });
+    assert.equal(found.length, 1, text);
+    assert.equal(found[0].marker.toLocaleLowerCase("es"), marker.toLocaleLowerCase("es"));
+    assert.equal(found[0].markerKind, "temporal");
+    assert.equal(text.slice(found[0].evidence.start, found[0].evidence.end), found[0].marker);
+  }
+});
+
+test("reconoce conectores causales sin asignar automáticamente causa y efecto", () => {
+  for (const [text, marker] of [
+    ["Ana se marchó. Por culpa de la tormenta, Bruno perdió el tren.", "Por culpa de"],
+    ["Bruno llegó a tiempo. Gracias a Ana, el grupo escapó.", "Gracias a"],
+    ["Ana recibió la noticia. A raíz de ello, canceló el viaje.", "A raíz de"],
+    ["El puente cedió. Como resultado, el camino quedó bloqueado.", "Como resultado"]
+  ]) {
+    const found = discoverNarrativeActionLinks({
+      projectId: "book-1", documentId: "chapter-1", revision: 4,
+      text, observations: observations(text)
+    });
+    assert.equal(found.length, 1, text);
+    assert.equal(found[0].marker.toLocaleLowerCase("es"), marker.toLocaleLowerCase("es"));
+    assert.equal(found[0].markerKind, "causal");
+    assert.equal("causeActionId" in found[0], false);
+    assert.equal("effectActionId" in found[0], false);
+  }
+});
+
+test("reconoce conectores adversativos y concesivos compuestos", () => {
+  for (const [text, marker] of [
+    ["Ana quiso entrar. A pesar de ello, permaneció afuera.", "A pesar de ello"],
+    ["Bruno estaba herido. Aun así, continuó caminando.", "Aun así"],
+    ["Ana pidió ayuda. Pese a ello, nadie respondió.", "Pese a ello"]
+  ]) {
+    const found = discoverNarrativeActionLinks({
+      projectId: "book-1", documentId: "chapter-1", revision: 4,
+      text, observations: observations(text)
+    });
+    assert.equal(found.length, 1, text);
+    assert.equal(found[0].marker.toLocaleLowerCase("es"), marker.toLocaleLowerCase("es"));
+    assert.equal(found[0].markerKind, "contrast");
+  }
+});

@@ -130,3 +130,10 @@ Un timeout o una desconexión no demuestra que el servidor haya rechazado la ope
 También puede ocurrir que el servidor responda con acuses válidos y falle después la transacción local que retira esos acuses. La bandeja conserva entonces las operaciones y el siguiente ciclo vuelve a enviarlas. El acuse remoto repetido debe ser idempotente y permitir que el cliente vuelva a retirar localmente la operación. La nueva prueba simula ambos lados: aceptación remota persistente, fallo de commit local y recuperación posterior sin duplicar el efecto remoto.
 
 Esta garantía no es una transacción distribuida ni una prueba del backend real: el repositorio cliente solo puede exigir y probar el contrato mediante un transporte simulado. La implementación del servidor debe mantener su registro de idempotencia durable durante todo el horizonte de reintentos.
+
+
+### Conflictos y orden causal por dispositivo
+
+Un conflicto se conserva en la outbox como operación pendiente, con el código y mensaje del conflicto en `lastError` y una fecha de próximo intento. No se elimina ni se interpreta como aceptación. El backoff actúa como barrera causal: las operaciones posteriores del mismo dispositivo no se envían mientras la operación anterior esté bloqueada. Las operaciones de otros dispositivos pueden avanzar porque representan flujos causales independientes.
+
+El backoff no resuelve el conflicto de negocio. Tras vencer, el coordinador puede volver a presentar la operación al transporte; el servidor debe devolver una clasificación actualizada o una aceptación explícita. Una reconciliación real (por ejemplo, rebase, edición o elección entre versiones) requiere una decisión de dominio y un contrato específico; no se simula ni se realiza automáticamente en este coordinador.

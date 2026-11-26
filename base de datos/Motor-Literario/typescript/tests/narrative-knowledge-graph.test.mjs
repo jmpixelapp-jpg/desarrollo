@@ -7,8 +7,8 @@ test("integra entidades, relaciones, eventos, ideas y afirmaciones con evidencia
     documentId: "chapter-1",
     revision: 3,
     text: [
-      "Personaje Mara.",
-      "Personaje Leo.",
+      "personaje Mara.",
+      "personaje Leo.",
       "Mara es la hermana de Leo.",
       "Mara tiene 24 años y vive en Puerto Azul.",
       "EVENTO: Mara está viva el día 4.",
@@ -36,8 +36,8 @@ test("integra entidades, relaciones, eventos, ideas y afirmaciones con evidencia
 
 test("consolida evidencia de una misma entidad entre documentos y ordena el resultado", () => {
   const graph = buildNarrativeKnowledgeGraph("novel-a", [
-    { documentId: "b", revision: 1, text: "Personaje Mara aparece." },
-    { documentId: "a", revision: 2, text: "Personaje Mara regresa." }
+    { documentId: "b", revision: 1, text: "personaje Mara aparece." },
+    { documentId: "a", revision: 2, text: "personaje Mara regresa." }
   ], { now: 100 });
   assert.equal(graph.entities.length, 1);
   assert.equal(graph.entities[0].evidence.length, 2);
@@ -65,7 +65,7 @@ test("respeta offsets absolutos al construir evidencia desde ventanas de texto",
     documentId: "chapter-window",
     revision: 2,
     baseOffset: 500,
-    text: "Personaje Mara. Mara tiene 24 años."
+    text: "personaje Mara. Mara tiene 24 años."
   }], { now: 100 });
   assert.ok(graph.entities[0].evidence[0].start >= 500);
   assert.ok(graph.assertions[0].evidence.start >= 500);

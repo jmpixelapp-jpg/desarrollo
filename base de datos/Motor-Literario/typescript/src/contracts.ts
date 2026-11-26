@@ -13,6 +13,8 @@ export interface ProjectIdentity {
   readonly projectName: string;
   /** Identidad estable del escritor autenticado, entregada por el anfitrión. */
   readonly writerId?: string;
+  /** UUID aleatorio y estable de esta instalación, persistido por el anfitrión. */
+  readonly deviceId?: string;
 }
 
 export interface DocumentSnapshot {
@@ -81,6 +83,42 @@ export interface CommitResult {
   readonly status: "applied" | "rejected";
   readonly revision?: number;
   readonly reason?: string;
+}
+
+/** Operación saliente antes de asignar la secuencia durable por dispositivo. */
+export interface SyncOperationDraft {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  readonly kind: string;
+  readonly payload: string;
+  readonly createdAt: number;
+}
+
+/** Operación durable pendiente de transporte. */
+export interface StoredSyncOperation {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  readonly sequence: number;
+  readonly kind: string;
+  readonly payload: string;
+  readonly createdAt: number;
+  readonly attemptCount: number;
+  readonly lastAttemptAt?: number;
+  readonly lastErrorCode?: string;
+}
+
+/** Acuse remoto durable ligado a la identidad exacta de una operación enviada. */
+export interface SyncOperationAcknowledgement {
+  readonly status: "accepted" | "duplicate";
+  readonly durable: true;
+  readonly projectId: string;
+  readonly operationId: string;
+  /** En el protocolo saliente, writerId identifica el stream del dispositivo. */
+  readonly writerId: string;
+  readonly sequence: number;
+  readonly digest: string;
 }
 
 export interface StoredDocument extends DocumentSnapshot {
@@ -201,6 +239,8 @@ export interface NarrativeReferenceRepairPendingEntry {
 }
 
 export interface ProjectStore {
+  /** Indica que las mutaciones de dominio y su outbox se confirman atómicamente. */
+  readonly supportsAtomicNarrativeSyncOutbox?: boolean;
   /** Auditoría append-only e idempotente de reparaciones narrativas. */
   appendNarrativeReferenceRepairAudit?(entry: NarrativeReferenceRepairAuditEntry): Promise<void>;
   loadNarrativeReferenceRepairAudits?(projectId: string): Promise<readonly NarrativeReferenceRepairAuditEntry[]>;
@@ -305,6 +345,19 @@ export interface ProjectStore {
     linked: boolean
   ): Promise<void>;
 
+  /** Última secuencia durable asignada a un proyecto/dispositivo; cero si no hay operaciones. */
+  loadLastSyncOperationSequence?(projectId: string, deviceId: string): Promise<number>;
+  /** Encola una operación ya numerada de forma idempotente. */
+  enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
+  /** Lee pendientes FIFO por dispositivo sin retirarlos antes del acuse remoto durable. */
+  loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
+  /** Persiste metadatos de reintento sin guardar texto del error ni datos sensibles. */
+  recordSyncOperationAttempt?(operationId: string, attemptedAt: number, errorCode?: string): Promise<boolean>;
+  /**
+   * Retira una operación solo si el acuse durable coincide con el sobre SHA-256
+   * reconstruido desde el registro que sigue pendiente.
+   */
+  acknowledgeSyncOperation?(acknowledgement: SyncOperationAcknowledgement): Promise<boolean>;
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;
   /** Obligatorio: lee snapshot y journal desde una misma vista transaccional consistente. */
@@ -314,6 +367,11 @@ export interface ProjectStore {
   }>;
   /** Opcional: almacenamiento incremental de cambios. */
   appendChange?(change: StoredChange): Promise<void>;
+  /** Confirma el delta del editor y su operación saliente en la misma transacción. */
+  appendChangeAndEnqueueSyncOperation?(
+    change: StoredChange,
+    operation: SyncOperationDraft
+  ): Promise<void>;
   /** Lee deltas posteriores al snapshot, ordenados por secuencia ascendente. */
   loadChanges?(projectId: string, documentId: string, afterSequence: number): Promise<readonly StoredChange[]>;
   /** Opcional: elimina del journal los deltas ya incluidos en un snapshot durable. */
@@ -369,26 +427,30 @@ export interface ProjectStore {
   /** Inserta o actualiza una entidad solo si la versión actual coincide con la lectura. */
   saveEntityIfUnchanged?(
     entity: import("./narrative-knowledge").NarrativeEntity,
-    expectedCurrent?: import("./narrative-knowledge").NarrativeEntity
+    expectedCurrent?: import("./narrative-knowledge").NarrativeEntity,
+    syncOperation?: SyncOperationDraft
   ): Promise<void>;
   loadEntities?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeEntity[]>;
   saveRelation?(relation: import("./narrative-knowledge").NarrativeRelation): Promise<void>;
   saveRelationIfUnchanged?(
     relation: import("./narrative-knowledge").NarrativeRelation,
-    expectedCurrent?: import("./narrative-knowledge").NarrativeRelation
+    expectedCurrent?: import("./narrative-knowledge").NarrativeRelation,
+    syncOperation?: SyncOperationDraft
   ): Promise<void>;
   loadRelations?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeRelation[]>;
   saveEvent?(event: import("./narrative-knowledge").NarrativeEvent): Promise<void>;
   saveEventIfUnchanged?(
     event: import("./narrative-knowledge").NarrativeEvent,
-    expectedCurrent?: import("./narrative-knowledge").NarrativeEvent
+    expectedCurrent?: import("./narrative-knowledge").NarrativeEvent,
+    syncOperation?: SyncOperationDraft
   ): Promise<void>;
   loadEvents?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeEvent[]>;
   saveIdea?(idea: import("./narrative-knowledge").NarrativeIdea): Promise<void>;
   /** Inserta o actualiza una idea solo si la versión actual coincide con la lectura. */
   saveIdeaIfUnchanged?(
     idea: import("./narrative-knowledge").NarrativeIdea,
-    expectedCurrent?: import("./narrative-knowledge").NarrativeIdea
+    expectedCurrent?: import("./narrative-knowledge").NarrativeIdea,
+    syncOperation?: SyncOperationDraft
   ): Promise<void>;
   /** Compatibilidad explícita para actualizar una idea existente. */
   updateIdeaIfUnchanged?(
@@ -400,7 +462,8 @@ export interface ProjectStore {
   saveAssertion?(assertion: import("./narrative-history").NarrativeAssertion): Promise<void>;
   saveAssertionIfUnchanged?(
     assertion: import("./narrative-history").NarrativeAssertion,
-    expectedCurrent?: import("./narrative-history").NarrativeAssertion
+    expectedCurrent?: import("./narrative-history").NarrativeAssertion,
+    syncOperation?: SyncOperationDraft
   ): Promise<void>;
   loadAssertions?(projectId: string): Promise<readonly import("./narrative-history").NarrativeAssertion[]>;
   /**
@@ -414,10 +477,23 @@ export interface ProjectStore {
     projectId: string,
     targetEntityId: string,
     sourceEntityId: string,
-    writerId?: string
+    writerId?: string,
+    syncOperation?: SyncOperationDraft
   ): Promise<void>;
-  /** Transfiere atómicamente ideas aún no incorporadas a la biblioteca privada del escritor. */
-  archiveUnincorporatedIdeas?(projectId: string, writerId: string, sourceProjectName: string, archivedAt: number): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
+  /**
+   * Transfiere ideas no incorporadas y su recibo mediante una sola transacción.
+   * Si expectedIdeaIds llega desde sincronización entrante, el store rechaza
+   * cualquier conjunto distinto antes de escribir. En el origen, syncOperation
+   * se incorpora a la outbox dentro de esa misma transacción.
+   */
+  archiveUnincorporatedIdeas?(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number,
+    syncOperation?: SyncOperationDraft,
+    expectedIdeaIds?: readonly string[]
+  ): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadPersonalIdeas?(writerId: string): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadProjectFinalizationReceipt?(
     writerId: string,

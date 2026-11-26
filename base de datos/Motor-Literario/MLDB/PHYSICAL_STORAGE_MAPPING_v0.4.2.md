@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `22` (manifiesto físico, mapping version `12`).
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `28` (manifiesto físico, mapping version `17`).
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -87,8 +87,16 @@ El manifiesto físico vigente usa mapping version 16 y `database_version: 27`. D
 |---|---|---|---|
 | `narrative-reference-repair-audits` | `[projectId, operationId]` | `by-project` (`projectId`) | Auditoría append-only de referencias reparadas |
 | `narrative-reference-repair-pending` | `[projectId, operationId]` | `by-project` (`projectId`) | Intenciones durables para recuperar interrupciones |
+| `sync-outbox` | `operationId` | `by-project-created-at`, `by-project-device-sequence` único | Operaciones narrativas salientes pendientes |
+| `sync-device-sequences` | `[projectId, deviceId]` | — | Secuencia monotónica por instalación y proyecto |
 
 Los índices se crean y verifican mediante el mismo helper `ensureIndex` que utiliza la migración para el resto de almacenes. La auditoría física compara nombre, keyPath y unicidad con el manifiesto. La prueba de migración parte de una base v22, deja ausentes estos almacenes y verifica que DB27 los cree, conserve el documento anterior y exponga ambos índices.
+
+## IndexedDB DB28 — bandeja de sincronización saliente
+
+DB28 eleva el mapping físico de 16 a 17 y conserva los almacenes DB27 de reparación de referencias. Añade `sync-outbox`, cuya clave estable es `operationId`, con FIFO por proyecto/dispositivo/secuencia; y `sync-device-sequences`, que conserva el último número asignado por proyecto e instalación incluso cuando una operación sale de la bandeja tras el acuse durable. La migración es ascendente y no elimina ni reconstruye registros narrativos anteriores.
+
+El runtime confirma cambios de dominio y sus operaciones salientes en la misma transacción IndexedDB. Para el editor, el delta del documento, la outbox y el cursor de dispositivo se escriben juntos. El transporte se ejecuta fuera de la base y solo un acuse remoto durable, coincidente en identidad y digest, permite retirar el elemento local.
 
 ## Límites que no deben ocultarse
 

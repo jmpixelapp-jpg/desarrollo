@@ -749,7 +749,7 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Límites pendientes:** esta etapa no resuelve pronombres oblicuos (`lo/la/le`), reflexivos (`se`), posesivos, relativos ni referencias implícitas sin pronombre. Tampoco interpreta diálogos, cambios de hablante, género gramatical, número, sujeto elíptico, perspectiva narrativa ni entidades fuera del catálogo conocido. Esas señales requieren análisis sintáctico, discursivo y de voz narrativa antes de cualquier resolución automática.
 
-**Validación CI:** la ejecución de integración de este módulo queda pendiente de resultado. No debe contabilizarse como aprobada hasta completar comprobación de tipos, pruebas y compilación.
+**Validación CI:** aprobada en GitHub Actions, ejecución `45786182555`: instalación de Chromium, type-check, compilación, conjunto automatizado y benchmark finalizaron correctamente.
 
 
 
@@ -757,13 +757,13 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Nuevo módulo:** `typescript/src/narrative-dialogue-speaker-discovery.ts`. Añade una capa específica para localizar intervenciones de discurso directo y recuperar atribuciones explícitas de hablante desde el propio texto. Reconoce citas con comillas angulares (`« »`), comillas curvas (`“ ”`), comillas rectas (`" "`), y líneas iniciadas con raya de diálogo (`—`).
 
-**Criterio de atribución:** una intervención solo recibe candidatos de hablante cuando la etiqueta contigua contiene simultáneamente un verbo de habla reconocido y una mención explícita de una entidad conocida de tipo personaje. Se contemplan etiquetas antes y después de la cita y atribuciones de cierre en líneas con raya. Los objetos, lugares y demás entidades no se consideran hablantes. Si aparecen varios personajes en la etiqueta, el resultado es `ambiguous`; si no hay verbo de habla y nombre vinculados, es `unattributed`. Nunca se asigna automáticamente el turno por alternancia, proximidad de párrafos, presencia en escena ni por aparecer el personaje dentro de sus propias palabras.
+**Criterio de atribución:** una intervención solo recibe candidatos de hablante cuando la etiqueta contigua contiene simultáneamente un verbo de habla reconocido y una mención explícita de una entidad conocida de tipo personaje. Se contemplan etiquetas antes y después de la cita y atribuciones de cierre en líneas con raya. Los objetos, lugares y demás entidades no se consideran hablantes. Si aparecen varios personajes en la etiqueta, el resultado es `ambiguous`; si no hay verbo de habla y nombre vinculados, es `unattributed`. Los nombres introducidos como complementos por `a`, `para` o `hacia` no se tratan como sujeto hablante. Nunca se asigna automáticamente el turno por alternancia, proximidad de párrafos, presencia en escena ni por aparecer el personaje dentro de sus propias palabras.
 
 **Evidencia:** cada segmento conserva texto literal de la intervención y el fragmento completo que la delimita; además registra la mención nominal del posible hablante, la forma verbal de habla y el fragmento de atribución. Los offsets son absolutos UTF-16 y admiten `baseOffset`. La capa devuelve candidatos revisables, no hechos de diálogo confirmados.
 
 **Límites deliberados:** esta primera versión reconoce discurso directo delimitado y etiquetas locales. No resuelve narración indirecta, estilo indirecto libre, voces sin nombre, alias no registrados, intervenciones sin delimitadores, identificación por contexto conversacional, destinatarios implícitos, ironía ni cambios de hablante deducidos por turnos. La lista de verbos de habla es léxica y ampliable; no sustituye un análisis sintáctico completo. Las citas anidadas y convenciones tipográficas no contempladas requieren revisión.
 
-**Pruebas añadidas:** atribución anterior y posterior a citas, etiqueta con varios personajes, abstención sin etiqueta, intervención con raya, offsets UTF-16 con emoji, límites y validación de entidades, y exclusión de verbos que aparecen dentro del contenido citado para impedir atribuciones falsas.
+**Pruebas añadidas:** atribución anterior y posterior a citas, etiqueta con varios personajes, abstención sin etiqueta, intervención con raya, offsets UTF-16 con emoji, límites y validación de entidades, exclusión de verbos dentro del contenido citado, separación entre hablante y destinatario, reconocimiento de verbos adicionales y exclusión de objetos/lugares como hablantes.
 
-**Validación CI:** pendiente de la ejecución disparada por los commits del módulo, pruebas y exportación. No marcar como aprobada hasta que TypeScript, compilación y conjunto automatizado finalicen correctamente.
+**Validación CI:** aprobada en GitHub Actions, ejecución `45787774176`: instalación de Chromium, type-check, compilación, conjunto automatizado y benchmark finalizaron correctamente.
 

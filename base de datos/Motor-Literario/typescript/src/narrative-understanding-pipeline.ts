@@ -167,8 +167,10 @@ export function understandNarrativeFragment(
     baseOffset
   };
   for (const assertion of input.priorAssertions ?? []) {
-    if (!assertion || assertion.projectId !== input.projectId) {
-      throw new Error("Las afirmaciones previas deben pertenecer al proyecto analizado.");
+    if (!assertion || assertion.projectId !== input.projectId ||
+        typeof assertion.entityId !== "string" ||
+        !input.entities.some(entity => entity.kind === "character" && entity.id === assertion.entityId)) {
+      throw new Error("Las afirmaciones previas deben pertenecer al proyecto y a personajes conocidos.");
     }
   }
   const assertions = extractNarrativeAssertions(

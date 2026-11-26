@@ -507,6 +507,16 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Documentación de esta garantía: `70de1aa`.
 - Run 2875 corresponde a la última tanda con validación reforzada y seguía en cola al actualizar este registro. No se declara validada hasta que complete todos los pasos.
 
+
+
+#### Regresión detectada y corrección del extractor — 26-11-2026
+
+- Runs 2871–2878 fallaron por una regresión en el patrón de objeto directo: al ampliar el reconocimiento del receptor, se restringió indebidamente el objeto a un patrón con «a». Los logs señalaron pérdida de extracción en «Ana perdió la Espada Solar» y «Ana entregó la Espada Solar a Bruno».
+- Corrección publicada en `da706b5`: restaura el patrón nominal con artículo para el objeto, manteniendo el reconocimiento del destinatario posterior al objeto. El candidato dirigido `transfers-to` conserva sujeto, objeto, receptor y evidencia separada; se excluye cuando la acción está negada o los roles son ambiguos.
+- Se detectó además que el fragmento de contexto de una observación podía abarcar toda la línea, pero sus offsets describían solo la oración. Corrección en `303cc32`: los offsets ahora corresponden al fragmento de línea conservado. Prueba multi-oración en `648df19`.
+- Documentación de rangos de contexto en `8758fd8`.
+- Runs 2880–2882 están en curso/cola para validar la restauración del objeto, las relaciones dirigidas, la validación de evidencia y el contexto de varias oraciones. No declarar la tanda final aprobada antes de CI completa.
+
 ### Trayectoria de objetos: primera capa funcional — 26-11-2026
 
 - Run 2859 (commit `7f514c7`) completó correctamente Type-check, build/pruebas automatizadas y benchmark. La corrección de la prueba BOM quedó validada.

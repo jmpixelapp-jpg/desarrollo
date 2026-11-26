@@ -16,6 +16,11 @@ import {
   type NarrativeKnowledgeEvolution
 } from "./narrative-knowledge-evolution";
 import type { NarrativeAttributedClaim } from "./narrative-claim-extraction";
+import {
+  reconstructNarrativeInformationChain,
+  type NarrativeInformationChainStep
+} from "./narrative-information-chain";
+import type { NarrativeInformationProvenance } from "./narrative-information-provenance";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
@@ -65,6 +70,8 @@ export interface NarrativeUnderstandingInput {
   readonly priorAssertions?: readonly NarrativeAssertion[];
   /** Afirmaciones atribuidas anteriores, conservadas con su procedencia original. */
   readonly priorClaims?: readonly NarrativeAttributedClaim[];
+  /** Procedencias previas del mismo proyecto para reconstruir transmisiones entre capítulos. */
+  readonly priorInformationProvenance?: readonly NarrativeInformationProvenance[];
 }
 
 export interface NarrativeUnderstandingResult {
@@ -78,6 +85,7 @@ export interface NarrativeUnderstandingResult {
   readonly dialogueAttributions: ReturnType<typeof extractNarrativeDialogueAttributions>;
   readonly informationProvenance: ReturnType<typeof extractNarrativeInformationProvenance>;
   readonly knowledgeEvolution: readonly NarrativeKnowledgeEvolution[];
+  readonly informationChain: readonly NarrativeInformationChainStep[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -131,7 +139,9 @@ function validate(input: NarrativeUnderstandingInput): void {
       (input.priorAssertions !== undefined &&
         (!Array.isArray(input.priorAssertions) || input.priorAssertions.length > 5000)) ||
       (input.priorClaims !== undefined &&
-        (!Array.isArray(input.priorClaims) || input.priorClaims.length > 5000))) {
+        (!Array.isArray(input.priorClaims) || input.priorClaims.length > 5000)) ||
+      (input.priorInformationProvenance !== undefined &&
+        (!Array.isArray(input.priorInformationProvenance) || input.priorInformationProvenance.length > 5000))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
   }
   const baseOffset = input.baseOffset ?? 0;
@@ -207,6 +217,11 @@ export function understandNarrativeFragment(
   const knowledgeEvolution = extractNarrativeKnowledgeEvolution({
     ...extractionContext, priorClaims: input.priorClaims
   });
+  const informationChain = reconstructNarrativeInformationChain({
+    projectId: input.projectId,
+    currentRecords: informationProvenance,
+    priorRecords: input.priorInformationProvenance
+  });
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,
@@ -269,7 +284,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

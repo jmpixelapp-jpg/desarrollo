@@ -5,6 +5,7 @@ import {
   createNarrativeSyncOperationEnvelope,
   createNarrativeSyncJournalConsumer,
   createRecoveryFirstNarrativeSyncConsumer,
+  replayPendingNarrativeSyncOperations,
   IndexedDbNarrativeSyncJournal
 } from "../dist/motor-literario.js";
 
@@ -365,6 +366,79 @@ test("la sincronización protegida repara un cursor solo tras aprobación y lueg
   assert.deepEqual(result.replay, { processed: 1, remaining: 0 });
   assert.equal(applied, 1);
   assert.equal(await journal.getLastSequence("cursor-approved-project", "remote-writer"), 1);
+  journal.close();
+});
+
+
+
+test("Web Locks evita replay concurrente en otra pestaña sin ejecutar handlers", async () => {
+  const journal = createJournal();
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "web-lock-busy-1", projectId: "web-lock-project",
+    writerId: "writer-lock", sequence: 1, kind: "note", payload: { value: "x" }
+  });
+  await journal.accept(envelope);
+  let applied = 0;
+  let requestedName = "";
+  const lockManager = {
+    request: async (name, _options, callback) => {
+      requestedName = name;
+      return callback(null);
+    }
+  };
+  const result = await replayPendingNarrativeSyncOperations(
+    journal, "web-lock-project", async () => { applied++; }, "writer-lock", lockManager
+  );
+  assert.equal(requestedName, "motor-literario:narrative-sync:web-lock-project");
+  assert.deepEqual(result, {
+    processed: 0, remaining: 1, failure: "consumer-already-running"
+  });
+  assert.equal(applied, 0);
+  journal.close();
+});
+
+test("fallo del coordinador Web Locks bloquea replay sin fallback inseguro", async () => {
+  const journal = createJournal();
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "web-lock-error-1", projectId: "web-lock-error-project",
+    writerId: "writer-lock", sequence: 1, kind: "note", payload: { value: "x" }
+  });
+  await journal.accept(envelope);
+  let applied = 0;
+  const result = await replayPendingNarrativeSyncOperations(
+    journal, "web-lock-error-project", async () => { applied++; }, "writer-lock",
+    { request: async () => { throw new Error("lock backend unavailable"); } }
+  );
+  assert.deepEqual(result, {
+    processed: 0, remaining: 1, failure: "consumer-lock-failed"
+  });
+  assert.equal(applied, 0);
+  journal.close();
+});
+
+test("Web Locks mantiene la exclusión durante el procesamiento y libera al terminar", async () => {
+  const journal = createJournal();
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "web-lock-success-1", projectId: "web-lock-success-project",
+    writerId: "writer-lock", sequence: 1, kind: "note", payload: { value: "x" }
+  });
+  await journal.accept(envelope);
+  let lockHeld = false;
+  const lockManager = {
+    request: async (_name, options, callback) => {
+      assert.deepEqual(options, { mode: "exclusive", ifAvailable: true });
+      lockHeld = true;
+      try { return await callback({ name: "test-lock" }); }
+      finally { lockHeld = false; }
+    }
+  };
+  const result = await replayPendingNarrativeSyncOperations(
+    journal, "web-lock-success-project",
+    async () => { assert.equal(lockHeld, true); },
+    "writer-lock", lockManager
+  );
+  assert.deepEqual(result, { processed: 1, remaining: 0 });
+  assert.equal(lockHeld, false);
   journal.close();
 });
 

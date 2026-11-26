@@ -115,7 +115,7 @@ test("detiene el análisis cuando las etiquetas exceden el presupuesto agregado 
     /presupuesto operativo de exploración/);
 });
 
-test("extrae una aposición descriptiva sin confirmar ni guardar automáticamente la etiqueta", () => {
+test("extrae una aposición descriptiva sin confirmar ni guardar automáticamente la etiqueta", async () => {
   const { discoverNarrativeDescriptiveLabelCandidates } = await import("../dist/motor-literario.js");
   const text = "Ana, la heredera del reino, abrió la puerta.";
   const [candidate] = discoverNarrativeDescriptiveLabelCandidates({

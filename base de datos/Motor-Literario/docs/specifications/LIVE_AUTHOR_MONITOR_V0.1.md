@@ -774,3 +774,6 @@ Se incorpora una página de referencia que conecta el flujo de escritura con el 
 La prueba Chromium automatizada escribe con teclado real, comprueba cambios admitidos/confirmados y durabilidad, guarda la sesión, recarga la página, verifica la restauración del texto y métricas y realiza una edición adicional.
 
 **Límite:** el ejemplo es un anfitrión real de referencia con textarea nativo. No acredita la conexión a un editor enriquecido no presente en el repositorio; para ello se necesita el adaptador transaccional del editor real.
+
+
+**Ejecución automática:** las modificaciones de la aplicación de referencia están incluidas en los filtros del workflow específico para `push` y `pull_request`; la prueba Chromium se ejecuta dentro de `tests/live-author-monitor*.test.mjs`.

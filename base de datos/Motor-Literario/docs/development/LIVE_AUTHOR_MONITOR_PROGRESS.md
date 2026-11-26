@@ -553,3 +553,6 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 **Workflow:** el workflow específico del monitor ahora también se ejecuta cuando cambia la aplicación de referencia.
 
 **Límite explícito:** esta página es una aplicación real de referencia sobre textarea, no la aplicación final de producción ni un editor enriquecido. Los editores con historial propio deben conectar sus callbacks nativos mediante el adaptador transaccional. La conexión de un editor anfitrión ausente no se declara completada.
+
+
+**CI de la aplicación de referencia:** el filtro del workflow específico contempla las rutas de `examples/live-author-monitor/**` tanto en `push` como en `pull_request`; el test de escritura se ejecuta junto con los demás archivos `live-author-monitor*.test.mjs`.

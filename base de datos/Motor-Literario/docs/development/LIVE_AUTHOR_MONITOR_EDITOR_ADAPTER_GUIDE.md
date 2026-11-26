@@ -155,3 +155,6 @@ El repositorio incorpora `typescript/examples/live-author-monitor/index.html`. L
 Para ejecutarla, consulta `typescript/examples/live-author-monitor/README.md`. El test `tests/live-author-monitor-writing-browser.test.mjs` escribe mediante Chromium, valida los contadores, cierra, recarga y confirma la recuperación del documento y sus métricas.
 
 Esta referencia proporciona una integración de navegador reproducible. No sustituye el callback transaccional específico de un editor enriquecido ausente del repositorio; ese anfitrión debe seguir las reglas de esta guía para preservar el historial real.
+
+
+**Nota de operación:** el workflow específico incluye la ruta `examples/live-author-monitor/**` en los filtros de push y pull request. Así cualquier modificación de la página de referencia vuelve a ejecutar la suite Chromium del monitor.

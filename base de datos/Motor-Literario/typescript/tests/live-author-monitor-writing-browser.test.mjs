@@ -70,7 +70,10 @@ test("el autor escribe, ve métricas, guarda y recupera el manuscrito y el check
       const textarea = page.locator("#manuscript");
       const initialText = await textarea.inputValue();
       const typed = " Texto escrito en vivo.";
-      await textarea.click();
+      await textarea.evaluate(element => {
+        element.focus();
+        element.setSelectionRange(element.value.length, element.value.length);
+      });
       await textarea.pressSequentially(typed);
       await page.evaluate(() => window.__liveAuthorMonitorDemo.flush());
 
@@ -104,6 +107,10 @@ test("el autor escribe, ve métricas, guarda y recupera el manuscrito y el check
       assert.equal(restored.metrics.insertedCharacters, typed.length);
 
       const secondEdit = " Segunda edición.";
+      await page.locator("#manuscript").evaluate(element => {
+        element.focus();
+        element.setSelectionRange(element.value.length, element.value.length);
+      });
       await page.locator("#manuscript").pressSequentially(secondEdit);
       await page.evaluate(() => window.__liveAuthorMonitorDemo.flush());
       const resumed = await page.evaluate(() => ({

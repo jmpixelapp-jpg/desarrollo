@@ -95,6 +95,14 @@ test("no resuelve pronombres ni nombres ambiguos entre dos fichas", () => {
   assert.deepEqual(result, []);
 });
 
+test("reconoce negaciones temporales nunca y jamás sin convertirlas en estados afirmados", () => {
+  const candidates = discover("Ana nunca estuvo viva. Bruno jamás estuvo libre.");
+  assert.deepEqual(candidates.map(item => [item.state, item.polarity, item.grammaticalTense]), [
+    ["alive", "negated", "past"],
+    ["free", "negated", "past"]
+  ]);
+});
+
 test("clasifica estados cognitivos, emocionales, sociales y físicos sin mezclarlos", () => {
   const text = "Ana está dormida. Bruno está furioso. Ana está encarcelada. Bruno está ciego.";
   const candidates = discover(text);

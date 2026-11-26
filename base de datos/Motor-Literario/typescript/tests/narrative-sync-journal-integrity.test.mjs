@@ -116,3 +116,27 @@ test("la auditoría detecta operaciones posteriores al cursor y última identida
   assert.ok(report.issues.some(issue => issue.code === "cursor-last-operation-mismatch"));
   assert.equal(report.intact, false);
 });
+
+
+test("la auditoría detecta operaciones sin cursor durable e identidad de cursor inválida", async () => {
+  const operation = await createNarrativeSyncOperationEnvelope({
+    operationId: "orphan-operation", projectId: "orphan-project",
+    writerId: "writer-orphan", sequence: 1, kind: "note", payload: { value: "orphan" }
+  });
+  const journal = {
+    loadOperations: async () => [{ ...operation, receivedAt: 10 }],
+    loadWriterCursors: async () => [{
+      projectId: "orphan-project",
+      writerId: "writer-malformed",
+      lastSequence: 0,
+      lastOperationId: "",
+      updatedAt: -1
+    }]
+  };
+  const report = await inspectNarrativeSyncJournalIntegrity(journal, "orphan-project");
+  const codes = report.issues.map(issue => issue.code);
+  assert.ok(codes.includes("cursor-missing-for-operations"));
+  assert.ok(codes.includes("invalid-cursor"));
+  assert.ok(codes.includes("cursor-without-operations"));
+  assert.equal(report.intact, false);
+});

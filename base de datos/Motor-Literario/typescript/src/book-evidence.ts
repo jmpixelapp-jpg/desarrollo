@@ -130,3 +130,25 @@ export function resolveNarrativeTextEvidence(
   }
   return resolveBookEvidence(book, chapter, evidence.start, evidence.end);
 }
+
+/**
+ * Resuelve todas las evidencias de una ficha narrativa contra el mismo snapshot.
+ * Mantiene el orden de entrada y falla de forma explícita si una sola evidencia
+ * no puede verificarse; evita devolver colecciones parcialmente fiables.
+ */
+export function resolveNarrativeEvidenceCollection(
+  book: IngestedBook,
+  evidences: readonly {
+    readonly documentId: string;
+    readonly revision: number;
+    readonly start: number;
+    readonly end: number;
+    readonly excerpt: string;
+    readonly status?: "stale";
+  }[]
+): readonly ResolvedBookEvidence[] {
+  if (!Array.isArray(evidences)) {
+    throw new TypeError("La colección de evidencias narrativas debe ser una lista.");
+  }
+  return evidences.map(evidence => resolveNarrativeTextEvidence(book, evidence));
+}

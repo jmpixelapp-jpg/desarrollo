@@ -2290,8 +2290,6 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["event-lifecycles", "by-subject-revision"],
       ["documents", "by-project"],
       ["changes", "by-document-sequence"],
-      ["sync-outbox", "by-project-created-at"],
-      ["sync-outbox", "by-project-device-sequence"],
       ["narrative-entities", "by-project"],
       ["narrative-relations", "by-project"],
       ["narrative-events", "by-project"],
@@ -2348,7 +2346,9 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["dictionary-entries", "by-dictionary-normalized"],
       ["dictionary-entry-entities", "by-project"],
       ["dictionary-entry-entities", "by-entry"],
-      ["dictionary-entry-entities", "by-record"]
+      ["dictionary-entry-entities", "by-record"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"]
     ]);
     assert.equal(createdIndexes.find(index => index.name === "by-document-sequence")?.unique, true);
   } finally {

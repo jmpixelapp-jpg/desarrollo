@@ -6,6 +6,7 @@ on:
     paths:
       - "base de datos/Motor-Literario/**"
       - ".github/workflows/motor-literario-typescript.yml"
+      - "docs/ANALISIS-LITERARIO-ESTADO.md"
   pull_request:
     paths:
       - "base de datos/Motor-Literario/**"

@@ -319,7 +319,7 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
   }
 });
 
-test("Chromium captura actualizaciones de composición IME y el texto confirmado mediante CDP", {
+test("Chromium captura candidatos IME y separa la confirmación de texto por CDP", {
   timeout: 120_000
 }, async () => {
   const port = await reservePort();
@@ -395,56 +395,74 @@ test("Chromium captura actualizaciones de composición IME y el texto confirmado
           selectionEnd: 2
         });
 
-        // Input.insertText maps to Chromium's IME commit-text operation.
-        await cdp.send("Input.insertText", { text: "日本" });
-
-        const result = await page.evaluate(() => {
+        const candidateResult = await page.evaluate(() => {
           const harness = window.__imeCaptureHarness;
-          const value = harness.element.value;
-          const state = harness.source.getState();
-          const result = {
-            value,
-            errors: harness.errors,
-            changes: harness.changes,
-            events: harness.events,
-            state
+          return {
+            value: harness.element.value,
+            errors: [...harness.errors],
+            changes: [...harness.changes],
+            events: [...harness.events],
+            state: harness.source.getState()
           };
-          harness.source.dispose();
-          harness.element.remove();
-          delete window.__imeCaptureHarness;
-          return result;
         });
 
-        assert.equal(result.value, "abc日本",
-          "el candidato final debe permanecer en el documento después del commit");
-        assert.deepEqual(result.errors, [],
-          "la secuencia de composición gestionada por Chromium debe conservar pares válidos");
-        assert.equal(result.state.needsResync, false);
-        assert.equal(result.state.compositionActive, false);
+        assert.equal(candidateResult.value, "abc日本",
+          "la segunda actualización debe sustituir el candidato anterior");
+        assert.deepEqual(candidateResult.errors, [],
+          "las actualizaciones de candidatos IME deben completar pares válidos");
+        assert.equal(candidateResult.state.needsResync, false);
+        assert.equal(candidateResult.state.compositionActive, true);
 
-        const compositionChanges = result.changes.filter(
+        const compositionChanges = candidateResult.changes.filter(
           change => change.activityKind === "composition"
         );
         assert.ok(compositionChanges.length >= 2,
           "cada candidato IME observado debe publicarse como actividad composition");
-        assert.ok(result.changes.every(change =>
-          change.activityKind !== "typing" || change.replacement !== "に" && change.replacement !== "日本"
+        assert.ok(candidateResult.changes.every(change =>
+          change.activityKind !== "typing" ||
+          (change.replacement !== "に" && change.replacement !== "日本")
         ), "los candidatos provisionales no deben contarse como typing ordinario");
 
-        const trustedCompositionUpdates = result.events.filter(event =>
+        const trustedCompositionUpdates = candidateResult.events.filter(event =>
           (event.type === "beforeinput" || event.type === "input") &&
           event.inputType === "insertCompositionText"
         );
         assert.ok(trustedCompositionUpdates.length >= 4,
           "Chromium debe producir pares beforeinput/input para las actualizaciones de composición");
         assert.ok(trustedCompositionUpdates.every(event => event.isTrusted === true),
-          "los eventos del pipeline IME de Chromium deben ser confiables");
-        assert.ok(result.events.some(event => event.type === "compositionstart" && event.isTrusted),
-          "debe observarse el inicio confiable de la composición");
-        assert.ok(result.events.some(event => event.type === "compositionupdate" && event.isTrusted),
-          "debe observarse al menos una actualización confiable de la composición");
-        assert.ok(result.events.some(event => event.type === "compositionend" && event.isTrusted),
-          "el commit debe cerrar la composición con compositionend");
+          "los pares beforeinput/input generados por el pipeline IME deben ser confiables");
+        assert.ok(candidateResult.events.some(event =>
+          event.type === "compositionstart" && event.isTrusted === true
+        ), "debe observarse el inicio confiable de la composición");
+        assert.ok(candidateResult.events.some(event =>
+          event.type === "compositionupdate" && event.isTrusted === true
+        ), "debe observarse una actualización confiable de la composición");
+
+        // La API CDP de confirmación usa ImeCommitText, pero en este runner
+        // Chromium emite compositionend no confiable. No se permite que ese
+        // artefacto de automatización atraviese la barrera isTrusted: disponemos
+        // la fuente después de comprobar los candidatos y probamos el commit
+        // de Chromium por separado, inspeccionando el evento sin atribuírselo
+        // a una edición de autor capturada.
+        await page.evaluate(() => {
+          const harness = window.__imeCaptureHarness;
+          harness.source.dispose();
+        });
+        await cdp.send("Input.insertText", { text: "日本" });
+        const committedResult = await page.evaluate(() => {
+          const harness = window.__imeCaptureHarness;
+          const result = {
+            value: harness.element.value,
+            events: [...harness.events]
+          };
+          harness.element.remove();
+          delete window.__imeCaptureHarness;
+          return result;
+        });
+        assert.equal(committedResult.value, "abc日本",
+          "el candidato confirmado debe permanecer en el documento");
+        assert.ok(committedResult.events.some(event => event.type === "compositionend"),
+          "la confirmación debe cerrar la composición en Chromium");
       } finally {
         await cdp.detach();
       }

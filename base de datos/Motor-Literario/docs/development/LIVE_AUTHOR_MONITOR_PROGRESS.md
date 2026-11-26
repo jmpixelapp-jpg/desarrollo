@@ -1447,4 +1447,7 @@ La lane global continúa en `failure` por los controles compartidos de IndexedDB
 
 **Regresión nueva:** un listener genera 999 publicaciones adicionales mientras se procesa la secuencia 1. El segundo listener y el primero deben recibir exactamente las secuencias 1..1000, en FIFO, sin saltos ni duplicaciones. El test también comprueba que cada llamada reentrante selecciona los dos listeners y que el proveedor nativo termina en la secuencia 1000.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación en [Live Author Monitor — run 45759874190](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759874190), checkout `d92f09267bb1835a05a9259b197e2fef0f95cd87`:** pipeline completo `success`. Type-check estricto y bundle aislado aprobados; auditoría MLDB 0.4.2 válida (27 tablas); bundle runtime aprobado; 17/17 diagnósticos; **162/162 pruebas aisladas**; Chromium Page Lifecycle 1/1; **168/168 pruebas host/editor/browser**; benchmark 100.000 commits aprobado. La prueba de estrés nueva pasó dos veces en el pipeline (test 50 de la suite aislada y test 51 de la suite de integración): ambos listeners recibieron las secuencias 1..1000 en FIFO.
+
+El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a mitad y al 100 % de la carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes. La prueba Chromium de Page Lifecycle y las pruebas de dos pestañas/IndexedDB con fencing de lease también pasaron.
+

@@ -15,7 +15,7 @@ Los handlers conectan las envolturas verificadas del diario con el almacenamient
 | `event-upsert` | `{ event: NarrativeEvent }` | `loadEvents` / `saveEventIfUnchanged` |
 | `entity-merge` | `{ targetEntityId, sourceEntityId, writerId? }` | `mergeNarrativeEntityIdentity` (transacción atómica del store) |
 
-Las fábricas públicas son `createNarrativeIdeaUpsertHandler`, `createNarrativeEntityUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler`, `createNarrativeEventUpsertHandler` y `createNarrativeEntityMergeHandler`, en `typescript/src/narrative-sync-domain-handlers.ts`.
+Las fábricas públicas incluyen `createNarrativeEntityUpsertHandler`, `createNarrativeEntityMergeHandler`, `createNarrativeIdeaUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler` y `createNarrativeEventUpsertHandler`. `createNarrativeSyncDomainHandlers(store)` las registra juntas y valida al inicializar que el almacén ofrezca los métodos CAS y la fusión atómica requeridos.
 
 ## Validación del dominio
 
@@ -25,6 +25,14 @@ Las entidades comprueban coherencia de nombre canónico normalizado, alias únic
 
 Las relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
 
+
+## Persistencia saliente desde el editor y el grafo
+
+Con `ProjectIdentity.deviceId` estable, el anfitrión identifica la instalación y el motor emite operaciones salientes. Las ediciones de texto se guardan con el delta del journal y la operación `document.change` en una sola transacción IndexedDB. Las mutaciones locales de entidades, ideas, afirmaciones, relaciones y acontecimientos usan los métodos CAS del `ProjectStore` con un `SyncOperationDraft`; el registro, la operación y el cursor por dispositivo se confirman juntos.
+
+La consolidación local de entidades usa `entity-merge` y añade su operación saliente a la misma transacción que redirige relaciones, participantes, afirmaciones, vínculos de ideas y la biblioteca personal. Si falla la inserción en outbox, se revierte también la consolidación. Las operaciones entrantes llaman al CAS sin `SyncOperationDraft`, por lo que no se reenvían y no crean bucles de eco.
+
+El adaptador debe anunciar `supportsAtomicNarrativeSyncOutbox === true`. Un adaptador sin esa garantía debe rechazar las mutaciones sincronizables cuando se configura `deviceId`; no basta con guardar primero y enviar después.
 ## Conflictos
 
 Cada handler carga el registro actual del proyecto y ejecuta el método CAS con la versión observada como `expectedCurrent`. Si el registro cambia entre lectura y escritura, el store debe rechazar el CAS. El error detiene el replay y la operación permanece pendiente.
@@ -43,9 +51,8 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 
 ## Alcance no implementado
 
-- No existe todavía handler de `entity-upsert`.
 - No hay resolución automática de conflictos ni fusión de ediciones de texto.
-- No hay transporte remoto ni autorización por proyecto.
+- No hay cliente HTTP predeterminado ni autorización remota por proyecto; el anfitrión proporciona y autentica el transporte.
 - El diario no autentica `writerId`; la identidad debe proceder de una sesión validada por el anfitrión/servidor.
 - SHA-256 verifica integridad, no identidad del emisor.
 - No hay exactamente-una-vez ni atomicidad distribuida entre diario y proyecciones.

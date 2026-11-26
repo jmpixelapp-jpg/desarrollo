@@ -122,3 +122,10 @@ test("conserva límites entre documentos del spine aunque no tengan h1", async (
   assert.equal(result.chapters[1].text, "Segunda parte.");
 });
 
+
+test("aplica límites de tamaño y número de entradas del contenedor", async () => {
+  const bytes = sampleEpub();
+  await assert.rejects(new EpubBookReader({ maxArchiveBytes: 32 }).inspect(bytes), /tamaño del archivo/);
+  await assert.rejects(new EpubBookReader({ maxEntries: 2 }).inspect(bytes), /directorio central inválido o excesivo/);
+});
+

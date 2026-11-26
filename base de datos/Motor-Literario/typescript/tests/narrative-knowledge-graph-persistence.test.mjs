@@ -556,6 +556,34 @@ test("aplica reparación aprobada de relación mediante CAS y devuelve auditorí
     "un reintento no debe duplicar la auditoría");
 });
 
+test("reanuda una intención durable cuando el CAS todavía no había ocurrido", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-pending-before-cas", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:pending", {
+    projectId: "novel-pending-before-cas", id: "relation:pending",
+    fromEntityId: "entity:legacy", toEntityId: "entity:other",
+    relationType: "knows", evidence: []
+  });
+  const pending = {
+    operationId: "reference-repair|novel-pending-before-cas|relation|relation:pending|fromEntityId|entity:legacy|entity:canonical",
+    projectId: "novel-pending-before-cas", issueCode: "missing-relation-entity",
+    recordType: "relation", recordId: "relation:pending", referenceField: "fromEntityId",
+    missingReferenceId: "entity:legacy", replacementEntityId: "entity:canonical", appliedAt: 41
+  };
+  await store.saveNarrativeReferenceRepairPending(pending);
+  const recovery = await recoverNarrativeReferenceRepairs(store, "novel-pending-before-cas");
+  assert.equal(recovery.recovered, 1);
+  assert.equal(recovery.pending.length, 0);
+  assert.equal(tables.relations.get("relation:pending").fromEntityId, "entity:canonical");
+  assert.equal(tables.audits.size, 1);
+  assert.equal(tables.pendingRepairs.size, 0);
+});
+
 test("recupera una reparación confirmada cuyo guardado de auditoría falló", async () => {
   const { store, tables } = createMemoryStore();
   tables.entities.set("entity:canonical", {

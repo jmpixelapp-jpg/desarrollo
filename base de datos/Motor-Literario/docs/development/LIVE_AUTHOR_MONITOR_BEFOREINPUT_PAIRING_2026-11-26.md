@@ -192,3 +192,28 @@ En el mismo commit `28afb9067c17a3b8e5d4d720cc0c819569f2dbdc`, el workflow **Liv
 - Benchmark del monitor: 8 documentos; 1.048.576 unidades UTF-16 iniciales por documento; 12.500 cambios por documento; 100.000 commits; 496,77 ms; 201.298,76 commits/s; 0,5 MB retenidos por las sesiones abiertas; 0 MB de crecimiento adicional del heap de media a carga completa; RSS 71,73 MB.
 
 **Límite de interpretación del benchmark:** mide el núcleo `LiveAuthorMonitor` y sus sesiones/contadores; no es una medición aislada del costo de comparación de texto del adaptador `textarea`. Las cifras son específicas de ese runner Node v22.23.5 y no deben generalizarse como latencia garantizada por pulsación.
+
+
+## Separación de actividad IME y escritura ordinaria
+
+El adaptador clasifica ahora `insertCompositionText` como `composition`, nunca como `typing`. La categoría representa una actualización de composición observada por el navegador (por ejemplo, la sustitución de una forma candidata por otra en un IME); no representa una pulsación de tecla ni confirma por sí sola que el texto sea definitivo.
+
+La nueva métrica `compositionChanges` se propaga por:
+- `EditorChangeActivityKind` y los deltas del adaptador;
+- la sesión y los snapshots inmutables de `LiveAuthorMonitor`;
+- checkpoints v1 y restauración tras reinicio;
+- el panel local, con la métrica visible **Composición IME**.
+
+La propiedad del checkpoint es opcional para mantener compatibilidad con checkpoints v1 anteriores. Cuando no existe, la recuperación la inicializa en cero; no se puede reclasificar retroactivamente la actividad histórica que las versiones anteriores ya contabilizaron como escritura u otras categorías. El validador sí rechaza un contador nuevo negativo, fraccionario o no entero.
+
+Se añadieron regresiones que verifican dos actualizaciones provisionales japonesas consecutivas, su categoría distinta de escritura ordinaria, la conservación del contador después de checkpoint/restauración y el rechazo de un checkpoint manipulado. El panel también incluye la categoría independiente.
+
+### Límite semántico que permanece explícito
+
+Cada actualización IME aceptada sigue siendo un delta real del documento y avanza revisión/secuencia como cualquier otra edición. Si el candidato cambia de `に` a `日本`, el stream contiene dos operaciones de composición, aunque el texto final conserve solo `日本`. Por eso:
+- `compositionChanges` cuenta actualizaciones observadas, no composiciones finales ni caracteres únicos;
+- `insertedCharacters` y `deletedCharacters` siguen siendo volúmenes brutos acumulados de los payloads/rangos de cada delta;
+- los ritmos derivados de esos volúmenes también son brutos y pueden elevarse durante una composición con sustituciones provisionales.
+
+El panel ahora lo indica de forma visible y etiqueta los contadores como brutos en UTF-16. No se afirma que estos contadores midan caracteres finales únicos ni una tasa humana exacta. Para medir texto de composición consolidado sin sobreconteo haría falta una señal de ciclo de composición autoritativa del editor que delimite inicio, actualizaciones, cancelación y commit final; el evento DOM aislado no ofrece una garantía uniforme suficiente para inventar esa conclusión.
+

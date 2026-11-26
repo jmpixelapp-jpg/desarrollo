@@ -13,6 +13,7 @@ import {
   proposeNarrativeReferenceRepairs,
   applyNarrativeReferenceRepair,
   recoverNarrativeReferenceRepairs,
+  loadNarrativeProjectAfterRepairRecovery,
   verifyNarrativeReferenceRepairAuditIntegrity,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
@@ -679,4 +680,55 @@ test("rechaza aplicar propuesta si la procedencia de fusión ya no la respalda",
     missingReferenceId: "entity:legacy", referenceField: "entityId", candidateEntityId: "entity:canonical",
     resolution: "explicit-merge-match"
   }, true, 13), /correspondencia de fusión cambió/);
+});
+
+
+test("la carga del proyecto ejecuta recuperación durable antes de hidratarlo", async () => {
+  const events = [];
+  const store = {
+    loadNarrativeReferenceRepairPending: async projectId => {
+      events.push("recover:" + projectId);
+      return [];
+    },
+    appendNarrativeReferenceRepairAudit: async () => {},
+    deleteNarrativeReferenceRepairPending: async () => {}
+  };
+
+  const result = await loadNarrativeProjectAfterRepairRecovery(
+    store,
+    "project-startup",
+    async () => {
+      events.push("hydrate");
+      return { id: "project-startup", ready: true };
+    }
+  );
+
+  assert.deepEqual(events, ["recover:project-startup", "hydrate"]);
+  assert.deepEqual(result.project, { id: "project-startup", ready: true });
+  assert.deepEqual(result.recovery, {
+    projectId: "project-startup",
+    checked: 0,
+    recovered: 0,
+    pending: []
+  });
+});
+
+test("la carga del proyecto no hidrata si no se puede inspeccionar la cola durable", async () => {
+  let hydrated = false;
+  const store = {
+    loadNarrativeReferenceRepairPending: async () => {
+      throw new Error("IndexedDB no disponible");
+    },
+    appendNarrativeReferenceRepairAudit: async () => {},
+    deleteNarrativeReferenceRepairPending: async () => {}
+  };
+
+  await assert.rejects(
+    loadNarrativeProjectAfterRepairRecovery(store, "project-startup-failure", async () => {
+      hydrated = true;
+      return {};
+    }),
+    /IndexedDB no disponible/
+  );
+  assert.equal(hydrated, false);
 });

@@ -231,7 +231,7 @@ test("la evolución de atributos localiza escenas mediante búsqueda binaria", (
 
 test("la evolución de atributos procesa solo escenas con evidencia y mantiene su orden", () => {
   const start = literaryAnalysisSource.indexOf("const sceneByIndex = new Map(scenes.map(");
-  const end = literaryAnalysisSource.indexOf("\\n    const transitions:", start + 10);
+  const end = literaryAnalysisSource.indexOf("\n    const transitions:", start + 10);
   assert.notEqual(start, -1, "debe indexarse el catálogo de escenas por ID");
   assert.ok(end > start, "la materialización de snapshots debe delimitarse");
   const builder = literaryAnalysisSource.slice(start, end);

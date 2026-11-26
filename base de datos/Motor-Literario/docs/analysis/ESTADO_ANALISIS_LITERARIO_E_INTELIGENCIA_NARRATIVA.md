@@ -494,3 +494,13 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - No se debilitó la extracción. Se corrigió la prueba en `ae52a39` para exigir ambos datos: Bruno como sujeto gramatical activo candidato y Ana como complemento personal explícito con marcador «a».
 - Así se comprueba la separación que interesa al motor: el rol gramatical de sujeto y el complemento personal no se confunden ni se intercambian.
 - La validación completa de esta revisión y de la ingesta con BOM UTF-8 sigue pendiente de los runs 2844–2847.
+
+
+### Evidencia de objeto gramatical y correcciones de adquisición — 26-11-2026
+
+- Se añadió `grammaticalObjectCandidate` en `6099af6`: para una entidad `kind: "object"`, propone objeto gramatical solo si el nombre conocido aparece inmediatamente después del verbo con patrón nominal explícito (p. ej. «Ana perdió la Espada Solar»). Conserva evidencia y offsets; no afirma posesión ni pérdida/transferencia efectiva.
+- Pruebas positivas y negativas añadidas en `9abaa67`: objeto conocido tras el verbo y ausencia de marcador nominal.
+- La corrección del complemento personal se publicó en `124067c`: patrón de espacios y preposición «a» ya no tiene escapes duplicados. La prueba negativa adicional se añadió en `f9dd049`.
+- Se hizo explícita la preservación del BOM en `8510519` mediante `TextDecoder(..., { ignoreBOM: true })`. La prueba inicial confundía el inicio del contexto probatorio del párrafo con el offset exacto del verbo (el campo `evidence` conserva el párrafo, no solo el verbo). Corregido en `7f514c7`: calcula el offset del verbo dentro del fragmento de evidencia y lo compara con la fuente original.
+- Documentación funcional del objeto gramatical en `3d84432`.
+- Runs 2856–2858 detectaron únicamente el test de offset del BOM; los runs previos de complemento personal y objeto gramatical también estaban atravesados por ese fallo de prueba. La revisión `7f514c7` queda pendiente de CI completa (run 2859 y posteriores); no se declara validada todavía.

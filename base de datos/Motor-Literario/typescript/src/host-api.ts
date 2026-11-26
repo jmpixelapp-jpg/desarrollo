@@ -5,7 +5,7 @@ import {
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
-  StoredLiveAuthorMonitorLease, Diagnostic
+  StoredLiveAuthorMonitorLease, Diagnostic, SyncOperationDraft
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener, type LiveAuthorMonitorPersistenceDiagnostics } from "./live-author-monitor";
@@ -3640,11 +3640,21 @@ export class HostEngineApi {
     expectedCurrent?: NarrativeIdea
   ): Promise<void> {
     try {
+      const syncOperation = this.createNarrativeSyncDraft("idea-upsert", "idea", updated);
       if (store.saveIdeaIfUnchanged) {
-        await store.saveIdeaIfUnchanged(updated, expectedCurrent);
+        if (syncOperation && !this.store.saveIdeaIfUnchanged) {
+          throw new Error("El almacén no ofrece CAS atómico para sincronizar ideas.");
+        }
+        await store.saveIdeaIfUnchanged(updated, expectedCurrent, syncOperation);
       } else if (expectedCurrent && store.updateIdeaIfUnchanged) {
+        if (syncOperation) {
+          throw new Error("El almacén no ofrece CAS atómico con outbox para actualizar ideas.");
+        }
         await store.updateIdeaIfUnchanged(updated, expectedCurrent);
       } else {
+        if (syncOperation) {
+          throw new Error("El almacén no ofrece persistencia CAS/outbox para sincronizar ideas.");
+        }
         await this.persistNarrativeRecord(
           updated, expectedCurrent,
           record => store.saveIdea(record)
@@ -3664,20 +3674,61 @@ export class HostEngineApi {
    * conservan el comportamiento de escritura que ofrecían originalmente;
    * no se anuncia concurrencia atómica cuando no implementan este contrato.
    */
+  private createNarrativeSyncDraft<T extends { readonly projectId: string }>(
+    kind: string,
+    payloadKey: string,
+    record: T
+  ): SyncOperationDraft | undefined {
+    const project = this.project;
+    if (!project?.deviceId) return undefined;
+    if (record.projectId !== project.projectId) {
+      throw new Error("El registro narrativo pertenece a otro proyecto y no puede sincronizarse.");
+    }
+    const operationId = globalThis.crypto?.randomUUID?.();
+    if (!operationId) {
+      throw new Error("No hay un generador criptográfico UUID disponible para identificar la operación narrativa.");
+    }
+    const createdAt = Date.now();
+    return {
+      operationId,
+      projectId: project.projectId,
+      deviceId: project.deviceId,
+      kind,
+      payload: JSON.stringify({ [payloadKey]: record }),
+      createdAt
+    };
+  }
+
   private async persistNarrativeRecord<T extends { readonly projectId: string; readonly id: string }>(
     updated: T,
     expectedCurrent: T | undefined,
     save: (record: T) => Promise<void>,
-    saveIfUnchanged?: (record: T, expected?: T) => Promise<void>
+    saveIfUnchanged?: (
+      record: T,
+      expected?: T,
+      syncOperation?: SyncOperationDraft
+    ) => Promise<void>,
+    syncKind?: string,
+    syncPayloadKey?: string
   ): Promise<void> {
     if (expectedCurrent && (
       expectedCurrent.projectId !== updated.projectId || expectedCurrent.id !== updated.id
     )) {
       throw new Error("La actualización debe conservar la identidad del registro narrativo.");
     }
+    const project = this.requireProject();
+    const syncOperation = syncKind && syncPayloadKey
+      ? this.createNarrativeSyncDraft(syncKind, syncPayloadKey, updated)
+      : undefined;
+    if (project.deviceId && syncKind && !saveIfUnchanged) {
+      throw new Error("El almacén no implementa CAS con outbox; no se guardará un cambio narrativo no sincronizable.");
+    }
     if (saveIfUnchanged) {
-      await saveIfUnchanged(updated, expectedCurrent);
+      await saveIfUnchanged(updated, expectedCurrent, syncOperation);
       return;
+    }
+    if (syncOperation) {
+      throw new Error("El almacén no ofrece persistencia atómica para este tipo de cambio narrativo.");
     }
     await save(updated);
   }
@@ -3695,8 +3746,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveEntity!(record),
         store.saveEntityIfUnchanged
-          ? (record, expected) => store.saveEntityIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveEntityIfUnchanged!(record, expected, operation)
+          : undefined,
+        "entity-upsert",
+        "entity"
       );
     } catch (error) {
       this.invalidateNarrativeKnowledgeCaches();
@@ -3717,8 +3770,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveRelation!(record),
         store.saveRelationIfUnchanged
-          ? (record, expected) => store.saveRelationIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveRelationIfUnchanged!(record, expected, operation)
+          : undefined,
+        "relation-upsert",
+        "relation"
       );
     } catch (error) {
       this.narrativeRelations.clear();
@@ -3741,8 +3796,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveEvent!(record),
         store.saveEventIfUnchanged
-          ? (record, expected) => store.saveEventIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveEventIfUnchanged!(record, expected, operation)
+          : undefined,
+        "event-upsert",
+        "event"
       );
     } catch (error) {
       this.narrativeEvents.clear();
@@ -3766,8 +3823,10 @@ export class HostEngineApi {
         updated, expectedCurrent,
         record => store.saveAssertion!(record),
         store.saveAssertionIfUnchanged
-          ? (record, expected) => store.saveAssertionIfUnchanged!(record, expected)
-          : undefined
+          ? (record, expected, operation) => store.saveAssertionIfUnchanged!(record, expected, operation)
+          : undefined,
+        "assertion-upsert",
+        "assertion"
       );
     } catch (error) {
       this.narrativeAssertions.clear();

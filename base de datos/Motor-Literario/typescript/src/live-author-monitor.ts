@@ -48,7 +48,7 @@ export interface LiveAuthorMonitorSnapshot {
   /** Raw UTF-16 units across applied provisional/committed IME composition deltas. */
   readonly compositionInsertedCharacters: number;
   readonly compositionDeletedCharacters: number;
-  /** False when a legacy checkpoint lacked unit-provenance counters. */
+  /** False after legacy restore, snapshot resync, or any accepted delta without explicit activity provenance. */
   readonly activityUnitMetricsComplete: boolean;
   readonly netCharacterDelta: number;
   readonly currentDocumentLength: number;

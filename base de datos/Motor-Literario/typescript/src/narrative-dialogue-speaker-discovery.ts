@@ -180,7 +180,8 @@ export function discoverNarrativeDialogueSpeakers(
   return spans.map((span, index) => {
     const attributionStart = span.attributionStart ?? Math.max(0, span.start - distance);
     const attributionEnd = span.attributionEnd ?? Math.min(input.text.length, span.end + distance);
-    const attributionChars = input.text.slice(attributionStart, attributionEnd).split("");
+    const rawAttributionText = input.text.slice(attributionStart, attributionEnd);
+    const attributionChars = rawAttributionText.split("");
     const maskedStart = Math.max(attributionStart, span.contentStart);
     const maskedEnd = Math.min(attributionEnd, span.contentEnd);
     for (let offset = maskedStart; offset < maskedEnd; offset++) {
@@ -209,7 +210,7 @@ export function discoverNarrativeDialogueSpeakers(
     });
     const unique = [...new Map(candidates.map(candidate => [candidate.entityId, candidate])).values()];
     const attributionEvidence = verbMatches.length > 0
-      ? evidence(input.documentId, input.revision, base, attributionStart, attributionEnd, attributionText)
+      ? evidence(input.documentId, input.revision, base, attributionStart, attributionEnd, rawAttributionText)
       : undefined;
     return {
       id: "dialogue-speaker:" + input.documentId + ":" + input.revision + ":" + (base + span.start) + ":" + index,

@@ -223,6 +223,8 @@ export function discoverNarrativeIdeaCandidates(
         evidence: { start, end, excerpt }
       });
     }
+    // El límite también controla memoria y tiempo en documentos con señales repetidas.
+    if (candidates.size >= MAX_NARRATIVE_IDEA_DISCOVERY_CANDIDATES) break;
   }
 
   return [...candidates.values()]

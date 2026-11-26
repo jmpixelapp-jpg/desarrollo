@@ -1,6 +1,6 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 15,
+  "mapping_version": 16,
   "schema_version": "0.4.2",
   "storage_model": "journal-first-key-value",
   "runtime": {

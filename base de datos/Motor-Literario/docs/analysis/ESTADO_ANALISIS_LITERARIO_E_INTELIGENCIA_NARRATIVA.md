@@ -711,5 +711,7 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Pruebas añadidas:** marcador causal con el estado antes y después de la acción, rechazo de mera proximidad sin conector, aislamiento de personajes sin rol explícito en la acción y asociación mediante objeto personal explícito, offsets UTF-16 con prefijo y emoji, evidencia que no coincide con el texto y candidatos duplicados.
 
+**Validación de la nueva capa:** en la ejecución CI `45784878036`, la comprobación de tipos pasó y las pruebas específicas de esta capa (incluidos los dos órdenes de mención, el rol personal explícito, los offsets con prefijo Unicode y los rechazos negativos) terminaron correctamente. La ejecución global no quedó verde: cinco pruebas ajenas a este módulo fallaron en integración del monitor/editor y persistencia IndexedDB. Por tanto, se registra el éxito de las pruebas propias sin presentar el conjunto completo del repositorio como aprobado.
+
 **Límite semántico:** el módulo identifica una asociación textual con marcador causal, no demuestra causalidad real ni decide si el narrador informa un hecho, expresa una hipótesis o reproduce la creencia de un personaje. Tampoco asigna agente, paciente o beneficiario por mera mención. La revisión humana y la atribución de enunciador siguen siendo necesarias.
 

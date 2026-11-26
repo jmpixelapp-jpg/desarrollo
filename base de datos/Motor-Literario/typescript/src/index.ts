@@ -72,3 +72,4 @@ export * from "./narrative-memory-events";
 export * from "./narrative-memory-timeline";
 export * from "./narrative-memory-action-links";
 export * from "./narrative-knowledge-action-links";
+export * from "./narrative-decision-context";

@@ -9,70 +9,233 @@
     :root { color: #172033; background: #f4f6f8; font: 15px/1.5 system-ui, sans-serif; }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 28px; }
-    main { width: min(1180px, 100%); margin: 0 auto; }
+    main { width: min(1280px, 100%); margin: 0 auto; }
     h1 { margin: 0 0 6px; font-size: clamp(23px, 4vw, 32px); }
     .intro { margin: 0 0 22px; color: #566276; }
-    .layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(310px, .9fr); gap: 18px; align-items: start; }
-    .editor-card { padding: 18px; background: white; border: 1px solid #dce3eb; border-radius: 14px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .95fr); gap: 18px; align-items: start; }
+    .editor-card { min-width: 0; padding: 18px; background: white; border: 1px solid #dce3eb; border-radius: 14px; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+    .tabs button { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; color: #334155; background: #f8fafc; font: inherit; font-weight: 650; cursor: pointer; }
+    .tabs button[aria-pressed="true"] { border-color: #1d4ed8; color: #1d4ed8; background: #eff6ff; }
     label { display: block; margin-bottom: 9px; font-weight: 700; }
     textarea { display: block; width: 100%; min-height: 460px; resize: vertical; padding: 16px; border: 1px solid #cbd5e1; border-radius: 9px; color: #172033; background: #fff; font: 16px/1.7 Georgia, serif; }
     textarea:focus { outline: 3px solid #c8daf6; border-color: #4779c7; }
     .status { margin: 12px 0 0; min-height: 24px; color: #475569; font-size: 13px; }
     .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 15px; }
-    button { border: 0; border-radius: 8px; padding: 10px 14px; background: #1d4ed8; color: white; font: inherit; font-weight: 650; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: wait; }
+    .actions button { border: 0; border-radius: 8px; padding: 10px 14px; background: #1d4ed8; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+    .actions button:disabled { opacity: .55; cursor: wait; }
     .privacy { color: #64748b; font-size: 12px; }
-    #monitor-panel { min-width: 0; }
+    .monitor-stack { display: grid; gap: 14px; min-width: 0; }
+    #monitor-workspace, #monitor-panel { min-width: 0; }
     .notice { margin-top: 18px; color: #64748b; font-size: 12px; }
-    @media (max-width: 820px) { body { padding: 16px; } .layout { grid-template-columns: 1fr; } textarea { min-height: 320px; } }
+    @media (max-width: 900px) { body { padding: 16px; } .layout { grid-template-columns: 1fr; } textarea { min-height: 320px; } }
   </style>
 </head>
 <body>
   <main>
     <h1>Monitoreo del autor en tiempo real</h1>
-    <p class="intro">Editor de referencia conectado al motor TypeScript, con métricas de escritura, confirmación y persistencia local.</p>
+    <p class="intro">Dos capítulos abiertos simultáneamente, métricas independientes y recuperación local de cada sesión de escritura.</p>
     <div class="layout">
       <section class="editor-card" aria-labelledby="editor-heading">
-        <label id="editor-heading" for="manuscript">Manuscrito</label>
+        <nav id="chapter-tabs" class="tabs" aria-label="Capítulos abiertos">
+          <button type="button" data-document="chapter-1" aria-pressed="true">Capítulo 1</button>
+          <button type="button" data-document="chapter-2" aria-pressed="false">Capítulo 2</button>
+        </nav>
+        <label id="editor-heading" for="manuscript">Manuscrito — <span id="active-chapter-label">Capítulo 1</span></label>
         <textarea id="manuscript" spellcheck="true" aria-describedby="privacy-note">La historia comienza con una decisión pequeña. El personaje observa el camino, recuerda lo que perdió y decide avanzar.</textarea>
-        <p id="connection-status" class="status" role="status" aria-live="polite">Inicializando el motor y recuperando la sesión...</p>
+        <p id="connection-status" class="status" role="status" aria-live="polite">Inicializando el motor y recuperando las sesiones...</p>
         <div class="actions">
-          <button id="save-session" type="button" disabled>Guardar sesión y cerrar monitoreo</button>
-          <span id="privacy-note" class="privacy">El texto permanece en el almacenamiento local del navegador; el panel no muestra el manuscrito.</span>
+          <button id="save-session" type="button" disabled>Guardar todas las sesiones y cerrar monitoreo</button>
+          <span id="privacy-note" class="privacy">El texto permanece en IndexedDB local; los paneles muestran únicamente métricas.</span>
         </div>
       </section>
-      <aside id="monitor-panel" aria-label="Métricas de escritura"></aside>
+      <aside class="monitor-stack" aria-label="Monitoreo de escritura">
+        <div id="monitor-workspace" aria-label="Resumen de capítulos abiertos"></div>
+        <div id="monitor-panel" aria-label="Métricas del capítulo activo"></div>
+      </aside>
     </div>
-    <p class="notice">Aplicación de referencia del módulo. Usa un textarea nativo; la integración con editores enriquecidos debe publicar las transacciones e historial reales del editor anfitrión.</p>
+    <p class="notice">Aplicación de referencia con textarea nativo. Los editores enriquecidos deben conectar sus transacciones e historial reales mediante el adaptador transaccional.</p>
   </main>
 
   <script type="module">
     import {
       HostEngineApi,
       IndexedDbProjectStore,
-      mountLiveAuthorMonitorPanel,
+      mountLiveAuthorMonitorEditorIntegration,
       mountLiveAuthorMonitorTextArea
     } from "/src/index.ts";
 
-    const PROJECT_ID = new URLSearchParams(location.search).get("project") || "live-author-monitor-reference";
-    const DOCUMENT_ID = new URLSearchParams(location.search).get("document") || "manuscript";
-    const INITIAL_TEXT = document.querySelector("#manuscript").value;
+    const query = new URLSearchParams(location.search);
+    const PROJECT_ID = query.get("project") || "live-author-monitor-reference";
+    const DOCUMENT_ID = query.get("document") || "manuscript";
+    const DOCUMENTS = [
+      {
+        id: DOCUMENT_ID,
+        label: "Capítulo 1",
+        initialText: document.querySelector("#manuscript").value
+      },
+      {
+        id: DOCUMENT_ID + "-chapter-2",
+        label: "Capítulo 2",
+        initialText: "En el segundo capítulo, una carta inesperada cambia el rumbo de la investigación."
+      }
+    ];
+
     const textarea = document.querySelector("#manuscript");
     const status = document.querySelector("#connection-status");
     const saveButton = document.querySelector("#save-session");
+    const activeChapterLabel = document.querySelector("#active-chapter-label");
     const store = new IndexedDbProjectStore();
     const hostApi = new HostEngineApi({ store });
-    let disposeEditor;
-    let disposePanel;
+    const selectionListeners = new Set();
+    let activeDocumentId;
     let editorIntegration;
-    let refreshPanel = () => undefined;
+    let monitorUnmount;
+    let navigationTail = Promise.resolve();
     let closing = false;
     let closeStage = "idle";
     let closeError;
 
+    function labelFor(documentId) {
+      return DOCUMENTS.find(item => item.id === documentId)?.label ?? documentId;
+    }
+
     function reportStatus(message, isError = false) {
       status.textContent = message;
       status.style.color = isError ? "#b42318" : "#475569";
+    }
+
+    function reportError(error) {
+      reportStatus(error instanceof Error ? error.message : String(error), true);
+    }
+
+    function updateTabs() {
+      for (const button of document.querySelectorAll("#chapter-tabs [data-document]")) {
+        const selected = button.getAttribute("data-document") === activeDocumentId;
+        button.setAttribute("aria-pressed", String(selected));
+      }
+      activeChapterLabel.textContent = labelFor(activeDocumentId);
+    }
+
+    async function flushActiveEditor() {
+      await hostApi.flushPendingChanges();
+      editorIntegration?.retryPending();
+      await hostApi.flushPendingChanges();
+      if (editorIntegration && editorIntegration.getPendingChanges().length > 0) {
+        throw new Error("No se puede cambiar de capítulo: quedan cambios sin admitir en la cola.");
+      }
+    }
+
+    function mountActiveEditor(documentId) {
+      const snapshot = hostApi.getSnapshot(documentId);
+      if (!snapshot) throw new Error("No se encontró el snapshot de " + labelFor(documentId) + ".");
+      textarea.value = snapshot.text;
+
+      const nextIntegration = mountLiveAuthorMonitorTextArea({
+        element: textarea,
+        documentId,
+        hostApi,
+        maxPendingChanges: 256,
+        onBackpressure: state => {
+          if (state.status === "resync-required") {
+            reportStatus("La captura necesita reconciliar " + labelFor(documentId) + ".", true);
+          } else if (state.status === "backpressured") {
+            reportStatus("El motor está procesando cambios pendientes...");
+          } else if (!closing) {
+            reportStatus("Monitoreo activo en " + labelFor(documentId) + ".");
+          }
+        },
+        onError: reportError
+      });
+      const previousIntegration = editorIntegration;
+      editorIntegration = nextIntegration;
+      try { previousIntegration?.dispose(); } catch (error) {
+        editorIntegration = previousIntegration;
+        nextIntegration.dispose();
+        throw error;
+      }
+    }
+
+    async function activateDocumentNow(documentId) {
+      if (closing) throw new Error("La sesión se está cerrando.");
+      if (!DOCUMENTS.some(item => item.id === documentId)) {
+        throw new Error("El documento solicitado no pertenece a este proyecto de referencia.");
+      }
+      if (documentId === activeDocumentId) return;
+      await flushActiveEditor();
+      mountActiveEditor(documentId);
+      activeDocumentId = documentId;
+      updateTabs();
+      for (const listener of selectionListeners) {
+        try { listener(documentId); } catch { /* La navegación no depende del panel. */ }
+      }
+      reportStatus("Monitoreo activo en " + labelFor(documentId) + ".");
+    }
+
+    function requestDocumentSwitch(documentId) {
+      const task = navigationTail.then(() => activateDocumentNow(documentId));
+      navigationTail = task.catch(error => {
+        reportError(error);
+      });
+      return task;
+    }
+
+    const editorSelection = {
+      getActiveDocumentId: () => activeDocumentId,
+      subscribeActiveDocument(listener) {
+        if (typeof listener !== "function") throw new TypeError("Se requiere un listener de selección.");
+        selectionListeners.add(listener);
+        return () => selectionListeners.delete(listener);
+      },
+      activateDocument(documentId) {
+        void requestDocumentSwitch(documentId).catch(() => undefined);
+      }
+    };
+
+    async function openOrRecoverDocument(item) {
+      const stored = await store.loadDocumentWithChanges(PROJECT_ID, item.id);
+      if (stored.document) {
+        await hostApi.recoverDocument(item.id);
+      } else {
+        await hostApi.openDocument({
+          documentId: item.id,
+          text: item.initialText,
+          revision: 0,
+          sequence: 0
+        });
+      }
+      hostApi.ensureLiveAuthorMonitorDocument(item.id);
+    }
+
+    async function closeSafely(harness) {
+      if (closing || harness.closed) return;
+      closing = true;
+      saveButton.disabled = true;
+      try {
+        closeStage = "navigation";
+        await navigationTail;
+        closeStage = "flush";
+        await flushActiveEditor();
+        closeStage = "dispose-editor";
+        editorIntegration?.dispose();
+        editorIntegration = undefined;
+        monitorUnmount?.();
+        monitorUnmount = undefined;
+        closeStage = "dispose-host-safely";
+        await hostApi.disposeSafely();
+        closeStage = "close-store";
+        await store.close();
+        closeStage = "closed";
+        harness.closed = true;
+        reportStatus("Todas las sesiones están guardadas. Puedes recargar para comprobar su restauración.");
+      } catch (error) {
+        closeError = error;
+        closeStage = "error";
+        closing = false;
+        saveButton.disabled = false;
+        reportError(error);
+        throw error;
+      }
     }
 
     async function start() {
@@ -82,96 +245,46 @@
         writerId: "reference-writer"
       });
 
-      const stored = await store.loadDocumentWithChanges(PROJECT_ID, DOCUMENT_ID);
-      if (stored.document) {
-        await hostApi.recoverDocument(DOCUMENT_ID);
-      } else {
-        await hostApi.openDocument({
-          documentId: DOCUMENT_ID,
-          text: INITIAL_TEXT,
-          revision: 0,
-          sequence: 0
-        });
-      }
+      for (const item of DOCUMENTS) await openOrRecoverDocument(item);
+      activeDocumentId = DOCUMENTS[0].id;
+      mountActiveEditor(activeDocumentId);
+      updateTabs();
 
-      const snapshot = hostApi.getSnapshot(DOCUMENT_ID);
-      if (!snapshot) throw new Error("El motor no devolvió el manuscrito inicial.");
-      textarea.value = snapshot.text;
-
-      editorIntegration = mountLiveAuthorMonitorTextArea({
-        element: textarea,
-        documentId: DOCUMENT_ID,
+      monitorUnmount = mountLiveAuthorMonitorEditorIntegration({
         hostApi,
-        maxPendingChanges: 256,
-        onBackpressure: state => {
-          if (state.status === "resync-required") {
-            reportStatus("La captura se pausó para reconciliar el documento antes de continuar.", true);
-          } else if (state.status === "backpressured") {
-            reportStatus("El motor está procesando cambios pendientes...");
-          } else if (!closing) {
-            reportStatus("Monitoreo activo. Los cambios se sincronizan en segundo plano.");
-          }
-        },
-        onError: error => reportStatus(error instanceof Error ? error.message : String(error), true)
+        editor: editorSelection,
+        workspaceContainer: document.querySelector("#monitor-workspace"),
+        activeDocumentContainer: document.querySelector("#monitor-panel"),
+        workspaceTitle: "Todos los capítulos",
+        activeDocumentTitle: "Actividad del capítulo activo",
+        intervalMs: 100,
+        getDocumentLabel: labelFor
       });
 
-      disposeEditor = () => editorIntegration.dispose();
-      disposePanel = mountLiveAuthorMonitorPanel(
-        document.querySelector("#monitor-panel"),
-        hostApi,
-        {
-          documentId: DOCUMENT_ID,
-          intervalMs: 100,
-          title: "Actividad del autor",
-          schedule(callback, intervalMs) {
-            refreshPanel = callback;
-            const timer = window.setInterval(callback, intervalMs);
-            return () => window.clearInterval(timer);
-          }
-        }
-      );
+      for (const button of document.querySelectorAll("#chapter-tabs [data-document]")) {
+        button.addEventListener("click", () => {
+          void requestDocumentSwitch(button.getAttribute("data-document")).catch(() => undefined);
+        });
+      }
 
       const harness = {
         ready: true,
         closed: false,
         projectId: PROJECT_ID,
-        documentId: DOCUMENT_ID,
-        getSnapshot: () => hostApi.getSnapshot(DOCUMENT_ID),
-        getMetrics: () => hostApi.getLiveAuthorMonitorSnapshot(DOCUMENT_ID),
-        getPendingChanges: () => editorIntegration.getPendingChanges(),
+        documentIds: DOCUMENTS.map(item => item.id),
+        getActiveDocumentId: () => activeDocumentId,
+        getSnapshot: (documentId = activeDocumentId) => hostApi.getSnapshot(documentId),
+        getMetrics: (documentId = activeDocumentId) => hostApi.getLiveAuthorMonitorSnapshot(documentId),
+        getPendingChanges: () => editorIntegration?.getPendingChanges() ?? [],
         getCloseState: () => ({ stage: closeStage, error: closeError ? String(closeError) : undefined }),
-        refreshPanel: () => refreshPanel(),
-        flush: () => hostApi.flushPendingChanges(),
+        getWorkspaceDocumentCount: () => document.querySelectorAll("#monitor-workspace [data-document-id]").length,
+        switchDocument: requestDocumentSwitch,
+        async flush() {
+          await navigationTail;
+          await flushActiveEditor();
+        },
         async closeSafely() {
-          if (closing || harness.closed) return;
-          closing = true;
-          saveButton.disabled = true;
-          try {
-            closeStage = "flush";
-            await hostApi.flushPendingChanges();
-            editorIntegration.retryPending();
-            await hostApi.flushPendingChanges();
-            if (editorIntegration.getPendingChanges().length > 0) {
-              throw new Error("No se puede cerrar: quedan deltas sin admitir en el editor.");
-            }
-            closeStage = "dispose-editor";
-            disposeEditor();
-            disposePanel();
-            closeStage = "dispose-host-safely";
-            await hostApi.disposeSafely();
-            closeStage = "close-store";
-            await store.close();
-            closeStage = "closed";
-            harness.closed = true;
-            reportStatus("Sesión guardada de forma segura. Puedes recargar para comprobar su restauración.");
-          } catch (error) {
-            closeError = error;
-            closeStage = "error";
-            closing = false;
-            saveButton.disabled = false;
-            reportStatus(error instanceof Error ? error.message : String(error), true);
-            throw error;
-          }
+          await closeSafely(harness);
         }
       };
       window.__liveAuthorMonitorDemo = harness;
@@ -179,11 +292,11 @@
       saveButton.addEventListener("click", () => {
         void harness.closeSafely().catch(() => undefined);
       });
-      reportStatus("Monitoreo activo. Los cambios se sincronizan en segundo plano.");
+      reportStatus("Dos capítulos abiertos. El monitoreo independiente está activo.");
     }
 
     start().catch(error => {
-      reportStatus(error instanceof Error ? error.message : String(error), true);
+      reportError(error);
       window.__liveAuthorMonitorDemo = { ready: false, error: String(error) };
     });
   </script>

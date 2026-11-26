@@ -802,3 +802,14 @@ Resultados del benchmark del runner de CI:
 - Cuatro documentos y 40 ediciones concurrentes: extremo a extremo p95 1,21 ms.
 
 Los datos son medidas del runner de CI, no un SLA ni una garantía de rendimiento de todos los equipos. Para la validación directa del módulo de navegador, conservar como referencia la ejecución específica 139/139 de [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285).
+
+
+## 43. Workspace multi-documento en la aplicación de referencia
+
+La aplicación de referencia mantiene dos documentos abiertos bajo el mismo proyecto y enlaza el contrato `LiveAuthorMonitorEditorSelection` con `mountLiveAuthorMonitorEditorIntegration()`. El anfitrión es dueño de la selección; el helper mantiene el panel activo y el workspace global sin duplicar el flujo de edición.
+
+Antes de alternar el textarea activo, la aplicación espera la cola durable y los reintentos FIFO, verifica que no queden deltas externos sin admitir y desmonta el source anterior. Las sesiones de monitoreo de documentos inactivos continúan abiertas. El workspace refleja ambos documentos; el panel detallado cambia de capítulo.
+
+La recuperación vuelve a cargar ambos snapshots y sus checkpoints desde IndexedDB. El test Chromium escribe en ambos, valida contadores separados, cambia entre ellos, cierra, recarga y reanuda la escritura después de la restauración.
+
+**Límite:** el ejemplo usa textarea nativo para hacer verificable el recorrido multi-documento en navegador; los editores enriquecidos externos deben publicar sus transacciones y eventos de historial reales.

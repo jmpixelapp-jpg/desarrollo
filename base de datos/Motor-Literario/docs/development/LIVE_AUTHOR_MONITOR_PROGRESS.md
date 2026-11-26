@@ -575,3 +575,17 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 - Cuatro documentos con diez ediciones cada uno: 40 ediciones concurrentes; p95 extremo a extremo 1,21 ms.
 
 Los valores son mediciones del runner de CI y no una garantía universal de latencia en todos los navegadores o equipos. La CI específica sigue siendo la validación directa del adaptador y navegador: 139/139 aprobadas en [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285).
+
+## 27. Integración multi-documento en la aplicación de referencia (25 de noviembre de 2026)
+
+**Cambio funcional:** la aplicación de referencia deja de limitarse a un único manuscrito. Mantiene dos documentos abiertos dentro del mismo proyecto, permite cambiar el textarea activo sin cerrar la sesión del documento anterior, vacía y confirma la cola antes de cambiar de capítulo y muestra un tablero global con tarjetas independientes junto al panel detallado del capítulo activo.
+
+**Integración de componentes existentes:** se conecta `mountLiveAuthorMonitorEditorIntegration()` al contrato de selección de documentos del anfitrión. El tablero puede activar un capítulo y las pestañas del editor actualizan el panel activo; el motor no abre ni cierra documentos como efecto secundario de la navegación.
+
+**Persistencia y recuperación:** al iniciar se recuperan los dos documentos desde IndexedDB o se crean si todavía no existen. El cierre usa `HostEngineApi.disposeSafely()` para confirmar y guardar las sesiones bajo lease antes de liberar recursos. La recarga debe restaurar texto y métricas de cada capítulo de manera independiente.
+
+**Prueba Chromium ampliada:** el test end-to-end escribe en ambos capítulos, cambia de uno a otro, confirma métricas separadas, verifica que el primer texto permanece intacto, cierra, recarga, comprueba ambos checkpoints y vuelve a escribir tras la recuperación.
+
+**Validación:** pendiente de la ejecución del workflow `Live Author Monitor` generada por esta entrega. No se anticipa el resultado.
+
+**Límite:** es una integración multi-documento real de referencia con textarea. El callback de un editor enriquecido de producción externo sigue dependiendo de su anfitrión, ausente del repositorio.

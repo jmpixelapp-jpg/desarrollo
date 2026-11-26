@@ -168,3 +168,12 @@ El chequeo de tipos de la suite general también pasó. Esa suite completa todav
 
 
 **Rendimiento general verificado:** el benchmark del workflow general [45734599092](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734599092) ejecutó 40 ediciones sobre manuscritos de 10k, 100k y 500k palabras, además de línea única y cuatro documentos concurrentes. En el caso de 500k palabras midió commit p95 de 3,54 ms y extremo a extremo p95 de 4,04 ms en el runner CI. Son referencias de esa máquina, no garantías universales.
+
+
+## 12. Integración multi-documento del workspace
+
+La aplicación de referencia ahora conecta `mountLiveAuthorMonitorEditorIntegration()` con una selección de documento implementada por el anfitrión. El contrato es simple: `getActiveDocumentId()`, `subscribeActiveDocument(listener)` y `activateDocument(documentId)`.
+
+El anfitrión mantiene la responsabilidad sobre apertura, recuperación y cambio del editor. Antes de cambiar el textarea activo, confirma los deltas pendientes y desmonta solo el adaptador anterior; las sesiones de métricas de los otros capítulos permanecen vivas. La integración de paneles muestra el resumen global y cambia el panel detallado con el documento seleccionado.
+
+La prueba de navegador de referencia valida dos documentos persistidos en IndexedDB, métricas separadas y recuperación en ambos. El patrón puede reutilizarse con un editor enriquecido, siempre que su anfitrión conecte el callback real de transacciones para cada documento.

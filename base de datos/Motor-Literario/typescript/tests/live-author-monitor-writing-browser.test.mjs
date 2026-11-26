@@ -29,12 +29,12 @@ async function waitForVite(url, child) {
   let lastError;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
-      throw new Error(`Vite terminó antes de estar listo (código ${child.exitCode}).`);
+      throw new Error(\`Vite terminó antes de estar listo (código \${child.exitCode}).\`);
     }
     try {
       const response = await fetch(url);
       if (response.ok) return;
-      lastError = new Error(`Vite respondió HTTP ${response.status}.`);
+      lastError = new Error(\`Vite respondió HTTP \${response.status}.\`);
     } catch (error) {
       lastError = error;
     }
@@ -43,13 +43,37 @@ async function waitForVite(url, child) {
   throw new Error("Vite no respondió dentro del límite de arranque.", { cause: lastError });
 }
 
-test("el autor escribe, ve métricas, guarda y recupera el manuscrito y el checkpoint en Chromium", {
+async function typeAtEnd(page, value) {
+  await page.locator("#manuscript").evaluate(element => {
+    element.focus();
+    element.setSelectionRange(element.value.length, element.value.length);
+  });
+  await page.locator("#manuscript").pressSequentially(value);
+}
+
+async function closeAndAssert(page) {
+  await page.getByRole("button", { name: "Guardar todas las sesiones y cerrar monitoreo" }).click();
+  await page.waitForFunction(() => {
+    const demo = window.__liveAuthorMonitorDemo;
+    const closeState = demo?.getCloseState?.();
+    return demo?.closed === true || closeState?.stage === "error";
+  });
+  const result = await page.evaluate(() => ({
+    closed: window.__liveAuthorMonitorDemo.closed,
+    state: window.__liveAuthorMonitorDemo.getCloseState(),
+    pending: window.__liveAuthorMonitorDemo.getPendingChanges()
+  }));
+  assert.equal(result.closed, true, "el cierre durable debe finalizar: " + JSON.stringify(result));
+}
+
+test("dos capítulos conservan métricas independientes al cambiar, guardar y recuperar en Chromium", {
   timeout: 120_000
 }, async () => {
   const port = await reservePort();
-  const projectId = "live-author-browser-" + randomUUID();
-  const documentId = "manuscript-" + randomUUID();
-  const url = `http://127.0.0.1:${port}/examples/live-author-monitor/index.html?project=${encodeURIComponent(projectId)}&document=${encodeURIComponent(documentId)}`;
+  const projectId = "live-author-multidoc-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const secondDocumentId = documentId + "-chapter-2";
+  const url = \`http://127.0.0.1:\${port}/examples/live-author-monitor/index.html?project=\${encodeURIComponent(projectId)}&document=\${encodeURIComponent(documentId)}\`;
   const viteCli = resolve(process.cwd(), "node_modules/vite/bin/vite.js");
   const server = spawn(
     process.execPath,
@@ -67,74 +91,82 @@ test("el autor escribe, ve métricas, guarda y recupera el manuscrito y el check
     try {
       await page.goto(url);
       await page.waitForFunction(() => window.__liveAuthorMonitorDemo?.ready === true);
-      const textarea = page.locator("#manuscript");
-      const initialText = await textarea.inputValue();
-      const typed = " Texto escrito en vivo.";
-      await textarea.evaluate(element => {
-        element.focus();
-        element.setSelectionRange(element.value.length, element.value.length);
-      });
-      await textarea.pressSequentially(typed);
+      assert.equal(await page.evaluate(() => window.__liveAuthorMonitorDemo.documentIds.length), 2);
+      await page.waitForFunction(() => window.__liveAuthorMonitorDemo.getWorkspaceDocumentCount() === 2);
+
+      const chapterOneInitial = await page.locator("#manuscript").inputValue();
+      const chapterOneEdit = " Edición exclusiva del primer capítulo.";
+      await typeAtEnd(page, chapterOneEdit);
       await page.evaluate(() => window.__liveAuthorMonitorDemo.flush());
 
-      const firstState = await page.evaluate(() => ({
-        snapshot: window.__liveAuthorMonitorDemo.getSnapshot(),
-        metrics: window.__liveAuthorMonitorDemo.getMetrics()
-      }));
-      assert.equal(firstState.snapshot.text, initialText + typed);
-      assert.equal(firstState.metrics.acceptedChanges, typed.length);
-      assert.equal(firstState.metrics.committedChanges, typed.length);
-      assert.equal(firstState.metrics.durableSequence, typed.length);
-      assert.equal(firstState.metrics.insertedCharacters, typed.length);
-      await page.evaluate(() => window.__liveAuthorMonitorDemo.refreshPanel());
-      const visibleInserted = await page.locator('[data-metric="inserted"]').textContent();
-      assert.equal(
-        Number((visibleInserted ?? "").replace(/\D/gu, "")),
-        typed.length,
-        "el panel visual debe mostrar los caracteres insertados confirmados"
-      );
-
-      await page.getByRole("button", { name: "Guardar sesión y cerrar monitoreo" }).click();
-      await page.waitForFunction(() => {
+      let chapterOne = await page.evaluate(() => {
         const demo = window.__liveAuthorMonitorDemo;
-        const closeState = demo?.getCloseState?.();
-        return demo?.closed === true || closeState?.stage === "error";
+        return { snapshot: demo.getSnapshot(), metrics: demo.getMetrics() };
       });
-      const closeResult = await page.evaluate(() => ({
-        closed: window.__liveAuthorMonitorDemo.closed,
-        closeState: window.__liveAuthorMonitorDemo.getCloseState(),
-        pending: window.__liveAuthorMonitorDemo.getPendingChanges()
-      }));
-      assert.equal(closeResult.closed, true, "el cierre seguro debe completar: " + JSON.stringify(closeResult));
+      assert.equal(chapterOne.snapshot.text, chapterOneInitial + chapterOneEdit);
+      assert.equal(chapterOne.metrics.acceptedChanges, chapterOneEdit.length);
+      assert.equal(chapterOne.metrics.committedChanges, chapterOneEdit.length);
+      assert.equal(chapterOne.metrics.durableSequence, chapterOneEdit.length);
 
+      await page.evaluate(id => window.__liveAuthorMonitorDemo.switchDocument(id), secondDocumentId);
+      assert.equal(await page.evaluate(() => window.__liveAuthorMonitorDemo.getActiveDocumentId()), secondDocumentId);
+      const chapterTwoInitial = await page.locator("#manuscript").inputValue();
+      const chapterTwoEdit = " Texto independiente del segundo capítulo.";
+      await typeAtEnd(page, chapterTwoEdit);
+      await page.evaluate(() => window.__liveAuthorMonitorDemo.flush());
+
+      const chapterTwo = await page.evaluate(() => {
+        const demo = window.__liveAuthorMonitorDemo;
+        return { snapshot: demo.getSnapshot(), metrics: demo.getMetrics() };
+      });
+      assert.equal(chapterTwo.snapshot.text, chapterTwoInitial + chapterTwoEdit);
+      assert.equal(chapterTwo.metrics.acceptedChanges, chapterTwoEdit.length);
+      assert.equal(chapterTwo.metrics.committedChanges, chapterTwoEdit.length);
+      assert.equal(chapterTwo.metrics.durableSequence, chapterTwoEdit.length);
+
+      await page.evaluate(id => window.__liveAuthorMonitorDemo.switchDocument(id), documentId);
+      const chapterOneAfterSwitch = await page.evaluate(() => {
+        const demo = window.__liveAuthorMonitorDemo;
+        return { text: demo.getSnapshot().text, metrics: demo.getMetrics() };
+      });
+      assert.equal(chapterOneAfterSwitch.text, chapterOneInitial + chapterOneEdit);
+      assert.equal(chapterOneAfterSwitch.metrics.insertedCharacters, chapterOneEdit.length);
+      assert.equal(await page.evaluate(() => window.__liveAuthorMonitorDemo.getWorkspaceDocumentCount()), 2);
+
+      await closeAndAssert(page);
       await page.reload();
       await page.waitForFunction(() => window.__liveAuthorMonitorDemo?.ready === true);
-      const restored = await page.evaluate(() => ({
-        text: window.__liveAuthorMonitorDemo.getSnapshot()?.text,
-        metrics: window.__liveAuthorMonitorDemo.getMetrics()
-      }));
-      assert.equal(restored.text, initialText + typed);
-      assert.equal(restored.metrics.acceptedChanges, typed.length);
-      assert.equal(restored.metrics.committedChanges, typed.length);
-      assert.equal(restored.metrics.durableSequence, typed.length);
-      assert.equal(restored.metrics.insertedCharacters, typed.length);
+      await page.waitForFunction(() => window.__liveAuthorMonitorDemo.getWorkspaceDocumentCount() === 2);
 
-      const secondEdit = " Segunda edición.";
-      await page.locator("#manuscript").evaluate(element => {
-        element.focus();
-        element.setSelectionRange(element.value.length, element.value.length);
-      });
-      await page.locator("#manuscript").pressSequentially(secondEdit);
+      const restoredChapterOne = await page.evaluate(id => {
+        const demo = window.__liveAuthorMonitorDemo;
+        return { snapshot: demo.getSnapshot(id), metrics: demo.getMetrics(id) };
+      }, documentId);
+      const restoredChapterTwo = await page.evaluate(id => {
+        const demo = window.__liveAuthorMonitorDemo;
+        return { snapshot: demo.getSnapshot(id), metrics: demo.getMetrics(id) };
+      }, secondDocumentId);
+      assert.equal(restoredChapterOne.snapshot.text, chapterOneInitial + chapterOneEdit);
+      assert.equal(restoredChapterOne.metrics.acceptedChanges, chapterOneEdit.length);
+      assert.equal(restoredChapterOne.metrics.committedChanges, chapterOneEdit.length);
+      assert.equal(restoredChapterOne.metrics.durableSequence, chapterOneEdit.length);
+      assert.equal(restoredChapterTwo.snapshot.text, chapterTwoInitial + chapterTwoEdit);
+      assert.equal(restoredChapterTwo.metrics.acceptedChanges, chapterTwoEdit.length);
+      assert.equal(restoredChapterTwo.metrics.committedChanges, chapterTwoEdit.length);
+      assert.equal(restoredChapterTwo.metrics.durableSequence, chapterTwoEdit.length);
+
+      await page.evaluate(id => window.__liveAuthorMonitorDemo.switchDocument(id), secondDocumentId);
+      const postRecoveryEdit = " Continuación tras recuperar el segundo capítulo.";
+      await typeAtEnd(page, postRecoveryEdit);
       await page.evaluate(() => window.__liveAuthorMonitorDemo.flush());
-      const resumed = await page.evaluate(() => ({
+      const continued = await page.evaluate(() => ({
         snapshot: window.__liveAuthorMonitorDemo.getSnapshot(),
         metrics: window.__liveAuthorMonitorDemo.getMetrics()
       }));
-      assert.equal(resumed.snapshot.text, initialText + typed + secondEdit);
-      assert.equal(resumed.metrics.durableSequence, typed.length + secondEdit.length);
+      assert.equal(continued.snapshot.text, chapterTwoInitial + chapterTwoEdit + postRecoveryEdit);
+      assert.equal(continued.metrics.durableSequence, chapterTwoEdit.length + postRecoveryEdit.length);
 
-      await page.getByRole("button", { name: "Guardar sesión y cerrar monitoreo" }).click();
-      await page.waitForFunction(() => window.__liveAuthorMonitorDemo?.closed === true);
+      await closeAndAssert(page);
     } finally {
       await context.close();
     }

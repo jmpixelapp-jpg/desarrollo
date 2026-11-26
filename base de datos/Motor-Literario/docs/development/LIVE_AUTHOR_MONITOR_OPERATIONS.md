@@ -435,3 +435,8 @@ Esta distinción permite conservar la trazabilidad sin reintentar una edición q
 ## 25. Una sola notificación de admisión tras pausar un rechazo permanente
 
 Durante `retryPending()`, `queue_full` informa el rechazo una sola vez y conserva la cola para otro intento cuando haya capacidad. Un motivo permanente primero pausa y desuscribe la fuente, y solo después emite `onAdmission` una vez. Esto es necesario porque el callback de la aplicación puede provocar emisiones síncronas; nunca debe ejecutarse una vez antes y otra después de entrar en `resync-required`.
+
+
+## 26. Criterio del fixture de reentrancia tras recuperación
+
+La prueba de reentrancia debe modelar la recuperación completa: la primera secuencia queda en `queue_full`, el reintento de esa cabeza devuelve `unknown_document`, la fuente se pausa antes del callback y el callback no consigue introducir la secuencia siguiente. Tras validar el snapshot, el sink del fixture vuelve a admitir secuencias nuevas; no debe simular un rechazo permanente para siempre. La notificación `unknown_document` se verifica como exactamente una.

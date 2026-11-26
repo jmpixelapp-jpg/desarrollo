@@ -1185,3 +1185,12 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresión:** el test `un onAdmission reentrante no puede adelantar cambios al rechazo permanente durante retryPending` falla con la implementación duplicada y valida el orden de notificación después de esta corrección.
 
 **CI:** la ejecución [Live Author Monitor — run 45751943626](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751943626) falló 1/185 pruebas (184 aprobadas); la ejecución general [Motor Literario TypeScript — run 45751943629](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751943629) falló la misma regresión (815/816). Build aislado, type-check y demás pruebas finalizaron correctamente. El nuevo commit queda pendiente de CI.
+
+
+## 70. Fixture de recuperación reentrante: admisión válida después del snapshot (26 de noviembre de 2026)
+
+**Ajuste de prueba tras CI:** la regresión de reentrancia dejaba al sink configurado para devolver `unknown_document` a cualquier secuencia después de liberar capacidad. Por eso el cambio nuevo posterior al snapshot también se rechazaba y el test intentaba detenerse con backlog pendiente. El fixture ahora rechaza terminalmente solo la cabeza `sequence=1`, devuelve `queued` para la nueva `sequence=4` después de reconciliar y comprueba que `unknown_document` se notifica exactamente una vez.
+
+**Evidencia:** [Motor Literario TypeScript — run 45752135449](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752135449) pasó type-check y ejecutó 819/820 pruebas; la única fallida fue este fixture con un sink de prueba que rechazaba también la edición posterior. La lane específica [Live Author Monitor — run 45752135425](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752135425) ya había completado las regresiones aisladas; el conjunto de monitor seguía avanzando en Chromium al último chequeo.
+
+**Validación:** pendiente de una nueva ejecución con el fixture corregido.

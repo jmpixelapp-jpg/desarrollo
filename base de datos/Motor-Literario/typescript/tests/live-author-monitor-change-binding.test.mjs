@@ -834,7 +834,8 @@ test("un onAdmission reentrante no puede adelantar cambios al rechazo permanente
       onEditorChange(value) {
         attempts.push(value.sequence);
         if (!capacity) return { status: "rejected", reason: "queue_full" };
-        return { status: "rejected", reason: "unknown_document" };
+        if (value.sequence === 1) return { status: "rejected", reason: "unknown_document" };
+        return { status: "queued", ticketId: "ticket-" + value.sequence };
       }
     },
     onAdmission(_value, admission) {
@@ -854,6 +855,8 @@ test("un onAdmission reentrante no puede adelantar cambios al rechazo permanente
   assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1, 2]);
   assert.equal(f.listeners.size, 0, "la fuente ya está pausada cuando se ejecuta onAdmission");
   assert.equal(admissions.at(-1).reason, "unknown_document");
+  assert.equal(admissions.filter(value => value.reason === "unknown_document").length, 1,
+    "el rechazo permanente se notifica exactamente una vez");
 
   stop.discardPendingAfterResynchronization();
   f.emit(change(4));

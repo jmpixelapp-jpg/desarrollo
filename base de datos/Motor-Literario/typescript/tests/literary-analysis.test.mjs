@@ -1669,7 +1669,7 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
         omittedStatusHistoryCount: 3
       }]
     }),
-    /historial de decisiones del catálogo global/
+    /catálogo global de ideas/
   );
 });
 

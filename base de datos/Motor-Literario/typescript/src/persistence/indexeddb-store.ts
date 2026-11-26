@@ -1456,43 +1456,72 @@ function validateLiveAuthorMonitorCheckpoint(
   projectId?: string,
   documentId?: string
 ): void {
-  const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
-  const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
   if (!checkpoint || checkpoint.version !== 1 ||
       typeof checkpoint.projectId !== "string" || !checkpoint.projectId.trim() ||
       (projectId !== undefined && checkpoint.projectId !== projectId) ||
       typeof checkpoint.documentId !== "string" || !checkpoint.documentId.trim() ||
       (documentId !== undefined && checkpoint.documentId !== documentId) ||
-      typeof checkpoint.sessionId !== "string" || !checkpoint.sessionId.trim() ||
-      !finiteNonNegative(checkpoint.savedAt) ||
-      !finiteNonNegative(checkpoint.sessionDurationMs) ||
-      !finiteNonNegative(checkpoint.activeDurationMs) ||
-      !finiteNonNegative(checkpoint.idleDurationMs) ||
+      typeof checkpoint.sessionId !== "string" || !checkpoint.sessionId.trim()) {
+    throw new Error("Checkpoint de monitoreo malformado o perteneciente a otra identidad: identidad.");
+  }
+
+  const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
+  const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
+  const invalid: string[] = [];
+  if (!finiteNonNegative(checkpoint.savedAt)) invalid.push("savedAt");
+  if (!finiteNonNegative(checkpoint.sessionDurationMs)) invalid.push("sessionDurationMs");
+  if (!finiteNonNegative(checkpoint.activeDurationMs)) invalid.push("activeDurationMs");
+  if (!finiteNonNegative(checkpoint.idleDurationMs)) invalid.push("idleDurationMs");
+  if (finiteNonNegative(checkpoint.sessionDurationMs) &&
+      finiteNonNegative(checkpoint.activeDurationMs) &&
+      finiteNonNegative(checkpoint.idleDurationMs) &&
       Math.abs(checkpoint.sessionDurationMs -
-        checkpoint.activeDurationMs - checkpoint.idleDurationMs) > 1 ||
-      !(checkpoint.lastActivityAgeMs === null ||
-        (finiteNonNegative(checkpoint.lastActivityAgeMs) &&
-          checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1)) ||
-      !integerNonNegative(checkpoint.pauseCount) ||
-      !integerNonNegative(checkpoint.acceptedChanges) ||
-      !integerNonNegative(checkpoint.rejectedChanges) ||
-      !integerNonNegative(checkpoint.committedChanges) ||
-      !integerNonNegative(checkpoint.failedChanges) ||
-      checkpoint.committedChanges + checkpoint.failedChanges > checkpoint.acceptedChanges ||
-      !integerNonNegative(checkpoint.insertedCharacters) ||
-      !integerNonNegative(checkpoint.deletedCharacters) ||
-      !integerNonNegative(checkpoint.currentDocumentLength) ||
-      !integerNonNegative(checkpoint.revision) ||
-      !integerNonNegative(checkpoint.sequence) ||
-      !integerNonNegative(checkpoint.resynchronizations) ||
-      !finiteNonNegative(checkpoint.lastCommitLatencyMs) ||
-      !finiteNonNegative(checkpoint.totalCommitLatencyMs) ||
-      !Array.isArray(checkpoint.commitLatencies) ||
-      checkpoint.commitLatencies.length > 4096 ||
-      checkpoint.commitLatencies.some(value => !finiteNonNegative(value)) ||
-      checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
-        checkpoint.totalCommitLatencyMs + 1) {
-    throw new Error("Checkpoint de monitoreo malformado o perteneciente a otra identidad.");
+        checkpoint.activeDurationMs - checkpoint.idleDurationMs) > 1) {
+    invalid.push("duration-balance");
+  }
+  if (!(checkpoint.lastActivityAgeMs === null ||
+      (finiteNonNegative(checkpoint.lastActivityAgeMs) &&
+        checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1))) {
+    invalid.push("lastActivityAgeMs");
+  }
+  if (!integerNonNegative(checkpoint.pauseCount)) invalid.push("pauseCount");
+  if (!integerNonNegative(checkpoint.acceptedChanges)) invalid.push("acceptedChanges");
+  if (!integerNonNegative(checkpoint.rejectedChanges)) invalid.push("rejectedChanges");
+  if (!integerNonNegative(checkpoint.committedChanges)) invalid.push("committedChanges");
+  if (!integerNonNegative(checkpoint.failedChanges)) invalid.push("failedChanges");
+  if (integerNonNegative(checkpoint.committedChanges) &&
+      integerNonNegative(checkpoint.failedChanges) &&
+      integerNonNegative(checkpoint.acceptedChanges) &&
+      checkpoint.committedChanges + checkpoint.failedChanges > checkpoint.acceptedChanges) {
+    invalid.push("commit-counts");
+  }
+  if (!integerNonNegative(checkpoint.insertedCharacters)) invalid.push("insertedCharacters");
+  if (!integerNonNegative(checkpoint.deletedCharacters)) invalid.push("deletedCharacters");
+  if (!integerNonNegative(checkpoint.currentDocumentLength)) invalid.push("currentDocumentLength");
+  if (!integerNonNegative(checkpoint.revision)) invalid.push("revision");
+  if (!integerNonNegative(checkpoint.sequence)) invalid.push("sequence");
+  if (!integerNonNegative(checkpoint.resynchronizations)) invalid.push("resynchronizations");
+  if (!finiteNonNegative(checkpoint.lastCommitLatencyMs)) invalid.push("lastCommitLatencyMs");
+  if (!finiteNonNegative(checkpoint.totalCommitLatencyMs)) invalid.push("totalCommitLatencyMs");
+  if (!Array.isArray(checkpoint.commitLatencies)) {
+    invalid.push("commitLatencies");
+  } else {
+    if (checkpoint.commitLatencies.length > 4096) invalid.push("commitLatencies.length");
+    if (checkpoint.commitLatencies.some(value => !finiteNonNegative(value))) {
+      invalid.push("commitLatencies.values");
+    }
+    if (finiteNonNegative(checkpoint.totalCommitLatencyMs) &&
+        checkpoint.commitLatencies.every(value => finiteNonNegative(value)) &&
+        checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
+          checkpoint.totalCommitLatencyMs + 1) {
+      invalid.push("commitLatencies.total");
+    }
+  }
+  if (invalid.length > 0) {
+    throw new Error(
+      "Checkpoint de monitoreo malformado o perteneciente a otra identidad: " +
+      invalid.join(", ") + "."
+    );
   }
 }
 

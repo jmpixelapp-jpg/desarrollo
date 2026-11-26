@@ -512,8 +512,8 @@ export function discoverNarrativeObservationCandidates(
           evidence: {
             documentId: input.documentId,
             revision: input.revision,
-            start,
-            end,
+            start: baseOffset + lineStart,
+            end: baseOffset + lineEnd,
             excerpt
           }
         });

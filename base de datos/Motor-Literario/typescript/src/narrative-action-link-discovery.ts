@@ -49,19 +49,28 @@ function validate(input: NarrativeActionLinkDiscoveryInput): void {
     throw new Error("Contexto inválido para descubrir vínculos entre acciones.");
   }
   const base = input.baseOffset ?? 0;
+  const seenIds = new Set<string>();
   for (const item of input.observations) {
-    if (!item || item.projectId !== input.projectId ||
+    const actionEvidence = item && typeof item === "object" ? item.actionEvidence : undefined;
+    if (!item || typeof item !== "object" ||
+        item.projectId !== input.projectId ||
         item.documentId !== input.documentId || item.revision !== input.revision ||
-        item.kind !== "action" || !item.id ||
-        item.actionEvidence.documentId !== input.documentId ||
-        item.actionEvidence.revision !== input.revision ||
-        item.actionEvidence.start < base ||
-        item.actionEvidence.end > base + input.text.length ||
-        item.actionEvidence.end <= item.actionEvidence.start ||
-        input.text.slice(item.actionEvidence.start - base, item.actionEvidence.end - base) !==
-          item.actionEvidence.excerpt) {
-      throw new Error("Las observaciones deben pertenecer al mismo documento y revisión y conservar offsets verificables.");
+        item.kind !== "action" || typeof item.id !== "string" || !item.id.trim() ||
+        seenIds.has(item.id) ||
+        !actionEvidence || typeof actionEvidence !== "object" ||
+        actionEvidence.documentId !== input.documentId ||
+        actionEvidence.revision !== input.revision ||
+        !Number.isSafeInteger(actionEvidence.start) ||
+        !Number.isSafeInteger(actionEvidence.end) ||
+        typeof actionEvidence.excerpt !== "string" ||
+        actionEvidence.start < base ||
+        actionEvidence.end > base + input.text.length ||
+        actionEvidence.end <= actionEvidence.start ||
+        input.text.slice(actionEvidence.start - base, actionEvidence.end - base) !==
+          actionEvidence.excerpt) {
+      throw new Error("Las observaciones deben pertenecer al mismo documento y revisión y conservar offsets verificables y únicos.");
     }
+    seenIds.add(item.id);
   }
 }
 

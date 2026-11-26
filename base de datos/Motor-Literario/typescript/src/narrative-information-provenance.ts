@@ -55,7 +55,7 @@ function normalizeName(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
 }
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\]/g, "\$&");
 }
 function evidence(
   input: NarrativeInformationProvenanceInput,
@@ -197,15 +197,15 @@ export function extractNarrativeInformationProvenance(
         sourceGroup?: number;
       }[] = [
         {
-          regex: new RegExp(String.raw`(?<![\\p{L}\\p{M}\\p{N}_])(${escaped})(?![\\p{L}\\p{M}\\p{N}_])\\s+(?:vio|observó|observo)\\s+que\\s+(.+?)[.!?]*$`, "iu"),
+          regex: new RegExp(String.raw`(?<![\p{L}\p{M}\p{N}_])(${escaped})(?![\p{L}\p{M}\p{N}_])\s+(?:vio|observó|observo)\s+que\s+(.+?)[.!?]*$`, "iu"),
           channel: "visual-observation", status: "observed", contentGroup: 2
         },
         {
-          regex: new RegExp(String.raw`(?<![\\p{L}\\p{M}\\p{N}_])(${escaped})(?![\\p{L}\\p{M}\\p{N}_])\\s+(?:oyó|oyo|escuchó|escucho)\\s+que\\s+(.+?)[.!?]*$`, "iu"),
+          regex: new RegExp(String.raw`(?<![\p{L}\p{M}\p{N}_])(${escaped})(?![\p{L}\p{M}\p{N}_])\s+(?:oyó|oyo|escuchó|escucho)\s+que\s+(.+?)[.!?]*$`, "iu"),
           channel: "auditory-observation", status: "observed", contentGroup: 2
         },
         {
-          regex: new RegExp(String.raw`(?<![\\p{L}\\p{M}\\p{N}_])(${escaped})(?![\\p{L}\\p{M}\\p{N}_])\\s+(?:leyó|leyo)\\s+que\\s+(.+?)[.!?]*$`, "iu"),
+          regex: new RegExp(String.raw`(?<![\p{L}\p{M}\p{N}_])(${escaped})(?![\p{L}\p{M}\p{N}_])\s+(?:leyó|leyo)\s+que\s+(.+?)[.!?]*$`, "iu"),
           channel: "written-source", status: "reported", contentGroup: 2
         }
       ];
@@ -226,7 +226,7 @@ export function extractNarrativeInformationProvenance(
     for (const sourceName of names) {
       for (const holderName of names) {
         const expression = new RegExp(
-          String.raw`(?<![\\p{L}\\p{M}\\N_])(${escapeRegExp(sourceName.name)})(?![\\p{L}\\p{M}\\N_])\\s+(?:le contó|le conto|le dijo|le explicó|le explico)\\s+a\\s+(${escapeRegExp(holderName.name)})(?![\\p{L}\\p{M}\\N_])\\s+que\\s+(.+?)[.!?]*$`,
+          String.raw`(?<![\p{L}\p{M}\p{N}_])(${escapeRegExp(sourceName.name)})(?![\p{L}\p{M}\p{N}_])\s+(?:le contó|le conto|le dijo|le explicó|le explico)\s+a\s+(${escapeRegExp(holderName.name)})(?![\p{L}\p{M}\p{N}_])\s+que\s+(.+?)[.!?]*$`,
           "iu"
         );
         const match = expression.exec(scoped);

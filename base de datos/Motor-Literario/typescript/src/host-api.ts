@@ -972,9 +972,11 @@ export class HostEngineApi {
       // Cuando hay más documentos que el presupuesto, el muestreo cubre todo
       // el inventario en vez de favorecer solo los primeros IDs alfabéticos.
       for (let slot = 0; slot < sampleCount; slot++) {
-        const documentIndex = Math.floor(
-          slot * documentCandidateLists.length / sampleCount
-        );
+        const documentIndex = sampleCount === 1
+          ? Math.floor(documentCandidateLists.length / 2)
+          : Math.floor(
+              slot * (documentCandidateLists.length - 1) / (sampleCount - 1)
+            );
         sampledDocumentIndexes.add(documentIndex);
         const candidate = documentCandidateLists[documentIndex]?.[0];
         if (!candidate) continue;

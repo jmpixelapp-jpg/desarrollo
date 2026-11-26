@@ -299,3 +299,10 @@ Se añadió `liveMonitorLeaseHeartbeatFollowups`: cuando llega una revalidación
 
 
 La primera corrección basada solo en una marca y `queueMicrotask` no bastó: la prueba que solicita directamente la renovación esperaba el resultado de la revalidación, pero la llamada podía resolver antes de que terminara el heartbeat original. Se reemplazó por una promesa de seguimiento compartida por documento, de modo que los callers concurrentes esperan el resultado de la revalidación posterior. Este segundo ajuste está en `34eacf0`; requiere nueva validación CI.
+
+
+### Causa raíz confirmada del fallo de fencing
+
+La segunda inspección de CI permitió localizar la causa real que las dos pruebas anteriores seguían mostrando. En `renewLiveAuthorMonitorLeaseFromHeartbeat`, la generación se capturaba como `map.get(documentId) ?? 0`, pero después se comparaba con `map.get(documentId)`. Cuando el documento todavía no tenía una generación registrada, se comparaba `undefined` con `0` y se descartaba siempre la respuesta de renovación antes de procesar tanto la pérdida como la recuperación del lease.
+
+Se corrigió capturando el valor real, incluido `undefined`, y comparándolo sin fabricar un valor por defecto. La protección contra respuestas tardías sigue funcionando: cualquier cambio real de generación durante la operación invalida la respuesta. El ajuste está en `1cfe39d` y es el cambio que aborda directamente los dos fallos de lease observados en CI. La cola de seguimiento se conserva para no perder solicitudes concurrentes de revalidación.

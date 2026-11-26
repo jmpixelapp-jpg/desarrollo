@@ -62,3 +62,22 @@ test("preserva negación explícita sin etiquetarla como ocultación afirmada",(
 test("exige límites de palabra para nombres de personajes",()=>{
  assert.deepEqual(discover(input("Anabel ocultó que la carta llegó.")),[]);
 });
+
+test("reconoce fórmulas explícitas de secreto mantenido",()=>{
+ const [maintained]=discover(input("Ana mantuvo en secreto que la carta estaba en el cajón."));
+ const [guarded]=discover(input("Ana guardó en secreto que Bruno había vuelto."));
+ assert.equal(maintained.signal,"concealed-proposition");
+ assert.equal(maintained.propositionEvidence.excerpt,"la carta estaba en el cajón");
+ assert.equal(guarded.signal,"concealed-proposition");
+});
+test("reconoce silencio dirigido a un personaje nombrado",()=>{
+ const [item]=discover(input("Ana calló ante Bruno que la carta había llegado."));
+ assert.equal(item.actorEntityId,"ana");
+ assert.equal(item.recipientEntityId,"bruno");
+ assert.equal(item.propositionEvidence.excerpt,"la carta había llegado");
+});
+test("reconoce silenciamiento explícito de una proposición",()=>{
+ const [item]=discover(input("Ana silenció que Clara había regresado."));
+ assert.equal(item.signal,"concealed-proposition");
+ assert.equal(item.propositionEvidence.excerpt,"Clara había regresado");
+});

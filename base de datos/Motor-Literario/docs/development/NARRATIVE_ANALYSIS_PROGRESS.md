@@ -537,3 +537,15 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - Pruebas verifican propuesta por cursor ausente, discrepancia de identidad final, diario discontinuo, cursor adelantado, estado coherente y ausencia de mutaciones.
 
 **Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` localmente; comprobar CI antes de dar esta tanda por validada.
+
+
+## Aplicación atómica y revalidada de cursores
+
+- Se añadió `IndexedDbNarrativeSyncJournal.applyCursorRecoveryProposal(proposal)`, separada del planificador read-only.
+- Comprueba previamente que el historial del escritor sea completo desde secuencia 1, que `receivedAt/appliedAt` sean coherentes y que todas las envolturas superen SHA-256.
+- En una transacción `readwrite` conjunta de operaciones y cursores, relee el diario y el cursor, compara el snapshot validado y aplica únicamente si el cursor falta o su identidad final diverge manteniendo la secuencia correcta.
+- No sobrescribe cursores adelantados/retrasados, inválidos ni alterados concurrentemente. No modifica operaciones.
+- Resultado explícito: `applied`, `already-consistent` o `rejected`; repetir una propuesta ya aplicada es idempotente.
+- Se agregaron pruebas IndexedDB para cursor perdido, identidad divergente, reintento, diario obsoleto, cursor cambiado concurrentemente y diario incompleto.
+
+**Validación pendiente:** los cambios están registrados en GitHub, pero no se han ejecutado `npm run typecheck` ni `npm test` en este entorno. No se considera validada la tanda hasta ejecutar ambas comprobaciones.

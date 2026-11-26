@@ -1,14 +1,14 @@
 # Contrato de transporte para sincronización narrativa
 
 **Implementación:** `typescript/src/narrative-sync.ts`  
-**Estado:** coordinador local implementado; adaptadores de almacenamiento y transporte aún deben integrarse  
+**Estado:** coordinador y bandeja durable IndexedDB integrados en esta rama; el transporte remoto sigue siendo un adaptador del anfitrión  
 **Formato:** TypeScript/JavaScript puro, sin dependencias de runtime
 
 ## Responsabilidades
 
 `NarrativeSyncCoordinator` conecta dos puertos:
 
-- `SyncOutboxPort`: lee operaciones pendientes, registra intentos y elimina una operación únicamente después de un acuse explícito.
+- `SyncOutboxPort`: implementado directamente por `IndexedDbProjectStore` (IndexedDB v25); lee operaciones pendientes, registra intentos y elimina una operación únicamente después de un acuse explícito.
 - `SyncTransport`: envía un lote a un servidor y devuelve tres conjuntos disjuntos: operaciones aceptadas, conflictos y operaciones reintentables.
 
 El coordinador no conoce HTTP, credenciales, proveedor cloud ni formato de API. Esas responsabilidades pertenecen al anfitrión y a un adaptador remoto que deberá validar autenticación, autorización por proyecto, esquema y tamaño del payload.
@@ -48,6 +48,6 @@ El coordinador también valida el tamaño y la estructura JSON de cada payload a
 
 ## Pruebas añadidas
 
-`tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, respuestas parciales, coalescencia concurrente por proyecto, ejecución paralela entre proyectos, persistencia del intento ante fallo de transporte, aislamiento de proyecto y validación del tamaño de lote.
+`tests/indexeddb-sync-outbox.test.mjs` verifica la bandeja real con IndexedDB y su integración con el coordinador; `tests/indexeddb-storage-health.test.mjs` cubre diagnósticos de cuota/almacenamiento. `tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, respuestas parciales, coalescencia concurrente por proyecto, ejecución paralela entre proyectos, persistencia del intento ante fallo de transporte, aislamiento de proyecto y validación del tamaño de lote.
 
 La existencia de estos tests acredita cobertura escrita, no ejecución satisfactoria. La validación requiere `npm run typecheck` y `npm test` desde `typescript/`.

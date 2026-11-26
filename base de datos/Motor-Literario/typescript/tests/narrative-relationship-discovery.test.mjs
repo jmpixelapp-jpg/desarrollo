@@ -47,3 +47,19 @@ test("respeta presupuesto máximo y no produce autorrelaciones",()=>{
  const results=run("Ana es hermana de Bruno. Ana es hermana de Bruno.",[ana,bruno],[],{maxCandidates:1});
  assert.equal(results.length,1); assert.notEqual(results[0].fromEntityId,results[0].toEntityId);
 });
+
+test("marca ambigua una descripción compartida por dos personajes",()=>{
+ const [first,second]=run("El hermano de Ana llegó.",[ana,bruno,carla],[
+  {entityId:"bruno",labels:[label]},
+  {entityId:"carla",labels:[label]}
+ ]);
+ assert.equal(first.status,"ambiguous");
+ assert.equal(second.status,"ambiguous");
+ assert.deepEqual([first.fromEntityId,second.fromEntityId],["bruno","carla"]);
+});
+test("distingue la dirección parental de la filiación",()=>{
+ const [r]=run("Ana es madre de Bruno.");
+ assert.equal(r.fromEntityId,"ana");
+ assert.equal(r.toEntityId,"bruno");
+ assert.equal(r.relationType,"parent-of");
+});

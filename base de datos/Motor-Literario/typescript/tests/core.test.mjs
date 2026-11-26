@@ -5029,6 +5029,51 @@ test("la extracción narrativa conserva offsets UTF-16 con emoji y nombres Unico
   ), "Élodie Núñez");
 });
 
+
+test("relaciones, ideas y acontecimientos mantienen offsets UTF-16 con emoji y CRLF", async () => {
+  const {
+    extractNarrativeEntities, extractNarrativeRelations,
+    extractNarrativeIdeas, extractNarrativeEvents
+  } = await import("../dist/motor-literario.js");
+  const text = [
+    "😀",
+    "personaje Ana llegó.",
+    "personaje Luis esperó.",
+    "IDEA: Una promesa",
+    "EVENTO: Ana salvó a Luis el día 3."
+  ].join("\r\n");
+  const baseOffset = 211;
+  const entities = extractNarrativeEntities(
+    "narrative-unicode-offsets", "chapter", 7, text, 900, baseOffset
+  );
+  const relations = extractNarrativeRelations(
+    "narrative-unicode-offsets", "chapter", 7, text, entities, baseOffset
+  );
+  const ideas = extractNarrativeIdeas(
+    "narrative-unicode-offsets", "chapter", 7, text, baseOffset
+  );
+  const events = extractNarrativeEvents(
+    "narrative-unicode-offsets", "chapter", 7, text, entities, baseOffset
+  );
+  const relation = relations.find(item => item.relationType === "salvó");
+  const idea = ideas[0];
+  const event = events[0];
+  assert.ok(relation);
+  assert.ok(idea);
+  assert.ok(event);
+  const relationText = "Ana salvó a Luis";
+  const ideaText = "Una promesa";
+  const eventText = "Ana salvó a Luis el día 3.";
+  assert.equal(relation.evidence[0].start, baseOffset + text.indexOf(relationText));
+  assert.equal(relation.evidence[0].end, baseOffset + text.indexOf(relationText) + relationText.length);
+  assert.equal(idea.evidence[0].start, baseOffset + text.indexOf(ideaText));
+  assert.equal(idea.evidence[0].end, baseOffset + text.indexOf(ideaText) + ideaText.length);
+  assert.equal(event.evidence[0].start, baseOffset + text.indexOf(eventText));
+  assert.equal(event.evidence[0].end, baseOffset + text.indexOf(eventText) + eventText.length);
+  assert.deepEqual(event.participants.sort(), entities
+    .filter(item => item.kind === "character").map(item => item.id).sort());
+});
+
 test("rechaza consolidaciones que crearían alias ambiguos con una tercera entidad", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({ store });

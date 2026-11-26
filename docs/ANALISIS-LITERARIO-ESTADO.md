@@ -163,3 +163,31 @@ La ejecución del workflow en ese HEAD contabilizó **716 pruebas: 715 aprobadas
 Ejecución: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45735421770
 
 En ese HEAD, TypeScript y la compilación completan; el paso de pruebas falla por ese escenario de navegador y, por ello, el benchmark queda omitido. La validación integral verde anterior sigue registrada en el commit `bf6d3f5`; la siguiente tarea de integración global es resolver ese único fallo del monitor y repetir el workflow completo.
+
+### Cierre de validación integral y compatibilidad de persistencia
+
+Validación posterior sobre el commit `347301ca1ba09b4c159d6bc654cd8ad81d2d4aec` (rama `main`):
+
+- Workflow: [Motor Literario TypeScript, ejecución 45736809722](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736809722).
+- Type-check: aprobado.
+- Build, validación de esquemas y suite automatizada: aprobados.
+- Node Test Runner: **718 pruebas, 718 aprobadas, 0 fallidas y 0 omitidas**.
+- Benchmark de edición en vivo: aprobado.
+
+La suite de navegador también se ejecutó en este workflow (instalación de Chromium completada); por tanto, el fallo multiproyecto que constaba en el registro anterior ya no bloquea esta validación integral.
+
+El commit incorpora además compatibilidad de lectura para catálogos de ideas e historiales editoriales importados de versiones anteriores, clasifica posiciones temporales no finitas como no verificadas y documenta el límite de lectura de 20.000 ideas. Se conserva la distinción entre límites de lectura/análisis y límites de escritura: no se debe inferir que admitir un catálogo histórico grande autoriza una escritura de igual tamaño.
+
+#### Benchmark observado en la ejecución final
+
+| Escenario | Ediciones | P95 commit | P95 extremo a extremo | Delta de heap |
+|---|---:|---:|---:|---:|
+| 10.000 palabras | 40 | 7,18 ms | 7,83 ms | +0,76 MB |
+| 100.000 palabras | 40 | 3,27 ms | 4,13 ms | +1,84 MB |
+| 500.000 palabras | 40 | 4,54 ms | 5,30 ms | +3,67 MB |
+| 20.000 palabras en una línea | 5 | 61,41 ms | 61,66 ms | -9,65 MB |
+| 4 documentos concurrentes | 40 totales | — | 1,69 ms | — |
+
+Son mediciones del runner de GitHub Actions de esa ejecución, no garantías universales de rendimiento.
+
+**Estado verificado de esta entrega:** el HEAD indicado supera el workflow configurado completo. Esto acredita el conjunto de pruebas, compilación, validación de esquemas y benchmark del paquete; no equivale a una garantía de ausencia de defectos ni a una auditoría editorial humana de resultados narrativos. Las suites IndexedDB usan `fake-indexeddb` en Node y no sustituyen pruebas en todos los navegadores y dispositivos de producción.

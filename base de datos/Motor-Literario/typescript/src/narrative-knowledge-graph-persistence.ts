@@ -821,13 +821,27 @@ export async function inspectNarrativeReferenceRepairPending(
   } as const;
   const entityById = new Map(entities.map(entity => [entity.id, entity]));
   return pending.map(entry => {
+    const validRecordTypes = ["relation", "event", "idea", "assertion"];
+    const validReferenceFields = [
+      "fromEntityId", "toEntityId", "participants", "entityId", "relatedEntityIds"
+    ];
+    const safeOperationId = typeof entry?.operationId === "string" ? entry.operationId : "";
+    const safeRecordId = typeof entry?.recordId === "string" ? entry.recordId : "";
+    if (!entry || entry.projectId !== projectId ||
+        !validRecordTypes.includes(entry.recordType) ||
+        !validReferenceFields.includes(entry.referenceField) ||
+        typeof entry.recordId !== "string" || !entry.recordId.trim() ||
+        typeof entry.missingReferenceId !== "string" || !entry.missingReferenceId.trim() ||
+        typeof entry.replacementEntityId !== "string" || !entry.replacementEntityId.trim()) {
+      return { operationId: safeOperationId, recordType: entry?.recordType ?? "relation",
+        recordId: safeRecordId, status: "invalid-intent",
+        detail: "La identidad o los datos de la intención no son válidos." };
+    }
     const expectedId = [
       "reference-repair", projectId, entry.recordType, entry.recordId,
       entry.referenceField, entry.missingReferenceId, entry.replacementEntityId
     ].join("|");
-    if (entry.projectId !== projectId || entry.operationId !== expectedId ||
-        !entry.recordId.trim() || !entry.missingReferenceId.trim() ||
-        !entry.replacementEntityId.trim()) {
+    if (entry.operationId !== expectedId) {
       return { operationId: entry.operationId, recordType: entry.recordType,
         recordId: entry.recordId, status: "invalid-intent",
         detail: "La identidad o los datos de la intención no son válidos." };

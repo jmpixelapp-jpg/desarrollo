@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, StoredSyncOperation, SyncOperationDraft, Diagnostic, NarrativeDocumentProjectionManifest } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, StoredSyncOperation, SyncOperationDraft, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -71,6 +71,7 @@ const RECORD_NAMES = "record-names";
 const PROJECT_RELATIONS = "project-relations";
 const PROJECT_EVIDENCES = "project-evidences";
 const TIMELINE_OCCURRENCES = "timeline-occurrences";
+const NARRATIVE_REFERENCE_REPAIR_AUDITS = "narrative-reference-repair-audits";
 
 /** FNV-1a de 64 bits: checksum de integridad de la lista ordenada de IDs, no una firma criptográfica. */
 function checksumArchivedIdeaIds(ids: readonly string[]): string {
@@ -1890,6 +1891,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           return;
         }
         const db = request.result;
+        if (!db.objectStoreNames.contains(NARRATIVE_REFERENCE_REPAIR_AUDITS)) {
+          const audits = db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_AUDITS, {
+            keyPath: ["projectId", "operationId"]
+          });
+          audits.createIndex("by-project", "projectId", { unique: false });
+        }
         if (!db.objectStoreNames.contains(PROJECT_SETTINGS)) {
           const settings = db.createObjectStore(PROJECT_SETTINGS, {
             keyPath: ["projectId", "key"]
@@ -2619,6 +2626,73 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
   }
 
+  async appendNarrativeReferenceRepairAudit(entry: NarrativeReferenceRepairAuditEntry): Promise<void> {
+    if (!entry || typeof entry.projectId !== "string" || !entry.projectId.trim() ||
+        typeof entry.operationId !== "string" || !entry.operationId.trim() ||
+        entry.operation !== "narrative-reference-repair" ||
+        !["relation", "event", "assertion", "idea"].includes(entry.recordType) ||
+        !entry.recordId || !entry.referenceField || !entry.missingReferenceId ||
+        !entry.replacementEntityId || !Number.isFinite(entry.appliedAt) || entry.appliedAt < 0 ||
+        (entry.recordType === "relation" && entry.referenceField !== "fromEntityId" && entry.referenceField !== "toEntityId") ||
+        (entry.recordType === "event" && entry.referenceField !== "participants") ||
+        (entry.recordType === "assertion" && entry.referenceField !== "entityId") ||
+        (entry.recordType === "idea" && entry.referenceField !== "relatedEntityIds") ||
+        (entry.recordType === "relation" || entry.recordType === "assertion"
+          ? entry.before !== entry.missingReferenceId || entry.after !== entry.replacementEntityId
+          : !Array.isArray(entry.before) || !entry.before.includes(entry.missingReferenceId) ||
+            !Array.isArray(entry.after) || !entry.after.includes(entry.replacementEntityId))) {
+      throw new Error("Registro de auditoría de reparación narrativa inválido.");
+    }
+    const expectedOperationId = [
+      "reference-repair", entry.projectId, entry.recordType, entry.recordId,
+      entry.referenceField, entry.missingReferenceId, entry.replacementEntityId
+    ].join("|");
+    if (entry.operationId !== expectedOperationId) {
+      throw new Error("El ID de operación de auditoría no coincide con sus referencias.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_AUDITS, "readwrite");
+    const store = transaction.objectStore(NARRATIVE_REFERENCE_REPAIR_AUDITS);
+    const request = store.get([entry.projectId, entry.operationId]);
+    await new Promise<void>((resolve, reject) => {
+      let failure: Error | undefined;
+      request.onsuccess = () => {
+        const current = request.result as NarrativeReferenceRepairAuditEntry | undefined;
+        if (current) {
+          const { appliedAt: _currentAt, ...currentOperation } = current;
+          const { appliedAt: _entryAt, ...newOperation } = entry;
+          if (JSON.stringify(currentOperation) !== JSON.stringify(newOperation)) {
+            failure = new Error("El ID de operación de auditoría ya existe con contenido diferente.");
+            transaction.abort();
+          }
+          return;
+        }
+        store.add(structuredClone(entry));
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo consultar la auditoría de reparación.");
+        transaction.abort();
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo guardar la auditoría."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el guardado de auditoría."));
+    });
+  }
+
+  async loadNarrativeReferenceRepairAudits(projectId: string): Promise<readonly NarrativeReferenceRepairAuditEntry[]> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Identificador de proyecto inválido para consultar auditorías.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_AUDITS, "readonly");
+    const request = transaction.objectStore(NARRATIVE_REFERENCE_REPAIR_AUDITS)
+      .index("by-project").getAll(projectId);
+    const records = await readAfterTransaction(
+      transaction, request, "No se pudieron leer las auditorías de reparación narrativa."
+    ) as NarrativeReferenceRepairAuditEntry[];
+    if (!Array.isArray(records)) throw new Error("Las auditorías narrativas no son una colección.");
+    return records.map(item => structuredClone(item));
+  }
   async loadRecordLifecycles(projectId: string, recordId: string): Promise<readonly RecordLifecycle[]> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof recordId !== "string" || !recordId.trim()) {

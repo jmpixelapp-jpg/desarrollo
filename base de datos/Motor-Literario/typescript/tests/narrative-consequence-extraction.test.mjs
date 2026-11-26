@@ -28,6 +28,10 @@ test("vincula dos acontecimientos consecutivos con un marcador explícito", () =
   assert.equal(results[0].consequenceEventId, "event-2");
   assert.equal(results[0].marker, "Por eso");
   assert.equal(results[0].reviewStatus, "candidate");
+  assert.equal(results[0].hypothesisBasis, "explicit-linguistic-connector");
+  assert.deepEqual(results[0].sharedCharacterEntityIds, []);
+  assert.equal(results[0].supportingEvidence.sourceEvent.excerpt, "Mara abrió la puerta.");
+  assert.equal(results[0].supportingEvidence.consequenceEvent.excerpt, "Por eso Elian escapó.");
   assert.equal(text.slice(results[0].evidence.start, results[0].evidence.end), "Por eso");
 });
 
@@ -108,6 +112,10 @@ test("marca la proximidad temporal como hipótesis no demostrada si comparten pa
   const [result]=extractNarrativeConsequenceCandidates(input(text,events));
   assert.equal(result.relationType,"temporal-association-hypothesis");
   assert.equal(result.causalStatus,"unproven-hypothesis");
+  assert.equal(result.hypothesisBasis,"temporal-marker-and-shared-character");
+  assert.deepEqual(result.sharedCharacterEntityIds,["mara"]);
+  assert.equal(result.supportingEvidence.sourceEvent.excerpt,"Mara abrió la puerta.");
+  assert.equal(result.supportingEvidence.consequenceEvent.excerpt,"Poco después, Mara escapó.");
   assert.equal(result.marker,"Poco después");
   assert.equal(text.slice(result.evidence.start,result.evidence.end), "Poco después");
 });
@@ -183,4 +191,18 @@ test("valida que los participantes-personaje pertenezcan al conjunto de particip
   const a=text.indexOf("Mara");
   const malformed=event("invalid-character-participant",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"],["ghost"]);
   assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[malformed])),/únicos, válidos/);
+});
+
+test("la evidencia de soporte conserva documento, revisión y rangos exactos de ambos eventos",()=>{
+  const text="Mara protegió a Elian. Por eso Elian escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Por eso");
+  const source=event("source-support",a,text.indexOf(".")+1,"Mara protegió a Elian.",["mara","elian"],["mara","elian"]);
+  const consequence=event("result-support",b,text.length,text.slice(b),["elian"],["elian"]);
+  const [result]=extractNarrativeConsequenceCandidates(input(text,[source,consequence]));
+  assert.deepEqual(result.supportingEvidence.sourceEvent,{
+    documentId:"chapter-1",revision:2,start:a,end:text.indexOf(".")+1,excerpt:"Mara protegió a Elian."
+  });
+  assert.deepEqual(result.supportingEvidence.consequenceEvent,{
+    documentId:"chapter-1",revision:2,start:b,end:text.length,excerpt:"Por eso Elian escapó."
+  });
 });

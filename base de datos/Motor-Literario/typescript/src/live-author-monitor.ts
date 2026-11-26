@@ -128,10 +128,10 @@ function classifyActivityKind(change: EditorChange):
     case "redo":
     case "other":
       return change.activityKind;
+    // Sin procedencia explícita, la geometría del delta no demuestra si fue
+    // escritura, pegado, autocorrección, dictado, corte u otra operación.
+    // Se conserva como "other" en lugar de inventar una categoría.
     default:
-      if (change.end > change.start && change.replacement.length > 0) return "correction";
-      if (change.end > change.start) return "deletion";
-      if (change.replacement.length > 0) return "typing";
       return "other";
   }
 }

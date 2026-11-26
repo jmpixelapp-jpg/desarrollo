@@ -264,3 +264,13 @@ La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualiza
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.
+
+
+### Tanda 26-11-2026 — idempotencia canónica del replay de dominio
+
+- `narrative-sync-domain-handlers.ts` compara ahora los snapshots existentes y entrantes mediante `areNarrativeSyncPayloadsEquivalent`, que canonicaliza el JSON por orden de claves, en lugar de depender del orden de inserción de `JSON.stringify`.
+- La corrección se aplica a los cinco handlers de upsert: ideas, afirmaciones, relaciones, acontecimientos y entidades.
+- Un replay cuyo contenido JSON es equivalente no vuelve a ejecutar la escritura CAS por una mera diferencia en el orden de propiedades. Esto evita escrituras innecesarias y conserva la idempotencia tras reintentos y recuperación de operaciones.
+- Se añadió una regresión de `idea-upsert` que invierte deliberadamente el orden de las propiedades y comprueba que no se invoca la escritura.
+- Commits publicados en `main`: `bffa0bd` (implementación) y `d466c34` (regresión).
+- **Validación pendiente:** el cambio y la prueba están publicados; todavía no se declara que typecheck, build o suite completa hayan pasado hasta observar GitHub Actions o ejecutar las órdenes en el entorno Node del proyecto.

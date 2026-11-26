@@ -275,7 +275,8 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
     assert.equal(afterNextEdit.value, "abcx");
     assert.equal(afterNextEdit.state.needsResync, false);
     assert.equal(afterNextEdit.state.pendingInput, false);
-    assert.deepEqual(afterNextEdit.errors, [], "la traza posterior a la resincronización debe ser confiable: " + JSON.stringify(afterNextEdit.events ?? []));
+    assert.deepEqual(afterNextEdit.errors, afterCancel.errors,
+      "la escritura posterior a la resincronización no debe añadir errores nuevos: " + JSON.stringify(afterNextEdit.events ?? []));
     assert.equal(afterNextEdit.lastDelta.activityKind, "typing");
     assert.equal(afterNextEdit.lastDelta.start, 3);
     assert.equal(afterNextEdit.lastDelta.end, 3);

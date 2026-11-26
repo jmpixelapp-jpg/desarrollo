@@ -125,10 +125,10 @@ export function discoverNarrativeInformationConcealmentCandidates(
   const actor="(?<actor>"+alternatives+")";
   const recipient="(?<recipient>"+alternatives+")";
   const patterns:readonly {signal:NarrativeInformationConcealmentSignal;expression:RegExp}[]=[
-    {signal:"concealed-proposition",expression:new RegExp(actor+"\\\\s+(?<trigger>ocult[oó]|escondi[oó]|call[oó])\\\\s+(?:a\\\\s+"+recipient+"\\\\s+)?que\\\\s+(?<proposition>[^.!?;\\\\n]{1,500})","giu")},
-    {signal:"lied-to-recipient",expression:new RegExp(actor+"\\\\s+(?<trigger>minti[oó])\\\\s+a\\\\s+"+recipient+"\\\\s+(?<bridge>diciendo)\\\\s+que\\\\s+(?<proposition>[^.!?;\\\\n]{1,500})","giu")},
-    {signal:"feigned-proposition",expression:new RegExp(actor+"\\\\s+(?<trigger>fingi[oó]|simul[oó])\\\\s+que\\\\s+(?<proposition>[^.!?;\\\\n]{1,500})","giu")},
-    {signal:"induced-belief",expression:new RegExp(actor+"\\\\s+(?<trigger>hizo)\\\\s+creer\\\\s+a\\\\s+"+recipient+"\\\\s+que\\\\s+(?<proposition>[^.!?;\\\\n]{1,500})","giu")}
+    {signal:"concealed-proposition",expression:new RegExp(actor+"\\s+(?<trigger>ocult[oó]|escondi[oó]|call[oó])\\s+(?:a\\s+"+recipient+"\\s+)?que\\s+(?<proposition>[^.!?;\\n]{1,500})","giu")},
+    {signal:"lied-to-recipient",expression:new RegExp(actor+"\\s+(?<trigger>minti[oó])\\s+a\\s+"+recipient+"\\s+(?<bridge>diciendo)\\s+que\\s+(?<proposition>[^.!?;\\n]{1,500})","giu")},
+    {signal:"feigned-proposition",expression:new RegExp(actor+"\\s+(?<trigger>fingi[oó]|simul[oó])\\s+que\\s+(?<proposition>[^.!?;\\n]{1,500})","giu")},
+    {signal:"induced-belief",expression:new RegExp(actor+"\\s+(?<trigger>hizo)\\s+creer\\s+a\\s+"+recipient+"\\s+que\\s+(?<proposition>[^.!?;\\n]{1,500})","giu")}
   ];
   const output:NarrativeInformationConcealmentCandidate[]=[],seen=new Set<string>();
   for(const span of sentenceSpans(input.text)) {

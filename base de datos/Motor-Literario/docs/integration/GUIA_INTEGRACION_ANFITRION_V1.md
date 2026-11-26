@@ -109,6 +109,11 @@ Para procesos separados no se usa IndexedDB: el proceso compañero utiliza el ad
 Con `deviceId` configurado, el motor ya no confirma una edición solo en el journal local: exige `appendChangeAndEnqueueSyncOperation`, que guarda el delta de texto y su operación `document.change` junto con el cursor por dispositivo en una sola transacción. Si el adaptador no implementa esa operación atómica, la edición se rechaza de forma segura en vez de aparentar que está sincronizada.
 
 La outbox contiene el texto reemplazado necesario para replicar la edición. Debe tratarse como contenido privado del manuscrito. La persistencia local no envía nada a Internet; el transporte remoto y la aplicación en otros dispositivos siguen siendo responsabilidades pendientes. Esta integración está disponible en `IndexedDbProjectStore`; el adaptador SQLite del puente entre procesos todavía no ofrece la transacción equivalente.
+### Enviar operaciones pendientes
+
+El núcleo expone `dispatchPendingNarrativeSyncOperations`. El anfitrión debe proporcionar un transporte autenticado que reciba la envoltura con SHA-256 y devuelva un acuse durable que repita exactamente proyecto, `operationId`, stream (`writerId`/`deviceId`), secuencia y digest. La outbox solo se elimina después de validar ese acuse. Los reintentos deben reenviar la misma operación; no crear una identidad nueva para el mismo cambio.
+
+El `writerId` de la envoltura identifica el stream de una instalación, no sustituye al usuario autenticado. El servidor debe ligar ese stream con el escritor y proyecto autorizados. El digest no sustituye autenticación ni autorización.
 ## 4. Apertura y recuperación de documentos
 
 El anfitrión mantiene el snapshot autoritativo del editor: texto completo, revisión y secuencia. En una apertura normal, envía ese snapshot:

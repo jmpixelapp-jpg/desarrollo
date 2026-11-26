@@ -494,6 +494,6 @@ Dos vías quedan habilitadas:
 
 Se conserva la regla de cronología local: dentro del mismo documento se exige misma revisión y que la acción aparezca después del objetivo. Entre documentos se exige orden explícito. Si no existe orden fiable, no se crea una comparación.
 
-Se añaden cuatro pruebas unitarias nuevas: dos de cronología entre capítulos y dos de validación de duplicados; además, dos pruebas de integración del pipeline para acción pronominal y objetivo histórico.
+Se añaden seis pruebas unitarias nuevas en total: dos de cronología entre capítulos, dos de validación de duplicados y dos salvaguardas adicionales de integración; además, dos pruebas de integración del pipeline para acción pronominal y objetivo histórico.
 
 **Límites:** las referencias pronominales ambiguas o sin resolver no se convierten en acciones atribuidas; los objetos omitidos no se inventan; una oposición sigue sin demostrar engaño, hipocresía o cambio psicológico. La biblioteca debe suministrar los objetivos anteriores y el orden documental. Build, type-check y suite completa aún requieren validación ejecutada.

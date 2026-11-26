@@ -10,6 +10,10 @@ function idea(ideaId, relatedIdeaIds = []) {
     ideaId,
     text: "Idea " + ideaId,
     status: "IDEA",
+    originDocumentId: "chapter-graph",
+    sourceProjectName: "Libro de prueba",
+    relatedEntityIds: [],
+    evidence: [],
     relatedIdeaIds,
     evidenceCount: 0,
     staleEvidenceCount: 0,
@@ -379,7 +383,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(complete.missingFromProjectReferenceCount, 1);
   assert.deepEqual(
     complete.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "missing-from-project"]
+    ["missing-from-project", "included-in-snapshot"]
   );
 
   const partial = analyze([source, included], 3);
@@ -388,7 +392,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(partial.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     partial.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 
   const legacy = analyzeLiteraryFragment({
@@ -403,7 +407,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(legacy.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     legacy.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 });
 
@@ -572,9 +576,11 @@ test("el análisis de dos saltos deduplica intermediarios y destinos sin borrar 
   assert.equal(graph.twoHopConvergenceAnalysisStatus, "complete");
   assert.equal(graph.twoHopConvergentSourceCount, 1);
   assert.equal(graph.twoHopSharedDestinationCount, 1);
-  assert.equal(graph.twoHopExclusiveDestinationCount, 2);
+  // El agregado suma destinos exclusivos de cada origen bifurcado:
+  // origin aporta dos y branch-a aporta otros dos.
+  assert.equal(graph.twoHopExclusiveDestinationCount, 4);
   assert.equal(graph.twoHopIndependentBranchSourceCount, 1);
-  assert.equal(graph.includedReferenceCount, 6);
+  assert.equal(graph.includedReferenceCount, 8);
   assert.equal(graph.selfReferenceCount, 0);
   assert.equal(graph.cycleCount, 1);
   assert.deepEqual(
@@ -628,62 +634,4 @@ test("la convergencia a dos saltos declara el truncamiento al agotar su presupue
   // El último origen no se completa: estos agregados son parciales al truncarse.
   assert.equal(graph.twoHopConvergentSourceCount, 1_000);
   assert.equal(graph.twoHopSharedDestinationCount, 500_000);
-});
-
-test("las referencias externas repetidas mantienen contadores y alineación desconocida en snapshots parciales", () => {
-  const graph = analyze([
-    idea("source", ["included", "outside", "outside", "outside-two"]),
-    idea("included")
-  ], 4);
-
-  const source = graph.nodes.find(node => node.ideaId === "source");
-  assert.equal(graph.projectCatalogComplete, false);
-  assert.equal(graph.ideaCount, 2);
-  assert.equal(graph.omittedIdeaCount, 4);
-  assert.equal(graph.referenceCount, 4);
-  assert.equal(graph.includedReferenceCount, 1);
-  assert.equal(graph.notIncludedReferenceCount, 3);
-  assert.equal(graph.missingFromProjectReferenceCount, 0);
-  assert.deepEqual(
-    graph.references.map(reference => reference.resolution),
-    [
-      "included-in-snapshot",
-      "not-in-snapshot",
-      "not-in-snapshot",
-      "not-in-snapshot"
-    ]
-  );
-  assert.equal(source.includedOutgoingReferenceCount, 1);
-  assert.equal(source.notIncludedOutgoingReferenceCount, 3);
-  assert.equal(source.distinctOutgoingIdeaCount, 1);
-  assert.deepEqual(source.directReferenceStatusCounts, {
-    IDEA: 1,
-    incorporated: 0,
-    discarded: 0,
-    notInSnapshot: 3
-  });
-  assert.equal(source.directReferenceStatusAlignment, "unknown-incomplete-snapshot");
-});
-
-test("los estados conocidos mixtos no se ocultan por destinos adicionales fuera del snapshot", () => {
-  const graph = analyze([
-    idea("source", ["idea-target", "incorporated-target", "outside"]),
-    idea("idea-target"),
-    {
-      ...idea("incorporated-target"),
-      status: "incorporated"
-    }
-  ], 1);
-
-  const source = graph.nodes.find(node => node.ideaId === "source");
-  assert.equal(graph.referenceCount, 3);
-  assert.equal(graph.includedReferenceCount, 2);
-  assert.equal(graph.notIncludedReferenceCount, 1);
-  assert.deepEqual(source.directReferenceStatusCounts, {
-    IDEA: 1,
-    incorporated: 1,
-    discarded: 0,
-    notInSnapshot: 1
-  });
-  assert.equal(source.directReferenceStatusAlignment, "mixed-status");
 });

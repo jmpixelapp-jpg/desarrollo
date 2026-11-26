@@ -61,6 +61,15 @@ test("la outbox pagina por proyecto, conserva pendientes y registra reintentos",
   assert.equal(retried[0].attemptCount, 1);
   assert.equal(retried[0].lastAttemptAt, 500);
   assert.equal(retried[0].lastError, "network unavailable");
+  // Reintentar el mismo cambio tras actualizar metadatos no debe producir una colisión.
+  await store.enqueueSyncOperation(operation({
+    operationId: "op-first",
+    projectId: "project-b",
+    deviceId: "device-b",
+    sequence: 1,
+    createdAt: 100
+  }));
+  assert.equal((await store.loadPendingSyncOperations("project-b"))[0].attemptCount, 1);
   assert.equal(await store.recordSyncOperationAttempt("missing", 600), false);
 });
 

@@ -68,7 +68,12 @@ function validate(input: NarrativeCharacterKnowledgeComparisonInput): void {
   for (const item of input.candidates) {
     if (!item || item.projectId !== input.projectId || typeof item.id !== "string" ||
         !item.id.trim() || ids.has(item.id) || typeof item.holderEntityId !== "string" ||
-        !item.holderEntityId.trim() || !validEvidence(item.evidence, item) ||
+        !item.holderEntityId.trim() ||
+        !["learned", "known", "heard", "read", "discovered", "suspected", "believed", "remembered", "forgotten", "reported"].includes(item.kind) ||
+        !["asserted-cognition", "uncertain-cognition", "reported-transfer"].includes(item.mode) ||
+        !["affirmed", "negated"].includes(item.polarity) ||
+        !["explicit-claim", "uncertain-claim"].includes(item.certainty) ||
+        !validEvidence(item.evidence, item) ||
         !validEvidence(item.holderEvidence, item) || !validEvidence(item.triggerEvidence, item) ||
         item.holderEvidence.start < item.evidence.start || item.holderEvidence.end > item.evidence.end ||
         item.triggerEvidence.start < item.evidence.start || item.triggerEvidence.end > item.evidence.end ||
@@ -76,9 +81,12 @@ function validate(input: NarrativeCharacterKnowledgeComparisonInput): void {
           (!validEvidence(item.propositionEvidence, item) ||
            item.propositionEvidence.start < item.evidence.start ||
            item.propositionEvidence.end > item.evidence.end)) ||
-        (item.sourceEvidence !== undefined &&
+        ((item.sourceEvidence !== undefined &&
           (!validEvidence(item.sourceEvidence, item) ||
-           item.sourceEvidence.start < item.evidence.start || item.sourceEvidence.end > item.evidence.end))) {
+           item.sourceEvidence.start < item.evidence.start || item.sourceEvidence.end > item.evidence.end)) ||
+         (item.sourceEntityId !== undefined &&
+          (typeof item.sourceEntityId !== "string" || !item.sourceEntityId.trim() || !item.sourceEvidence)) ||
+         (item.sourceEvidence !== undefined && !item.sourceEntityId))) {
       throw new Error("Afirmación cognitiva inválida, duplicada o con evidencia no vigente.");
     }
     ids.add(item.id);

@@ -66,7 +66,8 @@ test("lee archivos TXT y Markdown UTF-8 mediante APIs estándar", async () => {
   const parsed = ingestNarrativeBookText({
     projectId: "p", documentId: "file-1", revision: 1, text: source.text
   });
-  assert.equal(parsed.coverage.wordCount, 7);\n  assert.equal(parsed.chapters[0].heading, "Capítulo I");
+  assert.equal(parsed.coverage.wordCount, 7);
+  assert.equal(parsed.chapters[0].heading, "Capítulo I");
   assert.ok(parsed.signals.some(signal => signal.label === "arrival"));
 });
 

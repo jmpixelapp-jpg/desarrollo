@@ -8,7 +8,12 @@ const ana = {
   canonicalName: "Ana", normalizedName: "ana", aliases: [],
   evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
 };
-const context = { projectId: "book-1", documentId: "chapter-1", revision: 1, entities: [ana] };
+const door = {
+  projectId: "book-1", id: "door", kind: "object",
+  canonicalName: "puerta", normalizedName: "puerta", aliases: [],
+  evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+};
+const context = { projectId: "book-1", documentId: "chapter-1", revision: 1, entities: [ana, door] };
 
 test("detecta discrepancia de polaridad y conserva ambas pruebas", () => {
   const positiveText = "Ana abrió la puerta.";
@@ -46,7 +51,7 @@ test("separa perspectivas epistémicas sin declarar cuál es verdadera", () => {
 
 test("no compara acciones sin sujeto activo inequívoco ni objetos incompatibles", () => {
   const ambiguous = discoverNarrativeObservationCandidates({
-    ...context, entities: [ana, { ...ana, id: "bruno", canonicalName: "Bruno" }],
+    ...context, entities: [ana, door, { ...ana, id: "bruno", canonicalName: "Bruno" }],
     text: "Ana ayudó a Bruno."
   });
   const explicitObject = discoverNarrativeObservationCandidates({

@@ -771,6 +771,12 @@ export async function updateNarrativeIdeaContinuityIndexIncrementally(
 
   const current = await store.loadNarrativeIdeaContinuityIndex(input.projectId);
   if (current) {
+    // ProjectStore puede ser una implementación distinta a IndexedDB; nunca
+    // se utiliza una proyección previa sin validar versión, referencias y huella.
+    validateNarrativeIdeaContinuityIndex(current);
+    if (current.projectId !== input.projectId) {
+      throw new Error("El índice previo de continuidad pertenece a otro proyecto.");
+    }
     const previousByDocument = new Map<string, { revision: number; status: "active" | "deleted" }>();
     const nextByDocument = new Map<string, { revision: number; status: "active" | "deleted" }>();
     for (const item of current.sourceRevisions) {

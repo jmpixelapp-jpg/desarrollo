@@ -1578,6 +1578,7 @@ function validateLiveAuthorMonitorLeaseRequest(
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
+/** Estado de cuota y conteos locales; no incluye contenido del manuscrito. */
 export interface IndexedDbStorageHealthReport {
   readonly databaseName: string;
   readonly databaseVersion: number;
@@ -5518,6 +5519,93 @@ export class IndexedDbProjectStore implements ProjectStore {
         new Error("No se pudo eliminar el checkpoint del monitor."));
       transaction.onabort = () => reject(transaction.error ??
         new Error("Se canceló la eliminación del checkpoint del monitor."));
+    });
+  }
+
+  /**
+   * Limpia checkpoints vencidos de un proyecto sin alterar los registros de lease.
+   * Un lease activo o malformado protege su checkpoint: ante duda se conserva.
+   */
+  async cleanupLiveAuthorMonitorCheckpoints(
+    projectId: string,
+    olderThan: number,
+    now: number
+  ): Promise<number> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        !Number.isSafeInteger(olderThan) || olderThan < 0 ||
+        !Number.isSafeInteger(now) || now < olderThan) {
+      throw new RangeError("El proyecto o los límites temporales de retención no son válidos.");
+    }
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(
+        [LIVE_AUTHOR_MONITOR_CHECKPOINTS, LIVE_AUTHOR_MONITOR_LEASES],
+        "readwrite"
+      );
+      const checkpoints = transaction.objectStore(LIVE_AUTHOR_MONITOR_CHECKPOINTS);
+      const leases = transaction.objectStore(LIVE_AUTHOR_MONITOR_LEASES);
+      const cursorRequest = checkpoints.index("by-project").openCursor(projectId);
+      let deleted = 0;
+      let failure: Error | undefined;
+
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) return;
+        const checkpoint = cursor.value as StoredLiveAuthorMonitorCheckpoint;
+        try {
+          validateLiveAuthorMonitorCheckpoint(checkpoint, projectId);
+        } catch {
+          // Un registro que no puede identificarse con certeza no se elimina automáticamente.
+          cursor.continue();
+          return;
+        }
+        if (checkpoint.savedAt >= olderThan) {
+          cursor.continue();
+          return;
+        }
+
+        const leaseRequest = leases.get([projectId, checkpoint.documentId]);
+        leaseRequest.onsuccess = () => {
+          const lease = leaseRequest.result as StoredLiveAuthorMonitorLease | undefined;
+          let protectedByLease = false;
+          if (lease !== undefined) {
+            try {
+              validateLiveAuthorMonitorLease(lease, projectId, checkpoint.documentId);
+              protectedByLease = lease.expiresAt > now;
+            } catch {
+              // Un lease ilegible o inválido no autoriza borrar métricas de ese documento.
+              protectedByLease = true;
+            }
+          }
+          if (!protectedByLease) {
+            try {
+              cursor.delete();
+              deleted++;
+            } catch (error) {
+              failure = error instanceof Error ? error :
+                new Error("No se pudo eliminar un checkpoint vencido del monitor.");
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              return;
+            }
+          }
+          cursor.continue();
+        };
+        leaseRequest.onerror = () => {
+          failure = leaseRequest.error ??
+            new Error("No se pudo verificar el lease antes de limpiar un checkpoint.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        };
+      };
+      cursorRequest.onerror = () => {
+        failure = cursorRequest.error ??
+          new Error("No se pudieron recorrer los checkpoints para aplicar retención.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve(deleted);
+      transaction.onerror = () => reject(failure ?? transaction.error ??
+        new Error("No se pudo completar la limpieza de checkpoints."));
+      transaction.onabort = () => reject(failure ?? transaction.error ??
+        new Error("Se canceló la limpieza de checkpoints."));
     });
   }
 

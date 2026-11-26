@@ -192,6 +192,62 @@ test("publica acciones narrativas candidatas tras reconocer personajes del proye
   await api.disposeSafely();
 });
 
+test("publica estados explícitos de personajes en cada revisión de escritura en vivo", async () => {
+  const store = new MemoryDocumentStore();
+  store.entities = new Map();
+  store.saveEntity = async entity => {
+    store.entities.set(entity.id, structuredClone(entity));
+  };
+  store.loadEntities = async projectId => [...store.entities.values()]
+    .filter(entity => entity.projectId === projectId)
+    .map(entity => structuredClone(entity));
+
+  const updates = [];
+  const api = new HostEngineApi({
+    store,
+    callbacks: {
+      onNarrativeCharacterStateCandidates(analysis, candidates) {
+        updates.push({ analysis, candidates });
+      }
+    }
+  });
+  api.initializeProject({ projectId: "monitor-character-state", projectName: "Character state" });
+  await api.openDocument({ documentId: "chapter-live", text: "", revision: 0, sequence: 0 });
+  await api.extractNarrativeKnowledge("chapter-live", 0, "Personaje Ana", 0);
+
+  const firstText = "Ana está herida.";
+  const firstAdmission = api.onEditorChange({
+    documentId: "chapter-live", sequence: 1, baseRevision: 0,
+    start: 0, end: 0, replacement: firstText, activityKind: "typing"
+  });
+  assert.equal(firstAdmission.status, "queued");
+  await api.flushPendingChanges();
+
+  const first = updates.find(item => item.analysis.revision === 1);
+  assert.ok(first, "la revisión de escritura debe publicar estados candidatos");
+  assert.equal(first.candidates.length, 1);
+  assert.equal(first.candidates[0].entityId, "entity:character:ana");
+  assert.equal(first.candidates[0].state, "injured");
+  assert.equal(first.candidates[0].polarity, "affirmed");
+  assert.equal(first.candidates[0].evidence.excerpt, firstText);
+
+  const secondText = "Ana ya no está herida.";
+  const secondAdmission = api.onEditorChange({
+    documentId: "chapter-live", sequence: 2, baseRevision: 1,
+    start: 0, end: firstText.length, replacement: secondText, activityKind: "correction"
+  });
+  assert.equal(secondAdmission.status, "queued");
+  await api.flushPendingChanges();
+
+  const second = updates.find(item => item.analysis.revision === 2);
+  assert.ok(second, "la corrección debe publicar la nueva revisión del estado");
+  assert.equal(second.candidates.length, 1);
+  assert.equal(second.candidates[0].state, "injured");
+  assert.equal(second.candidates[0].polarity, "negated");
+  assert.equal(second.candidates[0].evidence.excerpt, secondText);
+  await api.disposeSafely();
+});
+
 test("reanuda las métricas desde el snapshot durable sin reabrir el documento del motor", async () => {
   const api = new HostEngineApi({ store: new MemoryDocumentStore() });
   api.initializeProject({ projectId: "monitor-reopen", projectName: "Monitor reopen" });

@@ -29,6 +29,7 @@ export interface LiveAuthorMonitorSnapshot {
   readonly pauseCount: number;
   readonly acceptedChanges: number;
   readonly typingChanges: number;
+  readonly compositionChanges: number;
   readonly pasteChanges: number;
   readonly deletionChanges: number;
   readonly correctionChanges: number;
@@ -90,6 +91,7 @@ interface DocumentSession {
   pauseCount: number;
   acceptedChanges: number;
   typingChanges: number;
+  compositionChanges: number;
   pasteChanges: number;
   deletionChanges: number;
   correctionChanges: number;
@@ -118,9 +120,10 @@ interface DocumentSession {
 export type LiveAuthorMonitorListener = (snapshot: LiveAuthorMonitorSnapshot) => void;
 
 function classifyActivityKind(change: EditorChange):
-  "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other" {
+  "typing" | "composition" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other" {
   switch (change.activityKind) {
     case "typing":
+    case "composition":
     case "paste":
     case "deletion":
     case "correction":
@@ -209,7 +212,8 @@ export class LiveAuthorMonitor {
       pauseCount: 0,
       acceptedChanges: 0,
       typingChanges: 0,
-      pasteChanges: 0,
+      compositionChanges: 0,
+      pasteChanges: 0;
       deletionChanges: 0,
       correctionChanges: 0,
       undoChanges: 0,
@@ -269,6 +273,7 @@ export class LiveAuthorMonitor {
     session.acceptedChanges++;
     switch (classifyActivityKind(change)) {
       case "typing": session.typingChanges++; break;
+      case "composition": session.compositionChanges++; break;
       case "paste": session.pasteChanges++; break;
       case "deletion": session.deletionChanges++; break;
       case "correction": session.correctionChanges++; break;
@@ -416,6 +421,7 @@ export class LiveAuthorMonitor {
       pauseCount: session.pauseCount,
       acceptedChanges: session.acceptedChanges,
       typingChanges: session.typingChanges,
+      compositionChanges: session.compositionChanges,
       pasteChanges: session.pasteChanges,
       deletionChanges: session.deletionChanges,
       correctionChanges: session.correctionChanges,
@@ -472,14 +478,17 @@ export class LiveAuthorMonitor {
     const classifiedActivityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
       checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges, checkpoint.redoChanges];
     const hasActivityCounts = classifiedActivityCounts.some(value => value !== undefined) ||
-      checkpoint.otherChanges !== undefined;
+      checkpoint.compositionChanges !== undefined || checkpoint.otherChanges !== undefined;
     const validClassifiedCounts = classifiedActivityCounts.every(
       value => value !== undefined && integerNonNegative(value)
     );
-    const classifiedCountTotal = classifiedActivityCounts.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    const classifiedCountTotal = classifiedActivityCounts.reduce<number>((sum, value) => sum + (value ?? 0), 0) +
+      (checkpoint.compositionChanges ?? 0);
+    const validCompositionCount = checkpoint.compositionChanges === undefined ||
+      integerNonNegative(checkpoint.compositionChanges);
     const activityCountTotal = classifiedCountTotal +
       (checkpoint.otherChanges ?? checkpoint.acceptedChanges - classifiedCountTotal);
-    const validActivityCounts = !hasActivityCounts || (validClassifiedCounts &&
+    const validActivityCounts = !hasActivityCounts || (validClassifiedCounts && validCompositionCount &&
       (checkpoint.otherChanges === undefined || integerNonNegative(checkpoint.otherChanges)) &&
       classifiedCountTotal <= checkpoint.acceptedChanges &&
       (checkpoint.otherChanges === undefined ||
@@ -556,6 +565,7 @@ export class LiveAuthorMonitor {
       pauseCount: checkpoint.pauseCount,
       acceptedChanges: checkpoint.acceptedChanges,
       typingChanges: checkpoint.typingChanges ?? 0,
+      compositionChanges: checkpoint.compositionChanges ?? 0,
       pasteChanges: checkpoint.pasteChanges ?? 0,
       deletionChanges: checkpoint.deletionChanges ?? 0,
       correctionChanges: checkpoint.correctionChanges ?? 0,
@@ -652,6 +662,7 @@ export class LiveAuthorMonitor {
       pauseCount: session.pauseCount,
       acceptedChanges: session.acceptedChanges,
       typingChanges: session.typingChanges,
+      compositionChanges: session.compositionChanges,
       pasteChanges: session.pasteChanges,
       deletionChanges: session.deletionChanges,
       correctionChanges: session.correctionChanges,

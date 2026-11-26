@@ -86,6 +86,49 @@ class MemoryDocumentStore {
   }
 }
 
+test("emite candidatos narrativos con evidencia durante cada revisión del autor", async () => {
+  const updates = [];
+  const api = new HostEngineApi({
+    store: new MemoryDocumentStore(),
+    callbacks: {
+      onNarrativeIdeaCandidates(analysis, candidates) {
+        updates.push({ analysis, candidates });
+      }
+    }
+  });
+  api.initializeProject({ projectId: "monitor-live-intelligence", projectName: "Live intelligence" });
+  await api.openDocument({
+    documentId: "chapter-live",
+    text: "",
+    revision: 0,
+    sequence: 0
+  });
+
+  const text = "El tema central es la memoria perdida.";
+  const admission = api.onEditorChange({
+    documentId: "chapter-live",
+    sequence: 1,
+    baseRevision: 0,
+    start: 0,
+    end: 0,
+    replacement: text,
+    activityKind: "typing"
+  });
+  assert.equal(admission.status, "queued");
+  await api.flushPendingChanges();
+
+  const update = updates.find(item => item.analysis.revision === 1);
+  assert.ok(update, "cada revisión analizada debe publicar un resultado de descubrimiento");
+  assert.equal(update.analysis.documentId, "chapter-live");
+  assert.equal(update.candidates.length, 1);
+  assert.equal(update.candidates[0].kind, "theme");
+  assert.equal(update.candidates[0].text, "la memoria perdida");
+  assert.equal(update.candidates[0].reviewStatus, "candidate");
+  assert.equal(update.candidates[0].evidence.start, text.indexOf("la memoria perdida"));
+  assert.equal(update.candidates[0].evidence.excerpt, text);
+  await api.disposeSafely();
+});
+
 test("reanuda las métricas desde el snapshot durable sin reabrir el documento del motor", async () => {
   const api = new HostEngineApi({ store: new MemoryDocumentStore() });
   api.initializeProject({ projectId: "monitor-reopen", projectName: "Monitor reopen" });

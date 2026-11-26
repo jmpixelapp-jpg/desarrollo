@@ -69,6 +69,13 @@ const FINGERPRINT_LIMITS = {
   maxBytes: 40_000_000
 } as const;
 
+/**
+ * Límites compartidos por el emisor y receptor al transportar el índice
+ * compacto. Los anfitriones deben configurar el diario con esta misma
+ * política para que las operaciones grandes no se rechacen al recibirse.
+ */
+export const NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS = FINGERPRINT_LIMITS;
+
 function equalOccurrence(
   left: NarrativeIdeaOccurrenceReference,
   right: NarrativeIdeaOccurrenceReference

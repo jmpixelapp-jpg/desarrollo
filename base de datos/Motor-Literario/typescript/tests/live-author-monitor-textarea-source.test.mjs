@@ -118,6 +118,7 @@ test("convierte escritura y reemplazo de selección en deltas UTF-16 consecutivo
     sequence: 11,
     documentLength: 5,
     compositionActive: false,
+    pendingInput: false,
     needsResync: false
   });
   f.stop();
@@ -413,12 +414,37 @@ test("blur suspende operaciones incompletas pero no interrumpe un editor inactiv
   pending.element.emitBeforeInput("insertText");
   pending.element.emitBlur();
   await Promise.resolve();
-  assert.equal(pending.source.getState().needsResync, true);
-  assert.equal(pending.errors[0].code, "missing-input");
-  assert.equal(pending.source.pendingInput, undefined,
-    "la operación parcial se libera al perder el foco");
+  assert.equal(pending.source.getState().needsResync, false,
+    "blur no debe adelantarse a un input que el navegador puede entregar en una tarea posterior");
+  assert.equal(pending.source.getState().pendingInput, true);
+  assert.equal(pending.errors.length, 0);
+
+  // El input tardío completa correctamente el par aunque el textarea ya perdió foco.
+  pending.element.value = "abcx";
+  pending.element.emitInput(false, "insertText", true, "x");
+  assert.equal(pending.changes.length, 1);
+  assert.equal(pending.changes[0].replacement, "x");
+  assert.equal(pending.source.getState().pendingInput, false);
+  assert.equal(pending.source.getState().needsResync, false);
   pending.stop();
   pending.source.dispose();
+
+  // Si no llega input, un nuevo beforeinput confirma la discontinuidad.
+  const lost = fixture("abc", 0, 0);
+  lost.element.selectionStart = 3;
+  lost.element.selectionEnd = 3;
+  lost.element.emitBeforeInput("insertText");
+  lost.element.emitBlur();
+  await Promise.resolve();
+  assert.equal(lost.source.getState().pendingInput, true);
+  lost.element.selectionStart = 3;
+  lost.element.selectionEnd = 3;
+  lost.element.emitBeforeInput("insertText");
+  assert.equal(lost.source.getState().needsResync, true);
+  assert.equal(lost.source.getState().pendingInput, false);
+  assert.equal(lost.errors[0].code, "missing-input");
+  lost.stop();
+  lost.source.dispose();
 });
 
 test("pagehide y freeze suspenden la captura y exigen snapshot tras volver", () => {

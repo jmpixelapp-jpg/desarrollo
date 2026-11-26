@@ -421,3 +421,36 @@ test("rechaza input cuyo inputType no coincide con el beforeinput asociado", () 
   f.stop();
   f.source.dispose();
 });
+
+
+test("acepta el input final cuando compositionend precede al input en el navegador", () => {
+  const f = fixture("abc", 0, 0);
+  f.element.emitCompositionStart();
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+  f.element.emitBeforeInput("insertCompositionText", true);
+  // Orden observado en algunos navegadores: compositionend antes del input final.
+  f.element.value = "abc日本";
+  f.element.emitCompositionEnd();
+  assert.equal(f.source.getState().compositionActive, false);
+  assert.equal(f.source.getState().needsResync, false);
+  f.element.emitInput(false, "insertCompositionText");
+
+  assert.equal(f.changes.length, 1);
+  assert.deepEqual({
+    start: f.changes[0].start,
+    end: f.changes[0].end,
+    replacement: f.changes[0].replacement,
+    sequence: f.changes[0].sequence,
+    baseRevision: f.changes[0].baseRevision
+  }, {
+    start: 3,
+    end: 3,
+    replacement: "日本",
+    sequence: 1,
+    baseRevision: 0
+  });
+  assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});

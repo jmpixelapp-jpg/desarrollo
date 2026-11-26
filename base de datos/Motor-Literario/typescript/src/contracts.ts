@@ -162,7 +162,13 @@ export interface ProjectStore {
   /** Bandeja de salida durable para sincronización; no implica transporte remoto. */
   enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
   loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
-  recordSyncOperationAttempt?(operationId: string, attemptedAt: number, error?: string): Promise<void>;
+  recordSyncOperationAttempt?(
+    operationId: string,
+    attemptedAt: number,
+    error?: string,
+    nextAttemptAt?: number
+  ): Promise<void>;
+  countPendingSyncOperations?(projectId: string): Promise<number>;
   acknowledgeSyncOperation?(operationId: string): Promise<boolean>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
@@ -474,4 +480,5 @@ export interface StoredSyncOperation {
   readonly attemptCount: number;
   readonly lastAttemptAt?: number;
   readonly lastError?: string;
+  readonly nextAttemptAt?: number;
 }

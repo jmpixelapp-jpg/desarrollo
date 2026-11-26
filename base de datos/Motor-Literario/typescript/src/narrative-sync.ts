@@ -18,11 +18,19 @@ export interface SyncOperation {
   readonly attemptCount: number;
   readonly lastAttemptAt?: number;
   readonly lastError?: string;
+  /** No transmitir antes de esta fecha; se conserva en la bandeja durable. */
+  readonly nextAttemptAt?: number;
 }
 
 export interface SyncOutboxPort {
   loadPendingSyncOperations(projectId: string, limit?: number): Promise<readonly SyncOperation[]>;
-  recordSyncOperationAttempt(operationId: string, attemptedAt: number, error?: string): Promise<void>;
+  recordSyncOperationAttempt(
+    operationId: string,
+    attemptedAt: number,
+    error?: string,
+    nextAttemptAt?: number
+  ): Promise<void>;
+  countPendingSyncOperations(projectId: string): Promise<number>;
   acknowledgeSyncOperation(operationId: string): Promise<boolean>;
 }
 
@@ -48,6 +56,12 @@ export interface SyncTransport {
 export interface NarrativeSyncCoordinatorOptions {
   readonly batchSize?: number;
   readonly now?: () => number;
+  /** Espera exponencial inicial tras un fallo, en milisegundos. */
+  readonly retryBaseDelayMs?: number;
+  /** Límite superior del backoff, en milisegundos. */
+  readonly retryMaxDelayMs?: number;
+  /** Fuente inyectable para jitter determinista en pruebas. Devuelve [0, 1]. */
+  readonly random?: () => number;
 }
 
 export interface NarrativeSyncResult {
@@ -61,6 +75,9 @@ export interface NarrativeSyncResult {
 
 const DEFAULT_BATCH_SIZE = 50;
 const MAX_BATCH_SIZE = 500;
+const DEFAULT_RETRY_BASE_DELAY_MS = 1_000;
+const DEFAULT_RETRY_MAX_DELAY_MS = 5 * 60_000;
+const MAX_RETRY_DELAY_MS = 24 * 60 * 60_000;
 
 function assertNonEmpty(value: unknown, label: string): asserts value is string {
   if (typeof value !== "string" || !value.trim()) {
@@ -86,7 +103,10 @@ function validateOperation(operation: SyncOperation, projectId: string): void {
       (operation.lastAttemptAt !== undefined &&
         (!Number.isFinite(operation.lastAttemptAt) || operation.lastAttemptAt < 0)) ||
       (operation.lastError !== undefined &&
-        (typeof operation.lastError !== "string" || operation.lastError.length > 2048))) {
+        (typeof operation.lastError !== "string" || operation.lastError.length > 2048)) ||
+      (operation.nextAttemptAt !== undefined &&
+        (!Number.isFinite(operation.nextAttemptAt) || operation.nextAttemptAt < 0 ||
+          (operation.lastAttemptAt !== undefined && operation.nextAttemptAt < operation.lastAttemptAt)))) {
     throw new TypeError("La bandeja devolvió una operación fuera de contrato o de otro proyecto.");
   }
   let payload: unknown;
@@ -120,6 +140,10 @@ function validatePushResult(
     }
     add(conflict.operationId, "operationId del conflicto");
     assertNonEmpty(conflict.code, "code del conflicto");
+    if (conflict.message !== undefined &&
+        (typeof conflict.message !== "string" || conflict.message.length > 2048)) {
+      throw new TypeError("El mensaje del conflicto supera el límite permitido.");
+    }
   }
   for (const id of result.retryableOperationIds) add(id, "operationId reintentable");
   if (classified.size !== sent.size) {
@@ -130,6 +154,9 @@ function validatePushResult(
 export class NarrativeSyncCoordinator {
   private readonly batchSize: number;
   private readonly now: () => number;
+  private readonly retryBaseDelayMs: number;
+  private readonly retryMaxDelayMs: number;
+  private readonly random: () => number;
   private readonly inFlight = new Map<string, Promise<NarrativeSyncResult>>();
 
   constructor(
@@ -139,10 +166,54 @@ export class NarrativeSyncCoordinator {
   ) {
     this.batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this.now = options.now ?? Date.now;
+    this.retryBaseDelayMs = options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
+    this.retryMaxDelayMs = options.retryMaxDelayMs ?? DEFAULT_RETRY_MAX_DELAY_MS;
+    this.random = options.random ?? Math.random;
     if (!Number.isSafeInteger(this.batchSize) ||
         this.batchSize < 1 || this.batchSize > MAX_BATCH_SIZE) {
       throw new RangeError(`batchSize debe estar entre 1 y ${MAX_BATCH_SIZE}.`);
     }
+    if (!Number.isSafeInteger(this.retryBaseDelayMs) ||
+        this.retryBaseDelayMs < 1 || this.retryBaseDelayMs > MAX_RETRY_DELAY_MS ||
+        !Number.isSafeInteger(this.retryMaxDelayMs) ||
+        this.retryMaxDelayMs < this.retryBaseDelayMs ||
+        this.retryMaxDelayMs > MAX_RETRY_DELAY_MS) {
+      throw new RangeError("Los límites de backoff deben ser enteros positivos, crecientes y no superar 24 horas.");
+    }
+    if (typeof this.random !== "function") {
+      throw new TypeError("Se requiere una fuente de jitter válida.");
+    }
+  }
+
+  /** Calcula backoff exponencial con jitter igual para evitar reintentos sincronizados. */
+  private nextRetryAt(operation: SyncOperation, attemptedAt: number): number {
+    const exponent = Math.min(operation.attemptCount, 52);
+    const ceiling = Math.min(this.retryMaxDelayMs, this.retryBaseDelayMs * (2 ** exponent));
+    const sample = this.random();
+    if (!Number.isFinite(sample) || sample < 0 || sample > 1) {
+      throw new RangeError("La fuente de jitter debe devolver un número entre 0 y 1.");
+    }
+    const delay = Math.max(1, Math.floor(ceiling * (0.5 + sample * 0.5)));
+    const retryAt = attemptedAt + delay;
+    if (!Number.isSafeInteger(retryAt)) {
+      throw new RangeError("La fecha del próximo intento excede el rango seguro.");
+    }
+    return retryAt;
+  }
+
+  private async recordAttempt(
+    operation: SyncOperation,
+    attemptedAt: number,
+    error?: string,
+    scheduleRetry = false
+  ): Promise<void> {
+    const nextAttemptAt = scheduleRetry ? this.nextRetryAt(operation, attemptedAt) : undefined;
+    await this.outbox.recordSyncOperationAttempt(
+      operation.operationId,
+      attemptedAt,
+      error?.slice(0, 2048),
+      nextAttemptAt
+    );
   }
 
   /**
@@ -161,13 +232,20 @@ export class NarrativeSyncCoordinator {
   }
 
   private async performSync(projectId: string): Promise<NarrativeSyncResult> {
-    const pending = await this.outbox.loadPendingSyncOperations(projectId, this.batchSize);
-    if (pending.length > this.batchSize) {
+    const attemptedAt = this.now();
+    if (!Number.isFinite(attemptedAt) || attemptedAt < 0) {
+      throw new RangeError("El reloj de sincronización devolvió una marca temporal inválida.");
+    }
+
+    const loaded = await this.outbox.loadPendingSyncOperations(projectId, this.batchSize);
+    if (loaded.length > this.batchSize) {
       throw new Error("La bandeja excedió el tamaño máximo solicitado.");
     }
     const ids = new Set<string>();
     const lastSequenceByDevice = new Map<string, number>();
-    for (const operation of pending) {
+    const pending: SyncOperation[] = [];
+    let blockedByBackoff = false;
+    for (const operation of loaded) {
       validateOperation(operation, projectId);
       if (ids.has(operation.operationId)) {
         throw new Error("La bandeja devolvió operationId duplicados.");
@@ -178,15 +256,19 @@ export class NarrativeSyncCoordinator {
         throw new Error("La bandeja no devolvió secuencias crecientes por dispositivo.");
       }
       lastSequenceByDevice.set(operation.deviceId, operation.sequence);
+
+      // Conserva el orden durable: no adelanta operaciones posteriores a una
+      // operación que todavía está esperando su próxima ventana de reintento.
+      if (!blockedByBackoff && (operation.nextAttemptAt ?? 0) <= attemptedAt) {
+        pending.push(operation);
+      } else {
+        blockedByBackoff = true;
+      }
     }
 
     if (pending.length === 0) {
-      return { projectId, sent: 0, acknowledged: 0, conflicted: 0, retryable: 0, remaining: 0 };
-    }
-
-    const attemptedAt = this.now();
-    if (!Number.isFinite(attemptedAt) || attemptedAt < 0) {
-      throw new RangeError("El reloj de sincronización devolvió una marca temporal inválida.");
+      const remaining = await this.outbox.countPendingSyncOperations(projectId);
+      return { projectId, sent: 0, acknowledged: 0, conflicted: 0, retryable: 0, remaining };
     }
 
     let response: SyncPushResult;
@@ -196,20 +278,37 @@ export class NarrativeSyncCoordinator {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error de transporte desconocido.";
       await Promise.all(pending.map(operation =>
-        this.outbox.recordSyncOperationAttempt(operation.operationId, attemptedAt, message)
+        this.recordAttempt(operation, attemptedAt, message, true)
       ));
       throw error;
     }
 
-    // Registrar el intento antes de retirar cualquier operación confirmada.
-    await Promise.all(pending.map(operation =>
-      this.outbox.recordSyncOperationAttempt(operation.operationId, attemptedAt)
-    ));
+    const acknowledgedIds = new Set(response.acknowledgedOperationIds);
+    const conflictsById = new Map(response.conflicts.map(conflict => [conflict.operationId, conflict]));
+    const retryableIds = new Set(response.retryableOperationIds);
+
+    // Los acuses limpian el backoff anterior. Conflictos y reintentos quedan
+    // durables con su próxima fecha; no se elimina nada antes del acuse.
+    await Promise.all(pending.map(operation => {
+      if (acknowledgedIds.has(operation.operationId)) {
+        return this.recordAttempt(operation, attemptedAt);
+      }
+      const conflict = conflictsById.get(operation.operationId);
+      if (conflict) {
+        const detail = conflict.message ? ": " + conflict.message : "";
+        return this.recordAttempt(operation, attemptedAt, "conflict: " + conflict.code + detail, true);
+      }
+      if (retryableIds.has(operation.operationId)) {
+        return this.recordAttempt(operation, attemptedAt, "retryable response", true);
+      }
+      throw new Error("La respuesta validada perdió la clasificación de una operación.");
+    }));
 
     let acknowledged = 0;
     for (const operationId of response.acknowledgedOperationIds) {
       if (await this.outbox.acknowledgeSyncOperation(operationId)) acknowledged++;
     }
+    const remaining = await this.outbox.countPendingSyncOperations(projectId);
 
     return {
       projectId,
@@ -217,7 +316,7 @@ export class NarrativeSyncCoordinator {
       acknowledged,
       conflicted: response.conflicts.length,
       retryable: response.retryableOperationIds.length,
-      remaining: pending.length - acknowledged
+      remaining
     };
   }
 }

@@ -377,10 +377,11 @@ La bandeja `sync-outbox` conserva operaciones salientes hasta que el transporte 
 
 - `enqueueSyncOperation(operation)`: inserta una operación idempotente. Repetir el mismo `operationId` con el mismo contenido no duplica el registro; reutilizarlo con contenido distinto se rechaza. La secuencia es única por proyecto y dispositivo.
 - `loadPendingSyncOperations(projectId, limit)`: lee pendientes sin eliminarlos.
-- `recordSyncOperationAttempt(operationId, attemptedAt, error?)`: registra reintentos y conserva el último error.
+- `recordSyncOperationAttempt(operationId, attemptedAt, error?, nextAttemptAt?)`: registra el intento y la próxima fecha; omitir nextAttemptAt limpia el backoff anterior.
+- `countPendingSyncOperations(projectId)`: cuenta todas las operaciones, incluso las que esperan.
 - `acknowledgeSyncOperation(operationId)`: elimina la operación solo tras el acuse remoto validado.
 
-Esta bandeja es infraestructura local durable; por sí sola no realiza llamadas de red ni sincroniza dispositivos. El anfitrión debe aportar autenticación, transporte, validación del lado servidor, política de backoff y resolución explícita de conflictos. Nunca debe confirmar una operación antes de que el servidor la haya aceptado.
+El coordinador aplica backoff exponencial con jitter (1 segundo inicial y 5 minutos de máximo por defecto). Las fechas se guardan en IndexedDB; las operaciones que aún no vencen no se envían y una operación retrasada no permite adelantar las siguientes de la cola. El anfitrión debe despertar el coordinador cuando haya conexión o periódicamente; la bandeja por sí sola no realiza llamadas de red ni sincroniza dispositivos. Siguen siendo responsabilidad del anfitrión el transporte remoto, autenticación, autorización, validación del lado servidor y resolución explícita de conflictos. Nunca debe confirmar una operación antes de que el servidor la haya aceptado.
 
 
 La suite completa construye también el bundle aislado del monitor antes de ejecutar los tests: `npm run build:monitor-test` genera `dist-monitor/`, requerido por las regresiones de aislamiento de diagnósticos.

@@ -56,11 +56,13 @@ test("la bandeja durable es idempotente, ordenada y conserva operaciones hasta e
     assert.equal(pending.length, 2);
     assert.deepEqual(pending.map(item => item.sequence), [1, 2]);
 
-    await store.recordSyncOperationAttempt(first.operationId, 300, "Red no disponible");
+    await store.recordSyncOperationAttempt(first.operationId, 300, "Red no disponible", 600);
     pending = await store.loadPendingSyncOperations("sync-outbox-project");
     assert.equal(pending[0].attemptCount, 1);
     assert.equal(pending[0].lastAttemptAt, 300);
     assert.equal(pending[0].lastError, "Red no disponible");
+    assert.equal(pending[0].nextAttemptAt, 600);
+    assert.equal(await store.countPendingSyncOperations("sync-outbox-project"), 2);
 
     assert.equal(await store.acknowledgeSyncOperation(first.operationId), true);
     assert.equal(await store.acknowledgeSyncOperation(first.operationId), false);
@@ -103,6 +105,7 @@ test("el coordinador usa la bandeja IndexedDB real y conserva conflictos hasta s
     await store.enqueueSyncOperation(second);
 
     let pushCount = 0;
+    let now = 500;
     const coordinator = new NarrativeSyncCoordinator(store, {
       async push(projectId, operations) {
         pushCount++;
@@ -120,7 +123,12 @@ test("el coordinador usa la bandeja IndexedDB real y conserva conflictos hasta s
           retryableOperationIds: []
         };
       }
-    }, { now: () => 500 });
+    }, {
+      now: () => now,
+      retryBaseDelayMs: 1_000,
+      retryMaxDelayMs: 1_000,
+      random: () => 1
+    });
 
     const firstResult = await coordinator.syncOnce("sync-outbox-project");
     assert.equal(firstResult.acknowledged, 1);
@@ -130,7 +138,14 @@ test("el coordinador usa la bandeja IndexedDB real y conserva conflictos hasta s
     assert.equal(pending[0].operationId, "op-sync-2");
     assert.equal(pending[0].attemptCount, 1);
     assert.equal(pending[0].lastAttemptAt, 500);
+    assert.equal(pending[0].nextAttemptAt, 1_500);
 
+    const deferred = await coordinator.syncOnce("sync-outbox-project");
+    assert.equal(deferred.sent, 0);
+    assert.equal(deferred.remaining, 1);
+    assert.equal(pushCount, 1);
+
+    now = 1_500;
     const secondResult = await coordinator.syncOnce("sync-outbox-project");
     assert.equal(secondResult.acknowledged, 1);
     assert.equal((await store.loadPendingSyncOperations("sync-outbox-project")).length, 0);

@@ -8,7 +8,7 @@
 
 `NarrativeSyncCoordinator` conecta dos puertos:
 
-- `SyncOutboxPort`: implementado directamente por `IndexedDbProjectStore` (IndexedDB v25); lee operaciones pendientes, registra intentos y elimina una operación únicamente después de un acuse explícito.
+- `SyncOutboxPort`: implementado directamente por `IndexedDbProjectStore` (IndexedDB v25); lee operaciones pendientes, registra intentos, cuenta también las operaciones retrasadas y elimina una operación únicamente después de un acuse explícito. `recordSyncOperationAttempt(..., nextAttemptAt)` persiste la próxima fecha; omitirla limpia el backoff anterior.
 - `SyncTransport`: envía un lote a un servidor y devuelve tres conjuntos disjuntos: operaciones aceptadas, conflictos y operaciones reintentables.
 
 El coordinador no conoce HTTP, credenciales, proveedor cloud ni formato de API. Esas responsabilidades pertenecen al anfitrión y a un adaptador remoto que deberá validar autenticación, autorización por proyecto, esquema y tamaño del payload.
@@ -22,7 +22,10 @@ El coordinador no conoce HTTP, credenciales, proveedor cloud ni formato de API. 
 5. Exige que cada ID devuelto por el transporte pertenezca al lote y aparezca en una sola clasificación.
 6. Registra el intento de todas las operaciones enviadas antes de retirar las aceptadas.
 7. Conserva conflictos y operaciones reintentables en la bandeja; no intenta resolverlos ni sobrescribir datos locales.
-8. Ante error de red o respuesta inválida, registra el intento y propaga el error. No confirma operaciones.
+8. Aplica backoff exponencial local con jitter igual (1 segundo inicial y máximo de 5 minutos por defecto); nextAttemptAt se persiste en IndexedDB.
+9. No reenvía operaciones antes de su fecha y no adelanta operaciones posteriores cuando la primera pendiente está en backoff.
+10. Cuenta como pendientes también las operaciones que esperan su próxima ventana de reintento.
+11. Ante error de red o respuesta inválida, registra el intento, programa el siguiente y propaga el error. No confirma operaciones.
 
 ## Contrato de respuesta remota
 
@@ -36,12 +39,12 @@ Una respuesta debe clasificar exactamente una vez cada operación enviada: no pu
 
 Este módulo **no completa la sincronización multidispositivo**. Todavía faltan:
 
-- Adaptador concreto del almacenamiento durable de la bandeja para la rama principal.
 - Transporte remoto y contrato versionado de API.
 - Autenticación y autorización por escritor/proyecto.
 - Firma o verificación de integridad del lote y límites del payload en el servidor.
 - Resolución interactiva de conflictos, con revisión de base y cambios concurrentes.
-- Política de backoff, jitter, límites de frecuencia y reanudación.
+- Política del anfitrión para despertar el coordinador cuando haya conexión o periódicamente; la fecha y el backoff ya se conservan localmente.
+- Límites de frecuencia del servidor.
 - Pruebas de integración contra un servidor y pruebas entre dos dispositivos.
 
 El coordinador también valida el tamaño y la estructura JSON de cada payload antes de entregarlo al transporte. El anfitrión no debe borrar una operación por timeout, respuesta ambigua o conflicto. Solo un acuse explícito y validado permite retirarla.

@@ -19,8 +19,20 @@ function createOutbox(initial) {
     async loadPendingSyncOperations(projectId, limit) {
       return pending.filter(item => item.projectId === projectId).slice(0, limit);
     },
-    async recordSyncOperationAttempt(id, at, error) {
-      attempts.push({ id, at, error });
+    async recordSyncOperationAttempt(id, at, error, nextAttemptAt) {
+      attempts.push({ id, at, ...(error !== undefined ? { error } : {}),
+        ...(nextAttemptAt !== undefined ? { nextAttemptAt } : {}) });
+      const item = pending.find(candidate => candidate.operationId === id);
+      if (!item) throw new Error("missing operation");
+      delete item.lastError;
+      delete item.nextAttemptAt;
+      item.attemptCount++;
+      item.lastAttemptAt = at;
+      if (error !== undefined) item.lastError = error;
+      if (nextAttemptAt !== undefined) item.nextAttemptAt = nextAttemptAt;
+    },
+    async countPendingSyncOperations(projectId) {
+      return pending.filter(item => item.projectId === projectId).length;
     },
     async acknowledgeSyncOperation(id) {
       const index = pending.findIndex(item => item.operationId === id);
@@ -96,10 +108,19 @@ test("un fallo de transporte registra el intento y conserva las operaciones", as
   const outbox = createOutbox([operation("op-1", 1)]);
   const coordinator = new NarrativeSyncCoordinator(outbox, {
     async push() { throw new Error("offline"); }
-  }, { now: () => 55 });
+  }, {
+    now: () => 55,
+    retryBaseDelayMs: 1_000,
+    retryMaxDelayMs: 1_000,
+    random: () => 1
+  });
   await assert.rejects(coordinator.syncOnce("project-a"), /offline/);
   assert.equal(outbox.pending.length, 1);
-  assert.deepEqual(outbox.attempts, [{ id: "op-1", at: 55, error: "offline" }]);
+  assert.deepEqual(outbox.attempts, [
+    { id: "op-1", at: 55, error: "offline", nextAttemptAt: 1_055 }
+  ]);
+  assert.equal(outbox.pending[0].attemptCount, 1);
+  assert.equal(outbox.pending[0].nextAttemptAt, 1_055);
 });
 
 test("valida el aislamiento del proyecto y los límites del lote", async () => {
@@ -167,4 +188,59 @@ test("rechaza payloads que no sean objetos JSON antes de llamar al transporte", 
   assert.equal(pushed, false);
   assert.equal(outbox.pending.length, 1);
   assert.equal(outbox.attempts.length, 0);
+});
+
+
+test("aplica backoff exponencial persistente y no reintenta antes de la fecha programada", async () => {
+  const outbox = createOutbox([operation("op-1", 1)]);
+  let now = 500;
+  let pushes = 0;
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push() {
+      pushes++;
+      if (pushes === 1) throw new Error("offline");
+      return { acknowledgedOperationIds: ["op-1"], conflicts: [], retryableOperationIds: [] };
+    }
+  }, {
+    now: () => now,
+    retryBaseDelayMs: 1_000,
+    retryMaxDelayMs: 4_000,
+    random: () => 1
+  });
+
+  await assert.rejects(coordinator.syncOnce("project-a"), /offline/);
+  assert.equal(outbox.pending[0].nextAttemptAt, 1_500);
+
+  const deferred = await coordinator.syncOnce("project-a");
+  assert.deepEqual(deferred, {
+    projectId: "project-a", sent: 0, acknowledged: 0,
+    conflicted: 0, retryable: 0, remaining: 1
+  });
+  assert.equal(pushes, 1, "no debe enviar durante el backoff");
+
+  now = 1_500;
+  const retried = await coordinator.syncOnce("project-a");
+  assert.equal(retried.acknowledged, 1);
+  assert.equal(retried.remaining, 0);
+  assert.equal(pushes, 2);
+  assert.equal(outbox.pending.length, 0);
+});
+
+test("una operación retrasada bloquea la cola para conservar el orden de secuencia", async () => {
+  const outbox = createOutbox([
+    operation("op-1", 1, { nextAttemptAt: 2_000 }),
+    operation("op-2", 2)
+  ]);
+  let pushes = 0;
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push() {
+      pushes++;
+      return { acknowledgedOperationIds: ["op-1", "op-2"], conflicts: [], retryableOperationIds: [] };
+    }
+  }, { now: () => 1_000 });
+
+  const result = await coordinator.syncOnce("project-a");
+  assert.equal(result.sent, 0);
+  assert.equal(result.remaining, 2);
+  assert.equal(pushes, 0);
 });

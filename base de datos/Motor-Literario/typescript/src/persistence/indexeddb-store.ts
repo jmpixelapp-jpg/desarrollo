@@ -5761,7 +5761,8 @@ export class IndexedDbProjectStore implements ProjectStore {
         typeof operation.payload !== "string" || operation.payload.length > 2_000_000 ||
         !Number.isFinite(operation.createdAt) || operation.createdAt < 0 ||
         operation.attemptCount !== 0 ||
-        operation.lastAttemptAt !== undefined || operation.lastError !== undefined) {
+        operation.lastAttemptAt !== undefined || operation.lastError !== undefined ||
+        operation.nextAttemptAt !== undefined) {
       throw new Error("Operación de sincronización inválida para la bandeja durable.");
     }
     let payload: unknown;
@@ -5824,11 +5825,37 @@ export class IndexedDbProjectStore implements ProjectStore {
     return result.map(item => structuredClone(item));
   }
 
-  /** Registra un intento fallido sin retirar la operación de la bandeja. */
-  async recordSyncOperationAttempt(operationId: string, attemptedAt: number, error?: string): Promise<void> {
+  /** Cuenta todas las operaciones, incluidas las que esperan su siguiente reintento. */
+  async countPendingSyncOperations(projectId: string): Promise<number> {
+    if (typeof projectId !== "string" || !projectId.trim()) {
+      throw new Error("Proyecto inválido al contar la bandeja de sincronización.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(SYNC_OUTBOX, "readonly");
+    const request = transaction.objectStore(SYNC_OUTBOX)
+      .index("by-project-created-at")
+      .count(IDBKeyRange.bound([projectId, 0], [projectId, Number.MAX_SAFE_INTEGER]));
+    const result = await readAfterTransaction(
+      transaction, request, "No se pudo contar la bandeja de sincronización."
+    );
+    if (!Number.isSafeInteger(result) || result < 0) {
+      throw new Error("El conteo de la bandeja de sincronización es inválido.");
+    }
+    return result;
+  }
+
+  /** Registra un intento y su próxima fecha sin retirar la operación de la bandeja. */
+  async recordSyncOperationAttempt(
+    operationId: string,
+    attemptedAt: number,
+    error?: string,
+    nextAttemptAt?: number
+  ): Promise<void> {
     if (typeof operationId !== "string" || !operationId.trim() ||
         !Number.isFinite(attemptedAt) || attemptedAt < 0 ||
-        (error !== undefined && (typeof error !== "string" || error.length > 2048))) {
+        (error !== undefined && (typeof error !== "string" || error.length > 2048)) ||
+        (nextAttemptAt !== undefined &&
+          (!Number.isFinite(nextAttemptAt) || nextAttemptAt < attemptedAt))) {
       throw new Error("Metadatos inválidos para registrar el intento de sincronización.");
     }
     const db = await this.open();
@@ -5844,11 +5871,19 @@ export class IndexedDbProjectStore implements ProjectStore {
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
           return;
         }
+        if (!Number.isSafeInteger(current.attemptCount) ||
+            current.attemptCount < 0 || current.attemptCount >= Number.MAX_SAFE_INTEGER) {
+          failure = new Error("El contador de intentos de sincronización está fuera de rango.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        const { lastError: _lastError, nextAttemptAt: _nextAttemptAt, ...base } = current;
         store.put({
-          ...current,
+          ...base,
           attemptCount: current.attemptCount + 1,
           lastAttemptAt: attemptedAt,
-          ...(error !== undefined ? { lastError: error } : {})
+          ...(error !== undefined ? { lastError: error } : {}),
+          ...(nextAttemptAt !== undefined ? { nextAttemptAt } : {})
         });
       };
       request.onerror = () => {

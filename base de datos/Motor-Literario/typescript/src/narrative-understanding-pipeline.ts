@@ -134,6 +134,11 @@ export interface NarrativeUnderstandingResult {
       readonly sceneId?: string;
       readonly sceneAssignment: "explicit" | "unassigned" | "crosses-boundary";
     }[];
+    readonly characterIntentCandidates: readonly {
+      readonly candidateId: string;
+      readonly sceneId?: string;
+      readonly sceneAssignment: "explicit" | "unassigned" | "crosses-boundary";
+    }[];
     readonly eventCandidates: readonly {
       readonly candidateId: string;
       readonly sceneId?: string;
@@ -353,6 +358,7 @@ export function understandNarrativeFragment(
     sceneAssignments: {
       ideaCandidates: assign(ideas),
       actionCandidates: assign(actions),
+      characterIntentCandidates: assign(characterIntents),
       eventCandidates: assign(events),
       pronounActionCandidates: assign(pronounActions)
     }

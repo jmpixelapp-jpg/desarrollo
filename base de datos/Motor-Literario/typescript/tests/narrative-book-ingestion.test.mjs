@@ -116,3 +116,17 @@ test("la ingesta no mezcla entidades de otro libro ni oculta el límite del aná
     entities: [foreign]
   }));
 });
+
+test("limita la negación al contexto de la acción y no a la oración anterior", () => {
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "negation-scope", revision: 1,
+    text: "Ana no cruzó el puente. Pedro llegó al pueblo. María nunca salió."
+  });
+  const actionSignals = result.signals.filter(signal => signal.kind === "action");
+  const crossed = actionSignals.find(signal => signal.surface === "cruzó");
+  const arrived = actionSignals.find(signal => signal.surface === "llegó");
+  const departed = actionSignals.find(signal => signal.surface === "salió");
+  assert.equal(crossed?.polarity, "negated");
+  assert.equal(arrived?.polarity, "affirmed");
+  assert.equal(departed?.polarity, "negated");
+});

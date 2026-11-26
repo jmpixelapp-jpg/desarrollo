@@ -379,3 +379,6 @@ La prueba de relación reflexiva ahora también aplica ambas propuestas, verific
 Se añadió `verifyNarrativeReferenceRepairAuditIntegrity(store, projectId)`. La verificación comprueba la estructura de cada entrada, la correspondencia del identificador determinista con los datos operativos, la coherencia de las referencias anterior y posterior, y la unicidad de las operaciones. Además compara el destino registrado con la ficha actual. Los cambios posteriores y las fichas ausentes se presentan como estados históricos diferenciados, sin clasificarlos automáticamente como corrupción del registro.
 
 IndexedDB también valida el tipo de campo, los valores anterior/posterior y el ID determinista antes de aceptar una entrada. Se añadieron pruebas para auditoría íntegra, cambio posterior legítimo del registro y manipulación del ID de operación. **Pendiente:** ejecutar typecheck, suite completa y pruebas de migración IndexedDB en entorno compatible.
+
+
+La verificación también estrecha explícitamente el tipo de las entradas después de validarlas, evitando propagar campos opcionales al análisis de registros. La función queda exportada por el punto de entrada TypeScript existente.

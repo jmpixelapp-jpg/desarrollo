@@ -208,6 +208,23 @@ El análisis detiene la exploración al alcanzar el máximo de 100 candidatos, e
 
 Se añadieron pruebas para objetivos dentro de condiciones y para el límite de candidatos. La suite completa todavía debe ejecutarse en CI antes de considerar validada esta mejora.
 
+### Fase B: extracción explícita de acciones
+
+Se añadió `extractNarrativeActionCandidates` en `typescript/src/narrative-action-extraction.ts`. Identifica patrones explícitos y conservadores de **actor → acción → objetivo**, siempre que el actor y el objetivo ya existan como entidades del mismo proyecto.
+
+Cada candidato conserva:
+- ID del personaje que realiza la acción;
+- forma verbal detectada y entidad objetivo;
+- polaridad afirmada o negada;
+- fragmento literal, documento, revisión y offsets UTF-16;
+- estado `candidate`, pendiente de revisión.
+
+La primera cobertura incluye formas frecuentes en español (por ejemplo, ayudar, salvar, proteger, atacar, buscar, encontrar, entregar, rescatar, abrir y destruir). Los nombres y alias ambiguos se excluyen para evitar atribuciones inventadas. Se limita la entrada a 2 millones de unidades UTF-16 y la salida a 200 candidatos.
+
+**Límites deliberados:** todavía no interpreta pronombres, sujetos tácitos, voz pasiva, coordinación compleja ni objetos implícitos. No deduce causalidad a partir del orden de las frases. Una acción detectada es una propuesta basada en evidencia, no un hecho confirmado.
+
+Se añadieron pruebas para actor/acción/objetivo, negación, alias, offsets, ambigüedad y ausencia de inferencias implícitas. Pendiente de validación integral en CI.
+
 ### Fase B: atribución explícita de afirmaciones
 
 Se incorporó `extractNarrativeAttributedClaims` en `typescript/src/narrative-claim-extraction.ts`. Esta primera pieza detecta construcciones explícitas en las que un personaje ya identificado cree, piensa, supone, sospecha, afirma, asegura, recuerda, teme o dice algo.

@@ -51,6 +51,8 @@ El descubrimiento de vínculos entre acciones valida también la forma de cada o
 
 La detección de futuro en observaciones de personajes se generalizó al inventario léxico de acciones: genera formas regulares a partir del infinitivo y contempla los futuros irregulares frecuentes de «decir» y «salir». Las expresiones mantienen límites Unicode de palabra para no aceptar coincidencias como prefijos. El resultado sigue siendo una clasificación morfológica candidata, no una fecha ni una afirmación de que el hecho ocurra.
 
+Cada observación conserva ahora `entityMentionEvidence`: para cada personaje, objeto, lugar u otra entidad detectada en la frase, registra el ID, el tipo de entidad y la primera coincidencia literal con offsets UTF-16 exactos. La evidencia de mención no asigna por sí sola el papel de agente, paciente, destino ni propietario; solo permite verificar dónde aparece la entidad y sirve como base para un análisis sintáctico posterior.
+
 ## Garantías y límites
 
 1. La ingesta no modifica el manuscrito.

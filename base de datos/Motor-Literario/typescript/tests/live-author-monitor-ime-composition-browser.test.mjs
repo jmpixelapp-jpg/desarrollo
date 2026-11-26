@@ -42,7 +42,7 @@ async function waitForVite(url, child) {
   throw new Error("Vite no respondió dentro del límite de arranque.", { cause: lastError });
 }
 
-test("Chromium conserva la continuidad ante candidatos IME provisionales y cancelación", {
+test("Chromium valida candidatos IME y suspende ante compositionend no confiable", {
   timeout: 90_000
 }, async () => {
   const port = await reservePort();
@@ -209,21 +209,44 @@ test("Chromium conserva la continuidad ante candidatos IME provisionales y cance
       "la secuencia de deltas debe reconstruir el estado final del textarea");
     assert.equal(afterCancel.state.compositionActive, false);
     assert.equal(afterCancel.state.pendingInput, false);
-    assert.equal(afterCancel.state.needsResync, false,
-      "la traza IME debe ser continua: " + JSON.stringify({ errors: afterCancel.errors, events: afterCancel.events, deltas: afterCancel.deltas }));
-    assert.deepEqual(afterCancel.errors, [],
-      "una cancelación IME válida no debe requerir resincronización");
+    assert.equal(afterCancel.state.needsResync, true,
+      "un compositionend no confiable debe suspender la fuente conservadoramente");
+    assert.deepEqual(afterCancel.errors, ["untrusted-event"]);
     assert.ok(afterCancel.deltas.length >= 2,
       "se deben observar las mutaciones aplicadas de los candidatos y su cancelación");
     assert.ok(afterCancel.deltas.every(change => change.activityKind === "composition" ||
       change.activityKind === "deletion"),
       "las actualizaciones/cancelación IME no deben etiquetarse como escritura ordinaria");
-    assert.ok(afterCancel.events.filter(event =>
-      event.type.startsWith("composition") || event.inputType === "insertCompositionText"
-    ).every(event => event.isTrusted),
-    "los eventos de composición usados como evidencia deben ser confiables");
 
-    // La cancelación no puede dejar bloqueada la siguiente edición normal.
+    const trustedCompositionInputs = afterCancel.events.filter(event =>
+      event.type === "compositionstart" ||
+      event.type === "compositionupdate" ||
+      event.inputType === "insertCompositionText"
+    );
+    assert.ok(trustedCompositionInputs.length >= 5);
+    assert.ok(trustedCompositionInputs.every(event => event.isTrusted),
+      "los eventos IME de actualización y texto aplicado deben ser confiables");
+    const compositionEnd = afterCancel.events.find(event => event.type === "compositionend");
+    assert.ok(compositionEnd,
+      "CDP debe finalizar el ciclo de composición");
+    assert.equal(compositionEnd.isTrusted, false,
+      "esta ruta de automatización no debe confundirse con un IME físico confiable");
+
+    // La fuente se reanuda solo después de un snapshot explícito del editor.
+    const recovered = await page.evaluate(() => {
+      const test = window.__imeCompositionTest;
+      const current = test.source.getState();
+      return test.source.resynchronize({
+        documentId: "chromium-ime-composition",
+        text: test.element.value,
+        revision: current.revision,
+        sequence: current.sequence
+      });
+    });
+    assert.equal(recovered.needsResync, false);
+    assert.equal(recovered.compositionActive, false);
+
+    // La recuperación no puede dejar bloqueada la siguiente edición normal.
     await page.locator("#ime-composition-editor").focus();
     await page.keyboard.type("x");
     await page.waitForFunction(() =>

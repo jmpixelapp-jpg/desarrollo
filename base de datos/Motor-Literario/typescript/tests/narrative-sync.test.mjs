@@ -271,6 +271,36 @@ test("el backoff de un dispositivo no bloquea escritores independientes", async 
   assert.deepEqual(outbox.pending.map(item => item.operationId), ["op-a-1", "op-a-2"]);
 });
 
+test("recupera un fallo durante el borrado parcial de acuses sin reenviar lo ya retirado", async () => {
+  const outbox = createOutbox([operation("op-ack-1", 1), operation("op-ack-2", 2)]);
+  const originalAcknowledge = outbox.acknowledgeSyncOperation;
+  let failSecondAck = true;
+  outbox.acknowledgeSyncOperation = async id => {
+    if (id === "op-ack-2" && failSecondAck) {
+      failSecondAck = false;
+      throw new Error("indexeddb interrupted");
+    }
+    return originalAcknowledge(id);
+  };
+  const pushedBatches = [];
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push(_projectId, operations) {
+      const ids = operations.map(item => item.operationId);
+      pushedBatches.push(ids);
+      return { acknowledgedOperationIds: ids, conflicts: [], retryableOperationIds: [] };
+    }
+  }, { now: () => 10 });
+
+  await assert.rejects(coordinator.syncOnce("project-a"), /indexeddb interrupted/);
+  assert.deepEqual(outbox.pending.map(item => item.operationId), ["op-ack-2"]);
+
+  const recovered = await coordinator.syncOnce("project-a");
+  assert.equal(recovered.acknowledged, 1);
+  assert.equal(recovered.remaining, 0);
+  assert.deepEqual(pushedBatches, [["op-ack-1", "op-ack-2"], ["op-ack-2"]]);
+  assert.deepEqual(outbox.acknowledged, ["op-ack-1", "op-ack-2"]);
+});
+
 test("rechaza códigos de conflicto excesivos y conserva la operación", async () => {
   const outbox = createOutbox([operation("op-oversized-code", 1)]);
   const coordinator = new NarrativeSyncCoordinator(outbox, {

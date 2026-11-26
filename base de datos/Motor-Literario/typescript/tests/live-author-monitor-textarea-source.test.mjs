@@ -846,7 +846,7 @@ test("clasifica y conserva saltos de línea, párrafos y pegado como cita", () =
     replacement: change.replacement
   })), [
     { activityKind: "typing", inputType: "insertLineBreak", replacement: "\n" },
-    { activityKind: "typing", inputType: "insertParagraph", replacement: "\\n" },
+    { activityKind: "typing", inputType: "insertParagraph", replacement: "\n" },
     { activityKind: "paste", inputType: "insertFromPasteAsQuotation", replacement: "> quote" }
   ]);
   assert.equal(f.source.getState().needsResync, false);

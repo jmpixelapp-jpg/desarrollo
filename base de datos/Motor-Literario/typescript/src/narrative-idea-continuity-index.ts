@@ -1,6 +1,15 @@
 import type { NarrativeIdeaOccurrenceReference } from "./narrative-idea-cross-document-relations";
 import type { NarrativeIdeaEvolutionEvent } from "./narrative-idea-evolution";
-import type { NarrativeIdeaContinuityLine, NarrativeIdeaContinuityLinesResult, NarrativeIdeaContinuityLinesSummary } from "./narrative-idea-continuity-lines";
+import {
+  buildNarrativeIdeaContinuityLines,
+  type NarrativeIdeaContinuityLine,
+  type NarrativeIdeaContinuityLinesResult,
+  type NarrativeIdeaContinuityLinesSummary
+} from "./narrative-idea-continuity-lines";
+import {
+  updateNarrativeIdeaContinuityLinesIncrementally,
+  type NarrativeIdeaContinuityIncrementalResult
+} from "./narrative-idea-continuity-incremental";
 import type { ProjectStore } from "./contracts";
 import {
   createNarrativeSyncOperationEnvelope,
@@ -701,4 +710,141 @@ export function createNarrativeIdeaContinuityIndexSyncEnvelope(
     ...input,
     kind: "idea-continuity-index-upsert"
   }, NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS);
+}
+
+
+export interface UpdateNarrativeIdeaContinuityIndexIncrementallyInput {
+  readonly projectId: string;
+  readonly updatedAt: number;
+  readonly sourceRevisions: readonly NarrativeIdeaContinuitySourceRevision[];
+  readonly nextEvolution: NarrativeIdeaEvolutionEvent[] extends never[] ? never : import("./narrative-idea-evolution").NarrativeIdeaEvolutionResult;
+  /** Cambios editoriales conocidos; se completa automáticamente con el vector de revisiones. */
+  readonly changedDocumentIds?: readonly string[];
+}
+
+export interface UpdateNarrativeIdeaContinuityIndexIncrementallyResult {
+  readonly index: NarrativeIdeaContinuityIndex;
+  readonly reused: boolean;
+  readonly changedDocumentIds: readonly string[];
+  readonly incremental?: NarrativeIdeaContinuityIncrementalResult;
+  readonly rebuiltLineCount: number;
+  readonly reusedLineCount: number;
+}
+
+function emptyContinuityLines(projectId: string): NarrativeIdeaContinuityLinesResult {
+  const evolution = {
+    summary: {
+      projectId,
+      relationCount: 0,
+      eventCount: 0,
+      reappearedCount: 0,
+      echoedCount: 0,
+      withoutOrderCount: 0,
+      modalityChangeCount: 0,
+      ideaKindChangeCount: 0,
+      sourceAnalysisTruncated: false
+    },
+    events: []
+  } satisfies import("./narrative-idea-evolution").NarrativeIdeaEvolutionResult;
+  return buildNarrativeIdeaContinuityLines({ projectId, evolution });
+}
+
+/**
+ * Actualiza y confirma el índice en una sola operación de aplicación:
+ * lee el snapshot vigente, añade al conjunto sucio los documentos cuya
+ * revisión/estado cambió, reconstruye solo los componentes afectados y
+ * confirma la nueva generación mediante CAS. Si no existe índice previo,
+ * realiza una construcción inicial completa.
+ */
+export async function updateNarrativeIdeaContinuityIndexIncrementally(
+  store: ProjectStore,
+  input: UpdateNarrativeIdeaContinuityIndexIncrementallyInput
+): Promise<UpdateNarrativeIdeaContinuityIndexIncrementallyResult> {
+  if (!store ||
+      typeof store.loadNarrativeIdeaContinuityIndex !== "function" ||
+      typeof store.saveNarrativeIdeaContinuityIndexIfUnchanged !== "function" ||
+      !input || typeof input !== "object" ||
+      typeof input.projectId !== "string" || !input.projectId.trim() ||
+      !Number.isFinite(input.updatedAt) || input.updatedAt < 0) {
+    throw new Error("Contexto inválido para actualizar el índice incremental de continuidad.");
+  }
+  const nextRevisions = normalizeSourceRevisions(input.sourceRevisions);
+  const suppliedChanged = input.changedDocumentIds ?? [];
+  if (!Array.isArray(suppliedChanged) || suppliedChanged.length > MAX_DOCUMENTS) {
+    throw new Error("La lista incremental de documentos cambiados es inválida.");
+  }
+  const changed = new Set<string>();
+  for (const documentId of suppliedChanged) {
+    if (typeof documentId !== "string" || !documentId.trim() ||
+        documentId.length > 256 || changed.has(documentId)) {
+      throw new Error("La lista incremental contiene IDs documentales inválidos o repetidos.");
+    }
+    changed.add(documentId);
+  }
+
+  const current = await store.loadNarrativeIdeaContinuityIndex(input.projectId);
+  if (current) {
+    const previousByDocument = new Map(current.sourceRevisions.map(item => [
+      item.documentId,
+      { revision: item.revision, status: item.status }
+    ]));
+    const nextByDocument = new Map(nextRevisions.map(item => [
+      item.documentId,
+      { revision: item.revision, status: item.status }
+    ]));
+    const allDocumentIds = new Set([
+      ...previousByDocument.keys(),
+      ...nextByDocument.keys()
+    ]);
+    for (const documentId of allDocumentIds) {
+      const previous = previousByDocument.get(documentId);
+      const next = nextByDocument.get(documentId);
+      if (previous?.revision !== next?.revision || previous?.status !== next?.status) {
+        changed.add(documentId);
+      }
+    }
+  }
+
+  const changedDocumentIds = [...changed].sort((a, b) => a.localeCompare(b));
+  const nextLines = current
+    ? updateNarrativeIdeaContinuityLinesIncrementally({
+        projectId: input.projectId,
+        previous: hydrateNarrativeIdeaContinuityIndex(current),
+        nextEvolution: input.nextEvolution,
+        changedDocumentIds
+      })
+    : undefined;
+  const lines = nextLines?.result ?? buildNarrativeIdeaContinuityLines({
+    projectId: input.projectId,
+    evolution: input.nextEvolution
+  });
+  const generation = (current?.generation ?? 0) + 1;
+  const candidate = createNarrativeIdeaContinuityIndex({
+    projectId: input.projectId,
+    generation,
+    updatedAt: input.updatedAt,
+    sourceRevisions: nextRevisions,
+    result: lines
+  });
+
+  if (current && areNarrativeIdeaContinuityIndexesEquivalent(current, candidate)) {
+    return {
+      index: current,
+      reused: true,
+      changedDocumentIds,
+      ...(nextLines ? { incremental: nextLines } : {}),
+      rebuiltLineCount: nextLines?.rebuiltLineCount ?? 0,
+      reusedLineCount: nextLines?.reusedLineIds.length ?? current.lines.length
+    };
+  }
+
+  await store.saveNarrativeIdeaContinuityIndexIfUnchanged(candidate, current?.generation);
+  return {
+    index: candidate,
+    reused: false,
+    changedDocumentIds,
+    ...(nextLines ? { incremental: nextLines } : {}),
+    rebuiltLineCount: nextLines?.rebuiltLineCount ?? lines.lines.length,
+    reusedLineCount: nextLines?.reusedLineIds.length ?? 0
+  };
 }

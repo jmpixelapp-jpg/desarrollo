@@ -7562,7 +7562,7 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
       ...structuredClone(entry.idea),
       statusHistory: [
         { status: "IDEA", reason: "initial", changedAt: 1 },
-        { status: "IDEA", reason: "writer", changedAt: 2 }
+        { status: "IDEA", reason: "unsupported-reason", changedAt: 2 }
       ]
     }
   }];

@@ -1476,3 +1476,16 @@ El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a 
 **Cambios publicados en main:** núcleo 37f5563878c236417bb34aa7aeb1362b53cab6c6 y test ce1b71bb56eb66ab4ec4c26fc4c76a205aac3da2. No se cambió el contrato persistido ni el esquema IndexedDB.
 
 **Validación CI:** [Live Author Monitor — run 45760911836](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760911836), checkout `ce1b71bb56eb66ab4ec4c26fc4c76a205aac3da2`, terminó `success`: type-check aislado y bundle focalizado aprobados; auditoría MLDB 0.4.2 con 27 tablas; runtime build aprobado; diagnósticos 17/17; monitor/panel/workspace/adaptadores 163/163; Page Lifecycle Chromium 1/1; host/editor/browser 168/168. El test existente de validación de checkpoints ejecutó y aprobó el caso de snapshot `null`, y confirmó que no se crea una sesión parcial. [Motor Literario TypeScript — run 45760911868](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760911868), sobre el mismo checkout, terminó `success` con **927/927 pruebas generales**, cero fallos y cero cancelaciones; type-check, build y benchmark general también pasaron. El benchmark de monitor procesó 100.000 commits en 495,92 ms (~201.647 commits/s), con 4,39 MiB de heap a mitad y al final, 0 MiB de crecimiento, 0,50 MiB retenidos y cero tickets pendientes.
+
+
+## 95. Integridad de outcomes y muestras de latencia en checkpoints (26 de noviembre de 2026)
+
+**Hallazgo:** restoreCheckpoint comprobaba que los resultados de commit no superaran acceptedChanges y que la suma de muestras de latencia fuera razonable, pero aceptaba dos registros imposibles: una edición aceptada sin resultado durable (commit aplicado o fallido), y una última latencia distinta del último elemento de la ventana guardada. También podía aceptar una ventana vacía con commits previos.
+
+**Corrección:** un checkpoint ahora exige committedChanges + failedChanges === acceptedChanges; las muestras no pueden superar el número de resultados; si hay resultados debe existir al menos una muestra y su último valor debe coincidir exactamente con lastCommitLatencyMs; si no hay resultados, la latencia total/última y la ventana deben estar vacías/cero. Se conserva el límite configurado de la ventana y el control de suma total.
+
+**Regresión:** tests/live-author-monitor.test.mjs genera un checkpoint válido y luego prueba tres variantes corruptas: outcome ausente, última latencia incongruente y ventana eliminada. Cada variante debe rechazarse sin crear una sesión parcial.
+
+**Cambios publicados:** núcleo d096087f30d6065405f8662304fec5f54c44753d y pruebas dc8e6102338f24969640b9784749c52709b15708, ambos en main. No se modifica el formato ni la versión del checkpoint.
+
+**Validación CI:** pendiente.

@@ -126,6 +126,24 @@ test("emite candidatos narrativos con evidencia durante cada revisión del autor
   assert.equal(update.candidates[0].reviewStatus, "candidate");
   assert.equal(update.candidates[0].evidence.start, text.indexOf("la memoria perdida"));
   assert.equal(update.candidates[0].evidence.excerpt, text);
+
+  const revisedText = "La lluvia golpeaba los cristales.";
+  const revisionTwo = api.onEditorChange({
+    documentId: "chapter-live",
+    sequence: 2,
+    baseRevision: 1,
+    start: 0,
+    end: text.length,
+    replacement: revisedText,
+    activityKind: "correction"
+  });
+  assert.equal(revisionTwo.status, "queued");
+  await api.flushPendingChanges();
+
+  const cleared = updates.find(item => item.analysis.revision === 2);
+  assert.ok(cleared, "la revisión siguiente también debe publicar el resultado");
+  assert.deepEqual(cleared.candidates, [],
+    "una revisión sin señal debe emitir una lista vacía para retirar el candidato anterior");
   await api.disposeSafely();
 });
 

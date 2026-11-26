@@ -665,6 +665,7 @@ export class HostEngineApi {
     readonly revision: number;
     readonly sequence: number;
     readonly updatedAt: number;
+    readonly textBudget: number;
     readonly candidates: readonly NarrativeIdeaCandidate[];
     readonly truncated: boolean;
   }>();
@@ -886,6 +887,19 @@ export class HostEngineApi {
       const seenDocuments = new Set<string>();
       const candidatesByDocument = new Map<string, readonly NarrativeIdeaCandidate[]>();
       const documentsToDiscover: Array<(typeof metadata)[number]> = [];
+      // El límite por documento es estable para el tamaño actual del proyecto.
+      // Si se agregan o eliminan capítulos, cambia el límite y se invalida la
+      // caché antigua para volver a repartir el presupuesto de forma justa.
+      const perDocumentTextBudget = Math.max(
+        1,
+        Math.min(
+          MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
+          Math.floor(
+            MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS /
+            Math.max(1, metadata.length)
+          )
+        )
+      );
       const sourceRevisions: Array<{
         documentId: string;
         revision: number;
@@ -915,7 +929,8 @@ export class HostEngineApi {
 
         const cached = this.continuityCandidatesByDocument.get(item.documentId);
         if (cached && cached.revision === item.revision &&
-            cached.sequence === item.sequence && cached.updatedAt === item.updatedAt) {
+            cached.sequence === item.sequence && cached.updatedAt === item.updatedAt &&
+            cached.textBudget === perDocumentTextBudget) {
           candidatesByDocument.set(item.documentId, cached.candidates);
           anyDocumentTruncated ||= cached.truncated;
         } else {
@@ -923,20 +938,6 @@ export class HostEngineApi {
           documentsToDiscover.push(item);
         }
       }
-
-      // Presupuesto agregado: evita escanear 2 MB por cada uno de miles de
-      // capítulos en una sola reconciliación. Los límites se reparten de forma
-      // determinista entre los documentos que realmente necesitan relectura.
-      const perDocumentTextBudget = Math.max(
-        1,
-        Math.min(
-          MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
-          Math.floor(
-            MAX_NARRATIVE_IDEA_CONTINUITY_PROJECT_TEXT_UNITS /
-            Math.max(1, documentsToDiscover.length)
-          )
-        )
-      );
 
       // Lectura por lotes acotados: evita abrir miles de transacciones IndexedDB
       // secuenciales y limita a 16 los snapshots completos retenidos a la vez.
@@ -986,6 +987,7 @@ export class HostEngineApi {
             revision: discovered.item.revision,
             sequence: discovered.item.sequence,
             updatedAt: discovered.item.updatedAt,
+            textBudget: perDocumentTextBudget,
             candidates: discovered.candidates,
             truncated: discovered.truncated
           });

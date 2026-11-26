@@ -293,3 +293,11 @@ Las ejecuciones [Live Author Monitor — run 45746701123](https://github.com/jmp
 El benchmark específico informó, en Node.js v22.23.5: 8 documentos de 1.048.576 unidades UTF-16, 100.000 commits, 167.437,39 commits/s, 0,48 MB retenidos por sesiones abiertas, 0 MB de crecimiento de heap entre mitad y carga completa y 75,33 MB de RSS final. Todos los documentos quedaron con 12.500 commits y 0 pendientes.
 
 Estos valores describen el runner Node y deben usarse como línea base comparativa del mismo entorno. No equivalen al heap ni al RSS del navegador Chromium/host de producción.
+
+## 19. Polling adaptado a la visibilidad de la pestaña
+
+El panel individual y el workspace global utilizan `scheduleLiveAuthorMonitorWhileVisible()` para su refresco visual periódico. Al pasar el documento a `hidden`, cancelan los intervalos de la vista; al recibir `visibilitychange` y volver a visible, ejecutan una reconciliación inmediata y vuelven a programar el intervalo configurado.
+
+Este scheduler afecta exclusivamente a la actualización visual de métricas y diagnósticos. No pausa el motor de escritura, los checkpoints, los heartbeats ni la renovación de leases. Esos procesos permanecen bajo control de `HostEngineApi` y sus coordinadores.
+
+Si el entorno no ofrece Page Visibility API, mantiene el polling convencional. Las opciones `schedule` permiten inyectar relojes deterministas y también se someten al ciclo visible/oculto. La regresión verifica montaje con la pestaña oculta, pausa, refresco inmediato al volver, reprogramación y cancelación al desmontar.

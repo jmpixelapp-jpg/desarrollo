@@ -979,3 +979,18 @@ En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelap
 **Validación confirmada:** los workflows **Motor Literario TypeScript** y **Live Author Monitor** terminaron en `success` para el commit `71d6144c820512ce5989be17d03e6cdc88d6ccdb`. Se aprobaron typecheck, build, suite automatizada, regresiones de monitor, validación MLDB y benchmarks. Los commits posteriores `7a75e0e` (configuración del entrypoint aislado) y `f7dfabb` (distinción de arrays dispersos y propiedades adicionales) están sometidos a una nueva ejecución CI; su estado debe consultarse por separado.
 
 **Alcance:** las mejoras del lease corrigen la coordinación local entre pestañas del navegador. No sustituyen un servidor remoto ni constituyen por sí solas sincronización multidispositivo.
+
+
+## 54. Polling visual consciente de la visibilidad del navegador (25 de noviembre de 2026)
+
+**Objetivo:** reducir intervalos de refresco innecesarios cuando la pestaña del editor queda suspendida/oculta y evitar que el panel se muestre desactualizado al volver a primer plano.
+
+**Implementación:** nuevo módulo `src/live-author-monitor-visibility.ts` exporta `scheduleLiveAuthorMonitorWhileVisible()`. Panel y workspace conectan su scheduler mediante ese helper. `visibilitychange` a hidden cancela el intervalo; a visible ejecuta refresco inmediato y programa uno nuevo. Al desmontar, elimina listeners y cancela el intervalo activo.
+
+**Aislamiento:** solo controla el polling de presentación. No pausa ni cancela checkpoints, actividad, escrituras, heartbeats o leases. La orquestación de persistencia y coordinación sigue perteneciendo al motor anfitrión.
+
+**Regresiones:** montaje oculto no crea intervalos; volver a visible actualiza y reprograma ambas vistas; ocultar cancela; desmontar elimina listener y no permite reactivar; cancelación idempotente.
+
+**Archivos:** nuevo `src/live-author-monitor-visibility.ts`, panel, workspace, suite de diagnóstico aislada y esta guía.
+
+**Validación:** pendiente de los workflows CI disparados por este commit.

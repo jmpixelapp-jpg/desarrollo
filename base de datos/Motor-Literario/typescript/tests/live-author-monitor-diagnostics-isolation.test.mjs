@@ -7,7 +7,8 @@ const {
   LiveAuthorMonitor,
   mountLiveAuthorMonitorPanel,
   mountLiveAuthorMonitorWorkspace,
-  readLiveAuthorMonitorPersistenceDiagnosticsSafely
+  readLiveAuthorMonitorPersistenceDiagnosticsSafely,
+  scheduleLiveAuthorMonitorWhileVisible
 } = monitorModule;
 
 class FakeElement {
@@ -55,7 +56,12 @@ class FakeElement {
   remove() { this.parentElement?.removeChild(this); }
 }
 class FakeDocument {
+  constructor() { this.hidden = false; this.listeners = new Map(); }
   createElement(tagName) { return new FakeElement(tagName, this); }
+  addEventListener(name, callback) { const listeners = this.listeners.get(name) ?? []; listeners.push(callback); this.listeners.set(name, listeners); }
+  removeEventListener(name, callback) { const listeners = this.listeners.get(name) ?? []; this.listeners.set(name, listeners.filter(item => item !== callback)); }
+  setHidden(hidden) { this.hidden = hidden; for (const listener of [...(this.listeners.get("visibilitychange") ?? [])]) listener(); }
+  visibilityListenerCount() { return (this.listeners.get("visibilitychange") ?? []).length; }
 }
 function findNode(root, predicate) {
   if (!root) return undefined;
@@ -76,7 +82,7 @@ function fixture(documentIds = ["chapter-1"]) {
   }
   const document = new FakeDocument();
   const container = document.createElement("div");
-  return { monitor, container, setTime(value) { now = value; } };
+  return { monitor, document, container, setTime(value) { now = value; } };
 }
 function recordPending(monitor, documentId, ticketId) {
   monitor.recordAdmission({
@@ -336,4 +342,67 @@ test("rechaza estados desconocidos y metadatos fuera de rango del adaptador", ()
     checkpointErrorCode: "X".repeat(65)
   };
   assert.equal(readLiveAuthorMonitorPersistenceDiagnosticsSafely(api, "chapter-1"), undefined);
+});
+
+
+test("panel y workspace suspenden el polling en segundo plano y refrescan al volver a primer plano", () => {
+  const f = fixture(["chapter-1", "chapter-2"]);
+  f.document.setHidden(true);
+  const scheduleCalls = [];
+  let cancellations = 0;
+  const schedule = (callback, intervalMs) => {
+    const item = { callback, intervalMs, cancelled: false };
+    scheduleCalls.push(item);
+    return () => { if (item.cancelled) return; item.cancelled = true; cancellations += 1; };
+  };
+  const api = {
+    getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
+    getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
+    getLiveAuthorMonitorPersistenceDiagnostics: () => undefined,
+    subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
+  };
+  const unmountPanel = mountLiveAuthorMonitorPanel(f.container, api, { documentId: "chapter-1", intervalMs: 250, schedule });
+  const workspaceContainer = f.document.createElement("div");
+  const unmountWorkspace = mountLiveAuthorMonitorWorkspace(workspaceContainer, api, { intervalMs: 500, schedule });
+  assert.equal(f.document.visibilityListenerCount(), 2);
+  assert.equal(scheduleCalls.length, 0, "no se crean intervalos mientras la pestaña ya está oculta");
+  f.document.setHidden(false);
+  assert.equal(scheduleCalls.length, 2);
+  assert.equal(scheduleCalls[0].intervalMs, 250);
+  assert.equal(scheduleCalls[1].intervalMs, 500);
+  f.document.setHidden(true);
+  assert.equal(cancellations, 2);
+  assert.equal(scheduleCalls.every(item => item.cancelled), true);
+  f.document.setHidden(false);
+  assert.equal(scheduleCalls.length, 4, "cada vista programa un nuevo intervalo al reanudarse");
+  scheduleCalls[2].callback();
+  scheduleCalls[3].callback();
+  f.document.setHidden(true);
+  assert.equal(cancellations, 4);
+  unmountPanel();
+  unmountWorkspace();
+  assert.equal(f.document.visibilityListenerCount(), 0);
+  f.document.setHidden(false);
+  assert.equal(scheduleCalls.length, 4, "no hay reactivación después del desmontaje");
+});
+
+test("el scheduler visible actualiza de inmediato y cancela de forma idempotente", () => {
+  const f = fixture();
+  const scheduleCalls = [];
+  let cancellations = 0;
+  let refreshes = 0;
+  const cancel = scheduleLiveAuthorMonitorWhileVisible(f.document, () => { refreshes += 1; }, 750, (callback, intervalMs) => {
+    scheduleCalls.push({ callback, intervalMs });
+    return () => { cancellations += 1; };
+  });
+  assert.equal(scheduleCalls.length, 1);
+  f.document.setHidden(true);
+  assert.equal(cancellations, 1);
+  f.document.setHidden(false);
+  assert.equal(refreshes, 1);
+  assert.equal(scheduleCalls.length, 2);
+  cancel();
+  cancel();
+  assert.equal(cancellations, 2);
+  assert.equal(f.document.visibilityListenerCount(), 0);
 });

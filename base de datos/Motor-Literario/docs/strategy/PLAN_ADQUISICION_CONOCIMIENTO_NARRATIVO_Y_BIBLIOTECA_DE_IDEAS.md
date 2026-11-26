@@ -208,6 +208,24 @@ El análisis detiene la exploración al alcanzar el máximo de 100 candidatos, e
 
 Se añadieron pruebas para objetivos dentro de condiciones y para el límite de candidatos. La suite completa todavía debe ejecutarse en CI antes de considerar validada esta mejora.
 
+### Fase B: atribución explícita de afirmaciones
+
+Se incorporó `extractNarrativeAttributedClaims` en `typescript/src/narrative-claim-extraction.ts`. Esta primera pieza detecta construcciones explícitas en las que un personaje ya identificado cree, piensa, supone, sospecha, afirma, asegura, recuerda, teme o dice algo.
+
+Cada resultado conserva:
+- ID de la entidad que habla, resuelto únicamente contra personajes del mismo proyecto;
+- tipo de atribución (creencia, afirmación, recuerdo, temor o habla);
+- contenido literal atribuido, sin paráfrasis;
+- polaridad afirmada/negada;
+- evidencia, documento, revisión y offsets UTF-16;
+- estado de revisión `candidate`, nunca hecho confirmado.
+
+Los alias solo se utilizan si resuelven a una única identidad. Si dos personajes comparten un nombre/alias, el extractor omite esa atribución en vez de adivinar. La función tiene límites de tamaño y máximo de 200 resultados.
+
+**Límite conocido:** todavía no resuelve citas indirectas complejas, cambios de hablante entre turnos, pronombres (“él dijo…”) ni distingue automáticamente narrador de personaje. Tampoco infiere quién realiza una acción descrita sin un verbo de atribución explícito. Esas capacidades requieren contexto de discurso y análisis de eventos en pasos separados.
+
+Se añadieron pruebas para atribución, tipos de voz, negación, offsets, alias ambiguos y aislamiento por proyecto. La implementación queda pendiente de validación integral en CI.
+
 ## 9. Cómo informar el progreso
 
 Cada entrega debe indicar claramente:

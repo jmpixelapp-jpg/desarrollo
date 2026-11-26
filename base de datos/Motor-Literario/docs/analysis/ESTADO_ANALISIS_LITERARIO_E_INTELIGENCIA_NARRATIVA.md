@@ -605,3 +605,14 @@ La API `EpubBookReader.inspect(source)` ahora recorre el spine, además de inspe
 - Actualizado este estado de desarrollo.
 
 La lectura EPUB ya tiene una implementación concreta, pero su madurez aún es inicial. Falta validación con corpus real y cobertura completa de HTML5, nav/NCX, codificaciones XML alternativas, EPUB cifrados/protegidos, CSS de visibilidad, recursos complejos y más casos de notas. El siguiente lector será PDF por página, pero primero se debe ejecutar y corregir el typecheck y los fixtures EPUB.
+
+
+### Ajustes de fidelidad textual en EPUB
+
+- La inspección ahora recorre los documentos del spine y reporta bloques extraídos y documentos sin texto.
+- Se conservan límites de documento del spine incluso cuando el XHTML no incluye encabezados `h1`; no se mezclan silenciosamente archivos editoriales independientes en un solo capítulo.
+- El texto preformateado/versificado conserva saltos de línea, en lugar de colapsarlos como espacios.
+- Se añadió fixture para comprobar la preservación de versos.
+- Se exige que `mimetype` sea la primera entrada ZIP y esté almacenada sin compresión; también se valida la longitud del comentario ZIP final.
+
+Los cambios anteriores amplían la calidad de extracción, pero todavía requieren ejecución de typecheck y pruebas. La fidelidad debe comprobarse con EPUB reales, incluyendo poesía, notas, tablas, nav/NCX, XHTML heterogéneo y codificaciones distintas de UTF-8.

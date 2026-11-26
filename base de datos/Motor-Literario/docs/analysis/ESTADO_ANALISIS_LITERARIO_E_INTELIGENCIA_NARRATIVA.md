@@ -543,3 +543,31 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Se añadió una prueba unitaria para payload válido y casos inválidos de versión, revisión, offsets, secuencia y objeto nulo.
 - Se actualizó el contrato de transporte.
 - **Validación de ejecución pendiente:** no se ha ejecutado `npm run typecheck` ni `npm test`. El repositorio no ha devuelto checks ni workflow runs para los commits inspeccionados.
+
+
+## Cambio de prioridad — obtención y lectura de libros
+
+Se corrige el foco del desarrollo: la calidad de la sincronización no sustituye la necesidad primaria de obtener texto y estructura fiables desde los libros. El siguiente frente prioritario pasa a ser la ingesta y lectura de fuentes, y la sincronización queda como infraestructura posterior.
+
+### Primera capa de ingesta estructural implementada
+
+- Nuevo módulo `typescript/src/book-ingestion.ts`, exportado desde `src/index.ts`.
+- Contrato `BookReaderAdapter<TSource>` con lectura asíncrona y cancelable; los lectores concretos entregan bloques en orden de lectura.
+- Bloques tipados para título, encabezado de capítulo, encabezado de sección, párrafo, verso, nota y salto de página.
+- Metadatos y localizadores de origen por bloque: identificador, página, spine y sección.
+- Ensamblado de capítulos con límites explícitos, IDs estables y rechazo de secuencias o identidades duplicadas.
+- Rangos UTF-16 por bloque para devolver evidencias del análisis al pasaje original.
+- Límites de tamaño por bloque, capítulo y libro; cancelación mediante AbortSignal.
+- Normalización conservadora de BOM y finales de línea. No se eliminan guiones, notas, encabezados ni contenido que pueda ser autoral.
+- Pruebas nuevas en `tests/book-ingestion.test.mjs` para orden, capítulos, offsets, procedencia, límites, duplicados, adaptadores y cancelación.
+- README actualizado con el contrato y sus límites.
+
+### Brecha reconocida y siguiente trabajo prioritario
+
+Esta primera capa todavía no decodifica por sí misma archivos EPUB, PDF, DOCX ni libros escaneados. No se afirma que el lector de formatos esté terminado. El siguiente desarrollo debe implementar lectores concretos, comenzando por EPUB (estructura OPF/spine, XHTML, orden de lectura, navegación y metadatos), después PDF con extracción por página y coordenadas, y luego OCR como ruta diferenciada para documentos escaneados. Cada adaptador debe preservar localizadores, orden, notas, encabezados y texto original; debe detectar extracción vacía, páginas ausentes, codificación defectuosa y contenido duplicado sin corregir silenciosamente el original.
+
+También falta conectar el resultado validado de ingesta con una operación de importación de libro que cree/actualice documentos de forma controlada y recupere la lectura tras interrupciones. Esa conexión debe evitar importaciones parciales invisibles y conservar el vínculo entre cada capítulo y su fuente.
+
+### Validación
+
+Las pruebas de ingesta están escritas, pero todavía no se han ejecutado `npm run typecheck` ni `npm test`. No hay CI confirmado para esta tanda.

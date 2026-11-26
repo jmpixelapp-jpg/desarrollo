@@ -2990,7 +2990,7 @@ export class HostEngineApi {
     });
   }
 
-  async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
+  async getNarrativeIdeas(options: { readonly allowLegacyGraph?: boolean } = {}): Promise<readonly NarrativeIdea[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
       if (!this.ideasLoaded) {

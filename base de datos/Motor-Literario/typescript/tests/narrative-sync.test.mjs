@@ -442,3 +442,48 @@ test("un timeout ambiguo reenvía el mismo operationId y permite deduplicación 
   ]);
   assert.equal(remotelyAccepted.size, 1);
 });
+
+
+test("un conflicto aplica backoff al flujo causal del dispositivo sin frenar otros dispositivos", async () => {
+  const first = operation("device-a-op-1", 1);
+  const second = { ...operation("device-a-op-2", 2), deviceId: "device-a" };
+  const independent = { ...operation("device-b-op-1", 1), deviceId: "device-b" };
+  const outbox = createOutbox([first, second, independent]);
+  let now = 5_000;
+  const batches = [];
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push(_projectId, operations) {
+      batches.push(operations.map(item => item.operationId));
+      return {
+        acknowledgedOperationIds: operations
+          .filter(item => item.operationId === "device-b-op-1")
+          .map(item => item.operationId),
+        conflicts: operations.some(item => item.operationId === "device-a-op-1")
+          ? [{ operationId: "device-a-op-1", code: "revision_conflict", message: "base desactualizada" }]
+          : [],
+        retryableOperationIds: []
+      };
+    }
+  }, {
+    now: () => now,
+    retryBaseDelayMs: 2_000,
+    retryMaxDelayMs: 2_000,
+    random: () => 1
+  });
+
+  const firstResult = await coordinator.syncOnce("project-a");
+  assert.equal(firstResult.conflicted, 1);
+  assert.equal(firstResult.acknowledged, 1);
+  assert.equal(first.nextAttemptAt, 7_000);
+  assert.match(first.lastError, /revision_conflict/);
+  assert.deepEqual(batches[0], ["device-a-op-1", "device-b-op-1"]);
+
+  now = 6_999;
+  const held = await coordinator.syncOnce("project-a");
+  assert.equal(held.sent, 0);
+  assert.equal(held.remaining, 2);
+  assert.equal(batches.length, 1);
+  assert.deepEqual(outbox.pending.map(item => item.operationId), [
+    "device-a-op-1", "device-a-op-2"
+  ]);
+});

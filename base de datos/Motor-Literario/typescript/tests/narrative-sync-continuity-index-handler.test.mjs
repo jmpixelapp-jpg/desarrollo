@@ -5,7 +5,9 @@ import {
   buildNarrativeIdeaContinuityLines,
   buildNarrativeIdeaEvolution,
   createNarrativeIdeaContinuityIndex,
-  createNarrativeIdeaContinuityIndexUpsertHandler
+  createNarrativeIdeaContinuityIndexSyncEnvelope,
+  createNarrativeIdeaContinuityIndexUpsertHandler,
+  NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS
 } from "../dist/motor-literario.js";
 
 function makeIndex(projectId, generation, suffix = "same") {
@@ -130,4 +132,22 @@ test("validador rechaza generación no consecutiva, índices corruptos y cruce d
     payload: { index, expectedGeneration: undefined },
     digest: "sha256:" + "0".repeat(64)
   }), /otro proyecto/u);
+});
+
+
+test("el helper crea una envoltura SHA-256 con el kind y límites de la proyección", async () => {
+  const projectId = "sync-continuity-envelope";
+  const index = makeIndex(projectId, 1);
+  const envelope = await createNarrativeIdeaContinuityIndexSyncEnvelope({
+    operationId: "continuity-envelope-1",
+    projectId,
+    writerId: "writer-envelope",
+    sequence: 1,
+    payload: { index }
+  });
+
+  assert.equal(envelope.kind, "idea-continuity-index-upsert");
+  assert.equal(envelope.digest.startsWith("sha256:"), true);
+  assert.ok(NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS.maxBytes > 1_048_576);
+  assert.equal(envelope.payload.index.projectId, projectId);
 });

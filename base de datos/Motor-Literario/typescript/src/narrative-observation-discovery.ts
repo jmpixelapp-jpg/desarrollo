@@ -457,6 +457,7 @@ export function discoverNarrativeObservationCandidates(
         })();
         const before = sentence.slice(0, match.index).match(/(?:\bno|\bnunca|\bjamás)\s*$/iu);
         const directedRelationCandidate = signal.action === "entregar" &&
+          !before &&
           subjectCandidate?.voice === "active" &&
           grammaticalObjectCandidate && personalObjectCandidate &&
           subjectCandidate.entityId !== personalObjectCandidate.entityId

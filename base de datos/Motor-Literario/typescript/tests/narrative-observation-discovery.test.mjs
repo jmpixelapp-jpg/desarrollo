@@ -300,6 +300,19 @@ test("reconoce un complemento personal explícito sin inventar la relación sem�
   assert.equal(text.slice(evidence.start, evidence.end), "Bruno");
 });
 
+test("no confunde una mención directa sin marcador a con complemento personal", () => {
+  const bruno = {
+    ...character, id: "character:bruno", canonicalName: "Bruno",
+    normalizedName: "bruno"
+  };
+  const text = "Ana encontró Bruno.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno], text
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].personalObjectCandidate, undefined);
+});
+
 test("no propone complemento personal si el personaje solo se menciona antes del verbo", () => {
   const bruno = {
     ...character, id: "character:bruno", canonicalName: "Bruno",

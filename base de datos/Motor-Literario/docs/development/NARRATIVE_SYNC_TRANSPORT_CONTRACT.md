@@ -47,7 +47,7 @@ Este módulo **no completa la sincronización multidispositivo**. Todavía falta
 - Límites de frecuencia del servidor.
 - Pruebas de integración contra un servidor y pruebas entre dos dispositivos.
 
-El coordinador también valida el tamaño y la estructura JSON de cada payload antes de entregarlo al transporte. El anfitrión no debe borrar una operación por timeout, respuesta ambigua o conflicto. Solo un acuse explícito y validado permite retirarla.
+El coordinador también valida el tamaño y la estructura JSON de cada payload antes de entregarlo al transporte. Las respuestas limitan `code` de conflicto a 128 caracteres y `message` a 2.048, evitando que un adaptador remoto introduzca metadatos de error sin cota. El anfitrión no debe borrar una operación por timeout, respuesta ambigua o conflicto. Solo un acuse explícito y validado permite retirarla.
 
 ## Pruebas añadidas
 

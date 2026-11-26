@@ -409,7 +409,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(legacy.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     legacy.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 });
 

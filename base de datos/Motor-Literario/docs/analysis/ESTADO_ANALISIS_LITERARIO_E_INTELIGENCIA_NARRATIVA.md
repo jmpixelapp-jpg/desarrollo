@@ -199,6 +199,7 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `845b2bc`: amplía la auditoría estática para verificar conjuntamente la reserva del anfitrión y la incorporación del texto enlazado al grafo.
 - `62881c6`: añade una prueba de integración del anfitrión con 21 textos de 100.000 unidades para forzar el límite agregado de dos millones.
 - `d4f714d`: ajusta la longitud exacta del fixture de estrés a 100.000 unidades UTF-16 por idea.
+- `4e73f4f`: completa el store de documentos de prueba para que la integración ejercite `analyzeLiteraryDocument` a través del anfitrión.
 ## 7. Pendientes y siguiente secuencia de trabajo
 
 1. Revisar y ejecutar la prueba de estrés que fuerza el límite de un millón de expansiones de dos saltos y confirma `truncated-by-work-budget`; verificar en ejecución que los contadores parciales no se interpreten como resultados completos.

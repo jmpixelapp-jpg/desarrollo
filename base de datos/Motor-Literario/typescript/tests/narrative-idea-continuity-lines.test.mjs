@@ -290,3 +290,28 @@ test("integra las líneas de continuidad en la salida del pipeline", () => {
   assert.equal(result.ideaContinuityLines.lines[0].chronology, "complete");
   assert.equal(result.ideaEvolution.summary.reappearedCount, 1);
 });
+
+
+test("rechaza un ciclo cronológico imposible en una colección de eventos manipulada", () => {
+  const base = evolution([
+    idea("cycle-a", "chapter-1", "memoria de la ciudad"),
+    idea("cycle-b", "chapter-2", "memoria de la ciudad"),
+    idea("cycle-c", "chapter-3", "memoria de la ciudad")
+  ], ["chapter-1", "chapter-2", "chapter-3"]);
+  const events = base.events.map(event => {
+    const pair = new Set([
+      event.firstOccurrence.ideaCandidateId,
+      event.secondOccurrence.ideaCandidateId
+    ]);
+    if (pair.has("cycle-a") && pair.has("cycle-c")) {
+      return {
+        ...event,
+        earlierOccurrence: event.laterOccurrence,
+        laterOccurrence: event.earlierOccurrence
+      };
+    }
+    return event;
+  });
+
+  assert.throws(() => linesFromEvolution({ ...base, events }), /ciclo imposible/);
+});

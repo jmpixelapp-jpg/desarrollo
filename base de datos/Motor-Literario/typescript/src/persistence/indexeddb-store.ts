@@ -286,7 +286,7 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
   // diagnosticarlas; las altas y cambios nuevos se validan por separado.
   for (const links of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
     if (links !== undefined &&
-        (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+        (!Array.isArray(links) || links.length > 20_000 ||
           links.some(id => typeof id !== "string" || !id.trim()))) {
       throw new Error(
         `Registro de ${label} malformado: referencias inválidas o superiores al límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`
@@ -313,8 +313,8 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
 /** Reglas estrictas para ideas nuevas: el histórico leído se conserva, pero no se crean anomalías nuevas. */
 function validateNarrativeIdeaLinksForWrite(idea: NarrativeIdea, label: string): void {
   for (const links of [idea.relatedEntityIds ?? [], idea.relatedIdeaIds ?? []]) {
-    if (new Set(links).size !== links.length) {
-      throw new Error(`Registro de ${label} malformado: referencias duplicadas.`);
+    if (links.length > MAX_NARRATIVE_IDEA_REFERENCES || new Set(links).size !== links.length) {
+      throw new Error(`Registro de ${label} malformado: referencias inválidas o duplicadas.`);
     }
   }
   if (idea.relatedIdeaIds?.includes(idea.id)) {

@@ -6,6 +6,8 @@ import {
 } from "../dist/motor-literario.js";
 
 function idea(id, documentId, text, start = 0, revision = 1) {
+  const excerpt = "La idea expresada es " + text + ".";
+  const evidenceStart = start + excerpt.indexOf(text);
   return {
     id,
     projectId: "book-1",
@@ -17,9 +19,9 @@ function idea(id, documentId, text, start = 0, revision = 1) {
     polarity: "affirmed",
     reviewStatus: "candidate",
     evidence: {
-      start,
-      end: start + text.length,
-      excerpt: "La idea expresada es " + text + "."
+      start: evidenceStart,
+      end: evidenceStart + text.length,
+      excerpt
     }
   };
 }
@@ -147,4 +149,17 @@ test("el pipeline integra candidatos previos de otros capítulos", () => {
   assert.ok(result.ideaCrossDocumentAnalysis.relations.every(relation =>
     relation.reviewStatus === "candidate"
   ));
+});
+
+
+test("informa cuando el límite de relaciones recorta una salida grande", () => {
+  const candidates = Array.from({ length: 200 }, (_, index) => {
+    const documentId = index < 67 ? "chapter-a" : index < 134 ? "chapter-b" : "chapter-c";
+    return idea("bulk-" + index, documentId, "memoria compartida", index * 30);
+  });
+  const result = analyze(candidates);
+
+  assert.equal(result.analyzedCandidateCount, 200);
+  assert.equal(result.truncated, true);
+  assert.equal(result.relations.length, 10_000);
 });

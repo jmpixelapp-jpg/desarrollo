@@ -261,7 +261,7 @@ export interface NarrativeProjectionReconciliationIssue {
   readonly recordType: "document" | "entity" | "relation" | "event" | "idea" | "assertion";
   readonly recordId?: string;
   readonly relatedId?: string;
-  readonly referenceField?: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
+  readonly referenceField?: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds" | "relatedIdeaIds";
   readonly detail: string;
 }
 

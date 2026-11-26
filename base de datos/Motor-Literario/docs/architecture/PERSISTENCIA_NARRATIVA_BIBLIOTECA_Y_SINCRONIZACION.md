@@ -1,10 +1,10 @@
 # Persistencia narrativa, biblioteca de ideas y sincronización
 
-**Versión documental:** 1.0  
+**Versión documental:** 1.1  
 **Revisión de código de referencia:** `main` en `f99278768abb4fd0ad2fbb01dcc4bf4c49f1ed1f`  
 **Ámbito:** núcleo `base de datos/Motor-Literario/typescript`  
 **Lenguaje de implementación:** TypeScript/JavaScript puro  
-**Estado:** guía de arquitectura y plan de endurecimiento; no declara implementadas las capacidades remotas descritas como objetivo.
+**Estado:** guía de arquitectura y plan de endurecimiento; incluye diagnóstico local implementado en esta rama y no declara implementadas las capacidades remotas descritas como objetivo.
 
 > Esta guía se ha redactado contrastando los contratos TypeScript, el adaptador IndexedDB, el esquema MLDB y los scripts de validación de la rama indicada. Cuando una capacidad no está conectada o no existe en ese código, se identifica como pendiente.
 
@@ -151,7 +151,7 @@ La futura API de salud local debe devolver, como mínimo:
 
 El diagnóstico debe ser de solo lectura. Las cifras de cuota son estimaciones y no prometen espacio disponible en el futuro. La solicitud de almacenamiento persistente debe ser una acción explícita de la aplicación anfitriona, y el resultado depende del navegador.
 
-**Estado en la revisión de referencia:** el esquema IndexedDB es v24. Esta guía describe el contrato recomendado; no afirma que la API de diagnóstico ya esté incorporada a `main`.
+**Implementación añadida en esta rama:** `IndexedDbProjectStore.inspectStorageHealth()` cuenta registros por object store en una transacción de solo lectura y consulta `estimate()` y `persisted()` cuando están disponibles. `requestPersistentStorage()` solicita persistencia y devuelve el resultado del navegador; si la API no existe o falla, devuelve `false`. La inspección no incluye contenido del manuscrito y no modifica el esquema v24. Los tests cubren cuota disponible/no disponible, persistencia concedida/ausente y no mutación del documento. Esta capacidad está en la rama de PR y no debe atribuirse a `main` hasta su integración.
 
 ## 7. Contrato de sincronización propuesto
 
@@ -360,7 +360,7 @@ La suite actual ejecuta validación de esquema, auditoría de almacenamiento y p
 | Checkpoints y leases del monitor | Presentes |
 | Outbox durable de sincronización | No incorporada a esta revisión de `main` |
 | Encolado atómico de todas las mutaciones | Pendiente |
-| Diagnóstico de cuota y solicitud de persistencia | Pendiente de incorporación/verificación |
+| Diagnóstico de cuota y solicitud de persistencia | Implementado en la rama de trabajo; pendiente de CI final e integración |
 | Transporte remoto y autenticación | Pendiente |
 | Descarga y reconciliación | Pendiente |
 | Resolución de conflictos multidispositivo | Pendiente |

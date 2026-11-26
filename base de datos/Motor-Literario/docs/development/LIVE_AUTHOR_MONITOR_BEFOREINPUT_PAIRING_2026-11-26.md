@@ -124,3 +124,11 @@ En la ejecución `45780942285` asociada al commit `49007e0716b551683da87ed7026d1
 La construcción del bundle general falló antes de la integración host/editor, en `src/narrative-action-link-discovery.ts:46`, un archivo ajeno al cambio de captura. El workflow de monitor continuaba instalando Chromium en la última consulta; por ello, el resultado final de ciclo de vida, integración navegador y benchmark de esta ejecución queda **pendiente**. No se declara aprobada la integración completa ni el pipeline global a partir de los pasos aislados que sí terminaron correctamente.
 
 Las fallas iniciales de expectativas que aparecieron en ejecuciones anteriores se corrigieron en los tests del adaptador nativo, la integración HostEngineApi y Chromium. La ejecución `45780942285` confirmó la suite aislada corregida en verde.
+
+## Reparación de validación global posterior
+
+Al ejecutar la suite completa, se aislaron problemas en pruebas de descubrimiento narrativo que bloqueaban la validación general:
+- Los ejemplos nuevos de vínculos entre acciones utilizaban verbos que el inventario de acciones no reconoce. Se sustituyeron por formas ya presentes en el extractor (entrar, correr, buscar, llegar, perder, recibir, caminar y responder), manteniendo cada marcador temporal/causal/adversativo entre dos acciones observables.
+- Un caso temporal había sido incorporado con secuencias `\\n` literales dentro de una línea JavaScript; se restituyó el formato multilínea del test.
+
+Estos cambios corrigen fixtures y formato de pruebas, no amplían el clasificador lingüístico. La validación global debe repetirse sobre el commit resultante; todavía no se declara aprobada.

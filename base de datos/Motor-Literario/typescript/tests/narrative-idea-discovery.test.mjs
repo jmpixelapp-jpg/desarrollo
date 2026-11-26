@@ -89,7 +89,7 @@ test("detecta objetivos, motivaciones y dilemas expresados sin etiquetas", () =>
     "Mara desea encontrar a su hermano desaparecido.",
     "Su motivación principal es proteger a su familia.",
     "El guardián debe elegir entre salvar la ciudad o cumplir su juramento."
-  ].join("\\n");
+  ].join("\n");
 
   const found = discoverNarrativeIdeaCandidates({ ...context, text });
   assert.deepEqual(found.map(item => item.kind), ["goal", "motivation", "dilemma"]);
@@ -128,7 +128,7 @@ test("descubre semillas de historia y temas sugeridos en formulaciones explorato
     "Me gustaría explorar una ciudad que cambia de lugar cada noche.",
     "La trama gira en torno a la memoria heredada.",
     "La protagonista sueña con regresar a su hogar."
-  ].join("\\n");
+  ].join("\n");
 
   const found = discoverNarrativeIdeaCandidates({ ...context, text });
   assert.deepEqual(found.map(item => item.kind), ["premise", "theme", "goal"]);

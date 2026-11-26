@@ -720,3 +720,20 @@ Cada resultado conserva el ID de la idea, proyecto, documento, revisión, nombre
 Se validan límites de ideas, entidades, alias y evidencia; se rechazan proyectos cruzados, IDs duplicados y entradas malformadas. Se añadieron pruebas para atribución del titular, exclusión del objetivo, ambigüedad entre personajes, alias compartidos, ausencia de titular, coincidencias repetidas e integración del pipeline.
 
 **Límite deliberado:** la atribución exige que el nombre aparezca antes de la idea en la misma oración. No resuelve pronombres, sujetos omitidos, coreferencia entre oraciones ni titulares implícitos. En esos casos se abstiene; no intenta deducir la autoría por cercanía.
+
+
+### Fase AQ: relaciones explicables entre ideas de distintos capítulos
+
+Se añade `narrative-idea-cross-document-relations.ts` y el resultado `ideaCrossDocumentAnalysis` al pipeline `understandNarrativeFragment`. El anfitrión puede aportar hasta 100 candidatos previos mediante `priorIdeaCandidates`; el fragmento actual aporta sus propios candidatos. La comparación conjunta admite hasta 200 elementos por ejecución.
+
+Se separan dos señales:
+- `exact-recurrence`: texto equivalente tras normalizar Unicode NFKD, mayúsculas/minúsculas, diacríticos, puntuación y espacios.
+- `lexical-resonance`: coincidencia de al menos dos términos de contenido que supera un umbral de Jaccard o de solapamiento. Se excluyen palabras funcionales en español e inglés y términos presentes en demasiados documentos del lote.
+
+Cada relación conserva los dos candidatos, documento, revisión, tipo de idea, modalidad, texto y evidencias originales. Expone los términos compartidos y las métricas para que el resultado sea explicable. Los pares del mismo documento no se relacionan, incluso si pertenecen a revisiones distintas. Los IDs y el orden de salida son deterministas.
+
+La cronología solo se orienta cuando ambos documentos figuran en `orderedDocumentIds`; de lo contrario queda como `unknown`. La salida permanece en estado `candidate`, no crea enlaces canónicos, no fusiona ideas y no escribe en IndexedDB ni en la biblioteca personal. La resonancia léxica no demuestra que dos expresiones sean paráfrasis, sinónimos o la misma idea. La revisión humana sigue siendo necesaria para esa decisión.
+
+Límites de recursos: máximo 200 candidatos, 500 unidades UTF-16 por texto de idea, 10.000 relaciones publicadas y señal explícita `truncated` si el límite de resultados recorta la lista. Se cuentan los pares comparados entre documentos para permitir diagnóstico del coste.
+
+Se agregan nueve pruebas para recurrencia normalizada, resonancia, coincidencia insuficiente, aislamiento por documento, cronología explícita/desconocida, filtrado de términos frecuentes, determinismo, entradas inválidas e integración con candidatos previos en el pipeline.

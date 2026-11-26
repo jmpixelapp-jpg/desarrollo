@@ -1369,7 +1369,7 @@ La conclusión global de la lane sigue siendo `failure` por controles compartido
 
 **Regresión:** el test de checkpoint instala un suscriptor que falla durante una admisión y un commit; comprueba que la sesión informa dos errores, que el checkpoint no contiene la propiedad `listenerErrors` y que `restoreCheckpoint()` comienza en cero. Las métricas de escritura y durabilidad se restauran sin contaminar la sesión nueva con fallos antiguos de UI.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI:** en la misma ejecución dedicada [run 45763663440](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45763663440), la regresión de respuestas fuera de orden aprobó como test 104. El pipeline terminó `success`: **167/167** pruebas aisladas, Chromium Page Lifecycle 1/1 y **170/170** pruebas host/editor/browser. El orden invertido conservó los máximos de `expiresAt` y `updatedAt`; no se observaron fallos ni tickets pendientes al completar el benchmark.
 
 
 ## 86. Aislamiento visible de fallos de reconciliación del workspace (26 de noviembre de 2026)
@@ -1538,7 +1538,7 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 
 **Regresión:** un almacén determinista confirma la renovación, pero demora la entrega de su respuesta. Mientras tanto, el cierre seguro completa el checkpoint y libera el lease. Al desbloquear la respuesta antigua, se exige que no se repongan el lease local ni el heartbeat y que el registro persistido permanezca vencido.
 
-**Validación:** pendiente de GitHub Actions para la nueva regresión.
+**Validación CI:** [Live Author Monitor — run 45763663440](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45763663440), checkout `26fc325ceb66d57b4bd9cfa642bb166ccd0710d4` (incluye el código de `host-api.ts` del commit `e0312b4536f3c7eaef3d91d565aba58dc817f86f`), terminó `success`. Type-check estricto, bundle aislado, 17/17 diagnósticos, auditoría MLDB/almacenamiento y runtime build aprobados; monitor/panel/workspace/adaptadores **167/167**; Page Lifecycle Chromium 1/1; host/editor/browser **170/170**. La regresión de renovación genérica tardía pasó como test 103. El benchmark de 100.000 commits terminó en **645,71 ms** (~154.868 commits/s), heap de 4,39 MiB a mitad y al 100 % de carga, crecimiento de 0 MiB, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
 
 
 ## 100. Monotonía de metadatos ante respuestas de renovación fuera de orden (26 de noviembre de 2026)

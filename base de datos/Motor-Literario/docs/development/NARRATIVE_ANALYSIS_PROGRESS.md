@@ -114,3 +114,9 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Pruebas de regresión para revisión actualizada, evidencia de otro documento y repetición idempotente.
 
 **Límites vigentes:** la persistencia continúa siendo secuencial, no atómica entre colecciones. Los documentos retirados del proyecto deben declararse explícitamente; omitirlos del snapshot no autoriza su eliminación. La siguiente fase debe incorporar manifiestos de documentos, tombstones y reemplazo transaccional.
+
+### Ajuste de alcance de reconciliación
+
+- Corregido el acceso al ID documental desde `snapshot.documents[].input.documentId` según el contrato real del snapshot incremental.
+- Las afirmaciones narrativas contienen una única evidencia (`TextEvidence`), no una lista. La persistencia actualiza afirmaciones entrantes por CAS, pero conserva las antiguas que no aparecen en el snapshot; no se declara reconciliación de afirmaciones hasta disponer de tombstones/borrado transaccional.
+- La reconciliación de evidencias por colección queda limitada a entidades, relaciones, acontecimientos e ideas.

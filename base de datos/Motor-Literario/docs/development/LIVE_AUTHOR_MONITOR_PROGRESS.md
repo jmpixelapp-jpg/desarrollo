@@ -1440,3 +1440,11 @@ La lane global continúa en `failure` por los controles compartidos de IndexedDB
 **CI general del HEAD:** la ejecución [Motor Literario TypeScript — run 45759492198](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759492198) aún falla en `tests/core.test.mjs:2163`, donde la expectativa de esquema inicial no incluye/concuerda con los almacenes `narrative-reference-repair-audits` y `narrative-reference-repair-pending`; el runner cancela después 235 pruebas dependientes. Es una expectativa de migración/almacenamiento, fuera de este módulo. No se cambió ese test ni la implementación IndexedDB desde la tarea del monitor.
 
 **Conclusión de esta tanda:** el monitor tiene validación integral verde sobre el contenido idéntico actualmente en `main`; el bloqueo restante para tener todo el repositorio verde se encuentra en la suite de almacenamiento general y debe resolverse por el trabajo paralelo responsable de DB27.
+
+## 92. Estrés FIFO del puente de transacciones nativas (26 de noviembre de 2026)
+
+**Motivación:** la prueba existente cubría dos publicaciones reentrantes, suficientes para verificar orden lógico pero no para estresar una ráfaga larga emitida sincrónicamente desde un listener del propio puente.
+
+**Regresión nueva:** un listener genera 999 publicaciones adicionales mientras se procesa la secuencia 1. El segundo listener y el primero deben recibir exactamente las secuencias 1..1000, en FIFO, sin saltos ni duplicaciones. El test también comprueba que cada llamada reentrante selecciona los dos listeners y que el proveedor nativo termina en la secuencia 1000.
+
+**Validación:** pendiente de GitHub Actions.

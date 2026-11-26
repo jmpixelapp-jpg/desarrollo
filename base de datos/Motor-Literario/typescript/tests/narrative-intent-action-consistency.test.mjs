@@ -83,3 +83,19 @@ test("conserva negación y condicionalidad de la intención sin reinterpretarlas
   assert.equal(negative.relation,"intent-negated");
   assert.equal(conditional.relation,"conditional-intent");
 });
+
+test("no compara como oposición una acción dirigida a otro objetivo", () => {
+  const [result] = compareNarrativeIntentsWithActions({
+    projectId:"novel",entities,intents:[intent("proteger a Elian")],
+    actions:[action("traicionó","affirmed",70,"mara","mara")]
+  });
+  assert.equal(result.relation,"unrelated-action");
+});
+
+test("no usa evidencia marcada como obsoleta para declarar coherencia o contradicción", () => {
+  const staleIntent = {...intent("proteger a Elian"),evidence:{...intent("proteger a Elian").evidence,status:"stale"}};
+  const [result] = compareNarrativeIntentsWithActions({
+    projectId:"novel",entities,intents:[staleIntent],actions:[action("traicionó")]
+  });
+  assert.equal(result.relation,"not-comparable");
+});

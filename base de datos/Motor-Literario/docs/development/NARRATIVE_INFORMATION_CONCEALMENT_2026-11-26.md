@@ -6,7 +6,7 @@ El módulo `narrative-information-concealment-discovery.ts` extrae construccione
 
 ## Señales reconocidas
 
-- `concealed-proposition`: «Ana ocultó a Bruno que…», «Ana escondió que…» o «Ana calló que…».
+- `concealed-proposition`: «Ana ocultó a Bruno que…», «Ana escondió que…», «Ana mantuvo en secreto que…», «Ana guardó en secreto que…», «Ana silenció que…» o «Ana calló ante Bruno que…».
 - `lied-to-recipient`: «Ana mintió a Bruno diciendo que…».
 - `feigned-proposition`: «Ana fingió que…» o «Ana simuló que…».
 - `induced-belief`: «Ana hizo creer a Bruno que…».

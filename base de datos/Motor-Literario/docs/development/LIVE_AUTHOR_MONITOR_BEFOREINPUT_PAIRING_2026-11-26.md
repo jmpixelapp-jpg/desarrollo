@@ -64,7 +64,7 @@ Commits:
 - Corrección: `11dc5a86032f38cfe313c390769daf46ba5bf193`
 - Prueba: `ed2482015f1e558b5d1c2ed78e4202f755e01f36`
 
-**Validación pendiente:** ejecutar el build aislado del monitor, suite específica y prueba de integración Chromium sobre este HEAD. La prueba unitaria nueva cubre el orden de eventos; no equivale a una prueba con IME real del sistema operativo.
+**Estado de validación actualizado:** la compilación, la suite específica del monitor y la integración Chromium ya se completaron en los workflows `45786484345` y `45786484481`, ambos sobre el commit `1838d242d5ceabbe964dbcbe541bb8ebcf7bf240`; los resultados completos se registran al final de este documento. La matriz con sesiones IME físicas de distintos sistemas operativos, navegadores e idiomas permanece pendiente.
 
 
 ## Verificación exacta del contexto fuera del rango editado
@@ -227,3 +227,24 @@ El panel y el workspace de capítulos ahora lo indican con etiquetas de métrica
 El borrador vigente de [Input Events Level 2 del W3C](https://www.w3.org/TR/2026/WD-input-events-2-20261120/) describe, durante una sesión de composición, una secuencia de `compositionupdate` seguida de pares `beforeinput`/`input` con `inputType="insertCompositionText"`; `compositionend` marca el final de la sesión. El adaptador conserva el emparejamiento de cada par y tolera el orden `compositionend`/último `input` que ya tiene regresión específica.
 
 Las pruebas unitarias cubren varias actualizaciones candidatas y el orden de los eventos de composición, pero no equivalen a una sesión física de IME con un teclado/servicio de entrada del sistema operativo. La prueba Chromium actual valida teclado nativo para `insertText`, persistencia IndexedDB y rechazo de eventos sintéticos; una matriz de IME reales por navegador, sistema operativo e idioma sigue siendo una validación de dispositivo pendiente.
+
+
+## Validación completa de esta iteración — 26 de noviembre de 2026
+
+Los dos workflows siguientes terminaron correctamente sobre el mismo commit `1838d242d5ceabbe964dbcbe541bb8ebcf7bf240`:
+
+- **[Live Author Monitor — run 45786484345](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45786484345):** type-check aislado; 17/17 pruebas del primer grupo; 180/180 pruebas unitarias/diagnósticas; Chromium Page Lifecycle; integración IndexedDB real entre dos páginas; integración de capítulos/workspace. El resultado integrado fue **198/198 pruebas, 0 fallos**.
+- **[Motor Literario TypeScript — run 45786484481](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45786484481):** type-check global, build, validación de esquema y bundle; suite completa **1.145/1.145 pruebas, 0 fallos**; las pruebas Chromium de IndexedDB, Page Lifecycle y capítulos también terminaron correctamente.
+
+### Benchmark de memoria del monitor
+
+La ejecución global reportó el escenario `live-author-monitor-bounded-heap` con 8 documentos, 1.048.576 unidades UTF-16 iniciales por documento, 12.500 cambios por documento y 100.000 commits totales. En esa ejecución: 383,63 ms, 260.667,99 commits/s, 0,5 MB retenidos por sesiones abiertas, 0 MB de crecimiento de heap entre media carga y carga completa y 71,79 MB de RSS final. El workflow dedicado del monitor observó 649,01 ms y 154.080,69 commits/s para el mismo volumen; ambos resultados son mediciones de ejecución, no garantías de rendimiento.
+
+**Alcance del benchmark:** mide el núcleo `LiveAuthorMonitor` (sesiones, commits y contadores), no el coste aislado ni el heap de la copia de texto del adaptador `TextArea`. La comprobación `beforeinput.data` añade una comparación del segmento insertado cuando el navegador entrega un dato no nulo; la extracción usa esa misma cadena validada, evitando una segunda copia del segmento.
+
+### Límites que siguen abiertos
+
+- Las pruebas de IME cubren secuencias de eventos y sustitución de candidatos con fixtures de prueba. La integración Chromium confirma teclado nativo para `insertText`, pero no simula una sesión física de IME del sistema operativo.
+- Hace falta una matriz real de idiomas, IME, navegadores y sistemas operativos para medir diferencias de `compositionstart`, `compositionupdate`, pares `beforeinput`/`input` y `compositionend`.
+- Cuando `beforeinput.data` y `input.data` no proporcionan contenido (`null`), el adaptador no puede contrastar el texto dentro del rango editado; solo aplica las verificaciones estructurales y del contexto exterior descritas antes.
+- Los contadores de composición representan actualizaciones observadas, no cadenas finales únicas; los volúmenes de caracteres y los ritmos se mantienen explícitamente como métricas brutas UTF-16.

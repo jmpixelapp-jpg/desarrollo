@@ -318,3 +318,147 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
     if (server.exitCode === null) server.kill("SIGKILL");
   }
 });
+
+test("Chromium captura actualizaciones de composición IME y el texto confirmado mediante CDP", {
+  timeout: 120_000
+}, async () => {
+  const port = await reservePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const harnessUrl = origin + "/tests/browser/live-author-monitor-lease.html";
+  const viteCli = resolve(process.cwd(), "node_modules/vite/bin/vite.js");
+  const server = spawn(
+    process.execPath,
+    [viteCli, "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
+    { cwd: process.cwd(), stdio: "ignore" }
+  );
+  let browser;
+
+  try {
+    await waitForVite(harnessUrl, server);
+    browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(harnessUrl);
+      await page.waitForFunction(() => window.__monitorLeaseHarness !== undefined);
+      await page.evaluate(async () => {
+        const { LiveAuthorMonitorTextAreaSource } =
+          await import("/src/live-author-monitor-textarea-source.ts");
+        const element = document.createElement("textarea");
+        element.id = "ime-capture-textarea";
+        element.value = "abc";
+        document.body.append(element);
+        const errors = [];
+        const changes = [];
+        const events = [];
+        for (const type of [
+          "compositionstart", "compositionupdate", "compositionend", "beforeinput", "input"
+        ]) {
+          element.addEventListener(type, event => events.push({
+            type,
+            inputType: event.inputType ?? null,
+            data: event.data ?? null,
+            isComposing: event.isComposing ?? null,
+            isTrusted: event.isTrusted
+          }));
+        }
+        const source = new LiveAuthorMonitorTextAreaSource({
+          element,
+          initialSnapshot: {
+            documentId: "browser-ime-capture",
+            text: "abc",
+            revision: 0,
+            sequence: 0
+          },
+          onError: error => errors.push({ code: error.code, message: error.message })
+        });
+        source.subscribeChanges(change => changes.push(change));
+        window.__imeCaptureHarness = { element, source, errors, changes, events };
+      });
+
+      const textarea = page.locator("#ime-capture-textarea");
+      await textarea.focus();
+      await textarea.evaluate(element => element.setSelectionRange(3, 3));
+      const cdp = await context.newCDPSession(page);
+      try {
+        // CDP sets successive IME candidate strings. This exercises the real
+        // Chromium editing pipeline and trusted DOM events, not dispatchEvent().
+        await cdp.send("Input.imeSetComposition", {
+          text: "に",
+          selectionStart: 1,
+          selectionEnd: 1
+        });
+        await cdp.send("Input.imeSetComposition", {
+          text: "日本",
+          selectionStart: 2,
+          selectionEnd: 2
+        });
+
+        // Input.insertText maps to Chromium's IME commit-text operation.
+        await cdp.send("Input.insertText", { text: "日本" });
+
+        const result = await page.evaluate(() => {
+          const harness = window.__imeCaptureHarness;
+          const value = harness.element.value;
+          const state = harness.source.getState();
+          const result = {
+            value,
+            errors: harness.errors,
+            changes: harness.changes,
+            events: harness.events,
+            state
+          };
+          harness.source.dispose();
+          harness.element.remove();
+          delete window.__imeCaptureHarness;
+          return result;
+        });
+
+        assert.equal(result.value, "abc日本",
+          "el candidato final debe permanecer en el documento después del commit");
+        assert.deepEqual(result.errors, [],
+          "la secuencia de composición gestionada por Chromium debe conservar pares válidos");
+        assert.equal(result.state.needsResync, false);
+        assert.equal(result.state.compositionActive, false);
+
+        const compositionChanges = result.changes.filter(
+          change => change.activityKind === "composition"
+        );
+        assert.ok(compositionChanges.length >= 2,
+          "cada candidato IME observado debe publicarse como actividad composition");
+        assert.ok(result.changes.every(change =>
+          change.activityKind !== "typing" || change.replacement !== "に" && change.replacement !== "日本"
+        ), "los candidatos provisionales no deben contarse como typing ordinario");
+
+        const trustedCompositionUpdates = result.events.filter(event =>
+          (event.type === "beforeinput" || event.type === "input") &&
+          event.inputType === "insertCompositionText"
+        );
+        assert.ok(trustedCompositionUpdates.length >= 4,
+          "Chromium debe producir pares beforeinput/input para las actualizaciones de composición");
+        assert.ok(trustedCompositionUpdates.every(event => event.isTrusted === true),
+          "los eventos del pipeline IME de Chromium deben ser confiables");
+        assert.ok(result.events.some(event => event.type === "compositionstart" && event.isTrusted),
+          "debe observarse el inicio confiable de la composición");
+        assert.ok(result.events.some(event => event.type === "compositionupdate" && event.isTrusted),
+          "debe observarse al menos una actualización confiable de la composición");
+        assert.ok(result.events.some(event => event.type === "compositionend" && event.isTrusted),
+          "el commit debe cerrar la composición con compositionend");
+      } finally {
+        await cdp.detach();
+      }
+    } finally {
+      await context.close();
+    }
+  } finally {
+    if (browser) await browser.close();
+    server.kill("SIGTERM");
+    await Promise.race([
+      new Promise(resolveExit => server.once("exit", resolveExit)),
+      delay(3_000)
+    ]);
+    if (server.exitCode === null) server.kill("SIGKILL");
+  }
+});
+

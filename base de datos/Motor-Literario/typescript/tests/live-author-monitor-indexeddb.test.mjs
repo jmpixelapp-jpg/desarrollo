@@ -182,6 +182,12 @@ test("migra IndexedDB v22 a v25 creando checkpoints, leases y bandeja sin perder
       assert.equal(migratedDatabase.version, 25);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
+      assert.equal(migratedDatabase.objectStoreNames.contains("sync-outbox"), true);
+      const outboxStore = migratedDatabase.transaction("sync-outbox", "readonly").objectStore("sync-outbox");
+      assert.equal(outboxStore.keyPath, "operationId");
+      assert.equal(outboxStore.indexNames.contains("by-project-created-at"), true);
+      assert.equal(outboxStore.indexNames.contains("by-project-device-sequence"), true);
+      assert.equal(outboxStore.index("by-project-device-sequence").unique, true);
 
       const leaseStore = migratedDatabase.transaction(
         "live-author-monitor-leases",

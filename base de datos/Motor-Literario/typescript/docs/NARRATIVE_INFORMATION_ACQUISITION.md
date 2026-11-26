@@ -180,3 +180,9 @@ La extracción conserva la forma verbal exacta, el objeto identificado, el sujet
 
 Estas etiquetas describen el tipo de cambio expresado por el verbo, no un estado global confirmado. «Intentó romper la espada» no demuestra que la espada se rompiera; «reparó la espada» no demuestra que quedara completamente funcional. Los resultados permanecen como candidatos y necesitan validación contextual. Se añadieron pruebas para los siete verbos, evidencia exacta y offsets, negación y futuro.
 
+#### Protección frente a intentos, deseos y posibilidades
+
+La presencia de un verbo de cambio no basta para concluir que el cambio se ejecutó. Las construcciones subordinadas como «Ana intentó romper la espada», «Ana quiso abrirla», «Ana podría destruirla» o «Ana no pudo activarla» no deben convertirse en una transición consumada: el sujeto de la acción subordinada no se atribuye como si el verbo principal no existiera. Se añadieron casos negativos para evitar esa falsa actualización.
+
+El clasificador de efecto también conserva estados no concluyentes para formas no finitas o en desarrollo (`attempted`, `intended`, `hypothetical`, `in-progress`, `unresolved`) cuando el contexto de evidencia permite identificarlas. Solo `candidate` representa una acción finita afirmada pendiente de revisión; no equivale a éxito ni a estado confirmado. La negación y el futuro mantienen prioridad (`not-applied` y `prospective`).
+

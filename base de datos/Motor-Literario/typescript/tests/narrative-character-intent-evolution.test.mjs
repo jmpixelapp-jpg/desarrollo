@@ -91,3 +91,13 @@ test("rechaza objetivos previos de otro proyecto o personaje desconocido", () =>
     currentIntents:[intent("new", "proteger a Elian", "affirmed", "chapter-2", 20)]
   }));
 });
+
+test("no ordena automáticamente revisiones distintas del mismo documento", () => {
+  const prior = intent("old", "buscar el trono", "affirmed", "chapter-1", 10, "Mara quiere buscar el trono.", 1);
+  const current = intent("new", "proteger a Elian", "affirmed", "chapter-1", 80, "Mara quiere proteger a Elian.", 2);
+  const [result] = evolveNarrativeCharacterIntents({
+    projectId:"novel", entities, priorIntents:[prior], currentIntents:[current],
+    orderedDocumentIds:["chapter-1"]
+  });
+  assert.equal(result.transition, "chronology-unresolved");
+});

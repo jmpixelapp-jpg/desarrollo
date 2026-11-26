@@ -352,6 +352,7 @@ test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timest
         acceptedChanges: 4,
         committedChanges: 4,
         insertedCharacters: 10,
+        currentDocumentLength: 15,
         revision: 5,
         sequence: 5,
         totalCommitLatencyMs: 20,

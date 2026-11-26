@@ -80,6 +80,7 @@ function validate(input: NarrativeInformationAsymmetryInput): void {
         item.triggerEvidence.start < item.evidence.start || item.triggerEvidence.end > item.evidence.end ||
         item.propositionEvidence.start < item.evidence.start || item.propositionEvidence.end > item.evidence.end ||
         item.readerKnowledge !== "not-established" || item.focalization !== "unresolved" ||
+        item.presentation !== "proposition-explicitly-presented-in-narrative-text" ||
         (item.signal === "character-unaware-that" &&
           (typeof item.subjectEntityId !== "string" || !item.subjectEntityId.trim() ||
            !item.subjectEvidence || !validEvidence(item.subjectEvidence,item.documentId,item.revision) ||
@@ -92,6 +93,10 @@ function validate(input: NarrativeInformationAsymmetryInput): void {
   for (const item of input.knowledgeCandidates) {
     if (!item || item.projectId !== input.projectId || !item.id || knowledgeIds.has(item.id) ||
         typeof item.holderEntityId !== "string" || !item.holderEntityId.trim() ||
+        !["learned","known","heard","read","discovered","suspected","believed","remembered","forgotten","reported"].includes(item.kind) ||
+        !["asserted-cognition","uncertain-cognition","reported-transfer"].includes(item.mode) ||
+        !["affirmed","negated"].includes(item.polarity) ||
+        !["explicit-claim","uncertain-claim"].includes(item.certainty) ||
         !validEvidence(item.evidence,item.documentId,item.revision) ||
         !validEvidence(item.holderEvidence,item.documentId,item.revision) ||
         !validEvidence(item.triggerEvidence,item.documentId,item.revision) ||

@@ -226,7 +226,7 @@ El panel y el workspace de capítulos ahora lo indican con etiquetas de métrica
 
 El borrador vigente de [Input Events Level 2 del W3C](https://www.w3.org/TR/2026/WD-input-events-2-20261120/) describe, durante una sesión de composición, una secuencia de `compositionupdate` seguida de pares `beforeinput`/`input` con `inputType="insertCompositionText"`; `compositionend` marca el final de la sesión. El adaptador conserva el emparejamiento de cada par y tolera el orden `compositionend`/último `input` que ya tiene regresión específica.
 
-Las pruebas unitarias cubren varias actualizaciones candidatas y el orden de los eventos de composición, pero no equivalen a una sesión física de IME con un teclado/servicio de entrada del sistema operativo. La prueba Chromium actual valida teclado nativo para `insertText`, persistencia IndexedDB y rechazo de eventos sintéticos; una matriz de IME reales por navegador, sistema operativo e idioma sigue siendo una validación de dispositivo pendiente.
+Las pruebas unitarias cubren varias actualizaciones candidatas y el orden de los eventos de composición, pero no equivalen a una sesión física de IME con un teclado/servicio de entrada del sistema operativo. La suite de Chromium ahora prueba dos vías: teclado nativo para `insertText` y candidatos IME mediante `Input.imeSetComposition`, con persistencia IndexedDB y rechazo de eventos sintéticos; una matriz de IME físicos por navegador, sistema operativo e idioma sigue pendiente.
 
 
 ## Validación completa de esta iteración — 26 de noviembre de 2026
@@ -248,3 +248,15 @@ La ejecución global reportó el escenario `live-author-monitor-bounded-heap` co
 - Hace falta una matriz real de idiomas, IME, navegadores y sistemas operativos para medir diferencias de `compositionstart`, `compositionupdate`, pares `beforeinput`/`input` y `compositionend`.
 - Cuando `beforeinput.data` y `input.data` no proporcionan contenido (`null`), el adaptador no puede contrastar el texto dentro del rango editado; solo aplica las verificaciones estructurales y del contexto exterior descritas antes.
 - Los contadores de composición representan actualizaciones observadas, no cadenas finales únicas; los volúmenes de caracteres y los ritmos se mantienen explícitamente como métricas brutas UTF-16.
+
+
+### Prueba de candidatos IME con Chromium DevTools Protocol
+
+El test de navegador `Chromium captura candidatos IME y separa la confirmación de texto por CDP` usa el comando experimental `Input.imeSetComposition` para aplicar el candidato `に` y sustituirlo por `日本`. El test comprueba en el textarea y en el stream:
+- el texto del candidato anterior se sustituye, no se concatena;
+- los pares confiables `beforeinput`/`input` con `inputType="insertCompositionText"` originan al menos dos deltas `composition`;
+- los eventos `compositionstart` y `compositionupdate` del pipeline de candidatos aparecen y la fuente permanece sincronizada durante la composición.
+
+La confirmación de texto CDP se verifica por separado después de disponer la fuente. En este runner, `Input.insertText` deja el texto final correcto pero genera un `compositionend` que el adaptador clasifica como no confiable y rechaza. No se relajó `isTrusted` para hacer pasar el test: ese rechazo protege la captura frente a eventos que no prueban una entrada confiable. La prueba deja explícito que este comando de automatización no puede sustituir la validación de un commit realizado por un IME físico.
+
+**Límite de automatización:** `Input.imeSetComposition` es un comando experimental del protocolo de Chromium; la prueba verifica el pipeline de edición del navegador, no el comportamiento de un proveedor IME concreto ni del sistema operativo. La API CDP tampoco garantiza estabilidad entre versiones. Referencias: [definición de Input.imeSetComposition](https://chromedevtools.github.io/devtools-protocol/tot/Input/#method-imeSetComposition), [Input Events Level 2: orden de eventos durante la composición](https://www.w3.org/TR/input-events-2/#event-order-during-composition) y [Chrome DevTools Protocol: alcance y estabilidad](https://chromedevtools.github.io/devtools-protocol/).

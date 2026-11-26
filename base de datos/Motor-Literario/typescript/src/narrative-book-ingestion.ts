@@ -29,6 +29,11 @@ import {
   discoverNarrativeLocationPresenceCandidates,
   type NarrativeLocationPresenceCandidate
 } from "./narrative-location-presence-discovery";
+import {
+  discoverNarrativeTemporalReferenceCandidates,
+  MAX_NARRATIVE_TEMPORAL_TEXT_UNITS,
+  type NarrativeTemporalReferenceCandidate
+} from "./narrative-temporal-reference-discovery";
 import { auditNarrativeExtractionCoverage, type NarrativeExtractionAudit } from "./narrative-extraction-audit";
 
 /**
@@ -125,6 +130,9 @@ export interface NarrativeBookIngestionResult {
   readonly locationTransitionCandidates: readonly NarrativeLocationTransitionCandidate[];
   /** Afirmaciones candidatas de presencia de personajes en lugares explícitos. */
   readonly locationPresenceCandidates: readonly NarrativeLocationPresenceCandidate[];
+  /** Referencias temporales literales; las relativas no se resuelven sin ancla. */
+  readonly temporalReferences: readonly NarrativeTemporalReferenceCandidate[];
+  readonly temporalReferenceStatus: "extracted" | "omitted-text-budget";
   /** Pasajes no cubiertos por las extracciones actuales, expuestos para revisión humana. */
   readonly extractionAudit: NarrativeExtractionAudit;
   readonly observationStatus: "extracted" | "no-entities" | "omitted-text-budget";
@@ -500,6 +508,19 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
       })
     : [];
 
+  const temporalReferenceStatus = input.text.length <= MAX_NARRATIVE_TEMPORAL_TEXT_UNITS
+    ? "extracted" as const
+    : "omitted-text-budget" as const;
+  const temporalReferences = temporalReferenceStatus === "extracted"
+    ? discoverNarrativeTemporalReferenceCandidates({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        revision: input.revision,
+        text: input.text,
+        baseOffset: input.baseOffset ?? 0
+      })
+    : [];
+
   // Los acontecimientos se extraen solo cuando el escritor usa una etiqueta explícita.
   // Las entidades locales sirven para sugerir participantes, nunca para confirmar roles.
   const eventCandidates = input.text.length <= MAX_NARRATIVE_BOOK_TEXT_UNITS
@@ -530,7 +551,8 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     additionalEvidence: [
       ...characterStateCandidates.map(candidate => ({ evidence: candidate.evidence })),
       ...locationTransitionCandidates.map(candidate => ({ evidence: candidate.locationEvidence })),
-      ...locationPresenceCandidates.map(candidate => ({ evidence: candidate.evidence }))
+      ...locationPresenceCandidates.map(candidate => ({ evidence: candidate.evidence })),
+      ...temporalReferences.map(candidate => ({ evidence: candidate.evidence }))
     ]
   });
   return {
@@ -551,6 +573,8 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     characterStateCandidates,
     locationTransitionCandidates,
     locationPresenceCandidates,
+    temporalReferences,
+    temporalReferenceStatus,
     eventCandidates,
     extractionAudit,
     observationStatus,

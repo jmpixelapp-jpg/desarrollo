@@ -1721,3 +1721,27 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 
 **Validación en suite general:** [Motor Literario TypeScript — run 45767527107](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45767527107) ejecutó 960 pruebas: 959 pasaron y una falló en el extractor Unicode narrativo (`tests/narrative-unicode-boundaries.test.mjs:107`). La nueva regresión `disposeSafely persiste y libera todos los leases de varios documentos` aprobó como test 677. Type-check general aprobado. **Validación CI dedicada del monitor:** el run 45767498753 sigue en curso durante la instalación de Chromium; no se declara todavía completada la integración específica para este test.
+
+## 113. Matriz exhaustiva de exactitud de observación (26 de noviembre de 2026)
+
+**Objetivo:** que el monitor no confunda una señal indirecta con un cambio realmente aplicado y que cada métrica pueda relacionarse con una fuente y una secuencia verificables.
+
+**Documento nuevo:** [LIVE_AUTHOR_MONITOR_OBSERVABILITY_ACCURACY.md](LIVE_AUTHOR_MONITOR_OBSERVABILITY_ACCURACY.md).
+
+**Contenido incorporado:**
+- Cuatro niveles de evidencia: transacción autoritativa, eventos nativos de edición, reconciliación por snapshots y señales indirectas.
+- Contrato mínimo de un cambio exacto: identidad, transactionId, secuencia, revisión base, offsets UTF-16, reemplazo y estado posterior coincidente.
+- Matriz de cobertura de escritura, borrado, sustitución, selección, pegado, cortar, arrastrar/soltar, IME, autocorrección, undo/redo, operaciones por lotes, formato y cambios externos.
+- Separación de tiempos de aplicación, recepción, admisión, commit y análisis.
+- Reglas para detectar duplicados, IDs reutilizados, saltos, rangos inválidos, discrepancias, snapshots inaccesibles, overflow y pérdida de titularidad.
+- Límites explícitos de inferencia: el monitor observa operaciones, no intención psicológica ni identidad física del operador.
+- Requisitos de diagnóstico sin exponer texto, reemplazos ni contenido del portapapeles.
+- Plan de pruebas unitarias, Unicode, Chromium, recuperación, IndexedDB y criterios verificables de aceptación.
+
+**Hallazgo importante documentado:** los offsets y longitudes actuales son unidades UTF-16 de JavaScript; no equivalen siempre a caracteres percibidos ni a palabras lingüísticas. La velocidad derivada de unidades de texto debe seguir etiquetada como estimación. No se debe prometer precisión absoluta sin definir fuente y escenario.
+
+**Commit:** [cc1b8b2 — matriz de exactitud de observación](https://github.com/jmpixelapp-jpg/desarrollo/commit/cc1b8b2bfba163edd7c63f5b33507cade372eda5).
+
+**Validación:** documentación añadida en `main`. La CI dedicada aún debe ejecutar una validación posterior; este cambio no modifica código ejecutable y no se declara una nueva suite aprobada por este commit.
+
+**Próximo trabajo técnico:** convertir los criterios de esta matriz en pruebas de navegador de operaciones concretas (IME, pegar/cortar, reemplazos y undo/redo) y después conectar el adaptador transaccional al editor anfitrión real. Mantener separados los eventos observados, los inferidos y las discontinuidades.

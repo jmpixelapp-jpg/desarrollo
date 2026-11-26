@@ -483,3 +483,86 @@ test("el fallback rechaza un planificador sin cancelación e invalida su callbac
   queuedCallback();
   assert.equal(refreshes, 0, "un scheduler inválido no debe dejar callbacks activos");
 });
+
+
+test("los ticks de una generación anterior quedan invalidados después de reanudar", () => {
+  const f = fixture();
+  const scheduled = [];
+  let refreshes = 0;
+  const dispose = scheduleLiveAuthorMonitorWhileVisible(
+    f.document,
+    () => { refreshes += 1; },
+    400,
+    callback => {
+      const item = { callback, cancelled: false };
+      scheduled.push(item);
+      return () => { item.cancelled = true; };
+    }
+  );
+
+  assert.equal(scheduled.length, 1);
+  f.document.defaultView.dispatch("pagehide");
+  f.document.defaultView.dispatch("pageshow");
+  assert.equal(refreshes, 1, "la reanudación realiza una lectura inmediata");
+  assert.equal(scheduled.length, 2);
+
+  scheduled[0].callback();
+  assert.equal(refreshes, 1, "un tick antiguo no revive al volver a active");
+  scheduled[1].callback();
+  assert.equal(refreshes, 2, "el intervalo vigente sigue funcionando");
+  dispose();
+});
+
+test("un fallo al reprogramar invalida callbacks huérfanos y permite reintentar", () => {
+  const f = fixture();
+  const scheduled = [];
+  let scheduleCalls = 0;
+  let refreshes = 0;
+  const dispose = scheduleLiveAuthorMonitorWhileVisible(
+    f.document,
+    () => { refreshes += 1; },
+    400,
+    callback => {
+      scheduleCalls += 1;
+      const item = { callback, cancelled: false };
+      scheduled.push(item);
+      if (scheduleCalls === 2) throw new Error("scheduler temporalmente no disponible");
+      return () => { item.cancelled = true; };
+    }
+  );
+
+  f.document.defaultView.dispatch("pagehide");
+  assert.throws(() => f.document.defaultView.dispatch("pageshow"), /scheduler temporalmente no disponible/);
+  assert.equal(refreshes, 1);
+  scheduled[1].callback();
+  assert.equal(refreshes, 1, "el callback del intento fallido queda cercado");
+
+  f.document.defaultView.dispatch("pageshow");
+  assert.equal(refreshes, 2, "un evento posterior puede recuperar el refresco inmediato");
+  assert.equal(scheduleCalls, 3);
+  scheduled[1].callback();
+  assert.equal(refreshes, 2, "el callback huérfano sigue inválido tras un reintento");
+  scheduled[2].callback();
+  assert.equal(refreshes, 3, "solo el callback de la generación nueva puede ejecutarse");
+  dispose();
+});
+
+test("un fallo durante el montaje invalida ticks encolados y retira listeners", () => {
+  const f = fixture();
+  let queuedCallback;
+  let refreshes = 0;
+  assert.throws(() => scheduleLiveAuthorMonitorWhileVisible(
+    f.document,
+    () => { refreshes += 1; },
+    400,
+    callback => {
+      queuedCallback = callback;
+      throw new Error("fallo tras encolar");
+    }
+  ), /fallo tras encolar/);
+
+  queuedCallback();
+  assert.equal(refreshes, 0, "el tick no debe sobrevivir a un montaje fallido");
+  assert.equal(f.document.visibilityListenerCount(), 0);
+  assert.equal(f.document.lifecycleListenerCount(), 0);
+});

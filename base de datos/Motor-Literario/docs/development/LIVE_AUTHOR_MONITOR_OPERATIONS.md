@@ -348,3 +348,17 @@ La cancelación conserva las mismas garantías de ciclo de vida que el camino co
 - se rechaza un scheduler que no devuelva una función de cancelación.
 
 Las regresiones están en `tests/live-author-monitor-diagnostics-isolation.test.mjs`. Cubren el fallback y el callback atrasado mediante un scheduler determinista; no simulan ni afirman disponibilidad de Page Visibility.
+
+
+## 17. Generaciones de intervalos y recuperación de fallos de programación
+
+Cada intervalo del polling visual tiene una generación monotónica. Al suspenderse o desmontarse la vista, la generación cambia antes de llamar a la cancelación del timer. Los callbacks ya encolados de generaciones anteriores no se ejecutan aunque la vista vuelva a estar activa.
+
+La protección también cubre dos fallos del scheduler:
+
+- Si el montaje inicial falla después de encolar un callback, el módulo invalida ese callback y elimina los listeners registrados.
+- Si la reanudación no puede crear un nuevo intervalo, la vista vuelve al estado inactivo. Una señal posterior de ciclo de vida puede reintentar el refresco y la programación sin revalidar callbacks huérfanos.
+
+Un scheduler que provoque una transición síncrona mientras crea un intervalo recibe cancelación inmediata cuando devuelve su función de cancelación, siempre que esa programación haya quedado obsoleta antes de finalizar la llamada.
+
+Las regresiones deterministas están en `tests/live-author-monitor-diagnostics-isolation.test.mjs`. La generación protege únicamente el polling del panel/workspace; no controla persistencia, heartbeat ni fencing del lease de datos.

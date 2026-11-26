@@ -36,19 +36,49 @@ export function scheduleLiveAuthorMonitorWhileVisible(
   let disposed = false;
   let active = !document.hidden;
   let cancelInterval: (() => void) | undefined;
-  const stopInterval = (): void => { const cancel = cancelInterval; cancelInterval = undefined; cancel?.(); };
+  // Cada intervalo tiene una generación propia. Cancelar y rearmar no debe
+  // revivir callbacks antiguos que ya estuvieran encolados en el event loop.
+  let intervalGeneration = 0;
+  const stopInterval = (): void => {
+    intervalGeneration += 1;
+    const cancel = cancelInterval;
+    cancelInterval = undefined;
+    cancel?.();
+  };
   const startInterval = (): void => {
     if (disposed || !active || document.hidden || cancelInterval) return;
-    const guardedCallback = (): void => { if (!disposed && active && !document.hidden) callback(); };
+    const generation = ++intervalGeneration;
+    const guardedCallback = (): void => {
+      if (!disposed && active && !document.hidden && generation === intervalGeneration) callback();
+    };
     const cancel = schedule(guardedCallback, intervalMs);
-    if (typeof cancel !== "function") throw new TypeError("El planificador debe devolver una función de cancelación.");
+    if (typeof cancel !== "function") {
+      intervalGeneration += 1;
+      throw new TypeError("El planificador debe devolver una función de cancelación.");
+    }
+    // Un scheduler inyectado puede provocar una transición síncrona antes de
+    // devolver su cancelación. En ese caso cerramos el intervalo recién creado.
+    if (disposed || !active || document.hidden || generation !== intervalGeneration) {
+      cancel();
+      return;
+    }
     cancelInterval = cancel;
   };
   const suspend = (): void => { if (disposed || !active) return; active = false; stopInterval(); };
   const resume = (): void => {
     if (disposed || document.hidden || active) return;
     active = true;
-    try { callback(); } finally { startInterval(); }
+    try { callback(); }
+    finally {
+      try { startInterval(); }
+      catch (error) {
+        // Permite que una señal posterior de pageshow/resume/visible reintente
+        // programar el polling; nunca dejamos la máquina activa sin intervalo.
+        active = false;
+        stopInterval();
+        throw error;
+      }
+    }
   };
   const onVisibilityChange: EventListener = () => { if (document.hidden) suspend(); else resume(); };
   const onSuspend: EventListener = () => suspend();
@@ -65,6 +95,10 @@ export function scheduleLiveAuthorMonitorWhileVisible(
     if (view) for (const [type, listener] of viewListeners) view.addEventListener(type, listener);
     startInterval();
   } catch (error) {
+    // El setup puede fallar después de que el scheduler haya encolado un tick.
+    // Invalidamos primero todos esos callbacks, incluso si no recibimos cancel().
+    disposed = true;
+    active = false;
     for (const [type, listener] of viewListeners) { try { view?.removeEventListener(type, listener); } catch { /* Preserve original error. */ } }
     for (const [type, listener] of documentListeners) { try { document.removeEventListener(type, listener); } catch { /* Preserve original error. */ } }
     try { stopInterval(); } catch { /* Preserve original error. */ }

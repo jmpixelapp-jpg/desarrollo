@@ -1064,3 +1064,20 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Validación:** las regresiones quedan incorporadas a la lane específica del monitor y a `npm test`. No se declara ejecución aprobada en el momento de crear este commit; se registrará el resultado real de GitHub Actions cuando finalice.
 
 **Aislamiento:** no se modifican `HostEngineApi`, persistencia IndexedDB, leases, contratos narrativos ni archivos incluidos en el PR #56.
+
+
+## 61. Fencing de ticks entre suspensiones y reanudaciones (26 de noviembre de 2026)
+
+**Hallazgo:** el scheduler protegía un tick mientras la vista estaba suspendida, pero la guarda solo comprobaba `active`. Si un tick del intervalo A quedaba encolado, la página se suspendía y luego volvía a activarse, ese callback antiguo podía ejecutarse cuando `active` volvía a `true`, aunque ya existiera un intervalo B.
+
+**Corrección:** cada intervalo obtiene una generación monotónica. Suspender, cancelar, fallar al programar o desmontar invalida la generación anterior. Un callback solo puede refrescar cuando pertenece a la generación vigente. Si el scheduler dispara una transición síncrona antes de devolver su cancelación, el intervalo recién creado se cancela inmediatamente.
+
+**Recuperación ante errores del scheduler:** un fallo al rearmar deja la máquina inactiva y permite que otra señal `pageshow`, `resume` o `visibilitychange` intente programar de nuevo. Si el montaje inicial falla después de encolar un callback, se invalidan los ticks antes de limpiar los listeners.
+
+**Regresiones añadidas:** tres pruebas cubren ticks antiguos después de reanudar; fallo durante el rearmado con callback huérfano y reintento; y fallo durante el montaje con limpieza de listeners.
+
+**CI anterior:** el cambio de fallback del commit `31bd3b0124026cfa1512a1615b745ac253216277` terminó correctamente en [Live Author Monitor — run 45750290858](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45750290858) y [Motor Literario TypeScript — run 45750290828](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45750290828). La nueva corrección de generaciones queda pendiente de sus propias ejecuciones.
+
+**Archivos:** `typescript/src/live-author-monitor-visibility.ts`, `typescript/tests/live-author-monitor-diagnostics-isolation.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+**Aislamiento:** no se modifican HostEngineApi, persistencia, IndexedDB, leases ni archivos del PR #56.

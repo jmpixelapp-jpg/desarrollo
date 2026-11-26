@@ -265,10 +265,6 @@ export function understandNarrativeFragment(
     currentIntents: characterIntents,
     orderedDocumentIds: input.orderedDocumentIds
   });
-  const intentActionConsistency = compareNarrativeIntentsWithActions({
-    projectId: input.projectId, entities: input.entities,
-    intents: characterIntents, actions
-  });
   const attributedClaims = extractNarrativeAttributedClaims(extractionContext);
   const dialogueAttributions = extractNarrativeDialogueAttributions(extractionContext);
   const informationProvenance = extractNarrativeInformationProvenance(extractionContext);
@@ -350,6 +346,14 @@ export function understandNarrativeFragment(
   const pronounTargetActions = linkNarrativePronounActionTargets(
     input.text, pronounActions, input.entities, input.projectId, baseOffset
   );
+  // Las acciones pronominales solo entran al contraste cuando su actor y
+  // objetivo quedaron resueltos explícitamente por los módulos anteriores.
+  const intentActionConsistency = compareNarrativeIntentsWithActions({
+    projectId: input.projectId,
+    entities: input.entities,
+    intents: characterIntents,
+    actions: [...actions, ...pronounTargetActions]
+  });
   const interactions = extractNarrativeCharacterInteractions(
     [...actions, ...pronounTargetActions], input.entities, input.projectId
   );

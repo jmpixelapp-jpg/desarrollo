@@ -209,26 +209,86 @@ test("rechaza snapshots iniciales distintos del contenido visible", () => {
   }), error => error.code === "document-mismatch");
 });
 
-test("desmonta listeners al retirar la última suscripción y al disponer el adaptador", () => {
+test("desmonta listeners y exige snapshot autoritativo tras un intervalo sin observación", () => {
   const f = fixture();
   assert.equal(f.element.listeners.get("beforeinput").size, 1);
   assert.equal(f.element.listeners.get("input").size, 1);
   assert.equal(f.element.listeners.get("compositionstart").size, 1);
   assert.equal(f.element.listeners.get("compositionend").size, 1);
+
   f.stop();
   assert.equal(f.element.listeners.get("beforeinput").size, 0);
   assert.equal(f.element.listeners.get("input").size, 0);
   assert.equal(f.element.listeners.get("compositionstart").size, 0);
   assert.equal(f.element.listeners.get("compositionend").size, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "resync-required");
+  assert.equal(f.source.previousText, "",
+    "la copia temporal se libera cuando termina la última suscripción");
 
-  // Retirar la última suscripción no dispone el adaptador; permite remontarlo.
-  const stopAgain = f.source.subscribeChanges(() => {});
+  // Simula una edición no observada y de igual longitud durante el intervalo.
+  f.element.value = "hXllo";
+  const stopAgain = f.source.subscribeChanges(change => f.changes.push(change));
   assert.equal(f.element.listeners.get("beforeinput").size, 1);
-  stopAgain();
-  assert.equal(f.element.listeners.get("input").size, 0);
+  assert.equal(f.element.listeners.get("input").size, 1);
+  assert.equal(f.source.getState().needsResync, true);
 
+  f.element.edit({
+    start: 5,
+    end: 5,
+    nextValue: "hXllo!",
+    inputType: "insertText",
+    data: "!"
+  });
+  assert.equal(f.changes.length, 0,
+    "la nueva suscripción no debe aceptar cambios antes del snapshot autoritativo");
+
+  const recovered = f.source.resynchronize({
+    documentId: "chapter-1",
+    text: "hXllo!",
+    revision: 5,
+    sequence: 10
+  });
+  assert.equal(recovered.needsResync, false);
+
+  f.element.edit({
+    start: 6,
+    end: 6,
+    nextValue: "hXllo!?",
+    inputType: "insertText",
+    data: "?"
+  });
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].sequence, 11);
+  assert.equal(f.changes[0].baseRevision, 5);
+
+  stopAgain();
   f.source.dispose();
-  assert.throws(() => f.source.subscribeChanges(() => {}), /ya dispuesto/);
+});
+
+test("no inicia la primera suscripción si el textarea ya difiere del snapshot", () => {
+  const element = new FakeTextArea("abc");
+  const errors = [];
+  const source = new LiveAuthorMonitorTextAreaSource({
+    element,
+    initialSnapshot: {
+      documentId: "chapter-1",
+      text: "abc",
+      revision: 0,
+      sequence: 0
+    },
+    onError: error => errors.push(error)
+  });
+
+  // Mutación programática de igual longitud antes de conectar el observador.
+  element.value = "aZc";
+  const stop = source.subscribeChanges(() => {});
+
+  assert.equal(source.getState().needsResync, true);
+  assert.equal(errors[0].code, "resync-required");
+  assert.equal(source.previousText, "");
+  stop();
+  source.dispose();
 });
 
 test("aísla errores lanzados por consumidores del stream", () => {
@@ -538,6 +598,29 @@ test("no clasifica como corrección una sustitución de selección mediante inse
   f.source.dispose();
 });
 
+
+test("rechaza una mutación de igual longitud dentro de la selección antes de capturar beforeinput", () => {
+  const f = fixture("abcde", 0, 0);
+
+  // El texto cambia en el mismo rango que el autor va a reemplazar: una
+  // comprobación que solo compare prefijo/sufijo al final no basta.
+  f.element.value = "aZcde";
+  f.element.edit({
+    start: 1,
+    end: 2,
+    nextValue: "aYcde",
+    inputType: "insertText",
+    data: "Y"
+  });
+
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors[0].code, "resync-required");
+  assert.match(f.errors[0].message, /fuera de una secuencia observada completa/);
+  assert.equal(f.source.previousText, "");
+  f.stop();
+  f.source.dispose();
+});
 
 test("contrasta beforeinput.data con el reemplazo real y detecta mutaciones dentro de la selección", () => {
   const accepted = fixture("abcd", 0, 0);

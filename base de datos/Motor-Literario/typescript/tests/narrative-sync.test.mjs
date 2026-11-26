@@ -398,3 +398,47 @@ test("dos coordinadores comparten exclusión mutua por proyecto mediante el lock
   assert.equal(results.reduce((sum, result) => sum + result.acknowledged, 0), 1);
   assert.equal(outbox.pending.length, 0);
 });
+
+
+test("un timeout ambiguo reenvía el mismo operationId y permite deduplicación remota", async () => {
+  const outbox = createOutbox([operation("op-ambiguous-acceptance", 1)]);
+  const remotelyAccepted = new Set();
+  const receivedIds = [];
+  let now = 100;
+  let calls = 0;
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push(_projectId, operations) {
+      calls++;
+      const ids = operations.map(item => item.operationId);
+      receivedIds.push(ids);
+      // El servidor confirma durablemente, pero la primera respuesta se pierde.
+      for (const id of ids) remotelyAccepted.add(id);
+      if (calls === 1) throw new Error("connection reset after remote commit");
+      return {
+        acknowledgedOperationIds: ids.filter(id => remotelyAccepted.has(id)),
+        conflicts: [],
+        retryableOperationIds: []
+      };
+    }
+  }, {
+    now: () => now,
+    retryBaseDelayMs: 1_000,
+    retryMaxDelayMs: 1_000,
+    random: () => 1
+  });
+
+  await assert.rejects(
+    coordinator.syncOnce("project-a"),
+    /connection reset after remote commit/
+  );
+  assert.equal(outbox.pending.length, 1);
+  now = 1_101;
+  const recovered = await coordinator.syncOnce("project-a");
+  assert.equal(recovered.acknowledged, 1);
+  assert.equal(recovered.remaining, 0);
+  assert.deepEqual(receivedIds, [
+    ["op-ambiguous-acceptance"],
+    ["op-ambiguous-acceptance"]
+  ]);
+  assert.equal(remotelyAccepted.size, 1);
+});

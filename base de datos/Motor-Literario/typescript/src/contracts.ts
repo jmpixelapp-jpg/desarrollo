@@ -188,7 +188,17 @@ export interface NarrativeReferenceRepairAuditEntry {
   readonly appliedAt: number;
 }
 
-export interface NarrativeReferenceRepairPendingEntry extends NarrativeReferenceRepairAuditEntry {}
+export interface NarrativeReferenceRepairPendingEntry {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly issueCode: string;
+  readonly recordType: "relation" | "event" | "assertion" | "idea";
+  readonly recordId: string;
+  readonly referenceField: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
+  readonly missingReferenceId: string;
+  readonly replacementEntityId: string;
+  readonly appliedAt: number;
+}
 
 export interface ProjectStore {
   /** Auditoría append-only e idempotente de reparaciones narrativas. */

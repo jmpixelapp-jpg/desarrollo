@@ -753,3 +753,6 @@ Ambos adaptadores propagan el valor al mismo enlace FIFO, con predeterminado 409
 **Cobertura de integración:** una prueba del proveedor transaccional comprueba retirada del listener nativo y edición posterior a la recuperación; otra prueba del textarea verifica la captura suspendida y reanudada.
 
 **Estado:** código y pruebas incluidos; CI pendiente.
+
+
+**Validación anticipada:** ambos montajes comprueban el rango de `maxPendingChanges` antes de tocar HostEngineApi o instalar listeners. Una configuración inválida no debe abrir una sesión del monitor ni dejar recursos parciales.

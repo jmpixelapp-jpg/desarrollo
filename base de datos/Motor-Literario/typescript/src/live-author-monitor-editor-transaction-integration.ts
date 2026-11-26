@@ -74,6 +74,13 @@ export function mountLiveAuthorMonitorEditorTransactions(
   if (!options || typeof options.documentId !== "string" || !options.documentId.trim()) {
     throw new TypeError("documentId es obligatorio para montar el monitoreo transaccional.");
   }
+
+  if (options.maxPendingChanges !== undefined &&
+      (!Number.isSafeInteger(options.maxPendingChanges) ||
+       options.maxPendingChanges < 1 || options.maxPendingChanges > 65536)) {
+    throw new RangeError("maxPendingChanges debe ser un entero entre 1 y 65536.");
+  }
+
   if (!options.editor ||
       typeof options.editor.getSnapshot !== "function" ||
       typeof options.editor.subscribeTransactions !== "function") {

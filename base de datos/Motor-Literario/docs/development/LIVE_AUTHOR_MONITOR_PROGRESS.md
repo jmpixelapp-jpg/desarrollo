@@ -533,3 +533,6 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 **Archivos:** integraciones pública transaccional y textarea, pruebas de integración respectivas y guía del adaptador; especificación sección 39.
 
 **Validación:** las regresiones se incluyen en el workflow específico del monitor. Pendiente de resultados de GitHub Actions para el commit de esta entrega.
+
+
+**Validación preventiva de configuración:** los montajes transaccional y textarea validan `maxPendingChanges` antes de consultar/reservar la sesión de monitoreo o instalar listeners. Un límite inválido (no entero seguro o fuera de 1–65536) falla de inmediato y no deja recursos parcialmente montados.

@@ -1,0 +1,107 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  EpubBookReader,
+  ingestBookWithReader
+} from "../dist/motor-literario.js";
+
+const encoder = new TextEncoder();
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+function concat(parts) {
+  const size = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) { output.set(part, offset); offset += part.length; }
+  return output;
+}
+function storedZip(entries) {
+  const locals = [], centrals = [];
+  let localOffset = 0;
+  for (const [name, value] of entries) {
+    const nameBytes = encoder.encode(name), data = encoder.encode(value), crc = crc32(data);
+    const local = new Uint8Array(30 + nameBytes.length + data.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0x800, true); lv.setUint16(8, 0, true);
+    lv.setUint32(14, crc, true); lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true); lv.setUint16(26, nameBytes.length, true);
+    local.set(nameBytes, 30); local.set(data, 30 + nameBytes.length);
+    locals.push(local);
+
+    const central = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(central.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true); cv.setUint16(8, 0x800, true);
+    cv.setUint16(10, 0, true); cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true); cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nameBytes.length, true); cv.setUint32(42, localOffset, true);
+    central.set(nameBytes, 46); centrals.push(central);
+    localOffset += local.length;
+  }
+  const centralBytes = concat(centrals);
+  const end = new Uint8Array(22), ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, centralBytes.length, true); ev.setUint32(16, localOffset, true);
+  return concat([...locals, centralBytes, end]);
+}
+function sampleEpub() {
+  return storedZip([
+    ["mimetype", "application/epub+zip"],
+    ["META-INF/container.xml", '<?xml version="1.0"?><container><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'],
+    ["OPS/book.opf", '<?xml version="1.0"?><package><metadata><dc:title>La novela &amp; el viaje</dc:title><dc:creator>Ana Autora</dc:creator><dc:language>es</dc:language><dc:identifier>urn:test:book</dc:identifier></metadata><manifest><item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>'],
+    ["OPS/chapter1.xhtml", '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><h1>Capítulo primero</h1><p>Una <em>historia</em> &amp; su comienzo.</p><p>Segunda línea.</p><script>texto que no debe entrar</script></body></html>'],
+    ["OPS/chapter2.xhtml", '<html><body><h1>Capítulo segundo</h1><p>El viaje continúa.</p><h2>Una sección</h2><p>Y termina.</p></body></html>']
+  ]);
+}
+
+test("lee EPUB, metadatos, orden spine, encabezados y párrafos conservando localizadores", async () => {
+  const reader = new EpubBookReader();
+  const bytes = sampleEpub();
+  const inspection = await reader.inspect(bytes);
+  assert.deepEqual(inspection.metadata, {
+    title: "La novela & el viaje", author: "Ana Autora",
+    language: "es", identifier: "urn:test:book"
+  });
+  assert.equal(inspection.spineItems, 2);
+  const ingested = await ingestBookWithReader(reader, bytes, { sourceId: "epub-test" });
+  assert.equal(ingested.metadata.title, "La novela & el viaje");
+  assert.equal(ingested.chapters.length, 2);
+  assert.equal(ingested.chapters[0].heading, "Capítulo primero");
+  assert.equal(ingested.chapters[0].text, "Una historia & su comienzo.\n\nSegunda línea.");
+  assert.equal(ingested.chapters[1].heading, "Capítulo segundo");
+  assert.match(ingested.chapters[1].text, /Una sección/);
+  assert.ok(ingested.chapters[0].sourceSpans.every(span => span.location.locator.startsWith("OPS/chapter1.xhtml#")));
+  assert.ok(!ingested.chapters[0].text.includes("texto que no debe entrar"));
+});
+
+test("rechaza archivos que no son EPUB y rutas internas inseguras", async () => {
+  const badMime = storedZip([["mimetype", "text/plain"]]);
+  await assert.rejects(new EpubBookReader().inspect(badMime), /mimetype no identifica/);
+  const badPath = storedZip([
+    ["mimetype", "application/epub+zip"],
+    ["META-INF/container.xml", '<container><rootfile full-path="../book.opf"/></container>']
+  ]);
+  await assert.rejects(new EpubBookReader().inspect(badPath), /ruta interna no segura/);
+});
+
+test("detecta corrupción de contenido mediante CRC32", async () => {
+  const bytes = sampleEpub();
+  // Corrompe el primer byte del contenido de chapter1.xhtml sin tocar el directorio.
+  const marker = encoder.encode("Una ");
+  let found = -1;
+  outer: for (let i = 0; i <= bytes.length - marker.length; i++) {
+    for (let j = 0; j < marker.length; j++) if (bytes[i + j] !== marker[j]) continue outer;
+    found = i; break;
+  }
+  assert.notEqual(found, -1);
+  bytes[found] ^= 1;
+  await assert.rejects(new EpubBookReader().inspect(bytes), /CRC32 incorrecto/);
+});

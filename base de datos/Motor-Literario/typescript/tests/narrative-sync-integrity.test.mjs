@@ -324,7 +324,8 @@ test("replay del diario confirma cada operación y conserva pendiente si el cons
       if (operation.operationId === "replay-2") throw new Error("fallo temporal del consumidor");
     }, "writer-replay");
     assert.deepEqual(firstPass, {
-      processed: 1, remaining: 1, stoppedAtOperationId: "replay-2"
+      processed: 1, remaining: 1, stoppedAtOperationId: "replay-2",
+      failure: "apply-or-ack-failed"
     });
     assert.deepEqual((await journal.loadPendingOperations("project-replay", "writer-replay"))
       .map(operation => operation.operationId), ["replay-2"]);
@@ -403,7 +404,8 @@ test("replay vuelve a entregar si el proceso falla después del efecto externo y
       throw new Error("simulated crash before acknowledgment");
     }, "writer-crash");
     assert.deepEqual(first, {
-      processed: 0, remaining: 1, stoppedAtOperationId: "crash-window-op"
+      processed: 0, remaining: 1, stoppedAtOperationId: "crash-window-op",
+      failure: "apply-or-ack-failed"
     });
     const second = await replayPendingNarrativeSyncOperations(journal, "project-crash", async operation => {
       effects.push(operation.operationId);
@@ -411,6 +413,60 @@ test("replay vuelve a entregar si el proceso falla después del efecto externo y
     assert.deepEqual(second, { processed: 1, remaining: 0 });
     assert.deepEqual(effects, ["crash-window-op", "crash-window-op"]);
     journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});
+
+
+test("replay vuelve a verificar SHA-256 y no entrega sobrescrituras corruptas al consumidor", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const {
+    createNarrativeSyncOperationEnvelope,
+    IndexedDbNarrativeSyncJournal,
+    replayPendingNarrativeSyncOperations
+  } = await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-reverify-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const envelope = await createNarrativeSyncOperationEnvelope({
+      operationId: "tampered-op", projectId: "project-tamper", writerId: "writer-tamper",
+      sequence: 1, kind: "idea-upsert", payload: { id: "idea-original" }
+    });
+    await journal.accept(envelope);
+    journal.close();
+
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open(databaseName, 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction("operations", "readwrite");
+        const store = transaction.objectStore("operations");
+        const get = store.get(["project-tamper", "tampered-op"]);
+        get.onsuccess = () => store.put({ ...get.result, payload: { id: "idea-tampered" } });
+        transaction.oncomplete = () => { database.close(); resolve(); };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
+
+    const reopened = new IndexedDbNarrativeSyncJournal({ databaseName });
+    let called = false;
+    const result = await replayPendingNarrativeSyncOperations(reopened, "project-tamper", async () => {
+      called = true;
+    }, "writer-tamper");
+    assert.deepEqual(result, {
+      processed: 0, remaining: 1, stoppedAtOperationId: "tampered-op",
+      failure: "invalid-envelope"
+    });
+    assert.equal(called, false);
+    reopened.close();
   } finally {
     globalThis.indexedDB = previous;
     await new Promise(resolve => {

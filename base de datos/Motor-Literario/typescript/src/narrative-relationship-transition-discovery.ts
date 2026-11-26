@@ -7,6 +7,11 @@ export interface NarrativeRelationshipTransitionCandidate {
  readonly transition:NarrativeRelationshipTransitionKind; readonly trigger:string;
  readonly triggerEvidence:TextEvidence; readonly firstEntityEvidence:TextEvidence;
  readonly secondEntityEvidence:TextEvidence; readonly contextEvidence:TextEvidence;
+ readonly epistemicFrame:"narrator-asserted"|"character-belief"|"character-memory"|"character-desire"|"reported-speech"|"hypothetical";
+ readonly epistemicFrameEvidence?:TextEvidence;
+ readonly epistemicSourceCandidate?:{readonly entityId:string;readonly evidence:TextEvidence};
+ readonly polarity:"affirmed"|"negated";
+ readonly polarityEvidence?:TextEvidence;
  readonly reviewStatus:"candidate";
 }
 export interface NarrativeRelationshipTransitionDiscoveryInput {
@@ -43,6 +48,59 @@ function escapeRegExp(value:string):string {
 function normalize(value:string):string {return value.normalize("NFC").toLocaleLowerCase("es").trim().replace(/\s+/gu," ");}
 function makeEvidence(documentId:string,revision:number,base:number,start:number,end:number,excerpt:string):TextEvidence {
  return {documentId,revision,start:base+start,end:base+end,excerpt};
+}
+
+const TRANSITION_EPISTEMIC_SIGNALS:readonly {
+ frame:"character-belief"|"character-memory"|"character-desire"|"reported-speech"|"hypothetical";
+ expression:RegExp;
+}[]=[
+ {frame:"character-belief",expression:/\b(?:creyó|creía|creyeron|pensó|pensaba|imaginó|imaginaba|supuso|suponía)\s+que\s+/giu},
+ {frame:"character-memory",expression:/\b(?:recordó|recordaba|rememoró|rememoraba|olvidó|olvidaba)\s+que\s+/giu},
+ {frame:"character-desire",expression:/\b(?:deseó|deseaba|quería|quiso|esperaba|esperó|anhelaba|anheló)\s+que\s+/giu},
+ {frame:"reported-speech",expression:/\b(?:dijo|decía|afirmó|afirmaba|aseguró|aseguraba|contó|relató|advirtió|anunció)\s+que\s+/giu},
+ {frame:"hypothetical",expression:/\b(?:si|quizá|quizás|tal vez|acaso|como si)\s+/giu}
+];
+function classifyTransitionContext(
+ sentence:string,triggerStart:number,characters:readonly NarrativeEntity[],documentId:string,revision:number,base:number
+):{
+ frame:NarrativeRelationshipTransitionCandidate["epistemicFrame"];
+ frameEvidence?:TextEvidence;
+ source?:{entityId:string;evidence:TextEvidence};
+ polarity:"affirmed"|"negated";
+ polarityEvidence?:TextEvidence;
+}{
+ let selected:{frame:NonNullable<NarrativeRelationshipTransitionCandidate["epistemicFrame"]>;start:number;end:number;excerpt:string}|undefined;
+ for(const signal of TRANSITION_EPISTEMIC_SIGNALS){
+  signal.expression.lastIndex=0;
+  for(const match of sentence.matchAll(signal.expression)){
+   if(match.index!>=triggerStart)break;
+   const candidate={frame:signal.frame,start:match.index!,end:match.index!+match[0].length,excerpt:match[0]};
+   if(!selected||candidate.start>selected.start)selected=candidate;
+  }
+ }
+ let source:{entityId:string;start:number;end:number;excerpt:string}|undefined;
+ if(selected?.frame==="reported-speech"){
+  const possible=characters.flatMap(entity=>[entity.canonicalName,...entity.aliases].flatMap(name=>{
+   const escaped=name.replace(/[.*+?^$()|[\]{}\\]/gu,"\\function makeEvidence(documentId:string,revision:number,base:number,start:number,end:number,excerpt:string):TextEvidence {
+ return {documentId,revision,start:base+start,end:base+end,excerpt};
+}
+");
+   const expression=new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])"+escaped+"(?![\\p{L}\\p{M}\\p{N}_])","giu");
+   return [...sentence.slice(0,selected!.start).matchAll(expression)].map(match=>({entityId:entity.id,start:match.index!,end:match.index!+match[0].length,excerpt:match[0]}));
+  })).sort((a,b)=>b.end-a.end||b.start-a.start);
+  const nearest=possible[0];
+  const equallyNear=nearest?possible.filter(item=>item.end===nearest.end):[];
+  if(nearest&&equallyNear.every(item=>item.entityId===nearest.entityId))source=nearest;
+ }
+ const prefix=sentence.slice(0,triggerStart);
+ const negation=/(?:^|[^\p{L}\p{M}\p{N}_])(?:no|nunca|jamás)\s*$/iu.exec(prefix);
+ return {
+  frame:selected?.frame??"narrator-asserted",
+  ...(selected?{frameEvidence:makeEvidence(documentId,revision,base,selected.start,selected.end,selected.excerpt)}:{}),
+  ...(source?{source:{entityId:source.entityId,evidence:makeEvidence(documentId,revision,base,source.start,source.end,source.excerpt)}}:{}),
+  polarity:negation?"negated":"affirmed",
+  ...(negation?{polarityEvidence:makeEvidence(documentId,revision,base,negation.index!,negation.index!+negation[0].length,negation[0])}:{})
+ };
 }
 /** Detecta transiciones expresadas literalmente, sin mutar el grafo de relaciones. */
 export function discoverNarrativeRelationshipTransitionCandidates(input:NarrativeRelationshipTransitionDiscoveryInput):readonly NarrativeRelationshipTransitionCandidate[] {
@@ -109,6 +167,7 @@ export function discoverNarrativeRelationshipTransitionCandidates(input:Narrativ
     const {first,second,start:contextStart,end:contextEnd}=chosen;
     const key=[first.entityId,second.entityId,signal.family,signal.transition,triggerStart].join(":");
     if(!results.has(key)){
+     const epistemic=classifyTransitionContext(sentence.text,trigger.index!,input.entities,input.documentId,input.revision,base+sentence.start);
      results.set(key,{id:"relationship-transition-candidate:"+JSON.stringify([input.documentId,input.revision,base+triggerStart,first.entityId,second.entityId,signal.family,signal.transition]),
       projectId:input.projectId,documentId:input.documentId,revision:input.revision,
       firstEntityId:first.entityId,secondEntityId:second.entityId,family:signal.family,transition:signal.transition,trigger:trigger[0],
@@ -116,6 +175,11 @@ export function discoverNarrativeRelationshipTransitionCandidates(input:Narrativ
       firstEntityEvidence:makeEvidence(input.documentId,input.revision,base,first.start,first.end,first.surface),
       secondEntityEvidence:makeEvidence(input.documentId,input.revision,base,second.start,second.end,second.surface),
       contextEvidence:makeEvidence(input.documentId,input.revision,base,contextStart,contextEnd,input.text.slice(contextStart,contextEnd)),
+      epistemicFrame:epistemic.frame,
+      ...(epistemic.frameEvidence?{epistemicFrameEvidence:epistemic.frameEvidence}:{}),
+      ...(epistemic.source?{epistemicSourceCandidate:epistemic.source}:{}),
+      polarity:epistemic.polarity,
+      ...(epistemic.polarityEvidence?{polarityEvidence:epistemic.polarityEvidence}:{}),
       reviewStatus:"candidate"});
      if(results.size>max) throw new Error("La extracción supera el máximo de cambios relacionales; no se devuelve un resultado parcial.");
     }

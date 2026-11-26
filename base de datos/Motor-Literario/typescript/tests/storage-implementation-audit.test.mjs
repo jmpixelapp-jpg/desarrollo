@@ -228,7 +228,7 @@ test("la evolución de atributos ordena buckets locales sin duplicar las colecci
 
 test("el análisis de convergencia aplica un presupuesto agregado y marca los resultados parciales", () => {
   const start = literaryAnalysisSource.indexOf("function buildLiteraryIdeaGraph(");
-  const end = literaryAnalysisSource.indexOf("\\nfunction ", start + 10);
+  const end = literaryAnalysisSource.indexOf("\nfunction ", start + 10);
   assert.notEqual(start, -1, "debe existir el constructor del grafo de ideas");
   assert.ok(end > start, "el constructor debe delimitarse para auditar el presupuesto");
   const builder = literaryAnalysisSource.slice(start, end);

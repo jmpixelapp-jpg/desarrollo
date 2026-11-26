@@ -129,3 +129,19 @@ La orquestación:
 Se agregan dos pruebas de integración: resolución y atribución con `baseOffset` distinto de cero, y rechazo de una superficie pronominal que no coincide.
 
 **Límite importante:** el motor no descubre todavía por sí mismo todos los pronombres ni sus rasgos gramaticales. Un detector lingüístico debe proporcionar menciones y referencias; si faltan, el pipeline no inventa sujetos. Las acciones pronominales se conservan separadas de las acciones actor-objetivo con nombres explícitos.
+
+
+### Fase I: detección léxica inicial de menciones y pronombres en español
+
+Se añade `typescript/src/narrative-pronoun-detection.ts`, que el pipeline ejecuta automáticamente cuando no se proporcionan colecciones externas.
+
+Cobertura deliberadamente acotada:
+- Busca nombres canónicos y alias ya registrados de personajes, respetando límites Unicode y offsets UTF-16.
+- Detecta los pronombres sujeto singulares `él` y `ella`.
+- Omite nombres que pertenecen a más de una identidad, registrándolos en `skippedAmbiguousCharacterNames`.
+- Acepta perfiles gramaticales explícitos por personaje. Sin perfil, la mención queda con género `unknown` y no puede confirmar una referencia marcada.
+- Conserva documento, revisión y offsets absolutos, también al analizar ventanas parciales.
+
+Se agregan cuatro pruebas directas del detector y dos pruebas de integración que comprueban resolución automática y el comportamiento seguro cuando falta el género.
+
+**Límites:** no detecta todavía plurales, clíticos (`lo/la/le/se`), pronombres relativos ni sujetos omitidos. Tampoco deduce género por terminaciones de nombres. La detección léxica no sustituye un analizador sintáctico; cuando haya varios antecedentes compatibles, la resolución permanece ambigua.

@@ -616,3 +616,12 @@ La lectura EPUB ya tiene una implementación concreta, pero su madurez aún es i
 - Se exige que `mimetype` sea la primera entrada ZIP y esté almacenada sin compresión; también se valida la longitud del comentario ZIP final.
 
 Los cambios anteriores amplían la calidad de extracción, pero todavía requieren ejecución de typecheck y pruebas. La fidelidad debe comprobarse con EPUB reales, incluyendo poesía, notas, tablas, nav/NCX, XHTML heterogéneo y codificaciones distintas de UTF-8.
+
+
+### Tercera tanda — evidencia narrativa enlazada a la fuente
+
+Se implementó `typescript/src/book-evidence.ts` y se exportó desde `src/index.ts`. La función `resolveBookEvidence(book, chapter, start, end)` resuelve rangos UTF-16 del texto analizado hacia los bloques de origen del lector. Devuelve citas exactas por bloque, localizadores, secuencias, offsets locales y datos de libro/capítulo. Si la evidencia cruza párrafos, produce varios fragmentos; los separadores añadidos por la ingesta no se adjudican a ninguna fuente.
+
+Se añadieron `tests/book-evidence.test.mjs` para rangos multibloque, offsets locales, localizadores, separadores sintéticos y rangos inválidos. Esto construye la unión necesaria entre análisis literario y libro primario sin inventar evidencia ni cambiar el modelo persistido actual.
+
+Validación automatizada todavía pendiente: los nuevos tests y el typecheck no se han ejecutado en esta tanda. El siguiente paso es conectar esta resolución en los resultados/consultas de conocimiento narrativo y construir el lector PDF con evidencia por página.

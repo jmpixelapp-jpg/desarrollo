@@ -101,3 +101,51 @@ test("la migración 26→27 crea los almacenes de auditoría e intenciones pendi
     await deleteDatabase();
   }
 });
+
+
+test("dos instancias IndexedDB conservan idempotencia durable de intención y auditoría", async () => {
+  globalThis.indexedDB = new IDBFactory();
+  await deleteDatabase();
+  const first = new IndexedDbProjectStore();
+  const second = new IndexedDbProjectStore();
+  try {
+    const pending = pendingEntry(500);
+    const audit = {
+      operationId: pending.operationId,
+      operation: "narrative-reference-repair",
+      projectId,
+      recordType: "relation",
+      recordId: "relation-1",
+      referenceField: "fromEntityId",
+      before: "entity-old",
+      after: "entity-new",
+      missingReferenceId: "entity-old",
+      replacementEntityId: "entity-new",
+      appliedAt: 500
+    };
+
+    await Promise.all([
+      first.saveNarrativeReferenceRepairPending(pending),
+      second.saveNarrativeReferenceRepairPending(pending)
+    ]);
+    await Promise.all([
+      first.appendNarrativeReferenceRepairAudit(audit),
+      second.appendNarrativeReferenceRepairAudit(audit)
+    ]);
+
+    assert.deepEqual(await first.loadNarrativeReferenceRepairPending(projectId), [pending]);
+    assert.deepEqual(await second.loadNarrativeReferenceRepairPending(projectId), [pending]);
+    assert.deepEqual(await first.loadNarrativeReferenceRepairAudits(projectId), [audit]);
+    assert.deepEqual(await second.loadNarrativeReferenceRepairAudits(projectId), [audit]);
+
+    await Promise.all([
+      first.deleteNarrativeReferenceRepairPending(projectId, pending.operationId),
+      second.deleteNarrativeReferenceRepairPending(projectId, pending.operationId)
+    ]);
+    assert.deepEqual(await first.loadNarrativeReferenceRepairPending(projectId), []);
+  } finally {
+    await first.close();
+    await second.close();
+    await deleteDatabase();
+  }
+});

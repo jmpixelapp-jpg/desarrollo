@@ -146,3 +146,34 @@ test("rechaza colecciones de entidades nulas sin provocar errores de acceso", ()
     }]
   }), /entidades/i);
 });
+
+
+test("integra actor pronominal y objetivo explícito en la evolución de interacciones", () => {
+  const text = "Mara llegó. Ella protegió a Elian. Después, Ella traicionó a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-pronoun-interaction", revision:1,
+    text, entities,
+    characterProfiles:[{ characterId:"mara", grammaticalGender:"feminine" }]
+  });
+  assert.equal(result.pronounActions.length, 2);
+  assert.equal(result.pronounTargetActions.length, 2);
+  assert.equal(result.pronounTargetActions[0].actorEntityId, "mara");
+  assert.equal(result.pronounTargetActions[0].targetEntityId, "elian");
+  assert.equal(result.interactions.length, 2);
+  assert.deepEqual(result.interactions.map(item => item.effectiveSignal), ["supportive", "hostile"]);
+  assert.equal(result.interactionShifts.length, 1);
+  assert.equal(result.interactionShifts[0].fromValence, "supportive");
+  assert.equal(result.interactionShifts[0].toValence, "hostile");
+});
+
+test("no inventa objetivo cuando la acción pronominal no lo expresa", () => {
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-no-target", revision:1,
+    text:"Mara llegó. Ella protegió.",
+    entities,
+    characterProfiles:[{ characterId:"mara", grammaticalGender:"feminine" }]
+  });
+  assert.equal(result.pronounActions.length, 1);
+  assert.equal(result.pronounTargetActions.length, 0);
+  assert.equal(result.interactions.length, 0);
+});

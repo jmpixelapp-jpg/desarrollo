@@ -33,6 +33,9 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Type-check
         run: npm run typecheck
+      - name: Run storage integrity regressions independently
+        if: always()
+        run: npm run test:storage-integrity
       - name: Build and run automated tests
         run: npm test
       - name: Run live-edit benchmark

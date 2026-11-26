@@ -41,6 +41,8 @@ export interface NarrativeUnderstandingResult {
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
   readonly interactions: ReturnType<typeof extractNarrativeCharacterInteractions>;
   readonly interactionShifts: ReturnType<typeof detectNarrativeInteractionShifts>;
+  readonly pronounResolutions: ReturnType<typeof resolveNarrativePronounReferences>;
+  readonly pronounActions: ReturnType<typeof extractNarrativePronounActionCandidates>;
   readonly sceneAssignments: {
     readonly ideaCandidates: readonly {
       readonly candidateId: string;
@@ -72,8 +74,32 @@ function validate(input: NarrativeUnderstandingInput): void {
       !Array.isArray(input.entities) || input.entities.length > MAX_ENTITIES ||
       (input.baseOffset !== undefined &&
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
-          input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {
+          input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) ||
+      (input.characterMentions !== undefined && !Array.isArray(input.characterMentions)) ||
+      (input.pronounReferences !== undefined && !Array.isArray(input.pronounReferences))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
+  }
+  const baseOffset = input.baseOffset ?? 0;
+  const endOffset = baseOffset + input.text.length;
+  for (const mention of input.characterMentions ?? []) {
+    if (!mention || !Number.isSafeInteger(mention.start) || !Number.isSafeInteger(mention.end) ||
+        mention.start < baseOffset || mention.end > endOffset ||
+        mention.documentId !== input.documentId || mention.revision !== input.revision ||
+        !input.entities.some(entity => entity.id === mention.characterId && entity.kind === "character")) {
+      throw new Error("Las menciones deben referir personajes del documento, revisión y fragmento analizados.");
+    }
+  }
+  for (const reference of input.pronounReferences ?? []) {
+    if (!reference || !Number.isSafeInteger(reference.start) || !Number.isSafeInteger(reference.end) ||
+        reference.start < baseOffset || reference.end > endOffset ||
+        reference.documentId !== input.documentId || reference.revision !== input.revision ||
+        input.text.slice(reference.start - baseOffset, reference.end - baseOffset) !== reference.surface) {
+      throw new Error("Las referencias pronominales deben coincidir con el texto y su procedencia.");
+    }
+  }
+  if ((input.pronounReferences?.length ?? 0) > 500 ||
+      (input.characterMentions?.length ?? 0) > 2000) {
+    throw new Error("Se superó el límite de menciones o referencias pronominales.");
   }
   for (const entity of input.entities) {
     if (!entity || entity.projectId !== input.projectId ||
@@ -117,6 +143,28 @@ export function understandNarrativeFragment(
   const interactions = extractNarrativeCharacterInteractions(
     actions, input.entities, input.projectId
   );
+  const localMentions = (input.characterMentions ?? []).map(item => ({
+    ...item, start: item.start - baseOffset, end: item.end - baseOffset
+  }));
+  const localReferences = (input.pronounReferences ?? []).map(item => ({
+    ...item, start: item.start - baseOffset, end: item.end - baseOffset
+  }));
+  const pronounResolutions = localReferences.length
+    ? resolveNarrativePronounReferences(
+        input.text, localMentions, localReferences, input.pronounResolutionOptions
+      )
+    : [];
+  const pronounActions = localReferences.length
+    ? extractNarrativePronounActionCandidates(input.text, localReferences, pronounResolutions)
+        .map(item => ({
+          ...item,
+          evidence: {
+            ...item.evidence,
+            start: item.evidence.start + baseOffset,
+            end: item.evidence.end + baseOffset
+          }
+        }))
+    : [];
   const interactionShifts = detectNarrativeInteractionShifts(interactions);
 
   const assign = <T extends { readonly id: string; readonly evidence: {
@@ -135,7 +183,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, events, consequences, scenes, interactions, interactionShifts,
+    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions,
     sceneAssignments: {
       ideaCandidates: assign(ideas),
       actionCandidates: assign(actions),

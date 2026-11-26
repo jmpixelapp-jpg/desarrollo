@@ -70,7 +70,7 @@ const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "tomar", expression: /\btom(?:ó|aba|aron|a|an|ar|ado|ando)\b/giu },
   { action: "abrir", expression: /\babri(?:ó|ía|eron|r|erto|endo)\b/giu },
   { action: "cerrar", expression: /\bcerr(?:ó|aba|aron|ó|ar|ado|ando)\b/giu },
-  { action: "encontrar", expression: /\bencontr(?:ó|aba|aron|ó|ar|ado|ando)\b/giu },
+  { action: "encontrar", expression: /\bencontr(?:ó|aba|aron|ar|ad[oa]s?|ando)\b/giu },
   { action: "perder", expression: /\bperd(?:ió|ía|ieron|er|ido|iendo)\b/giu },
   { action: "entregar", expression: /\bentreg(?:ó|aba|aron|a|an|ar|ado|ando)\b/giu },
   { action: "recibir", expression: /\brecibi(?:ó|ía|eron|r|do|endo)\b/giu },

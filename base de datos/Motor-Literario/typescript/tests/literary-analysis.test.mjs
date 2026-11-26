@@ -285,7 +285,7 @@ test("ubica afirmaciones de atributo entre muchas escenas sin recorrer el catál
       revision: 2
     }));
   }
-  const text = lines.join("\\n");
+  const text = lines.join("\n");
   // makeAssertion usa offsets locales al texto; ajustar cada evidencia al rango global.
   let cursor = 0;
   for (let index = 0; index < sceneCount; index++) {

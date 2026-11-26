@@ -278,7 +278,7 @@ export function extractNarrativeEntities(
   const allMarkers = [characterMarkers, placeMarkers, objectMarkers].join("|");
   if (!new RegExp("\\b(?:" + allMarkers + ")\\b", "u").test(text)) return [];
 
-  const name = "[A-ZÁÉÍÓÚÜÑ][\\\\p{L}]+(?:[ \\\\u00a0]+(?:de[ \\\\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\\\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\\\p{L}]+){0,3}";
+  const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}]+){0,3}";
   const prefixCharacter = String.raw`\\b(?:${characterMarkers})\\s+(?:el|la|a)?\\s*`;
   const prefixPlace = String.raw`\\b(?:${placeMarkers})\\s+(?:de|del|de la|de los|de las)?\\s*`;
   const prefixObject = String.raw`\\b(?:${objectMarkers})\\s+(?:llamado|llamada)?\\s*`;

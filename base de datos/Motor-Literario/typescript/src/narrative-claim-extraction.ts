@@ -131,7 +131,7 @@ export function extractNarrativeAttributedClaims(
           kind: definition.kind,
           content,
           attributionPolarity: match[2] ? "negated" : "affirmed",
-          contentPolarity: /^(?:no\\b|nunca\\b|jamás\\b|jamas\\b|tampoco\\b)/iu.test(content)
+          contentPolarity: /^(?:no\b|nunca\b|jamás\b|jamas\b|tampoco\b)/iu.test(content)
             ? "negated" : "affirmed",
           polarity: match[2] ? "negated" : "affirmed",
           reviewStatus: "candidate",

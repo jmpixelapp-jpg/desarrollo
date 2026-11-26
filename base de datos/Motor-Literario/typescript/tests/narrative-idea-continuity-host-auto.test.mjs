@@ -655,12 +655,14 @@ test("HostEngineApi encola automáticamente cada generación en el outbox usando
     databaseName: "host-continuity-outbox-" + projectId()
   });
   const id = projectId();
-  const writerId = "writer-" + randomUUID();
+  const writerId = "writer-account-" + randomUUID();
+  const replicaId = "replica-installation-" + randomUUID();
   const initialText = "El tema central es la memoria compartida que une a dos ciudades.";
   const revisedText = "El tema central es la culpa compartida que divide a dos ciudades.";
   const api = new HostEngineApi({
     store,
     continuityOutbox: outbox,
+    continuityOutboxWriterId: replicaId,
     getOrderedDocumentIds: () => ["chapter-1", "chapter-2"]
   });
 
@@ -681,7 +683,8 @@ test("HostEngineApi encola automáticamente cada generación en el outbox usando
     const firstEntries = await outbox.loadEntries(id);
     assert.equal(firstEntries.length, 1);
     assert.equal(firstEntries[0].generation, 1);
-    assert.equal(firstEntries[0].writerId, writerId);
+    assert.equal(firstEntries[0].writerId, replicaId);
+    assert.notEqual(firstEntries[0].writerId, writerId);
     assert.equal(firstEntries[0].status, "pending");
     assert.equal(api.getCapabilities().narrativeIdeaContinuityDurableOutbox, true);
 
@@ -711,19 +714,21 @@ test("HostEngineApi encola automáticamente cada generación en el outbox usando
 });
 
 
-test("exige writerId estable al configurar el outbox automático", async () => {
+test("exige un ID estable y distinto por instalación al configurar el outbox automático", async () => {
   const store = new IndexedDbProjectStore();
   const outbox = new IndexedDbNarrativeSyncOutbox({
     databaseName: "host-continuity-outbox-invalid-" + projectId()
   });
-  const api = new HostEngineApi({ store, continuityOutbox: outbox });
   try {
-    assert.throws(() => api.initializeProject({
-      projectId: projectId(),
-      projectName: "Outbox sin escritor"
-    }), /writerId estable/u);
+    assert.throws(() => new HostEngineApi({
+      store,
+      continuityOutbox: outbox
+    }), /continuityOutboxWriterId estable y único por instalación/u);
+    assert.throws(() => new HostEngineApi({
+      store,
+      continuityOutboxWriterId: "replica-without-outbox"
+    }), /solo se usa junto a continuityOutbox/u);
   } finally {
-    api.dispose();
     outbox.close();
     await store.close();
   }

@@ -782,3 +782,80 @@ test("HostEngineApi no calcula secuencias si el almacén carece del asignador at
     api.dispose();
   }
 });
+
+
+const waitForCommit = async (api, ticketId) => {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const result = api.pollCommit(ticketId);
+    if (result) return result;
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  throw new Error("El commit del motor no terminó dentro del plazo de prueba.");
+};
+
+test("el commit de edición y su operación de sincronización comparten una transacción", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const api = new HostEngineApi({ store, syncDeviceId: "device-atomic-1" });
+  try {
+    api.initializeProject({ projectId: "atomic-journal-project", projectName: "Proyecto atómico" });
+    await api.openDocument({ documentId: "chapter-atomic", text: "Inicio", revision: 0, sequence: 0 });
+    const admission = api.onEditorChange({
+      documentId: "chapter-atomic", sequence: 1, baseRevision: 0,
+      start: 6, end: 6, replacement: " narrativo"
+    });
+    assert.equal(admission.status, "queued");
+    if (admission.status !== "queued") return;
+    const committed = await waitForCommit(api, admission.ticketId);
+    assert.equal(committed.status, "applied");
+    const changes = await store.loadChanges("atomic-journal-project", "chapter-atomic", 0);
+    const operations = await store.loadPendingSyncOperations("atomic-journal-project");
+    assert.equal(changes.length, 1);
+    assert.equal(operations.length, 1);
+    assert.equal(operations[0].operationId, "narrative-change:atomic-journal-project:chapter-atomic:1");
+    assert.equal(operations[0].deviceId, "device-atomic-1");
+    assert.equal(operations[0].kind, "narrative-document-change.v1");
+    const payload = JSON.parse(operations[0].payload);
+    assert.equal(payload.committedRevision, 1);
+    assert.equal(payload.replacement, " narrativo");
+    assert.equal(operations[0].sequence, 1);
+  } finally {
+    api.dispose();
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+test("un fallo al insertar la outbox revierte también el delta del journal", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const api = new HostEngineApi({ store, syncDeviceId: "device-rollback-1" });
+  try {
+    api.initializeProject({ projectId: "rollback-project", projectName: "Proyecto rollback" });
+    await api.openDocument({ documentId: "chapter", text: "Base", revision: 0, sequence: 0 });
+    await store.enqueueNextSyncOperation({
+      operationId: "narrative-change:rollback-project:chapter:1",
+      projectId: "rollback-project",
+      deviceId: "device-rollback-1",
+      kind: "preexisting-collision",
+      payload: JSON.stringify({ collision: true }),
+      createdAt: 10,
+      attemptCount: 0
+    });
+    const admission = api.onEditorChange({
+      documentId: "chapter", sequence: 1, baseRevision: 0,
+      start: 4, end: 4, replacement: " nuevo"
+    });
+    assert.equal(admission.status, "queued");
+    if (admission.status !== "queued") return;
+    const committed = await waitForCommit(api, admission.ticketId);
+    assert.equal(committed.status, "rejected");
+    assert.deepEqual(await store.loadChanges("rollback-project", "chapter", 0), []);
+    assert.equal(api.getSnapshot("chapter")?.text, "Base");
+    assert.equal(await store.countPendingSyncOperations("rollback-project"), 1);
+  } finally {
+    api.dispose();
+    await store.close();
+    await deleteDatabase();
+  }
+});

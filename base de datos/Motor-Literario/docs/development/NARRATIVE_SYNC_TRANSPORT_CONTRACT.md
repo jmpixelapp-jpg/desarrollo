@@ -58,3 +58,7 @@ La existencia de estos tests acredita cobertura escrita, no ejecución satisfact
 ## Idempotencia de la bandeja local
 
 La clave `operationId` identifica el contenido inmutable de una operación: proyecto, dispositivo, secuencia, tipo, fecha de creación y payload JSON. Los metadatos locales de reintento (`attemptCount`, `lastAttemptAt`, `lastError` y `nextAttemptAt`) no forman parte de esa identidad. Reencolar una operación ya persistida tras un timeout o un reinicio es idempotente y no debe borrar ni reiniciar su backoff. La comparación del payload normaliza recursivamente las claves de objetos JSON, preservando el orden de los arrays.
+
+## Orden causal durante la recuperación
+
+La recuperación de pendientes usa el índice `by-project-device-sequence`, no el índice temporal. `createdAt` es metadato de auditoría y puede verse afectado por desfases o ajustes del reloj local; no es una fuente fiable del orden causal. El lote queda ordenado por escritor/dispositivo y secuencia ascendente dentro de cada escritor. Las secuencias de dispositivos distintos son flujos independientes y no se interpretan como un reloj global.

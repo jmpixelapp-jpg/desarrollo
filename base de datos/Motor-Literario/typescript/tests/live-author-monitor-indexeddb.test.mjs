@@ -272,7 +272,125 @@ test("IndexedDB propaga QuotaExceededError del request y aborta sin reemplazar e
   }
 });
 
-test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
+test("IndexedDB aborta una transacción tras validar lease sin confirmar un checkpoint parcial", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-abort-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const lease = await acquireLease(store, projectId, documentId);
+  const durable = checkpoint(projectId, documentId, Date.now());
+  await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
+
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open("motor-literario-local");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const probeTransaction = database.transaction("live-author-monitor-checkpoints", "readonly");
+  const storePrototype = Object.getPrototypeOf(
+    probeTransaction.objectStore("live-author-monitor-checkpoints")
+  );
+  const originalPut = storePrototype.put;
+
+  try {
+    storePrototype.put = function(value, ...keys) {
+      const request = originalPut.call(this, value, ...keys);
+      if (this.name === "live-author-monitor-checkpoints" &&
+          value?.projectId === projectId && value?.documentId === documentId) {
+        // Simula cierre/aborto de la tx después de encolar el put y antes del commit.
+        this.transaction.abort();
+      }
+      return request;
+    };
+
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(
+        checkpoint(projectId, documentId, durable.savedAt + 1, {
+          sessionDurationMs: 150,
+          activeDurationMs: 75,
+          idleDurationMs: 75,
+          acceptedChanges: 2,
+          committedChanges: 2,
+          insertedCharacters: 6,
+          currentDocumentLength: 6,
+          revision: 2,
+          sequence: 2,
+          totalCommitLatencyMs: 10,
+          lastCommitLatencyMs: 5,
+          commitLatencies: [5, 5]
+        }),
+        lease
+      ),
+      error => error?.name === "AbortError" || /transacción|canceló/i.test(error?.message ?? "")
+    );
+  } finally {
+    storePrototype.put = originalPut;
+    database.close();
+  }
+
+  try {
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "el aborto debe revertir el put y preservar el checkpoint anterior"
+    );
+    const recovered = checkpoint(projectId, documentId, durable.savedAt + 2, {
+      sessionDurationMs: 200,
+      activeDurationMs: 100,
+      idleDurationMs: 100,
+      acceptedChanges: 2,
+      committedChanges: 2,
+      insertedCharacters: 6,
+      currentDocumentLength: 6,
+      revision: 2,
+      sequence: 2,
+      totalCommitLatencyMs: 10,
+      lastCommitLatencyMs: 5,
+      commitLatencies: [5, 5]
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(recovered, lease);
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      recovered,
+      "la instancia debe poder persistir normalmente después de una transacción abortada"
+    );
+  } finally {
+    await store.close();
+  }
+});
+
+test("IndexedDB reabre tras el evento close externo e intacta el checkpoint durable", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-external-close-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const lease = await acquireLease(store, projectId, documentId);
+  const durable = checkpoint(projectId, documentId, Date.now());
+  await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
+
+  try {
+    // open() es un método privado de TypeScript, accesible en la clase compilada;
+    // se usa aquí para simular la conexión cerrada por el navegador/entorno.
+    const connection = await store.open();
+    connection.close();
+    assert.equal(typeof connection.onclose, "function",
+      "el adaptador debe registrar el handler de cierre externo");
+    connection.onclose.call(connection, new Event("close"));
+
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "la siguiente operación debe crear una conexión nueva y restaurar el checkpoint"
+    );
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "la conexión recuperada debe poder reutilizarse"
+    );
+  } finally {
+    await store.close();
+  }
+});
+
+test("migra IndexedDB v22 a v28 creando stores narrativos, sync y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";
   const projectId = "monitor-migration-" + randomUUID();
@@ -280,12 +398,9 @@ test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perd
   const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.2.json", import.meta.url);
   const mapping = JSON.parse(await readFile(mappingUrl, "utf8"));
   const existingStores = mapping.runtime.object_stores.filter(
-    descriptor => ![
-      "live-author-monitor-checkpoints",
-      "live-author-monitor-leases",
-      "narrative-reference-repair-audits",
-      "narrative-reference-repair-pending"
-    ].includes(descriptor.name)
+    descriptor => descriptor.name !== "live-author-monitor-checkpoints" &&
+      descriptor.name !== "live-author-monitor-leases" &&
+      !["sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"].includes(descriptor.name)
   );
 
   const legacyDatabase = await new Promise((resolve, reject) => {
@@ -339,18 +454,28 @@ test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perd
       request.onerror = () => reject(request.error);
     });
     try {
-      assert.equal(migratedDatabase.version, 27);
+      assert.equal(migratedDatabase.version, 28);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
-      for (const storeName of [
+      for (const name of ["sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"]) {
+        assert.equal(migratedDatabase.objectStoreNames.contains(name), true);
+      }
+      for (const repairStoreName of [
         "narrative-reference-repair-audits",
         "narrative-reference-repair-pending"
       ]) {
-        assert.equal(migratedDatabase.objectStoreNames.contains(storeName), true);
-        const repairStore = migratedDatabase.transaction(storeName, "readonly").objectStore(storeName);
+        const repairStore = migratedDatabase.transaction(repairStoreName, "readonly")
+          .objectStore(repairStoreName);
         assert.deepEqual(repairStore.keyPath, ["projectId", "operationId"]);
         assert.equal(repairStore.indexNames.contains("by-project"), true);
+        assert.equal(repairStore.index("by-project").keyPath, "projectId");
       }
+      const outboxStore = migratedDatabase.transaction("sync-outbox", "readonly")
+        .objectStore("sync-outbox");
+      assert.equal(outboxStore.indexNames.contains("by-project-created-at"), true);
+      assert.equal(outboxStore.indexNames.contains("by-project-device-sequence"), true);
+      assert.deepEqual(outboxStore.index("by-project-device-sequence").keyPath,
+        ["projectId", "deviceId", "sequence"]);
 
       const leaseStore = migratedDatabase.transaction(
         "live-author-monitor-leases",
@@ -363,27 +488,7 @@ test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perd
         "live-author-monitor-checkpoints",
         "readonly"
       ).objectStore("live-author-monitor-checkpoints");
-      assert.deepEqual(checkpointStore.keyPath, ["projectId", "documentId"]);
-      assert.equal(checkpointStore.indexNames.contains("by-project"), true);
-      assert.equal(checkpointStore.index("by-project").keyPath, "projectId");
-
-      const document = await new Promise((resolve, reject) => {
-        const transaction = migratedDatabase.transaction("documents", "readonly");
-        const request = transaction.objectStore("documents").get([projectId, documentId]);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      assert.equal(document.text, "documento anterior a la migración");
-      assert.equal(document.revision, 0);
-    } finally {
-      migratedDatabase.close();
-    }
-  } finally {
-    await store.close();
-  }
-});
-
-
+      assert.deepEqual(checkpointStore.keyPath, ["projectId", "docum
 test("rechaza checkpoints atrasados por revisión/secuencia aunque tengan timestamp más reciente", async () => {
   const store = new IndexedDbProjectStore();
   const projectId = "live-author-monitor-order-" + randomUUID();

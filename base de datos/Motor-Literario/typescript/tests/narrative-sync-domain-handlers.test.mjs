@@ -5,6 +5,9 @@ import {
   createNarrativeSyncOperationEnvelope,
   createNarrativeSyncJournalConsumer,
   createNarrativeIdeaUpsertHandler,
+  createNarrativeEntityMergeHandler,
+  createNarrativeSyncDomainHandlers,
+  createPersonalIdeaArchiveHandler,
   IndexedDbNarrativeSyncJournal
 } from "../dist/motor-literario.js";
 
@@ -182,6 +185,130 @@ test("idea-upsert no permite que un sobre escriba en un proyecto distinto", asyn
     digest: "sha256:" + "0".repeat(64)
   }), /otro proyecto/u);
   assert.equal(store.ideas.size, 0);
+});
+
+test("la fábrica registra los seis handlers de dominio CAS y fusión sin duplicados", () => {
+  const store = {
+    loadEntities: async () => [], saveEntityIfUnchanged: async () => {},
+    mergeNarrativeEntityIdentity: async () => {},
+    loadIdeas: async () => [], saveIdeaIfUnchanged: async () => {},
+    loadAssertions: async () => [], saveAssertionIfUnchanged: async () => {},
+    loadRelations: async () => [], saveRelationIfUnchanged: async () => {},
+    loadEvents: async () => [], saveEventIfUnchanged: async () => {}
+  };
+  const handlers = createNarrativeSyncDomainHandlers(store);
+  assert.deepEqual(handlers.map(handler => handler.kind), [
+    "entity-upsert", "entity-merge", "idea-upsert", "assertion-upsert", "relation-upsert", "event-upsert"
+  ]);
+  assert.equal(new Set(handlers.map(handler => handler.kind)).size, handlers.length);
+});
+
+
+test("personal-idea-archive valida el escritor autenticado, el conjunto exacto y el recibo durable", async () => {
+  const project = "project-library-archive";
+  const writer = "writer-authenticated";
+  const ideaIds = ["idea-a", "idea-z"];
+  const payload = {
+    writerId: writer,
+    sourceProjectName: "Libro archivado",
+    archivedAt: 1234,
+    archivedIdeaIds: ideaIds,
+    archiveChecksum: "fnv1a64:0123456789abcdef"
+  };
+  const entries = ideaIds.map(id => ({
+    writerId: writer,
+    sourceProjectId: project,
+    sourceProjectName: payload.sourceProjectName,
+    category: payload.sourceProjectName,
+    idea: idea(id, { sourceProjectName: payload.sourceProjectName }),
+    context: { version: 1, relatedIdeas: [], relatedEntities: [] },
+    archivedAt: payload.archivedAt
+  }));
+  const receipt = {
+    writerId: writer,
+    sourceProjectId: project,
+    receiptId: "finalization-v1",
+    sourceProjectName: payload.sourceProjectName,
+    finalizedAt: payload.archivedAt,
+    archivedIdeaIds: ideaIds,
+    archiveChecksum: payload.archiveChecksum
+  };
+  const calls = [];
+  const store = {
+    async archiveUnincorporatedIdeas(...args) {
+      calls.push(args);
+      return structuredClone(entries);
+    },
+    async loadProjectFinalizationReceipt(receiptWriterId, receiptProjectId) {
+      assert.equal(receiptWriterId, writer);
+      assert.equal(receiptProjectId, project);
+      return structuredClone(receipt);
+    }
+  };
+  const handler = createPersonalIdeaArchiveHandler(store, projectId =>
+    projectId === project ? writer : undefined
+  );
+  const operation = {
+    operationId: "archive-op-1",
+    projectId: project,
+    writerId: "device-1",
+    sequence: 1,
+    kind: "personal-idea-archive",
+    payload
+  };
+  assert.equal(handler.validate(payload), true);
+  assert.equal(handler.validate({ ...payload, archivedIdeaIds: ["idea-z", "idea-a"] }), false);
+  assert.equal(handler.validate({ ...payload, archivedIdeaIds: ["idea-a", "idea-a"] }), false);
+
+  await handler.apply(operation);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], [
+    project, writer, payload.sourceProjectName, payload.archivedAt, undefined, ideaIds
+  ]);
+});
+
+test("personal-idea-archive rechaza un escritor no autorizado antes de tocar la biblioteca", async () => {
+  let writes = 0;
+  const store = {
+    async archiveUnincorporatedIdeas() { writes++; return []; },
+    async loadProjectFinalizationReceipt() { return undefined; }
+  };
+  const handler = createPersonalIdeaArchiveHandler(store, () => "another-writer");
+  await assert.rejects(handler.apply({
+    operationId: "archive-op-unauthorized",
+    projectId: "project-library-archive",
+    writerId: "device-1",
+    sequence: 1,
+    kind: "personal-idea-archive",
+    payload: {
+      writerId: "writer-requested",
+      sourceProjectName: "Libro",
+      archivedAt: 10,
+      archivedIdeaIds: [],
+      archiveChecksum: "fnv1a64:0000000000000000"
+    }
+  }), /identidad autenticada/u);
+  assert.equal(writes, 0);
+});
+
+test("la fábrica agrega el handler de biblioteca solo cuando recibe el resolvedor autenticado", () => {
+  const store = {
+    loadEntities: async () => [], saveEntityIfUnchanged: async () => {},
+    mergeNarrativeEntityIdentity: async () => {},
+    loadIdeas: async () => [], saveIdeaIfUnchanged: async () => {},
+    loadAssertions: async () => [], saveAssertionIfUnchanged: async () => {},
+    loadRelations: async () => [], saveRelationIfUnchanged: async () => {},
+    loadEvents: async () => [], saveEventIfUnchanged: async () => {},
+    archiveUnincorporatedIdeas: async () => [],
+    loadProjectFinalizationReceipt: async () => undefined
+  };
+  const withoutIdentity = createNarrativeSyncDomainHandlers(store);
+  const withIdentity = createNarrativeSyncDomainHandlers(store, {
+    resolveAuthorizedWriterId: () => "writer-authenticated"
+  });
+  assert.equal(withoutIdentity.length, 6);
+  assert.equal(withIdentity.length, 7);
+  assert.equal(withIdentity.at(-1).kind, "personal-idea-archive");
 });
 
 

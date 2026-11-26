@@ -607,3 +607,12 @@ La recepción de operaciones ahora trata el cursor leído de IndexedDB como esta
 La deduplicación también compara la representación JSON canónica de toda la envoltura almacenada con la operación recibida, además del digest. Esto detecta un registro local cuyo payload o metadatos hayan cambiado conservando una copia del digest original. Los metadatos locales de recepción/aplicación también se validan; una operación huérfana sin cursor, o cuyo cursor no confirma su secuencia, no se declara duplicada.
 
 Se agregan regresiones con IndexedDB real de prueba para: cursor malformado, payload alterado bajo el mismo digest, operación duplicada con cursor eliminado y duplicado legítimo. Las pruebas exigen que no se acepte una nueva operación ni se modifique silenciosamente la evidencia corrupta. Estas defensas no sustituyen autenticación/autorización ni convierten el replay en exactly-once; mantienen la recuperación explícita y el contrato de entrega al menos una vez.
+
+
+## Sincronización saliente durable DB28 — 26 de noviembre de 2026
+
+La integración propuesta eleva IndexedDB DB27→DB28 sin retirar los almacenes de reparación de referencias ni los datos narrativos existentes. Las ediciones del editor, mutaciones narrativas CAS y secuencia por dispositivo se confirman en una transacción local compartida con la outbox. Los sobres de salida incluyen digest SHA-256; un acuse remoto durable debe coincidir en proyecto, operación, dispositivo, secuencia y digest antes de poder retirar la operación pendiente.
+
+El despachador conserva la entrega al menos una vez y usa Web Locks por proyecto cuando están disponibles para evitar ciclos simultáneos entre pestañas. El runtime anfitrión debe proporcionar un transporte autenticado y el servidor debe deduplicar por identidad de operación/digest. La descarga remota incremental y la resolución automática de conflictos entre escritores no se consideran implementadas en esta etapa.
+
+La migración DB28 tiene pruebas para base nueva y actualización desde DB27, preservación de documentos y cola de reparación, atomicidad de biblioteca personal/outbox, concurrencia del despachador y rechazo de acuses no coincidentes.

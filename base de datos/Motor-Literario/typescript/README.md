@@ -415,3 +415,6 @@ La lectura ZIP verifica directorio central, nombres y rutas, entradas duplicadas
 La primera versión usa `DecompressionStream("deflate-raw")` para entradas comprimidas; los entornos que no lo implementen pueden leer EPUBs con entradas stored, pero devolverán un error explícito para entradas deflate. Los libros que empleen XML/HTML con codificación distinta de UTF-8, CSS complejo, contenido remoto, overlays de audio o estructuras no cubiertas requieren soporte adicional. La salida es una extracción estructural inicial, no una promesa de fidelidad editorial perfecta; las advertencias y pruebas con corpus real siguen siendo necesarias.
 
 Pruebas nuevas en `tests/epub-reader.test.mjs`: metadatos y spine, localizadores, notas, exclusión de scripts, rechazo de mimetype/rutas inseguras y detección de corrupción CRC32.
+
+
+La inspección `EpubBookReader.inspect(source)` también recorre el spine y entrega `extractedBlocks`, `emptySpineItems` y advertencias de metadatos o documentos sin bloques textuales. Así, la importación puede evaluar si el archivo realmente produjo contenido antes de confirmar su incorporación al proyecto; no debe confundir un EPUB válido como ZIP con un libro cuya extracción textual sea completa.

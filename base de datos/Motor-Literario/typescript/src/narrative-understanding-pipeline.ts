@@ -42,7 +42,8 @@ export interface NarrativeUnderstandingInput {
   readonly characterMentions?: readonly NarrativeCharacterMention[];
   /** Pronombres detectados externamente; offsets UTF-16 absolutos del documento. */
   readonly pronounReferences?: readonly NarrativePronounReference[];
-  readonly pronounResolutionOptions?: NarrativePronounResolutionOptions;\n  readonly characterProfiles?: readonly NarrativeCharacterPronounProfile[];
+  readonly pronounResolutionOptions?: NarrativePronounResolutionOptions;
+  readonly characterProfiles?: readonly NarrativeCharacterPronounProfile[];
 }
 
 export interface NarrativeUnderstandingResult {
@@ -58,7 +59,8 @@ export interface NarrativeUnderstandingResult {
   readonly interactions: ReturnType<typeof extractNarrativeCharacterInteractions>;
   readonly interactionShifts: ReturnType<typeof detectNarrativeInteractionShifts>;
   readonly pronounResolutions: ReturnType<typeof resolveNarrativePronounReferences>;
-  readonly pronounActions: ReturnType<typeof extractNarrativePronounActionCandidates>;\n  readonly skippedAmbiguousCharacterNames: readonly string[];
+  readonly pronounActions: ReturnType<typeof extractNarrativePronounActionCandidates>;
+  readonly skippedAmbiguousCharacterNames: readonly string[];
   readonly sceneAssignments: {
     readonly ideaCandidates: readonly {
       readonly candidateId: string;
@@ -164,10 +166,16 @@ export function understandNarrativeFragment(
   const interactions = extractNarrativeCharacterInteractions(
     actions, input.entities, input.projectId
   );
-  const localMentions = (input.characterMentions ?? []).map(item => ({
+  const detectedPronouns = detectNarrativePronounInputs(
+    input.text, input.entities, input.documentId, input.revision,
+    baseOffset, input.characterProfiles ?? []
+  );
+  const sourceMentions = input.characterMentions ?? detectedPronouns.mentions;
+  const sourceReferences = input.pronounReferences ?? detectedPronouns.references;
+  const localMentions = sourceMentions.map(item => ({
     ...item, start: item.start - baseOffset, end: item.end - baseOffset
   }));
-  const localReferences = (input.pronounReferences ?? []).map(item => ({
+  const localReferences = sourceReferences.map(item => ({
     ...item, start: item.start - baseOffset, end: item.end - baseOffset
   }));
   const pronounResolutions = localReferences.length
@@ -204,7 +212,8 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions,\n    skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
+    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions,
+    skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     sceneAssignments: {
       ideaCandidates: assign(ideas),
       actionCandidates: assign(actions),

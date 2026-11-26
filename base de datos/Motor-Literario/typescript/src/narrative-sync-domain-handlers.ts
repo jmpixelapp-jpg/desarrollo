@@ -382,8 +382,82 @@ export function createNarrativeEntityMergeHandler(
 }
 
 /**
- * Registra los seis handlers de dominio para el consumidor entrante.
- * Incluye la fusión de identidades, que delega en la primitiva atómica del almacén.
+ * Payload de finalización de libro y transferencia a la biblioteca personal.
+ * La lista exacta evita que el receptor archive ideas creadas después del evento.
+ */
+export interface PersonalIdeaArchivePayload {
+  readonly writerId: string;
+  readonly sourceProjectName: string;
+  readonly archivedAt: number;
+  readonly archivedIdeaIds: readonly string[];
+  readonly archiveChecksum: string;
+}
+
+function isPersonalIdeaArchivePayload(value: unknown): value is PersonalIdeaArchivePayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Partial<PersonalIdeaArchivePayload>;
+  return typeof item.writerId === "string" && !!item.writerId.trim() && item.writerId.length <= 256 &&
+    typeof item.sourceProjectName === "string" && !!item.sourceProjectName.trim() && item.sourceProjectName.length <= 512 &&
+    Number.isFinite(item.archivedAt) && item.archivedAt! >= 0 &&
+    Array.isArray(item.archivedIdeaIds) && item.archivedIdeaIds.length <= 100_000 &&
+    item.archivedIdeaIds.every(id => typeof id === "string" && !!id.trim() && id.length <= 512) &&
+    new Set(item.archivedIdeaIds).size === item.archivedIdeaIds.length &&
+    item.archivedIdeaIds.every((id, index, ids) => index === 0 || ids[index - 1]!.localeCompare(id) < 0) &&
+    typeof item.archiveChecksum === "string" && !!item.archiveChecksum.trim() && item.archiveChecksum.length <= 160;
+}
+
+/**
+ * Replica el cierre de un libro solo bajo la identidad de escritor autenticada
+ * por el anfitrión. El store vuelve a comparar el conjunto de IDs y el recibo
+ * durable después de archivar; una operación fuera de orden queda pendiente.
+ */
+export function createPersonalIdeaArchiveHandler(
+  store: ProjectStore,
+  resolveAuthorizedWriterId: (projectId: string) => string | undefined
+): NarrativeSyncOperationHandler<PersonalIdeaArchivePayload> {
+  if (!store || typeof store.archiveUnincorporatedIdeas !== "function" ||
+      typeof store.loadProjectFinalizationReceipt !== "function" ||
+      typeof resolveAuthorizedWriterId !== "function") {
+    throw new TypeError("El archivo personal requiere una resolución de escritor autenticado y recibo durable.");
+  }
+  return {
+    kind: "personal-idea-archive",
+    validate: isPersonalIdeaArchivePayload,
+    async apply(operation): Promise<void> {
+      const payload = operation.payload;
+      const authorizedWriterId = resolveAuthorizedWriterId(operation.projectId);
+      if (!authorizedWriterId || authorizedWriterId !== payload.writerId) {
+        throw new Error("El escritor de la operación no coincide con la identidad autenticada del proyecto.");
+      }
+      const entries = await store.archiveUnincorporatedIdeas!(
+        operation.projectId, payload.writerId, payload.sourceProjectName,
+        payload.archivedAt, undefined, payload.archivedIdeaIds
+      );
+      const archivedIds = entries.map(entry => entry.idea.id).sort();
+      if (JSON.stringify(archivedIds) !== JSON.stringify(payload.archivedIdeaIds)) {
+        throw new Error("La biblioteca local no confirmó exactamente las ideas de la operación recibida.");
+      }
+      const receipt = await store.loadProjectFinalizationReceipt!(payload.writerId, operation.projectId);
+      if (!receipt || receipt.writerId !== payload.writerId ||
+          receipt.sourceProjectId !== operation.projectId ||
+          receipt.sourceProjectName !== payload.sourceProjectName ||
+          receipt.finalizedAt !== payload.archivedAt ||
+          receipt.archiveChecksum !== payload.archiveChecksum ||
+          JSON.stringify([...receipt.archivedIdeaIds].sort()) !== JSON.stringify(payload.archivedIdeaIds)) {
+        throw new Error("El recibo durable de la biblioteca no coincide con la operación de archivo.");
+      }
+    }
+  };
+}
+
+export interface NarrativeSyncDomainHandlerOptions {
+  /** Identidad del escritor obtenida de la sesión autenticada del anfitrión. */
+  readonly resolveAuthorizedWriterId?: (projectId: string) => string | undefined;
+}
+
+/**
+ * Registra los seis handlers de dominio CAS/fusión y, cuando se proporciona
+ * una identidad autenticada, el handler de archivo a la biblioteca personal.
  */
 export type NarrativeSyncDomainHandler =
   | NarrativeSyncOperationHandler<NarrativeEntityUpsertPayload>
@@ -391,12 +465,14 @@ export type NarrativeSyncDomainHandler =
   | NarrativeSyncOperationHandler<NarrativeIdeaUpsertPayload>
   | NarrativeSyncOperationHandler<NarrativeAssertionUpsertPayload>
   | NarrativeSyncOperationHandler<NarrativeRelationUpsertPayload>
-  | NarrativeSyncOperationHandler<NarrativeEventUpsertPayload>;
+  | NarrativeSyncOperationHandler<NarrativeEventUpsertPayload>
+  | NarrativeSyncOperationHandler<PersonalIdeaArchivePayload>;
 
 export function createNarrativeSyncDomainHandlers(
-  store: ProjectStore
+  store: ProjectStore,
+  options: NarrativeSyncDomainHandlerOptions = {}
 ): readonly NarrativeSyncDomainHandler[] {
-  return [
+  const handlers: NarrativeSyncDomainHandler[] = [
     createNarrativeEntityUpsertHandler(store),
     createNarrativeEntityMergeHandler(store),
     createNarrativeIdeaUpsertHandler(store),
@@ -404,4 +480,8 @@ export function createNarrativeSyncDomainHandlers(
     createNarrativeRelationUpsertHandler(store),
     createNarrativeEventUpsertHandler(store)
   ];
+  if (options.resolveAuthorizedWriterId) {
+    handlers.push(createPersonalIdeaArchiveHandler(store, options.resolveAuthorizedWriterId));
+  }
+  return handlers;
 }

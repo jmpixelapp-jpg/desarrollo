@@ -264,3 +264,46 @@ test("rechaza códigos de conflicto excesivos y conserva la operación", async (
   assert.equal(outbox.attempts.length, 1);
   assert.equal(outbox.attempts[0].error, "El código del conflicto supera el límite permitido.");
 });
+
+
+test("acepta el código de conflicto en el límite contractual de 128 caracteres", async () => {
+  const outbox = createOutbox([operation("op-boundary-code", 1)]);
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push() {
+      return {
+        acknowledgedOperationIds: [],
+        conflicts: [{ operationId: "op-boundary-code", code: "c".repeat(128) }],
+        retryableOperationIds: []
+      };
+    }
+  }, { now: () => 200, retryBaseDelayMs: 1_000, retryMaxDelayMs: 1_000, random: () => 1 });
+
+  const result = await coordinator.syncOnce("project-a");
+  assert.equal(result.conflicted, 1);
+  assert.equal(result.remaining, 1);
+  assert.equal(outbox.pending.length, 1);
+  assert.match(outbox.pending[0].lastError, /^conflict: /);
+});
+
+test("rechaza mensajes de conflicto que exceden 2.048 caracteres", async () => {
+  const outbox = createOutbox([operation("op-oversized-message", 1)]);
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push() {
+      return {
+        acknowledgedOperationIds: [],
+        conflicts: [{
+          operationId: "op-oversized-message",
+          code: "revision_conflict",
+          message: "m".repeat(2049)
+        }],
+        retryableOperationIds: []
+      };
+    }
+  }, { now: () => 300, retryBaseDelayMs: 1_000, retryMaxDelayMs: 1_000, random: () => 1 });
+
+  await assert.rejects(coordinator.syncOnce("project-a"), /mensaje del conflicto supera el límite/);
+  assert.equal(outbox.pending.length, 1);
+  assert.equal(outbox.acknowledged.length, 0);
+  assert.equal(outbox.attempts.length, 1);
+  assert.match(outbox.attempts[0].error, /mensaje del conflicto supera el límite/);
+});

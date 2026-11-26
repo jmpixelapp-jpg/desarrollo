@@ -3,7 +3,10 @@ import {
   inspectNarrativeSyncJournalIntegrity,
   type IndexedDbNarrativeSyncJournal,
   type NarrativeSyncJournalIntegrityReport,
-  type NarrativeSyncReplayResult
+  type NarrativeSyncReplayResult,
+  type NarrativeSyncCursorRecoveryPlan,
+  type NarrativeSyncCursorRecoveryProposal,
+  type NarrativeSyncCursorRecoveryApplyResult
 } from "./narrative-sync-journal";
 import { recoverNarrativeReferenceRepairs, type NarrativeReferenceRepairRecoveryResult } from "./narrative-knowledge-graph-persistence";
 import type { ProjectStore } from "./contracts";
@@ -19,6 +22,16 @@ import {
  * anfitrión o al servidor; verificar SHA-256 no autentica al emisor.
  */
 export interface NarrativeSyncJournalConsumerOptions extends NarrativeSyncDispatchOptions {}
+
+/**
+ * La reconstrucción de cursores requiere aprobación explícita del anfitrión.
+ * Sin este callback, el consumidor solo informa el plan y nunca escribe cursores.
+ */
+export interface NarrativeSyncCursorRecoveryApproval {
+  readonly approve: (
+    proposal: NarrativeSyncCursorRecoveryProposal
+  ) => boolean | Promise<boolean>;
+}
 
 /**
  * Crea un consumidor de operaciones narrativas recibidas.
@@ -55,6 +68,10 @@ export interface RecoveryFirstNarrativeSyncResult {
   readonly blockedByPendingRepairs: boolean;
   readonly blockedByJournalIntegrity: boolean;
   readonly journalIntegrity: NarrativeSyncJournalIntegrityReport;
+  readonly cursorRecovery?: {
+    readonly plan: NarrativeSyncCursorRecoveryPlan;
+    readonly applications: readonly NarrativeSyncCursorRecoveryApplyResult[];
+  };
   readonly replay?: NarrativeSyncReplayResult;
 }
 
@@ -68,7 +85,8 @@ export function createRecoveryFirstNarrativeSyncConsumer(
   store: ProjectStore,
   journal: IndexedDbNarrativeSyncJournal,
   handlers: readonly AnyNarrativeSyncOperationHandler[],
-  options: NarrativeSyncJournalConsumerOptions = {}
+  options: NarrativeSyncJournalConsumerOptions = {},
+  cursorRecoveryApproval?: NarrativeSyncCursorRecoveryApproval
 ): (projectId: string, writerId?: string) => Promise<RecoveryFirstNarrativeSyncResult> {
   if (!store || typeof store.loadNarrativeReferenceRepairPending !== "function" ||
       typeof store.appendNarrativeReferenceRepairAudit !== "function" ||
@@ -86,16 +104,39 @@ export function createRecoveryFirstNarrativeSyncConsumer(
         journalIntegrity: await inspectNarrativeSyncJournalIntegrity(journal, projectId)
       };
     }
+    const { planNarrativeSyncJournalCursorRecovery } = await import("./narrative-sync-journal");
+    const cursorPlan = await planNarrativeSyncJournalCursorRecovery(journal, projectId);
+    const cursorApplications: NarrativeSyncCursorRecoveryApplyResult[] = [];
+    if (cursorRecoveryApproval) {
+      for (const item of cursorPlan.items) {
+        if (item.action !== "rebuild-cursor-from-complete-journal" || !item.proposal) continue;
+        if (await cursorRecoveryApproval.approve(item.proposal)) {
+          cursorApplications.push(await journal.applyCursorRecoveryProposal(item.proposal));
+        }
+      }
+    }
     const journalIntegrity = await inspectNarrativeSyncJournalIntegrity(journal, projectId);
+    const cursorRecovery = {
+      plan: cursorPlan,
+      applications: cursorApplications
+    };
     if (!journalIntegrity.intact) {
       return {
         recovery,
         blockedByPendingRepairs: false,
         blockedByJournalIntegrity: true,
-        journalIntegrity
+        journalIntegrity,
+        cursorRecovery
       };
     }
     const replay = await consume(projectId, writerId);
-    return { recovery, blockedByPendingRepairs: false, blockedByJournalIntegrity: false, journalIntegrity, replay };
+    return {
+      recovery,
+      blockedByPendingRepairs: false,
+      blockedByJournalIntegrity: false,
+      journalIntegrity,
+      cursorRecovery,
+      replay
+    };
   };
 }

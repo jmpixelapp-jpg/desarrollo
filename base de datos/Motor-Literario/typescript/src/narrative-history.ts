@@ -4,9 +4,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export interface NarrativeAssertion {");
-}
-
 export interface NarrativeAssertion {
   readonly projectId: string;
   readonly id: string;
@@ -79,26 +76,26 @@ export function extractNarrativeAssertions(
     const names = [entity.canonicalName, ...entity.aliases];
     for (const definition of definitions) {
       for (const name of names) {
-      const escapedName = escapeRegExp(name);
-      const expression = new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escapedName + "(?![\\p{L}\\p{M}\\p{N}_])" + definition.suffix, "giu");
-      for (const match of text.matchAll(expression)) {
-        const value = definition.capture(match);
-        if (typeof value === "string" && !value) continue;
-        const localStart = match.index;
-        const localEnd = localStart + match[0].length;
-        const lineStart = text.lastIndexOf("\n", localStart - 1) + 1;
-        const lineBreak = text.indexOf("\n", localEnd);
-        const lineEnd = lineBreak < 0 ? text.length : lineBreak;
-        const start = baseOffset + localStart;
-        const excerpt = text.slice(lineStart, lineEnd);
-        const evidence: TextEvidence = { documentId, revision, start, end: baseOffset + localEnd, excerpt };
-        const timeReference = explicitTimeReference(excerpt, localStart - lineStart);
-        output.push({
-          projectId, id: "assertion:" + entity.id + ":" + documentId + ":" + revision + ":" + start + ":" + definition.attribute,
-          entityId: entity.id, entityName: entity.canonicalName, attribute: definition.attribute,
-          value, evidence, ...(timeReference ? { timeReference } : {}), capturedAt: now
-        });
-      }
+        const escapedName = escapeRegExp(name);
+        const expression = new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escapedName + "(?![\\p{L}\\p{M}\\p{N}_])" + definition.suffix, "giu");
+        for (const match of text.matchAll(expression)) {
+          const value = definition.capture(match);
+          if (typeof value === "string" && !value) continue;
+          const localStart = match.index;
+          const localEnd = localStart + match[0].length;
+          const lineStart = text.lastIndexOf("\n", localStart - 1) + 1;
+          const lineBreak = text.indexOf("\n", localEnd);
+          const lineEnd = lineBreak < 0 ? text.length : lineBreak;
+          const start = baseOffset + localStart;
+          const excerpt = text.slice(lineStart, lineEnd);
+          const evidence: TextEvidence = { documentId, revision, start, end: baseOffset + localEnd, excerpt };
+          const timeReference = explicitTimeReference(excerpt, localStart - lineStart);
+          output.push({
+            projectId, id: "assertion:" + entity.id + ":" + documentId + ":" + revision + ":" + start + ":" + definition.attribute,
+            entityId: entity.id, entityName: entity.canonicalName, attribute: definition.attribute,
+            value, evidence, ...(timeReference ? { timeReference } : {}), capturedAt: now
+          });
+        }
       }
     }
   }

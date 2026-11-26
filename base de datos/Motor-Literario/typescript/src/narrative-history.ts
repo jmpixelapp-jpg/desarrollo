@@ -5,9 +5,6 @@ function escapeRegExp(value: string): string {
 }
 
 export interface NarrativeAssertion {
-}
-
-export interface NarrativeAssertion {
   readonly projectId: string;
   readonly id: string;
   readonly entityId: string;

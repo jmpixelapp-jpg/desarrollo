@@ -621,6 +621,8 @@ export class HostEngineApi {
   private readonly liveMonitorCheckpointErrors = new Map<string, unknown>();
   private readonly liveMonitorLeases = new Map<string, StoredLiveAuthorMonitorLease>();
   private readonly liveMonitorLeaseHeartbeats = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly liveMonitorLeaseGenerations = new Map<string, number>();
+  private readonly liveMonitorLeaseReleasing = new Set<string>();
   private readonly liveMonitorOwnerId = globalThis.crypto?.randomUUID?.() ??
     `monitor-owner:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   private static readonly LIVE_MONITOR_LEASE_DURATION_MS = 30_000;
@@ -3857,9 +3859,13 @@ export class HostEngineApi {
   dispose(): void {
     this.unsubscribeNarrativeChanges?.();
     this.unsubscribeNarrativeChanges = undefined;
+    for (const documentId of this.liveMonitorLeases.keys()) {
+      this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
+    }
     for (const timer of this.liveMonitorLeaseHeartbeats.values()) clearInterval(timer);
     this.liveMonitorLeaseHeartbeats.clear();
     this.liveMonitorLeases.clear();
+    this.liveMonitorLeaseReleasing.clear();
     this.liveAuthorMonitor.dispose();
   }
 
@@ -4092,38 +4098,67 @@ export class HostEngineApi {
       typeof this.store.releaseLiveAuthorMonitorLease === "function";
   }
 
+  private bumpLiveAuthorMonitorLeaseGeneration(documentId: string): number {
+    const next = (this.liveMonitorLeaseGenerations.get(documentId) ?? 0) + 1;
+    this.liveMonitorLeaseGenerations.set(documentId, next);
+    return next;
+  }
+
   private startLiveAuthorMonitorLeaseHeartbeat(documentId: string): void {
-    if (this.liveMonitorLeaseHeartbeats.has(documentId)) return;
+    if (this.liveMonitorLeaseHeartbeats.has(documentId) ||
+        this.liveMonitorLeaseReleasing.has(documentId)) return;
     const timer = setInterval(() => {
-      const current = this.liveMonitorLeases.get(documentId);
-      if (!current) {
-        const activeTimer = this.liveMonitorLeaseHeartbeats.get(documentId);
-        if (activeTimer) clearInterval(activeTimer);
-        this.liveMonitorLeaseHeartbeats.delete(documentId);
-        return;
-      }
-      const renew = this.store.renewLiveAuthorMonitorLease;
-      if (!renew) return;
-      void renew.call(
-        this.store,
-        current,
-        Date.now(),
-        HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
-      ).then(renewed => {
-        if (!renewed) {
-          this.liveMonitorLeases.delete(documentId);
-          const activeTimer = this.liveMonitorLeaseHeartbeats.get(documentId);
-          if (activeTimer) clearInterval(activeTimer);
-          this.liveMonitorLeaseHeartbeats.delete(documentId);
-          return;
-        }
-        this.liveMonitorLeases.set(documentId, renewed);
-      }).catch(error => {
+      void this.renewLiveAuthorMonitorLeaseFromHeartbeat(documentId).catch(error => {
         this.reportKnowledgeError(error);
       });
     }, Math.floor(HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS / 3));
     (timer as ReturnType<typeof setInterval> & { unref?: () => void }).unref?.();
     this.liveMonitorLeaseHeartbeats.set(documentId, timer);
+  }
+
+  /**
+   * Renueva desde el heartbeat sin permitir que una respuesta tardía restaure
+   * la titularidad local después de un cierre/liberación.
+   */
+  private async renewLiveAuthorMonitorLeaseFromHeartbeat(documentId: string): Promise<void> {
+    if (this.liveMonitorLeaseReleasing.has(documentId)) return;
+    const current = this.liveMonitorLeases.get(documentId);
+    const generation = this.liveMonitorLeaseGenerations.get(documentId) ?? 0;
+    if (!current) {
+      const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
+      if (timer) clearInterval(timer);
+      this.liveMonitorLeaseHeartbeats.delete(documentId);
+      return;
+    }
+    const renew = this.store.renewLiveAuthorMonitorLease;
+    if (!renew) return;
+    const renewed = await renew.call(
+      this.store,
+      current,
+      Date.now(),
+      HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
+    );
+
+    // Una liberación, dispose o cambio de generación invalida esta respuesta.
+    if ((this.liveMonitorLeaseGenerations.get(documentId) ?? 0) !== generation ||
+        this.liveMonitorLeaseReleasing.has(documentId)) return;
+    const latest = this.liveMonitorLeases.get(documentId);
+    if (!latest || latest.ownerId !== current.ownerId ||
+        latest.fencingToken !== current.fencingToken) return;
+
+    if (!renewed) {
+      this.liveMonitorLeases.delete(documentId);
+      this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
+      const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
+      if (timer) clearInterval(timer);
+      this.liveMonitorLeaseHeartbeats.delete(documentId);
+      return;
+    }
+    this.liveMonitorLeases.set(documentId, {
+      ...renewed,
+      expiresAt: Math.max(renewed.expiresAt, latest.expiresAt),
+      updatedAt: Math.max(renewed.updatedAt, latest.updatedAt)
+    });
   }
 
   private async acquireOrRenewLiveAuthorMonitorLease(
@@ -4168,15 +4203,25 @@ export class HostEngineApi {
   private async releaseLiveAuthorMonitorLease(documentId: string): Promise<void> {
     const lease = this.liveMonitorLeases.get(documentId);
     if (!lease || !this.store.releaseLiveAuthorMonitorLease) return;
+    this.liveMonitorLeaseReleasing.add(documentId);
+    const generation = this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
     const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
     if (timer) clearInterval(timer);
     this.liveMonitorLeaseHeartbeats.delete(documentId);
     try {
       await this.store.releaseLiveAuthorMonitorLease.call(this.store, lease, Date.now());
-      this.liveMonitorLeases.delete(documentId);
+      if ((this.liveMonitorLeaseGenerations.get(documentId) ?? 0) === generation) {
+        const latest = this.liveMonitorLeases.get(documentId);
+        if (latest?.ownerId === lease.ownerId &&
+            latest.fencingToken === lease.fencingToken) {
+          this.liveMonitorLeases.delete(documentId);
+        }
+      }
+      this.liveMonitorLeaseReleasing.delete(documentId);
     } catch (error) {
       // Si el almacén no confirmó la liberación, conservamos la titularidad local
       // y reanudamos el heartbeat para evitar una expiración accidental.
+      this.liveMonitorLeaseReleasing.delete(documentId);
       this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
       throw error;
     }

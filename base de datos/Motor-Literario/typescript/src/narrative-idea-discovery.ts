@@ -40,6 +40,8 @@ export interface NarrativeIdeaCandidate {
   };
   /** Oración completa que permite verificar el candidato en su contexto. */
   readonly evidence: {
+    readonly documentId: string;
+    readonly revision: number;
     readonly start: number;
     readonly end: number;
     readonly excerpt: string;
@@ -210,7 +212,13 @@ export function discoverNarrativeIdeaCandidates(
         confidence: pattern.confidence,
         reviewStatus: "candidate",
         mention: { start: mentionStart, end: mentionEnd, excerpt: mentionExcerpt },
-        evidence: { start: evidenceStart, end: evidenceEnd, excerpt }
+        evidence: {
+          documentId: input.documentId,
+          revision: input.revision,
+          start: evidenceStart,
+          end: evidenceEnd,
+          excerpt
+        }
       });
     }
   }

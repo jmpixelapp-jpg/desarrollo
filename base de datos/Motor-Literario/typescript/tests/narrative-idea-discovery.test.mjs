@@ -53,6 +53,8 @@ test("conserva offsets UTF-16 absolutos y el fragmento probatorio", () => {
   assert.equal(found[0].mention.end, prefix.length + sentence.indexOf("."));
   assert.equal(found[0].mention.excerpt, "la memoria de Ángela");
   assert.deepEqual(found[0].evidence, {
+    documentId: context.documentId,
+    revision: context.revision,
     start: prefix.length,
     end: prefix.length + sentence.length,
     excerpt: sentence

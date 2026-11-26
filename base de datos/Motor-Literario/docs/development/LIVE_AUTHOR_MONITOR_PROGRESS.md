@@ -1383,3 +1383,14 @@ La conclusión global de la lane sigue siendo `failure` por controles compartido
 **Validación en [Live Author Monitor — run 45757281903](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45757281903):** aprobada para la lane aislada. El type-check estricto, el bundle reducido y las 17 pruebas diagnósticas pasaron. La suite del núcleo, panel y workspace terminó con 61/61 pruebas aprobadas, incluida la nueva regresión `getDocumentLabel()` que falla una vez durante la reconciliación y se recupera en el siguiente pulso. La advertencia queda sólo en la tarjeta afectada, no filtra el mensaje privado y el contador local no modifica `snapshot.listenerErrors`. El benchmark procesó 100.000 commits en 511,50 ms (~195.503 commits/s), con heap de 4,26 MiB a mitad y al final de la carga, crecimiento de 0 MiB, 0,49 MiB retenidos por sesiones abiertas y cero tickets pendientes.
 
 La lane global sigue en `failure` por controles compartidos de persistencia: `DATABASE_VERSION_MISMATCH`, dos almacenes no mapeados y el error de sintaxis de `indexeddb-store.ts:2560`. No se han modificado esos archivos; las integraciones que requieren el bundle general siguen pendientes.
+
+
+## 87. Regresiones aisladas del scheduler de visibilidad y ciclo de vida (26 de noviembre de 2026)
+
+**Motivación:** las regresiones previas de `visibilitychange`, `pagehide/pageshow`, `freeze/resume` estaban cubiertas en Chromium, pero se ejecutaban junto a las integraciones que dependen del bundle completo del motor. Cuando persistencia impide compilar dicho bundle, faltaba una señal independiente sobre el scheduler visual.
+
+**Prueba añadida:** `tests/live-author-monitor-visibility.test.mjs` usa targets DOM controlados y un scheduler manual para validar: suspensión y reanudación con visibilidad/ciclo de vida; rechazo de `pageshow/resume` mientras `document.hidden` continúa activo; invalidación de callbacks de intervalos antiguos; transición `pagehide` síncrona durante la instalación del scheduler; rollback si falla el registro parcial de listeners; invalidación de callbacks cuando el scheduler no devuelve cancelación; y limpieza completa incluso si un `removeEventListener` aislado falla.
+
+**CI:** se incluye el archivo en el comando aislado de pruebas junto al núcleo, panel, workspace y pruebas de diagnóstico. No necesita Chromium ni importar el almacenamiento general.
+
+**Validación:** pendiente de GitHub Actions.

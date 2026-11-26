@@ -640,8 +640,10 @@ export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "o
    * las recurrencias se detectan pero su cronología permanece desconocida.
    */
   readonly getOrderedDocumentIds?: (projectId: string) => readonly string[] | undefined;
-  /** Outbox local persistente opcional; requiere ProjectIdentity.writerId estable. */
+  /** Outbox local persistente opcional para las generaciones de continuidad. */
   readonly continuityOutbox?: IndexedDbNarrativeSyncOutbox;
+  /** ID estable y único de esta instalación/replica; distinto del escritor autenticado. */
+  readonly continuityOutboxWriterId?: string;
 }
 
 /**
@@ -662,6 +664,7 @@ export class HostEngineApi {
   private readonly onNarrativeIdeaContinuityIndexUpdated: HostCallbacks["onNarrativeIdeaContinuityIndexUpdated"];
   private readonly getOrderedDocumentIds: HostEngineOptions["getOrderedDocumentIds"];
   private readonly hasNarrativeContinuityOutbox: boolean;
+  private readonly continuityOutboxWriterId: string | undefined;
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
   private continuityIndexTail: Promise<void> = Promise.resolve();
@@ -762,6 +765,18 @@ export class HostEngineApi {
     this.liveMonitorLifecycleWindow?.addEventListener("pageshow", this.onLiveMonitorPageShow);
     this.store = options.store;
     this.liveAuthorMonitor = new LiveAuthorMonitor(options.liveAuthorMonitor);
+    if (options.continuityOutbox &&
+        (typeof options.continuityOutboxWriterId !== "string" ||
+         !options.continuityOutboxWriterId.trim() ||
+         options.continuityOutboxWriterId.length > 256)) {
+      throw new TypeError(
+        "El outbox de continuidad requiere un continuityOutboxWriterId estable y único por instalación."
+      );
+    }
+    if (!options.continuityOutbox && options.continuityOutboxWriterId !== undefined) {
+      throw new TypeError("continuityOutboxWriterId solo se usa junto a continuityOutbox.");
+    }
+    this.continuityOutboxWriterId = options.continuityOutboxWriterId;
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
@@ -775,10 +790,9 @@ export class HostEngineApi {
               operations.push(Promise.resolve(continuityNoticeCallback(notice)));
             }
             if (options.continuityOutbox) {
-              const writerId = this.requireWriterId();
               operations.push(options.continuityOutbox.enqueueContinuityIndex({
                 index: notice.index,
-                writerId,
+                writerId: this.continuityOutboxWriterId!,
                 ...(notice.expectedGeneration !== undefined
                   ? { expectedGeneration: notice.expectedGeneration }
                   : {}),
@@ -4293,10 +4307,6 @@ export class HostEngineApi {
         (identity.writerId !== undefined &&
           (typeof identity.writerId !== "string" || !identity.writerId.trim() || identity.writerId.length > 256))) {
       throw new Error("La identidad del proyecto o del escritor es inválida.");
-    }
-    if (this.hasNarrativeContinuityOutbox &&
-        (typeof identity.writerId !== "string" || !identity.writerId.trim())) {
-      throw new Error("El outbox de continuidad requiere un writerId estable en la identidad del proyecto.");
     }
     this.engine.initializeProject(identity);
     this.unsubscribeNarrativeChanges?.();

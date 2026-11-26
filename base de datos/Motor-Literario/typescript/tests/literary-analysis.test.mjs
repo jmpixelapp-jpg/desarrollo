@@ -201,7 +201,7 @@ test("marca como desconocida la participación en escenas con vínculos de event
 
 test("los vínculos de escena acotan muestras de evidencia sin perder el total", () => {
   const lines = Array.from({ length: 35 }, () => "La puerta se cerró.");
-  const text = ["Escena 1", ...lines].join("\\n");
+  const text = ["Escena 1", ...lines].join(String.fromCharCode(10));
   const evidence = lines.map((line, index) => {
     const start = text.indexOf(line, text.indexOf("Escena 1") + "Escena 1".length + 1 +
       lines.slice(0,index).reduce((sum,item) => sum + item.length + 1,0));

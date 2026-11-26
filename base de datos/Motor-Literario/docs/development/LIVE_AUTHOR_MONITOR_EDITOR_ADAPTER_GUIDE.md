@@ -196,3 +196,16 @@ Al recuperar un checkpoint, sumar el downtime a `idleDurationMs` ya garantiza qu
 En el commit `d728593bd4f9758e85a4b16ce5ab1480d330f4bc`, la CI específica [45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764) aprobó **141/141 pruebas**, con Chromium real, MLDB 0.4.2 y auditoría IndexedDB (25 tablas / 34 almacenes). Se cubren el cambio entre dos capítulos, sus checkpoints independientes, recuperación inmediata y recuperación posterior al cierre.
 
 La suite general [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738) también quedó verde: Type-check, build, **718/718 pruebas** y benchmark completos. Las mediciones de CI no sustituyen el benchmark en el equipo final del autor.
+
+## 9. Clasificación de operaciones para estadísticas
+
+`EditorChange.activityKind` es metadato opcional para enriquecer las métricas; el motor sigue validando y aplicando el delta textual autoritativo.
+
+- `typing`: escritura normal; también se infiere para inserciones simples.
+- `paste`: pegado desde portapapeles; textarea lo reconoce por `InputEvent.inputType` y el editor nativo puede asignarlo.
+- `deletion`: borrado sin texto de reemplazo; también se infiere por el delta.
+- `correction`: reemplazo de un rango por texto; también se infiere cuando el delta elimina e inserta contenido.
+- `undo` / `redo`: únicamente desde la transacción real del historial del editor, nunca desde atajos de teclado.
+- `other`: operación textual no clasificable.
+
+Los seis contadores se conservan en checkpoints versión 1 como campos opcionales compatibles con checkpoints anteriores. Los checkpoints antiguos restauran los nuevos contadores a cero; los nuevos validan que la suma de categorías coincida con las ediciones admitidas. Las métricas no guardan texto del manuscrito.

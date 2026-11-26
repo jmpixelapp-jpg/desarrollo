@@ -13,7 +13,8 @@ export interface LiveAuthorMonitorPanelOptions {
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
 type MetricKey = "session" | "active" | "idle" | "pauses" | "wordsPerMinute" | "charactersPerMinute" |
-  "inserted" | "deleted" | "accepted" | "committed" | "pending" | "failed" |
+  "inserted" | "deleted" | "accepted" | "typing" | "paste" | "deletion" | "correction" |
+  "undo" | "redo" | "committed" | "pending" | "failed" |
   "revision" | "commitP95";
 interface MetricNode { readonly value: HTMLElement; }
 interface PanelNodes {
@@ -38,6 +39,12 @@ const METRICS: readonly MetricDefinition[] = [
   { key: "inserted", label: "Caracteres insertados" },
   { key: "deleted", label: "Caracteres eliminados" },
   { key: "accepted", label: "Ediciones aceptadas" },
+  { key: "typing", label: "Escritura" },
+  { key: "paste", label: "Pegados" },
+  { key: "deletion", label: "Borrados" },
+  { key: "correction", label: "Correcciones" },
+  { key: "undo", label: "Deshacer" },
+  { key: "redo", label: "Rehacer" },
   { key: "committed", label: "Ediciones guardadas" },
   { key: "pending", label: "Ediciones pendientes" },
   { key: "failed", label: "Ediciones fallidas" },
@@ -99,6 +106,12 @@ function formatMetric(
     case "inserted": return integer.format(snapshot.insertedCharacters);
     case "deleted": return integer.format(snapshot.deletedCharacters);
     case "accepted": return integer.format(snapshot.acceptedChanges);
+    case "typing": return integer.format(snapshot.typingChanges);
+    case "paste": return integer.format(snapshot.pasteChanges);
+    case "deletion": return integer.format(snapshot.deletionChanges);
+    case "correction": return integer.format(snapshot.correctionChanges);
+    case "undo": return integer.format(snapshot.undoChanges);
+    case "redo": return integer.format(snapshot.redoChanges);
     case "committed": return integer.format(snapshot.committedChanges);
     case "pending": return integer.format(snapshot.pendingChanges);
     case "failed": return integer.format(snapshot.failedChanges);

@@ -28,6 +28,12 @@ export interface LiveAuthorMonitorSnapshot {
   readonly currentIdleMs: number;
   readonly pauseCount: number;
   readonly acceptedChanges: number;
+  readonly typingChanges: number;
+  readonly pasteChanges: number;
+  readonly deletionChanges: number;
+  readonly correctionChanges: number;
+  readonly undoChanges: number;
+  readonly redoChanges: number;
   readonly rejectedChanges: number;
   readonly committedChanges: number;
   readonly failedChanges: number;
@@ -69,6 +75,12 @@ interface DocumentSession {
   idleDurationMs: number;
   pauseCount: number;
   acceptedChanges: number;
+  typingChanges: number;
+  pasteChanges: number;
+  deletionChanges: number;
+  correctionChanges: number;
+  undoChanges: number;
+  redoChanges: number;
   rejectedChanges: number;
   committedChanges: number;
   failedChanges: number;
@@ -88,6 +100,25 @@ interface DocumentSession {
 }
 
 export type LiveAuthorMonitorListener = (snapshot: LiveAuthorMonitorSnapshot) => void;
+
+function classifyActivityKind(change: EditorChange):
+  "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other" {
+  switch (change.activityKind) {
+    case "typing":
+    case "paste":
+    case "deletion":
+    case "correction":
+    case "undo":
+    case "redo":
+    case "other":
+      return change.activityKind;
+    default:
+      if (change.end > change.start && change.replacement.length > 0) return "correction";
+      if (change.end > change.start) return "deletion";
+      if (change.replacement.length > 0) return "typing";
+      return "other";
+  }
+}
 
 const defaultMonotonicClock = (): number =>
   typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -159,6 +190,12 @@ export class LiveAuthorMonitor {
       idleDurationMs: 0,
       pauseCount: 0,
       acceptedChanges: 0,
+      typingChanges: 0,
+      pasteChanges: 0,
+      deletionChanges: 0,
+      correctionChanges: 0,
+      undoChanges: 0,
+      redoChanges: 0,
       rejectedChanges: 0,
       committedChanges: 0,
       failedChanges: 0,
@@ -210,6 +247,15 @@ export class LiveAuthorMonitor {
     }
 
     session.acceptedChanges++;
+    switch (classifyActivityKind(change)) {
+      case "typing": session.typingChanges++; break;
+      case "paste": session.pasteChanges++; break;
+      case "deletion": session.deletionChanges++; break;
+      case "correction": session.correctionChanges++; break;
+      case "undo": session.undoChanges++; break;
+      case "redo": session.redoChanges++; break;
+      case "other": break;
+    }
     session.insertedCharacters += change.replacement.length;
     session.deletedCharacters += change.end - change.start;
     session.currentDocumentLength += change.replacement.length - (change.end - change.start);
@@ -342,6 +388,12 @@ export class LiveAuthorMonitor {
         : Math.max(0, now - session.lastActivityAt),
       pauseCount: session.pauseCount,
       acceptedChanges: session.acceptedChanges,
+      typingChanges: session.typingChanges,
+      pasteChanges: session.pasteChanges,
+      deletionChanges: session.deletionChanges,
+      correctionChanges: session.correctionChanges,
+      undoChanges: session.undoChanges,
+      redoChanges: session.redoChanges,
       rejectedChanges: session.rejectedChanges,
       committedChanges: session.committedChanges,
       failedChanges: session.failedChanges,
@@ -386,6 +438,12 @@ export class LiveAuthorMonitor {
     }
     const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
     const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
+    const activityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
+      checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges,
+      checkpoint.redoChanges];
+    const hasActivityCounts = activityCounts.some(value => value !== undefined);
+    const validActivityCounts = activityCounts.every(value => value !== undefined && integerNonNegative(value));
+    const activityCountTotal = activityCounts.reduce((sum, value) => sum + (value ?? 0), 0);
     if (!finiteNonNegative(restoredAt) || !finiteNonNegative(checkpoint.savedAt) ||
         restoredAt < checkpoint.savedAt ||
         !finiteNonNegative(checkpoint.sessionDurationMs) ||
@@ -398,6 +456,7 @@ export class LiveAuthorMonitor {
             checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1)) ||
         !integerNonNegative(checkpoint.pauseCount) ||
         !integerNonNegative(checkpoint.acceptedChanges) ||
+        (hasActivityCounts && (!validActivityCounts || activityCountTotal !== checkpoint.acceptedChanges)) ||
         !integerNonNegative(checkpoint.rejectedChanges) ||
         !integerNonNegative(checkpoint.committedChanges) ||
         !integerNonNegative(checkpoint.failedChanges) ||
@@ -449,6 +508,12 @@ export class LiveAuthorMonitor {
       idleDurationMs,
       pauseCount: checkpoint.pauseCount,
       acceptedChanges: checkpoint.acceptedChanges,
+      typingChanges: checkpoint.typingChanges ?? 0,
+      pasteChanges: checkpoint.pasteChanges ?? 0,
+      deletionChanges: checkpoint.deletionChanges ?? 0,
+      correctionChanges: checkpoint.correctionChanges ?? 0,
+      undoChanges: checkpoint.undoChanges ?? 0,
+      redoChanges: checkpoint.redoChanges ?? 0,
       rejectedChanges: checkpoint.rejectedChanges,
       committedChanges: checkpoint.committedChanges,
       failedChanges: checkpoint.failedChanges,
@@ -534,6 +599,12 @@ export class LiveAuthorMonitor {
         : Math.max(0, now - session.lastActivityAt - this.idleAfterMs),
       pauseCount: session.pauseCount,
       acceptedChanges: session.acceptedChanges,
+      typingChanges: session.typingChanges,
+      pasteChanges: session.pasteChanges,
+      deletionChanges: session.deletionChanges,
+      correctionChanges: session.correctionChanges,
+      undoChanges: session.undoChanges,
+      redoChanges: session.redoChanges,
       rejectedChanges: session.rejectedChanges,
       committedChanges: session.committedChanges,
       failedChanges: session.failedChanges,

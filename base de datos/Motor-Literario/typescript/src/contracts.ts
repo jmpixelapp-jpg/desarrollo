@@ -22,6 +22,9 @@ export interface DocumentSnapshot {
   readonly sequence: number;
 }
 
+export type EditorChangeActivityKind =
+  | "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
+
 export interface EditorChange {
   readonly documentId: string;
   readonly sequence: number;
@@ -30,6 +33,8 @@ export interface EditorChange {
   readonly start: number;
   readonly end: number;
   readonly replacement: string;
+  /** Optional operation metadata from native editor events. */
+  readonly activityKind?: EditorChangeActivityKind;
 }
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
@@ -110,6 +115,13 @@ export interface StoredLiveAuthorMonitorCheckpoint {
   readonly lastCommitLatencyMs: number;
   readonly totalCommitLatencyMs: number;
   readonly commitLatencies: readonly number[];
+  /** Optional v1 counters; absent in historic checkpoints means zero. */
+  readonly typingChanges?: number;
+  readonly pasteChanges?: number;
+  readonly deletionChanges?: number;
+  readonly correctionChanges?: number;
+  readonly undoChanges?: number;
+  readonly redoChanges?: number;
 }
 
 /** Lease temporal de titularidad del monitor, con fencing token monotónico por documento. */

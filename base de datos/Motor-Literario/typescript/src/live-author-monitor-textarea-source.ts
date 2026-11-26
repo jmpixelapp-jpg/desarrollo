@@ -223,13 +223,20 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       return;
     }
 
+    const activityKind = before.inputType === "insertFromPaste" ||
+      before.inputType === "insertFromPasteAsQuotation" || before.inputType === "insertFromDrop"
+      ? "paste" as const
+      : before.inputType === "insertReplacementText" || before.inputType === "insertFromYank"
+        ? "correction" as const
+        : before.inputType.startsWith("delete") ? "deletion" as const : undefined;
     const change: EditorChange = Object.freeze({
       documentId: this.documentId,
       sequence: this.sequence + 1,
       baseRevision: this.revision,
       start,
       end,
-      replacement: value.slice(start, start + insertedLength)
+      replacement: value.slice(start, start + insertedLength),
+      ...(activityKind === undefined ? {} : { activityKind })
     });
 
     this.sequence = change.sequence;

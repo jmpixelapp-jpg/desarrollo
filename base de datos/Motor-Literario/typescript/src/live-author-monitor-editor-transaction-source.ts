@@ -393,7 +393,10 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       baseRevision: change.baseRevision,
       start: change.start,
       end: change.end,
-      replacement: change.replacement
+      replacement: change.replacement,
+      ...(transaction.kind === "undo" || transaction.kind === "redo"
+        ? { activityKind: transaction.kind }
+        : change.activityKind === undefined ? {} : { activityKind: change.activityKind })
     });
 
     this.sequence = normalized.sequence;

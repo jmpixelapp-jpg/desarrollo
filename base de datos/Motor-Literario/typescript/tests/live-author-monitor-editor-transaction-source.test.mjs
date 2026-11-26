@@ -84,7 +84,10 @@ test("convierte edición, undo y redo del editor en deltas autoritativos consecu
     start: 3, end: 3, replacement: "!"
   });
 
-  assert.deepEqual(f.changes, [edit.change, undo.change, redo.change]);
+  assert.deepEqual(f.changes.map(({ activityKind, ...change }) => change), [
+    edit.change, undo.change, redo.change
+  ]);
+  assert.deepEqual(f.changes.map(change => change.activityKind), [undefined, "undo", "redo"]);
   assert.deepEqual(f.changes.map(change => [change.sequence, change.baseRevision]), [
     [1, 0], [2, 1], [3, 2]
   ]);

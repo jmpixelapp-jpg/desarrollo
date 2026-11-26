@@ -439,3 +439,52 @@ test("mantiene métricas acotadas tras más de ocho horas y 40.000 cambios en oc
   assert.equal(JSON.stringify(snapshots).includes(privateSentinel), false,
     "los snapshots del monitor no deben retener ni exponer el texto del manuscrito");
 });
+
+test("clasifica escritura, pegado, borrado, corrección, deshacer y rehacer; los conserva al restaurar", () => {
+  let time = 0;
+  const monitor = new LiveAuthorMonitor({ now: () => time });
+  monitor.openDocument({ documentId: "chapter-activity", text: "abcd", revision: 0, sequence: 0 }, "book-activity");
+  const operations = [
+    { activityKind: "typing", start: 4, end: 4, replacement: "x" },
+    { activityKind: "paste", start: 5, end: 5, replacement: "yy" },
+    { activityKind: "deletion", start: 5, end: 6, replacement: "" },
+    { activityKind: "correction", start: 0, end: 1, replacement: "Z" },
+    { activityKind: "undo", start: 0, end: 1, replacement: "" },
+    { activityKind: "redo", start: 0, end: 0, replacement: "Z" }
+  ];
+  operations.forEach((operation, index) => {
+    time += 1;
+    const admission = monitor.recordAdmission({
+      documentId: "chapter-activity",
+      sequence: index + 1,
+      baseRevision: index,
+      ...operation
+    }, { status: "queued", ticketId: "activity-" + index });
+    assert.equal(admission.pendingChanges, 1);
+    monitor.recordCommit({ ticketId: "activity-" + index, status: "applied", revision: index + 1 });
+  });
+
+  const snapshot = monitor.getSnapshot("chapter-activity");
+  assert.equal(snapshot.typingChanges, 1);
+  assert.equal(snapshot.pasteChanges, 1);
+  assert.equal(snapshot.deletionChanges, 1);
+  assert.equal(snapshot.correctionChanges, 1);
+  assert.equal(snapshot.undoChanges, 1);
+  assert.equal(snapshot.redoChanges, 1);
+  assert.equal(snapshot.acceptedChanges,
+    snapshot.typingChanges + snapshot.pasteChanges + snapshot.deletionChanges +
+    snapshot.correctionChanges + snapshot.undoChanges + snapshot.redoChanges);
+
+  const checkpoint = monitor.createCheckpoint("chapter-activity", 100);
+  assert.ok(checkpoint);
+  const restored = new LiveAuthorMonitor({ now: () => 0 });
+  const recovered = restored.restoreCheckpoint(checkpoint, {
+    documentId: "chapter-activity", text: "Zbcdxy", revision: 6, sequence: 6
+  }, "book-activity", 200);
+  assert.equal(recovered.typingChanges, 1);
+  assert.equal(recovered.pasteChanges, 1);
+  assert.equal(recovered.deletionChanges, 1);
+  assert.equal(recovered.correctionChanges, 1);
+  assert.equal(recovered.undoChanges, 1);
+  assert.equal(recovered.redoChanges, 1);
+});

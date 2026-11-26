@@ -139,6 +139,7 @@ test("maneja reemplazo de selección por pegado y conserva longitudes UTF-16", (
   assert.equal(f.changes[0].start, 1);
   assert.equal(f.changes[0].end, 3);
   assert.equal(f.changes[0].replacement, "é");
+  assert.equal(f.changes[0].activityKind, "paste");
   assert.equal(f.source.getState().documentLength, 3);
   f.stop();
   f.source.dispose();

@@ -21,7 +21,8 @@ export interface LiveAuthorMonitorWorkspaceOptions {
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
 
-type CompactMetricKey = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95";
+type CompactMetricKey = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95" |
+  "typing" | "paste" | "deletion" | "correction" | "undo" | "redo";
 interface WorkspaceCard {
   readonly root: HTMLElement;
   readonly heading: HTMLElement;
@@ -39,6 +40,12 @@ interface WorkspaceCard {
 const WORKSPACE_METRICS: readonly { readonly key: CompactMetricKey; readonly label: string }[] = [
   { key: "wordsPerMinute", label: "Palabras/min" },
   { key: "inserted", label: "Caracteres insertados" },
+  { key: "typing", label: "Escritura" },
+  { key: "paste", label: "Pegados" },
+  { key: "deletion", label: "Borrados" },
+  { key: "correction", label: "Correcciones" },
+  { key: "undo", label: "Deshacer" },
+  { key: "redo", label: "Rehacer" },
   { key: "idle", label: "Tiempo en pausa" },
   { key: "pauses", label: "Pausas detectadas" },
   { key: "pending", label: "Pendientes" },
@@ -109,6 +116,12 @@ function metricValue(
   switch (key) {
     case "wordsPerMinute": return decimal.format(snapshot.estimatedWordsPerMinute);
     case "inserted": return integer.format(snapshot.insertedCharacters);
+    case "typing": return integer.format(snapshot.typingChanges);
+    case "paste": return integer.format(snapshot.pasteChanges);
+    case "deletion": return integer.format(snapshot.deletionChanges);
+    case "correction": return integer.format(snapshot.correctionChanges);
+    case "undo": return integer.format(snapshot.undoChanges);
+    case "redo": return integer.format(snapshot.redoChanges);
     case "idle": return formatDuration(snapshot.idleDurationMs);
     case "pauses": return integer.format(snapshot.pauseCount);
     case "pending": return integer.format(snapshot.pendingChanges);

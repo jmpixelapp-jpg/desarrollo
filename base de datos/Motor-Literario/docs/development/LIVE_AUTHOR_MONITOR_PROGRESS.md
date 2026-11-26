@@ -648,3 +648,14 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **Limitaciones de la prueba de soak:** simula el tiempo y el volumen de eventos de forma determinista; verifica límites de las muestras y ausencia de retención del manuscrito en snapshots. No se presenta como una medición de consumo de memoria del navegador ni como una sesión física de ocho horas.
 
 **Validación:** pendiente de GitHub Actions. El workflow vigente también está bloqueado por un error de sintaxis ajeno al monitor en `src/narrative-history.ts` (TS1002); no se modifica ese archivo porque pertenece a trabajo paralelo.
+
+## 10. Entrega — clasificación de actividad de escritura (25 de noviembre de 2026)
+
+- Se añade la clasificación tipada `EditorChange.activityKind`: escritura, pegado, borrado, corrección, deshacer, rehacer y otras operaciones.
+- El adaptador textarea identifica pegado, borrado y algunos tipos de reemplazo desde `InputEvent.inputType`; los editores nativos pueden informar categorías adicionales.
+- El adaptador transaccional conserva explícitamente los tipos reales `undo` y `redo` del historial.
+- El monitor agrega seis contadores por sesión, los presenta en panel y workspace, y los conserva en checkpoints.
+- Los campos nuevos son opcionales en checkpoints v1 antiguos. La validación exige enteros no negativos y que la suma de categorías coincida con los cambios aceptados cuando esos campos están presentes.
+- Se añaden pruebas para las seis categorías, pegado desde textarea, historial nativo y recuperación desde checkpoint.
+
+**Validación:** pendiente de CI. La compilación sigue condicionada por el error TS1002 de `src/narrative-history.ts`, fuera del ámbito de este módulo.

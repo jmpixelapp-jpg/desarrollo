@@ -308,14 +308,14 @@ export function bindLiveAuthorMonitorEditorChanges(
       return;
     }
 
-    // invalid_change, unknown_document, change_too_large y resync_required
-    // no se resuelven liberando capacidad. Pausar evita un FIFO bloqueado.
-    reportAdmission(change, admission);
+    // Primero se marca y desacopla la fuente; onAdmission puede ser reentrante.
+    // Ninguna emisión síncrona del callback debe adelantar al delta rechazado.
     pauseForResynchronization(
       change,
       admission.reason,
       new LiveAuthorMonitorAdmissionResynchronizationError(admission.reason, change.sequence)
     );
+    reportAdmission(change, admission);
   };
 
   const retryPending = (): void => {
@@ -351,13 +351,14 @@ export function bindLiveAuthorMonitorEditorChanges(
           break;
         }
 
-        // Una causa permanente en la cabeza bloquea toda la cola FIFO:
-        // se pausa la fuente y se conserva el backlog hasta un snapshot común.
+        // Pausar y desacoplar antes del callback: un onAdmission reentrante no
+        // debe introducir otra secuencia mientras la cabeza FIFO exige snapshot.
         pauseForResynchronization(
           change,
           admission.reason,
           new LiveAuthorMonitorAdmissionResynchronizationError(admission.reason, change.sequence)
         );
+        reportAdmission(change, admission);
         break;
       }
     } finally {

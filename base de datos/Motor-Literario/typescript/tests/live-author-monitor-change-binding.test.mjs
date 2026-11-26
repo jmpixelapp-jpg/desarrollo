@@ -788,3 +788,74 @@ test("un rechazo permanente durante retryPending pausa y conserva todo el backlo
   assert.equal(f.listeners.size, 1);
   stop();
 });
+
+
+test("un onAdmission reentrante no puede adelantar cambios a un rechazo permanente inicial", () => {
+  const f = sourceFixture();
+  const attempts = [];
+  let emitFromAdmission = false;
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        return value.sequence === 1
+          ? { status: "rejected", reason: "invalid_change" }
+          : { status: "queued", ticketId: "ticket-" + value.sequence };
+      }
+    },
+    onAdmission(_value, admission) {
+      if (emitFromAdmission && admission.status === "rejected") f.emit(change(2));
+    },
+    onError: () => {}
+  });
+
+  emitFromAdmission = true;
+  f.emit(change(1));
+  assert.deepEqual(attempts, [1], "la fuente se desacopla antes de llamar al callback reentrante");
+  assert.equal(stop.getPendingChanges().length, 0);
+  assert.equal(f.listeners.size, 0);
+  stop.discardPendingAfterResynchronization();
+  f.emit(change(3));
+  assert.deepEqual(attempts, [1, 3]);
+  stop();
+});
+
+test("un onAdmission reentrante no puede adelantar cambios al rechazo permanente durante retryPending", () => {
+  const f = sourceFixture();
+  const attempts = [];
+  const admissions = [];
+  let capacity = false;
+  let emitFromAdmission = false;
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        if (!capacity) return { status: "rejected", reason: "queue_full" };
+        return { status: "rejected", reason: "unknown_document" };
+      }
+    },
+    onAdmission(_value, admission) {
+      admissions.push(admission);
+      if (emitFromAdmission && admission.status === "rejected" &&
+          admission.reason === "unknown_document") f.emit(change(3));
+    },
+    onError: () => {}
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  capacity = true;
+  emitFromAdmission = true;
+  stop.retryPending();
+  assert.deepEqual(attempts, [1, 1]);
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1, 2]);
+  assert.equal(f.listeners.size, 0, "la fuente ya está pausada cuando se ejecuta onAdmission");
+  assert.equal(admissions.at(-1).reason, "unknown_document");
+
+  stop.discardPendingAfterResynchronization();
+  f.emit(change(4));
+  assert.deepEqual(attempts, [1, 1, 4]);
+  stop();
+});

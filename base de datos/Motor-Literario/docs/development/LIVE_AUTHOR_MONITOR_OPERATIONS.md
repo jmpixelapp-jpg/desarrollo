@@ -414,3 +414,10 @@ La cola externa distingue el único rechazo transitorio de capacidad (`queue_ful
 Estos rechazos detienen la captura de la fuente y publican un estado `resync-required` con el motivo real y `resyncSequence`. No se reintentan automáticamente ni se permite que deltas posteriores adelanten al rechazado. Si ya existía backlog, se conserva íntegro y en orden. La cola solo se limpia después de que el anfitrión haya reconciliado editor y motor con el mismo snapshot autoritativo.
 
 `overflowSequence` se reserva para el caso distinto en que el buffer alcanza su límite. `LiveAuthorMonitorAdmissionResynchronizationError` identifica los rechazos permanentes sin incluir texto del manuscrito. La regresión de admisión inicial cubre las cuatro causas; otra prueba cubre el mismo rechazo al reintentar la cabeza de una cola FIFO.
+
+
+## 23. Orden de pausa y callbacks reentrantes
+
+Al producirse un rechazo permanente, el binding primero marca `resync-required`, solicita la reconciliación y desacopla la fuente; después notifica `onAdmission`. Este orden es intencional porque los callbacks de observabilidad pueden emitir o causar trabajo síncrono. Si la notificación ocurriera antes de pausar, un nuevo delta podría adelantarse a la secuencia que exige un snapshot común.
+
+La misma regla se aplica cuando el rechazo aparece al reintentar la cabeza FIFO. Las pruebas reentrantes comprueban que una emisión disparada desde `onAdmission` no llega al sink mientras la fuente está pausada.

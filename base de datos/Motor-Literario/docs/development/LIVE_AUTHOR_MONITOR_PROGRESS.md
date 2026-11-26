@@ -1152,3 +1152,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Validación:** pendiente de CI para este commit. La validación general del commit `eebb84d` pasó type-check, build, suite y benchmark; la lane específica del monitor también aprobó su suite y benchmark en [run 45751188342](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188342).
 
 **Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+
+## 67. Pausa antes de notificar rechazos para evitar reentrancia del editor (26 de noviembre de 2026)
+
+**Hallazgo:** al recibir un rechazo permanente, el binding notificaba primero `onAdmission` y pausaba la fuente después. Un callback de observabilidad podía provocar una emisión síncrona de la fuente antes de que se activara `resyncRequired`; esa nueva edición podía admitirse detrás de la secuencia rechazada, violando el orden de captura.
+
+**Corrección:** la transición a `resync-required` y la desuscripción de la fuente ocurren antes de ejecutar `onAdmission`, tanto en la primera admisión como durante `retryPending()`. El callback conserva su notificación, pero ya no puede introducir eventos en el stream pausado.
+
+**Regresiones:** dos pruebas fuerzan emisiones reentrantes desde `onAdmission`: una para el rechazo inicial y otra para el rechazo permanente de la cabeza FIFO durante el reintento. Ambas comprueban que no se intenta admitir la secuencia reentrante y que la fuente se reactiva solo después del snapshot común.
+
+**Validación:** pendiente de CI para el commit que incorpore esta corrección.

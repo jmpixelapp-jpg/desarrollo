@@ -616,7 +616,7 @@ export interface HostCallbacks {
   /**
    * Se emite automáticamente tras reconciliar el índice. El anfitrión puede
    * insertar aquí la envoltura en su outbox de transporte; debe deduplicar por
-   * projectId + index.generation. Se re-emite en reconciliaciones idempotentes.
+   * projectId + index.generation. Solo se emite al confirmar una generación nueva.
    */
   readonly onNarrativeIdeaContinuityIndexUpdated?: (
     notice: NarrativeIdeaContinuityIndexUpdateNotice

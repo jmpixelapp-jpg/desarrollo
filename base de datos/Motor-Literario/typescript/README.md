@@ -6,6 +6,8 @@ Esta carpeta contiene la implementación definitiva en TypeScript. El código Ru
 
 **Seguimiento del análisis literario:** consulte el [estado de análisis literario e inteligencia narrativa](../docs/analysis/ESTADO_ANALISIS_LITERARIO_E_INTELIGENCIA_NARRATIVA.md), que registra alcance, contratos, límites, pruebas y pendientes.
 
+**Protocolo de sincronización:** consulte el [contrato de sobres v1](../docs/architecture/PROTOCOLO_SOBRES_SINCRONIZACION_NARRATIVA_V1.md), con identidad de dispositivo, secuencias, huella SHA-256 y validación de lotes.
+
 ## Principios
 
 - Sin motores lingüísticos, correctores, servicios ni bibliotecas de terceros en tiempo de ejecución.

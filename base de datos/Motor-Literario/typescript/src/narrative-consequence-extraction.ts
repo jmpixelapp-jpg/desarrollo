@@ -94,6 +94,8 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
         event.characterParticipantEntityIds.some(id =>
           typeof id !== "string" || !id.trim() || !event.participantEntityIds.includes(id)
         ) ||
+        new Set(event.participantEntityIds).size !== event.participantEntityIds.length ||
+        new Set(event.characterParticipantEntityIds).size !== event.characterParticipantEntityIds.length ||
         !event.evidence || event.projectId !== input.projectId ||
         event.evidence.documentId !== input.documentId ||
         event.evidence.revision !== input.revision ||

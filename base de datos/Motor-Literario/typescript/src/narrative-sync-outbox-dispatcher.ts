@@ -2,23 +2,15 @@ import {
   createNarrativeSyncOperationEnvelope,
   type NarrativeSyncOperationEnvelope
 } from "./narrative-sync-integrity";
-import type { StoredSyncOperation } from "./contracts";
+import type { StoredSyncOperation, SyncOperationAcknowledgement } from "./contracts";
 
 export interface NarrativeSyncOutboxStore {
   loadPendingSyncOperations(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
   recordSyncOperationAttempt(operationId: string, attemptedAt: number, errorCode?: string): Promise<boolean>;
-  acknowledgeSyncOperation(operationId: string): Promise<boolean>;
+  acknowledgeSyncOperation(acknowledgement: NarrativeSyncRemoteAcknowledgement): Promise<boolean>;
 }
 
-export interface NarrativeSyncRemoteAcknowledgement {
-  readonly status: "accepted" | "duplicate";
-  readonly durable: true;
-  readonly projectId: string;
-  readonly operationId: string;
-  readonly writerId: string;
-  readonly sequence: number;
-  readonly digest: string;
-}
+export type NarrativeSyncRemoteAcknowledgement = SyncOperationAcknowledgement;
 
 export interface NarrativeSyncOutboxTransport {
   send(operation: NarrativeSyncOperationEnvelope): Promise<NarrativeSyncRemoteAcknowledgement>;
@@ -152,7 +144,7 @@ export async function dispatchPendingNarrativeSyncOperations(
         return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "operation-no-longer-pending" };
       }
       let acknowledged: boolean;
-      try { acknowledged = await options.store.acknowledgeSyncOperation(stored.operationId); }
+      try { acknowledged = await options.store.acknowledgeSyncOperation(acknowledgement); }
       catch { return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "local-acknowledgement-failed" }; }
       if (!acknowledged) {
         return { processed, remaining: pending.length - processed, hasMore: pending.length === batchSize, stoppedAtOperationId: stored.operationId, failure: "local-acknowledgement-failed" };

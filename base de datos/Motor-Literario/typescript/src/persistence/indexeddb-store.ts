@@ -1,4 +1,5 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, StoredSyncOperation, SyncOperationDraft, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry, NarrativeReferenceRepairPendingEntry } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, StoredSyncOperation, SyncOperationDraft, SyncOperationAcknowledgement, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry, NarrativeReferenceRepairPendingEntry } from "../contracts";
+import { createNarrativeSyncOperationEnvelope } from "../narrative-sync-integrity";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -6496,27 +6497,91 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
   }
 
-  /** Elimina una operación solo cuando el anfitrión confirma un acuse remoto durable. */
-  async acknowledgeSyncOperation(operationId: string): Promise<boolean> {
-    if (typeof operationId !== "string" || !operationId.trim()) {
-      throw new TypeError("Se requiere operationId para confirmar la sincronización.");
+  /**
+   * Retira una operación solo si el acuse remoto coincide con el sobre SHA-256
+   * reconstruido desde la outbox. La verificación criptográfica ocurre fuera
+   * de la transacción; dentro de la transacción se compara otra vez el registro
+   * estable para impedir borrar una versión distinta tras una carrera.
+   */
+  async acknowledgeSyncOperation(
+    acknowledgement: SyncOperationAcknowledgement
+  ): Promise<boolean> {
+    if (!acknowledgement || typeof acknowledgement !== "object" ||
+        (acknowledgement.status !== "accepted" && acknowledgement.status !== "duplicate") ||
+        acknowledgement.durable !== true ||
+        typeof acknowledgement.projectId !== "string" || !acknowledgement.projectId.trim() ||
+        typeof acknowledgement.operationId !== "string" || !acknowledgement.operationId.trim() ||
+        typeof acknowledgement.writerId !== "string" || !acknowledgement.writerId.trim() ||
+        !Number.isSafeInteger(acknowledgement.sequence) || acknowledgement.sequence < 1 ||
+        typeof acknowledgement.digest !== "string" ||
+        !/^sha256:[a-f0-9]{64}$/u.test(acknowledgement.digest)) {
+      return false;
     }
+
     const db = await this.open();
+    const snapshotTransaction = db.transaction(SYNC_OUTBOX, "readonly");
+    const snapshot = await readAfterTransaction(
+      snapshotTransaction,
+      snapshotTransaction.objectStore(SYNC_OUTBOX).get(acknowledgement.operationId),
+      "No se pudo leer la operación antes de validar el acuse remoto."
+    ) as StoredSyncOperation | undefined;
+    if (!snapshot) return false;
+
+    const normalizedSnapshot = normalizeSyncOperation(snapshot);
+    if (normalizedSnapshot.projectId !== acknowledgement.projectId ||
+        normalizedSnapshot.operationId !== acknowledgement.operationId ||
+        normalizedSnapshot.deviceId !== acknowledgement.writerId ||
+        normalizedSnapshot.sequence !== acknowledgement.sequence) {
+      return false;
+    }
+
+    const envelope = await createNarrativeSyncOperationEnvelope({
+      operationId: normalizedSnapshot.operationId,
+      projectId: normalizedSnapshot.projectId,
+      writerId: normalizedSnapshot.deviceId,
+      sequence: normalizedSnapshot.sequence,
+      createdAt: normalizedSnapshot.createdAt,
+      kind: normalizedSnapshot.kind,
+      payload: JSON.parse(normalizedSnapshot.payload) as unknown
+    });
+    if (envelope.digest !== acknowledgement.digest) return false;
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
-      const store = transaction.objectStore(SYNC_OUTBOX);
-      let found = false;
-      const request = store.get(operationId);
+      const outbox = transaction.objectStore(SYNC_OUTBOX);
+      let removed = false;
+      let validationError: Error | undefined;
+      const request = outbox.get(acknowledgement.operationId);
       request.onsuccess = () => {
-        found = request.result !== undefined;
-        if (found) store.delete(operationId);
+        const current = request.result as StoredSyncOperation | undefined;
+        if (!current) return;
+        try {
+          const normalizedCurrent = normalizeSyncOperation(current);
+          const sameOperation =
+            syncOperationFingerprint(normalizedCurrent) ===
+            syncOperationFingerprint(normalizedSnapshot);
+          const sameAcknowledgement =
+            normalizedCurrent.projectId === acknowledgement.projectId &&
+            normalizedCurrent.operationId === acknowledgement.operationId &&
+            normalizedCurrent.deviceId === acknowledgement.writerId &&
+            normalizedCurrent.sequence === acknowledgement.sequence;
+          if (!sameOperation || !sameAcknowledgement) return;
+          outbox.delete(acknowledgement.operationId);
+          removed = true;
+        } catch (error) {
+          validationError = error instanceof Error
+            ? error
+            : new Error("La operación pendiente cambió durante la confirmación.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        }
       };
       request.onerror = () => {
+        validationError = request.error ?? new Error("No se pudo revalidar la operación pendiente.");
         try { transaction.abort(); } catch { /* transacción ya abortada */ }
       };
-      transaction.oncomplete = () => resolve(found);
-      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo confirmar la operación."));
-      transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la confirmación de sincronización."));
+      transaction.oncomplete = () => resolve(removed);
+      transaction.onerror = () => reject(validationError ?? transaction.error ?? new Error("No se pudo confirmar la operación."));
+      transaction.onabort = () => reject(validationError ?? transaction.error ?? new Error("Se abortó la confirmación de sincronización."));
     });
   }
 

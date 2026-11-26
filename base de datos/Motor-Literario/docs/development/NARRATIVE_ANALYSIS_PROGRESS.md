@@ -606,3 +606,12 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - El handler entrante de biblioteca se habilita únicamente cuando el anfitrión proporciona un resolvedor del escritor autenticado; compara cada entrada, el conjunto exacto de IDs y el recibo durable. No toma `writerId` del sobre del dispositivo como identidad personal.
 - El despachador saliente entrega al menos una vez, conserva pendientes ante errores de transporte y retira solo tras un acuse durable exacto. SHA-256 aporta integridad de la envoltura, no autenticación.
 - La validación remota completa sigue dependiendo de un servidor y transporte aportados por el anfitrión. No están incluidos la descarga incremental, el protocolo de sesión/credenciales del servicio remoto ni la resolución automática de conflictos editoriales entre dispositivos.
+
+
+## Acuse remoto vinculado al contenido exacto de outbox (26 de noviembre de 2026)
+
+El contrato de retirada ya no acepta únicamente un `operationId`. Recibe un acuse remoto que declara estado durable y enlaza proyecto, operación, dispositivo/escritor, secuencia y digest SHA-256. El store reconstruye el sobre desde el contenido pendiente y compara el digest antes de retirar el registro.
+
+La comprobación criptográfica se realiza antes de abrir la transacción de escritura para no mantener IndexedDB activo durante Web Crypto. Después, la transacción vuelve a leer la operación y compara su identidad estable con la instantánea verificada. Si el payload cambió entre el envío y el acuse, el acuse pertenece a otro proyecto/dispositivo/secuencia, no es durable o el digest no coincide, la operación permanece en la outbox.
+
+Se añadieron regresiones para acuses con identidad/digest incorrectos, acuses no durables, repetición del mismo acuse y contenido local alterado después del envío. Esto fortalece el borrado local condicionado al acuse, pero no autentica por sí solo al servidor: el transporte del anfitrión debe validar TLS, identidad y autorización, y el servidor debe conservar su deduplicación durable por operación.

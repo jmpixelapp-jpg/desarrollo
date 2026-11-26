@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
-const { IndexedDbProjectStore, HostEngineApi, dispatchPendingNarrativeSyncOperations } = await import("../dist/motor-literario.js");
+const { IndexedDbProjectStore, HostEngineApi, dispatchPendingNarrativeSyncOperations, createNarrativeSyncOperationEnvelope } = await import("../dist/motor-literario.js");
 
 const operation = (overrides = {}) => ({
   operationId: "op-1",
@@ -243,10 +243,35 @@ test("el acuse elimina únicamente la operación confirmada y valida el payload"
     /objeto JSON/
   );
 
-  await store.enqueueSyncOperation(operation({ operationId: "op-3", projectId: "project-d", deviceId: "device-c" }));
-  assert.equal(await store.acknowledgeSyncOperation("op-3"), true);
+  const pendingOperation = operation({ operationId: "op-3", projectId: "project-d", deviceId: "device-c" });
+  await store.enqueueSyncOperation(pendingOperation);
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: pendingOperation.operationId,
+    projectId: pendingOperation.projectId,
+    writerId: pendingOperation.deviceId,
+    sequence: pendingOperation.sequence,
+    createdAt: pendingOperation.createdAt,
+    kind: pendingOperation.kind,
+    payload: JSON.parse(pendingOperation.payload)
+  });
+  const acknowledgement = {
+    status: "accepted", durable: true, projectId: envelope.projectId,
+    operationId: envelope.operationId, writerId: envelope.writerId,
+    sequence: envelope.sequence, digest: envelope.digest
+  };
+  assert.equal(await store.acknowledgeSyncOperation({
+    ...acknowledgement, projectId: "other-project"
+  }), false);
+  assert.equal(await store.acknowledgeSyncOperation({
+    ...acknowledgement, durable: false
+  }), false);
+  assert.equal(await store.acknowledgeSyncOperation({
+    ...acknowledgement, digest: "sha256:" + "0".repeat(64)
+  }), false);
+  assert.equal((await store.loadPendingSyncOperations("project-d")).length, 1);
+  assert.equal(await store.acknowledgeSyncOperation(acknowledgement), true);
   assert.equal(await store.loadLastSyncOperationSequence("project-d", "device-c"), 1);
-  assert.equal(await store.acknowledgeSyncOperation("op-3"), false);
+  assert.equal(await store.acknowledgeSyncOperation(acknowledgement), false);
   assert.deepEqual(await store.loadPendingSyncOperations("project-d"), []);
   await assert.rejects(
     store.enqueueSyncOperation(operation({ operationId: "op-4", projectId: "project-d", deviceId: "device-c" })),
@@ -372,4 +397,56 @@ test("el CAS de entidad y su outbox se confirman juntos y una colisión revierte
   assert.deepEqual(pending.map(item => item.operationId).sort(), [
     "entity-outbox-collision", "entity-outbox-op-1"
   ]);
+});
+
+
+test("el acuse no elimina una operación si el contenido local cambió después del envío", async () => {
+  const store = new IndexedDbProjectStore();
+  const pendingOperation = operation({
+    operationId: "ack-stale-content",
+    projectId: "ack-stale-project",
+    deviceId: "ack-stale-device"
+  });
+  await store.enqueueSyncOperation(pendingOperation);
+  const sentEnvelope = await createNarrativeSyncOperationEnvelope({
+    operationId: pendingOperation.operationId,
+    projectId: pendingOperation.projectId,
+    writerId: pendingOperation.deviceId,
+    sequence: pendingOperation.sequence,
+    createdAt: pendingOperation.createdAt,
+    kind: pendingOperation.kind,
+    payload: JSON.parse(pendingOperation.payload)
+  });
+  const acknowledgement = {
+    status: "accepted", durable: true, projectId: sentEnvelope.projectId,
+    operationId: sentEnvelope.operationId, writerId: sentEnvelope.writerId,
+    sequence: sentEnvelope.sequence, digest: sentEnvelope.digest
+  };
+
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open("motor-literario-local");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction("sync-outbox", "readwrite");
+    const outbox = transaction.objectStore("sync-outbox");
+    const request = outbox.get(pendingOperation.operationId);
+    request.onsuccess = () => outbox.put({
+      ...request.result,
+      payload: JSON.stringify({ recordId: "different-content", revision: 99 })
+    });
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+  database.close();
+
+  assert.equal(await store.acknowledgeSyncOperation(acknowledgement), false);
+  const [stillPending] = await store.loadPendingSyncOperations(pendingOperation.projectId);
+  assert.equal(stillPending.operationId, pendingOperation.operationId);
+  assert.deepEqual(JSON.parse(stillPending.payload), {
+    recordId: "different-content", revision: 99
+  });
 });

@@ -109,6 +109,18 @@ export interface StoredSyncOperation {
   readonly lastErrorCode?: string;
 }
 
+/** Acuse remoto durable ligado a la identidad exacta de una operación enviada. */
+export interface SyncOperationAcknowledgement {
+  readonly status: "accepted" | "duplicate";
+  readonly durable: true;
+  readonly projectId: string;
+  readonly operationId: string;
+  /** En el protocolo saliente, writerId identifica el stream del dispositivo. */
+  readonly writerId: string;
+  readonly sequence: number;
+  readonly digest: string;
+}
+
 export interface StoredDocument extends DocumentSnapshot {
   readonly projectId: string;
   readonly updatedAt: number;
@@ -341,8 +353,11 @@ export interface ProjectStore {
   loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
   /** Persiste metadatos de reintento sin guardar texto del error ni datos sensibles. */
   recordSyncOperationAttempt?(operationId: string, attemptedAt: number, errorCode?: string): Promise<boolean>;
-  /** Retira solo una operación confirmada por un acuse remoto durable validado. */
-  acknowledgeSyncOperation?(operationId: string): Promise<boolean>;
+  /**
+   * Retira una operación solo si el acuse durable coincide con el sobre SHA-256
+   * reconstruido desde el registro que sigue pendiente.
+   */
+  acknowledgeSyncOperation?(acknowledgement: SyncOperationAcknowledgement): Promise<boolean>;
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;
   /** Obligatorio: lee snapshot y journal desde una misma vista transaccional consistente. */

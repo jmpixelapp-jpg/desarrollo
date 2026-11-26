@@ -632,3 +632,33 @@ test("una propuesta local nueva no sobrescribe ni retira la operación que origi
     await deleteDatabase();
   }
 });
+
+
+test("dos instancias IndexedDB no pueden asignar la misma secuencia al mismo dispositivo", async () => {
+  await deleteDatabase();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  try {
+    const first = operation({
+      operationId: "op-sequence-race-a", deviceId: "shared-device",
+      sequence: 7, payload: JSON.stringify({ writer: "tab-a" })
+    });
+    const second = operation({
+      operationId: "op-sequence-race-b", deviceId: "shared-device",
+      sequence: 7, payload: JSON.stringify({ writer: "tab-b" })
+    });
+    const results = await Promise.allSettled([
+      firstStore.enqueueSyncOperation(first),
+      secondStore.enqueueSyncOperation(second)
+    ]);
+    assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+    assert.equal(results.filter(result => result.status === "rejected").length, 1);
+    const pending = await firstStore.loadPendingSyncOperations(first.projectId);
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].deviceId, "shared-device");
+    assert.equal(pending[0].sequence, 7);
+  } finally {
+    await Promise.all([firstStore.close(), secondStore.close()]);
+    await deleteDatabase();
+  }
+});

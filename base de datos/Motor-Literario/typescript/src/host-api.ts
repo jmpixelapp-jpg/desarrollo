@@ -49,7 +49,8 @@ export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
 function requireProjectScopedRecords<T extends { readonly projectId: string; readonly id: string }>(
   records: readonly T[],
   projectId: string,
-  collection: string
+  collection: string,
+  options: { readonly allowLegacyIdeaGraph?: boolean } = {}
 ): readonly T[] {
   if (!Array.isArray(records)) {
     throw new Error(`El almacenamiento devolvió una colección inválida para ${collection}.`);
@@ -62,7 +63,7 @@ function requireProjectScopedRecords<T extends { readonly projectId: string; rea
     if (typeof record.id !== "string" || !record.id.trim() || recordIds.has(record.id)) {
       throw new Error(`Integridad narrativa: ${collection} contiene un identificador vacío o duplicado.`);
     }
-    requireNarrativeRecordShape(record, collection);
+    requireNarrativeRecordShape(record, collection, options);
     recordIds.add(record.id);
   }
   if (collection === "entidades") {
@@ -118,7 +119,11 @@ function validateEventLifecycleHistory(
 }
 
 /** Valida la forma de los registros recibidos de cualquier adaptador, no solo IndexedDB. */
-function requireNarrativeRecordShape(record: unknown, collection: string): void {
+function requireNarrativeRecordShape(
+  record: unknown,
+  collection: string,
+  options: { readonly allowLegacyIdeaGraph?: boolean } = {}
+): void {
   if (!record || typeof record !== "object") {
     throw new Error(`Integridad narrativa: registro inválido en ${collection}.`);
   }
@@ -160,22 +165,35 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
         typeof item.originDocumentId !== "string" || !item.originDocumentId.trim() ||
         typeof item.sourceProjectName !== "string" || !item.sourceProjectName.trim() ||
         !validEvidence(item.evidence)) invalid();
+    const allowLegacyIdeaGraph = options.allowLegacyIdeaGraph === true;
     for (const links of [item.relatedEntityIds, item.relatedIdeaIds]) {
       if (links !== undefined && (!Array.isArray(links) ||
-          links.length > 20_000 ||
-          links.some((value: unknown) => typeof value !== "string" || !value.trim()))) invalid();
+          links.length > (allowLegacyIdeaGraph ? 20_000 : MAX_NARRATIVE_IDEA_REFERENCES) ||
+          links.some((value: unknown) => typeof value !== "string" || !value.trim()) ||
+          (!allowLegacyIdeaGraph && new Set(links).size !== links.length))) invalid();
     }
-    // Los catálogos leídos pueden contener ciclos y aristas repetidas importadas.
-    // La escritura nueva mantiene las restricciones del adaptador de persistencia.
+    if (!allowLegacyIdeaGraph && item.relatedIdeaIds?.includes(item.id)) invalid();
     if (item.statusHistory !== undefined) {
-      if (!Array.isArray(item.statusHistory)) invalid();
-      for (const change of item.statusHistory) {
+      if (!Array.isArray(item.statusHistory) ||
+          (!allowLegacyIdeaGraph && item.statusHistory.length === 0)) invalid();
+      let previousChangedAt: number | undefined;
+      for (let index = 0; index < item.statusHistory.length; index++) {
+        const change = item.statusHistory[index];
         if (!change || !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
             (change.reason === "text-revised" && change.status !== "IDEA") ||
             (change.changedAt !== undefined &&
-              (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0))) invalid();
+              (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
+            (!allowLegacyIdeaGraph && (
+              (index === 0 ? change.reason !== "initial" :
+                change.reason === "initial" || change.status === item.statusHistory[index - 1]?.status) ||
+              (change.changedAt !== undefined && previousChangedAt !== undefined &&
+                change.changedAt < previousChangedAt)
+            ))) invalid();
+        if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
       }
+      if (!allowLegacyIdeaGraph &&
+          item.statusHistory[item.statusHistory.length - 1]?.status !== item.status) invalid();
     }
   } else if (collection === "afirmaciones") {
     if (typeof item.entityId !== "string" || !item.entityId.trim() ||
@@ -1593,7 +1611,7 @@ export class HostEngineApi {
     });
     const projectIdeaCatalogAvailable = Boolean(this.store.loadIdeas);
     const projectIdeas = projectIdeaCatalogAvailable
-      ? await this.getNarrativeIdeas()
+      ? await this.getNarrativeIdeas({ allowLegacyGraph: true })
       : [];
     // Mantiene el mismo desempate Unicode que el analizador antes de aplicar el límite de 2.000.
     const orderedProjectIdeas = [...projectIdeas].sort((left,right) => {
@@ -2995,14 +3013,27 @@ export class HostEngineApi {
       const projectId = this.requireProject().projectId;
       if (!this.ideasLoaded) {
         const loaded = requireProjectScopedRecords(
-          await this.requireIdeaReaderStore().loadIdeas(projectId), projectId, "ideas"
+          await this.requireIdeaReaderStore().loadIdeas(projectId),
+          projectId,
+          "ideas",
+          { allowLegacyIdeaGraph: options.allowLegacyGraph === true }
         );
         for (const idea of loaded) this.narrativeIdeas.set(idea.id, idea);
         this.ideasLoaded = true;
       }
 
       const ideas = [...this.narrativeIdeas.values()];
-      if (ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
+      // Una carga histórica permisiva nunca relaja las consultas estrictas posteriores.
+      for (const idea of ideas) {
+        if (!idea || idea.projectId !== projectId || typeof idea.id !== "string" || !idea.id.trim()) {
+          throw new Error("Violación de aislamiento: ideas contiene un registro ajeno al proyecto activo.");
+        }
+        requireNarrativeRecordShape(idea, "ideas", {
+          allowLegacyIdeaGraph: options.allowLegacyGraph === true
+        });
+      }
+      if (options.allowLegacyGraph !== true &&
+          ideas.some(idea => (idea.relatedEntityIds?.length ?? 0) > 0)) {
         if (!this.store.loadEntities) {
           throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
         }

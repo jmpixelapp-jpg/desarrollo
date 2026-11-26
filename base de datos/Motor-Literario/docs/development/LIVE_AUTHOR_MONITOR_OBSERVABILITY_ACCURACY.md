@@ -178,3 +178,14 @@ La longitud y los rangos siguen expresados en unidades UTF-16, no en grafemas o 
 Para producir una métrica exacta de composición confirmada hace falta un contrato de grupo con identidad de composición, rango inicial, actualizaciones provisionales y resultado final (commit/cancel). Ese cierre debe proceder del editor anfitrión o de una secuencia nativa validada; no se debe deducir solo de un temporizador ni de un `compositionend` aislado.
 
 **Evidencia Chromium:** `tests/live-author-monitor-ime-composition-browser.test.mjs` usa CDP para aplicar dos candidatos y cancelar. Las actualizaciones `compositionstart/update/beforeinput/input` se observaron confiables; el `compositionend` producido por CDP llegó con `isTrusted=false`, por lo que la fuente suspende y exige snapshot. Esto valida la política conservadora, no un IME físico del sistema operativo.
+## 12. Procedencia nativa inputType y traza manual v3
+
+`EditorChange.inputType` conserva el identificador exacto de `InputEvent.inputType` cuando existe. Está limitado a 128 caracteres y rechaza caracteres de control. Es un identificador de operación que declara el navegador, no una prueba de intención ni de teclado físico: `insertText` puede proceder de distintas formas de entrada; `insertFromDictation`, `insertFromDrop` y `insertFromYank` no se clasifican como escritura manual ni como pegado sin evidencia adicional.
+
+La fuente textarea emite además la categoría agregada `activityKind` solo cuando el `inputType` permite una clasificación conservadora. Si está vacío o ausente, el textarea suspende y pide snapshot porque no puede validar con seguridad si fue una inserción o eliminación. Un proveedor transaccional puede entregar un delta exacto sin `activityKind`, pero la cobertura de unidades se marca parcial.
+
+El adaptador transaccional conserva `inputType` en su cambio inmutable y lo incluye en la firma de deduplicación. Reutilizar un mismo `transactionId` con otro `inputType` se trata como identidad de transacción reutilizada, no como retransmisión idéntica.
+
+`inputType` no lleva `InputEvent.data` ni texto del manuscrito. No se escribe en checkpoints, snapshots ni diagnósticos persistentes. La página local de prueba puede incluirlo en el informe descargable por el usuario: el formato se elevó a `live-author-monitor-ime-trace-v3`; cada delta exporta categoría y `inputType`, mientras que `InputEvent.data` se representa únicamente mediante su longitud UTF-16. El informe sigue excluyendo texto, candidatos IME, contenido tecleado y cargas de eventos.
+
+Esta evidencia local permite comparar `beforeinput`/`input`, tipos nativos y deltas aplicados por navegador/SO sin registrar el manuscrito. No reemplaza el test con IME físico del sistema operativo ni la conexión al editor enriquecido de producción.

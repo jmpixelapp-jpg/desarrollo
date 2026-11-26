@@ -621,3 +621,12 @@ La validación general posterior del HEAD actual falla por una aserción de `tes
 
 
 **Validación del estrés FIFO:** [run 45759874190](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759874190) terminó con todos los pasos aprobados. La suite aislada terminó en 162/162; la suite host/editor/browser, en 168/168. La regresión de 1.000 publicaciones reentrantes pasó en ambos comandos. También pasaron el build de runtime, type-check, auditoría MLDB y Page Lifecycle/IndexedDB en Chromium. El benchmark registró 100.000 commits en 655,47 ms, heap estable de 4,39 MiB y cero pendientes.
+
+
+## 54. Recuperaciones sucesivas y continuidad de una sesión
+
+Un takeover puede ocurrir más de una vez durante la vida de un documento. Cada restauración debe partir de un checkpoint cuyo revision, sequence y currentDocumentLength coincidan exactamente con el snapshot durable del motor. La sesión conserva su sessionId, contadores acumulados, clasificación de cambios y ventana acotada de latencias. No se reconstituyen tickets pendientes: los checkpoints solo se crean cuando todas las admisiones están durables.
+
+En cada recuperación, restoredAt - savedAt se añade una única vez a sessionDurationMs e idleDurationMs; nunca a activeDurationMs. El checkpoint siguiente registra el nuevo total, de modo que la siguiente instancia suma únicamente el intervalo desde ese checkpoint y no vuelve a contabilizar interrupciones previas. La primera edición posterior al takeover debe continuar desde la secuencia y revisión durables, y puede incrementar pauseCount si el último evento supera idleAfterMs.
+
+La regresión "encadena dos recuperaciones tras cierres abruptos sin duplicar métricas ni tiempo inactivo" cubre tres instancias consecutivas, dos intervalos de recuperación, una nueva edición entre handoffs y los invariantes anteriores. Es una prueba determinista del contrato de LiveAuthorMonitor.restoreCheckpoint(); las pruebas de dos pestañas, IndexedDB y fencing siguen siendo responsables de demostrar la coordinación real entre propietarios.

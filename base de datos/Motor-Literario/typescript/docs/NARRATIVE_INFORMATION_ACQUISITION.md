@@ -63,7 +63,7 @@ Módulo: `src/narrative-action-link-discovery.ts`
 
 Relaciona únicamente dos observaciones consecutivas del mismo documento y revisión cuando entre sus verbos aparece un marcador textual explícito temporal, causal o de contraste. Conserva los IDs de ambas acciones y el tramo exacto del conector. Limita la distancia entre verbos y valida que cada evidencia del verbo coincida con el texto fuente.
 
-Un marcador como «porque» se registra como `markerKind: "causal"`, pero el módulo no decide qué acción es causa o consecuencia. Sin conector explícito no crea vínculo, aunque las acciones aparezcan próximas. Los resultados permanecen como candidatos para revisión.
+Un marcador como «porque» se registra como `markerKind: "causal"`, pero el módulo no decide qué acción es causa o consecuencia. Sin conector explícito no crea vínculo, aunque las acciones aparezcan próximas. Los resultados permanecen como candidatos para revisión. La ingesta de libro los expone en `result.actionLinks` junto con las observaciones de acción, sin exigir una fase de persistencia ni confirmar relaciones.
 
 ## Limitaciones conocidas que deben guiar el siguiente trabajo
 

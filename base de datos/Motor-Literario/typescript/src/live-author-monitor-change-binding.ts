@@ -308,6 +308,9 @@ export function bindLiveAuthorMonitorEditorChanges(
       return;
     }
 
+    // El rechazo no se repara esperando capacidad, pero conservamos el delta
+    // acotado para diagnóstico y para descartarlo solo tras un snapshot común.
+    pending.push(retainPendingChange(change));
     // Primero se marca y desacopla la fuente; onAdmission puede ser reentrante.
     // Ninguna emisión síncrona del callback debe adelantar al delta rechazado.
     pauseForResynchronization(

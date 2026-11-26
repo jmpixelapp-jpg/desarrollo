@@ -353,7 +353,7 @@ test("un rechazo resync_required pausa la fuente sin reintentar y se limpia tras
   assert.equal(states.at(-1).status, "resync-required");
   assert.equal(states.at(-1).reason, "resync_required");
   assert.equal(states.at(-1).resyncSequence, 4);
-  assert.equal(stop.getPendingChanges().length, 0);
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [4]);
   assert.equal(f.listeners.size, 0);
   assert.equal(f.resynchronizationRequests.length, 1);
   assert.equal(errors.at(-1) instanceof LiveAuthorMonitorAdmissionResynchronizationError, true);
@@ -732,7 +732,8 @@ test("los rechazos permanentes pausan la fuente y exigen snapshot en vez de bloq
     assert.equal(states.at(-1).status, "resync-required");
     assert.equal(states.at(-1).reason, reason);
     assert.equal(states.at(-1).resyncSequence, 10);
-    assert.equal(states.at(-1).pendingCount, 0);
+    assert.equal(states.at(-1).pendingCount, 1);
+    assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [10]);
     assert.equal(errors.at(-1) instanceof LiveAuthorMonitorAdmissionResynchronizationError, true);
     assert.equal(errors.at(-1).reason, reason);
 
@@ -813,7 +814,7 @@ test("un onAdmission reentrante no puede adelantar cambios a un rechazo permanen
   emitFromAdmission = true;
   f.emit(change(1));
   assert.deepEqual(attempts, [1], "la fuente se desacopla antes de llamar al callback reentrante");
-  assert.equal(stop.getPendingChanges().length, 0);
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1]);
   assert.equal(f.listeners.size, 0);
   stop.discardPendingAfterResynchronization();
   f.emit(change(3));

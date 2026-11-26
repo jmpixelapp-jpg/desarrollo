@@ -421,3 +421,12 @@ Estos rechazos detienen la captura de la fuente y publican un estado `resync-req
 Al producirse un rechazo permanente, el binding primero marca `resync-required`, solicita la reconciliación y desacopla la fuente; después notifica `onAdmission`. Este orden es intencional porque los callbacks de observabilidad pueden emitir o causar trabajo síncrono. Si la notificación ocurriera antes de pausar, un nuevo delta podría adelantarse a la secuencia que exige un snapshot común.
 
 La misma regla se aplica cuando el rechazo aparece al reintentar la cabeza FIFO. Las pruebas reentrantes comprueban que una emisión disparada desde `onAdmission` no llega al sink mientras la fuente está pausada.
+
+
+## 24. Delta permanente rechazado retenido hasta el snapshot autoritativo
+
+Un rechazo permanente no se reintenta, pero el delta causante sí queda en el backlog congelado y acotado para que la integración del editor pueda inspeccionar la secuencia que requiere reconciliación. La fuente se pausa de inmediato y no se aceptan deltas posteriores.
+
+El anfitrión compara el snapshot durable del motor con el editor. Solo después de confirmar que el snapshot común cubre la transacción rechazada llama a `discardPendingAfterResynchronization()`; entonces el binding limpia el delta y rearma el listener. El delta que desbordaría un buffer ya lleno sigue fuera de la cola y se identifica mediante `overflowSequence`.
+
+Esta distinción permite conservar la trazabilidad sin reintentar una edición que el motor ya clasificó como inválida/no recuperable mediante capacidad.

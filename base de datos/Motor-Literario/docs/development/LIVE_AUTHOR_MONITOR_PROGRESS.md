@@ -1163,3 +1163,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresiones:** dos pruebas fuerzan emisiones reentrantes desde `onAdmission`: una para el rechazo inicial y otra para el rechazo permanente de la cabeza FIFO durante el reintento. Ambas comprueban que no se intenta admitir la secuencia reentrante y que la fuente se reactiva solo después del snapshot común.
 
 **Validación:** pendiente de CI para el commit que incorpore esta corrección.
+
+
+## 68. Conservación del delta rechazado hasta confirmar el snapshot (26 de noviembre de 2026)
+
+**Corrección de integración:** la validación de `785e778` detectó que la nueva pausa para rechazos permanentes retiraba la fuente, pero no conservaba el delta que originó el rechazo. La integración transaccional necesita inspeccionar ese backlog y verificar que el snapshot autoritativo realmente lo cubre antes de reanudar el editor.
+
+**Ajuste:** los rechazos permanentes iniciales se copian al backlog acotado y congelado antes de pausar. El binding no reintenta ese delta ni procesa eventos posteriores; el anfitrión puede consultar la secuencia y solo elimina el backlog al completar `discardPendingAfterResynchronization()` después de validar el snapshot común. El caso distinto de overflow sigue sin guardar el delta que excedió el límite, porque no cabe en el buffer.
+
+**Reentrancia:** la fuente queda pausada antes de notificar `onAdmission`, por lo que callbacks síncronos no pueden adelantar una nueva transacción.
+
+**Validación previa:** [Live Author Monitor — run 45751720044](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751720044) ejecutó build, Chromium y auditoría correctamente, pero falló una prueba de integración transaccional porque esperaba el delta rechazado en el backlog. La corrección conserva explícitamente ese contrato; el nuevo commit queda pendiente de CI.

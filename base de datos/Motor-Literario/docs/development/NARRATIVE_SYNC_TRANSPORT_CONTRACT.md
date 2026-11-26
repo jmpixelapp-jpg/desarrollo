@@ -137,3 +137,9 @@ Esta garantía no es una transacción distribuida ni una prueba del backend real
 Un conflicto se conserva en la outbox como operación pendiente, con el código y mensaje del conflicto en `lastError` y una fecha de próximo intento. No se elimina ni se interpreta como aceptación. El backoff actúa como barrera causal: las operaciones posteriores del mismo dispositivo no se envían mientras la operación anterior esté bloqueada. Las operaciones de otros dispositivos pueden avanzar porque representan flujos causales independientes.
 
 El backoff no resuelve el conflicto de negocio. Tras vencer, el coordinador puede volver a presentar la operación al transporte; el servidor debe devolver una clasificación actualizada o una aceptación explícita. Una reconciliación real (por ejemplo, rebase, edición o elección entre versiones) requiere una decisión de dominio y un contrato específico; no se simula ni se realiza automáticamente en este coordinador.
+
+### Reintento y reclasificación de un conflicto
+
+Cuando vence nextAttemptAt, el coordinador puede volver a enviar la misma operación, conservando operationId y payload. El resultado del transporte debe clasificarla de nuevo de forma exhaustiva: si el servidor confirma que ahora puede aceptarla, el acuse explícito permite retirarla; si continúa en conflicto, permanece pendiente y recibe un nuevo backoff. El coordinador no modifica el payload, no cambia la revisión de origen y no presupone que el conflicto se haya resuelto por el mero paso del tiempo.
+
+La regresión correspondiente cubre tres momentos: conflicto inicial, ausencia de envío un milisegundo antes del vencimiento y aceptación explícita en el instante de vencimiento. Comprueba que el reintento conserva la identidad y el contenido de la operación. Esta prueba valida el comportamiento del cliente con un transporte simulado; no demuestra que un servidor real haya reconciliado la revisión.

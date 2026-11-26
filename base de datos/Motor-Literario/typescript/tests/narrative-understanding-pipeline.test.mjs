@@ -404,3 +404,20 @@ test("el pipeline expone eventos explícitos de memoria con evidencia", () => {
   assert.deepEqual(result.memoryEvents.map(item => item.kind),["forgetting","remembering"]);
   assert.ok(result.memoryEvents.every(item => item.evidence.documentId === "chapter-memory"));
 });
+
+
+test("el pipeline conserva el historial y proyecta la memoria explícita del personaje", () => {
+  const priorMemoryEvents = [{
+    id:"memory-prior",projectId:"novel",characterEntityId:"mara",
+    kind:"remembering",content:"Elian había salido",reviewStatus:"candidate",
+    evidence:{documentId:"chapter-1",revision:1,start:10,end:30,excerpt:"Mara recordó que Elian había salido"}
+  }];
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-2",revision:1,
+    text:"Mara olvidó que Elian había salido.",entities,
+    priorMemoryEvents,orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.memoryEvents.length,1);
+  assert.equal(result.characterMemoryTimelines[0].memories[0].currentStatus,"forgotten");
+  assert.equal(result.characterMemoryTimelines[0].memories[0].events.length,2);
+});

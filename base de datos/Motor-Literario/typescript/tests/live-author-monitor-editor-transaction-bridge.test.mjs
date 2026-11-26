@@ -191,3 +191,29 @@ test("serializa publicaciones reentrantes para que todos los listeners vean el m
   assert.equal(native.snapshot.text, "abc!?");
   bridge.dispose();
 });
+
+
+test("cuarentena payloads runtime nulos sin lanzar al callback nativo", () => {
+  const native = new NativeEditorState();
+  const bridge = new LiveAuthorMonitorEditorTransactionBridge({
+    getSnapshot: documentId => native.getSnapshot(documentId),
+    getDocumentState: documentId => native.getDocumentState(documentId)
+  });
+  const errors = [];
+  const source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: "chapter-1",
+    initialSnapshot: native.getSnapshot("chapter-1"),
+    provider: bridge,
+    onError: error => errors.push(error)
+  });
+  source.subscribeChanges(() => {});
+
+  assert.doesNotThrow(() => {
+    bridge.publishAppliedTransaction("chapter-1", null);
+  });
+  assert.equal(source.getState().needsResync, true);
+  assert.equal(errors.at(-1).code, "invalid-transaction");
+
+  source.dispose();
+  bridge.dispose();
+});

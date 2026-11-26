@@ -87,7 +87,7 @@ export function extractNarrativeActionCandidates(
     (value): value is { entity: NarrativeEntity; name: string } => value !== null
   );
   const actors = unique.filter(value => value.entity.kind === "character");
-  const targets = unique.filter(value => value.entity.kind !== "character");
+  const targets = unique;
   if (!actors.length || !targets.length) return [];
 
   const actionPattern = ACTIONS.map(escapeRegExp).sort((a, b) => b.length - a.length).join("|");
@@ -96,6 +96,7 @@ export function extractNarrativeActionCandidates(
     const lineText = line[0];
     for (const actor of actors) {
       for (const target of targets) {
+        if (actor.entity.id === target.entity.id) continue;
         const expression = new RegExp(
           "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(actor.name) +
           "(?![\\p{L}\\p{M}\\p{N}_])\\s+(no\\s+)?(" + actionPattern +

@@ -227,7 +227,6 @@ export function discoverNarrativeLocationPresenceCandidates(
       if (seen.has(id)) continue;
       seen.add(id);
 
-      const assertionEnd = location.end - span.start;
       results.push({
         id,
         projectId: input.projectId,

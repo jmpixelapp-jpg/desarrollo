@@ -102,10 +102,57 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
 
       assert.equal(ownerLease.ownerId, ownerId);
       assert.equal(ownerLease.fencingToken, 1);
+
+      // La pestaña propietaria también mantiene un segundo documento. Su lease
+      // y checkpoint deben sobrevivir al takeover del primero.
+      const secondDocumentId = "chapter-" + randomUUID();
+      const secondOwnerLease = await invoke(
+        ownerPage,
+        "acquire",
+        projectId,
+        secondDocumentId,
+        ownerId,
+        now + 1,
+        30_000
+      );
+      assert.ok(secondOwnerLease);
+      assert.equal(secondOwnerLease.fencingToken, 1);
+      const secondCheckpoint = {
+        version: 1,
+        projectId,
+        documentId: secondDocumentId,
+        sessionId: "browser-session-" + randomUUID(),
+        savedAt: Date.now(),
+        sessionDurationMs: 0,
+        activeDurationMs: 0,
+        idleDurationMs: 0,
+        lastActivityAgeMs: null,
+        pauseCount: 0,
+        acceptedChanges: 0,
+        rejectedChanges: 0,
+        committedChanges: 0,
+        failedChanges: 0,
+        insertedCharacters: 0,
+        deletedCharacters: 0,
+        currentDocumentLength: 0,
+        revision: 0,
+        sequence: 0,
+        resynchronizations: 0,
+        lastCommitLatencyMs: 0,
+        totalCommitLatencyMs: 0,
+        commitLatencies: []
+      };
+      await invoke(ownerPage, "saveCheckpoint", secondCheckpoint, secondOwnerLease);
+
       assert.equal(
-        await invoke(observerPage, "acquire", projectId, documentId, observerId, now + 1, 30_000),
+        await invoke(observerPage, "acquire", projectId, documentId, observerId, now + 2, 30_000),
         undefined,
-        "la segunda página no debe robar un lease activo"
+        "la segunda página no debe robar el lease activo del documento A"
+      );
+      assert.equal(
+        await invoke(observerPage, "acquire", projectId, secondDocumentId, observerId, now + 2, 30_000),
+        undefined,
+        "la segunda página tampoco debe apropiarse del documento B"
       );
 
       // Cierre abrupto: la pestaña propietaria desaparece sin ejecutar release().
@@ -124,6 +171,17 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
       assert.ok(observerLease);
       assert.equal(observerLease.ownerId, observerId);
       assert.equal(observerLease.fencingToken, ownerLease.fencingToken + 1);
+
+      assert.equal(
+        await invoke(observerPage, "acquire", projectId, secondDocumentId, observerId, takeoverTime + 1, 30_000),
+        undefined,
+        "el takeover del documento A no debe liberar ni robar el lease B"
+      );
+      assert.deepEqual(
+        await invoke(observerPage, "loadCheckpoint", projectId, secondDocumentId),
+        secondCheckpoint,
+        "el checkpoint B debe permanecer disponible después del takeover de A"
+      );
 
       const checkpoint = {
         version: 1,
@@ -175,6 +233,16 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
         await invoke(observerPage, "loadCheckpoint", projectId, documentId),
         checkpoint,
         "el checkpoint debe sobrevivir a una recarga real de la página"
+      );
+      assert.deepEqual(
+        await invoke(observerPage, "loadCheckpoint", projectId, secondDocumentId),
+        secondCheckpoint,
+        "el checkpoint del segundo documento también debe sobrevivir a la recarga"
+      );
+      assert.equal(
+        await invoke(observerPage, "acquire", projectId, secondDocumentId, observerId, Date.now(), 30_000),
+        undefined,
+        "el cierre abrupto de A no debe invalidar la titularidad durable de B"
       );
 
       assert.equal(await invoke(observerPage, "release", observerLease, Date.now()), true);

@@ -180,6 +180,22 @@ test("el presupuesto léxico reserva también el texto enlazado que se incorpora
 });
 
 
+test("la cronología conserva solo una muestra acotada de evidencia durante la agregación", () => {
+  const start = literaryAnalysisSource.indexOf("function buildCharacterProjectEventTimeline(");
+  const end = literaryAnalysisSource.indexOf("\\nfunction ", start + 10);
+  assert.notEqual(start, -1, "debe existir el constructor de cronología de personaje");
+  assert.ok(end > start, "el constructor debe delimitarse para auditar su acumulación");
+  const builder = literaryAnalysisSource.slice(start, end);
+
+  assert.match(builder, /const MAX_TIMELINE_EVIDENCE_SAMPLES = 20;/);
+  assert.match(builder, /const insertionIndex = group\.evidence\.findIndex/);
+  assert.match(builder, /if \(group\.evidence\.length < MAX_TIMELINE_EVIDENCE_SAMPLES\)\s*\{\s*group\.evidence\.push\(sample\);/);
+  assert.match(builder, /group\.evidence\.splice\(insertionIndex,0,sample\);\s*if \(group\.evidence\.length > MAX_TIMELINE_EVIDENCE_SAMPLES\)\s*\{\s*group\.evidence\.pop\(\);/);
+  assert.match(builder, /const orderedEvidence = group\.evidence;/);
+  assert.doesNotMatch(builder, /group\.evidence\.push\(\{/);
+});
+
+
 test("la auditoría de atomicidad detecta perder el almacén de entidades del alcance transaccional", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
   const weakenedWriter = writer.replace(

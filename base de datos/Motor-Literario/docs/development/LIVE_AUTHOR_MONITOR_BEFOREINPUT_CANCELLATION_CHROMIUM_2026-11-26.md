@@ -43,3 +43,12 @@ La prueba no sustituye el proveedor de transacciones autoritativas del editor en
 
 El archivo sigue el patrón `tests/live-author-monitor-*.test.mjs`, por lo que queda incluido en el paso de integración host/editor/navegador del workflow `Live Author Monitor`. La ejecución disparada por este commit debe consultarse antes de marcar la regresión como aprobada.
 
+## Validación independiente de la regresión
+
+Se añadió `.github/workflows/live-author-monitor-beforeinput-cancellation.yml` para ejecutar esta prueba en un job aislado de Chromium. Instala Node 22, dependencias del paquete y Chromium, y corre exclusivamente:
+
+```sh
+node --test tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs
+```
+
+Esta separación evita que un fallo de compilación global en módulos narrativos ajenos impida ejecutar la regresión DOM específica. No sustituye el workflow integral del monitor: ambos resultados deben informarse por separado. El nuevo workflow debe terminar correctamente antes de marcar aprobada la prueba.

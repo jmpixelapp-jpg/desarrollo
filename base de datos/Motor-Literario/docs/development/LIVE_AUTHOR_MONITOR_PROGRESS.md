@@ -1539,3 +1539,14 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 **Regresión:** un almacén determinista confirma la renovación, pero demora la entrega de su respuesta. Mientras tanto, el cierre seguro completa el checkpoint y libera el lease. Al desbloquear la respuesta antigua, se exige que no se repongan el lease local ni el heartbeat y que el registro persistido permanezca vencido.
 
 **Validación:** pendiente de GitHub Actions para la nueva regresión.
+
+
+## 100. Monotonía de metadatos ante respuestas de renovación fuera de orden (26 de noviembre de 2026)
+
+**Hallazgo:** al permitir que renovaciones válidas compartan una generación de ciclo de vida, dos respuestas podían terminar fuera de orden. Una renovación antigua que regresara después de otra más nueva podía sustituir localmente un `expiresAt` y `updatedAt` mayores por valores anteriores, acortando innecesariamente la titularidad que la instancia cree tener.
+
+**Corrección:** al publicar una renovación con el mismo owner y fencing token, se conservan los máximos de `expiresAt` y `updatedAt`. Si el lease local ya tiene un fencing token mayor, la respuesta vieja se descarta; un token igual de otro owner también se rechaza.
+
+**Regresión:** se demora la respuesta de la primera renovación después de que el almacén la confirma; se completa una segunda renovación más reciente y luego se libera la respuesta antigua. El estado local debe conservar la expiración y actualización más nuevas.
+
+**Validación:** pendiente de GitHub Actions.

@@ -237,6 +237,7 @@ export interface NarrativeDescriptiveLabelCandidateInput {
 
 export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES = 2_000;
 export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_SCAN_UNITS = 25_000_000;
+export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_ENTITIES = 10_000;
 
 /**
  * Extrae etiquetas descriptivas en aposición inmediata a una entidad nombrada:
@@ -252,7 +253,7 @@ export function discoverNarrativeDescriptiveLabelCandidates(
       typeof input.documentId !== "string" || !input.documentId.trim() ||
       !Number.isSafeInteger(input.revision) || input.revision < 0 ||
       typeof input.text !== "string" || input.text.length > MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_TEXT_UNITS ||
-      !Array.isArray(input.entities) || !Number.isSafeInteger(maxCandidates) ||
+      !Array.isArray(input.entities) || input.entities.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ENTITIES || !Number.isSafeInteger(maxCandidates) ||
       maxCandidates < 1 || maxCandidates > MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES ||
       (input.baseOffset !== undefined && (!Number.isSafeInteger(input.baseOffset) ||
         input.baseOffset < 0 || input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) {
@@ -276,7 +277,7 @@ export function discoverNarrativeDescriptiveLabelCandidates(
       }
       const expression = new RegExp(
         "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(name) +
-        "(?![\\p{L}\\p{M}\\p{N}_])\\s*,\\s*((?:el|la|los|las|un|una)\\s+[\\p{L}][\\p{L}\\p{M}-]*(?:\\s+(?:de|del|de la|de los|de las|con|sin|en)\\s+[\\p{L}][\\p{L}\\p{M}-]*){0,2})",
+        "(?![\\p{L}\\p{M}\\p{N}_])\\s*,\\s*((?:el|la|los|las|un|una)\\s+[\\p{L}][\\p{L}\\p{M}-]*(?:\\s+(?:de la|de los|de las|del|de|con|sin|en)\\s+[\\p{L}][\\p{L}\\p{M}-]*){0,2})",
         "giu"
       );
       for (const match of input.text.matchAll(expression)) {

@@ -368,6 +368,80 @@ export async function reconcileNarrativeDocumentProjections(
   };
 }
 
+/**
+ * Repara únicamente el inventario de un manifiesto activo a partir de la
+ * evidencia actualmente persistida. No toca registros ni acepta tombstones:
+ * la escritura del manifiesto se protege con la generación CAS observada.
+ */
+export async function repairNarrativeDocumentProjectionManifest(
+  store: ProjectStore,
+  projectId: string,
+  documentId: string,
+  updatedAt = Date.now()
+): Promise<{
+  readonly manifest: NarrativeDocumentProjectionManifest;
+  readonly reused: boolean;
+  readonly changed: boolean;
+}> {
+  if (!store || typeof projectId !== "string" || !projectId.trim() ||
+      typeof documentId !== "string" || !documentId.trim() ||
+      !Number.isFinite(updatedAt) || updatedAt < 0 ||
+      typeof store.loadNarrativeDocumentProjectionManifest !== "function" ||
+      typeof store.saveNarrativeDocumentProjectionManifestIfUnchanged !== "function") {
+    throw new Error("Contexto o capacidades inválidas para reparar el manifiesto.");
+  }
+  const required = [
+    "loadEntities", "loadRelations", "loadEvents", "loadIdeas", "loadAssertions"
+  ] as const;
+  for (const method of required) {
+    if (typeof store[method] !== "function") {
+      throw new Error("El almacenamiento no permite reparar inventarios: " + method);
+    }
+  }
+  const current = await store.loadNarrativeDocumentProjectionManifest(projectId, documentId);
+  if (!current) throw new Error("No se puede reconstruir automáticamente un manifiesto inexistente sin revisión fuente.");
+  validateNarrativeDocumentProjectionManifest(current);
+  if (current.projectId !== projectId || current.documentId !== documentId) {
+    throw new Error("El manifiesto leído no corresponde al documento solicitado.");
+  }
+  if (current.status !== "active") {
+    throw new Error("No se reparan tombstones automáticamente: requieren una decisión editorial explícita.");
+  }
+  const [entities, relations, events, ideas, assertions] = await Promise.all([
+    store.loadEntities!(projectId), store.loadRelations!(projectId),
+    store.loadEvents!(projectId), store.loadIdeas!(projectId),
+    store.loadAssertions!(projectId)
+  ]);
+  const idsFor = (records: readonly { readonly id: string; readonly evidence?: unknown }[]) =>
+    records.filter(record => {
+      const evidence = Array.isArray(record.evidence)
+        ? record.evidence as readonly { readonly documentId?: string }[]
+        : record.evidence && typeof record.evidence === "object"
+          ? [record.evidence as { readonly documentId?: string }] : [];
+      return evidence.some(item => item?.documentId === documentId);
+    }).map(record => record.id).sort();
+  const candidate: NarrativeDocumentProjectionManifest = {
+    ...current,
+    generation: current.generation + 1,
+    entityIds: idsFor(entities),
+    relationIds: idsFor(relations),
+    eventIds: idsFor(events),
+    ideaIds: idsFor(ideas),
+    assertionIds: idsFor(assertions),
+    updatedAt
+  };
+  validateNarrativeDocumentProjectionManifest(candidate);
+  const sameInventory =
+    JSON.stringify([...current.entityIds].sort()) === JSON.stringify(candidate.entityIds) &&
+    JSON.stringify([...current.relationIds].sort()) === JSON.stringify(candidate.relationIds) &&
+    JSON.stringify([...current.eventIds].sort()) === JSON.stringify(candidate.eventIds) &&
+    JSON.stringify([...current.ideaIds].sort()) === JSON.stringify(candidate.ideaIds) &&
+    JSON.stringify([...current.assertionIds].sort()) === JSON.stringify(candidate.assertionIds);
+  if (sameInventory) return { manifest: current, reused: true, changed: false };
+  await store.saveNarrativeDocumentProjectionManifestIfUnchanged(candidate, current.generation);
+  return { manifest: candidate, reused: false, changed: true };
+}
+
 export interface NarrativeKnowledgeGraphPersistenceResult {
   readonly projectId: string;
   readonly saved: {

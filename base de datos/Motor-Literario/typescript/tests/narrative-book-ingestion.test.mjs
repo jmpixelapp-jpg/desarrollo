@@ -125,6 +125,57 @@ test("descubre personajes etiquetados en el texto y extrae sus acciones sin fich
   assert.equal(result.observations[0].reviewStatus, "candidate");
 });
 
+test("la ingesta publica transiciones candidatas de objetos con evidencia absoluta", () => {
+  const ana = {
+    projectId: "p", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const bruno = {
+    ...ana, id: "character:bruno", canonicalName: "Bruno", normalizedName: "bruno"
+  };
+  const sword = {
+    projectId: "p", id: "object:sword", kind: "object",
+    canonicalName: "Espada Solar", normalizedName: "espada solar", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const text = "Ana entregó la Espada Solar a Bruno.";
+  const baseOffset = 300;
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "live-scene", revision: 12,
+    text, baseOffset, entities: [ana, bruno, sword]
+  });
+  assert.equal(result.objectTransitionCandidates.length, 1);
+  const transition = result.objectTransitionCandidates[0];
+  assert.equal(transition.transition, "transferred");
+  assert.equal(transition.objectEntityId, sword.id);
+  assert.equal(transition.actorEntityId, ana.id);
+  assert.equal(transition.recipientEntityId, bruno.id);
+  assert.equal(transition.effectStatus, "candidate");
+  assert.equal(transition.reviewStatus, "candidate");
+  for (const evidence of [
+    transition.actionEvidence, transition.objectEvidence,
+    transition.actorEvidence, transition.recipientEvidence
+  ]) {
+    assert.ok(evidence);
+    assert.equal(text.slice(evidence.start - baseOffset, evidence.end - baseOffset), evidence.excerpt);
+    assert.equal(evidence.revision, 12);
+  }
+});
+
+test("la ingesta no inventa transiciones de objeto sin entidades de objeto conocidas", () => {
+  const ana = {
+    projectId: "p", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "live-scene", revision: 1,
+    text: "Ana perdió la espada.", entities: [ana]
+  });
+  assert.deepEqual(result.objectTransitionCandidates, []);
+});
+
 test("no infiere entidades de nombres propios sin etiqueta explícita", () => {
   const result = ingestNarrativeBookText({
     projectId: "p", documentId: "no-name-guess", revision: 1,

@@ -96,9 +96,15 @@ export function extractNarrativeCharacterIntentCandidates(
           }
         }
       }
-      // Si hay más de una identidad posible, no se asigna la intención a ninguna.
-      if (actorMatches.size !== 1) continue;
-      const actor = [...actorMatches.values()][0]!;
+      // El actor debe aparecer antes del marcador de intención. Un personaje
+      // mencionado después como objetivo («Mara quiere ayudar a Elian») no
+      // vuelve ambigua la autoría. Si dos identidades preceden al marcador,
+      // se conserva la abstención.
+      const intentActors = [...actorMatches.values()].filter(candidate =>
+        patterns.some(pattern => pattern.expression.test(excerpt.slice(candidate.end)))
+      );
+      if (intentActors.length !== 1) continue;
+      const actor = intentActors[0]!;
       const afterActor = excerpt.slice(actor.end);
       if (afterActor.length > 180) continue;
       for (const pattern of patterns) {

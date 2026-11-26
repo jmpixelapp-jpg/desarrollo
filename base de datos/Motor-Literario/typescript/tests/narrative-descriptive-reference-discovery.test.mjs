@@ -230,3 +230,45 @@ test("rechaza un conjunto de cláusulas que excede el máximo en vez de truncarl
     entities: [ana], maxCandidates: 1
   }), /no se devuelve un resultado parcial/);
 });
+
+
+test("extrae parentesco explícito y resuelve el objetivo contra una entidad registrada", async () => {
+  const { discoverNarrativeRelationalAppositionCandidates } = await import("../dist/motor-literario.js");
+  const text = "Bruno, hermano menor de Ana, volvió al castillo.";
+  const [candidate] = discoverNarrativeRelationalAppositionCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4, text, entities: [ana, bruno]
+  });
+  assert.equal(candidate.relationText, "hermano menor de Ana");
+  assert.equal(candidate.anchorEntityId, bruno.id);
+  assert.deepEqual(candidate.targetEntityCandidates, [ana.id]);
+  assert.equal(candidate.relation, "relational-apposition");
+  assert.equal(candidate.reviewStatus, "candidate");
+});
+
+test("mantiene varios objetivos cuando un nombre/alias coincide con varias entidades", async () => {
+  const { discoverNarrativeRelationalAppositionCandidates } = await import("../dist/motor-literario.js");
+  const anaDuplicate = { ...ana, id: "character:ana-2", canonicalName: "Ana" };
+  const [candidate] = discoverNarrativeRelationalAppositionCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Bruno, hermano menor de Ana, volvió.",
+    entities: [ana, anaDuplicate, bruno]
+  });
+  assert.deepEqual(candidate.targetEntityCandidates, [ana.id, anaDuplicate.id].sort());
+});
+
+test("no infiere el objetivo si el nombre mencionado no está en el registro", async () => {
+  const { discoverNarrativeRelationalAppositionCandidates } = await import("../dist/motor-literario.js");
+  assert.deepEqual(discoverNarrativeRelationalAppositionCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Bruno, hermano menor de Clara, volvió.", entities: [bruno]
+  }), []);
+});
+
+test("rechaza exceso de propuestas relacionales sin devolver resultados parciales", async () => {
+  const { discoverNarrativeRelationalAppositionCandidates } = await import("../dist/motor-literario.js");
+  assert.throws(() => discoverNarrativeRelationalAppositionCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Bruno, hermano de Ana, volvió. Bruno, amigo de Ana, regresó.",
+    entities: [ana, bruno], maxCandidates: 1
+  }), /no se devuelve un resultado parcial/);
+});

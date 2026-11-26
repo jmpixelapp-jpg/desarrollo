@@ -54,7 +54,7 @@ test("los IDs y resultados son deterministas para una misma revisión y fuente",
 });
 
 test("lee archivos TXT y Markdown UTF-8 mediante APIs estándar", async () => {
-  const text = "Capítulo I\n\nLa niña llegó al puerto. 🌊";
+  const text = "# Capítulo I\n\nLa niña llegó al puerto. 🌊";
   const bytes = new TextEncoder().encode(text);
   const source = await readNarrativeBookFile({
     name: "novela.md", type: "text/markdown", size: bytes.byteLength,
@@ -66,7 +66,7 @@ test("lee archivos TXT y Markdown UTF-8 mediante APIs estándar", async () => {
   const parsed = ingestNarrativeBookText({
     projectId: "p", documentId: "file-1", revision: 1, text: source.text
   });
-  assert.equal(parsed.coverage.wordCount, 7);
+  assert.equal(parsed.coverage.wordCount, 7);\n  assert.equal(parsed.chapters[0].heading, "Capítulo I");
   assert.ok(parsed.signals.some(signal => signal.label === "arrival"));
 });
 

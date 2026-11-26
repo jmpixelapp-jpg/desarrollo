@@ -779,3 +779,42 @@ Una cronología parcial nunca se fuerza a una secuencia lineal. Cuando dos apari
 La salida es una proyección analítica de solo lectura. No consolida candidatos, no crea equivalencias canónicas, no decide si una idea fue dividida, fusionada, abandonada o recuperada y no modifica el historial editorial ni la biblioteca personal. Los componentes sin conexiones no se presentan como líneas.
 
 Límites: máximo 10.000 eventos, 200 apariciones únicas y 25 millones de unidades UTF-16 de evidencia agregada por reconstrucción. Cada aparición se valida una sola vez y las referencias repetidas deben conservar identidad, offsets y evidencia exactos. Se propagan los indicadores de truncamiento de las fases anteriores. Se añadieron dieciocho pruebas para orden único, redes de recurrencia, bifurcación, convergencia, componentes separados, cronología desconocida/parcial, resonancia léxica, grupos mixtos, propagación de truncamiento, procedencia cambiante, duplicados, referencias cronológicas incoherentes, ciclos imposibles, proyección vacía, entradas malformadas, orden por offsets e integración con el pipeline.
+
+
+### Fase AT: índice persistente, actualización incremental y sincronización (26-11-2026)
+
+Se incorpora la persistencia del índice de continuidad como proyección derivada y reconstruible, separada de `NarrativeIdea` y de la biblioteca personal.
+
+**Persistencia compacta**
+- Nuevo módulo `narrative-idea-continuity-index.ts`.
+- `NarrativeIdeaContinuityIndex` contiene generación CAS, vector ordenado de revisiones documentales, resumen, apariciones únicas con sus evidencias, eventos compactados mediante IDs y líneas compactadas mediante referencias.
+- Cada evidencia se almacena una sola vez dentro del índice; las líneas y eventos la referencian por identificador.
+- El índice valida procedencia de documento/revisión, referencias sin huérfanos, unicidad de relaciones, métricas de recurrencia, modalidad, tipo de idea, cronología, topología y contadores del resumen.
+- La huella FNV-1a identifica cambios accidentales y no se considera una firma de seguridad. La envoltura de transporte sigue verificándose con SHA-256.
+
+**Actualización incremental**
+- `updateNarrativeIdeaContinuityLinesIncrementally` detecta eventos añadidos, retirados o modificados y reconstruye los componentes conectados afectados. Los componentes independientes se reutilizan.
+- Los cambios de revisión o estado de documentos se derivan automáticamente al comparar el vector de fuentes anterior con el nuevo.
+- `updateNarrativeIdeaContinuityIndexIncrementally` orquesta lectura, actualización de componentes, compactación y confirmación CAS. La primera generación realiza un cálculo completo; generaciones posteriores recalculan únicamente los componentes afectados.
+- Los conflictos CAS no se resuelven sobrescribiendo el índice: el llamador debe recargar y reconciliar la fuente vigente.
+
+**IndexedDB**
+- Se añade el almacén `narrative-idea-continuity-indexes`, con clave `projectId`.
+- IndexedDB pasa de versión 27 a 28. La escritura compara y avanza la generación dentro de una única transacción `readwrite`.
+- El manifiesto `storage_mapping_v0.4.2.json` pasa a mapping_version 17 y describe el nuevo almacén. El esquema MLDB 0.4.2 no cambia: la proyección no es una nueva entidad canónica.
+
+**Sincronización**
+- Nuevo handler `idea-continuity-index-upsert`, idempotente y protegido por generación CAS. Una divergencia se deja pendiente para reconciliación, no sobrescribe conocimiento local.
+- `createNarrativeIdeaContinuityIndexSyncEnvelope` genera envolturas SHA-256 específicas para el índice compacto.
+- `NarrativeSyncJournalOptions.canonicalizationLimits` permite configurar el mismo límite ampliado en recepción, auditoría, recuperación de cursores y replay. La política general por defecto permanece en 1 MiB.
+- El emisor debe utilizar `NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS` al construir la envoltura y el receptor debe configurar el diario con esos mismos límites. SHA-256 aporta integridad del contenido, no autenticación del escritor ni autorización del proyecto; estas últimas siguen bajo responsabilidad del anfitrión.
+
+**Pruebas añadidas**
+- 9 pruebas de actualización incremental de componentes.
+- 4 pruebas del índice compacto e integridad de referencias.
+- 4 pruebas de persistencia IndexedDB, CAS, concurrencia y actualización de revisiones.
+- 4 pruebas del handler de sincronización e idempotencia.
+- 2 pruebas de límites configurables de envolturas, auditoría y replay.
+- Total: 23 pruebas nuevas de Fase AT.
+
+El índice sigue siendo una vista derivada. No cambia estados editoriales, no fusiona ideas y no reemplaza el historial de la biblioteca. Debe poder descartarse y reconstruirse desde documentos, candidatos y revisiones fuente.

@@ -555,3 +555,18 @@ test("el pipeline detecta sustitución explícita de una motivación previa", ()
   assert.equal(result.characterIntentEvolution[0].transition,"replaced");
   assert.deepEqual(result.characterIntentEvolution[0].priorIntentIds,["prior-fear"]);
 });
+
+test("el pipeline conserva el verbo que expresa una motivación introducida por porque", () => {
+  const text = "Mara actúa porque teme perder a su familia.";
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-because-motive",revision:1,text,entities
+  });
+  assert.equal(result.characterIntents.length,1);
+  assert.equal(result.characterIntents[0].kind,"motivation");
+  assert.equal(result.characterIntents[0].evidenceBasis,"explicit-causal-motive");
+  assert.equal(result.characterIntents[0].text,"teme perder a su familia");
+  assert.equal(
+    text.slice(result.characterIntents[0].evidence.start,result.characterIntents[0].evidence.end),
+    "teme perder a su familia"
+  );
+});

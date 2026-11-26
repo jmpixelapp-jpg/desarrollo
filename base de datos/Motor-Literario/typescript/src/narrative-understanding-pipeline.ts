@@ -32,6 +32,7 @@ import {
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeMemoryEvents, type NarrativeMemoryEvent } from "./narrative-memory-events";
 import { buildNarrativeMemoryTimeline, type NarrativeCharacterMemoryState } from "./narrative-memory-timeline";
+import { linkNarrativeMemoryToActions, type NarrativeMemoryActionLink } from "./narrative-memory-action-links";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
   assignNarrativeEvidenceToScene,
@@ -108,6 +109,7 @@ export interface NarrativeUnderstandingResult {
   readonly characterKnowledgeStates: readonly NarrativeCharacterKnowledgeState[];
   readonly memoryEvents: readonly NarrativeMemoryEvent[];
   readonly characterMemoryTimelines: readonly NarrativeCharacterMemoryState[];
+  readonly memoryActionLinks: readonly NarrativeMemoryActionLink[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -168,6 +170,8 @@ function validate(input: NarrativeUnderstandingInput): void {
         (!Array.isArray(input.priorInformationInterpretations) || input.priorInformationInterpretations.length > 5000)) ||
       (input.priorKnowledgeEvolution !== undefined &&
         (!Array.isArray(input.priorKnowledgeEvolution) || input.priorKnowledgeEvolution.length > 5000)) ||
+      (input.priorMemoryEvents !== undefined &&
+        (!Array.isArray(input.priorMemoryEvents) || input.priorMemoryEvents.length > 5000)) ||
       (input.orderedDocumentIds !== undefined && !Array.isArray(input.orderedDocumentIds))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
   }
@@ -260,6 +264,16 @@ export function understandNarrativeFragment(
     events: [...(input.priorMemoryEvents ?? []), ...memoryEvents],
     orderedDocumentIds: input.orderedDocumentIds
   });
+  const memoryActionLinks = linkNarrativeMemoryToActions({
+    projectId: input.projectId,
+    documentId: input.documentId,
+    revision: input.revision,
+    text: input.text,
+    baseOffset,
+    entities: input.entities,
+    memoryEvents,
+    actions
+  });
   const characterKnowledgeStates = buildNarrativeCharacterKnowledgeStates({
     projectId: input.projectId,
     entities: input.entities,
@@ -330,7 +344,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

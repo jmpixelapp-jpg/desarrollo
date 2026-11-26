@@ -27,6 +27,20 @@ test("detecta acciones explícitas de un personaje conocido y conserva la frase 
   assert.ok(found.every(item => item.evidence.revision === 7));
 });
 
+test("distingue formas verbales sin convertir el tiempo gramatical en cronología", () => {
+  const forms = [
+    ["Ana cruzó el puente.", "past-preterite"],
+    ["Ana cruzaba el puente.", "past-imperfect"],
+    ["Ana cruza el puente.", "present"],
+    ["Ana cruzar el puente.", "infinitive"],
+    ["Ana cruzando el puente.", "gerund"]
+  ];
+  for (const [text, expected] of forms) {
+    const found = discoverNarrativeObservationCandidates({ ...context, text });
+    assert.equal(found[0]?.grammaticalTense, expected, text);
+  }
+});
+
 test("no atribuye un sujeto cuando aparecen varios personajes", () => {
   const bruno = { ...character, id: "entity:character:bruno", canonicalName: "Bruno" };
   const text = "Ana ayudó a Bruno durante la huida.";

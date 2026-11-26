@@ -19,6 +19,8 @@ export interface NarrativeObservationCandidate {
   readonly kind: "action";
   readonly action: string;
   readonly surface: string;
+  /** Forma verbal morfológica; no equivale a una fecha ni fija cronología global. */
+  readonly grammaticalTense: "past-preterite" | "past-imperfect" | "present" | "infinitive" | "gerund" | "participle" | "unknown";
   /** Único personaje mencionado, si lo hay; nunca equivale a sujeto o agente confirmado. */
   readonly singleMentionedCharacterId?: string;
   /** Referencia pronominal pendiente: nunca fusiona automáticamente el pronombre con una identidad. */
@@ -96,6 +98,17 @@ const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "pensar", expression: /\bpens(?:ó|aba|aron|ó|ar|ado|ando)\b/giu },
   { action: "creer", expression: /\bcre(?:yó|ía|yeron|e|en|er|ído|yendo)\b/giu }
 ];
+
+function classifyGrammaticalTense(surface: string): NarrativeObservationCandidate["grammaticalTense"] {
+  const form = surface.toLocaleLowerCase("es");
+  if (/(?:ando|iendo|yendo)$/u.test(form)) return "gerund";
+  if (/(?:ar|er|ir)$/u.test(form)) return "infinitive";
+  if (/(?:aba|abas|ábamos|aban|ía|ías|íamos|ían)$/u.test(form)) return "past-imperfect";
+  if (/(?:ó|ió|aron|ieron|yó|yeron|dijo|dijeron)$/u.test(form)) return "past-preterite";
+  if (/(?:ado|ido|to|cho|so|abierto|muerto|visto|puesto|hecho|escrito)$/u.test(form)) return "participle";
+  if (/(?:a|an|e|en|o|es)$/u.test(form)) return "present";
+  return "unknown";
+}
 
 function validateInput(input: NarrativeObservationDiscoveryInput): void {
   if (!input || typeof input !== "object" ||
@@ -204,9 +217,9 @@ export function discoverNarrativeObservationCandidates(
           evidence: {
             documentId: input.documentId,
             revision: input.revision,
-            start: baseOffset + segment.start,
-            end: baseOffset + segment.start + pronounMatch[0].trimStart().length,
-            excerpt: sentence
+            start: baseOffset + segment.start + sentence.indexOf(pronounMatch[1]!),
+            end: baseOffset + segment.start + sentence.indexOf(pronounMatch[1]!) + pronounMatch[1]!.length,
+            excerpt: pronounMatch[1]!
           }
         }];
       }
@@ -237,6 +250,7 @@ export function discoverNarrativeObservationCandidates(
           kind: "action",
           action: signal.action,
           surface,
+          grammaticalTense: classifyGrammaticalTense(surface),
           ...(mentionedCharacters.length === 1
             ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),

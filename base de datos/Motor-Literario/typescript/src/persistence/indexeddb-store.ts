@@ -4058,19 +4058,33 @@ export class IndexedDbProjectStore implements ProjectStore {
     projectId: string,
     writerId: string,
     sourceProjectName: string,
-    archivedAt: number
+    archivedAt: number,
+    syncOperation?: SyncOperationDraft,
+    expectedIdeaIds?: readonly string[]
   ): Promise<readonly PersonalIdeaLibraryEntry[]> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
         typeof sourceProjectName !== "string" || !sourceProjectName.trim() ||
-        !Number.isFinite(archivedAt) || archivedAt < 0) {
+        !Number.isFinite(archivedAt) || archivedAt < 0 ||
+        (expectedIdeaIds !== undefined &&
+          (!Array.isArray(expectedIdeaIds) || expectedIdeaIds.length > 100_000 ||
+           expectedIdeaIds.some(id => typeof id !== "string" || !id.trim() || id.length > 512) ||
+           new Set(expectedIdeaIds).size !== expectedIdeaIds.length))) {
       throw new Error("Datos de archivo de ideas inválidos.");
     }
+    const syncDraft = syncOperation === undefined
+      ? undefined : normalizeSyncOperationDraft(syncOperation);
+    if (syncDraft && syncDraft.projectId !== projectId) {
+      throw new Error("El proyecto del archivo de ideas y de la operación de sincronización no coincide.");
+    }
+    const expectedIds = expectedIdeaIds === undefined
+      ? undefined : [...expectedIdeaIds].sort();
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(
-        [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS], "readwrite"
-      );
+      const stores = syncDraft
+        ? [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS, SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES]
+        : [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS];
+      const transaction = db.transaction(stores, "readwrite");
       const ideas = transaction.objectStore(IDEAS);
       const personal = transaction.objectStore(PERSONAL_IDEAS);
       const entities = transaction.objectStore(ENTITIES);
@@ -4111,6 +4125,21 @@ export class IndexedDbProjectStore implements ProjectStore {
       ): void => {
         if (finished) return;
         try {
+          const archivedIdeaIds = pending.map(item => item.idea.id).sort();
+          if (expectedIds !== undefined &&
+              JSON.stringify(archivedIdeaIds) !== JSON.stringify(expectedIds)) {
+            throw new Error("El conjunto de ideas del libro no coincide con la operación de archivo recibida.");
+          }
+          if (syncDraft) {
+            const payload = JSON.stringify({
+              writerId, sourceProjectName, archivedAt,
+              archivedIdeaIds,
+              archiveChecksum: checksumArchivedIdeaIds(archivedIdeaIds)
+            });
+            queueSyncOperationInTransaction(
+              transaction, { ...syncDraft, payload }, abortWith
+            );
+          }
           for (const item of pending) {
             const archivedIdea: NarrativeIdea = { ...item.idea, sourceProjectName };
             validateNarrativeIdeaRecord(archivedIdea, "idea archivada");
@@ -4152,6 +4181,10 @@ export class IndexedDbProjectStore implements ProjectStore {
 
           if (existingReceipt) {
             validateFinalizationReceipt(existingReceipt, writerId, projectId);
+            if (expectedIds !== undefined &&
+                JSON.stringify([...existingReceipt.archivedIdeaIds].sort()) !== JSON.stringify(expectedIds)) {
+              throw new Error("El recibo de finalización no coincide con los IDs archivados de la operación recibida.");
+            }
             if (projectIdeas.some(idea => idea?.status === "IDEA")) {
               throw new Error(
                 "El libro ya tiene un recibo de finalización; las ideas nuevas requieren una reapertura explícita antes de archivarse."
@@ -4235,6 +4268,10 @@ export class IndexedDbProjectStore implements ProjectStore {
           const ideasToArchive = new Set(projectIdeas
             .filter(idea => idea.status === "IDEA")
             .map(idea => idea.id));
+          if (expectedIds !== undefined &&
+              JSON.stringify([...ideasToArchive].sort()) !== JSON.stringify(expectedIds)) {
+            throw new Error("El conjunto de ideas del libro cambió desde la operación de archivo recibida.");
+          }
           for (const idea of projectIdeas) {
             for (const relatedId of idea.relatedIdeaIds ?? []) {
               if (!projectIdeaIds.has(relatedId)) {

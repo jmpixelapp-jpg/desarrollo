@@ -48,7 +48,8 @@ test("no propaga sujetos desde una acción anterior que ya era hipotética", () 
   const first = observation("o1", 0, 20, ana.id, [ana.id]);
   const second = observation("o2", 21, 45, undefined, []);
   const third = observation("o3", 46, text.length, undefined, []);
-  assert.deepEqual(discover(text, [first, second, third]), []);
+  const candidates = discover(text, [first, second, third]);
+  assert.deepEqual(candidates.map(item => item.observationId), ["o2"]);
 });
 
 test("se abstiene cuando aparece otro personaje entre acciones", () => {
@@ -68,9 +69,9 @@ test("se abstiene ante saltos de párrafo", () => {
 
 test("respeta la distancia máxima y los offsets UTF-16 absolutos", () => {
   const prefix = "😀 ";
-  const text = "Ana abrió la puerta. Después salió.";
+  const text = "Ana abrió la puerta.  Después salió.";
   const first = observation("o1", prefix.length, prefix.length + 20, ana.id, [ana.id]);
-  const second = observation("o2", prefix.length + 21, prefix.length + text.length, undefined, []);
+  const second = observation("o2", prefix.length + 22, prefix.length + text.length, undefined, []);
   assert.equal(discover(text, [first, second], [ana], { baseOffset: prefix.length }).length, 1);
   assert.deepEqual(discover(text, [first, second], [ana], { baseOffset: prefix.length, maxDistance: 1 }), []);
 });

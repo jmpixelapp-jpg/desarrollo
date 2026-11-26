@@ -97,7 +97,7 @@ export interface StoredSyncOperation {
   readonly createdAt: number;
   readonly attemptCount: number;
   readonly lastAttemptAt?: number;
-  readonly lastError?: string;
+  readonly lastErrorCode?: string;
 }
 
 export interface StoredDocument extends DocumentSnapshot {

@@ -70,3 +70,9 @@ El orden y el bloqueo por reintento se aplican dentro de cada flujo `(projectId,
 ## Recuperación ante interrupción durante acuses locales
 
 El servidor puede haber aceptado un lote completo aunque el cliente se interrumpa mientras elimina sus acuses locales. La bandeja elimina cada operación confirmada de forma independiente y transaccional: si falla un borrado posterior, las ya retiradas no se reenvían y las restantes se recuperan en el siguiente ciclo. Si la interrupción ocurre antes de retirar una operación ya aceptada remotamente, esta podrá reenviarse; por ello el transporte remoto debe deduplicar por `operationId`. La entrega es, por diseño, al menos una vez, no exactamente una vez.
+
+## Concurrencia entre pestañas e instancias
+
+La coalescencia `inFlight` del coordinador evita envíos simultáneos del mismo proyecto únicamente dentro de una misma instancia JavaScript. No constituye un bloqueo compartido entre pestañas, workers o instancias del coordinador. Dos contextos pueden leer y enviar la misma operación antes de que cualquiera retire su acuse local. Por tanto, el transporte y el servidor deben admitir entregas duplicadas y deduplicar de forma atómica por `(projectId, operationId)`; una clave de idempotencia aislada en memoria no es suficiente.
+
+La bandeja actual no implementa leases distribuidos ni reclamación exclusiva de operaciones. No se debe afirmar exclusión mutua entre contextos. Una futura reclamación durable requiere una migración de esquema, vencimiento recuperable tras cierre abrupto y pruebas multi-contexto; no se añade implícitamente a la versión 25 de IndexedDB.

@@ -129,6 +129,13 @@
     function mountActiveEditor(documentId) {
       const snapshot = hostApi.getSnapshot(documentId);
       if (!snapshot) throw new Error("No se encontró el snapshot de " + labelFor(documentId) + ".");
+      const sync = hostApi.getDocumentSyncState(documentId);
+      if (!sync || sync.needsResync || sync.pendingSequence !== sync.sequence) {
+        throw new Error(
+          "No se puede activar " + labelFor(documentId) + " porque su estado de sincronización no es durable: " +
+          JSON.stringify(sync)
+        );
+      }
       textarea.value = snapshot.text;
 
       const nextIntegration = mountLiveAuthorMonitorTextArea({
@@ -275,6 +282,7 @@
         getActiveDocumentId: () => activeDocumentId,
         getSnapshot: (documentId = activeDocumentId) => hostApi.getSnapshot(documentId),
         getMetrics: (documentId = activeDocumentId) => hostApi.getLiveAuthorMonitorSnapshot(documentId),
+        getSyncState: (documentId = activeDocumentId) => hostApi.getDocumentSyncState(documentId),
         getPendingChanges: () => editorIntegration?.getPendingChanges() ?? [],
         getCloseState: () => ({ stage: closeStage, error: closeError ? String(closeError) : undefined }),
         getWorkspaceDocumentCount: () => document.querySelectorAll("#monitor-workspace [data-document-id]").length,

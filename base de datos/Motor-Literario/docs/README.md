@@ -9,6 +9,8 @@
 - [Actualización incremental del grafo narrativo](architecture/GRAFO_CONOCIMIENTO_NARRATIVO_INCREMENTAL.md): snapshots por documento, invalidación selectiva y reutilización de contribuciones.
 - [Persistencia del grafo narrativo](architecture/PERSISTENCIA_DEL_GRAFO_NARRATIVO.md): escritura CAS, recuperación desde documentos y límites de reconciliación.
 
+- [Plan de adquisición de conocimiento narrativo y biblioteca de ideas](strategy/PLAN_ADQUISICION_CONOCIMIENTO_NARRATIVO_Y_BIBLIOTECA_DE_IDEAS.md): objetivo, principios, arquitectura lógica, fases, criterios de aceptación y orden obligatorio de trabajo.
+
 ## Integración con la aplicación anfitriona
 
 - [Guía de integración TypeScript v1](integration/GUIA_INTEGRACION_ANFITRION_V1.md): arquitectura, identidades, edición en vivo, recuperación y consultas.

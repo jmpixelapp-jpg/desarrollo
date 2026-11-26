@@ -437,7 +437,8 @@ export interface ProjectStore {
     projectId: string,
     targetEntityId: string,
     sourceEntityId: string,
-    writerId?: string
+    writerId?: string,
+    syncOperation?: SyncOperationDraft
   ): Promise<void>;
   /** Transfiere atómicamente ideas aún no incorporadas a la biblioteca privada del escritor. */
   archiveUnincorporatedIdeas?(projectId: string, writerId: string, sourceProjectName: string, archivedAt: number): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;

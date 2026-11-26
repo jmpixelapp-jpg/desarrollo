@@ -67,8 +67,7 @@ function validate(input: NarrativeEllipticalSubjectDiscoveryInput): void {
       typeof input.text !== "string" || input.text.length > MAX_NARRATIVE_ELLIPTICAL_SUBJECT_TEXT_UNITS ||
       !Array.isArray(input.observations) || !Array.isArray(input.entities) ||
       !Number.isSafeInteger(maxDistance) || maxDistance < 1 ||
-      maxDistance > MAX_NARRATIVE_ELLIPTICAL_SUBJECT_DISTANCE &&
-        maxDistance > MAX_NARRATIVE_ELLIPTICAL_SUBJECT_DISTANCE * 6 ||
+      maxDistance > MAX_NARRATIVE_ELLIPTICAL_SUBJECT_DISTANCE ||
       (input.baseOffset !== undefined &&
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
           input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {

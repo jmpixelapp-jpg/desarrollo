@@ -242,3 +242,48 @@ test("cuarentena payloads runtime nulos sin lanzar al callback nativo", () => {
   assert.equal(proxyErrors.at(-1).code, "invalid-transaction");
   proxySource.dispose();
   proxyBridge.dispose();
+
+
+test("drena mil publicaciones reentrantes del editor sin recursión y en FIFO para todos los listeners", () => {
+  const native = new NativeEditorState();
+  const bridge = new LiveAuthorMonitorEditorTransactionBridge({
+    getSnapshot: documentId => native.getSnapshot(documentId),
+    getDocumentState: documentId => native.getDocumentState(documentId)
+  });
+  const firstOrder = [];
+  const secondOrder = [];
+  const publicationCounts = [];
+  const total = 1_000;
+
+  bridge.subscribeTransactions("chapter-1", transaction => {
+    const sequence = transaction.change.sequence;
+    firstOrder.push(sequence);
+    if (sequence !== 1) return;
+
+    for (let next = 2; next <= total; next++) {
+      const change = native.apply("edit", "burst-" + next, {
+        start: native.snapshot.text.length,
+        end: native.snapshot.text.length,
+        replacement: "x"
+      });
+      publicationCounts.push(bridge.publishAppliedTransaction("chapter-1", change) === 2);
+    }
+  });
+  bridge.subscribeTransactions("chapter-1", transaction => {
+    secondOrder.push(transaction.change.sequence);
+  });
+
+  const initial = native.apply("edit", "burst-1", {
+    start: 3, end: 3, replacement: "!"
+  });
+  assert.equal(bridge.publishAppliedTransaction("chapter-1", initial), 2);
+
+  const expected = Array.from({ length: total }, (_, index) => index + 1);
+  assert.deepEqual(firstOrder, expected);
+  assert.deepEqual(secondOrder, expected);
+  assert.equal(publicationCounts.length, total - 1);
+  assert.equal(publicationCounts.every(Boolean), true);
+  assert.equal(native.snapshot.sequence, total);
+  assert.equal(bridge.getSubscriberCount("chapter-1"), 2);
+  bridge.dispose();
+});

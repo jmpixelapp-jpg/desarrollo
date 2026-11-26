@@ -1216,3 +1216,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresión:** se cubren una cadena desconocida, un objeto mutable y un número, verificando que ninguno alcanza los suscriptores y que el source exige resincronización.
 
 **Validación:** pendiente de CI para este commit.
+
+
+## 73. Reintento seguro al cerrar listeners del proveedor transaccional (26 de noviembre de 2026)
+
+**Hallazgo:** `detachProvider()` borraba `unsubscribeProvider` antes de llamar al proveedor. Si el editor lanzaba una excepción, el handle quedaba perdido y el listener podía seguir activo; una resincronización posterior podía abrir otro listener, y `dispose()` repetido no podía liberar el primero.
+
+**Corrección:** el source conserva el disposer hasta que la llamada de cancelación termina correctamente. `attachProvider()` intenta cerrar cualquier handle anterior y rechaza abrir una segunda suscripción si el anterior todavía no se ha liberado. `dispose()` reintentado vuelve a ejecutar la limpieza aunque la instancia ya esté marcada como dispuesta. La integración pública también permite repetir `dispose()` para reintentar tanto el binding como el proveedor.
+
+**Regresiones:** una cancelación que falla una vez se reintenta antes de reanudar el proveedor; otra prueba confirma que un `dispose()` posterior termina de retirar el listener; una prueba de integración fuerza dos fallos transitorios y verifica que la segunda llamada pública libera el único listener restante.
+
+**Validación:** pendiente de CI para este commit.

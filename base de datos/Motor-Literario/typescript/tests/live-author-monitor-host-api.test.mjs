@@ -1250,6 +1250,14 @@ test("coalesce visibilitychange y pageshow por documento durante renovaciones si
     );
     for (const documentId of documents) {
       assert.ok(originalLeases.get(documentId));
+      const checkpointTail = api.liveMonitorCheckpointTails.get(documentId);
+      if (checkpointTail) await checkpointTail;
+    }
+    await new Promise(resolve => setImmediate(resolve));
+    // Descarta renovaciones usadas durante el guardado inicial; desde aquí
+    // el contador mide exclusivamente los eventos de reanudación.
+    store.renewalCounts.clear();
+    for (const documentId of documents) {
       store.delayNextRenewByDocument.add(documentId);
     }
 

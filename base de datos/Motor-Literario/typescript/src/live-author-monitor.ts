@@ -56,6 +56,8 @@ export interface LiveAuthorMonitorSnapshot {
   readonly commitLatencyP50Ms: number;
   readonly commitLatencyP95Ms: number;
   readonly commitLatencySamples: number;
+  /** Fallos de callbacks de observabilidad de esta sesión; no afectan la escritura. */
+  readonly listenerErrors: number;
 }
 
 interface MonitorSubscriber {
@@ -65,6 +67,7 @@ interface MonitorSubscriber {
 
 interface PendingMonitorNotification {
   readonly snapshot: LiveAuthorMonitorSnapshot;
+  readonly session: DocumentSession;
   readonly subscribers: readonly MonitorSubscriber[];
 }
 
@@ -96,6 +99,7 @@ interface DocumentSession {
   rejectedChanges: number;
   committedChanges: number;
   failedChanges: number;
+  listenerErrors: number;
   insertedCharacters: number;
   deletedCharacters: number;
   currentDocumentLength: number;
@@ -214,7 +218,8 @@ export class LiveAuthorMonitor {
       rejectedChanges: 0,
       committedChanges: 0,
       failedChanges: 0,
-      insertedCharacters: 0,
+      listenerErrors: 0,
+      insertedCharacters: 0;
       deletedCharacters: 0,
       currentDocumentLength: snapshot.text.length,
       latestRevision: snapshot.revision,
@@ -354,6 +359,13 @@ export class LiveAuthorMonitor {
   }
 
   subscribe(listener: LiveAuthorMonitorListener, documentId?: string): () => void {
+    if (typeof listener !== "function") {
+      throw new TypeError("El suscriptor del monitor debe ser una función.");
+    }
+    if (documentId !== undefined &&
+        (typeof documentId !== "string" || !documentId.trim())) {
+      throw new TypeError("documentId del suscriptor no puede estar vacío.");
+    }
     const entry = documentId === undefined ? { listener } : { listener, documentId };
     this.listeners.add(entry);
     return () => this.listeners.delete(entry);
@@ -545,6 +557,7 @@ export class LiveAuthorMonitor {
       rejectedChanges: checkpoint.rejectedChanges,
       committedChanges: checkpoint.committedChanges,
       failedChanges: checkpoint.failedChanges,
+      listenerErrors: 0,
       insertedCharacters: checkpoint.insertedCharacters,
       deletedCharacters: checkpoint.deletedCharacters,
       currentDocumentLength: snapshot.text.length,
@@ -655,7 +668,8 @@ export class LiveAuthorMonitor {
       averageCommitLatencyMs,
       commitLatencyP50Ms: percentile(session.commitLatencies, 0.50),
       commitLatencyP95Ms: percentile(session.commitLatencies, 0.95),
-      commitLatencySamples: session.commitLatencies.length
+      commitLatencySamples: session.commitLatencies.length,
+      listenerErrors: session.listenerErrors
     });
   }
 
@@ -669,6 +683,7 @@ export class LiveAuthorMonitor {
     const snapshot = this.createSnapshot(session, this.readClock(session));
     this.notificationQueue.push({
       snapshot,
+      session,
       // Fija los destinatarios al publicar: altas posteriores no reciben
       // snapshots anteriores y las bajas se respetan antes de cada callback.
       subscribers: [...this.listeners]
@@ -692,7 +707,8 @@ export class LiveAuthorMonitor {
           try {
             subscriber.listener(notification.snapshot);
           } catch {
-            // Un panel no debe interrumpir la escritura ni a otros suscriptores.
+            // Solo se cuenta el fallo; no se conserva ni expone el mensaje del error.
+            notification.session.listenerErrors++;
           }
         }
       }
@@ -762,6 +778,8 @@ export interface LiveAuthorMonitorPollingOptions {
   readonly intervalMs?: number;
   /** Permite inyectar un planificador determinista en pruebas o en el anfitrión. */
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
+  /** Recibe el snapshot, nunca el mensaje de excepción, si falla una vista. */
+  readonly onListenerError?: (snapshot: LiveAuthorMonitorSnapshot) => void;
 }
 
 const defaultMonitorRefreshScheduler = (
@@ -807,7 +825,8 @@ export function subscribeLiveAuthorMonitorWithRefresh(
     try {
       listener(snapshot);
     } catch {
-      // Un panel desconectado no debe interrumpir el flujo de escritura.
+      // El error se reduce a un aviso seguro, sin exponer mensajes del anfitrión.
+      try { options.onListenerError?.(snapshot); } catch { /* La telemetría no afecta al escritor. */ }
     }
   };
 

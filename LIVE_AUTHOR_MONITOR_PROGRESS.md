@@ -1877,3 +1877,31 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Fallo global restante:** ambos workflows siguen concluyendo `failure` por el build runtime general, que informa `src/narrative-observation-discovery.ts:373:67: Unterminated string literal`. El paso nuevo de Chromium sí se ejecuta y pasa antes de la suite completa host/editor/browser, que queda omitida por depender del bundle runtime. El archivo del fallo es ajeno a Live Author Monitor y no se modificó aquí.
 
 **Conclusión técnica:** la carrera de cancelación tardía quedó corregida y cubierta por dos ejecuciones Chromium independientes sobre el mismo commit. Sigue pendiente la validación de IME físico por sistema operativo y la conexión del puente transaccional al editor enriquecido concreto; la página de referencia textarea no equivale a esa integración de producción.
+## 122. Separación de unidades typing/IME, cobertura de procedencia y validación integral (26 de noviembre de 2026)
+
+**Cambio de métricas:**
+- Se mantiene `insertedCharacters` / `deletedCharacters` como acumulado bruto de todos los deltas admitidos, sin perder operaciones aplicadas de candidatos IME ni alterar secuencia o revisión.
+- Nuevas métricas `typingInsertedCharacters`, `compositionInsertedCharacters` y `compositionDeletedCharacters` separan unidades UTF-16 de escritura normal frente a sustituciones de candidato IME. Las unidades de composición son suma de deltas aplicados, no longitud final confirmada.
+- `estimatedWordsPerMinute` y `insertedCharactersPerMinute` usan unidades `typing` en el numerador y el tiempo activo total de sesión como denominador. Los paneles ahora lo declaran literalmente; no es tiempo puro de teclado.
+- `activityUnitMetricsComplete` pasa a `false` al restaurar checkpoints v1 históricos sin desglose, al resincronizar desde snapshot o al aceptar un delta sin `activityKind` explícito/reconocido. Los cambios futuros clasificados no reconstruyen la cobertura histórica ausente. Un `other` explícito sí es una categoría conocida.
+
+**Persistencia:** los campos nuevos son opcionales en checkpoint v1 para mantener compatibilidad histórica. El validador IndexedDB comprueba que el desglose esté completo cuando comienza, que los contadores sean enteros no negativos, que las inserciones tipadas+IME no excedan las inserciones brutas y que las unidades reemplazadas IME no excedan las eliminaciones brutas.
+
+**Interfaz:** panel de capítulo y workspace muestran unidades typing, inserciones/reemplazos IME y cobertura completa/parcial. Los textos distinguen deltas provisionales aplicados de texto final, y explican el denominador real del estimador.
+
+**Pruebas añadidas/ajustadas:** candidatos IME con reemplazos repetidos y cancelación; restauración de checkpoint histórico sin reclasificar unidades; cobertura incompleta tras resincronización o delta sin procedencia; persistencia IndexedDB y rechazo de counters parciales/incoherentes; render de métricas completas y parciales en panel y workspace. Se actualizó la regresión de cancelación tardía para esperar la tarea de respaldo en vez de exigir limpieza en microtarea.
+
+**Validación integral aprobada:** [Live Author Monitor — run 45813045173](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45813045173), commit `264821422697297802e2588ff459ea3fada46eb1`, resultado `success`.
+- Diagnóstico aislado: **17/17**.
+- Suite aislada del monitor: **197/197**, 0 fallos.
+- Page Lifecycle Chromium: **1/1**.
+- Cancelación tardía `beforeinput`: **1/1**.
+- Composición IME por CDP: **1/1**.
+- Integración host/editor/navegador: **225/225**, 0 fallos.
+- Benchmark: 100.000 commits en 497,09 ms (~201.173 commits/s); 8 documentos de 1 MiB, 0 MiB de crecimiento de heap entre media y carga completa, 0,5 MiB retenidos por sesiones abiertas, 0 operaciones pendientes y RSS final 71,29 MiB.
+
+**Validación focalizada adicional:** [Live Author Monitor — beforeinput cancellation, run 45813052811](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45813052811), resultado `success`; prueba de cancelación y prueba IME, ambas 1/1.
+
+**Bloqueo externo separado:** el workflow general `Motor Literario TypeScript` continúa fallando solo en el paso de typecheck por errores preexistentes fuera del monitor: `narrative-action-claim-comparison.ts` (propiedad `polarityEvidence` inexistente en el tipo), `narrative-character-knowledge-discovery.ts`, `narrative-evidence-context-expansion.ts`, `narrative-information-concealment-discovery.ts`, `narrative-information-exposure-discovery.ts`, `narrative-information-reception-discovery.ts`, `narrative-knowledge-dialogue-link.ts` (`exactOptionalPropertyTypes`) y `narrative-relationship-transition-discovery.ts` (parámetros `any`). En ese job, el build/tests del paquete completo quedan omitidos por el typecheck; no se atribuye ese fallo al Live Author Monitor. El bundle runtime del monitor y su integración sí aprobaron el run 45813045173.
+
+**Alcance pendiente:** la prueba CDP no sustituye validación con IME físico en Windows/macOS/Linux y los eventos de `compositionend` de CDP pueden ser no confiables. El repositorio sigue sin contener el editor enriquecido final de producción; debe conectarse el adaptador transaccional al editor real antes de afirmar cobertura de historial/undo/redo de producción.

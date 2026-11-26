@@ -4525,6 +4525,12 @@ export class IndexedDbProjectStore implements ProjectStore {
 
             const target = entities.find(item => item.id === targetEntityId);
             const source = entities.find(item => item.id === sourceEntityId);
+            // Una entrega repetida puede llegar después de confirmar la transacción
+            // y antes del acuse del diario. El destino registra el ID absorbido.
+            if (target && !source && target.projectId === projectId &&
+                (target.mergedFromIds ?? []).includes(sourceEntityId)) {
+              return;
+            }
             if (!target || !source || target.projectId !== projectId || source.projectId !== projectId ||
                 target.kind !== source.kind) {
               transaction.abort();

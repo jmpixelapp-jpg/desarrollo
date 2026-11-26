@@ -556,3 +556,8 @@ Ejemplos esperados:
 Límite: la separación es lingüística y conservadora. No decide si el motivo declarado es verdadero, sincero, principal o suficiente; tampoco deduce motivos que no estén expresados.
 
 Validación: pruebas añadidas y publicadas; build, type-check y suite completa aún deben ejecutarse sobre el head actualizado.
+
+ 
+### Corrección de atribución actor–objetivo (incluida en Fase AG)
+
+La validación de la fase reveló que el extractor podía confundir la mención del personaje objetivo con una segunda identidad actora. Ahora el candidato actor se determina por su posición anterior al marcador de intención: en «Mara desea ayudar a Elian», Mara es el actor y Elian el objetivo. Si dos personajes aparecen antes del marcador, el extractor se abstiene. Se actualizó la prueba de ambigüedad y se añadió una prueba específica actor/objetivo.

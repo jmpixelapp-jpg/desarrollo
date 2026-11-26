@@ -34,7 +34,7 @@ test("separa perspectivas epistémicas sin declarar cuál es verdadera", () => {
     ...context, text: "Ana abrió la puerta."
   });
   const belief = discoverNarrativeObservationCandidates({
-    ...context, documentId: "chapter-2", text: "Ana creyó que no abrió la puerta."
+    ...context, documentId: "chapter-2", text: "Ana creyó que Ana no abrió la puerta."
   });
   const findings = compareNarrativeActionClaims({
     projectId: "book-1", observations: [...narrator, ...belief]

@@ -82,3 +82,10 @@ La reconciliación es deliberadamente de sólo lectura. No infiere si una discre
 `repairNarrativeDocumentProjectionManifest(store, projectId, documentId)` reconstruye los cinco inventarios de un manifiesto **activo** usando exclusivamente la evidencia persistida. La actualización conserva la revisión documental, incrementa la generación y exige CAS sobre la generación previamente leída. Si el inventario ya coincide, devuelve un resultado idempotente sin escribir.
 
 La operación no repara manifiestos ausentes (no hay revisión fuente confiable), no reactiva tombstones y no modifica entidades, relaciones, eventos, ideas, afirmaciones ni sus evidencias. Los tombstones con evidencia residual deben pasar por una decisión explícita de recuperación o retirada; no se resuelven automáticamente.
+
+
+### Integridad de referencias cruzadas del grafo
+
+La reconciliación también verifica referencias internas: extremos de relaciones, participantes de acontecimientos, entidad propietaria de afirmaciones y vínculos explícitos entre ideas y entidades/otras ideas. Los códigos `missing-relation-entity`, `missing-event-participant`, `missing-assertion-entity`, `missing-related-entity` y `missing-related-idea` identifican la clase de inconsistencia.
+
+Cuando el registro no tiene evidencia documental, el diagnóstico usa `documentId: ""` para indicar alcance de proyecto y no atribuye el problema a un capítulo arbitrario. Estas incidencias no se reparan automáticamente: sin una fuente autoritativa no es seguro inventar, fusionar o reasignar identidades.

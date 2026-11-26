@@ -463,3 +463,12 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Comprueba que no hay envío un milisegundo antes del vencimiento y que al vencer se reenvían exactamente el mismo `operationId` y payload.
 - La operación solo desaparece después del acuse explícito del segundo ciclo.
 - **Validación:** regresión y documentación publicadas; no se ha ejecutado localmente la suite ni se han recibido resultados CI para este commit.
+
+
+### Tanda — identidad inmutable ante sustitución manual de conflictos
+
+- Añadida regresión sobre IndexedDB real: una propuesta local nueva utiliza un `operationId` distinto y una secuencia posterior; la operación que originó el conflicto permanece en la bandeja.
+- La prueba verifica que el payload original, el error persistido y el backoff no se alteran al insertar la operación nueva.
+- Documentado el contrato de reconciliación explícita: no reutilizar IDs con contenido distinto, no retirar la operación original por una decisión local sin validar, preservar causalidad y exigir comprobaciones transaccionales frente a decisiones concurrentes.
+- Separadas las decisiones conceptuales `accept-remote`, reemplazo local y fusión manual. No se implementa todavía ninguna API operativa de resolución, porque faltan modelo versionado de conflictos, autoridad formal de secuencias, transacción atómica y recibo remoto verificable.
+- **Validación:** test y documentación publicados en la rama de trabajo. No se ha ejecutado la suite local ni se dispone de resultados CI; no se declara la regresión aprobada.

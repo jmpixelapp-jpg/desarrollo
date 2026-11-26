@@ -105,10 +105,17 @@ export function extractNarrativeCharacterIntentCandidates(
         const match = pattern.expression.exec(afterActor);
         if (!match?.[1]) continue;
         const capture = match[1];
-        const clean = capture.replace(/[.!?;,:]+$/u, "").trim();
+        // Separa cláusulas coordinadas: una meta no debe absorber su causa
+        // («quiere protegerlo porque teme perderlo») ni su propósito («quiere
+        // protegerlo para salvarlo»). Cada cláusula conserva su propio rango.
+        const clauseBoundary = pattern.kind === "goal"
+          ? /\s+\b(?:porque|ya\s+que|puesto\s+que|para|a\s+fin\s+de|con\s+el\s+fin\s+de)\b/iu.exec(capture)
+          : undefined;
+        const boundedCapture = clauseBoundary ? capture.slice(0, clauseBoundary.index) : capture;
+        const clean = boundedCapture.replace(/[.!?;,:]+$/u, "").trim();
         if (!clean || clean.length > MAX_INTENT) continue;
-        const captureStart = match.index + match[0].indexOf(capture) + capture.search(/\S/u);
-        const captureEnd = match.index + match[0].indexOf(capture) + capture.trimEnd().length;
+        const captureStart = match.index + match[0].indexOf(capture) + boundedCapture.search(/\S/u);
+        const captureEnd = match.index + match[0].indexOf(capture) + boundedCapture.trimEnd().length;
         const prefix = excerpt.slice(0, actor.end + captureStart);
         const polarity = /\b(?:no|nunca|jamás)\b(?:\s+[\p{L}\p{M}]+){0,3}\s*$/iu.test(prefix)
           ? "negated"
@@ -122,7 +129,6 @@ export function extractNarrativeCharacterIntentCandidates(
           kind: pattern.kind, text: clean, polarity, evidenceBasis: pattern.evidenceBasis, reviewStatus: "candidate",
           evidence: {documentId:input.documentId,revision:input.revision,start,end,excerpt}
         });
-        break;
       }
     }
     if (results.size >= MAX_RESULTS) break;

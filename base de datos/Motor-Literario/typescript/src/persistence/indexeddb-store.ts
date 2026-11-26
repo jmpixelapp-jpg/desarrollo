@@ -314,7 +314,7 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
 function validateNarrativeIdeaLinksForWrite(idea: NarrativeIdea, label: string): void {
   for (const links of [idea.relatedEntityIds ?? [], idea.relatedIdeaIds ?? []]) {
     if (links.length > MAX_NARRATIVE_IDEA_REFERENCES || new Set(links).size !== links.length) {
-      throw new Error(`Registro de ${label} malformado: referencias inválidas o duplicadas.`);
+      throw new Error(`Registro de ${label} malformado: referencias inválidas o duplicadas o superiores al límite de 500.`);
     }
   }
   if (idea.relatedIdeaIds?.includes(idea.id)) {

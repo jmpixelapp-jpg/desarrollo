@@ -4190,7 +4190,6 @@ export class IndexedDbProjectStore implements ProjectStore {
             archived.push(entry);
             didChange = true;
           }
-          const archivedIdeaIds = pending.map(item => item.idea.id).sort();
           if (supportsReceipts) receipts.add({
             writerId,
             sourceProjectId: projectId,

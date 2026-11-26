@@ -49,3 +49,25 @@ Se agregaron pruebas para resolución única, ambigüedad, desacuerdo gramatical
 ### Validación de Fase D
 
 El código, exportación, pruebas y documentación están publicados en la rama de la PR 63. Aún no se ha observado una ejecución CI asociada al último commit. Build, type-check y suite completa siguen pendientes de confirmación.
+
+
+### Fase E: atribución de acciones a referencias pronominales
+
+Se añade `typescript/src/narrative-pronoun-action-link.ts`, que conecta el resultado del resolver pronominal con el extractor de acciones explícitas. Esto permite representar casos como «Mara entró. Ella no protegió a Elian» sin exigir que el escritor repita el nombre en cada oración.
+
+Reglas de seguridad:
+- Solo consume referencias y resoluciones previamente validadas.
+- Solo reconoce un verbo del vocabulario de acciones existente inmediatamente después del pronombre.
+- Una identidad única genera una acción candidata, nunca un hecho confirmado.
+- Una resolución ambigua genera una acción ambigua con todos los actores posibles y sin actor definitivo.
+- Una referencia no resuelta no genera una acción atribuida.
+- Conserva negación, documento, revisión, offsets y evidencia literal.
+- No completa objetos, no interpreta complementos complejos y no deduce causalidad.
+
+Se añadieron pruebas de integración para atribución única, ambigüedad, referencias sin resolver, estructuras verbales no compatibles y entradas inconsistentes.
+
+**Límite:** el vocabulario verbal sigue siendo deliberadamente acotado. La capa no es un analizador sintáctico general ni debe atribuir automáticamente verbos separados del pronombre por incisos o estructuras subordinadas.
+
+### Validación de Fase E
+
+Módulo, exportación, cinco pruebas y documentación publicados en la rama de la PR 63. No se ha confirmado aún una ejecución CI sobre el head actual; type-check, build y suite completa siguen pendientes.

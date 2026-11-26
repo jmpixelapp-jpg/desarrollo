@@ -121,3 +121,12 @@ La prueba de integración debe cubrir tareas más largas que la duración inicia
 El puerto `SyncOutboxPort` permite implementar `acknowledgeSyncOperations(ids)` para retirar varios acuses en una única transacción. El coordinador detecta esta capacidad y la prefiere; los adaptadores anteriores que solo implementan `acknowledgeSyncOperation(id)` conservan compatibilidad mediante el recorrido individual.
 
 La implementación IndexedDB lee y elimina el lote dentro de una transacción `readwrite`. Si la transacción falla, el lote completo se revierte en lugar de dejar una retirada parcial por fallo entre operaciones. Los IDs repetidos se rechazan; una lista vacía devuelve cero; los IDs ya ausentes no cuentan como nuevos acuses. Esta atomicidad solo cubre la persistencia local: no crea una transacción distribuida con el servidor. Si el servidor aceptó el lote y el cliente falla antes del commit local, el lote puede reenviarse y el servidor debe deduplicar cada `operationId`.
+
+
+### Recuperación ante aceptación remota ambigua
+
+Un timeout o una desconexión no demuestra que el servidor haya rechazado la operación: puede haber confirmado el cambio y perderse únicamente la respuesta. En ese caso el coordinador registra el intento, conserva la operación y la reenvía cuando vence el backoff. El transporte debe enviar el mismo `operationId` en cada repetición y el servidor debe aplicar una deduplicación durable y atómica por proyecto/operación.
+
+También puede ocurrir que el servidor responda con acuses válidos y falle después la transacción local que retira esos acuses. La bandeja conserva entonces las operaciones y el siguiente ciclo vuelve a enviarlas. El acuse remoto repetido debe ser idempotente y permitir que el cliente vuelva a retirar localmente la operación. La nueva prueba simula ambos lados: aceptación remota persistente, fallo de commit local y recuperación posterior sin duplicar el efecto remoto.
+
+Esta garantía no es una transacción distribuida ni una prueba del backend real: el repositorio cliente solo puede exigir y probar el contrato mediante un transporte simulado. La implementación del servidor debe mantener su registro de idempotencia durable durante todo el horizonte de reintentos.

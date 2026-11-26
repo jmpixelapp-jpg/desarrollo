@@ -90,6 +90,8 @@ export interface LiveAuthorMonitorEditorTransactionSourceOptions {
   readonly duplicateWindowSize?: number;
   /** Máximo de eventos reentrantes en espera; predeterminado: 4096. */
   readonly maxQueuedTransactions?: number;
+  /** Máximo total de unidades UTF-16 retenidas en la cola reentrante; predeterminado: 4194304. */
+  readonly maxQueuedTextUnits?: number;
 }
 
 export interface LiveAuthorMonitorEditorTransactionSourceState {
@@ -116,6 +118,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   private readonly onError: ((error: LiveAuthorMonitorEditorTransactionSourceError) => void) | undefined;
   private readonly duplicateWindowSize: number;
   private readonly maxQueuedTransactions: number;
+  private readonly maxQueuedTextUnits: number;
+  private pendingTransactionTextUnits = 0;
   private readonly listeners = new Set<(change: EditorChange) => void>();
   private readonly dispatchQueue: EditorChange[] = [];
   private readonly pendingTransactions: LiveAuthorMonitorEditorTransaction[] = [];
@@ -166,12 +170,17 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     if (!Number.isSafeInteger(queueLimit) || queueLimit < 1 || queueLimit > 65536) {
       throw new RangeError("maxQueuedTransactions debe ser un entero entre 1 y 65536.");
     }
+    const queuedTextLimit = options.maxQueuedTextUnits ?? 4_194_304;
+    if (!Number.isSafeInteger(queuedTextLimit) || queuedTextLimit < 1) {
+      throw new RangeError("maxQueuedTextUnits debe ser un entero positivo.");
+    }
 
     this.documentId = options.documentId;
     this.provider = options.provider;
     this.onError = options.onError;
     this.duplicateWindowSize = windowSize;
     this.maxQueuedTransactions = queueLimit;
+    this.maxQueuedTextUnits = queuedTextLimit;
     this.revision = snapshot.revision;
     this.sequence = snapshot.sequence;
     this.documentLength = snapshot.text.length;
@@ -283,6 +292,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.listeners.clear();
     this.dispatchQueue.length = 0;
     this.pendingTransactions.length = 0;
+    this.pendingTransactionTextUnits = 0;
     this.seenTransactions.clear();
     if (this.providerDetachFailed) {
       throw new Error("No se pudo retirar el listener del proveedor; repita dispose() para reintentar.");
@@ -309,7 +319,31 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       );
       return;
     }
+    const retainedChange = retained && typeof retained === "object"
+      ? retained.change
+      : undefined;
+    const retainedReplacement = retainedChange && typeof retainedChange === "object"
+      ? (retainedChange as { readonly replacement?: unknown }).replacement
+      : undefined;
+    const retainedTextUnits = typeof retainedReplacement === "string"
+      ? retainedReplacement.length
+      : 0;
+
+    // Solo limita eventos realmente reentrantes que esperan detrás del cambio
+    // activo. Un pegado grande que llega en reposo se procesa directamente y
+    // no debe rechazarse por no ser parte de un backlog.
+    if (this.processingTransactions &&
+        retainedTextUnits > this.maxQueuedTextUnits - this.pendingTransactionTextUnits) {
+      this.fail(
+        "transaction-backlog-overflow",
+        "La cola reentrante del editor superó el presupuesto de " +
+        this.maxQueuedTextUnits + " unidades UTF-16 retenidas; se requiere resincronización."
+      );
+      return;
+    }
+
     this.pendingTransactions.push(retained);
+    this.pendingTransactionTextUnits += retainedTextUnits;
     this.drainTransactionQueue();
   };
 
@@ -366,6 +400,15 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     try {
       while (this.pendingTransactions.length > 0 && !this.disposed && !this.needsResync) {
         const transaction = this.pendingTransactions.shift();
+        const transactionChange = transaction && typeof transaction === "object"
+          ? transaction.change
+          : undefined;
+        const replacement = transactionChange && typeof transactionChange === "object"
+          ? (transactionChange as { readonly replacement?: unknown }).replacement
+          : undefined;
+        if (typeof replacement === "string") {
+          this.pendingTransactionTextUnits -= replacement.length;
+        }
         try {
           // La frontera del proveedor es dinámica en runtime: incluso un payload
           // null o un getter defectuoso debe pausar el source, no escapar al editor.
@@ -380,7 +423,10 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       }
     } finally {
       this.processingTransactions = false;
-      if (this.disposed || this.needsResync) this.pendingTransactions.length = 0;
+      if (this.disposed || this.needsResync) {
+        this.pendingTransactions.length = 0;
+        this.pendingTransactionTextUnits = 0;
+      }
     }
   }
 

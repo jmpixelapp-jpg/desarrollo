@@ -814,16 +814,22 @@ test("rechaza inputType nativo inválido sin publicar la transacción", () => {
   }
 });
 
-test("exige resincronización si se reutiliza transactionId cambiando activityKind", () => {
+test("exige resincronización si se reutiliza transactionId cambiando inputType nativo", () => {
   const f = fixture();
-  const original = f.editor.apply("edit", "tx-activity-kind-reused", {
-    start: 3, end: 3, replacement: "x"
+  const original = f.editor.apply("edit", "tx-input-type-reused", {
+    start: 3,
+    end: 3,
+    replacement: "x",
+    activityKind: "typing",
+    inputType: "insertText"
   });
+  assert.equal(f.changes[0].inputType, "insertText");
+
   f.editor.publish({
     ...structuredClone(original),
     change: {
       ...structuredClone(original.change),
-      activityKind: "paste"
+      inputType: "insertFromPaste"
     }
   });
 

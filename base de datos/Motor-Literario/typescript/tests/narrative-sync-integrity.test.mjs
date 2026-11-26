@@ -100,3 +100,67 @@ test("aplica límites explícitos de profundidad, nodos y bytes UTF-8", () => {
     /entero positivo/u
   );
 });
+
+
+test("crea y verifica envolturas de operación con SHA-256", async () => {
+  const { createNarrativeSyncOperationEnvelope, verifyNarrativeSyncOperationEnvelope } =
+    await import("../dist/motor-literario.js");
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "op-01",
+    projectId: "libro-1",
+    writerId: "writer-a",
+    sequence: 1,
+    createdAt: 1_800_000_000_000,
+    kind: "idea-upsert",
+    payload: { id: "idea-1", text: "La memoria persiste." }
+  });
+  assert.equal(envelope.schemaVersion, 1);
+  assert.equal(envelope.algorithm, "SHA-256");
+  assert.match(envelope.digest, /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(await verifyNarrativeSyncOperationEnvelope(envelope), true);
+});
+
+test("rechaza envolturas alteradas, incompletas o con secuencia inválida", async () => {
+  const { createNarrativeSyncOperationEnvelope, verifyNarrativeSyncOperationEnvelope } =
+    await import("../dist/motor-literario.js");
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "op-02",
+    projectId: "libro-1",
+    writerId: "writer-a",
+    sequence: 2,
+    kind: "document-revision",
+    payload: { revision: 4 }
+  });
+  assert.equal(await verifyNarrativeSyncOperationEnvelope({
+    ...envelope, payload: { revision: 5 }
+  }), false);
+  assert.equal(await verifyNarrativeSyncOperationEnvelope({
+    ...envelope, sequence: 3
+  }), false);
+  assert.equal(await verifyNarrativeSyncOperationEnvelope({
+    ...envelope, algorithm: "FNV-1a"
+  }), false);
+  assert.equal(await verifyNarrativeSyncOperationEnvelope({
+    ...envelope, digest: "sha256:invalid"
+  }), false);
+  await assert.rejects(() => createNarrativeSyncOperationEnvelope({
+    operationId: "op-03", projectId: "libro-1", writerId: "writer-a",
+    sequence: 0, kind: "idea-upsert", payload: {}
+  }), /secuencia/u);
+});
+
+test("la envoltura no confunde integridad con autenticación", async () => {
+  const { createNarrativeSyncOperationEnvelope, verifyNarrativeSyncOperationEnvelope } =
+    await import("../dist/motor-literario.js");
+  const original = await createNarrativeSyncOperationEnvelope({
+    operationId: "op-04", projectId: "libro-1", writerId: "writer-a",
+    sequence: 4, kind: "idea-upsert", payload: { id: "idea-4" }
+  });
+  const forgedByRehashing = await createNarrativeSyncOperationEnvelope({
+    ...original,
+    writerId: "writer-b",
+    payload: original.payload
+  });
+  assert.equal(await verifyNarrativeSyncOperationEnvelope(forgedByRehashing), true);
+  assert.notEqual(forgedByRehashing.digest, original.digest);
+});

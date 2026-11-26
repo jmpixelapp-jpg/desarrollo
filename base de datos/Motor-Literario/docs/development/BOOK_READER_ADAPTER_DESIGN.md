@@ -154,3 +154,5 @@ Esta sección actualiza las notas históricas anteriores de este documento. El l
 Por tanto, las frases de las primeras secciones que indiquen que nav/NCX o los saltos `br` aún no existen deben leerse como descripción histórica de la primera implementación. El detalle vigente, las limitaciones actuales y los criterios de validación están en `docs/analysis/REGISTRO_TECNICO_LECTURA_Y_TRAZABILIDAD_NARRATIVA.md`.
 
 También se añadió revisión al snapshot de ingesta y un resolver de evidencia narrativa que exige igualdad de revisión y coincidencia exacta de cita. Esto no sustituye el plan de importación transaccional: la resolución de evidencias y la confirmación de importación son responsabilidades distintas.
+
+Nota de auditoría: la evidencia narrativa usa rangos de ocurrencia y una cita contextual de línea completa; el resolver compara ahora la línea que contiene el rango. La ingesta, por su parte, crea IDs internos `chapter:<id>`. Estos no se deben tratar como IDs de documentos anfitriones sin un mapeo explícito y una conversión comprobada de offsets.

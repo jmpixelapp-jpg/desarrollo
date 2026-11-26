@@ -82,6 +82,8 @@ export interface NarrativeUnderstandingInput {
   readonly priorInformationProvenance?: readonly NarrativeInformationProvenance[];
   /** Interpretaciones explícitas previas, conservadas con su evidencia. */
   readonly priorInformationInterpretations?: readonly NarrativeInformationInterpretation[];
+  /** Evaluaciones anteriores de afirmaciones, con evidencia y autoría originales. */
+  readonly priorKnowledgeEvolution?: readonly NarrativeKnowledgeEvolution[];
   /** Orden cronológico de documentos conocido por el proyecto; si falta, no se inventa. */
   readonly orderedDocumentIds?: readonly string[];
 }
@@ -158,6 +160,8 @@ function validate(input: NarrativeUnderstandingInput): void {
         (!Array.isArray(input.priorInformationProvenance) || input.priorInformationProvenance.length > 5000)) ||
       (input.priorInformationInterpretations !== undefined &&
         (!Array.isArray(input.priorInformationInterpretations) || input.priorInformationInterpretations.length > 5000)) ||
+      (input.priorKnowledgeEvolution !== undefined &&
+        (!Array.isArray(input.priorKnowledgeEvolution) || input.priorKnowledgeEvolution.length > 5000)) ||
       (input.orderedDocumentIds !== undefined && !Array.isArray(input.orderedDocumentIds))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
   }
@@ -248,7 +252,7 @@ export function understandNarrativeFragment(
     entities: input.entities,
     information: [...(input.priorInformationProvenance ?? []), ...informationProvenance],
     interpretations: [...(input.priorInformationInterpretations ?? []), ...informationInterpretations],
-    evaluations: knowledgeEvolution,
+    evaluations: [...(input.priorKnowledgeEvolution ?? []), ...knowledgeEvolution],
     orderedDocumentIds: input.orderedDocumentIds
   });
   const events = extractNarrativeEventCandidates(extractionContext);

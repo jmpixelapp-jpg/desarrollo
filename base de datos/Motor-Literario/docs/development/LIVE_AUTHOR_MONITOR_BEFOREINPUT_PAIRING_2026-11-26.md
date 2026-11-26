@@ -366,3 +366,43 @@ Son resultados del benchmark `live-author-monitor-bounded-heap` sobre el núcleo
 La página manual está compilada y su exportación de metadatos se prueba en Chromium con texto sentinel y entrada de teclado nativa. El JSON descargado no incluye ni el texto sentinel ni el carácter introducido; sí conserva longitudes, offsets y metadatos suficientes para investigar la secuencia. El buffer de eventos y el de deltas se limitan a 2.000 entradas cada uno, con contadores de descartes.
 
 **Pendiente fuera de CI:** todavía no se han ejecutado sesiones con IME físicos ni se han recibido trazas de los equipos de Windows, macOS y Linux descritos en la matriz anterior. No se debe marcar esa matriz como aprobada hasta probar cada combinación real. La página ya está disponible en `tests/browser/live-author-monitor-ime-manual.html` para realizar esa validación en los dispositivos correspondientes.
+
+
+## Trazas IME v2: correlación de eventos y contadores de vida de sesión
+
+El banco manual exporta ahora el formato `live-author-monitor-ime-trace-v2`.
+
+### Correlación `beforeinput`/`input`
+
+Cada `beforeinput` no cancelado recibe un `pairId`. El evento `input` siguiente consume ese identificador y ambos registros reciben el estado de pareja. El resumen de sesión distingue:
+- `pairedInputCount`: pares completados;
+- `pendingBeforeInputCount`: operación cuyo `input` todavía no llegó;
+- `unmatchedBeforeInputCount`: un nuevo `beforeinput` reemplazó uno pendiente;
+- `orphanInputCount`: `input` sin un `beforeinput` pendiente;
+- `inputTypeMismatchCount`: los dos eventos informaron tipos incompatibles;
+- `defaultPreventedBeforeInputCount`: el navegador notificó que la operación estaba cancelada antes del cambio por defecto.
+
+El par no se cierra en `compositionend`: el `input` final puede llegar después, tal como se comprobó con el flujo Chromium. Los estados individuales también quedan en los registros cuando aún están dentro del buffer.
+
+### Comparación de `data` sin exportar contenido
+
+Durante el par, el banco compara los strings `beforeinput.data` y `input.data` solo en memoria. En la traza quedan únicamente estos resultados:
+- `match`: ambos strings estaban disponibles y eran idénticos;
+- `mismatch`: ambos estaban disponibles y diferían;
+- `one-sided`: solo uno estaba disponible;
+- `unavailable`: ninguno estaba disponible;
+- `not-applicable`: no se esperaba un `input` porque el `beforeinput` estaba cancelado.
+
+Los valores literales no se copian a los objetos de eventos, al resumen ni al JSON exportado. El string temporal del evento anterior se libera al emparejar el `input`, al ser reemplazado por otro `beforeinput` o al abandonar la página. Esto permite contrastar exactamente los datos de ambos eventos sin incluir el manuscrito ni los candidatos en la traza.
+
+### Contadores acumulativos y límite del buffer
+
+Los contadores de eventos, confianza, composición, deltas, errores y parejas ahora se incrementan durante toda la sesión y no se calculan filtrando el buffer visible. El buffer de eventos conserva como máximo 2.000 entradas y el de deltas como máximo 2.000; los contadores `droppedEventCount` y `droppedDeltaCount` informan cuántas entradas antiguas se descartaron. Por tanto, una sesión larga puede seguir reportando totales completos aunque su traza detallada cubra solo el tramo más reciente.
+
+La prueba Playwright amplía la prueba de privacidad: realiza una escritura nativa, verifica un par de eventos completo, despacha 2.010 `compositionupdate` sintéticos solo para estresar el límite del registrador, y comprueba que:
+- los contadores registran las 2.010 actualizaciones aunque solo se retengan 2.000 entradas;
+- el número de parejas y deltas no cambia cuando se descartan eventos antiguos;
+- los valores centinela privados del manuscrito y de los candidatos no aparecen en el JSON;
+- la clasificación de confianza identifica los eventos sintéticos del test como no confiables.
+
+**Importante:** esos 2.010 eventos sintéticos no representan una sesión IME ni son consumidos por el adaptador; solo prueban la retención y los contadores del banco manual. La evidencia del pipeline IME del navegador sigue procediendo de la prueba específica con `Input.imeSetComposition`, y la evidencia de IME físicos sigue pendiente de la matriz de dispositivos.

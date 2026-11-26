@@ -275,7 +275,7 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
     const closing = /^<\s*\//u.test(token);
     const tagMatch = /^<\s*\/?\s*([\w:-]+)/u.exec(token);
     if (!tagMatch) continue;
-    const tag = tagMatch[1].toLowerCase();
+    const tag = tagMatch[1].toLowerCase().split(":").pop()!;
     if (closing) {
       if (["p","div","li","blockquote","pre","h1","h2","h3","h4","h5","h6"].includes(tag)) emit();
       if (["aside","footer"].includes(tag)) emit();
@@ -290,16 +290,18 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
       if (!token.endsWith("/>")) stack.push(tag);
       continue;
     }
+    if (tag === "br") {
+      if (currentKind) current.push("\\n");
+      continue;
+    }
     const role = (attrs.get("epub:type") ?? attrs.get("role") ?? "").toLowerCase();
     const classes = (attrs.get("class") ?? "").toLowerCase();
-    if (["p","div","li","blockquote","pre"].includes(tag) ||
-        /^h[1-6]$/u.test(tag) || tag === "br") {
+    if (["p","div","li","blockquote","pre"].includes(tag) || /^h[1-6]$/u.test(tag)) {
       emit();
       currentKind = /^h1$/u.test(tag) ? "chapter-heading" :
         /^h[2-6]$/u.test(tag) ? "section-heading" :
         (role.includes("footnote") || classes.includes("footnote") || stack.includes("__footnote__") ? "footnote" :
           (tag === "pre" || role.includes("verse") || classes.includes("verse") ? "poem-line" : "paragraph"));
-      if (tag === "br") emit();
     }
     if (tag === "aside" && (role.includes("footnote") || classes.includes("footnote"))) {
       stack.push(tag, "__footnote__");

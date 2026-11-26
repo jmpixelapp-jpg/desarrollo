@@ -13,11 +13,7 @@ export interface ProjectIdentity {
   readonly projectName: string;
   /** Identidad estable del escritor autenticado, entregada por el anfitrión. */
   readonly writerId?: string;
-  /**
-   * Identidad UUID estable de esta instalación, persistida por el anfitrión.
-   * Al definirla, las ediciones requieren un ProjectStore con outbox atómica.
-   * No debe regenerarse al abrir una sesión ni derivarse de datos personales.
-   */
+  /** UUID aleatorio y estable de esta instalación, persistido por el anfitrión. */
   readonly deviceId?: string;
 }
 
@@ -89,10 +85,7 @@ export interface CommitResult {
   readonly reason?: string;
 }
 
-/**
- * Operación durable pendiente de transporte. El payload JSON se mantiene
- * desacoplado de proveedores de red y de los detalles del anfitrión.
- */
+/** Operación saliente antes de asignar la secuencia durable por dispositivo. */
 export interface SyncOperationDraft {
   readonly operationId: string;
   readonly projectId: string;
@@ -102,6 +95,7 @@ export interface SyncOperationDraft {
   readonly createdAt: number;
 }
 
+/** Operación durable pendiente de transporte. */
 export interface StoredSyncOperation {
   readonly operationId: string;
   readonly projectId: string;
@@ -114,6 +108,7 @@ export interface StoredSyncOperation {
   readonly lastAttemptAt?: number;
   readonly lastErrorCode?: string;
 }
+
 export interface StoredDocument extends DocumentSnapshot {
   readonly projectId: string;
   readonly updatedAt: number;
@@ -204,9 +199,27 @@ export interface NarrativeDocumentProjectionManifest {
   readonly updatedAt: number;
 }
 
+/** Registro append-only de una reparación de referencias del grafo narrativo. */
+export interface NarrativeReferenceRepairAuditEntry {
+  readonly operationId: string;
+  readonly operation: "narrative-reference-repair";
+  readonly projectId: string;
+  readonly recordType: "relation" | "event" | "assertion" | "idea";
+  readonly recordId: string;
+  readonly referenceField: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
+  readonly before: string | readonly string[];
+  readonly after: string | readonly string[];
+  readonly missingReferenceId: string;
+  readonly replacementEntityId: string;
+  readonly appliedAt: number;
+}
+
 export interface ProjectStore {
-  /** True only when domain CAS and outbox writes share one local transaction. */
+  /** True solo si las mutaciones CAS del dominio y la outbox comparten transacción. */
   readonly supportsAtomicNarrativeSyncOutbox?: boolean;
+  /** Auditoría append-only e idempotente de reparaciones narrativas. */
+  appendNarrativeReferenceRepairAudit?(entry: NarrativeReferenceRepairAuditEntry): Promise<void>;
+  loadNarrativeReferenceRepairAudits?(projectId: string): Promise<readonly NarrativeReferenceRepairAuditEntry[]>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */
@@ -304,15 +317,15 @@ export interface ProjectStore {
     linked: boolean
   ): Promise<void>;
 
-  /** Última secuencia durable asignada a un proyecto/dispositivo; cero si aún no hay operaciones. */
+  /** Última secuencia durable asignada a un proyecto/dispositivo; cero si no hay operaciones. */
   loadLastSyncOperationSequence?(projectId: string, deviceId: string): Promise<number>;
-  /** Encola una operación idempotente y avanza el cursor en una sola transacción local. */
+  /** Encola una operación ya numerada de forma idempotente. */
   enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
-  /** Lee pendientes sin eliminarlos; solo un acuse remoto durable permite retirarlos. */
+  /** Lee pendientes FIFO por dispositivo sin retirarlos antes del acuse remoto durable. */
   loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
-  /** Conserva el diagnóstico del último intento sin guardar contenido sensible del error. */
+  /** Persiste metadatos de reintento sin guardar texto del error ni datos sensibles. */
   recordSyncOperationAttempt?(operationId: string, attemptedAt: number, errorCode?: string): Promise<boolean>;
-  /** Retira la operación después de que el anfitrión haya verificado el acuse remoto durable. */
+  /** Retira solo una operación confirmada por un acuse remoto durable validado. */
   acknowledgeSyncOperation?(operationId: string): Promise<boolean>;
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;
@@ -323,10 +336,7 @@ export interface ProjectStore {
   }>;
   /** Opcional: almacenamiento incremental de cambios. */
   appendChange?(change: StoredChange): Promise<void>;
-  /**
-   * Confirma un delta y su operación de salida en una única transacción.
-   * La secuencia de sincronización la asigna el almacén, global por proyecto/dispositivo.
-   */
+  /** Confirma el delta del editor y su operación saliente en la misma transacción. */
   appendChangeAndEnqueueSyncOperation?(
     change: StoredChange,
     operation: SyncOperationDraft

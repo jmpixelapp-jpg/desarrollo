@@ -1,4 +1,6 @@
 import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic, NarrativeDocumentProjectionManifest, NarrativeReferenceRepairAuditEntry, NarrativeReferenceRepairPendingEntry } from "../contracts";
+import type { NarrativeIdeaContinuityIndex } from "../narrative-idea-continuity-index";
+import { validateNarrativeIdeaContinuityIndex } from "../narrative-idea-continuity-index";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +32,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 27;
+const DATABASE_VERSION = 28;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -38,6 +40,7 @@ const ENTITIES = "narrative-entities";
 const RELATIONS = "narrative-relations";
 const EVENTS = "narrative-events";
 const IDEAS = "narrative-ideas";
+const NARRATIVE_IDEA_CONTINUITY_INDEXES = "narrative-idea-continuity-indexes";
 const PERSONAL_IDEAS = "personal-idea-library";
 const PERSONAL_IDEA_SOURCE_INDEX = "by-source-project";
 const FINALIZATION_RECEIPTS = "writer-library-finalization-receipts";
@@ -1845,6 +1848,9 @@ export class IndexedDbProjectStore implements ProjectStore {
         if (!db.objectStoreNames.contains(IDEAS)) {
           const ideas = db.createObjectStore(IDEAS, { keyPath: ["projectId", "id"] });
           ideas.createIndex("by-project", "projectId", { unique: false });
+        }
+        if (!db.objectStoreNames.contains(NARRATIVE_IDEA_CONTINUITY_INDEXES)) {
+          db.createObjectStore(NARRATIVE_IDEA_CONTINUITY_INDEXES, { keyPath: "projectId" });
         }
         if (!db.objectStoreNames.contains(PERSONAL_IDEAS)) {
           const personalIdeas = db.createObjectStore(PERSONAL_IDEAS, {
@@ -4307,6 +4313,85 @@ export class IndexedDbProjectStore implements ProjectStore {
       identities.add(identity);
     }
     return entries;
+  }
+
+  /**
+   * Lee el índice derivado y compacto de continuidad de un proyecto.
+   * La validación comprueba IDs, procedencia, referencias y huella antes de
+   * entregar datos potencialmente sincronizados o persistidos por otra pestaña.
+   */
+  async loadNarrativeIdeaContinuityIndex(
+    projectId: string
+  ): Promise<NarrativeIdeaContinuityIndex | undefined> {
+    if (typeof projectId !== "string" || !projectId.trim() || projectId.length > 256) {
+      throw new Error("Identificador de proyecto inválido para leer continuidad de ideas.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_IDEA_CONTINUITY_INDEXES, "readonly");
+    const request = transaction.objectStore(NARRATIVE_IDEA_CONTINUITY_INDEXES).get(projectId);
+    const result = await readAfterTransaction(
+      transaction, request, "No se pudo leer el índice de continuidad de ideas."
+    ) as NarrativeIdeaContinuityIndex | undefined;
+    if (result) {
+      validateNarrativeIdeaContinuityIndex(result);
+      if (result.projectId !== projectId) {
+        throw new Error("El índice de continuidad leído pertenece a otro proyecto.");
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Escritura CAS atómica: lectura de generación y reemplazo ocurren en la
+   * misma transacción IndexedDB. Una pestaña obsoleta no puede pisar el índice
+   * de otra instancia y un reintento debe volver a leer la generación vigente.
+   */
+  async saveNarrativeIdeaContinuityIndexIfUnchanged(
+    index: NarrativeIdeaContinuityIndex,
+    expectedGeneration?: number
+  ): Promise<void> {
+    validateNarrativeIdeaContinuityIndex(index);
+    if (expectedGeneration !== undefined &&
+        (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0)) {
+      throw new Error("Generación esperada del índice de continuidad inválida.");
+    }
+    if (index.generation !== (expectedGeneration ?? 0) + 1) {
+      throw new Error("La generación del índice de continuidad debe avanzar exactamente una unidad.");
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(NARRATIVE_IDEA_CONTINUITY_INDEXES, "readwrite");
+      const objectStore = transaction.objectStore(NARRATIVE_IDEA_CONTINUITY_INDEXES);
+      const request = objectStore.get(index.projectId);
+      let failure: Error | undefined;
+      request.onsuccess = () => {
+        try {
+          const current = request.result as NarrativeIdeaContinuityIndex | undefined;
+          if (current) validateNarrativeIdeaContinuityIndex(current);
+          if (current?.generation !== expectedGeneration) {
+            failure = new Error("Conflicto CAS: el índice de continuidad cambió desde la última lectura.");
+            transaction.abort();
+            return;
+          }
+          objectStore.put(index);
+        } catch (error) {
+          failure = error instanceof Error ? error : new Error("El índice de continuidad actual está corrupto.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        }
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo leer la generación del índice de continuidad.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(
+        failure ?? transaction.error ?? new Error("Se abortó la escritura CAS del índice de continuidad.")
+      );
+      transaction.onerror = () => reject(
+        failure ?? transaction.error ?? new Error("Falló la escritura del índice de continuidad.")
+      );
+    });
+    this.publishNarrativeChange(index.projectId);
   }
 
   async loadNarrativeDocumentProjectionManifest(

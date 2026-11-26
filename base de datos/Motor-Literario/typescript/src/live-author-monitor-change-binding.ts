@@ -15,11 +15,15 @@ export interface LiveAuthorMonitorChangeSink {
   onEditorChange(change: EditorChange): ChangeAdmission;
 }
 
+export type LiveAuthorMonitorPermanentAdmissionReason =
+  Exclude<Extract<ChangeAdmission, { status: "rejected" }>["reason"], "queue_full">;
+
 export type LiveAuthorMonitorBackpressureReason =
   | "queue_full"
   | "rejected"
   | "sink_error"
-  | "resync_required";
+  | "resync_required"
+  | LiveAuthorMonitorPermanentAdmissionReason;
 
 /** Estado observable del backlog FIFO; no contiene texto del manuscrito. */
 export interface LiveAuthorMonitorBackpressureSnapshot {
@@ -29,6 +33,8 @@ export interface LiveAuthorMonitorBackpressureSnapshot {
   readonly lastPendingSequence?: number;
   /** Secuencia que excedió el límite y no pudo retenerse; exige snapshot común. */
   readonly overflowSequence?: number;
+  /** Secuencia que originó un rechazo que requiere snapshot/resincronización. */
+  readonly resyncSequence?: number;
   readonly reason?: LiveAuthorMonitorBackpressureReason;
 }
 
@@ -46,6 +52,22 @@ export class LiveAuthorMonitorBackpressureOverflowError extends Error {
       " y se requiere resincronización desde un snapshot autoritativo."
     );
     this.name = "LiveAuthorMonitorBackpressureOverflowError";
+  }
+}
+
+/** Rechazo no recuperable mediante un simple reintento de capacidad. */
+export class LiveAuthorMonitorAdmissionResynchronizationError extends Error {
+  readonly code = "editor-change-resync-required";
+
+  constructor(
+    readonly reason: LiveAuthorMonitorPermanentAdmissionReason,
+    readonly sequence: number
+  ) {
+    super(
+      "El motor rechazó la secuencia " + sequence + " (" + reason +
+      "); la captura quedó pausada hasta reconciliar editor y motor con un snapshot autoritativo."
+    );
+    this.name = "LiveAuthorMonitorAdmissionResynchronizationError";
   }
 }
 
@@ -140,6 +162,7 @@ export function bindLiveAuthorMonitorEditorChanges(
   let resyncRequired = false;
   let pausedForResynchronization = false;
   let overflowSequence: number | undefined;
+  let resyncSequence: number | undefined;
   let pendingReason: LiveAuthorMonitorBackpressureReason | undefined;
   let lastPublishedBackpressure: LiveAuthorMonitorBackpressureSnapshot | undefined;
   let unsubscribeRetrySignal: (() => void) | undefined;
@@ -173,6 +196,7 @@ export function bindLiveAuthorMonitorEditorChanges(
           ...(first ? { firstPendingSequence: first.sequence } : {}),
           ...(last ? { lastPendingSequence: last.sequence } : {}),
           ...(overflowSequence === undefined ? {} : { overflowSequence }),
+          ...(resyncSequence === undefined ? {} : { resyncSequence }),
           reason: pendingReason ?? "rejected"
         });
 
@@ -182,6 +206,7 @@ export function bindLiveAuthorMonitorEditorChanges(
         lastPublishedBackpressure.firstPendingSequence === snapshot.firstPendingSequence &&
         lastPublishedBackpressure.lastPendingSequence === snapshot.lastPendingSequence &&
         lastPublishedBackpressure.overflowSequence === snapshot.overflowSequence &&
+        lastPublishedBackpressure.resyncSequence === snapshot.resyncSequence &&
         lastPublishedBackpressure.reason === snapshot.reason) {
       return;
     }
@@ -204,17 +229,19 @@ export function bindLiveAuthorMonitorEditorChanges(
     if (unsubscribeSource === unsubscribe) unsubscribeSource = undefined;
   };
 
-  const pauseForResynchronization = (change: EditorChange): void => {
+  const pauseForResynchronization = (
+    change: EditorChange,
+    reason: LiveAuthorMonitorBackpressureReason,
+    error: Error,
+    isOverflow = false
+  ): void => {
     if (disposed || resyncRequired) return;
     resyncRequired = true;
     pausedForResynchronization = true;
-    pendingReason = "resync_required";
-    overflowSequence = change.sequence;
+    pendingReason = reason;
+    resyncSequence = change.sequence;
+    if (isOverflow) overflowSequence = change.sequence;
 
-    const error = new LiveAuthorMonitorBackpressureOverflowError(
-      maxPendingChanges,
-      change.sequence
-    );
     try {
       options.source.requireResynchronization?.(error.message);
     } catch (pauseError) {
@@ -244,7 +271,12 @@ export function bindLiveAuthorMonitorEditorChanges(
     if (pending.length > 0) {
       if (pending.length >= maxPendingChanges) {
         // No se agrega el delta que desbordaría el buffer; se obliga a tomar un snapshot común.
-        pauseForResynchronization(change);
+        pauseForResynchronization(
+          change,
+          "resync_required",
+          new LiveAuthorMonitorBackpressureOverflowError(maxPendingChanges, change.sequence),
+          true
+        );
         return;
       }
       pending.push(retainPendingChange(change));
@@ -263,12 +295,27 @@ export function bindLiveAuthorMonitorEditorChanges(
       return;
     }
 
-    if (admission.status === "rejected") {
-      pending.push(retainPendingChange(change));
-      pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
-      publishBackpressure();
+    if (admission.status === "queued") {
+      reportAdmission(change, admission);
+      return;
     }
+
+    if (admission.reason === "queue_full") {
+      pending.push(retainPendingChange(change));
+      pendingReason = "queue_full";
+      publishBackpressure();
+      reportAdmission(change, admission);
+      return;
+    }
+
+    // invalid_change, unknown_document, change_too_large y resync_required
+    // no se resuelven liberando capacidad. Pausar evita un FIFO bloqueado.
     reportAdmission(change, admission);
+    pauseForResynchronization(
+      change,
+      admission.reason,
+      new LiveAuthorMonitorAdmissionResynchronizationError(admission.reason, change.sequence)
+    );
   };
 
   const retryPending = (): void => {
@@ -293,12 +340,25 @@ export function bindLiveAuthorMonitorEditorChanges(
           pending.shift();
           if (pending.length === 0) pendingReason = undefined;
           publishBackpressure();
-        } else {
-          pendingReason = admission.reason === "queue_full" ? "queue_full" : "rejected";
-          publishBackpressure();
+          reportAdmission(change, admission);
+          continue;
         }
+
         reportAdmission(change, admission);
-        if (admission.status === "rejected") break;
+        if (admission.reason === "queue_full") {
+          pendingReason = "queue_full";
+          publishBackpressure();
+          break;
+        }
+
+        // Una causa permanente en la cabeza bloquea toda la cola FIFO:
+        // se pausa la fuente y se conserva el backlog hasta un snapshot común.
+        pauseForResynchronization(
+          change,
+          admission.reason,
+          new LiveAuthorMonitorAdmissionResynchronizationError(admission.reason, change.sequence)
+        );
+        break;
       }
     } finally {
       retrying = false;
@@ -380,6 +440,7 @@ export function bindLiveAuthorMonitorEditorChanges(
         pending.length = 0;
         pendingReason = undefined;
         overflowSequence = undefined;
+        resyncSequence = undefined;
         resyncRequired = false;
         pausedForResynchronization = false;
         attachSource();
@@ -397,6 +458,7 @@ export function bindLiveAuthorMonitorEditorChanges(
     pending.length = 0;
     pendingReason = undefined;
     overflowSequence = undefined;
+    resyncSequence = undefined;
     resyncRequired = false;
     pausedForResynchronization = false;
     if (hadState) publishBackpressure();

@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   bindLiveAuthorMonitorEditorChanges,
-  LiveAuthorMonitorBackpressureOverflowError
+  LiveAuthorMonitorBackpressureOverflowError,
+  LiveAuthorMonitorAdmissionResynchronizationError
 } from "../dist/motor-literario.js";
 
 function sourceFixture() {
@@ -330,23 +331,38 @@ test("publica snapshots inmutables del backlog al entrar en contrapresión y al 
   assert.equal(states.length, 4, "el desmontaje no debe repetir el estado clear");
 });
 
-test("limpia el indicador de contrapresión solo al descartar el backlog tras resincronizar", () => {
+test("un rechazo resync_required pausa la fuente sin reintentar y se limpia tras el snapshot común", () => {
   const f = sourceFixture();
   const states = [];
+  const errors = [];
+  let admissions = 0;
   const stop = bindLiveAuthorMonitorEditorChanges({
     source: f.source,
-    sink: { onEditorChange: () => ({ status: "rejected", reason: "resync_required" }) },
+    sink: {
+      onEditorChange: () => {
+        admissions += 1;
+        return { status: "rejected", reason: "resync_required" };
+      }
+    },
     onAdmission: () => {},
     onBackpressure: snapshot => states.push(snapshot),
-    onError: error => { throw error; }
+    onError: error => errors.push(error)
   });
 
   f.emit(change(4));
-  assert.equal(states.at(-1).status, "backpressured");
-  assert.equal(stop.getPendingChanges().length, 1);
+  assert.equal(states.at(-1).status, "resync-required");
+  assert.equal(states.at(-1).reason, "resync_required");
+  assert.equal(states.at(-1).resyncSequence, 4);
+  assert.equal(stop.getPendingChanges().length, 0);
+  assert.equal(f.listeners.size, 0);
+  assert.equal(f.resynchronizationRequests.length, 1);
+  assert.equal(errors.at(-1) instanceof LiveAuthorMonitorAdmissionResynchronizationError, true);
+  f.emit(change(5));
+  assert.equal(admissions, 1, "la fuente pausada no genera nuevos intentos");
+
   stop.discardPendingAfterResynchronization();
   assert.deepEqual(states.at(-1), { status: "clear", pendingCount: 0 });
-  assert.deepEqual(stop.getPendingChanges(), []);
+  assert.equal(f.listeners.size, 1, "la fuente solo vuelve a activarse después del snapshot común");
   stop();
 });
 
@@ -679,5 +695,96 @@ test("el backlog conserva deltas congelados aunque el callback o la fuente muten
     [2, "A", true]
   ], "los reintentos deben recibir las copias inmutables, no las referencias externas");
   assert.deepEqual(stop.getPendingChanges(), []);
+  stop();
+});
+
+
+test("los rechazos permanentes pausan la fuente y exigen snapshot en vez de bloquear el FIFO", () => {
+  const permanentReasons = ["change_too_large", "unknown_document", "invalid_change", "resync_required"];
+  for (const reason of permanentReasons) {
+    const f = sourceFixture();
+    const states = [];
+    const errors = [];
+    const attempts = [];
+    const admissions = [];
+    let first = true;
+    const stop = bindLiveAuthorMonitorEditorChanges({
+      source: f.source,
+      sink: {
+        onEditorChange(value) {
+          attempts.push(value.sequence);
+          if (first) {
+            first = false;
+            return { status: "rejected", reason };
+          }
+          return { status: "queued", ticketId: "ticket-" + value.sequence };
+        }
+      },
+      onAdmission: (_value, admission) => admissions.push(admission.status),
+      onBackpressure: state => states.push(state),
+      onError: error => errors.push(error)
+    });
+
+    f.emit(change(10));
+    assert.deepEqual(attempts, [10], reason + ": no reintenta el rechazo permanente");
+    assert.deepEqual(admissions, ["rejected"]);
+    assert.equal(f.listeners.size, 0, reason + ": pausa la fuente");
+    assert.equal(states.at(-1).status, "resync-required");
+    assert.equal(states.at(-1).reason, reason);
+    assert.equal(states.at(-1).resyncSequence, 10);
+    assert.equal(states.at(-1).pendingCount, 0);
+    assert.equal(errors.at(-1) instanceof LiveAuthorMonitorAdmissionResynchronizationError, true);
+    assert.equal(errors.at(-1).reason, reason);
+
+    f.emit(change(11));
+    assert.deepEqual(attempts, [10], reason + ": ignora eventos posteriores mientras requiere snapshot");
+    stop.discardPendingAfterResynchronization();
+    assert.equal(f.listeners.size, 1);
+    f.emit(change(11));
+    assert.deepEqual(attempts, [10, 11], reason + ": admite cambios después de reconciliar");
+    stop();
+    assert.equal(f.listeners.size, 0);
+  }
+});
+
+test("un rechazo permanente durante retryPending pausa y conserva todo el backlog FIFO", () => {
+  const f = sourceFixture();
+  const attempts = [];
+  const states = [];
+  const errors = [];
+  let capacity = false;
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        if (!capacity) return { status: "rejected", reason: "queue_full" };
+        return { status: "rejected", reason: "invalid_change" };
+      }
+    },
+    onAdmission: () => {},
+    onBackpressure: state => states.push(state),
+    onError: error => errors.push(error)
+  });
+
+  f.emit(change(1));
+  f.emit(change(2));
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1, 2]);
+  assert.equal(f.listeners.size, 1);
+
+  capacity = true;
+  stop.retryPending();
+  assert.deepEqual(attempts, [1, 1]);
+  assert.deepEqual(stop.getPendingChanges().map(value => value.sequence), [1, 2],
+    "un rechazo permanente no elimina ni reordena el backlog");
+  assert.equal(f.listeners.size, 0);
+  assert.equal(states.at(-1).status, "resync-required");
+  assert.equal(states.at(-1).reason, "invalid_change");
+  assert.equal(states.at(-1).resyncSequence, 1);
+  assert.equal(errors.at(-1) instanceof LiveAuthorMonitorAdmissionResynchronizationError, true);
+
+  stop.discardPendingAfterResynchronization();
+  assert.deepEqual(stop.getPendingChanges(), []);
+  assert.equal(f.listeners.size, 1);
   stop();
 });

@@ -1137,3 +1137,18 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Validación:** pendiente de CI para este commit. La protección de las instantáneas de diagnóstico del commit `eebb84da3fff3acc5d92b565892d8789401f7d70` pasó la lane del monitor [run 45751188342](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188342); el workflow general aprobó type-check, build y suite, con benchmark incluido en [run 45751188331](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188331).
 
 **Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+
+## 66. Separación entre contrapresión recuperable y rechazo que exige resincronización (26 de noviembre de 2026)
+
+**Hallazgo:** el binding retenía cualquier `ChangeAdmission` rechazado en la cola FIFO y asignaba a casi todos el motivo genérico `rejected`. Sin embargo, el motor distingue `queue_full` (transitorio) de `invalid_change`, `unknown_document`, `change_too_large` y `resync_required`. Reintentar estos últimos sin reconciliar no corrige su causa; además, mantiene bloqueadas las ediciones posteriores detrás del primer delta imposible de admitir.
+
+**Corrección:** solo `queue_full` permanece en estado `backpressured` y puede resolverse con `retryPending()`. Los demás rechazos detienen la fuente y pasan a `resync-required`; el backlog existente se conserva sin reordenarlo hasta que el anfitrión confirme un snapshot autoritativo y llame `discardPendingAfterResynchronization()`. Un rechazo terminal de la primera edición no guarda un delta potencialmente inválido/oversized en memoria, pero informa su secuencia mediante `resyncSequence`.
+
+**Diagnóstico:** `LiveAuthorMonitorBackpressureSnapshot.reason` conserva el motivo real y agrega `resyncSequence`; `overflowSequence` queda reservado para desbordamientos del buffer. Se añade `LiveAuthorMonitorAdmissionResynchronizationError` con código estable y sin contenido del manuscrito.
+
+**Regresiones:** rechazos permanentes en la admisión inicial para las cuatro razones; pausa de fuente y rearme solo tras snapshot; y rechazo permanente al reintentar la cabeza FIFO, comprobando que se conserva toda la cola.
+
+**Validación:** pendiente de CI para este commit. La validación general del commit `eebb84d` pasó type-check, build, suite y benchmark; la lane específica del monitor también aprobó su suite y benchmark en [run 45751188342](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751188342).
+
+**Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.

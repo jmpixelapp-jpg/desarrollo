@@ -400,3 +400,17 @@ Cada cambio que se retiene por contrapresión o error de admisión se copia inme
 De esta manera, si el proveedor reutiliza o modifica después su objeto, o si un callback de observabilidad altera el argumento que recibió, el contenido pendiente no cambia. Al reintentar, el sink recibe la copia congelada y conserva la secuencia y los offsets originales.
 
 La consulta `getPendingChanges()` devuelve además nuevas copias congeladas para diagnóstico, sin compartir referencias con la cola interna. La regresión del módulo altera deliberadamente tanto el objeto entregado al callback como el objeto original del segundo delta, y comprueba que el reintento sigue enviando los dos reemplazos originales en orden.
+
+
+## 22. Rechazos permanentes del motor y pausa para resincronización
+
+La cola externa distingue el único rechazo transitorio de capacidad (`queue_full`) de los rechazos que no se reparan esperando espacio:
+
+- `invalid_change`
+- `unknown_document`
+- `change_too_large`
+- `resync_required`
+
+Estos rechazos detienen la captura de la fuente y publican un estado `resync-required` con el motivo real y `resyncSequence`. No se reintentan automáticamente ni se permite que deltas posteriores adelanten al rechazado. Si ya existía backlog, se conserva íntegro y en orden. La cola solo se limpia después de que el anfitrión haya reconciliado editor y motor con el mismo snapshot autoritativo.
+
+`overflowSequence` se reserva para el caso distinto en que el buffer alcanza su límite. `LiveAuthorMonitorAdmissionResynchronizationError` identifica los rechazos permanentes sin incluir texto del manuscrito. La regresión de admisión inicial cubre las cuatro causas; otra prueba cubre el mismo rechazo al reintentar la cabeza de una cola FIFO.

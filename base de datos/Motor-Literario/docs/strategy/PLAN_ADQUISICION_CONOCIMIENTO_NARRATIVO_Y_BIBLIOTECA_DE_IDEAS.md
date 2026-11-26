@@ -381,3 +381,20 @@ La selección de la evaluación vigente exige que la evidencia sea posterior a l
 Se añadieron pruebas para historial acumulado, cambio de duda a refutación, cronología desconocida y evaluación anterior a la recepción. El pipeline acepta y conserva `priorKnowledgeEvolution`.
 
 **Límite semántico:** confirmar o refutar significa que el personaje lo expresó; no establece la verdad objetiva. El sistema no deduce olvido por falta de menciones ni pérdida de memoria a partir del silencio narrativo.
+
+
+## Fase W: eventos explícitos de memoria individual
+
+Se incorpora `typescript/src/narrative-memory-events.ts` con `extractNarrativeMemoryEvents(input)`. Detecta señales léxicas explícitas atribuidas a personajes nombrados:
+
+- `forgetting`: olvidó, olvido, olvidaba, había olvidado y dejó de recordar.
+- `remembering`: recordó, recordo, recordaba y rememoró.
+- `memory-recovery`: recuperó el recuerdo/la memoria de.
+
+Cada evento conserva personaje, contenido, proyecto, documento, revisión y evidencia con offsets UTF-16 absolutos. Los nombres/alias ambiguos no se atribuyen. Se rechazan entidades ajenas al proyecto y se aplican límites de texto y resultados.
+
+El pipeline publica los candidatos como `memoryEvents`; la API se exporta desde el índice público. Se agregan pruebas para olvido explícito, recuerdo, recuperación, negación de olvido, nombres ambiguos, offsets y validación de proyecto, además de una prueba de integración.
+
+**Límites deliberados:** no deduce olvido por silencio, falta de mención, paso del tiempo o contradicción. No concluye que un recuerdo sea verdadero, que se haya borrado de forma permanente ni que un personaje haya recuperado toda la memoria. La negación simple `no olvidó` y `nunca olvidó` no se clasifica como olvido. Los patrones son un primer detector léxico en español, no un analizador semántico general.
+
+**Validación:** los archivos y pruebas están publicados en la rama; no se afirma que TypeScript, build o suite hayan pasado hasta ejecutar comprobaciones reales sobre el head actualizado.

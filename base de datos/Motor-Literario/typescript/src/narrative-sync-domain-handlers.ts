@@ -12,6 +12,11 @@ import {
 } from "./narrative-knowledge";
 import type { NarrativeAssertion } from "./narrative-history";
 import type { NarrativeSyncOperationHandler } from "./narrative-sync-dispatcher";
+import type { NarrativeIdeaContinuityIndex } from "./narrative-idea-continuity-index";
+import {
+  areNarrativeIdeaContinuityIndexesEquivalent,
+  validateNarrativeIdeaContinuityIndex
+} from "./narrative-idea-continuity-index";
 
 export interface NarrativeIdeaUpsertPayload {
   readonly idea: NarrativeIdea;
@@ -378,6 +383,58 @@ export function createNarrativeEntityMergeHandler(
         operation.payload.sourceEntityId,
         operation.payload.writerId
       );
+    }
+  };
+}
+
+
+export interface NarrativeIdeaContinuityIndexUpsertPayload {
+  readonly index: NarrativeIdeaContinuityIndex;
+  /** Generación que el emisor leyó antes de producir la siguiente generación. */
+  readonly expectedGeneration?: number;
+}
+
+/**
+ * Replica un snapshot derivado con CAS. No modifica ideas canónicas: el índice
+ * es una proyección reconstruible y la divergencia se deja pendiente para que
+ * el anfitrión vuelva a calcularla desde las fuentes documentales.
+ */
+export function createNarrativeIdeaContinuityIndexUpsertHandler(
+  store: ProjectStore
+): NarrativeSyncOperationHandler<NarrativeIdeaContinuityIndexUpsertPayload> {
+  if (!store ||
+      typeof store.loadNarrativeIdeaContinuityIndex !== "function" ||
+      typeof store.saveNarrativeIdeaContinuityIndexIfUnchanged !== "function") {
+    throw new TypeError("El store debe implementar loadNarrativeIdeaContinuityIndex y saveNarrativeIdeaContinuityIndexIfUnchanged.");
+  }
+
+  return {
+    kind: "idea-continuity-index-upsert",
+    validate(payload: unknown): payload is NarrativeIdeaContinuityIndexUpsertPayload {
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const item = payload as Partial<NarrativeIdeaContinuityIndexUpsertPayload>;
+      try {
+        if (!item.index) return false;
+        validateNarrativeIdeaContinuityIndex(item.index);
+      } catch {
+        return false;
+      }
+      return item.expectedGeneration === undefined ||
+        (Number.isSafeInteger(item.expectedGeneration) && item.expectedGeneration >= 0)
+        ? item.index.generation === (item.expectedGeneration ?? 0) + 1
+        : false;
+    },
+    async apply(operation): Promise<void> {
+      const { index, expectedGeneration } = operation.payload;
+      if (index.projectId !== operation.projectId) {
+        throw new Error("El índice de continuidad del sobre pertenece a otro proyecto.");
+      }
+      const current = await store.loadNarrativeIdeaContinuityIndex!(operation.projectId);
+      if (current && areNarrativeIdeaContinuityIndexesEquivalent(current, index)) return;
+      if (current?.generation !== expectedGeneration) {
+        throw new Error("Conflicto CAS al sincronizar el índice de continuidad; requiere reconciliación.");
+      }
+      await store.saveNarrativeIdeaContinuityIndexIfUnchanged!(index, expectedGeneration);
     }
   };
 }

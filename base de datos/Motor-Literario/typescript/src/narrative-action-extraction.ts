@@ -37,10 +37,10 @@ const ACTIONS = [
 ] as const;
 
 function normalize(value: string): string {
-  return value.normalize("NFKC").trim().replace(/\\s+/gu, " ").toLocaleLowerCase("es");
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
 }
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+  return value.split("").map(char => "|\\{}()[]^$+*?.-".includes(char) ? "\\" + char : char).join("");
 }
 function validate(input: NarrativeActionExtractionInput): void {
   if (!input || typeof input !== "object" ||

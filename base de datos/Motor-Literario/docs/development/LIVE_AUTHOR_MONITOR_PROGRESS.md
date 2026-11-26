@@ -1647,7 +1647,7 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Alcance:** carrera determinista en un almacén de pruebas que suspende la llamada antes de aplicar el mismo guard de lease que usa `MemoryDocumentStore`. La validación atómica de IndexedDB se mantiene cubierta por las pruebas de fencing transaccional existentes.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [Live Author Monitor — run 45766086566](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766086566), checkout `a5aaac7476f4509bc7d2d4cfebff6307c1da4c92`, terminó `success`. La regresión de la escritura antigua que se reanuda después del takeover aprobó como test 106; monitor/panel/workspace/adaptadores 167/167, Page Lifecycle Chromium 1/1 e integración host/editor/browser 179/179. El benchmark de 100.000 commits terminó en 410,43 ms (~243.648 commits/s), heap de 4,39 MiB a mitad y final, crecimiento medido 0 MiB y cero tickets pendientes.
 
 
 ## 107. Aislamiento de leases entre documentos del mismo proyecto (26 de noviembre de 2026)

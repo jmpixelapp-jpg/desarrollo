@@ -5691,6 +5691,47 @@ export class IndexedDbProjectStore implements ProjectStore {
                 try { transaction.abort(); } catch { /* transacción ya abortada */ }
                 return;
               }
+
+              // Los contadores por tipo también son monótonos. En checkpoints
+              // v1 históricos sin desglose, todos los cambios anteriores se
+              // interpretan como "other"; el total implícito debe conservarse.
+              const activityMetricKeys = [
+                "typingChanges",
+                "pasteChanges",
+                "deletionChanges",
+                "correctionChanges",
+                "undoChanges",
+                "redoChanges",
+                "otherChanges"
+              ] as const;
+              const activityMetricValue = (
+                candidate: StoredLiveAuthorMonitorCheckpoint,
+                key: typeof activityMetricKeys[number]
+              ): number => {
+                if (key === "otherChanges") {
+                  const classifiedTotal =
+                    (candidate.typingChanges ?? 0) +
+                    (candidate.pasteChanges ?? 0) +
+                    (candidate.deletionChanges ?? 0) +
+                    (candidate.correctionChanges ?? 0) +
+                    (candidate.undoChanges ?? 0) +
+                    (candidate.redoChanges ?? 0);
+                  return candidate.otherChanges ?? candidate.acceptedChanges - classifiedTotal;
+                }
+                return candidate[key] ?? 0;
+              };
+              const regressedActivityMetric = activityMetricKeys.find(
+                key => activityMetricValue(checkpoint, key) <
+                  activityMetricValue(existing, key)
+              );
+              if (regressedActivityMetric) {
+                failure = new Error(
+                  "Se rechazó un checkpoint de la misma sesión que hace retroceder la métrica " +
+                  regressedActivityMetric + "."
+                );
+                try { transaction.abort(); } catch { /* transacción ya abortada */ }
+                return;
+              }
             }
           }
           try {

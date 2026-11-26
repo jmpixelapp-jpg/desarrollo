@@ -57,6 +57,16 @@ export interface NarrativeObservationCandidate {
     readonly recipientEvidence: TextEvidence;
     readonly actionEvidence: TextEvidence;
   };
+  /** Interacción dirigida candidata: los roles se limitan a patrones verbales explícitos y siguen sin confirmar. */
+  readonly directedInteractionCandidate?: {
+    readonly relation: "attacks" | "helps" | "protects" | "saves";
+    readonly fromEntityId: string;
+    readonly toEntityId: string;
+    readonly targetRole: "target" | "beneficiary" | "protected";
+    readonly subjectEvidence: TextEvidence;
+    readonly targetEvidence: TextEvidence;
+    readonly actionEvidence: TextEvidence;
+  };
   /** Referencia pronominal pendiente: nunca fusiona automáticamente el pronombre con una identidad. */
   readonly unresolvedReferences?: readonly {
     readonly pronoun: string;
@@ -478,6 +488,34 @@ export function discoverNarrativeObservationCandidates(
               }
             }
           : undefined;
+        const interactionRoles = {
+          atacar: { relation: "attacks", targetRole: "target" },
+          ayudar: { relation: "helps", targetRole: "beneficiary" },
+          proteger: { relation: "protects", targetRole: "protected" },
+          salvar: { relation: "saves", targetRole: "beneficiary" }
+        } as const;
+        const interactionRole = interactionRoles[signal.action as keyof typeof interactionRoles];
+        const directedInteractionCandidate = interactionRole &&
+          !before &&
+          subjectCandidate?.voice === "active" &&
+          personalObjectCandidate &&
+          subjectCandidate.entityId !== personalObjectCandidate.entityId
+          ? {
+              relation: interactionRole.relation,
+              fromEntityId: subjectCandidate.entityId,
+              toEntityId: personalObjectCandidate.entityId,
+              targetRole: interactionRole.targetRole,
+              subjectEvidence: subjectCandidate.evidence,
+              targetEvidence: personalObjectCandidate.evidence,
+              actionEvidence: {
+                documentId: input.documentId,
+                revision: input.revision,
+                start: localStart,
+                end: localStart + surface.length,
+                excerpt: surface
+              }
+            }
+          : undefined;
         const id = `observation:${input.documentId}:${localStart}:${signal.action}`;
         results.set(id, {
           id,
@@ -493,6 +531,7 @@ export function discoverNarrativeObservationCandidates(
           ...(personalObjectCandidate ? { personalObjectCandidate } : {}),
           ...(grammaticalObjectCandidate ? { grammaticalObjectCandidate } : {}),
           ...(directedRelationCandidate ? { directedRelationCandidate } : {}),
+          ...(directedInteractionCandidate ? { directedInteractionCandidate } : {}),
           ...(mentionedCharacters.length === 1
             ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),

@@ -75,3 +75,13 @@ Ninguna de ellas demuestra IME físico de todas las plataformas ni sustituye la 
 **Propiedades conservadas:** la cancelación no incrementa secuencia/revisión, no publica un delta vacío ni exige resincronización. La siguiente edición aplicada sigue siendo admisible.
 
 El test mantiene la traza de evento, microtarea y tarea para que una futura regresión identifique el orden real del navegador. La validación CI de esta corrección está pendiente; no se marca todavía como aprobada.
+## Resultado validado en CI — 26 de noviembre de 2026
+
+- [Workflow focalizado, run 45808557947](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45808557947): `success`, test Chromium 1/1.
+- [Workflow habitual del monitor, run 45808558036](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45808558036): el paso de cancelación tardía concluyó `success`, 1/1.
+
+Ambos runs usaron el commit `b52e8d2130197b7656da01ce6033652a15556ca9`, con espera explícita de `pendingInput === false` y de la señal de la tarea posterior del navegador. El run habitual también aprobó la suite unitaria/diagnóstica 191/191, Page Lifecycle Chromium 1/1, type-check aislado, bundle aislado, esquema y benchmark.
+
+El workflow habitual conserva resultado global `failure` por el build runtime general, que se detiene en `src/narrative-observation-discovery.ts:373:67` con `Unterminated string literal`. La integración host/editor/browser completa queda omitida por depender de ese bundle. Este fallo pertenece a un módulo narrativo ajeno; el paso Chromium específico de esta regresión sí se ejecutó y pasó.
+
+Alcance pendiente: las pruebas cubren teclado confiable y propagación DOM en Chromium headless, no IME físico en cada sistema operativo/idioma. Tampoco demuestran que un editor enriquecido de producción esté conectado; esa integración debe suministrar transacciones nativas aplicadas y su historial real.

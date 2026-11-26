@@ -259,9 +259,9 @@ Esta tanda se concentra en la integridad de la evidencia textual: los rangos deb
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo sigue siendo `main`. `df1a10ab423f222d652349453d2a496cb1a206f3` es el HEAD histórico registrado antes de la tanda de idempotencia del 26 de noviembre. El HEAD resultante de esa tanda es `57e3d56efd6a6dc210d38990ef1f4643ad7d3dd4`. Las consultas de checks y de ejecuciones de workflow para los commits de implementación, prueba y documentación devolvieron colecciones vacías. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para el HEAD actual**. La presencia de pruebas en el repositorio no demuestra que se hayan ejecutado.
+La rama de trabajo sigue siendo `main`. `57e3d56efd6a6dc210d38990ef1f4643ad7d3dd4` es el HEAD de la tanda anterior. En los avances siguientes se publicaron `2f9a941` (comparación canónica durante recuperación del cursor), `e650d12` (regresión con propiedades reordenadas), `ff73710` (límites Unicode con marcas combinantes), `16c2312` (pruebas Unicode de participantes y contradicciones vitales) y `87cc45e` (documentación de ambos frentes). Las consultas de checks para los commits anteriores devolvieron colecciones vacías; por tanto, **los cambios y pruebas están publicados, pero no se declaran verificados**.
 
-El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
+La PR #59 propone integrar la outbox saliente con mutaciones CAS y migrar IndexedDB DB27→DB28. Sigue en revisión y no equivale a sincronización multidispositivo completa: la descarga remota incremental, el cursor del servidor, la resolución de conflictos y el transporte autenticado siguen siendo responsabilidades pendientes.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.
 

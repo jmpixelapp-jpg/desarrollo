@@ -592,3 +592,10 @@ El benchmark midió 100.000 commits en 660,83 ms (~151.325 commits/s); el heap t
 Las suites de los adaptadores del editor se ejecutan desde el bundle aislado del monitor, no desde el bundle principal del motor. El entrypoint de pruebas exporta ahora el binding de cambios, la fuente transaccional nativa, su bridge y su integración, la integración del panel de pestaña activa y las fuentes/integración del textarea. TypeScript estricto comprueba sus dependencias transitivas, y Vite genera el bundle reducido antes de ejecutar las pruebas.
 
 La evidencia del run 45758057459 es 161/161 pruebas y type-check estricto aprobados. Esto valida contratos y comportamiento determinista de los adaptadores con editores fake que emiten eventos nativos controlados; no sustituye aún las pruebas de navegador con IndexedDB real ni demuestra compatibilidad con una implementación externa concreta de editor. Las integraciones browser/host siguen condicionadas a que el bundle completo y la auditoría de persistencia pasen.
+
+
+## 50. Hito de integración end-to-end alcanzado en commit 948408ae
+
+La ejecución [Live Author Monitor — run 45758096783](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758096783) pasó todos los pasos: type-check estricto, bundle monitor, MLDB 0.4.2 con 27 tablas, runtime bundle, Chromium, 161/161 pruebas unitarias/aisladas y 167/167 al incluir host/editor/browser. En Chromium pasaron el lease entre dos páginas con IndexedDB real y fencing token, el ciclo de vida de pestaña y escritura/guardado/recuperación de dos capítulos.
+
+Se documenta como evidencia válida del checkout `948408ae9e9519495dc8df97f48abcf20a38020e`. No se extrapola al HEAD actual: commits de sincronización posteriores modificaron persistencia y una validación posterior reporta sintaxis inválida en `indexeddb-store.ts:2560`. El próximo gate es repetir el pipeline integral sobre un commit actual cuando las modificaciones de persistencia queden estables.

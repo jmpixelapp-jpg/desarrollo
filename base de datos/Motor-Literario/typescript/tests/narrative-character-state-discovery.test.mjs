@@ -164,3 +164,24 @@ test("no confunde estados nuevos con acciones ni acepta adjetivos sin cópula", 
   assert.deepEqual(discover("Ana, preocupada, abrió la puerta. Bruno sonrió feliz."), []);
 });
 
+
+test("separa los estados afirmados por el narrador de los estados que un personaje cree",()=>{
+ const result=discover("Ana está herida. Ana creyó que Ana no estaba herida.");
+ assert.equal(result.length,2);
+ assert.equal(result[0].epistemicFrame,"narrator-asserted");
+ assert.equal(result[1].epistemicFrame,"character-belief");
+ assert.equal(result[1].epistemicFrameEvidence.excerpt,"creyó que ");
+});
+test("conserva la fuente explícita del discurso referido sobre un estado",()=>{
+ const result=discover("Ana dijo que Ana estaba herida.");
+ assert.equal(result.length,1);
+ assert.equal(result[0].epistemicFrame,"reported-speech");
+ assert.equal(result[0].epistemicSourceCandidate.entityId,ana.id);
+ assert.equal(result[0].epistemicSourceCandidate.evidence.excerpt,"Ana");
+});
+test("no inventa fuente en discurso referido impersonal",()=>{
+ const result=discover("Se dijo que Ana estaba herida.");
+ assert.equal(result.length,1);
+ assert.equal(result[0].epistemicFrame,"reported-speech");
+ assert.equal(result[0].epistemicSourceCandidate,undefined);
+});

@@ -114,6 +114,19 @@ function validateOutboxCursor(
   }
 }
 
+function validateOutboxProjectCursor(
+  value: OutboxProjectCursor | undefined,
+  projectId: string
+): void {
+  if (value !== undefined && (
+    !value || value.projectId !== projectId ||
+    !Number.isSafeInteger(value.lastGeneration) || value.lastGeneration < 1 ||
+    !Number.isFinite(value.updatedAt) || value.updatedAt < 0
+  )) {
+    throw new Error("El cursor de generaciones del proyecto está corrupto.");
+  }
+}
+
 function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
   if (!value || typeof value !== "object" ||
       typeof value.projectId !== "string" || !value.projectId.trim() ||
@@ -143,8 +156,11 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
       envelope.sequence !== value.sequence ||
       envelope.operationId !== value.operationId ||
       envelope.kind !== "idea-continuity-index-upsert" ||
+      envelope.payload?.index?.projectId !== value.projectId ||
       envelope.payload?.index?.generation !== value.generation ||
-      envelope.payload?.index?.fingerprint !== value.fingerprint) {
+      envelope.payload?.index?.fingerprint !== value.fingerprint ||
+      envelope.payload?.expectedGeneration !== value.generation - 1 ||
+      envelope.createdAt !== value.createdAt) {
     throw new Error("La envoltura no coincide con la identidad persistida del outbox.");
   }
 }
@@ -217,6 +233,10 @@ export class IndexedDbNarrativeSyncOutbox {
       const snapshot = await this.readEnqueueSnapshot(database, projectId, generation, input.writerId);
       if (snapshot.existing) {
         validateStoredEntry(snapshot.existing);
+        validateNarrativeIdeaContinuityIndex(snapshot.existing.envelope.payload.index);
+        if (!(await this.verifyEnvelope(snapshot.existing.envelope))) {
+          throw new Error("La entrada existente del outbox no supera SHA-256.");
+        }
         if (snapshot.existing.fingerprint !== fingerprint ||
             snapshot.existing.envelope.payload.expectedGeneration !== expectedGeneration) {
           throw new Error("Conflicto de outbox: la misma generación ya se encoló con otro contenido o base.");
@@ -224,6 +244,7 @@ export class IndexedDbNarrativeSyncOutbox {
         return { status: "duplicate", entry: snapshot.existing };
       }
       validateOutboxCursor(snapshot.cursor, projectId, input.writerId);
+      validateOutboxProjectCursor(snapshot.projectCursor, projectId);
       if (snapshot.projectCursor &&
           (generation !== snapshot.projectCursor.lastGeneration + 1 ||
            expectedGeneration !== snapshot.projectCursor.lastGeneration)) {
@@ -478,19 +499,9 @@ export class IndexedDbNarrativeSyncOutbox {
       let existing: NarrativeSyncOutboxEntry | undefined;
       let cursor: OutboxWriterCursor | undefined;
       let projectCursor: OutboxProjectCursor | undefined;
-      let operationsReady = false;
-      let cursorReady = false;
-      const finish = (): void => {
-        if (operationsReady && cursorReady) {
-          // Se resuelve al final de la transacción para evitar usar snapshots
-          // de lecturas que aún no han terminado de confirmarse.
-        }
-      };
       const operationRequest = operations.get([projectId, generation]);
       operationRequest.onsuccess = () => {
         existing = operationRequest.result as NarrativeSyncOutboxEntry | undefined;
-        operationsReady = true;
-        finish();
       };
       operationRequest.onerror = () => {
         try { transaction.abort(); } catch { /* abortada */ }
@@ -498,8 +509,6 @@ export class IndexedDbNarrativeSyncOutbox {
       const cursorRequest = cursors.get([projectId, writerId]);
       cursorRequest.onsuccess = () => {
         cursor = cursorRequest.result as OutboxWriterCursor | undefined;
-        cursorReady = true;
-        finish();
       };
       cursorRequest.onerror = () => {
         try { transaction.abort(); } catch { /* abortada */ }
@@ -511,11 +520,14 @@ export class IndexedDbNarrativeSyncOutbox {
       projectCursorRequest.onerror = () => {
         try { transaction.abort(); } catch { /* abortada */ }
       };
-      transaction.oncomplete = () => resolve({
+      transaction.oncomplete = () => {
+        validateOutboxProjectCursor(projectCursor, projectId);
+        resolve({
         ...(existing ? { existing } : {}),
         ...(cursor ? { cursor } : {}),
         ...(projectCursor ? { projectCursor } : {})
       });
+      };
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo leer el estado de secuencia del outbox."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura de secuencia del outbox."));
     });

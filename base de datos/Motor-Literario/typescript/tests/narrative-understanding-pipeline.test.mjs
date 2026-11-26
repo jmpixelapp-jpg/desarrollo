@@ -342,3 +342,26 @@ test("integra interpretaciones explícitas y las compara con información previa
   assert.equal(result.informationInterpretations[0].comparison,"different-content");
   assert.equal(result.informationInterpretations[0].priorInformationId,"prior:mara:bridge");
 });
+
+
+test("el pipeline produce un estado de conocimiento por personaje con su interpretación vinculada", () => {
+  const priorInformationProvenance = [{
+    id:"prior:mara:bridge",projectId:"novel",
+    informationHolderEntityId:"mara",sourceEntityId:"elian",
+    channel:"reported-speech",status:"reported",
+    content:"el puente había caído",reviewStatus:"candidate",
+    evidence:{documentId:"chapter-1",revision:1,start:0,end:49,excerpt:"Elian le contó a Mara que el puente había caído."},
+    contentEvidence:{documentId:"chapter-1",revision:1,start:28,end:49,excerpt:"el puente había caído"}
+  }];
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-2",revision:2,
+    text:"Mara entendió mal que el puente seguía en pie.",
+    entities,priorInformationProvenance
+  });
+  const maraState = result.characterKnowledgeStates.find(state =>
+    state.characterEntityId === "mara");
+  assert.equal(maraState.summary.recordedInformationCount,1);
+  assert.equal(maraState.summary.explicitMisinterpretationCount,1);
+  assert.equal(maraState.items[0].interpretations[0].priorInformationId,
+    "prior:mara:bridge");
+});

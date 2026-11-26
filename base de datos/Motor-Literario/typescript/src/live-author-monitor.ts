@@ -512,7 +512,7 @@ export class LiveAuthorMonitor {
         !Array.isArray(checkpoint.commitLatencies) ||
         checkpoint.commitLatencies.length > this.commitSampleWindow ||
         checkpoint.commitLatencies.length > checkpoint.committedChanges + checkpoint.failedChanges ||
-        checkpoint.commitLatencies.some(value => !finiteNonNegative(value)) ||
+        Array.from(checkpoint.commitLatencies).some(value => !finiteNonNegative(value)) ||
         checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
           checkpoint.totalCommitLatencyMs + 1 ||
         (checkpoint.commitLatencies.length === 0

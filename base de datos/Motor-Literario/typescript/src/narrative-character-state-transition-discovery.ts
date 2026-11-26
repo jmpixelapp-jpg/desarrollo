@@ -174,7 +174,9 @@ export function discoverNarrativeCharacterStateTransitions(
         evidence,
         reviewStatus: "candidate"
       });
-      if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_TRANSITIONS) return results;
+      if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_TRANSITIONS) {
+        throw new Error("La reconstrucción supera el límite de transiciones; divide el manuscrito por bloques o capítulos.");
+      }
     }
     previousByState.set(key, current);
   }

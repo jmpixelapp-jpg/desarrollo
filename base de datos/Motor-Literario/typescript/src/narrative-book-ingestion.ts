@@ -88,14 +88,14 @@ interface Span { start: number; end: number; text: string; }
 
 const CHAPTER_HEADING = /^\s*(?:(?:cap[ií]tulo|chapter|parte|part|libro|book)\s+(?:[ivxlcdm]+|\d+|[a-záéíóúñ-]+)(?:\s*[:.—-]\s*.*)?|pr[oó]logo|ep[ií]logo|introducci[oó]n|interludio)\s*$/iu;
 const ACTIONS: readonly { label: string; expression: RegExp }[] = [
-  { label: "death", expression: /\b(?:muri[oó]|falleci[oó]|mat[oó]|asesin[oó]|pereci[oó])\b/giu },
-  { label: "arrival", expression: /\b(?:lleg[oó]|arrib[oó]|regres[oó]|volvi[oó])\b/giu },
-  { label: "departure", expression: /\b(?:parti[oó]|sali[oó]|huy[oó]|escap[oó])\b/giu },
-  { label: "discovery", expression: /\b(?:descubri[oó]|encontr[oó]|hall[oó]|revel[oó])\b/giu },
-  { label: "decision", expression: /\b(?:decidi[oó]|resolvi[oó]|acept[oó]|rechaz[oó])\b/giu },
-  { label: "conflict", expression: /\b(?:atac[oó]|golpe[oó]|luch[oó]|combati[oó]|traicion[oó])\b/giu },
-  { label: "communication", expression: /\b(?:dijo|declar[oó]|confes[oó]|pregunt[oó]|respondi[oó]|advirti[oó])\b/giu },
-  { label: "movement", expression: /\b(?:entr[oó]|cruz[oó]|camin[oó]|corri[oó]|subi[oó]|baj[oó])\b/giu }
+  { label: "death", expression: /(?<![\p{L}\p{M}\p{N}_])(?:muri[oó]|falleci[oó]|mat[oó]|asesin[oó]|pereci[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "arrival", expression: /(?<![\p{L}\p{M}\p{N}_])(?:lleg[oó]|arrib[oó]|regres[oó]|volvi[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "departure", expression: /(?<![\p{L}\p{M}\p{N}_])(?:parti[oó]|sali[oó]|huy[oó]|escap[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "discovery", expression: /(?<![\p{L}\p{M}\p{N}_])(?:descubri[oó]|encontr[oó]|hall[oó]|revel[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "decision", expression: /(?<![\p{L}\p{M}\p{N}_])(?:decidi[oó]|resolvi[oó]|acept[oó]|rechaz[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "conflict", expression: /(?<![\p{L}\p{M}\p{N}_])(?:atac[oó]|golpe[oó]|luch[oó]|combati[oó]|traicion[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "communication", expression: /(?<![\p{L}\p{M}\p{N}_])(?:dijo|declar[oó]|confes[oó]|pregunt[oó]|respondi[oó]|advirti[oó])(?![\p{L}\p{M}\p{N}_])/giu },
+  { label: "movement", expression: /(?<![\p{L}\p{M}\p{N}_])(?:entr[oó]|cruz[oó]|camin[oó]|corri[oó]|subi[oó]|baj[oó])(?![\p{L}\p{M}\p{N}_])/giu }
 ];
 const TEMPORAL: readonly { label: string; expression: RegExp }[] = [
   { label: "explicit-date", expression: /\b(?:el\s+)?\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/giu },

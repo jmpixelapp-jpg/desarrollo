@@ -26,10 +26,22 @@ export interface NarrativeObjectTrajectoryEntry {
   readonly interveningDocumentsWithoutTransitionCandidate: readonly string[];
 }
 
+export interface NarrativeObjectContinuitySignal {
+  readonly id: string;
+  readonly kind: "transfer-reception-corroboration";
+  readonly fromTransitionId: string;
+  readonly toTransitionId: string;
+  readonly participantEntityId: string;
+  readonly evidence: readonly [TextEvidence, TextEvidence];
+  /** Compatibilidad textual candidata; no demuestra posesión efectiva. */
+  readonly status: "corroboration-candidate";
+}
+
 export interface NarrativeObjectTrajectory {
   readonly projectId: string;
   readonly objectEntityId: string;
   readonly entries: readonly NarrativeObjectTrajectoryEntry[];
+  readonly continuitySignals: readonly NarrativeObjectContinuitySignal[];
   readonly evidenceCoverage: "candidate-transitions-only";
   readonly reviewStatus: "candidate";
 }
@@ -154,10 +166,37 @@ export function buildNarrativeObjectTrajectories(
       };
     });
 
+    const continuitySignals: NarrativeObjectContinuitySignal[] = [];
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1];
+      const current = ordered[index];
+      // Vincular solo dos enunciados consecutivos, afirmados y no prospectivos:
+      // «A entregó X a B» seguido de «B recibió X».
+      if (previous.transition !== "transferred" ||
+          current.transition !== "received" ||
+          previous.polarity !== "affirmed" || current.polarity !== "affirmed" ||
+          previous.effectStatus !== "candidate" || current.effectStatus !== "candidate" ||
+          !previous.recipientEntityId ||
+          previous.recipientEntityId !== current.recipientEntityId ||
+          !previous.recipientEvidence || !current.recipientEvidence) {
+        continue;
+      }
+      continuitySignals.push({
+        id: `continuity:${previous.id}:${current.id}`,
+        kind: "transfer-reception-corroboration",
+        fromTransitionId: previous.id,
+        toTransitionId: current.id,
+        participantEntityId: previous.recipientEntityId,
+        evidence: [previous.recipientEvidence, current.recipientEvidence],
+        status: "corroboration-candidate"
+      });
+    }
+
     trajectories.push({
       projectId: input.projectId,
       objectEntityId,
       entries,
+      continuitySignals,
       evidenceCoverage: "candidate-transitions-only",
       reviewStatus: "candidate"
     });

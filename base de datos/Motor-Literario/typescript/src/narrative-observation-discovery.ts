@@ -347,7 +347,20 @@ function findNameMatch(sentence: string, name: string): { start: number; end: nu
 }
 
 function findAllNameMatches(sentence: string, name: string): { start: number; end: number; excerpt: string }[] {
-  const escaped = name.replace(/[|\\{}()[\]^$+*?.]/g, "\\function includesName(sentence: string, name: string): boolean {");
+  const escaped = name.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");
+  const expression = new RegExp(
+    "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
+    "(?![\\p{L}\\p{M}\\p{N}_])",
+    "giu"
+  );
+  return [...sentence.matchAll(expression)].map(match => ({
+    start: match.index!,
+    end: match.index! + match[0].length,
+    excerpt: match[0]
+  }));
+}
+
+function includesName(sentence: string, name: string): boolean {");
   const expression = new RegExp(
     "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
     "(?![\\p{L}\\p{M}\\p{N}_])",

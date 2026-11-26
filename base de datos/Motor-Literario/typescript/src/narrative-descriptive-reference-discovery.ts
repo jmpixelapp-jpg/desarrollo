@@ -238,6 +238,8 @@ export interface NarrativeDescriptiveLabelCandidateInput {
 export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES = 2_000;
 export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_SCAN_UNITS = 25_000_000;
 export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_ENTITIES = 10_000;
+export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIASES_PER_ENTITY = 100;
+export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIAS_LENGTH = 256;
 
 /**
  * Extrae etiquetas descriptivas en aposición inmediata a una entidad nombrada:
@@ -261,15 +263,26 @@ export function discoverNarrativeDescriptiveLabelCandidates(
   }
   const base = input.baseOffset ?? 0;
   const results = new Map<string, NarrativeDescriptiveLabelCandidate>();
+  const entityIds = new Set<string>();
   let scanUnits = 0;
   for (const entity of input.entities) {
     if (!entity || entity.projectId !== input.projectId || typeof entity.id !== "string" ||
-        !entity.id.trim() || typeof entity.canonicalName !== "string" ||
-        !entity.canonicalName.trim() || !Array.isArray(entity.aliases)) {
-      throw new Error("Las entidades deben ser válidas y pertenecer al mismo proyecto.");
+        !entity.id.trim() || entityIds.has(entity.id) || typeof entity.canonicalName !== "string" ||
+        !entity.canonicalName.trim() || entity.canonicalName.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIAS_LENGTH ||
+        !Array.isArray(entity.aliases) || entity.aliases.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIASES_PER_ENTITY) {
+      throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
     }
-    const names = [entity.canonicalName, ...entity.aliases].filter(name =>
-      typeof name === "string" && name.trim().length > 0 && name.length <= MAX_NARRATIVE_DESCRIPTIVE_LABEL_LENGTH);
+    entityIds.add(entity.id);
+    const aliasKeys = new Set<string>();
+    for (const alias of entity.aliases) {
+      if (typeof alias !== "string" || !alias.trim() ||
+          alias.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ALIAS_LENGTH ||
+          aliasKeys.has(alias.normalize("NFC").toLocaleLowerCase("es").trim())) {
+        throw new Error("Los alias deben ser textos válidos, únicos y estar dentro del límite de longitud.");
+      }
+      aliasKeys.add(alias.normalize("NFC").toLocaleLowerCase("es").trim());
+    }
+    const names = [entity.canonicalName, ...entity.aliases];
     for (const name of names) {
       scanUnits += input.text.length;
       if (scanUnits > MAX_NARRATIVE_DESCRIPTIVE_LABEL_SCAN_UNITS) {
@@ -296,9 +309,15 @@ export function discoverNarrativeDescriptiveLabelCandidates(
           anchorEvidence: { documentId: input.documentId, revision: input.revision, start: base + anchorStart, end: base + anchorEnd, excerpt: match[0].slice(0, match[0].indexOf(",")) },
           relation: "appositive-description", reviewStatus: "candidate"
         });
-        if (results.size >= maxCandidates) return [...results.values()];
+        if (results.size > maxCandidates) {
+          throw new Error("La extracción supera el máximo de propuestas; no se devuelve un resultado parcial.");
+        }
       }
     }
   }
-  return [...results.values()].sort((a,b) => a.labelEvidence.start - b.labelEvidence.start || a.anchorEntityId.localeCompare(b.anchorEntityId));
+  return [...results.values()].sort((a,b) =>
+    a.labelEvidence.start - b.labelEvidence.start ||
+    a.labelEvidence.end - b.labelEvidence.end ||
+    a.anchorEntityId.localeCompare(b.anchorEntityId)
+  );
 }

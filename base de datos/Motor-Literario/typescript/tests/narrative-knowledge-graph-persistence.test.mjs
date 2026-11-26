@@ -796,19 +796,27 @@ test("inspecciona reparaciones pendientes y distingue listas, aplicadas y confli
     replacementEntityId: replacement,
     appliedAt: 50
   });
+  const malformed = {
+    ...makePending("relation:ready"),
+    operationId: ["reference-repair", "inspection-project", "relation", "relation:ready",
+      "participants", "entity:legacy", "entity:canonical"].join("|"),
+    referenceField: "participants"
+  };
   for (const entry of [
     makePending("relation:ready"),
     makePending("relation:applied"),
     makePending("relation:changed"),
-    makePending("relation:ready", "entity:unknown", "entity:missing")
+    makePending("relation:ready", "entity:unknown", "entity:missing"),
+    malformed
   ]) {
     await store.saveNarrativeReferenceRepairPending(entry);
   }
 
   const inspection = await inspectNarrativeReferenceRepairPending(store, "inspection-project");
   assert.deepEqual(inspection.map(item => item.status), [
-    "ready-to-recover", "already-applied", "record-changed", "replacement-not-proven"
+    "ready-to-recover", "already-applied", "record-changed",
+    "replacement-not-proven", "invalid-intent"
   ]);
-  assert.equal(tables.pendingRepairs.size, 4, "la inspección no debe borrar ni mutar intenciones");
+  assert.equal(tables.pendingRepairs.size, 5, "la inspección no debe borrar ni mutar intenciones");
   assert.equal(tables.audits.size, 0, "la inspección no debe escribir auditoría");
 });

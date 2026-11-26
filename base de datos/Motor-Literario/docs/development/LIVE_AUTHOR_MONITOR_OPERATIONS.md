@@ -558,3 +558,8 @@ La conclusión global de la lane sigue siendo fallo por la auditoría IndexedDB 
 ## 44. Ciclo de vida de los contadores de errores de vistas
 
 `listenerErrors` pertenece a la instancia de observabilidad y no al checkpoint durable. Se incrementa por sesión/documento mientras la instancia está viva; al serializar métricas durables se omite deliberadamente y `restoreCheckpoint()` lo inicializa a cero. Así, un panel que falló antes de un cierre forzado no hace que una vista nueva parezca defectuosa al recuperar el documento. Las regresiones de checkpoint verifican el contador previo, la ausencia de la propiedad en el registro durable y el cero tras la restauración.
+
+
+## 45. Restauración sin heredar fallos de vistas de la instancia anterior
+
+La ejecución [Live Author Monitor — run 45756913002](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756913002) aprobó la regresión de checkpoint: tras provocar dos fallos de suscriptor, el snapshot local cuenta ambos; el checkpoint durable no declara ni serializa `listenerErrors`; y `restoreCheckpoint()` inicia el documento recuperado con cero fallos de vistas. La suite completa aislada terminó en 59/59 y el type-check estricto independiente pasó. Esto evita que un error de DOM o de un panel antes de un cierre forzado se arrastre como alerta de la sesión recuperada.

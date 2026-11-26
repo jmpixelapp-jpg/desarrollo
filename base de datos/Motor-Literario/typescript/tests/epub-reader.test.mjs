@@ -82,7 +82,7 @@ test("lee EPUB, metadatos, orden spine, encabezados y párrafos conservando loca
   assert.equal(ingested.metadata.title, "La novela & el viaje");
   assert.equal(ingested.chapters.length, 2);
   assert.equal(ingested.chapters[0].heading, "Capítulo primero");
-  assert.equal(ingested.chapters[0].text, "Una historia & su comienzo.\\n\\nSegunda línea.\\nVerso uno\\nVerso dos\\n\\nNota al pie.");
+  assert.equal(ingested.chapters[0].text, "Una historia & su comienzo.\n\nSegunda línea.\nVerso uno\nVerso dos\n\nNota al pie.");
   assert.equal(ingested.chapters[1].heading, "Capítulo segundo");
   assert.match(ingested.chapters[1].text, /Una sección/);
   assert.ok(ingested.chapters[0].sourceSpans.every(span => span.location.locator.startsWith("OPS/chapter1.xhtml#")));
@@ -173,6 +173,6 @@ test("preserva saltos de línea XHTML br y nombres de elemento con prefijo", asy
     ["chapter.xhtml", '<xhtml:html xmlns:xhtml="http://www.w3.org/1999/xhtml"><xhtml:body><xhtml:h1>Inicio</xhtml:h1><xhtml:p>Primera línea.<xhtml:br/>Segunda línea.</xhtml:p></xhtml:body></xhtml:html>']
   ]);
   const result = await ingestBookWithReader(new EpubBookReader(), bytes, { sourceId: "br-test" });
-  assert.equal(result.chapters[0].text, "Primera línea.\\nSegunda línea.");
+  assert.equal(result.chapters[0].text, "Primera línea.\nSegunda línea.");
 });
 

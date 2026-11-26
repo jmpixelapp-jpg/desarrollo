@@ -75,3 +75,10 @@ El tombstone no borra entidades ni afirmaciones del proyecto. Esos registros pue
 `reconcileNarrativeDocumentProjections(store, projectId)` compara los manifiestos durables con la evidencia real de entidades, relaciones, acontecimientos, ideas y afirmaciones. Informa de manifiestos ausentes, IDs omitidos o sobrantes en inventarios y tombstones que todavía conservan evidencia del documento.
 
 La reconciliación es deliberadamente de sólo lectura. No infiere si una discrepancia debe resolverse restaurando un manifiesto, reextrayendo el documento o retirando evidencia; esa decisión depende del estado fuente y de la política editorial. El informe proporciona códigos, documento, tipo de registro e ID para que una capa de reparación aplique CAS explícito.
+
+
+### Reparación limitada de inventarios activos
+
+`repairNarrativeDocumentProjectionManifest(store, projectId, documentId)` reconstruye los cinco inventarios de un manifiesto **activo** usando exclusivamente la evidencia persistida. La actualización conserva la revisión documental, incrementa la generación y exige CAS sobre la generación previamente leída. Si el inventario ya coincide, devuelve un resultado idempotente sin escribir.
+
+La operación no repara manifiestos ausentes (no hay revisión fuente confiable), no reactiva tombstones y no modifica entidades, relaciones, eventos, ideas, afirmaciones ni sus evidencias. Los tombstones con evidencia residual deben pasar por una decisión explícita de recuperación o retirada; no se resuelven automáticamente.

@@ -64,8 +64,8 @@ export function extractNarrativeCharacterIntentCandidates(
   const because = /\bporque\s+(?:quiere|desea|teme|necesita)\s+(.+?)\s*$/iu;
   // Motivos indirectos: solo se extraen cuando el texto nombra la causa
   // mediante una construcción explícita; nunca se deducen por la acción sola.
-  const causalMotive = /\\bpor\\s+((?:miedo|temor|amor|lealtad|venganza|deber|culpa|compasión|compasion)\\s+(?:a|de|hacia|contra)\\s+.+?)\\s*$/iu;
-  const purpose = /\\b(?:para|a\\s+fin\\s+de|con\\s+el\\s+fin\\s+de)\\s+(.+?)\\s*$/iu;
+  const causalMotive = /\bpor\s+((?:miedo|temor|amor|lealtad|venganza|deber|culpa|compasión|compasion)\s+(?:a|de|hacia|contra)\s+.+?)\s*$/iu;
+  const purpose = /\b(?:para|a\s+fin\s+de|con\s+el\s+fin\s+de)\s+(.+?)\s*$/iu;
   const patterns = [
     {kind:"goal" as const, evidenceBasis:"explicit-goal-verb" as const, expression:goal},
     {kind:"motivation" as const, evidenceBasis:"explicit-causal-motive" as const, expression:motive},

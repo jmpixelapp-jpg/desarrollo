@@ -56,3 +56,4 @@ export * from "./narrative-pronoun-reference-discovery";
 
 export * from "./narrative-dialogue-speaker-discovery";
 export * from "./narrative-elliptical-subject-discovery";
+export * from "./narrative-descriptive-reference-discovery";

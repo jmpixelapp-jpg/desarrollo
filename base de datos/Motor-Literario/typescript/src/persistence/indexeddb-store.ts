@@ -34,6 +34,7 @@ const DATABASE_VERSION = 25;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const SYNC_OUTBOX = "sync-outbox";
+const SYNC_DEVICE_SEQUENCES = "sync-device-sequences";
 const CHANGE_INDEX = "by-document-sequence";
 const ENTITIES = "narrative-entities";
 const RELATIONS = "narrative-relations";
@@ -2155,6 +2156,9 @@ export class IndexedDbProjectStore implements ProjectStore {
         }
         ensureIndex(SYNC_OUTBOX, "by-project-created-at", ["projectId", "createdAt"]);
         ensureIndex(SYNC_OUTBOX, "by-project-device-sequence", ["projectId", "deviceId", "sequence"], true);
+        if (!db.objectStoreNames.contains(SYNC_DEVICE_SEQUENCES)) {
+          db.createObjectStore(SYNC_DEVICE_SEQUENCES, { keyPath: ["projectId", "deviceId"] });
+        }
         const nextVersion = changeEvent && Number.isSafeInteger(changeEvent.newVersion)
           ? changeEvent.newVersion
           : DATABASE_VERSION;
@@ -5888,15 +5892,47 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
   }
 
-  /** Inserta una operación pendiente; reintentar el mismo ID y contenido es idempotente. */
+  /** Lee la última secuencia confirmada localmente para un proyecto y dispositivo. */
+  async loadLastSyncOperationSequence(projectId: string, deviceId: string): Promise<number> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof deviceId !== "string" || !deviceId.trim()) {
+      throw new TypeError("Proyecto o dispositivo inválido para leer la secuencia de sincronización.");
+    }
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(SYNC_DEVICE_SEQUENCES, "readonly");
+      const request = transaction.objectStore(SYNC_DEVICE_SEQUENCES).get([projectId, deviceId]);
+      let sequence = 0;
+      request.onsuccess = () => {
+        const stored = request.result as { readonly lastSequence?: unknown } | undefined;
+        if (stored) {
+          if (!Number.isSafeInteger(stored.lastSequence) || (stored.lastSequence as number) < 0) {
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            reject(new Error("El cursor de secuencia del dispositivo está corrupto."));
+            return;
+          }
+          sequence = stored.lastSequence as number;
+        }
+      };
+      request.onerror = () => {
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve(sequence);
+      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo leer la secuencia del dispositivo."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura de secuencia."));
+    });
+  }
+
+  /** Inserta una operación idempotente y avanza la secuencia en una sola transacción. */
   async enqueueSyncOperation(operation: StoredSyncOperation): Promise<void> {
     const normalized = normalizeSyncOperation(operation);
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
-      const store = transaction.objectStore(SYNC_OUTBOX);
+      const transaction = db.transaction([SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES], "readwrite");
+      const outbox = transaction.objectStore(SYNC_OUTBOX);
+      const sequences = transaction.objectStore(SYNC_DEVICE_SEQUENCES);
       let validationError: Error | undefined;
-      const request = store.get(normalized.operationId);
+      const request = outbox.get(normalized.operationId);
       request.onsuccess = () => {
         const existing = request.result as StoredSyncOperation | undefined;
         if (existing) {
@@ -5906,15 +5942,38 @@ export class IndexedDbProjectStore implements ProjectStore {
           }
           return;
         }
-        try {
-          const addRequest = store.add(normalized);
-          addRequest.onerror = () => {
-            validationError = addRequest.error ?? new Error("No se pudo encolar la operación.");
-          };
-        } catch (error) {
-          validationError = error instanceof Error ? error : new Error("No se pudo encolar la operación.");
+        const sequenceRequest = sequences.get([normalized.projectId, normalized.deviceId]);
+        sequenceRequest.onsuccess = () => {
+          const stored = sequenceRequest.result as { readonly lastSequence?: unknown } | undefined;
+          const lastSequence = stored?.lastSequence ?? 0;
+          if (!Number.isSafeInteger(lastSequence) || (lastSequence as number) < 0 ||
+              normalized.sequence !== (lastSequence as number) + 1) {
+            validationError = new Error(
+              "Secuencia fuera de orden: se esperaba " + ((lastSequence as number) + 1) +
+              " y se recibió " + normalized.sequence + "."
+            );
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            return;
+          }
+          try {
+            const addRequest = outbox.add(normalized);
+            addRequest.onerror = () => {
+              validationError = addRequest.error ?? new Error("No se pudo encolar la operación.");
+            };
+            sequences.put({
+              projectId: normalized.projectId,
+              deviceId: normalized.deviceId,
+              lastSequence: normalized.sequence
+            });
+          } catch (error) {
+            validationError = error instanceof Error ? error : new Error("No se pudo encolar la operación.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          }
+        };
+        sequenceRequest.onerror = () => {
+          validationError = sequenceRequest.error ?? new Error("No se pudo leer el cursor de secuencia.");
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
-        }
+        };
       };
       request.onerror = () => {
         validationError = request.error ?? new Error("No se pudo consultar la operación existente.");

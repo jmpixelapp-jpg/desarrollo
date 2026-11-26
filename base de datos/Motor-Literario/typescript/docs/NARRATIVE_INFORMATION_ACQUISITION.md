@@ -35,7 +35,7 @@ Callback: `onNarrativeIdeaCandidates(analysis, candidates)`.
 
 ### Contexto de análisis incremental
 
-El análisis de acciones usa el snapshot del documento abierto cuando su revisión coincide exactamente con la revisión del resultado. Examina hasta 12.000 unidades UTF-16 a cada lado del fragmento afectado, conserva offsets absolutos y no mezcla revisiones. Si no existe un snapshot coherente, analiza solo el fragmento afectado. Esta ventana mejora el contexto local, pero todavía no resuelve pronombres ni referencias anafóricas.
+El análisis de acciones usa el snapshot del documento abierto cuando su revisión coincide exactamente con la revisión del resultado. Examina hasta 12.000 unidades UTF-16 a cada lado del fragmento afectado, conserva offsets absolutos y no mezcla revisiones. Si no existe un snapshot coherente, analiza solo el fragmento afectado. Esta ventana aporta contexto local y permite registrar algunos pronombres iniciales como referencias pendientes, pero todavía no resuelve identidad, concordancia ni referencias anafóricas complejas.
 
 ### Acciones narrativas candidatas
 

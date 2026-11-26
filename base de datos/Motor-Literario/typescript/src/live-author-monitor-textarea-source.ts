@@ -223,12 +223,16 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       return;
     }
 
+    // inputType informa el mecanismo del navegador, no siempre la intención.
+    // Drop y yank no se etiquetan como pegado/corrección sin evidencia específica.
     const activityKind = before.inputType === "insertFromPaste" ||
-      before.inputType === "insertFromPasteAsQuotation" || before.inputType === "insertFromDrop"
+      before.inputType === "insertFromPasteAsQuotation"
       ? "paste" as const
-      : before.inputType === "insertReplacementText" || before.inputType === "insertFromYank"
+      : before.inputType === "insertReplacementText"
         ? "correction" as const
-        : before.inputType.startsWith("delete") ? "deletion" as const : undefined;
+        : before.inputType.startsWith("delete") ? "deletion" as const
+          : before.inputType === "insertFromDrop" || before.inputType === "insertFromYank"
+            ? "other" as const : undefined;
     const change: EditorChange = Object.freeze({
       documentId: this.documentId,
       sequence: this.sequence + 1,

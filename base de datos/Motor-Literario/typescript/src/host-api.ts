@@ -4383,6 +4383,12 @@ export class HostEngineApi {
   ): Promise<StoredLiveAuthorMonitorLease | undefined> {
     if (this.disposed || !this.supportsLiveAuthorMonitorLeases() ||
         this.liveMonitorLeaseReleasing.has(documentId)) return undefined;
+    // Cada renovación/adquisición tiene una generación propia. Una liberación
+    // o una operación posterior invalida cualquier respuesta asíncrona antigua.
+    const generation = this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
+    const isCurrentOperation = (): boolean =>
+      this.liveMonitorLeaseGenerations.get(documentId) === generation &&
+      !this.liveMonitorLeaseReleasing.has(documentId);
     const now = Date.now();
     const current = this.liveMonitorLeases.get(documentId);
     const renew = this.store.renewLiveAuthorMonitorLease;
@@ -4408,6 +4414,7 @@ export class HostEngineApi {
         );
       }
     } catch (error) {
+      if (!this.disposed && !isCurrentOperation()) return undefined;
       this.liveMonitorLeaseErrors.set(documentId, error);
       throw error;
     }
@@ -4423,6 +4430,7 @@ export class HostEngineApi {
       }
       return undefined;
     }
+    if (!isCurrentOperation()) return undefined;
     if (!lease) {
       this.liveMonitorLeases.delete(documentId);
       if (current) this.liveMonitorLeaseLost.add(documentId);

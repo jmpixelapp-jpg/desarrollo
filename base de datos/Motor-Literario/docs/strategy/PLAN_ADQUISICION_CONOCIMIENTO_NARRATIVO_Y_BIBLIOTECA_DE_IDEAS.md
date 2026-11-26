@@ -362,3 +362,22 @@ La cronología entre documentos solo se ordena cuando el proyecto proporciona `o
 Integración: el pipeline devuelve `characterKnowledgeStates` y acepta `priorInformationInterpretations` y `orderedDocumentIds`. Se añadieron cuatro pruebas unitarias y una de integración.
 
 **Límites:** un registro de información no demuestra que el personaje lo acepte, lo recuerde indefinidamente o lo comprenda. La ausencia de registro no demuestra ignorancia. El estado es una reconstrucción de lo que el texto documenta, no una simulación omnisciente de la mente del personaje.
+
+
+## Fase V: evolución temporal de la valoración de información
+
+Se amplió la reconstrucción del estado individual para conservar evaluaciones de capítulos anteriores mediante `priorKnowledgeEvolution` en el pipeline. Las evaluaciones previas y actuales se adjuntan al registro de información correspondiente cuando coinciden el personaje evaluador y el contenido normalizado.
+
+Cada elemento incorpora `currentAssessment`, que distingue:
+- `unassessed`: no existe evaluación aplicable posterior a la recepción.
+- `confirmed-by-character`: el personaje expresó confirmación.
+- `refuted-by-character`: el personaje expresó refutación.
+- `uncertain`: el personaje expresó duda.
+- `concealed-by-character`: el texto atribuye ocultamiento.
+- `chronology-unresolved`: existen evaluaciones, pero no se puede demostrar cuál es posterior.
+
+La selección de la evaluación vigente exige que la evidencia sea posterior a la recepción. En un mismo documento se compara posición solo dentro de la misma revisión. Entre documentos se exige `orderedDocumentIds`; tampoco se mezclan revisiones diferentes de un mismo documento como si fueran capítulos cronológicos.
+
+Se añadieron pruebas para historial acumulado, cambio de duda a refutación, cronología desconocida y evaluación anterior a la recepción. El pipeline acepta y conserva `priorKnowledgeEvolution`.
+
+**Límite semántico:** confirmar o refutar significa que el personaje lo expresó; no establece la verdad objetiva. El sistema no deduce olvido por falta de menciones ni pérdida de memoria a partir del silencio narrativo.

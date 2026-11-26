@@ -12,7 +12,7 @@ import {
 } from "./narrative-knowledge";
 import type { NarrativeAssertion } from "./narrative-history";
 import type { NarrativeSyncOperationHandler } from "./narrative-sync-dispatcher";
-import type { NarrativeIdeaContinuityIndex } from "./narrative-idea-continuity-index";
+import type { NarrativeIdeaContinuityIndexSyncPayload } from "./narrative-idea-continuity-index";
 import {
   areNarrativeIdeaContinuityIndexesEquivalent,
   validateNarrativeIdeaContinuityIndex
@@ -388,12 +388,6 @@ export function createNarrativeEntityMergeHandler(
 }
 
 
-export interface NarrativeIdeaContinuityIndexUpsertPayload {
-  readonly index: NarrativeIdeaContinuityIndex;
-  /** Generación que el emisor leyó antes de producir la siguiente generación. */
-  readonly expectedGeneration?: number;
-}
-
 /**
  * Replica un snapshot derivado con CAS. No modifica ideas canónicas: el índice
  * es una proyección reconstruible y la divergencia se deja pendiente para que
@@ -401,7 +395,7 @@ export interface NarrativeIdeaContinuityIndexUpsertPayload {
  */
 export function createNarrativeIdeaContinuityIndexUpsertHandler(
   store: ProjectStore
-): NarrativeSyncOperationHandler<NarrativeIdeaContinuityIndexUpsertPayload> {
+): NarrativeSyncOperationHandler<NarrativeIdeaContinuityIndexSyncPayload> {
   if (!store ||
       typeof store.loadNarrativeIdeaContinuityIndex !== "function" ||
       typeof store.saveNarrativeIdeaContinuityIndexIfUnchanged !== "function") {
@@ -410,9 +404,9 @@ export function createNarrativeIdeaContinuityIndexUpsertHandler(
 
   return {
     kind: "idea-continuity-index-upsert",
-    validate(payload: unknown): payload is NarrativeIdeaContinuityIndexUpsertPayload {
+    validate(payload: unknown): payload is NarrativeIdeaContinuityIndexSyncPayload {
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
-      const item = payload as Partial<NarrativeIdeaContinuityIndexUpsertPayload>;
+      const item = payload as Partial<NarrativeIdeaContinuityIndexSyncPayload>;
       try {
         if (!item.index) return false;
         validateNarrativeIdeaContinuityIndex(item.index);

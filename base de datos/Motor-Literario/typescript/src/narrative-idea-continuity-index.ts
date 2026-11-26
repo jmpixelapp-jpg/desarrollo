@@ -1,8 +1,8 @@
 import type { NarrativeIdeaOccurrenceReference } from "./narrative-idea-cross-document-relations";
-import type { NarrativeIdeaEvolutionEvent, NarrativeIdeaEvolutionResult } from "./narrative-idea-evolution";
+import type { NarrativeIdeaEvolutionEvent } from "./narrative-idea-evolution";
 import type { NarrativeIdeaContinuityLine, NarrativeIdeaContinuityLinesResult, NarrativeIdeaContinuityLinesSummary } from "./narrative-idea-continuity-lines";
 import type { ProjectStore } from "./contracts";
-import { fingerprintNarrativeSyncPayload } from "./narrative-sync-integrity";
+import { canonicalizeNarrativeSyncPayload, fingerprintNarrativeSyncPayload } from "./narrative-sync-integrity";
 
 export interface NarrativeIdeaContinuitySourceRevision {
   readonly documentId: string;
@@ -106,27 +106,6 @@ function validateOccurrence(value: NarrativeIdeaOccurrenceReference): void {
   }
 }
 
-function eventSummary(
-  projectId: string,
-  events: readonly NarrativeIdeaEvolutionEvent[],
-  sourceAnalysisTruncated: boolean
-): NarrativeIdeaEvolutionResult {
-  return {
-    summary: {
-      projectId,
-      relationCount: events.length,
-      eventCount: events.length,
-      reappearedCount: events.filter(event => event.eventKind === "reappeared").length,
-      echoedCount: events.filter(event => event.eventKind === "echoed").length,
-      withoutOrderCount: events.filter(event => event.eventKind === "observed-without-order").length,
-      modalityChangeCount: events.filter(event => event.signals.includes("modality-change")).length,
-      ideaKindChangeCount: events.filter(event => event.signals.includes("idea-kind-change")).length,
-      sourceAnalysisTruncated
-    },
-    events
-  };
-}
-
 function fingerprintContent(value: {
   readonly version: 1;
   readonly projectId: string;
@@ -156,7 +135,8 @@ export function areNarrativeIdeaContinuityIndexesEquivalent(
   right: NarrativeIdeaContinuityIndex
 ): boolean {
   if (!left || !right || left.fingerprint !== right.fingerprint) return false;
-  return JSON.stringify(contentOf(left)) === JSON.stringify(contentOf(right));
+  return canonicalizeNarrativeSyncPayload(contentOf(left), FINGERPRINT_LIMITS) ===
+    canonicalizeNarrativeSyncPayload(contentOf(right), FINGERPRINT_LIMITS);
 }
 
 function normalizeSourceRevisions(
@@ -349,14 +329,58 @@ export function validateNarrativeIdeaContinuityIndex(
 
   const eventById = new Map<string, StoredNarrativeIdeaContinuityEvent>();
   for (const event of value.events) {
-    if (!event || typeof event.id !== "string" || !event.id.trim() ||
+    if (!event || typeof event.id !== "string" || !event.id.trim() || event.id.length > 1024 ||
         event.projectId !== value.projectId ||
         eventById.has(event.id) ||
         !occurrenceById.has(event.firstOccurrenceId) ||
         !occurrenceById.has(event.secondOccurrenceId) ||
         event.firstOccurrenceId === event.secondOccurrenceId ||
-        !Array.isArray(event.signals) || !event.supportingRelation) {
+        !Array.isArray(event.signals) || new Set(event.signals).size !== event.signals.length ||
+        event.signals.some(signal => ![
+          "exact-wording-recurrence", "lexical-resonance", "modality-change", "idea-kind-change"
+        ].includes(signal)) ||
+        !event.supportingRelation ||
+        typeof event.supportingRelation.relationId !== "string" ||
+        !event.supportingRelation.relationId.trim() ||
+        !["exact-recurrence", "lexical-resonance"].includes(event.supportingRelation.relationType) ||
+        !Array.isArray(event.supportingRelation.sharedTerms) ||
+        event.supportingRelation.sharedTerms.length > 500 ||
+        event.supportingRelation.sharedTerms.some(term => typeof term !== "string" || !term.trim()) ||
+        typeof event.supportingRelation.normalizedSimilarity !== "number" ||
+        !Number.isFinite(event.supportingRelation.normalizedSimilarity) ||
+        event.supportingRelation.normalizedSimilarity < 0 || event.supportingRelation.normalizedSimilarity > 1 ||
+        typeof event.supportingRelation.overlapCoefficient !== "number" ||
+        !Number.isFinite(event.supportingRelation.overlapCoefficient) ||
+        event.supportingRelation.overlapCoefficient < 0 || event.supportingRelation.overlapCoefficient > 1 ||
+        event.reviewStatus !== "candidate" ||
+        !["ordered", "unknown"].includes(event.chronology) ||
+        !["reappeared", "echoed", "observed-without-order"].includes(event.eventKind)) {
       throw new Error("El inventario persistente de relaciones de continuidad es inválido.");
+    }
+    const first = occurrenceById.get(event.firstOccurrenceId)!;
+    const second = occurrenceById.get(event.secondOccurrenceId)!;
+    const expectedKind = event.chronology === "unknown" ? "observed-without-order" :
+      event.supportingRelation.relationType === "exact-recurrence" ? "reappeared" : "echoed";
+    const expectedBaseSignal = event.supportingRelation.relationType === "exact-recurrence"
+      ? "exact-wording-recurrence" : "lexical-resonance";
+    if (first.documentId === second.documentId ||
+        event.eventKind !== expectedKind ||
+        !event.signals.includes(expectedBaseSignal) ||
+        event.signals.includes(expectedBaseSignal === "exact-wording-recurrence"
+          ? "lexical-resonance" : "exact-wording-recurrence") ||
+        event.signals.includes("modality-change") !== (first.polarity !== second.polarity) ||
+        event.signals.includes("idea-kind-change") !== (first.kind !== second.kind)) {
+      throw new Error("La relación persistida contradice la procedencia o señales de sus apariciones.");
+    }
+    if (event.chronology === "ordered") {
+      if (!event.earlierOccurrenceId || !event.laterOccurrenceId ||
+          event.earlierOccurrenceId === event.laterOccurrenceId ||
+          ![event.firstOccurrenceId, event.secondOccurrenceId].includes(event.earlierOccurrenceId) ||
+          ![event.firstOccurrenceId, event.secondOccurrenceId].includes(event.laterOccurrenceId)) {
+        throw new Error("La relación ordenada perdió sus referencias cronológicas.");
+      }
+    } else if (event.earlierOccurrenceId !== undefined || event.laterOccurrenceId !== undefined) {
+      throw new Error("Una relación sin orden no puede conservar extremos cronológicos.");
     }
     eventById.set(event.id, event);
   }
@@ -369,8 +393,12 @@ export function validateNarrativeIdeaContinuityIndex(
         line.projectId !== value.projectId || lineIds.has(line.id) ||
         !Array.isArray(line.occurrenceIds) || !Array.isArray(line.relationIds) ||
         line.occurrenceIds.length < 2 || line.relationIds.length < 1 ||
+        line.occurrenceIds.some(id => typeof id !== "string" || !id.trim()) ||
+        line.relationIds.some(id => typeof id !== "string" || !id.trim()) ||
         new Set(line.occurrenceIds).size !== line.occurrenceIds.length ||
-        new Set(line.relationIds).size !== line.relationIds.length) {
+        new Set(line.relationIds).size !== line.relationIds.length ||
+        typeof line.hasBranchingEvidence !== "boolean" ||
+        typeof line.hasConvergingEvidence !== "boolean") {
       throw new Error("El inventario persistente de líneas de continuidad es inválido.");
     }
     lineIds.add(line.id);
@@ -387,6 +415,24 @@ export function validateNarrativeIdeaContinuityIndex(
         throw new Error("Una línea contiene relaciones huérfanas o asignadas a dos componentes.");
       }
       seenEvents.add(relationId);
+    }
+    const lineEvents = line.relationIds.map(id => eventById.get(id)!);
+    const exactCount = lineEvents.filter(event =>
+      event.supportingRelation.relationType === "exact-recurrence").length;
+    const lexicalCount = lineEvents.length - exactCount;
+    const expectedLineType = exactCount && lexicalCount ? "mixed-signal-line" :
+      exactCount ? "exact-recurrence-line" : "lexical-resonance-line";
+    const modalityCount = lineEvents.filter(event => event.signals.includes("modality-change")).length;
+    const kindChangeCount = lineEvents.filter(event => event.signals.includes("idea-kind-change")).length;
+    if (line.lineType !== expectedLineType ||
+        line.exactRecurrenceCount !== exactCount ||
+        line.lexicalResonanceCount !== lexicalCount ||
+        line.modalityChangeCount !== modalityCount ||
+        line.ideaKindChangeCount !== kindChangeCount ||
+        (line.topology === "undirected" && line.chronology === "complete") ||
+        (line.chronology === "complete" && lineEvents.some(event => event.chronology !== "ordered")) ||
+        (line.chronology === "unknown" && lineEvents.some(event => event.chronology !== "unknown"))) {
+      throw new Error("Los metadatos de continuidad no coinciden con sus relaciones.");
     }
     if (line.orderedOccurrenceIds !== undefined &&
         (!Array.isArray(line.orderedOccurrenceIds) ||

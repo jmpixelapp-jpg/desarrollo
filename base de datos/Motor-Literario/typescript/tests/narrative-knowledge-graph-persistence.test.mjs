@@ -18,7 +18,7 @@ import {
 function createMemoryStore() {
   const tables = {
     entities: new Map(), relations: new Map(), events: new Map(),
-    ideas: new Map(), assertions: new Map(), manifests: new Map()
+    ideas: new Map(), assertions: new Map(), manifests: new Map(), audits: new Map()
   };
   const copy = value => structuredClone(value);
   const methods = {};
@@ -39,6 +39,19 @@ function createMemoryStore() {
       table.set(next.id, copy(next));
     };
   }
+  methods.appendNarrativeReferenceRepairAudit = async entry => {
+    const key = entry.projectId + "\\u0000" + entry.operationId;
+    const current = tables.audits.get(key);
+    if (current) {
+      const { appliedAt: _a, ...left } = current;
+      const { appliedAt: _b, ...right } = entry;
+      assert.deepEqual(left, right, "la auditoría append-only no puede cambiar de contenido");
+      return;
+    }
+    tables.audits.set(key, copy(entry));
+  };
+  methods.loadNarrativeReferenceRepairAudits = async projectId =>
+    [...tables.audits.values()].filter(item => item.projectId === projectId).map(copy);
   methods.loadNarrativeDocumentProjectionManifest = async (projectId, documentId) =>
     copy(tables.manifests.get(projectId + "\\u0000" + documentId));
   methods.saveNarrativeDocumentProjectionManifestIfUnchanged = async (manifest, expectedGeneration) => {
@@ -456,7 +469,11 @@ test("aplica reparación aprobada de relación mediante CAS y devuelve auditorí
   assert.equal(result.audit.before, "entity:legacy");
   assert.equal(result.audit.after, "entity:canonical");
   assert.equal(result.audit.appliedAt, 11);
+  assert.ok(result.audit.operationId);
   assert.equal(tables.relations.get("relation:1").fromEntityId, "entity:canonical");
+  const durableAudit = await store.loadNarrativeReferenceRepairAudits("novel-apply");
+  assert.equal(durableAudit.length, 1);
+  assert.equal(durableAudit[0].missingReferenceId, "entity:legacy");
   const replay = await applyNarrativeReferenceRepair(store, proposal, true, 12);
   assert.equal(replay.changed, false);
   assert.equal(replay.replayed, true);

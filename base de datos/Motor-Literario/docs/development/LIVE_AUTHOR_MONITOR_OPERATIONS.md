@@ -467,3 +467,8 @@ Un disposer presente no implica por sí solo que haya fallado: normalmente repre
 ## 31. Errores de `dispose()` visibles y reintentables
 
 Si la cancelación del listener del proveedor lanza una excepción, `dispose()` no devuelve éxito silencioso: lanza `No se pudo retirar el listener del proveedor; repita dispose() para reintentar.`. La instancia permanece marcada como dispuesta, sus colas y suscriptores internos se limpian, y el handle fallido se conserva. Una llamada posterior a `dispose()` intenta cerrar ese handle; al completarse, las siguientes llamadas son idempotentes. La integración de editor conserva esta misma semántica para que el anfitrión pueda detectar y reintentar la limpieza pendiente.
+
+
+## 32. Categoría efectiva en la deduplicación de transacciones
+
+La firma compacta de una transacción incluye también la categoría que recibirá el monitor. Para `edit`, procede de `EditorChange.activityKind`; para `undo`/`redo`, procede del tipo nativo de transacción, que prevalece en el delta publicado. Si el mismo `transactionId` vuelve con la misma edición textual, pero otra categoría efectiva, ya no se considera duplicado idéntico y el source exige resincronización.

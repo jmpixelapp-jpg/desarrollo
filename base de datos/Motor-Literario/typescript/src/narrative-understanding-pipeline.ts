@@ -11,6 +11,11 @@ import { extractNarrativeActionCandidates } from "./narrative-action-extraction"
 import { extractNarrativeAttributedClaims } from "./narrative-claim-extraction";
 import { extractNarrativeDialogueAttributions } from "./narrative-dialogue-attribution";
 import { extractNarrativeInformationProvenance } from "./narrative-information-provenance";
+import {
+  extractNarrativeKnowledgeEvolution,
+  type NarrativeKnowledgeEvolution
+} from "./narrative-knowledge-evolution";
+import type { NarrativeAttributedClaim } from "./narrative-claim-extraction";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
@@ -58,6 +63,8 @@ export interface NarrativeUnderstandingInput {
   readonly characterProfiles?: readonly NarrativeCharacterPronounProfile[];
   /** Afirmaciones previas del mismo proyecto, procedentes de otros fragmentos o capítulos. */
   readonly priorAssertions?: readonly NarrativeAssertion[];
+  /** Afirmaciones atribuidas anteriores, conservadas con su procedencia original. */
+  readonly priorClaims?: readonly NarrativeAttributedClaim[];
 }
 
 export interface NarrativeUnderstandingResult {
@@ -70,6 +77,7 @@ export interface NarrativeUnderstandingResult {
   readonly attributedClaims: ReturnType<typeof extractNarrativeAttributedClaims>;
   readonly dialogueAttributions: ReturnType<typeof extractNarrativeDialogueAttributions>;
   readonly informationProvenance: ReturnType<typeof extractNarrativeInformationProvenance>;
+  readonly knowledgeEvolution: readonly NarrativeKnowledgeEvolution[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -193,7 +201,7 @@ export function understandNarrativeFragment(
   const actions = extractNarrativeActionCandidates(extractionContext);
   const attributedClaims = extractNarrativeAttributedClaims(extractionContext);
   const dialogueAttributions = extractNarrativeDialogueAttributions(extractionContext);
-  const informationProvenance = extractNarrativeInformationProvenance(extractionContext);
+  const informationProvenance = extractNarrativeInformationProvenance(extractionContext);\n  const knowledgeEvolution = extractNarrativeKnowledgeEvolution({\n    ...extractionContext, priorClaims: input.priorClaims\n  });
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,
@@ -256,7 +264,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

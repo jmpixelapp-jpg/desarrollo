@@ -533,6 +533,13 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 **Cobertura espacial ampliada:** se reconocen además los verbos explícitos `pasar por`, `atravesar` y `recorrer`, junto con `cruzar`; se admiten artículos y contracciones del español (`del`, `de la`, `por el`). Las pruebas detectaron y corrigieron un escape incorrecto en el patrón de espacios para complementos directos. La corrección está incluida en run 2985 aprobado.
 
+### Referencias temporales explícitas y relativas — 26-11-2026
+
+- Nuevo `narrative-temporal-reference-discovery.ts`: extrae fechas ISO, fechas escritas en español, años, fechas numéricas ambiguas, relaciones de orden, duraciones, franjas del día y horas.
+- Valida fechas de calendario y normaliza solo valores inequívocos. Las fechas numéricas con orden día/mes no establecido quedan ambiguas; las referencias relativas requieren ancla y no se convierten en fechas absolutas.
+- Integrado en la ingesta como `temporalReferences` y `temporalReferenceStatus`, y en la auditoría global con evidencias exactas.
+- Añadidas pruebas unitarias para fechas válidas/imposibles, ambigüedad numérica, referencias relativas, franjas horarias y offsets, además de integración con ingesta. CI pendiente.
+
 ### Presencia explícita de personajes en ubicaciones — 26-11-2026
 
 - Nuevo `narrative-location-presence-discovery.ts`: extrae afirmaciones copulativas/perceptuales/modalizadas de presencia («Ana está en el castillo», «Ana parece estar cerca del puerto»), con personaje y lugar explícitos y no ambiguos.

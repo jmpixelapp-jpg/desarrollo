@@ -229,6 +229,56 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
       // adaptador; IndexedDB debe conservar el checkpoint y el lease vigente.
       await observerPage.reload();
       await observerPage.waitForFunction(() => window.__monitorLeaseHarness !== undefined);
+      const nativeCapture = await observerPage.evaluate(async () => {
+        const { LiveAuthorMonitorTextAreaSource } = await import("/src/live-author-monitor-textarea-source.ts");
+        const element = document.createElement("textarea");
+        element.value = "abc";
+        document.body.append(element);
+        const errors = [];
+        const changes = [];
+        const source = new LiveAuthorMonitorTextAreaSource({
+          element,
+          initialSnapshot: { documentId: "browser-native-capture", text: "abc", revision: 0, sequence: 0 },
+          onError: error => errors.push(error.code)
+        });
+        source.subscribeChanges(change => changes.push(change));
+
+        element.setSelectionRange(3, 3);
+        element.dispatchEvent(new InputEvent("beforeinput", {
+          bubbles: true, cancelable: true, inputType: "insertText", data: "!"
+        }));
+        element.value = "abc!";
+        element.dispatchEvent(new InputEvent("input", {
+          bubbles: true, inputType: "insertText", data: "!"
+        }));
+
+        element.setSelectionRange(4, 4);
+        element.dispatchEvent(new InputEvent("beforeinput", {
+          bubbles: true, cancelable: true, inputType: "insertText", data: "x"
+        }));
+        element.dispatchEvent(new InputEvent("beforeinput", {
+          bubbles: true, cancelable: true, inputType: "insertText", data: "y"
+        }));
+
+        const state = source.getState();
+        source.dispose();
+        element.remove();
+        return { changes, errors, state };
+      });
+      assert.equal(nativeCapture.changes.length, 1,
+        "el navegador debe producir un delta exacto para el par beforeinput/input válido");
+      assert.deepEqual(nativeCapture.changes[0], {
+        documentId: "browser-native-capture",
+        sequence: 1,
+        baseRevision: 0,
+        start: 3,
+        end: 3,
+        replacement: "!"
+      });
+      assert.deepEqual(nativeCapture.errors, ["missing-input"]);
+      assert.equal(nativeCapture.state.needsResync, true,
+        "dos beforeinput consecutivos en un textarea real deben suspender la captura");
+
       assert.deepEqual(
         await invoke(observerPage, "loadCheckpoint", projectId, documentId),
         checkpoint,

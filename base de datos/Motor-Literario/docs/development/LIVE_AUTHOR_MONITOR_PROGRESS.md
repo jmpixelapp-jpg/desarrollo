@@ -1249,3 +1249,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresiones:** la prueba de source exige que la primera llamada lance cuando el proveedor falla una vez y que la segunda complete la retirada; la prueba de integración fuerza dos fallos transitorios (binding y source), exige el error al llamador y verifica que la segunda llamada pública elimina el último listener.
 
 **Validación:** pendiente de CI para este cambio.
+
+
+## 76. Incluir `activityKind` en la firma de deduplicación (26 de noviembre de 2026)
+
+**Hallazgo:** la ventana de deduplicación comparaba ID, secuencia, tipo de transacción, revisión, offsets y hash del reemplazo, pero omitía `activityKind`. Una retransmisión con el mismo `transactionId` y delta textual, pero con categoría diferente (`typing` frente a `paste`, por ejemplo), se trataba como duplicado idéntico y la categoría que alcanzaba las métricas dependía del primer evento.
+
+**Corrección:** la firma compacta incluye ahora la categoría efectiva del delta. Para transacciones normales conserva `change.activityKind`; para `undo` y `redo` usa el tipo nativo porque esa es la categoría que realmente publica el adaptador. La comparación rechaza una reutilización semánticamente distinta del mismo ID y exige resincronización.
+
+**Regresión:** el mismo transactionId, secuencia y texto retransmitidos con `activityKind: "paste"` después de la transacción original sin categoría dejan de pasar como duplicado; el source pausa con `transaction-id-reused`.
+
+**Validación:** pendiente de CI para este commit.

@@ -206,3 +206,12 @@ test("la evidencia de soporte conserva documento, revisión y rangos exactos de 
     documentId:"chapter-1",revision:2,start:b,end:text.length,excerpt:"Por eso Elian escapó."
   });
 });
+
+test("rechaza identidades de participantes duplicadas antes de generar relaciones",()=>{
+  const text="Mara abrió la puerta.";
+  const a=text.indexOf("Mara");
+  const duplicated=event("duplicate-participants",a,text.length,text,["mara","mara"],["mara"]);
+  assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[duplicated])),/únicos, válidos/);
+  const duplicatedCharacter=event("duplicate-character-participants",a,text.length,text,["mara"],["mara","mara"]);
+  assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[duplicatedCharacter])),/únicos, válidos/);
+});

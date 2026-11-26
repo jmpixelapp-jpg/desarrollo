@@ -123,3 +123,11 @@ test("rechaza IDs de acción duplicados", () => {
     text, observations: [found[0], found[0]]
   }), /identidad única/);
 });
+
+
+test("rechaza colecciones de observaciones que exceden el presupuesto de reconstrucción", () => {
+  assert.throws(() => discoverNarrativeEventChainLinks({
+    projectId: "book-1", documentId: "chapter-1", revision: 4,
+    text: "", observations: Array.from({ length: 10_001 }, () => null)
+  }), /Contexto inválido/);
+});

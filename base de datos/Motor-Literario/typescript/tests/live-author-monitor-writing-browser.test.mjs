@@ -86,10 +86,7 @@ test("el autor escribe, ve métricas, guarda y recupera el manuscrito y el check
       assert.equal(firstState.metrics.committedChanges, typed.length);
       assert.equal(firstState.metrics.durableSequence, typed.length);
       assert.equal(firstState.metrics.insertedCharacters, typed.length);
-      await page.waitForFunction(() => {
-        const value = document.querySelector('[data-metric="inserted"]')?.textContent.trim();
-        return Boolean(value && value !== "—");
-      });
+      await page.evaluate(() => window.__liveAuthorMonitorDemo.refreshPanel());
       const visibleInserted = await page.locator('[data-metric="inserted"]').textContent();
       assert.equal(
         Number((visibleInserted ?? "").replace(/\D/gu, "")),

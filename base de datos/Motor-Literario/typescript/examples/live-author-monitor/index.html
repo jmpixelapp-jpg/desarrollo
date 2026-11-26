@@ -64,6 +64,7 @@
     const hostApi = new HostEngineApi({ store });
     let disposeEditor;
     let disposePanel;
+    let refreshPanel = () => undefined;
     let closing = false;
 
     function reportStatus(message, isError = false) {
@@ -114,7 +115,16 @@
       disposePanel = mountLiveAuthorMonitorPanel(
         document.querySelector("#monitor-panel"),
         hostApi,
-        { documentId: DOCUMENT_ID, intervalMs: 100, title: "Actividad del autor" }
+        {
+          documentId: DOCUMENT_ID,
+          intervalMs: 100,
+          title: "Actividad del autor",
+          schedule(callback, intervalMs) {
+            refreshPanel = callback;
+            const timer = window.setInterval(callback, intervalMs);
+            return () => window.clearInterval(timer);
+          }
+        }
       );
 
       const harness = {
@@ -124,6 +134,7 @@
         documentId: DOCUMENT_ID,
         getSnapshot: () => hostApi.getSnapshot(DOCUMENT_ID),
         getMetrics: () => hostApi.getLiveAuthorMonitorSnapshot(DOCUMENT_ID),
+        refreshPanel: () => refreshPanel(),
         flush: () => hostApi.flushPendingChanges(),
         async closeSafely() {
           if (closing || harness.closed) return;

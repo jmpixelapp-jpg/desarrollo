@@ -625,3 +625,12 @@ Se implementó `typescript/src/book-evidence.ts` y se exportó desde `src/index.
 Se añadieron `tests/book-evidence.test.mjs` para rangos multibloque, offsets locales, localizadores, separadores sintéticos y rangos inválidos. Esto construye la unión necesaria entre análisis literario y libro primario sin inventar evidencia ni cambiar el modelo persistido actual.
 
 Validación automatizada todavía pendiente: los nuevos tests y el typecheck no se han ejecutado en esta tanda. El siguiente paso es conectar esta resolución en los resultados/consultas de conocimiento narrativo y construir el lector PDF con evidencia por página.
+
+
+### Cuarta tanda — navegación EPUB y precisión de extracción
+
+Se amplió `EpubBookReader.inspect()` para leer tablas de contenidos EPUB 3 `nav` y EPUB 2 `NCX`, con etiqueta, destino interno y profundidad. El spine sigue siendo la autoridad del orden de lectura. Se añadieron pruebas para ambos mecanismos de navegación.
+
+Se corrigieron saltos XHTML `br`, elementos XML con prefijo, validación de flags ZIP y límites para impedir que datos de entradas se solapen con el directorio central. También se valida la consistencia de entradas del directorio ZIP entre volúmenes.
+
+La capa de resolución de evidencias se incorporó como módulo independiente, con tests que verifican citas de varios bloques y offsets locales. El análisis ya dispone de una ruta técnica para volver a los pasajes de origen; aún falta integrar esta referencia en las respuestas/consultas de entidades, ideas, relaciones y acontecimientos.

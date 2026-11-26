@@ -187,3 +187,25 @@ test("rechaza diarios con huecos aunque se presente una propuesta formal", async
   });
   journal.close();
 });
+
+test("corrige una identidad final divergente sin alterar la secuencia", async () => {
+  const databaseName = "narrative-sync-cursor-identity-" + Math.random().toString(36).slice(2);
+  const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-identity-op-1", projectId: "cursor-identity-project",
+    writerId: "writer-identity", sequence: 1, kind: "note", payload: { value: 1 }
+  });
+  await journal.accept(envelope);
+  await mutateStoredCursor(databaseName, "cursor-identity-project", "writer-identity",
+    current => ({ ...current, lastOperationId: "wrong-operation-id" }));
+  const plan = await planNarrativeSyncJournalCursorRecovery(journal, "cursor-identity-project");
+  assert.equal(plan.proposedRebuildCount, 1);
+  const result = await journal.applyCursorRecoveryProposal(plan.items[0].proposal);
+  assert.deepEqual(result, {
+    status: "applied", writerId: "writer-identity",
+    lastSequence: 1, lastOperationId: "cursor-identity-op-1"
+  });
+  assert.equal(await journal.getLastSequence("cursor-identity-project", "writer-identity"), 1);
+  journal.close();
+});
+

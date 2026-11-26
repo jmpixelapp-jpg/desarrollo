@@ -166,7 +166,9 @@ class EpubArchive {
       const nameLength = view.getUint16(offset + 28, true);
       const extraLength = view.getUint16(offset + 30, true);
       const commentLength = view.getUint16(offset + 32, true);
+      const diskStart = view.getUint16(offset + 34, true);
       const localOffset = view.getUint32(offset + 42, true);
+      if (diskStart !== 0) fail("no se admiten entradas distribuidas en varios volúmenes.");
       const end = offset + 46 + nameLength + extraLength + commentLength;
       if (end > bytes.length) fail("nombre o metadatos ZIP truncados.");
       if (flags & 1) fail("no se admiten entradas cifradas.");
@@ -257,6 +259,7 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
       if (["aside","footer"].includes(tag)) emit();
       const pos = stack.lastIndexOf(tag);
       if (pos >= 0) stack.splice(pos, 1);
+      if (tag === "aside") { const marker = stack.lastIndexOf("__footnote__"); if (marker >= 0) stack.splice(marker, 1); }
       continue;
     }
     const attrs = attributes(token);
@@ -273,8 +276,13 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
       currentKind = /^h1$/u.test(tag) ? "chapter-heading" :
         /^h[2-6]$/u.test(tag) ? "section-heading" :
         (role.includes("footnote") || classes.includes("footnote") ? "footnote" :
-          (tag === "pre" || role.includes("verse") || classes.includes("verse") ? "poem-line" : "paragraph"));
+          (role.includes("footnote") || classes.includes("footnote") || stack.includes("__footnote__") ? "footnote" :
+            (tag === "pre" || role.includes("verse") || classes.includes("verse") ? "poem-line" : "paragraph")));
       if (tag === "br") emit();
+    }
+    if (tag === "aside" && (role.includes("footnote") || classes.includes("footnote"))) {
+      stack.push(tag, "__footnote__");
+      continue;
     }
     if (!token.endsWith("/>") && !["meta","link","img","br","hr","input","source","wbr"].includes(tag)) stack.push(tag);
   }

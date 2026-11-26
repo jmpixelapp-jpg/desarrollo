@@ -473,3 +473,32 @@ También se endureció el ciclo de vida de `subscribeChanges`:
 Estas pruebas verifican tanto la ausencia de deltas falsos como la liberación del snapshot temporal y la continuidad de `revision`/`sequence` después de la recuperación.
 
 **Estado:** los cambios de código y pruebas se han enviado a `main`. Esta documentación registra la nueva política; la ejecución de CI correspondiente a estos commits todavía debe confirmarse. Los resultados 209/209 y 1.206/1.206 de la sección anterior corresponden a la revisión anterior y no se atribuyen a esta iteración.
+
+
+## Suspensión de captura ante Page Lifecycle y restauración BFCache — 26 de noviembre de 2026
+
+Se conectó el adaptador de captura del textarea a las señales de ciclo de vida de su propio documento:
+
+- pagehide se escucha en element.ownerDocument.defaultView.
+- freeze se escucha en element.ownerDocument.
+- Los listeners se instalan al iniciar la primera suscripción y se retiran al terminar la última o al disponer el adaptador.
+
+Ante cualquiera de esas señales, el adaptador utiliza el mismo camino conservador de resync-required: invalida cualquier beforeinput todavía pendiente, cierra el estado de composición y libera la copia sombra completa previousText. No emite un delta inferido para completar una composición cuyo input pudo quedar interrumpido.
+
+**No hay reanudación automática en pageshow ni resume.** La vista y su polling pueden volver a estar activos, pero la fuente del documento permanece suspendida hasta que el anfitrión vuelva a suscribirse, lea el snapshot autoritativo más reciente y llame a resynchronize(snapshot). Esto evita tratar una restauración BFCache como prueba de que no hubo cambios fuera de la secuencia observada.
+
+### Regresión añadida
+
+live-author-monitor-textarea-source.test.mjs cubre:
+
+1. composición activa al recibir pagehide;
+2. liberación de previousText y descarte del estado pendiente;
+3. señal freeze duplicada sin duplicar errores;
+4. eventos de edición ignorados durante el estado suspendido;
+5. recuperación explícita desde un snapshot actualizado mientras la suscripción sigue activa;
+6. aceptación de una edición posterior con sequence y baseRevision consecutivos;
+7. retirada de listeners pagehide y freeze al cerrar la suscripción.
+
+La prueba usa EventTargets controlados para verificar la máquina de estados del adaptador. No simula un congelamiento físico de Chromium, una salida real a BFCache ni un proveedor IME del sistema operativo. La prueba Chromium existente del scheduler de visibilidad/ciclo de vida sigue siendo una validación separada de la capa visual.
+
+**Estado de validación:** el código y la regresión se publicaron en main; la ejecución CI sobre estos commits no está confirmada todavía. No se extrapolan aquí los resultados de CI de revisiones anteriores.

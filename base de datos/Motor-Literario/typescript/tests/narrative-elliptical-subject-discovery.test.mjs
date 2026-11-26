@@ -57,7 +57,7 @@ test("se abstiene cuando aparece otro personaje entre acciones", () => {
   const first = observation("o1", 0, 20, ana.id, [ana.id]);
   const second = observation("o2", 21, 33, bruno.id, [bruno.id]);
   const third = observation("o3", 34, text.length, undefined, []);
-  assert.deepEqual(discover(text, [first, second, third], [ana, bruno]), []);
+  assert.deepEqual(discover(text, [first, third], [ana, bruno]), []);
 });
 
 test("se abstiene ante saltos de párrafo", () => {

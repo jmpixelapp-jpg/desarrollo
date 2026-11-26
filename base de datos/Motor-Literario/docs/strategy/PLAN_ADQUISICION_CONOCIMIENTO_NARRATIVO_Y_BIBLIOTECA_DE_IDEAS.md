@@ -284,3 +284,12 @@ Se añadieron pruebas para año bisiesto, fecha inválida, año aislado, día in
 
 
 La lectura temporal también reconoce fechas escritas en español (por ejemplo, `12 de marzo de 1842`), incluyendo las variantes `septiembre` y `setiembre`. Se valida el día contra el calendario antes de producir el ordinal; una fecha escrita imposible no se degrada a un año aislado. Las pruebas cubren fechas válidas, variantes regionales e imposibles.
+
+
+### Fase B: relaciones de consecuencia explícitamente narradas
+
+Se incorpora un extractor separado de relaciones de consecuencia. Solo crea candidatos entre dos acontecimientos consecutivos cuando el segundo comienza con un marcador lingüístico explícito (por ejemplo, «por eso», «por consiguiente», «como resultado» o «a consecuencia de ello»). La relación conserva ambos identificadores y el rango UTF-16 exacto del conector.
+
+La relación se etiqueta como `explicit-consequence-marker` y permanece en revisión. No se genera por conectores de mera sucesión como «después», no se resuelven causas implícitas y se rechazan eventos de otro documento o revisión. El marcador textual constituye evidencia de una formulación causal del narrador, no una verdad objetiva ni una confirmación automática.
+
+Se añaden pruebas para conectores simples y compuestos, ausencia de inferencia ante mera sucesión y aislamiento de documento/revisión. Las pruebas requieren ejecución CI antes de considerar validada esta ampliación.

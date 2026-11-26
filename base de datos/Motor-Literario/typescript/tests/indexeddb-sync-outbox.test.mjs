@@ -517,3 +517,74 @@ test("recupera aceptación remota cuando falla el commit local del lote de acuse
     await deleteDatabase();
   }
 });
+
+test("IndexedDB conserva un conflicto entre ciclos y lo retira solo tras una aceptación posterior", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    const original = operation({
+      operationId: "op-indexeddb-conflict-recovery",
+      sequence: 1,
+      payload: JSON.stringify({ ideaId: "idea-conflict", text: "Texto original" })
+    });
+    await store.enqueueSyncOperation(original);
+    let now = 10_000;
+    let pushes = 0;
+    const sent = [];
+    const coordinator = new NarrativeSyncCoordinator(store, {
+      async push(_projectId, operations) {
+        pushes++;
+        sent.push(operations.map(item => ({
+          operationId: item.operationId,
+          payload: item.payload,
+          attemptCount: item.attemptCount
+        })));
+        if (pushes === 1) {
+          return {
+            acknowledgedOperationIds: [],
+            conflicts: [{ operationId: original.operationId, code: "revision_conflict", message: "Revisión remota distinta" }],
+            retryableOperationIds: []
+          };
+        }
+        return {
+          acknowledgedOperationIds: [original.operationId],
+          conflicts: [],
+          retryableOperationIds: []
+        };
+      }
+    }, {
+      now: () => now,
+      retryBaseDelayMs: 2_000,
+      retryMaxDelayMs: 2_000,
+      random: () => 1
+    });
+
+    const first = await coordinator.syncOnce(original.projectId);
+    assert.equal(first.conflicted, 1);
+    let pending = await store.loadPendingSyncOperations(original.projectId);
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].lastError, "conflict: revision_conflict: Revisión remota distinta");
+    assert.equal(pending[0].nextAttemptAt, 12_000);
+    assert.equal(pending[0].attemptCount, 1);
+
+    now = 11_999;
+    const held = await coordinator.syncOnce(original.projectId);
+    assert.equal(held.sent, 0);
+    assert.equal(pushes, 1);
+
+    now = 12_000;
+    const recovered = await coordinator.syncOnce(original.projectId);
+    assert.equal(recovered.acknowledged, 1);
+    assert.equal(recovered.remaining, 0);
+    assert.equal(pushes, 2);
+    assert.deepEqual(sent, [
+      [{ operationId: original.operationId, payload: original.payload, attemptCount: 0 }],
+      [{ operationId: original.operationId, payload: original.payload, attemptCount: 1 }]
+    ]);
+    pending = await store.loadPendingSyncOperations(original.projectId);
+    assert.equal(pending.length, 0);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

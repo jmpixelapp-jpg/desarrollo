@@ -51,7 +51,7 @@ export function createNarrativeDocumentProjectionManifest(
   }
   const contribution = snapshot.documents.find(item => item.input.documentId === documentId);
   if (!contribution) throw new Error("El documento no forma parte del snapshot: " + documentId);
-  const ids = <T extends { readonly id: string }>(items: readonly T[]) =>
+  const ids = <T extends { readonly id: string; readonly evidence: readonly { readonly documentId: string }[] }>(items: readonly T[]) =>
     [...new Set(items.filter(item => item.evidence.some(evidence => evidence.documentId === documentId))
       .map(item => item.id))].sort();
   const assertions = contribution.graph.assertions.map(item => item.id).sort();

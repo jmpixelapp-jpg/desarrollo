@@ -79,6 +79,19 @@ test("reconoce contracciones y complementos directos de lugares atravesados", ()
   }))[0]?.transition, "passed-through");
 });
 
+test("reconoce variantes léxicas explícitas de tránsito", () => {
+  const cases = [
+    ["Ana pasó por el bosque.", "pasar", "pasó", "bosque"],
+    ["Ana atravesó el bosque.", "atravesar", "atravesó", "bosque"],
+    ["Ana recorrió el bosque.", "recorrer", "recorrió", "bosque"]
+  ];
+  for (const [text, action, surface, location] of cases) {
+    assert.equal(discover(observation({
+      text, action, actionSurface: surface, location
+    }))[0]?.transition, "passed-through");
+  }
+});
+
 test("no confirma movimientos negados ni futuros", () => {
   const negatedText = "Ana no llegó al puerto.";
   const negated = discover(observation({

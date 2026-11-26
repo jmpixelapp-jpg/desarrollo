@@ -356,3 +356,36 @@ test("exige resincronización si la composición termina sin el input asociado",
   f.stop();
   f.source.dispose();
 });
+
+test("no confunde arrastrar/soltar ni yank con pegado o corrección", () => {
+  const f = fixture("abcd", 0, 0);
+  f.element.edit({ start: 4, end: 4, nextValue: "abcdD", inputType: "insertFromDrop" });
+  f.element.edit({ start: 5, end: 5, nextValue: "abcdDY", inputType: "insertFromYank" });
+  f.element.edit({ start: 1, end: 2, nextValue: "aRbDY", inputType: "insertReplacementText" });
+  assert.deepEqual(f.changes.map(change => change.activityKind), ["other", "other", "correction"]);
+  assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});
+
+test("reconstruye exactamente deltas con límites UTF-16, incluidos pares sustitutos", () => {
+  const f = fixture("A😀e\u0301Z", 0, 0);
+  let previous = f.element.value;
+  const operations = [[2, 2, "x"], [1, 3, "🧪"], [2, 2, "\u200d"], [0, 1, "á"], [2, 4, ""], [0, 0, "😀e\u0301"]];
+  for (const [start, end, replacement] of operations) {
+    const nextValue = previous.slice(0, start) + replacement + previous.slice(end);
+    f.element.edit({ start, end, nextValue, inputType: "insertText" });
+    const change = f.changes.at(-1);
+    assert.ok(change, "cada edición válida debe producir exactamente un delta");
+    assert.equal(change.start, start);
+    assert.equal(change.end, end);
+    assert.equal(change.replacement, replacement);
+    assert.equal(previous.slice(0, change.start) + change.replacement + previous.slice(change.end), nextValue);
+    previous = nextValue;
+  }
+  assert.equal(f.changes.length, operations.length);
+  assert.equal(f.source.getState().documentLength, previous.length);
+  assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});

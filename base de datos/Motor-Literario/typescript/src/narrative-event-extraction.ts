@@ -77,6 +77,30 @@ function extractTimeReference(sentence: string): NarrativeTimeReference | undefi
       found.push({ basis: "calendar", precision: "date", raw: match[0], orderValue });
     }
   }
+  const months = new Map([
+    ["enero", 1], ["febrero", 2], ["marzo", 3], ["abril", 4],
+    ["mayo", 5], ["junio", 6], ["julio", 7], ["agosto", 8],
+    ["septiembre", 9], ["setiembre", 9], ["octubre", 10],
+    ["noviembre", 11], ["diciembre", 12]
+  ]);
+  const monthPattern = [...months.keys()].join("|");
+  const writtenDate = new RegExp(
+    String.raw`(?<![\p{L}\p{N}])(\d{1,2})\s+de\s+(${monthPattern})\s+de\s+(\d{4})(?![\p{L}\p{N}])`,
+    "giu"
+  );
+  for (const match of sentence.matchAll(writtenDate)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (occupied.some(([a, b]) => start < b && end > a)) continue;
+    occupied.push([start, end]);
+    const day = Number(match[1]);
+    const month = months.get((match[2] ?? "").toLocaleLowerCase("es")) ?? 0;
+    const year = Number(match[3]);
+    const orderValue = validCalendarDay(year, month, day);
+    if (orderValue === undefined) continue;
+    found.push({ basis: "calendar", precision: "date", raw: match[0], orderValue });
+  }
+
   for (const match of sentence.matchAll(/(?<![\p{L}\p{N}])(?:día|dia)\s+(?:n(?:ú|u)mero\s+)?(\d{1,9})(?![\p{L}\p{N}])/giu)) {
     const value = Number(match[1]);
     if (!Number.isSafeInteger(value) || value < 1) continue;

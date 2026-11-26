@@ -129,8 +129,8 @@ export function resolveNarrativeTextEvidence(
   }
   // En el conocimiento narrativo, start/end identifican la ocurrencia concreta,
   // mientras excerpt conserva la línea completa como contexto legible.
-  const lineStart = chapter.text.lastIndexOf("\\n", evidence.start - 1) + 1;
-  const nextLineBreak = chapter.text.indexOf("\\n", evidence.end);
+  const lineStart = chapter.text.lastIndexOf("\n", evidence.start - 1) + 1;
+  const nextLineBreak = chapter.text.indexOf("\n", evidence.end);
   const lineEnd = nextLineBreak < 0 ? chapter.text.length : nextLineBreak;
   const sourceLine = chapter.text.slice(lineStart, lineEnd);
   if (sourceLine !== evidence.excerpt ||

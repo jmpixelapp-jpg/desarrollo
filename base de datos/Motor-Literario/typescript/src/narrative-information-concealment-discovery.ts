@@ -23,6 +23,7 @@ export interface NarrativeInformationConcealmentCandidate {
   readonly evidence: TextEvidence;
   readonly recipientEvidence?: TextEvidence;
   readonly assertionStatus: "textually-asserted";
+  readonly polarity: "affirmed" | "negated";
   readonly deceptionEstablished: false;
   readonly intentEstablished: false;
   readonly reviewStatus: "candidate";
@@ -122,8 +123,10 @@ export function discoverNarrativeInformationConcealmentCandidates(
   if(!names.length)return [];
   const alternatives=[...new Set(names.map(item=>item.value))].sort((a,b)=>b.length-a.length)
     .map(escapeRegExp).join("|");
-  const actor="(?<actor>"+alternatives+")";
-  const recipient="(?<recipient>"+alternatives+")";
+  const boundaryStart="(?<![\\\\p{L}\\\\p{M}\\\\p{N}_])";
+  const boundaryEnd="(?![\\\\p{L}\\\\p{M}\\\\p{N}_])";
+  const actor="(?<actor>"+boundaryStart+"(?:"+alternatives+")"+boundaryEnd+")";
+  const recipient="(?<recipient>"+boundaryStart+"(?:"+alternatives+")"+boundaryEnd+")";
   const patterns:readonly {signal:NarrativeInformationConcealmentSignal;expression:RegExp}[]=[
     {signal:"concealed-proposition",expression:new RegExp(actor+"\\s+(?<trigger>ocult[oó]|escondi[oó]|call[oó])\\s+(?:a\\s+"+recipient+"\\s+)?que\\s+(?<proposition>[^.!?;\\n]{1,500})","giu")},
     {signal:"lied-to-recipient",expression:new RegExp(actor+"\\s+(?<trigger>minti[oó])\\s+a\\s+"+recipient+"\\s+(?<bridge>diciendo)\\s+que\\s+(?<proposition>[^.!?;\\n]{1,500})","giu")},
@@ -168,7 +171,9 @@ export function discoverNarrativeInformationConcealmentCandidates(
           triggerEvidence:evidence(input,triggerStart,triggerStart+triggerRaw.length),
           evidence:evidence(input,span.start,span.end),
           ...(recipientId&&recipientStart!==undefined?{recipientEvidence:evidence(input,recipientStart,recipientStart+recipientRaw!.length)}:{}),
-          assertionStatus:"textually-asserted",deceptionEstablished:false,intentEstablished:false,
+          assertionStatus:"textually-asserted",
+          polarity:/(?:^|\\\\s)(?:no|nunca|jam[aá]s)\\\\s+[^.!?;]*$/iu.test(sentence.slice(0,triggerStart-span.start))?"negated":"affirmed",
+          deceptionEstablished:false,intentEstablished:false,
           reviewStatus:"candidate"
         });
       }

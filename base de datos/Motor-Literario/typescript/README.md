@@ -404,3 +404,14 @@ El módulo `book-ingestion.ts` establece la frontera de entrada entre un lector 
 La salida conserva rangos UTF-16 por bloque y la ubicación original para poder volver desde una evidencia literaria al pasaje de origen. Solo se crean capítulos a partir de encabezados explícitos o cambios de `chapterId`; no se adivinan límites por cambios de escena, saltos de página o patrones de texto. La normalización es deliberadamente conservadora: unifica CRLF/CR y retira un BOM inicial, pero no elimina guiones de fin de línea, notas, encabezados repetidos ni caracteres que podrían pertenecer al autor.
 
 **Alcance actual:** está implementado el contrato de adaptadores y la ingesta estructural común; todavía no se incluye un decodificador concreto de EPUB, PDF, DOCX o escaneos/OCR. Cada formato debe aportar un adaptador que lea su estructura real y emita bloques con localizadores verificables. La ingesta no debe sustituir ese lector ni afirmar que puede extraer texto de un archivo binario sin un adaptador correspondiente.
+
+
+### Lector EPUB inicial
+
+Se incorpora `EpubBookReader` en `src/epub-reader.ts`, exportado desde el punto de entrada del paquete. El lector acepta `ArrayBuffer` o `Uint8Array`, inspecciona metadatos OPF (título, autor, idioma e identificador), resuelve `META-INF/container.xml`, manifiesto y spine, y emite bloques en el orden del spine. Los documentos XHTML se convierten en encabezados, secciones, párrafos, versos y notas con localizadores internos por documento y bloque.
+
+La lectura ZIP verifica directorio central, nombres y rutas, entradas duplicadas, cifrado, métodos admitidos (stored/deflate), límites de tamaño y ratio de expansión, cabeceras locales y CRC32. Se rechazan ZIP64, archivos divididos y texto UTF-8 inválido en esta primera versión. No se ejecuta contenido activo y se excluyen scripts, estilos, SVG y MathML de la extracción textual.
+
+La primera versión usa `DecompressionStream("deflate-raw")` para entradas comprimidas; los entornos que no lo implementen pueden leer EPUBs con entradas stored, pero devolverán un error explícito para entradas deflate. Los libros que empleen XML/HTML con codificación distinta de UTF-8, CSS complejo, contenido remoto, overlays de audio o estructuras no cubiertas requieren soporte adicional. La salida es una extracción estructural inicial, no una promesa de fidelidad editorial perfecta; las advertencias y pruebas con corpus real siguen siendo necesarias.
+
+Pruebas nuevas en `tests/epub-reader.test.mjs`: metadatos y spine, localizadores, notas, exclusión de scripts, rechazo de mimetype/rutas inseguras y detección de corrupción CRC32.

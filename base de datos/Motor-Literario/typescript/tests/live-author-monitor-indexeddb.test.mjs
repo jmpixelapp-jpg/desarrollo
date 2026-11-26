@@ -231,7 +231,7 @@ test("IndexedDB rechaza balances imposibles de pausas, caracteres, commits y lat
           compositionDeletedCharacters: 1,
           activityUnitMetricsComplete: true
         },
-        expected: /activity-unit-metrics\\.balance/
+        expected: /activity-unit-metrics\.balance/
       },
       {
         label: "commit-counts",

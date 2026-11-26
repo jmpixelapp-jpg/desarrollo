@@ -754,3 +754,5 @@ Estas pruebas deterministas no equivalen a un apagado forzado de sistema operati
 
 
 **Validación del aborto:** [run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154) aprobó el rollback después de encolar el put (test 115); el checkpoint previo y la capacidad de escritura posterior quedaron verificados.
+
+**Validación CI dedicada:** [run 45765482739](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765482739) aprobó el aborto transaccional (test 115) y la reapertura por `onclose` (test 116), con 177/177 integraciones, Chromium Page Lifecycle 1/1 y benchmark de 100.000 commits.

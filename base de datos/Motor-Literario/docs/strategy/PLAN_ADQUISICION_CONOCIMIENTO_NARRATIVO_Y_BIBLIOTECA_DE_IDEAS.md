@@ -398,3 +398,21 @@ El pipeline publica los candidatos como `memoryEvents`; la API se exporta desde 
 **Límites deliberados:** no deduce olvido por silencio, falta de mención, paso del tiempo o contradicción. No concluye que un recuerdo sea verdadero, que se haya borrado de forma permanente ni que un personaje haya recuperado toda la memoria. La negación simple `no olvidó` y `nunca olvidó` no se clasifica como olvido. Los patrones son un primer detector léxico en español, no un analizador semántico general.
 
 **Validación:** los archivos y pruebas están publicados en la rama; no se afirma que TypeScript, build o suite hayan pasado hasta ejecutar comprobaciones reales sobre el head actualizado.
+
+
+## Fase X: línea temporal de memoria autobiográfica explícita
+
+Se añade `typescript/src/narrative-memory-timeline.ts` y la API `buildNarrativeMemoryTimeline(input)`. La proyección agrupa los eventos explícitos por personaje y contenido normalizado, conserva todos los eventos originales y calcula un estado candidato:
+
+- `remembered`: el último evento comparable es un recuerdo explícito.
+- `forgotten`: el último evento comparable declara olvido.
+- `memory-recovered`: el último evento comparable declara recuperación de memoria.
+- `chronology-unresolved`: existen eventos, pero no hay base suficiente para determinar cuál ocurrió después.
+
+La cronología se establece únicamente con offsets dentro de la misma revisión documental o con un orden de documentos entregado expresamente. No se ordenan revisiones distintas de un mismo documento por su número ni se infiere orden por nombre de archivo. Si hay eventos comparables y no comparables mezclados, el estado permanece sin resolver.
+
+El pipeline acepta `priorMemoryEvents` y devuelve `characterMemoryTimelines`; el módulo se exporta desde el índice público. Se añaden seis pruebas unitarias y una integración para olvido posterior, recuperación, cronología desconocida, orden explícito, revisiones distintas y validación de proyecto/personaje.
+
+**Límites:** la línea temporal solo proyecta expresiones léxicas detectadas; no diagnostica pérdida de memoria, no demuestra la veracidad del recuerdo, no infiere qué información quedó borrada ni interpreta el silencio como olvido. El historial original permanece intacto aunque la proyección actual cambie.
+
+**Validación:** los cambios y pruebas están publicados; no se afirma que build, TypeScript o suite hayan pasado sin ejecución real en el head.

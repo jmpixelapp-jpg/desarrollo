@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { extractNarrativeConsequenceCandidates } from "../dist/motor-literario.js";
 
-function event(id, start, end, excerpt, participants = [], characterParticipants = participants) {
+function event(id, start, end, excerpt, participants = [], characterParticipants = participants, actionIds = []) {
   return {
     id, projectId: "book-1", label: excerpt,
-    participantEntityIds: participants, characterParticipantEntityIds: characterParticipants, actionCandidateIds: [],
+    participantEntityIds: participants, characterParticipantEntityIds: characterParticipants, actionCandidateIds: actionIds,
     reviewStatus: "candidate",
     evidence: { documentId: "chapter-1", revision: 2, start, end, excerpt }
   };
@@ -214,4 +214,23 @@ test("rechaza identidades de participantes duplicadas antes de generar relacione
   assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[duplicated])),/únicos, válidos/);
   const duplicatedCharacter=event("duplicate-character-participants",a,text.length,text,["mara"],["mara","mara"]);
   assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[duplicatedCharacter])),/únicos, válidos/);
+});
+
+test("cada relación conserva los IDs de acciones explícitas de ambos acontecimientos",()=>{
+  const text="Mara protegió a Elian. Por eso Elian escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Por eso");
+  const source=event("source-actions",a,text.indexOf(".")+1,"Mara protegió a Elian.",["mara","elian"],["mara","elian"],["action-protect"]);
+  const consequence=event("result-actions",b,text.length,text.slice(b),["elian"],["elian"],["action-escape"]);
+  const [result]=extractNarrativeConsequenceCandidates(input(text,[source,consequence]));
+  assert.deepEqual(result.supportingActionCandidateIds,{
+    sourceEvent:["action-protect"], consequenceEvent:["action-escape"]
+  });
+});
+test("rechaza IDs de acciones duplicados o mal formados en un acontecimiento",()=>{
+  const text="Mara abrió la puerta.";
+  const a=text.indexOf("Mara");
+  const duplicated=event("duplicate-actions",a,text.length,text,["mara"],["mara"],["action-1","action-1"]);
+  assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[duplicated])),/únicos, válidos/);
+  const malformed=event("malformed-actions",a,text.length,text,["mara"],["mara"],[null]);
+  assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[malformed])),/únicos, válidos/);
 });

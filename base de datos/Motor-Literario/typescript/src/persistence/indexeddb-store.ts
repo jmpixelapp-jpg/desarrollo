@@ -5786,11 +5786,23 @@ export class IndexedDbProjectStore implements ProjectStore {
       existingRequest.onsuccess = () => {
         const existing = existingRequest.result as StoredSyncOperation | undefined;
         if (existing) {
+          const canonicalize = (value: unknown): unknown => {
+            if (Array.isArray(value)) return value.map(canonicalize);
+            if (value && typeof value === "object") {
+              return Object.fromEntries(
+                Object.keys(value as Record<string, unknown>).sort().map(key => [
+                  key, canonicalize((value as Record<string, unknown>)[key])
+                ])
+              );
+            }
+            return value;
+          };
           const same = existing.projectId === draft.projectId &&
             existing.deviceId === draft.deviceId &&
             existing.kind === draft.kind &&
             existing.createdAt === draft.createdAt &&
-            JSON.stringify(JSON.parse(existing.payload)) === JSON.stringify(payload);
+            JSON.stringify(canonicalize(JSON.parse(existing.payload))) ===
+              JSON.stringify(canonicalize(payload));
           if (!same) {
             failure = new Error("Colisión de idempotencia: el operationId ya existe con otro contenido.");
             try { transaction.abort(); } catch { /* transacción ya abortada */ }

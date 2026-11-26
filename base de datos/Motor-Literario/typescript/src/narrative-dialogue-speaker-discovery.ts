@@ -195,7 +195,7 @@ export function discoverNarrativeDialogueSpeakers(
         const preceding = attributionText.slice(Math.max(0, item.start - 16), item.start);
         // A name governed by «a/para/hacia» is a likely addressee or complement,
         // not the grammatical subject of the speech verb.
-        if (/(?:\\b(?:a|para|hacia)\\s+)$/iu.test(preceding)) return false;
+        if (/(?:\b(?:a|para|hacia)\s+)$/iu.test(preceding)) return false;
         return verbMatches.some(verb =>
           Math.abs((attributionStart + item.start) - (attributionStart + verb.index!)) <= distance
         );

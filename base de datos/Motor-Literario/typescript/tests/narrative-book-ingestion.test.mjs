@@ -377,3 +377,35 @@ test("la ingesta no inventa acontecimientos cuando falta la etiqueta explícita"
   });
   assert.deepEqual(result.eventCandidates, []);
 });
+
+
+test("integra ideas detectadas en la ingesta y las incorpora a la auditoría de cobertura", () => {
+  const text = [
+    "La historia gira en torno a la pérdida de la memoria.",
+    "El protagonista busca recuperar su identidad."
+  ].join("\n");
+  const baseOffset = 500;
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "idea-ingestion", revision: 8,
+    text, baseOffset
+  });
+
+  assert.equal(result.ideaDiscoveryStatus, "extracted");
+  assert.equal(result.ideaCandidates.length, 2);
+  assert.equal(result.coverage.ideaCandidateCount, 2);
+  assert.deepEqual(result.ideaCandidates.map(item => item.kind), ["theme", "goal"]);
+  assert.ok(result.ideaCandidates.every(item => item.reviewStatus === "candidate"));
+  for (const candidate of result.ideaCandidates) {
+    assert.equal(
+      text.slice(candidate.evidence.start - baseOffset, candidate.evidence.end - baseOffset),
+      candidate.evidence.excerpt
+    );
+    assert.equal(
+      text.slice(candidate.mention.start - baseOffset, candidate.mention.end - baseOffset),
+      candidate.mention.excerpt
+    );
+  }
+  assert.equal(result.extractionAudit.sentencesWithAdditionalEvidence, 2);
+  assert.equal(result.extractionAudit.sentencesWithAnyExtractedEvidence, 2);
+  assert.deepEqual(result.extractionAudit.uncoveredSentences, []);
+});

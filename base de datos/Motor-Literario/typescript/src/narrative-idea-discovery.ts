@@ -32,6 +32,13 @@ export interface NarrativeIdeaCandidate {
   /** La confianza mide la claridad de la señal lingüística, no la verdad. */
   readonly confidence: NarrativeIdeaCandidateConfidence;
   readonly reviewStatus: "candidate";
+  /** Fragmento exacto que expresa el candidato, distinto del contexto probatorio. */
+  readonly mention: {
+    readonly start: number;
+    readonly end: number;
+    readonly excerpt: string;
+  };
+  /** Oración completa que permite verificar el candidato en su contexto. */
   readonly evidence: {
     readonly start: number;
     readonly end: number;
@@ -75,9 +82,19 @@ const DISCOVERY_PATTERNS: readonly DiscoveryPattern[] = [
     expression: /\b(?:la\s+historia|el\s+relato|la\s+novela)\s+trata\s+sobre\s+(.+?)(?=[.!?;]|$)/iu
   },
   {
+    kind: "theme",
+    confidence: "medium",
+    expression: /\b(?:la\s+historia|el\s+relato|la\s+novela|el\s+libro)\s+(?:gira\s+en\s+torno\s+a|se\s+centra\s+en|explora|aborda|indaga\s+en|reflexiona\s+sobre)\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
     kind: "conflict",
     confidence: "high",
     expression: /\b(?:conflicto\s+central|conflicto\s+principal|problema\s+central)\s*(?:es|consiste\s+en|:)?\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "conflict",
+    confidence: "medium",
+    expression: /\b(?:la\s+)?(?:tensi[oó]n|lucha|oposici[oó]n|choque|dilema)\s+(?:central\s+)?(?:surge\s+)?entre\s+(.+?)(?=[.!?;]|$)/iu
   },
   {
     kind: "goal",
@@ -85,9 +102,19 @@ const DISCOVERY_PATTERNS: readonly DiscoveryPattern[] = [
     expression: /\b(?:objetivo|meta|prop[oó]sito)\s+(?:de\s+[^,:;.!?]{1,100}\s+)?(?:es|consiste\s+en|:)?\s+(.+?)(?=[.!?;]|$)/iu
   },
   {
+    kind: "goal",
+    confidence: "medium",
+    expression: /\b(?:el|la)\s+(?:protagonista|personaje\s+principal|h[eé]roe|hero[ií]na)\s+(?:busca|desea|quiere|pretende|intenta|aspira\s+a|sueña\s+con)\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
     kind: "question",
     confidence: "high",
     expression: /\bqu[eé]\s+pasar[ií]a\s+si\s+(.+?)(?=[?]|$)/iu
+  },
+  {
+    kind: "question",
+    confidence: "medium",
+    expression: /\b(?:la\s+)?pregunta\s+(?:central|principal|que\s+plantea\s+(?:la\s+historia|el\s+relato|la\s+novela))\s*(?:es|:)?\s+(.+?)(?=[.!?;]|$)/iu
   },
   {
     kind: "hypothesis",
@@ -98,6 +125,11 @@ const DISCOVERY_PATTERNS: readonly DiscoveryPattern[] = [
     kind: "motif",
     confidence: "high",
     expression: /\b(?:motivo\s+recurrente|s[ií]mbolo\s+recurrente)\s*(?:es|:)?\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "motif",
+    confidence: "medium",
+    expression: /\b(?:vuelve\s+a\s+aparecer|reaparece|se\s+repite|aparece\s+una\s+y\s+otra\s+vez)\s+(.+?)(?=[.!?;]|$)/iu
   }
 ];
 
@@ -162,9 +194,12 @@ export function discoverNarrativeIdeaCandidates(
       const captureOffset = match.index + match[0].lastIndexOf(captured);
       const leadingTrim = captured.search(/\S/u);
       const trailingTrim = captured.trimEnd().length;
-      const start = baseOffset + segment.start + captureOffset + leadingTrim;
-      const end = baseOffset + segment.start + captureOffset + trailingTrim;
-      const id = `idea-candidate:${input.documentId}:${start}:${pattern.kind}`;
+      const mentionStart = baseOffset + segment.start + captureOffset + leadingTrim;
+      const mentionEnd = baseOffset + segment.start + captureOffset + trailingTrim;
+      const mentionExcerpt = input.text.slice(mentionStart - baseOffset, mentionEnd - baseOffset);
+      const evidenceStart = baseOffset + segment.start;
+      const evidenceEnd = baseOffset + segment.end;
+      const id = `idea-candidate:${input.documentId}:${mentionStart}:${pattern.kind}`;
       candidates.set(id, {
         id,
         projectId: input.projectId,
@@ -174,7 +209,8 @@ export function discoverNarrativeIdeaCandidates(
         text: value,
         confidence: pattern.confidence,
         reviewStatus: "candidate",
-        evidence: { start, end, excerpt }
+        mention: { start: mentionStart, end: mentionEnd, excerpt: mentionExcerpt },
+        evidence: { start: evidenceStart, end: evidenceEnd, excerpt }
       });
     }
   }

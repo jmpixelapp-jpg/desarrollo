@@ -49,9 +49,14 @@ test("conserva offsets UTF-16 absolutos y el fragmento probatorio", () => {
   });
 
   assert.equal(found.length, 1);
-  assert.equal(found[0].evidence.start, prefix.length + sentence.indexOf("la memoria"));
-  assert.equal(found[0].evidence.end, prefix.length + sentence.indexOf("."));
-  assert.equal(found[0].evidence.excerpt, sentence);
+  assert.equal(found[0].mention.start, prefix.length + sentence.indexOf("la memoria"));
+  assert.equal(found[0].mention.end, prefix.length + sentence.indexOf("."));
+  assert.equal(found[0].mention.excerpt, "la memoria de Ángela");
+  assert.deepEqual(found[0].evidence, {
+    start: prefix.length,
+    end: prefix.length + sentence.length,
+    excerpt: sentence
+  });
 });
 
 test("no inventa ideas a partir de prosa sin señales lingüísticas explícitas", () => {
@@ -81,4 +86,39 @@ test("rechaza contextos y offsets inválidos", () => {
   assert.throws(() => discoverNarrativeIdeaCandidates({
     ...context, text: "El tema central es la memoria.", baseOffset: -1
   }));
+});
+
+
+test("descubre formulaciones indirectas de tema, tensión, objetivo, pregunta y motivo", () => {
+  const text = [
+    "La historia gira en torno a la pérdida de la confianza.",
+    "El protagonista desea recuperar el nombre de su hermana.",
+    "La tensión central surge entre la lealtad y la libertad.",
+    "La pregunta central es quién decide qué merece ser recordado.",
+    "Vuelve a aparecer la puerta cerrada en cada decisión."
+  ].join("\n");
+  const found = discoverNarrativeIdeaCandidates({ ...context, text });
+
+  assert.deepEqual(found.map(item => item.kind), [
+    "theme", "goal", "conflict", "question", "motif"
+  ]);
+  assert.deepEqual(found.map(item => item.text), [
+    "la pérdida de la confianza",
+    "recuperar el nombre de su hermana",
+    "la lealtad y la libertad",
+    "quién decide qué merece ser recordado",
+    "la puerta cerrada en cada decisión"
+  ]);
+  for (const candidate of found) {
+    assert.equal(
+      text.slice(candidate.evidence.start, candidate.evidence.end),
+      candidate.evidence.excerpt
+    );
+    assert.equal(
+      text.slice(candidate.mention.start, candidate.mention.end),
+      candidate.mention.excerpt
+    );
+    assert.ok(candidate.evidence.start <= candidate.mention.start);
+    assert.ok(candidate.evidence.end >= candidate.mention.end);
+  }
 });

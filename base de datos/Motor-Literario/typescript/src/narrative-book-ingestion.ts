@@ -5,6 +5,11 @@ import {
   type NarrativeEvent
 } from "./narrative-knowledge";
 import {
+  discoverNarrativeIdeaCandidates,
+  MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
+  type NarrativeIdeaCandidate
+} from "./narrative-idea-discovery";
+import {
   discoverNarrativeObservationCandidates,
   MAX_NARRATIVE_OBSERVATION_TEXT_UNITS,
   type NarrativeObservationCandidate
@@ -116,6 +121,9 @@ export interface NarrativeBookIngestionResult {
   readonly signals: readonly NarrativeBookSignal[];
   /** Acontecimientos declarados explícitamente con ACONTECIMIENTO:/EVENTO:; no inferidos. */
   readonly eventCandidates: readonly NarrativeEvent[];
+  /** Ideas temáticas candidatas descubiertas en la prosa; nunca se confirman automáticamente. */
+  readonly ideaCandidates: readonly NarrativeIdeaCandidate[];
+  readonly ideaDiscoveryStatus: "extracted" | "omitted-text-budget";
   /** Entidades nombradas explícitamente con etiquetas como «Personaje Ana»; candidatas, no confirmadas. */
   readonly entityCandidates: readonly NarrativeEntity[];
   /** Acciones vinculadas a entidades conocidas; siguen siendo candidatos revisables. */
@@ -141,6 +149,7 @@ export interface NarrativeBookIngestionResult {
     readonly paragraphCount: number;
     readonly wordCount: number;
     readonly signalCount: number;
+    readonly ideaCandidateCount: number;
     readonly omittedSignals: number;
     readonly truncated: boolean;
   };
@@ -533,6 +542,19 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
         input.baseOffset ?? 0
       )
     : [];
+  const ideaDiscoveryStatus = input.text.length <= MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS
+    ? "extracted" as const
+    : "omitted-text-budget" as const;
+  const ideaCandidates = ideaDiscoveryStatus === "extracted"
+    ? discoverNarrativeIdeaCandidates({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        revision: input.revision,
+        text: input.text,
+        baseOffset: input.baseOffset ?? 0
+      })
+    : [];
+
   const extractionAudit = auditNarrativeExtractionCoverage({
     documentId: input.documentId,
     revision: input.revision,
@@ -552,7 +574,8 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
       ...characterStateCandidates.map(candidate => ({ evidence: candidate.evidence })),
       ...locationTransitionCandidates.map(candidate => ({ evidence: candidate.locationEvidence })),
       ...locationPresenceCandidates.map(candidate => ({ evidence: candidate.evidence })),
-      ...temporalReferences.map(candidate => ({ evidence: candidate.evidence }))
+      ...temporalReferences.map(candidate => ({ evidence: candidate.evidence })),
+      ...ideaCandidates.map(candidate => ({ evidence: candidate.evidence }))
     ]
   });
   return {
@@ -576,6 +599,8 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     temporalReferences,
     temporalReferenceStatus,
     eventCandidates,
+    ideaCandidates,
+    ideaDiscoveryStatus,
     extractionAudit,
     observationStatus,
     coverage: {
@@ -583,8 +608,10 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
       paragraphCount: paragraphs.length,
       wordCount: totalWords,
       signalCount: signals.length,
+      ideaCandidateCount: ideaCandidates.length,
       omittedSignals,
-      truncated: paragraphs.length >= MAX_NARRATIVE_BOOK_PARAGRAPHS || omittedSignals > 0
+      truncated: paragraphs.length >= MAX_NARRATIVE_BOOK_PARAGRAPHS ||
+        omittedSignals > 0 || ideaDiscoveryStatus === "omitted-text-budget"
     }
   };
 }

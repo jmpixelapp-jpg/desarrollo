@@ -29,6 +29,7 @@ interface PanelNodes {
   readonly durability: HTMLElement;
   readonly persistence: HTMLElement;
   readonly coordination: HTMLElement;
+  readonly listenerErrors: HTMLElement;
   readonly progress: HTMLElement;
   readonly progressTrack: HTMLElement;
   readonly metrics: ReadonlyMap<MetricKey, MetricNode>;
@@ -290,10 +291,22 @@ export function readLiveAuthorMonitorPersistenceDiagnosticsSafely(
   }
 }
 
+export function formatLiveAuthorMonitorListenerErrorStatus(
+  snapshot: LiveAuthorMonitorSnapshot,
+  localErrors = 0,
+  locale = "es"
+): string {
+  const total = snapshot.listenerErrors + localErrors;
+  if (total === 0) return "Notificaciones del monitor: sin errores.";
+  return "Aviso de observabilidad: " + new Intl.NumberFormat(locale).format(total) +
+    " fallo(s) de actualización de panel; la captura de escritura continúa.";
+}
+
 function updatePanel(
   nodes: PanelNodes, snapshot: LiveAuthorMonitorSnapshot,
   integer: Intl.NumberFormat, decimal: Intl.NumberFormat,
   diagnostics: LiveAuthorMonitorPersistenceDiagnostics | undefined,
+  localListenerErrors: number,
   locale: string
 ): void {
   const statuses = {
@@ -317,6 +330,11 @@ function updatePanel(
   nodes.coordination.setAttribute("data-level", !diagnostics ? "warning" :
     diagnostics.leaseState === "error" || diagnostics.leaseState === "lost" ||
       diagnostics.leaseState === "expired" ? "error" : "info");
+  nodes.listenerErrors.textContent = formatLiveAuthorMonitorListenerErrorStatus(
+    snapshot, localListenerErrors, locale
+  );
+  nodes.listenerErrors.setAttribute("data-level",
+    snapshot.listenerErrors + localListenerErrors > 0 ? "warning" : "info");
   const latest = Math.max(0, snapshot.latestSequence);
   const durable = Math.max(0, snapshot.durableSequence);
   const percentage = latest === 0 ? 100 : Math.max(0, Math.min(100, durable / latest * 100));
@@ -395,6 +413,10 @@ export function mountLiveAuthorMonitorPanel(
   coordination.setAttribute("data-diagnostic", "lease");
   coordination.setAttribute("role", "status");
   coordination.setAttribute("aria-live", "polite");
+  const listenerErrors = makeElement(document, "p", "ml-author-monitor__diagnostic");
+  listenerErrors.setAttribute("data-diagnostic", "listeners");
+  listenerErrors.setAttribute("role", "status");
+  listenerErrors.setAttribute("aria-live", "polite");
   const progressTrack = makeElement(document, "div", "ml-author-monitor__progress-track");
   progressTrack.setAttribute("role", "progressbar");
   progressTrack.setAttribute("aria-valuemin", "0");
@@ -404,23 +426,36 @@ export function mountLiveAuthorMonitorPanel(
   progressTrack.append(progress);
   const note = makeElement(document, "p", "ml-author-monitor__note");
   note.textContent = "Métricas locales de esta sesión. El contenido del manuscrito no se muestra ni se transmite.";
-  root.append(header, grid, durability, persistence, coordination, progressTrack, note);
+  root.append(header, grid, durability, persistence, coordination, listenerErrors, progressTrack, note);
   container.append(root);
 
   const nodes: PanelNodes = {
-    status, statusText, durability, persistence, coordination, progress, progressTrack, metrics: metricNodes
+    status, statusText, durability, persistence, coordination, listenerErrors, progress, progressTrack, metrics: metricNodes
   };
   let disposed = false;
+  let panelListenerErrors = 0;
   let unsubscribe: (() => void) | undefined;
   try {
     unsubscribe = subscribeLiveAuthorMonitorWithRefresh(hostApi, snapshot => {
       if (!disposed) updatePanel(
         nodes, snapshot, integer, decimal,
         readLiveAuthorMonitorPersistenceDiagnosticsSafely(hostApi, options.documentId),
+        panelListenerErrors,
         locale
       );
     }, {
       documentId: options.documentId,
+      onListenerError: snapshot => {
+        panelListenerErrors++;
+        if (!disposed) {
+          try {
+            nodes.listenerErrors.textContent = formatLiveAuthorMonitorListenerErrorStatus(
+              snapshot, panelListenerErrors, locale
+            );
+            nodes.listenerErrors.setAttribute("data-level", "warning");
+          } catch { /* El diagnóstico local tampoco puede interrumpir la escritura. */ }
+        }
+      },
       ...(options.intervalMs === undefined ? {} : { intervalMs: options.intervalMs }),
       schedule: (callback, milliseconds) =>
         scheduleLiveAuthorMonitorWhileVisible(document, callback, milliseconds, options.schedule)

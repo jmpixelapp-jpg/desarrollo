@@ -158,11 +158,26 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
   // dejar un candidato o una operación sin confirmación observable.
   private readonly handleBlur = (): void => {
     if (this.disposed || this.needsResync) return;
-    if (!this.pendingInput && !this.compositionActive) return;
-    this.fail(
-      this.pendingInput ? "missing-input" : "resync-required",
-      "El textarea perdió el foco durante una edición o composición incompleta; se requiere un snapshot autoritativo."
-    );
+    if (this.compositionActive) {
+      this.fail(
+        "resync-required",
+        "El textarea perdió el foco durante una composición activa; se requiere un snapshot autoritativo."
+      );
+      return;
+    }
+
+    const pending = this.pendingInput;
+    if (!pending) return;
+    // Un listener posterior de beforeinput puede cancelar y desenfocar el
+    // textarea dentro de la misma propagación. La comprobación de cancelación
+    // ya encolada debe ejecutarse antes de decidir que falta input.
+    queueMicrotask(() => {
+      if (this.disposed || this.needsResync || this.pendingInput !== pending) return;
+      this.fail(
+        "missing-input",
+        "El textarea perdió el foco antes de completar un beforeinput no cancelado; se requiere un snapshot autoritativo."
+      );
+    });
   };
 
   private readonly handleCompositionStart = (event: Event): void => {

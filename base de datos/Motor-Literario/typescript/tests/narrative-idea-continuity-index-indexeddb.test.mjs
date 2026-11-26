@@ -35,16 +35,16 @@ const projectSuffix = randomUUID();
 
 function result(candidates, orderedDocumentIds, projectId = "persisted-continuity-" + projectSuffix) {
   const relations = analyzeNarrativeIdeaCrossDocumentRelations({
-    projectId: "persisted-continuity-" + projectSuffix,
+    projectId,
     ideaCandidates: candidates,
     orderedDocumentIds
   });
   const evolution = buildNarrativeIdeaEvolution({
-    projectId: "persisted-continuity-" + projectSuffix,
+    projectId,
     crossDocumentAnalysis: relations
   });
   return buildNarrativeIdeaContinuityLines({
-    projectId: "persisted-continuity-" + projectSuffix,
+    projectId,
     evolution
   });
 }
@@ -95,10 +95,10 @@ test("CAS rechaza una generación obsoleta y admite la generación siguiente", a
   const store = new IndexedDbProjectStore();
   const projectId = "persisted-cas-" + randomUUID();
   const candidates = [
-    idea("a", "chapter-1", "memoria antigua de la ciudad"),
-    idea("b", "chapter-2", "memoria antigua de la ciudad")
+    idea("a", "chapter-1", "memoria antigua de la ciudad", 1, projectId),
+    idea("b", "chapter-2", "memoria antigua de la ciudad", 1, projectId)
   ];
-  const source = result(candidates, ["chapter-1", "chapter-2"]);
+  const source = result(candidates, ["chapter-1", "chapter-2"], projectId);
   const sourceRevisions = [
     { documentId: "chapter-1", revision: 1, status: "active" },
     { documentId: "chapter-2", revision: 1, status: "active" }
@@ -136,10 +136,10 @@ test("dos instancias no pueden confirmar simultáneamente la misma generación C
   const storeB = new IndexedDbProjectStore();
   const projectId = "persisted-race-" + randomUUID();
   const candidates = [
-    idea("a", "chapter-1", "memoria antigua de la ciudad"),
-    idea("b", "chapter-2", "memoria antigua de la ciudad")
+    idea("a", "chapter-1", "memoria antigua de la ciudad", 1, projectId),
+    idea("b", "chapter-2", "memoria antigua de la ciudad", 1, projectId)
   ];
-  const source = result(candidates, ["chapter-1", "chapter-2"]);
+  const source = result(candidates, ["chapter-1", "chapter-2"], projectId);
   const base = createNarrativeIdeaContinuityIndex({
     projectId,
     generation: 1,

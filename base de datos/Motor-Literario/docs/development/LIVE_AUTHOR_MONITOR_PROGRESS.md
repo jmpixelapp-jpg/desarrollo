@@ -1205,3 +1205,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresión:** un suscriptor del source provoca una segunda transacción mientras se procesa la primera y modifica el reemplazo del objeto original antes de que se drene la cola. El monitor debe entregar el texto original (`B`), conservar la longitud UTF-16 y seguir sincronizado.
 
 **Validación:** aprobada en ambas lanes sobre `71cf0d13`: [Live Author Monitor — run 45752453251](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752453251) completó el build aislado, regresiones diagnósticas, Chromium, auditoría MLDB, build de runtime, suite específica y benchmark de memoria; [Motor Literario TypeScript — run 45752453216](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45752453216) completó type-check, build, suite y benchmark.
+
+
+## 72. Validación runtime de categorías de actividad del editor (26 de noviembre de 2026)
+
+**Hallazgo:** `EditorChange.activityKind` declara siete valores (`typing`, `paste`, `deletion`, `correction`, `undo`, `redo`, `other`), pero el source transaccional aceptaba sin validar cualquier valor procedente del proveedor. Un editor defectuoso podía propagar objetos o etiquetas ajenas al contrato hacia el anfitrión y las métricas.
+
+**Corrección:** el source valida la categoría opcional antes de aceptar la transacción. Los valores desconocidos provocan `invalid-transaction`, pausan y desacoplan el proveedor, sin emitir el delta al monitor. La ausencia del campo sigue siendo válida y las transacciones nativas `undo`/`redo` conservan su actividad derivada del tipo de transacción.
+
+**Regresión:** se cubren una cadena desconocida, un objeto mutable y un número, verificando que ninguno alcanza los suscriptores y que el source exige resincronización.
+
+**Validación:** pendiente de CI para este commit.

@@ -390,6 +390,19 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       return;
     }
 
+    const activityKind: unknown = change.activityKind;
+    if (activityKind !== undefined &&
+        activityKind !== "typing" &&
+        activityKind !== "paste" &&
+        activityKind !== "deletion" &&
+        activityKind !== "correction" &&
+        activityKind !== "undo" &&
+        activityKind !== "redo" &&
+        activityKind !== "other") {
+      this.fail("invalid-transaction", "El editor emitió una categoría activityKind desconocida.");
+      return;
+    }
+
     const previousSignature = this.seenTransactions.get(transaction.transactionId);
     if (previousSignature !== undefined) {
       const currentSignature = this.createTransactionSignature(transaction);

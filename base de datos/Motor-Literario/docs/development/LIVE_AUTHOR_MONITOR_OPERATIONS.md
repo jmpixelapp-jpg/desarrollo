@@ -447,3 +447,8 @@ La prueba de reentrancia debe modelar la recuperación completa: la primera secu
 Cada evento que cruza `subscribeTransactions` se convierte en una copia plana y congelada con solo `transactionId`, `kind` y los campos definidos de `EditorChange`. Esto es importante para eventos reentrantes: permanecen esperando mientras se termina de notificar una transacción anterior, por lo que no deben depender de un objeto que el proveedor pueda reutilizar o mutar.
 
 Los getters fallidos y proxies hostiles se convierten en un error `invalid-transaction` y provocan la pausa del source. El monitor no permite que una excepción del proveedor escape al callback nativo del editor. El test de reentrancia verifica que la mutación posterior del objeto original no cambia el delta procesado.
+
+
+## 28. Categorías de actividad admitidas por el editor
+
+El proveedor puede omitir `activityKind`, o usar exactamente una de las siete etiquetas del contrato: `typing`, `paste`, `deletion`, `correction`, `undo`, `redo` u `other`. Cualquier valor distinto (incluidos objetos o números) se rechaza como `invalid-transaction`; el source se pausa para que el anfitrión no mezcle categorías arbitrarias en las métricas de escritura. Para transacciones nativas `undo` y `redo`, el tipo de transacción sigue teniendo precedencia sobre la metadata opcional.

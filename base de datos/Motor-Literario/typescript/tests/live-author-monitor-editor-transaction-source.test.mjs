@@ -643,3 +643,38 @@ test("captura una copia inmutable de transacciones reentrantes antes de que el p
   f.stop();
   f.source.dispose();
 });
+
+
+test("rechaza activityKind fuera del contrato sin publicar métricas desconocidas", () => {
+  const invalidKinds = ["typing-fast", { name: "typing" }, 7];
+  for (const activityKind of invalidKinds) {
+    const f = fixture();
+    f.editor.replaceSnapshot({
+      documentId: "chapter-1",
+      text: "abcX",
+      revision: 1,
+      sequence: 1
+    });
+    assert.doesNotThrow(() => f.editor.publish({
+      transactionId: "tx-invalid-activity-kind",
+      kind: "edit",
+      change: {
+        documentId: "chapter-1",
+        sequence: 1,
+        baseRevision: 0,
+        start: 3,
+        end: 3,
+        replacement: "X",
+        activityKind
+      }
+    }));
+
+    assert.equal(f.changes.length, 0);
+    assert.equal(f.source.getState().needsResync, true);
+    assert.equal(f.errors.at(-1).code, "invalid-transaction");
+    assert.match(f.errors.at(-1).message, /activityKind/);
+    assert.equal(f.editor.listeners.size, 0);
+    f.stop();
+    f.source.dispose();
+  }
+});

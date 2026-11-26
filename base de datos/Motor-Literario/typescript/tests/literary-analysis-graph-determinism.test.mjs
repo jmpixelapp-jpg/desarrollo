@@ -396,7 +396,13 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
     documentId: "chapter-graph",
     revision: 1,
     text: "Escena 1\nLas ideas se conectan en distintas direcciones.",
-    knownIdeas: [source, included]
+    knownIdeas: [source, included].map(item => ({
+      ...item,
+      originDocumentId: "chapter-graph",
+      sourceProjectName: "Graph",
+      relatedEntityIds: [],
+      evidence: []
+    }))
   }).ideaGraph;
   assert.equal(legacy.catalogScope, "character-linked-fallback");
   assert.equal(legacy.projectCatalogComplete, false);

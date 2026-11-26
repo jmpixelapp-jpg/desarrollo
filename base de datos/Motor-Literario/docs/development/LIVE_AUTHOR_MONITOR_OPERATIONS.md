@@ -148,7 +148,7 @@ npm run validate:schema
 npm run typecheck
 # Build aislado del monitor (no importa los tipos globales de src/index.ts)
 npx vite build --config vite.monitor.config.ts
-node --test tests/live-author-monitor.test.mjs tests/live-author-monitor-diagnostics-isolation.test.mjs
+node --test tests/live-author-monitor-diagnostics-isolation.test.mjs
 
 # Validación general del motor y suites completas
 npx vite build
@@ -259,9 +259,9 @@ La regresión `tests/live-author-monitor-diagnostics-isolation.test.mjs` cubre e
 El workflow dedicado construye un bundle focalizado antes de instalar Chromium o compilar el entrypoint general:
 
 1. `vite.monitor.config.ts` construye `src/live-author-monitor-test-entry.ts` en `dist-monitor/`, sin limpiar ni sobrescribir `dist/`.
-2. `tests/live-author-monitor.test.mjs` ejecuta las regresiones puras del motor de métricas sobre ese bundle, incluyendo restauración de checkpoints, reloj, secuencias y estrés determinista multi-documento. `tests/live-author-monitor-diagnostics-isolation.test.mjs` añade las regresiones de telemetría del panel/workspace.
+2. `tests/live-author-monitor-diagnostics-isolation.test.mjs` ejecuta las regresiones de telemetría del panel/workspace sobre ese bundle. Las pruebas completas de `LiveAuthorMonitor`, incluidos checkpoints y estrés determinista multi-documento, continúan en el workflow general después del build principal.
 3. Después se instalan las herramientas de navegador, se valida el esquema y se intenta la compilación general del motor.
 
 **Límite de tipos:** no se afirma que este bundle realice un typecheck estricto. Aunque el monitor importa los contratos solo como tipos, `contracts.ts` forma parte de un grafo de imports de tipos del motor; el intento de compilarlo como proyecto TypeScript aislado volvió a alcanzar `src/narrative-history.ts(7,41): TS1002`. La comprobación Vite/esbuild elimina esos imports de tipo al generar JavaScript y permite ejecutar las regresiones de runtime. El typecheck estricto de todo el proyecto sigue a cargo del workflow general.
 
-Esta separación permite verificar la ejecución del motor de métricas, panel y workspace aun cuando un módulo independiente del bundle general esté roto. No certifica integración completa con `HostEngineApi`, persistencia real IndexedDB, leases multi-pestaña ni editor de producción.
+Esta separación permite verificar la ejecución del panel y workspace aun cuando un módulo independiente del bundle general esté roto. No certifica integración completa con `HostEngineApi`, persistencia real IndexedDB, leases multi-pestaña ni editor de producción.

@@ -870,12 +870,14 @@ El primer intento de añadir `tsc --project tsconfig.live-author-monitor.json` f
 
 **Orden de CI:** el workflow se reorganizó para ejecutar el bundle y las regresiones aisladas antes de instalar Chromium, validar el esquema y compilar el entrypoint global. Se retiró el intento de typecheck separado porque el grafo transitivo de `contracts.ts` vuelve a incorporar el módulo narrativo.
 
-## 48. Ampliación de la lane aislada con pruebas del núcleo de métricas (25 de noviembre de 2026)
+## 48. Hallazgo al intentar ampliar pruebas del núcleo de métricas (25 de noviembre de 2026)
 
-Se incorpora la suite `tests/live-author-monitor.test.mjs` al bundle independiente `dist-monitor/live-author-monitor.js`. La suite deja de depender de `dist/motor-literario.js` y ejecuta directamente los métodos puros de `LiveAuthorMonitor` y `subscribeLiveAuthorMonitorWithRefresh`.
+Se probó temporalmente ejecutar `tests/live-author-monitor.test.mjs` desde el bundle aislado para validar restauración de checkpoints y estrés prolongado antes del build global. El intento ejecutó 20 casos: 17 aprobados y 3 fallidos.
 
-Su cobertura incluye 17 casos ya existentes: clasificación de actividad, inserciones/borrados, latencia de commits, fallos y resincronización, secuencias, aislamiento entre documentos, suscripciones/refrescos, restauración y validación de checkpoints, y un escenario determinista de más de ocho horas y 40.000 cambios en ocho documentos grandes.
+Los tres fallos se concentran en `restoreCheckpoint()` y devuelven `ReferenceError: activityCountTotal is not defined`. En `main`, la variable local se llama `classifiedCountTotal`, pero una condición sigue referenciando `activityCountTotal`. La suite deja así expuesta una regresión real de restauración de checkpoints, no un fallo del bundle aislado.
 
-El workflow ejecuta ahora estas 17 pruebas junto con las 3 regresiones DOM de aislamiento diagnóstico, en un mismo paso previo al build general. Esto no incorpora pruebas que requieren `HostEngineApi`, IndexedDB ni Chromium; esas permanecen en la suite de integración después del build completo.
+**Coordinación con el trabajo paralelo:** el archivo `src/live-author-monitor.ts` también está siendo modificado por el PR #56 (`feat/narrative-sync-coordinator-v3`), cuyo diff ya incluye la corrección de esa condición para depender de `validActivityCounts`. No se modifica ni se fuerza una actualización de ese archivo desde esta área.
 
-**Validación:** pendiente de CI para el commit que incorpora esta ampliación.
+**Ajuste de alcance:** se restauró el import original de la suite unitaria (`dist/motor-literario.js`) para no romper `npm test` ni el workflow general. La lane aislada vuelve a ejecutar únicamente las tres regresiones de panel/workspace ya aprobadas. La suite de 20 casos se mantiene en el workflow general y podrá validar la corrección cuando el cambio paralelo llegue a `main` y el build general esté disponible.
+
+**Resultado de esta prueba exploratoria:** 17/20 casos pasan; los 3 fallos quedan documentados como un bloqueo de checkpoint en el archivo compartido. El caso de soak de más de ocho horas y 40.000 cambios sí pasó (140,32 ms en el runner de CI). No se afirma que la restauración de checkpoint esté validada.

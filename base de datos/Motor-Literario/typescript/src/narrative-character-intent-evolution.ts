@@ -47,16 +47,18 @@ function validate(input: NarrativeCharacterIntentEvolutionInput): void {
       input.currentIntents.length + (input.priorIntents?.length ?? 0) > MAX_INTENTS ||
       (input.orderedDocumentIds !== undefined &&
         (!Array.isArray(input.orderedDocumentIds) ||
-         input.orderedDocumentIds.some(id => typeof id !== "string" || !id.trim())))) {
+         input.orderedDocumentIds.some(id => typeof id !== "string" || !id.trim()) ||
+         new Set(input.orderedDocumentIds).size !== input.orderedDocumentIds.length))) {
     throw new Error("Contexto inválido para reconstruir la evolución de objetivos.");
   }
   const characters = new Set(input.entities
     .filter(entity => entity && entity.projectId === input.projectId && entity.kind === "character")
     .map(entity => entity.id));
+  const intentIds = new Set<string>();
   for (const intent of [...(input.priorIntents ?? []), ...input.currentIntents]) {
     if (!intent || intent.projectId !== input.projectId ||
         !characters.has(intent.characterEntityId) ||
-        typeof intent.id !== "string" || !intent.id.trim() ||
+        typeof intent.id !== "string" || !intent.id.trim() || intentIds.has(intent.id) ||
         typeof intent.text !== "string" || !intent.text.trim() ||
         !["goal", "motivation"].includes(intent.kind) ||
         !["affirmed", "negated", "conditional"].includes(intent.polarity) ||
@@ -65,8 +67,9 @@ function validate(input: NarrativeCharacterIntentEvolutionInput): void {
         !Number.isSafeInteger(intent.evidence.start) ||
         !Number.isSafeInteger(intent.evidence.end) ||
         intent.evidence.start < 0 || intent.evidence.end < intent.evidence.start) {
-      throw new Error("Los objetivos deben pertenecer al proyecto y a personajes conocidos.");
+      throw new Error("Los objetivos deben pertenecer al proyecto y a personajes conocidos, con IDs únicos.");
     }
+    intentIds.add(intent.id);
   }
 }
 

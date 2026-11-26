@@ -443,3 +443,91 @@ test("valida el rango entero de maxQueuedTransactions y admite sus límites", ()
     assert.equal(editor.listeners.size, 0);
   }
 });
+
+
+test("valida transacciones con metadatos UTF-16 sin volver a leer el manuscrito completo", () => {
+  const snapshot = { documentId: "chapter-1", text: "hola", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(snapshot);
+  let snapshotReads = 0;
+  let metadataReads = 0;
+  let blockFullSnapshot = false;
+  const provider = {
+    getSnapshot(documentId) {
+      snapshotReads += 1;
+      if (blockFullSnapshot) throw new Error("full_snapshot_must_not_be_read_per_keystroke");
+      return editor.getSnapshot(documentId);
+    },
+    getDocumentState(documentId) {
+      metadataReads += 1;
+      const current = editor.getSnapshot(documentId);
+      if (!current) return undefined;
+      return {
+        documentId: current.documentId,
+        revision: current.revision,
+        sequence: current.sequence,
+        documentLength: current.text.length
+      };
+    },
+    subscribeTransactions(documentId, listener) {
+      return editor.subscribeTransactions(documentId, listener);
+    }
+  };
+  const changes = [];
+  const source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: snapshot.documentId,
+    initialSnapshot: snapshot,
+    provider
+  });
+  const stop = source.subscribeChanges(change => changes.push(change));
+  assert.equal(snapshotReads, 1, "el snapshot completo solo se necesita al montar");
+
+  blockFullSnapshot = true;
+  editor.apply("edit", "tx-metadata-only", {
+    start: 4,
+    end: 4,
+    replacement: "🙂"
+  });
+
+  assert.equal(snapshotReads, 1, "una edición no debe volver a materializar el manuscrito");
+  assert.equal(metadataReads, 1);
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].sequence, 1);
+  assert.equal(source.getState().documentLength, 6,
+    "la longitud se mide en unidades UTF-16, no en puntos de código");
+  assert.equal(source.getState().needsResync, false);
+
+  stop();
+  source.dispose();
+});
+
+test("suspende captura si getDocumentState devuelve metadatos inválidos", () => {
+  const snapshot = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(snapshot);
+  const provider = {
+    getSnapshot: documentId => editor.getSnapshot(documentId),
+    getDocumentState: documentId => ({
+      documentId,
+      revision: 1,
+      sequence: 1,
+      documentLength: Number.NaN
+    }),
+    subscribeTransactions: (documentId, listener) =>
+      editor.subscribeTransactions(documentId, listener)
+  };
+  const errors = [];
+  const source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: snapshot.documentId,
+    initialSnapshot: snapshot,
+    provider,
+    onError: error => errors.push(error)
+  });
+  source.subscribeChanges(() => {});
+  editor.apply("edit", "tx-invalid-metadata", {
+    start: 3, end: 3, replacement: "x"
+  });
+
+  assert.equal(source.getState().needsResync, true);
+  assert.equal(errors.at(-1).code, "editor-state-unavailable");
+  assert.equal(editor.listeners.size, 0);
+  source.dispose();
+});

@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredSyncOperation, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,9 +30,10 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 24;
+const DATABASE_VERSION = 25;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
+const SYNC_OUTBOX = "sync-outbox";
 const CHANGE_INDEX = "by-document-sequence";
 const ENTITIES = "narrative-entities";
 const RELATIONS = "narrative-relations";
@@ -1752,6 +1753,11 @@ export class IndexedDbProjectStore implements ProjectStore {
             keyPath: ["projectId", "documentId", "sequence"]
           });
           changes.createIndex(CHANGE_INDEX, ["projectId", "documentId", "sequence"], { unique: true });
+        }
+        if (!db.objectStoreNames.contains(SYNC_OUTBOX)) {
+          const outbox = db.createObjectStore(SYNC_OUTBOX, { keyPath: "operationId" });
+          outbox.createIndex("by-project-created-at", ["projectId", "createdAt"], { unique: false });
+          outbox.createIndex("by-project-device-sequence", ["projectId", "deviceId", "sequence"], { unique: true });
         }
         if (!db.objectStoreNames.contains(ENTITIES)) {
           const entities = db.createObjectStore(ENTITIES, { keyPath: ["projectId", "id"] });
@@ -5641,6 +5647,138 @@ export class IndexedDbProjectStore implements ProjectStore {
       );
     });
   }
+
+  /** Inserta una operación en la bandeja durable; repetir el mismo ID y contenido es idempotente. */
+  async enqueueSyncOperation(operation: StoredSyncOperation): Promise<void> {
+    if (!operation || typeof operation.operationId !== "string" || !operation.operationId.trim() ||
+        operation.operationId.length > 256 ||
+        typeof operation.projectId !== "string" || !operation.projectId.trim() ||
+        typeof operation.deviceId !== "string" || !operation.deviceId.trim() ||
+        operation.deviceId.length > 256 ||
+        !Number.isSafeInteger(operation.sequence) || operation.sequence < 1 ||
+        typeof operation.kind !== "string" || !operation.kind.trim() || operation.kind.length > 128 ||
+        typeof operation.payload !== "string" || operation.payload.length > 2_000_000 ||
+        !Number.isFinite(operation.createdAt) || operation.createdAt < 0 ||
+        operation.attemptCount !== 0 ||
+        operation.lastAttemptAt !== undefined || operation.lastError !== undefined) {
+      throw new Error("Operación de sincronización inválida para la bandeja durable.");
+    }
+    let payload: unknown;
+    try { payload = JSON.parse(operation.payload); }
+    catch { throw new Error("El payload de sincronización debe contener JSON válido."); }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("El payload de sincronización debe ser un objeto JSON.");
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
+      const store = transaction.objectStore(SYNC_OUTBOX);
+      let failure: Error | undefined;
+      const request = store.get(operation.operationId);
+      request.onsuccess = () => {
+        const current = request.result as StoredSyncOperation | undefined;
+        if (current) {
+          if (JSON.stringify(current) !== JSON.stringify(operation)) {
+            failure = new Error("Colisión de idempotencia: el operationId ya existe con otro contenido.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          }
+          return;
+        }
+        try { store.add(structuredClone(operation)); }
+        catch (error) {
+          failure = error instanceof Error ? error : new Error("No se pudo encolar la operación de sincronización.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        }
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo consultar la idempotencia de la operación.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo persistir la operación de sincronización."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló el encolado de sincronización."));
+    });
+  }
+
+  /** Devuelve pendientes en orden estable; la operación no se elimina al leerla. */
+  async loadPendingSyncOperations(projectId: string, limit = 100): Promise<readonly StoredSyncOperation[]> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        !Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      throw new Error("Proyecto o límite inválido al leer la bandeja de sincronización.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(SYNC_OUTBOX, "readonly");
+    const request = transaction.objectStore(SYNC_OUTBOX)
+      .index("by-project-created-at")
+      .getAll(IDBKeyRange.bound([projectId, 0], [projectId, Number.MAX_SAFE_INTEGER]), limit);
+    const result = await readAfterTransaction(
+      transaction, request, "No se pudieron recuperar las operaciones pendientes de sincronización."
+    ) as StoredSyncOperation[];
+    if (!Array.isArray(result)) throw new Error("La bandeja de sincronización está malformada.");
+    return result.map(item => structuredClone(item));
+  }
+
+  /** Registra un intento fallido sin retirar la operación de la bandeja. */
+  async recordSyncOperationAttempt(operationId: string, attemptedAt: number, error?: string): Promise<void> {
+    if (typeof operationId !== "string" || !operationId.trim() ||
+        !Number.isFinite(attemptedAt) || attemptedAt < 0 ||
+        (error !== undefined && (typeof error !== "string" || error.length > 2048))) {
+      throw new Error("Metadatos inválidos para registrar el intento de sincronización.");
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
+      const store = transaction.objectStore(SYNC_OUTBOX);
+      let failure: Error | undefined;
+      const request = store.get(operationId);
+      request.onsuccess = () => {
+        const current = request.result as StoredSyncOperation | undefined;
+        if (!current) {
+          failure = new Error("La operación pendiente ya no existe en la bandeja de sincronización.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          return;
+        }
+        store.put({
+          ...current,
+          attemptCount: current.attemptCount + 1,
+          lastAttemptAt: attemptedAt,
+          ...(error !== undefined ? { lastError: error } : {})
+        });
+      };
+      request.onerror = () => {
+        failure = request.error ?? new Error("No se pudo leer la operación pendiente.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("No se pudo actualizar el intento de sincronización."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló la actualización del intento."));
+    });
+  }
+
+  /** Retira una operación solo después de que el transporte confirme su aceptación remota. */
+  async acknowledgeSyncOperation(operationId: string): Promise<boolean> {
+    if (typeof operationId !== "string" || !operationId.trim()) {
+      throw new Error("Identificador inválido para confirmar una operación de sincronización.");
+    }
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
+      const store = transaction.objectStore(SYNC_OUTBOX);
+      let existed = false;
+      const request = store.get(operationId);
+      request.onsuccess = () => {
+        existed = request.result !== undefined;
+        if (existed) store.delete(operationId);
+      };
+      request.onerror = () => {
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => resolve(existed);
+      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo confirmar la operación de sincronización."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se canceló la confirmación de sincronización."));
+    });
+  }
+
   /**
    * Inspección de solo lectura para detectar crecimiento anómalo y presión de cuota.
    * Los conteos y la estimación de cuota son orientativos; no sustituyen una copia

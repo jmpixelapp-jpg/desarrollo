@@ -483,7 +483,11 @@ test("detecta oposición entre un objetivo explícito y una acción posterior de
 test("integra acciones pronominales resueltas en el contraste con objetivos", () => {
   const text = "Mara quiere proteger a Elian. Ella traicionó a Elian.";
   const result = understandNarrativeFragment({
-    projectId:"novel", documentId:"chapter-pronoun-intent", revision:1, text, entities
+    projectId:"novel", documentId:"chapter-pronoun-intent", revision:1, text, entities,
+    characterProfiles:[
+      {characterId:"mara",grammaticalGender:"feminine"},
+      {characterId:"elian",grammaticalGender:"masculine"}
+    ]
   });
   assert.equal(result.characterIntents.length, 1);
   assert.equal(result.pronounActions.length, 1);

@@ -89,3 +89,45 @@ test("mantiene métricas completas cuando el catálogo supera el límite de mues
   assert.equal(graph.omittedArticulationPointCount, ideaCount - 2 - 100);
   assert.equal(graph.terminalReachableNodeCount, ideaCount);
 });
+
+test("ordena de forma estable los ciclos y conserva el total al limitar sus muestras", () => {
+  const cycleCount = 120;
+  const ideas = Array.from({ length: cycleCount }, (_, index) => {
+    const ideaId = `cycle-${String(index).padStart(3, "0")}`;
+    return {
+      projectId,
+      ideaId,
+      status: "IDEA",
+      relatedIdeaIds: [ideaId],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 0
+    };
+  });
+
+  const analyze = knownProjectIdeas => analyzeLiteraryFragment({
+    projectId,
+    documentId: "cycle-sample-budget",
+    revision: 1,
+    text: "Ciclos independientes para validar el muestreo.",
+    knownProjectIdeas
+  }).ideaGraph;
+  const graph = analyze(ideas);
+  const reordered = analyze([...ideas].reverse());
+
+  assert.deepEqual(reordered, graph);
+  assert.equal(graph.ideaCount, cycleCount);
+  assert.equal(graph.referenceCount, cycleCount);
+  assert.equal(graph.includedReferenceCount, cycleCount);
+  assert.equal(graph.cycleCount, cycleCount);
+  assert.equal(graph.omittedCycleCount, cycleCount - 100);
+  assert.equal(graph.cycles.length, 100);
+  assert.deepEqual(
+    graph.cycles.map(cycle => cycle.ideaIds),
+    ideas.slice(0, 100).map(idea => [idea.ideaId])
+  );
+  assert.equal(graph.weakComponentCount, cycleCount);
+  assert.equal(graph.largestWeakComponentSize, 1);
+});

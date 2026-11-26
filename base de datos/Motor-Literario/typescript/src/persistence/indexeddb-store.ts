@@ -5780,7 +5780,30 @@ export class IndexedDbProjectStore implements ProjectStore {
       request.onsuccess = () => {
         const current = request.result as StoredSyncOperation | undefined;
         if (current) {
-          if (JSON.stringify(current) !== JSON.stringify(operation)) {
+          // Los metadatos de reintento son mutables; la identidad de una operación no.
+          // El payload se compara como JSON canónico para no depender del orden de claves.
+          const canonicalize = (value: unknown): unknown => {
+            if (Array.isArray(value)) return value.map(canonicalize);
+            if (value && typeof value === "object") {
+              return Object.fromEntries(
+                Object.keys(value as Record<string, unknown>).sort().map(key => [
+                  key, canonicalize((value as Record<string, unknown>)[key])
+                ])
+              );
+            }
+            return value;
+          };
+          const samePayload = JSON.stringify(canonicalize(JSON.parse(current.payload))) ===
+            JSON.stringify(canonicalize(payload));
+          const sameIdentity =
+            current.operationId === operation.operationId &&
+            current.projectId === operation.projectId &&
+            current.deviceId === operation.deviceId &&
+            current.sequence === operation.sequence &&
+            current.kind === operation.kind &&
+            current.createdAt === operation.createdAt &&
+            samePayload;
+          if (!sameIdentity) {
             failure = new Error("Colisión de idempotencia: el operationId ya existe con otro contenido.");
             try { transaction.abort(); } catch { /* transacción ya abortada */ }
           }

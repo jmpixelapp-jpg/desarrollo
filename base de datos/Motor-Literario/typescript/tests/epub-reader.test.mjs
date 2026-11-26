@@ -164,3 +164,15 @@ test("recupera tabla de contenidos NCX cuando no existe EPUB 3 nav", async () =>
   ]);
 });
 
+
+test("preserva saltos de línea XHTML br y nombres de elemento con prefijo", async () => {
+  const bytes = storedZip([
+    ["mimetype", "application/epub+zip"],
+    ["META-INF/container.xml", '<container><rootfile full-path="book.opf"/></container>'],
+    ["book.opf", '<package><metadata><dc:title>Saltos</dc:title></metadata><manifest><item id="c" href="chapter.xhtml"/></manifest><spine><itemref idref="c"/></spine></package>'],
+    ["chapter.xhtml", '<xhtml:html xmlns:xhtml="http://www.w3.org/1999/xhtml"><xhtml:body><xhtml:h1>Inicio</xhtml:h1><xhtml:p>Primera línea.<xhtml:br/>Segunda línea.</xhtml:p></xhtml:body></xhtml:html>']
+  ]);
+  const result = await ingestBookWithReader(new EpubBookReader(), bytes, { sourceId: "br-test" });
+  assert.equal(result.chapters[0].text, "Primera línea.\\nSegunda línea.");
+});
+

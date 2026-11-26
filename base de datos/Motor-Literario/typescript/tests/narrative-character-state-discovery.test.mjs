@@ -144,3 +144,23 @@ test("rechaza entidades ajenas, offsets inválidos y texto fuera de presupuesto"
     ...context, text: "x".repeat(2_000_001)
   }));
 });
+
+test("amplía estados emocionales y cognitivos mediante construcciones perceptuales", () => {
+  const text = "Ana se siente preocupada. Bruno se veía desorientado. Ana está feliz. Bruno estaba confundido.";
+  const candidates = discover(text);
+  assert.deepEqual(candidates.map(item => [
+    item.entityId, item.state, item.category, item.grammaticalTense, item.assertionMode
+  ]), [
+    [ana.id, "worried", "emotional", "present", "perceptual"],
+    [bruno.id, "disoriented", "cognitive", "past", "perceptual"],
+    [ana.id, "happy", "emotional", "present", "copular"],
+    [bruno.id, "confused", "cognitive", "past", "copular"]
+  ]);
+  assert.equal(candidates[0].stateEvidence.excerpt, "preocupada");
+  assert.equal(candidates[1].predicateEvidence.excerpt, "se veía desorientado");
+});
+
+test("no confunde estados nuevos con acciones ni acepta adjetivos sin cópula", () => {
+  assert.deepEqual(discover("Ana, preocupada, abrió la puerta. Bruno sonrió feliz."), []);
+});
+

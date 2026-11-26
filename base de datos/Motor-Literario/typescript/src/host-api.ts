@@ -3530,12 +3530,16 @@ export class HostEngineApi {
       if (this.store.loadPersonalIdeasPage) {
         const rawPage = await this.store.loadPersonalIdeasPage(writerId, cursor, limit);
         const checked = validatePersonalIdeaLibraryPage(rawPage, writerId, cursor, limit);
+        const pageLibraryVersion = checked.page.libraryVersion;
+        if (pageLibraryVersion === undefined) {
+          throw new Error("El adaptador paginado no devolvió la generación durable de la biblioteca.");
+        }
 
         if (checked.page.restartRequired) {
           return {
             items: [],
             nextCursor: null,
-            libraryVersion: checked.page.libraryVersion,
+            libraryVersion: pageLibraryVersion,
             restartRequired: true
           };
         }
@@ -3593,7 +3597,7 @@ export class HostEngineApi {
           nextCursor: checked.page.nextCursor
             ? cloneNarrativeRecord(checked.page.nextCursor)
             : null,
-          libraryVersion: checked.page.libraryVersion
+          libraryVersion: pageLibraryVersion
         };
       }
 

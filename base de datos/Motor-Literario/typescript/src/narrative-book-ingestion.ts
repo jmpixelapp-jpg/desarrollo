@@ -508,7 +508,11 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
           item.end - (input.baseOffset ?? 0)
         )
       }))
-    }))
+    })),
+    additionalEvidence: [
+      ...characterStateCandidates.map(candidate => ({ evidence: candidate.evidence })),
+      ...locationTransitionCandidates.map(candidate => ({ evidence: candidate.contextEvidence }))
+    ]
   });
   return {
     version: 1,

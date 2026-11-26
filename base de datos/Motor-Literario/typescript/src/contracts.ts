@@ -273,6 +273,8 @@ export interface ProjectStore {
     linked: boolean
   ): Promise<void>;
 
+  /** Última secuencia durable aceptada para un proyecto/dispositivo; cero si aún no hay operaciones. */
+  loadLastSyncOperationSequence?(projectId: string, deviceId: string): Promise<number>;
   /** Encola una operación idempotente para sincronización posterior. */
   enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
   /** Lee pendientes sin eliminarlos; el acuse remoto es quien autoriza retirarlos. */

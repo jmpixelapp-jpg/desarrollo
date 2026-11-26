@@ -281,7 +281,8 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
         start: 3,
         end: 3,
         replacement: "!",
-        activityKind: "typing"
+        activityKind: "typing",
+        inputType: "insertText"
       });
       assert.deepEqual(nativeCapture.errors, ["untrusted-event"]);
       assert.equal(nativeCapture.state.needsResync, true,

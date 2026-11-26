@@ -47,6 +47,8 @@ La búsqueda de menciones de entidades usa límites de palabra basados en propie
 
 Las observaciones de acción ligadas a personajes distinguen ahora el futuro gramatical en formas seleccionadas (por ejemplo, «cruzará», «llegará», «caminará» y «entrará»). Esta clasificación describe la forma verbal; no convierte por sí sola una promesa, predicción o intención en un acontecimiento sucedido ni establece la cronología global de la obra.
 
+El descubrimiento de vínculos entre acciones valida también la forma de cada observación de entrada: exige evidencia de acción con offsets enteros, fragmento literal coincidente, documento y revisión correctos, e IDs únicos. Las entradas malformadas se rechazan con un error de validación controlado en vez de provocar una excepción interna por acceso a propiedades ausentes.
+
 ## Garantías y límites
 
 1. La ingesta no modifica el manuscrito.

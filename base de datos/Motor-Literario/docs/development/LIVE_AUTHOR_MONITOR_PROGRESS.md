@@ -477,3 +477,22 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 **Commits:** [b59a567 — huella compacta](https://github.com/jmpixelapp-jpg/desarrollo/commit/b59a567f6b39bebc48f00cc7d7ff9e067f7d34e8), [0776234 — validar reemplazo antes de firmar](https://github.com/jmpixelapp-jpg/desarrollo/commit/07762345d7c1ad41def908404bd921b5e802399b), [e1022ae — prueba de payload distinto](https://github.com/jmpixelapp-jpg/desarrollo/commit/e1022ae19518a4fa74c974277220a0c5048ce926), [d8642c6 — prueba de evento malformado](https://github.com/jmpixelapp-jpg/desarrollo/commit/d8642c6b83faa63959ca26e9775fae83ab0b1fdc).
 
 **Resultado CI:** [45729007367](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729007367): build Vite correcto, MLDB 0.4.2 válido, auditoría física de 25 tablas/34 almacenes y **124/124 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+
+
+## 23. Nueva entrega — cuarentena de payloads inválidos del editor (26 de noviembre de 2026)
+
+**Objetivo:** impedir que eventos runtime malformados (aunque el adaptador esté tipado en TypeScript) interrumpan el callback nativo de edición o sean ignorados silenciosamente.
+
+**Implementación:**
+- `LiveAuthorMonitorEditorTransactionBridge.freezeTransaction()` crea un evento inmutable para payloads válidos y transforma `null`, primitivos o getters que lanzan en un evento centinela inválido que activa la pausa del source.
+- `LiveAuthorMonitorEditorTransactionSource.drainTransactionQueue()` captura excepciones por transacción, procesa explícitamente eventos `null` y convierte cualquier payload no validable en `invalid-transaction`, desconectando el proveedor.
+- `replacement` se comprueba como cadena antes de generar el fingerprint, de modo que un evento repetido malformado detiene el stream con `invalid-change-range` sin excepción no controlada.
+
+**Pruebas añadidas:** provider directo que emite null; Proxy con getter defectuoso en provider directo; bridge que recibe null; Proxy con getter defectuoso a través del bridge. Se mantiene también la prueba del duplicate con replacement no textual.
+
+**Archivos:** `typescript/src/live-author-monitor-editor-transaction-bridge.ts`, `typescript/src/live-author-monitor-editor-transaction-source.ts`, `typescript/tests/live-author-monitor-editor-transaction-bridge.test.mjs`, `typescript/tests/live-author-monitor-editor-transaction-source.test.mjs`; especificación sección 37.
+
+**Commits:** [991b1cb — contener eventos malformados en el bridge](https://github.com/jmpixelapp-jpg/desarrollo/commit/991b1cbe52ddbd50e76c8d8bde0132262eabf443), [a132a32 — probar null/Proxy en el bridge](https://github.com/jmpixelapp-jpg/desarrollo/commit/a132a32adbcc80418f6198de400b55a000d84db4), [183fc53 — contener payloads del proveedor directo](https://github.com/jmpixelapp-jpg/desarrollo/commit/183fc53c4aaeafa7c1dec107c60cdbfd746bf947), [b323c9a — probar null/getters en el source](https://github.com/jmpixelapp-jpg/desarrollo/commit/b323c9ab03abe6e3a7b7491280cdd118e3000e1d), [12a7542 — probar getters defectuosos también a través del bridge](https://github.com/jmpixelapp-jpg/desarrollo/commit/12a754203130e82bea7808763319143243898fc1).
+
+**Resultado CI:** [45729346603](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45729346603): build Vite correcto, esquema MLDB 0.4.2 válido, auditoría de 25 tablas/34 almacenes y **128/128 pruebas aprobadas, 0 fallidas, 0 omitidas**.

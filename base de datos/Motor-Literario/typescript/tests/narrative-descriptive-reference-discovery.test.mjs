@@ -183,3 +183,50 @@ test("ordena propuestas por posición textual aunque las entidades estén desord
   });
   assert.deepEqual(results.map(x => x.proposedLabel), ["el guardián", "la heredera"]);
 });
+
+
+test("extrae una cláusula relativa explícita como candidata sin convertirla en hecho", async () => {
+  const { discoverNarrativeRelativeClauseCandidates } = await import("../dist/motor-literario.js");
+  const text = "Ana, que conocía la ciudad, abrió la puerta.";
+  const [candidate] = discoverNarrativeRelativeClauseCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4, text, entities: [ana]
+  });
+  assert.equal(candidate.clauseText, "que conocía la ciudad");
+  assert.equal(candidate.anchorEntityId, ana.id);
+  assert.equal(candidate.relation, "relative-clause");
+  assert.equal(candidate.reviewStatus, "candidate");
+  assert.equal(candidate.clauseEvidence.excerpt, "que conocía la ciudad");
+  assert.equal(candidate.anchorEvidence.excerpt, "Ana");
+});
+
+test("conserva offsets UTF-16 y no confunde un que sin verbo finito", async () => {
+  const { discoverNarrativeRelativeClauseCandidates } = await import("../dist/motor-literario.js");
+  const prefix = "😀 ";
+  const text = "Ana, que llegó desde el norte, sonrió.";
+  const [candidate] = discoverNarrativeRelativeClauseCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text, entities: [ana], baseOffset: prefix.length
+  });
+  assert.equal(candidate.clauseEvidence.start, prefix.length + text.indexOf("que llegó"));
+  assert.deepEqual(discoverNarrativeRelativeClauseCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Ana, que llevaba una espada, volvió.", entities: [ana], maxClauseLength: 20
+  }), []);
+});
+
+test("no cruza límites de oración ni acepta cláusulas relativas sin coma de cierre", async () => {
+  const { discoverNarrativeRelativeClauseCandidates } = await import("../dist/motor-literario.js");
+  assert.deepEqual(discoverNarrativeRelativeClauseCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Ana, que conocía la ciudad. Después salió.", entities: [ana]
+  }), []);
+});
+
+test("rechaza un conjunto de cláusulas que excede el máximo en vez de truncarlo", async () => {
+  const { discoverNarrativeRelativeClauseCandidates } = await import("../dist/motor-literario.js");
+  assert.throws(() => discoverNarrativeRelativeClauseCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Ana, que conocía la ciudad, salió. Ana, que vivía allí, volvió.",
+    entities: [ana], maxCandidates: 1
+  }), /no se devuelve un resultado parcial/);
+});

@@ -62,6 +62,22 @@ interface ActionSignal {
   readonly expression: RegExp;
 }
 
+const FUTURE_ENDINGS = "(?:é|ás|á|emos|éis|án)";
+const IRREGULAR_FUTURE_STEMS: Readonly<Record<string, string>> = {
+  decir: "dir",
+  salir: "saldr"
+};
+
+function futureActionExpression(action: string): RegExp {
+  const stem = IRREGULAR_FUTURE_STEMS[action] ?? action;
+  const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\const ACTION_SIGNALS: readonly ActionSignal[] = [");
+  return new RegExp(
+    "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped + FUTURE_ENDINGS +
+    "(?![\\p{L}\\p{M}\\p{N}_])",
+    "giu"
+  );
+}
+
 const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "cruzar", expression: /(?<![\p{L}\p{M}\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando|aré|arás|ará|aremos|arán))(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "entrar", expression: /(?<![\p{L}\p{M}\p{N}_])entr(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },
@@ -112,7 +128,7 @@ function classifyGrammaticalTense(surface: string): NarrativeObservationCandidat
   if (/(?:ando|iendo|yendo)$/u.test(form)) return "gerund";
   if (/(?:ar|er|ir)$/u.test(form)) return "infinitive";
   if (/(?:aba|abas|ábamos|aban|ía|ías|íamos|ían)$/u.test(form)) return "past-imperfect";
-  if (/(?:aré|arás|ará|aremos|aréis|arán|eré|erás|erá|eremos|eréis|erán|iré|irás|irá|iremos|iréis|irán)$/u.test(form)) return "future";
+  if (/(?:aré|arás|ará|aremos|aréis|arán|eré|erás|erá|eremos|eréis|erán|iré|irás|irá|iremos|iréis|irán|diré|dirás|dirá|diremos|diréis|dirán|saldré|saldrás|saldrá|saldremos|saldréis|saldrán)$/u.test(form)) return "future";
   if (/(?:ó|ió|aron|ieron|yó|yeron|dijo|dijeron)$/u.test(form)) return "past-preterite";
   if (/(?:ad[oa]s?|id[oa]s?|to|cho|so|abiert[oa]s?|muert[oa]s?|vist[oa]s?|puest[oa]s?|hech[oa]s?|escrit[oa]s?)$/u.test(form)) return "participle";
   if (/(?:a|an|e|en|o|es)$/u.test(form)) return "present";
@@ -242,8 +258,10 @@ export function discoverNarrativeObservationCandidates(
     const excerpt = input.text.slice(lineStart, lineEnd);
 
     for (const signal of ACTION_SIGNALS) {
-      signal.expression.lastIndex = 0;
-      for (const match of sentence.matchAll(signal.expression)) {
+      const expressions = [signal.expression, futureActionExpression(signal.action)];
+      for (const expression of expressions) {
+      expression.lastIndex = 0;
+      for (const match of sentence.matchAll(expression)) {
         const surface = match[0];
         const localStart = baseOffset + segment.start + match.index;
         const start = baseOffset + segment.start;
@@ -313,6 +331,7 @@ export function discoverNarrativeObservationCandidates(
             excerpt
           }
         });
+      }
       }
     }
   }

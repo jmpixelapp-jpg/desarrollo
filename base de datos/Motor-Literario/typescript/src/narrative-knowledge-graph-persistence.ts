@@ -7,7 +7,8 @@ import {
   type NarrativeEntity,
   type NarrativeRelation,
   type NarrativeEvent,
-  type NarrativeIdea
+  type NarrativeIdea,
+  type TextEvidence
 } from "./narrative-knowledge";
 import type { NarrativeAssertion } from "./narrative-history";
 import type { NarrativeKnowledgeGraphSnapshot } from "./narrative-knowledge-graph-incremental";
@@ -51,9 +52,15 @@ export function createNarrativeDocumentProjectionManifest(
   }
   const contribution = snapshot.documents.find(item => item.input.documentId === documentId);
   if (!contribution) throw new Error("El documento no forma parte del snapshot: " + documentId);
-  const ids = <T extends { readonly id: string; readonly evidence: readonly { readonly documentId: string }[] }>(items: readonly T[]) =>
-    [...new Set(items.filter(item => item.evidence.some(evidence => evidence.documentId === documentId))
-      .map(item => item.id))].sort();
+  type EvidenceBackedRecord = {
+    readonly id: string;
+    readonly evidence: readonly TextEvidence[];
+  };
+  const ids = (items: readonly EvidenceBackedRecord[]): string[] =>
+    [...new Set(items
+      .filter((item: EvidenceBackedRecord) =>
+        item.evidence.some((evidence: TextEvidence) => evidence.documentId === documentId))
+      .map((item: EvidenceBackedRecord) => item.id))].sort();
   const assertions = contribution.graph.assertions.map(item => item.id).sort();
   return {
     projectId: snapshot.projectId,

@@ -83,6 +83,9 @@ jobs:
       - name: Run trusted beforeinput cancellation regression in Chromium
         if: ${{ !cancelled() && steps.chromium-install.outcome == 'success' }}
         run: node --test tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs
+      - name: Run trusted IME composition regression in Chromium
+        if: ${{ !cancelled() && steps.chromium-install.outcome == 'success' }}
+        run: node --test tests/live-author-monitor-ime-composition-browser.test.mjs
       - name: Run host, editor and browser integration tests
         if: ${{ !cancelled() && steps.runtime-build.outcome == 'success' && steps.chromium-install.outcome == 'success' }}
         run: node --test tests/live-author-monitor-*.test.mjs

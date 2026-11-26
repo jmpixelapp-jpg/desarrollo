@@ -2217,7 +2217,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 25);
+      assert.equal(version, 28);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2230,6 +2230,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("fresh-database"), []);
     assert.deepEqual(createdStores, [
+      { name: "narrative-reference-repair-audits", keyPath: ["projectId", "operationId"] },
+      { name: "narrative-reference-repair-pending", keyPath: ["projectId", "operationId"] },
       { name: "project-settings", keyPath: ["projectId", "key"] },
       { name: "language-profiles", keyPath: ["projectId", "id"] },
       { name: "language-resource-refs", keyPath: ["projectId", "id"] },
@@ -2264,9 +2266,13 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "timeline-occurrences", keyPath: ["projectId", "id"] },
       { name: "project-dictionaries", keyPath: ["projectId", "id"] },
       { name: "dictionary-entries", keyPath: ["projectId", "id"] },
-      { name: "dictionary-entry-entities", keyPath: ["projectId", "entryId", "recordId"] }
+      { name: "dictionary-entry-entities", keyPath: ["projectId", "entryId", "recordId"] },
+      { name: "sync-outbox", keyPath: "operationId" },
+      { name: "sync-device-sequences", keyPath: ["projectId", "deviceId"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
+      ["narrative-reference-repair-audits", "by-project"],
+      ["narrative-reference-repair-pending", "by-project"],
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
       ["language-profiles", "by-project-language"],
@@ -2339,6 +2345,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["timeline-occurrences", "by-project"],
       ["timeline-occurrences", "by-event-record"],
       ["timeline-occurrences", "by-track-order"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"],
       ["project-dictionaries", "by-project"],
       ["project-dictionaries", "by-project-language-name"],
       ["dictionary-entries", "by-project"],
@@ -2415,7 +2423,8 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
-    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities"
+    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities",
+    "sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"
   ];
   const stores = new Map(names.map(name => [name, {
     indexNames: { contains: () => false },
@@ -2464,7 +2473,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 25);
+    assert.equal(openedVersion, 27);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -2571,7 +2580,8 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",
-    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities"
+    "project-relations", "project-evidences", "timeline-occurrences", "dictionary-entry-entities",
+    "sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"
   ];
   const deleted = [];
   const created = [];

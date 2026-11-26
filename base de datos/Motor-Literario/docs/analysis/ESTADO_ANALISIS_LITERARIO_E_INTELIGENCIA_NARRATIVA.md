@@ -202,6 +202,7 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `d4f714d`: ajusta la longitud exacta del fixture de estrés a 100.000 unidades UTF-16 por idea.
 - `4e73f4f`: completa el store de documentos de prueba para que la integración ejercite `analyzeLiteraryDocument` a través del anfitrión.
 - `56cb870`: añade cobertura del límite de 50 identificadores de acontecimientos por punto de cronología, manteniendo el contador total y el número omitido.
+- `e22b6c5`: corrige el separador de escena del fixture de cronología para que el texto de prueba contenga un salto de línea real.
 ## 7. Pendientes y siguiente secuencia de trabajo
 
 1. Revisar y ejecutar la prueba de estrés que fuerza el límite de un millón de expansiones de dos saltos y confirma `truncated-by-work-budget`; verificar en ejecución que los contadores parciales no se interpreten como resultados completos.

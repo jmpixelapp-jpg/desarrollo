@@ -516,3 +516,20 @@ test("contrasta acciones del capítulo actual con objetivos conservados del cap�
   assert.equal(result.intentActionConsistency[0].relation,"opposes-intent");
   assert.equal(result.intentActionConsistency[0].intentId,"prior-protection-goal");
 });
+
+test("el pipeline conserva el motivo indirecto y su señal causal explícita", () => {
+  const text = "Mara luchó por miedo a perder a su hermana.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-indirect-motive", revision:1,
+    text, entities
+  });
+  assert.equal(result.characterIntents.length,1);
+  assert.equal(result.characterIntents[0].characterEntityId,"mara");
+  assert.equal(result.characterIntents[0].kind,"motivation");
+  assert.equal(result.characterIntents[0].evidenceBasis,"explicit-causal-motive");
+  assert.equal(result.characterIntents[0].text,"miedo a perder a su hermana");
+  assert.equal(
+    text.slice(result.characterIntents[0].evidence.start,result.characterIntents[0].evidence.end),
+    result.characterIntents[0].text
+  );
+});

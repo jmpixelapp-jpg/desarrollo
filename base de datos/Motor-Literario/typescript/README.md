@@ -445,3 +445,6 @@ La API de evidencia versionada requiere que el snapshot declare `revision` y que
 Las pruebas mencionadas en esta documentación son pruebas **escritas**. No se debe interpretar su presencia como ejecución satisfactoria: typecheck, build, suite completa y validación con corpus real deben registrarse por separado cuando se ejecuten.
 
 La evidencia persistida puede contener un rango de ocurrencia más una línea contextual completa. El resolver compara la línea de origen con el excerpt y devuelve el rango exacto como fragmento. Los IDs internos de capítulos importados no se consideran automáticamente iguales a los IDs documentales del anfitrión; esa correspondencia está pendiente de un contrato explícito.
+
+
+La evidencia del conocimiento narrativo usa `start/end` para la ocurrencia y `excerpt` para la línea contextual completa. El resolver compara esa línea con el snapshot y devuelve la ocurrencia exacta. La conexión de extremo a extremo permanece bloqueada hasta definir el mapeo entre `TextEvidence.documentId`, los IDs internos `chapter:<id>` y los offsets absolutos del documento anfitrión; no se deben tratar como equivalentes sin ese mapeo.

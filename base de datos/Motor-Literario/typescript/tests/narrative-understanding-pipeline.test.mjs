@@ -493,3 +493,22 @@ test("integra acciones pronominales resueltas en el contraste con objetivos", ()
   assert.equal(result.intentActionConsistency[0].relation, "opposes-intent");
   assert.equal(result.intentActionConsistency[0].actionId, result.pronounTargetActions[0].id);
 });
+
+test("contrasta acciones del capítulo actual con objetivos conservados del capítulo anterior", () => {
+  const prior = {
+    id:"prior-protection-goal", projectId:"novel", characterEntityId:"mara",
+    kind:"goal", text:"proteger a Elian", polarity:"affirmed",
+    reviewStatus:"candidate",
+    evidence:{documentId:"chapter-prior",revision:1,start:13,end:30,excerpt:"Mara quiere proteger a Elian."}
+  };
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-current", revision:1,
+    text:"Mara traicionó a Elian.", entities,
+    priorCharacterIntents:[prior],
+    orderedDocumentIds:["chapter-prior","chapter-current"]
+  });
+  assert.equal(result.actions.length,1);
+  assert.equal(result.intentActionConsistency.length,1);
+  assert.equal(result.intentActionConsistency[0].relation,"opposes-intent");
+  assert.equal(result.intentActionConsistency[0].intentId,"prior-protection-goal");
+});

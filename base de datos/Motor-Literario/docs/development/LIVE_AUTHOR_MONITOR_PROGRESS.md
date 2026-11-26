@@ -1751,9 +1751,9 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 Se amplió el adaptador nativo de textarea para no dar por completa una operación que queda interrumpida cuando el documento se oculta, la página entra en BFCache/congelación o el editor pierde el foco.
 
-**Código:** LiveAuthorMonitorTextAreaSource escucha blur en el textarea, visibilitychange en el documento y pagehide/freeze en los objetivos propietarios. Un blur o una ocultación solo suspenden cuando existe una pareja beforeinput/input pendiente o una composición activa; pagehide y freeze invalidan siempre la continuidad. Pageshow/resume no reanudan la captura automáticamente.
+**Código:** LiveAuthorMonitorTextAreaSource escucha blur en el textarea, visibilitychange en el documento y pagehide/freeze en los objetivos propietarios. Perder el foco u ocultar la pestaña durante una composición activa suspende inmediatamente. Si solo existe un beforeinput de texto pendiente, la fuente conserva el par y expone pendingInput=true porque el input de textarea puede llegar en una tarea posterior incluso después de blur o de ocultar/mostrar la pestaña. Pagehide y freeze invalidan siempre la continuidad. Pageshow/resume no reanudan la captura automáticamente.
 
-**Recuperación:** la fuente pasa a needsResync, libera el payload pendiente y previousText, y espera a que el anfitrión conecte un observador y proporcione un snapshot autoritativo que coincida con el valor visible. La reanudación sin observador activo está prohibida.
+**Recuperación:** cuando se confirma una discontinuidad, la fuente pasa a needsResync, libera el payload pendiente y previousText, y espera a que el anfitrión conecte un observador y proporcione un snapshot autoritativo que coincida con el valor visible. Un segundo beforeinput sin input previo confirma missing-input. La reanudación sin observador activo está prohibida.
 
 **Pruebas añadidas:** pérdida de foco con operación abierta, blur sin operación, ocultación durante IME, pagehide/freeze duplicados, edición ignorada en suspensión, recuperación con snapshot actualizado, secuencias/revisiones consecutivas y retirada de listeners.
 

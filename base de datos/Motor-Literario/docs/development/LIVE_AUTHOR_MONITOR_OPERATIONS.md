@@ -665,3 +665,14 @@ Estos invariantes protegen solo la lectura/recuperación de checkpoint. No cambi
 La ventana `commitLatencies` es una secuencia ordenada de muestras, no solo un array cuya propiedad `length` sea correcta. Cada posición entre cero y `length - 1` debe contener un número finito no negativo. No se aceptan arrays dispersos: los métodos nativos `some()` y `reduce()` omiten huecos y pueden validar accidentalmente una suma incompleta. La restauración materializa los elementos con `Array.from()`, convirtiendo cada hueco en `undefined` para que falle la validación numérica.
 
 La regresión asociada crea tres commits confirmados y un checkpoint correcto, elimina una muestra intermedia y exige que `restoreCheckpoint()` lo rechace sin registrar una sesión. Este guard es de solo lectura; no cambia la versión ni la estructura durable del checkpoint.
+
+
+## 58. Consistencia entre pausas y admisiones
+
+`pauseCount` solo aumenta al procesar una admisión aceptada o rechazada cuando ya existía actividad y el intervalo desde ella supera `idleAfterMs`. Por ello, un checkpoint válido siempre satisface:
+
+`pauseCount <= acceptedChanges + rejectedChanges`
+
+La restauración aplica este límite junto con las validaciones enteras de ambos contadores. No se impone un mínimo de pausas: una sesión puede tener muchas admisiones consecutivas y ninguna pausa. Un valor superior al número de admisiones indica corrupción o una combinación de métricas que el monitor nunca habría producido.
+
+La prueba asociada altera el contador de un checkpoint real sin actividad y exige rechazo sin crear una sesión parcial. La regla no cambia el formato v1 ni requiere migración.

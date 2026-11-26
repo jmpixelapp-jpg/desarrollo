@@ -40,6 +40,7 @@ import {
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
 import { discoverNarrativeIdeaCandidates, type NarrativeIdeaCandidate } from "./narrative-idea-discovery";
+import { discoverNarrativeObservationCandidates, type NarrativeObservationCandidate } from "./narrative-observation-discovery";
 import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
@@ -593,6 +594,8 @@ export interface HostCallbacks {
   readonly onKnowledgeChanged?: (projectId: string) => void;
   /** Candidatos extraídos de cada revisión analizada; incluye [] para limpiar la ventana revisada. Nunca confirma hechos automáticamente. */
   readonly onNarrativeIdeaCandidates?: (analysis: AnalysisResult, candidates: readonly NarrativeIdeaCandidate[]) => void;
+  /** Acciones léxicas candidatas con evidencia, emitidas tras actualizar el conocimiento del documento. */
+  readonly onNarrativeObservationCandidates?: (analysis: AnalysisResult, candidates: readonly NarrativeObservationCandidate[]) => void;
 }
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
@@ -618,6 +621,7 @@ export class HostEngineApi {
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
   private readonly onKnowledgeChanged: HostCallbacks["onKnowledgeChanged"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
+  private readonly onNarrativeObservationCandidates: HostCallbacks["onNarrativeObservationCandidates"];
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
   private diagnosticsRecoveryTail: Promise<void> = Promise.resolve();
@@ -712,6 +716,7 @@ export class HostEngineApi {
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
+    this.onNarrativeObservationCandidates = options.callbacks?.onNarrativeObservationCandidates;
     this.engine = new LiteraryEngine({
       store: options.store,
       ...(options.queueCapacity === undefined ? {} : { queueCapacity: options.queueCapacity }),
@@ -840,6 +845,17 @@ export class HostEngineApi {
         await this.extractNarrativeKnowledge(
           result.documentId, result.revision, result.affectedText, result.affectedStart
         );
+        try {
+          const candidates = discoverNarrativeObservationCandidates({
+            projectId: this.requireProject().projectId,
+            documentId: result.documentId,
+            revision: result.revision,
+            text: result.affectedText,
+            entities: [...this.narrativeEntities.values()],
+            baseOffset: result.affectedStart
+          });
+          this.onNarrativeObservationCandidates?.(result, candidates);
+        } catch { /* La observación narrativa nunca bloquea la escritura ni la extracción principal. */ }
       } finally {
         const analysisExecutionMs = Math.max(0, performance.now() - executionStartedAt);
         this.liveMetrics.totalAnalysisExecutionMs += analysisExecutionMs;

@@ -80,6 +80,7 @@ function validateOccurrence(
       !occurrence.evidence ||
       occurrence.evidence.documentId !== occurrence.documentId ||
       occurrence.evidence.revision !== occurrence.revision ||
+      !occurrence.evidence.excerpt.includes(occurrence.text) ||
       !Number.isSafeInteger(occurrence.evidence.start) ||
       !Number.isSafeInteger(occurrence.evidence.end) ||
       occurrence.evidence.start < 0 ||
@@ -116,6 +117,14 @@ function validateRelation(
 
   validateOccurrence(relation.first, projectId);
   validateOccurrence(relation.second, projectId);
+
+  if ((relation.first.polarity === relation.second.polarity ? "consistent" : "changed") !== relation.polarityRelation) {
+    throw new Error("La modalidad de la relación no coincide con las dos apariciones.");
+  }
+  if (relation.relationType === "exact-recurrence" &&
+      (relation.normalizedSimilarity !== 1 || relation.overlapCoefficient !== 1)) {
+    throw new Error("Una recurrencia exacta debe conservar métricas unitarias.");
+  }
 
   if (relation.first.ideaCandidateId === relation.second.ideaCandidateId ||
       relation.first.documentId === relation.second.documentId) {

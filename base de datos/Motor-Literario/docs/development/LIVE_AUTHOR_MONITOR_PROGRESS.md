@@ -851,3 +851,21 @@ El primer intento de añadir `tsc --project tsconfig.live-author-monitor.json` f
 **CI observada en el intento inicial:** [Live Author Monitor — run 45744464290](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45744464290) superó instalación, Chromium y auditoría de esquema; falló al intentar el typecheck aislado por TS1002 en `narrative-history.ts`. La compilación aislada y las regresiones no se ejecutaron en ese intento.
 
 **Precisión:** el bundle Vite no equivale a un typecheck TypeScript. El typecheck estricto de los módulos del monitor continúa pendiente hasta desacoplar de manera segura los contratos compartidos o resolver el error narrativo en el trabajo paralelo. No se modifican `contracts.ts`, `live-author-monitor.ts` ni `narrative-history.ts` en esta corrección, porque están dentro de áreas compartidas/paralelas.
+
+## 47. Resultado de la lane de runtime aislada (25 de noviembre de 2026)
+
+**Commit validado:** `e7e44eb1373777bd1b447c9b0d143d62074d68ca`.
+
+**Resultado de [Live Author Monitor — run 45744690399](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45744690399):**
+- `Build isolated live author monitor test bundle`: aprobado.
+- `Run isolated diagnostic recovery regressions`: aprobado, 3 pruebas, 3 aprobadas, 0 fallidas (79,19 ms).
+- Instalación de Chromium: aprobada.
+- Auditoría de esquema y mapeo físico: aprobada.
+- `Build runtime bundle`: bloqueado por `src/narrative-history.ts:7:40 — Unterminated string literal`.
+- Suite monitor completa y benchmark: omitidos porque el build general no terminó.
+
+**Resultado de [Motor Literario TypeScript — run 45744690397](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45744690397):** el typecheck general falló por `src/narrative-history.ts(7,41): TS1002`; suite general y benchmark omitidos.
+
+**Conclusión:** las tres regresiones específicas incorporadas para aislar errores de diagnóstico pasan sobre un bundle ejecutable separado. No se atribuye aprobación a las suites de IndexedDB, leases, navegador multi-pestaña ni benchmark; no alcanzaron sus pasos de ejecución. El bloqueo de integración global continúa abierto y se mantiene fuera de esta área para no modificar el archivo narrativo que trabaja en paralelo.
+
+**Orden de CI:** el workflow se reorganizó para ejecutar el bundle y las regresiones aisladas antes de instalar Chromium, validar el esquema y compilar el entrypoint global. Se retiró el intento de typecheck separado porque el grafo transitivo de `contracts.ts` vuelve a incorporar el módulo narrativo.

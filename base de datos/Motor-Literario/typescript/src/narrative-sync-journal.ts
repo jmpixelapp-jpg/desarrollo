@@ -334,20 +334,29 @@ export async function replayPendingNarrativeSyncOperations(
   for (const operation of pending) {
     // El registro añade receivedAt/appliedAt, que son metadatos locales y no
     // forman parte del digest original de la envoltura recibida.
-    const envelope: NarrativeSyncOperationEnvelope = {
-      schemaVersion: operation.schemaVersion,
-      algorithm: operation.algorithm,
-      operationId: operation.operationId,
-      projectId: operation.projectId,
-      writerId: operation.writerId,
-      sequence: operation.sequence,
-      createdAt: operation.createdAt,
-      kind: operation.kind,
-      // IndexedDB entrega un structured clone; normalizamos el payload al
-      // subconjunto JSON antes de verificar su representación canónica.
-      payload: JSON.parse(JSON.stringify(operation.payload)) as unknown,
-      digest: operation.digest
-    };
+    let envelope: NarrativeSyncOperationEnvelope;
+    try {
+      envelope = {
+        schemaVersion: operation.schemaVersion,
+        algorithm: operation.algorithm,
+        operationId: operation.operationId,
+        projectId: operation.projectId,
+        writerId: operation.writerId,
+        sequence: operation.sequence,
+        createdAt: operation.createdAt,
+        kind: operation.kind,
+        // IndexedDB entrega un structured clone; normalizamos el payload al
+        // subconjunto JSON antes de verificar su representación canónica.
+        payload: JSON.parse(JSON.stringify(operation.payload)) as unknown,
+        digest: operation.digest
+      };
+    } catch {
+      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+      return {
+        processed, remaining, stoppedAtOperationId: operation.operationId,
+        failure: "invalid-envelope"
+      };
+    }
     if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
       const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
       return {

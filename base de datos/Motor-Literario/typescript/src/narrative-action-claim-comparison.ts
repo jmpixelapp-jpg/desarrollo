@@ -10,6 +10,7 @@ import type { TextEvidence } from "./narrative-knowledge";
 
 export const MAX_NARRATIVE_ACTION_CLAIM_INPUTS = 10_000;
 export const MAX_NARRATIVE_ACTION_CLAIM_FINDINGS = 2_000;
+export const MAX_NARRATIVE_ACTION_CLAIM_PAIR_CHECKS = 50_000;
 
 export interface NarrativeActionClaimDisagreement {
   readonly id: string;
@@ -105,10 +106,21 @@ export function compareNarrativeActionClaims(
   }
 
   const findings: NarrativeActionClaimDisagreement[] = [];
-  for (const group of groups.values()) {
+  let pairChecks = 0;
+  const orderedGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  for (const [, group] of orderedGroups) {
+    group.sort((a, b) =>
+      a.evidence.documentId.localeCompare(b.evidence.documentId) ||
+      a.evidence.revision - b.evidence.revision ||
+      a.evidence.start - b.evidence.start || a.id.localeCompare(b.id)
+    );
     for (let i = 0; i < group.length; i++) {
       const first = group[i]!;
       for (let j = i + 1; j < group.length; j++) {
+        pairChecks++;
+        if (pairChecks > MAX_NARRATIVE_ACTION_CLAIM_PAIR_CHECKS) {
+          return findings.sort((a, b) => a.id.localeCompare(b.id));
+        }
         const second = group[j]!;
         if (first.polarity === second.polarity ||
             (first.evidence.documentId === second.evidence.documentId &&

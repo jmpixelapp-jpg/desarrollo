@@ -684,6 +684,8 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Evidencia:** cada transición conserva el ID y la evidencia del candidato anterior (cuando existe), el candidato actual y la evidencia exacta de este último. No se fabrica un fragmento continuo que una dos citas separadas ni se asigna a una cita un rango de offsets que no le corresponde.
 
+**Corrección de identidad entre revisiones:** los identificadores heredados de candidatos de estado pueden repetirse entre revisiones del mismo documento porque identifican ubicación y tipo de estado. El validador de trayectorias ahora distingue identidad por documento + revisión + ID de candidato. Así puede recibir revisiones distintas sin confundirlas con duplicados, pero sigue rechazando la repetición del mismo candidato dentro de una misma revisión. También verifica que la evidencia específica del estado esté contenida dentro de la evidencia de la afirmación.
+
 **Validación de entrada:** se rechazan candidatos duplicados, ajenos al proyecto, con documento/revisión inconsistentes o con evidencia obsoleta/inválida. Las salidas permanecen en estado `candidate`, con límite explícito de resultados.
 
 **Pruebas añadidas:** cese tras afirmación positiva, recurrencia marcada explícitamente, reaparición tras negación, aislamiento entre documentos/revisiones, separación por personaje y tipo de estado, y rechazo de duplicados/evidencia incompatible.

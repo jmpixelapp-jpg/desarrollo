@@ -1428,4 +1428,26 @@ La lane global continúa en `failure` por los controles compartidos de IndexedDB
 
 **Cambio CI:** Chromium se instala después de las pruebas aisladas con una condición `!cancelled()` independiente del resultado de `runtime-build`. A continuación se ejecuta `live-author-monitor-lifecycle-browser.test.mjs` cuando la instalación termina correctamente. Las pruebas host/editor/IndexedDB completas permanecen condicionadas al éxito del runtime y de la instalación del navegador.
 
-**Validación:** pendiente de la ejecución iniciada por el commit `d31055f1`; no se presupone que la prueba Chromium haya pasado hasta ver el resultado del paso dedicado.
+**Validación en [Live Author Monitor — run 45758203803](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758203803), checkout `d31055f1`:** instalación Chromium aprobada y prueba aislada `Chromium recupera el polling tras pagehide/pageshow y freeze/resume` aprobada (1/1). En ese mismo run pasaron 17/17 diagnósticos, 161/161 pruebas aisladas del monitor y el benchmark de 100.000 commits (638,91 ms, ~156.516 commits/s, heap 4,39 MiB a mitad y al final, 0 MiB de crecimiento, 0,50 MiB retenidos, cero pendientes). La lane global siguió roja por persistencia, pero la prueba de ciclo de vida en Chromium se ejecutó y pasó.
+
+
+## 91. Revalidación integral en verde y estado comprobado de main (26 de noviembre de 2026)
+
+**Ejecución integral más reciente del monitor:** [Live Author Monitor — run 45759321606](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759321606), checkout `e951f9a01d3e01ef23a8b00d8748f245a99bba2a`, terminó con `success` en todos los pasos. La auditoría MLDB 0.4.2 pasó con 27 tablas; el bundle general y el bundle aislado pasaron; type-check estricto; 17/17 diagnósticos; 161/161 unitarias/aisladas; prueba Page Lifecycle independiente en Chromium 1/1; suite host/editor/browser 167/167; benchmark de 100.000 commits en 347,94 ms (~287.406 commits/s), heap de 4,39 MiB tanto a mitad como al final de carga, 0 MiB de crecimiento, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+**Equivalencia respecto al HEAD comprobado:** en `main` (`54a3e88e0fc9a287cea624151f1a4fdc43c0c25a` al momento de esta inspección), los SHA blob de diez rutas relevantes —núcleo, panel, workspace, scheduler de visibilidad, entrypoint aislado, pruebas de visibilidad, suites de transacciones/textarea y workflow— coinciden exactamente con los SHA de `e951f9a`. Las commits posteriores fueron de sincronización/almacenamiento, no cambios en esos diez archivos del monitor. La validación integral es por tanto evidencia válida del mismo contenido de monitor que está en el HEAD revisado, aunque no equivale a una ejecución del commit combinado exacto.
+
+**CI general del HEAD:** la ejecución [Motor Literario TypeScript — run 45759492198](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759492198) aún falla en `tests/core.test.mjs:2163`, donde la expectativa de esquema inicial no incluye/concuerda con los almacenes `narrative-reference-repair-audits` y `narrative-reference-repair-pending`; el runner cancela después 235 pruebas dependientes. Es una expectativa de migración/almacenamiento, fuera de este módulo. No se cambió ese test ni la implementación IndexedDB desde la tarea del monitor.
+
+**Conclusión de esta tanda:** el monitor tiene validación integral verde sobre el contenido idéntico actualmente en `main`; el bloqueo restante para tener todo el repositorio verde se encuentra en la suite de almacenamiento general y debe resolverse por el trabajo paralelo responsable de DB27.
+
+## 92. Estrés FIFO del puente de transacciones nativas (26 de noviembre de 2026)
+
+**Motivación:** la prueba existente cubría dos publicaciones reentrantes, suficientes para verificar orden lógico pero no para estresar una ráfaga larga emitida sincrónicamente desde un listener del propio puente.
+
+**Regresión nueva:** un listener genera 999 publicaciones adicionales mientras se procesa la secuencia 1. El segundo listener y el primero deben recibir exactamente las secuencias 1..1000, en FIFO, sin saltos ni duplicaciones. El test también comprueba que cada llamada reentrante selecciona los dos listeners y que el proveedor nativo termina en la secuencia 1000.
+
+**Validación en [Live Author Monitor — run 45759874190](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45759874190), checkout `d92f09267bb1835a05a9259b197e2fef0f95cd87`:** pipeline completo `success`. Type-check estricto y bundle aislado aprobados; auditoría MLDB 0.4.2 válida (27 tablas); bundle runtime aprobado; 17/17 diagnósticos; **162/162 pruebas aisladas**; Chromium Page Lifecycle 1/1; **168/168 pruebas host/editor/browser**; benchmark 100.000 commits aprobado. La prueba de estrés nueva pasó dos veces en el pipeline (test 50 de la suite aislada y test 51 de la suite de integración): ambos listeners recibieron las secuencias 1..1000 en FIFO.
+
+El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a mitad y al 100 % de la carga, 0 MiB de crecimiento medido, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes. La prueba Chromium de Page Lifecycle y las pruebas de dos pestañas/IndexedDB con fencing de lease también pasaron.
+

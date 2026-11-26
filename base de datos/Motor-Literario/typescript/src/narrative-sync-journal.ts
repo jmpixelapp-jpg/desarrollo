@@ -833,7 +833,8 @@ export async function replayPendingNarrativeSyncOperations(
   // Un replay de proyecto completo excluye a todos los escritores del proyecto.
   // Replays de escritores distintos pueden avanzar en paralelo: sus cursores son
   // independientes y las escrituras de dominio siguen protegidas por CAS.
-  // Estos locks solo coordinan este runtime, no pestañas ni dispositivos.
+  // El lock local evita reentradas inmediatas; Web Locks añade exclusión
+  // entre pestañas del mismo origen. Sin Web Locks, la garantía es local.
   const writerLocks = activeNarrativeSyncWriterReplays.get(projectId);
   const blocked = writerId === undefined
     ? activeNarrativeSyncProjectWideReplays.has(projectId) || Boolean(writerLocks?.size)
@@ -904,9 +905,9 @@ export async function replayPendingNarrativeSyncOperations(
         return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
       
     };
-    const runtimeLocks = (globalThis as typeof globalThis & {
-      navigator?: { locks?: NarrativeSyncReplayLockManager };
-    }).navigator?.locks;
+    const runtimeLocks = (globalThis as unknown as {
+      navigator?: { locks?: unknown };
+    }).navigator?.locks as NarrativeSyncReplayLockManager | undefined;
     const locks = lockManager ?? runtimeLocks;
     if (!locks) return await runReplay();
     try {

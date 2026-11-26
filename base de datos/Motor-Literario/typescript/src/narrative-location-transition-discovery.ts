@@ -140,9 +140,13 @@ function transitionFor(
       new RegExp("^\\s+(?:en|a|al|hacia)\\s+" + article + "$", "u").test(phrase)) {
     return "entered";
   }
-  if (action === "cruzar" &&
-      (new RegExp("^\\s+(?:por)\\s+" + article + "$", "u").test(phrase) ||
+  if ((action === "cruzar" || action === "atravesar" || action === "recorrer") &&
+      (new RegExp("^\\s+(?:por|a\\s+trav[eé]s\\s+de|a\\s+lo\\s+largo\\s+de)\\s+" + article + "$", "u").test(phrase) ||
        /^\\s+(?:(?:el|la|los|las|un|una)\\s+)?$/u.test(phrase))) {
+    return "passed-through";
+  }
+  if (action === "pasar" &&
+      new RegExp("^\\s+por\\s+" + article + "$", "u").test(phrase)) {
     return "passed-through";
   }
   if ((action === "regresar" || action === "volver") &&

@@ -137,7 +137,7 @@ export function discoverNarrativeCharacterStateCandidates(
   const nameOwners = new Map<string, Set<string>>();
   for (const entity of characters) {
     for (const name of new Set([entity.canonicalName, ...entity.aliases])) {
-      const normalized = name.trim().replace(/\\s+/gu, " ").toLocaleLowerCase("es");
+      const normalized = name.trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
       const owners = nameOwners.get(normalized) ?? new Set<string>();
       owners.add(entity.id);
       nameOwners.set(normalized, owners);
@@ -154,7 +154,7 @@ export function discoverNarrativeCharacterStateCandidates(
         .sort((a, b) => b.length - a.length))];
       const matches: { name: string; index: number; end: number }[] = [];
       for (const name of names) {
-        const normalizedName = name.trim().replace(/\\s+/gu, " ").toLocaleLowerCase("es");
+        const normalizedName = name.trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
         if ((nameOwners.get(normalizedName)?.size ?? 0) > 1) continue;
         const expression = new RegExp(
           "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(name) +

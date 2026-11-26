@@ -13,6 +13,8 @@ export interface NarrativeEventCandidate {
   readonly projectId: string;
   readonly label: string;
   readonly participantEntityIds: readonly string[];
+  /** Participantes que son personajes según el catálogo de entidades del proyecto. */
+  readonly characterParticipantEntityIds: readonly string[];
   readonly actionCandidateIds: readonly string[];
   readonly reviewStatus: "candidate";
   readonly evidence: {
@@ -146,6 +148,11 @@ export function extractNarrativeEventCandidates(
     const participantEntityIds = [...new Set(group.flatMap(action =>
       [action.actorEntityId, action.targetEntityId]
     ))].sort();
+    const characterIds = new Set(input.entities
+      .filter(entity => entity.projectId === input.projectId && entity.kind === "character")
+      .map(entity => entity.id));
+    const characterParticipantEntityIds = participantEntityIds
+      .filter(id => characterIds.has(id));
     const start = (input.baseOffset ?? 0) + localStart;
     const end = (input.baseOffset ?? 0) + localEnd;
     const timeReference = extractTimeReference(input.text.slice(localStart, localEnd));
@@ -154,6 +161,7 @@ export function extractNarrativeEventCandidates(
       projectId: input.projectId,
       label: input.text.slice(localStart, localEnd),
       participantEntityIds,
+      characterParticipantEntityIds,
       actionCandidateIds: group.map(action => action.id),
       reviewStatus: "candidate",
       ...(timeReference ? { timeReference } : {}),

@@ -694,6 +694,49 @@ test("rechaza checkpoints con commits sin resultado o latencias incoherentes", (
   assert.equal(second.monitor.getSnapshot("chapter-1"), undefined);
 });
 
+test("rechaza ventanas de latencia dispersas en checkpoints", () => {
+  const first = fixture({ commitSampleWindow: 4 });
+  first.open("chapter-1", "hello");
+
+  for (let sequence = 1; sequence <= 3; sequence += 1) {
+    first.setTime(sequence * 2);
+    const ticketId = "sparse-latency-" + sequence;
+    const offset = 5 + sequence - 1;
+    first.monitor.recordAdmission(
+      first.change(sequence, sequence - 1, offset, offset, "x"),
+      first.queued(ticketId)
+    );
+    first.setTime(sequence * 2 + 1);
+    first.monitor.recordCommit({
+      ticketId,
+      status: "applied",
+      revision: sequence
+    });
+  }
+
+  first.setTime(10);
+  const checkpoint = first.monitor.createCheckpoint("chapter-1", 100);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.committedChanges, 3);
+  assert.equal(checkpoint.commitLatencies.length, 3);
+
+  // Array.prototype.some/reduce omiten huecos. Una ventana dispersa no es
+  // una secuencia completa de muestras, aunque su longitud parezca correcta.
+  const sparseLatencies = [...checkpoint.commitLatencies];
+  delete sparseLatencies[1];
+  assert.equal(sparseLatencies.length, 3);
+  assert.equal(1 in sparseLatencies, false);
+
+  const second = fixture({ commitSampleWindow: 4 });
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    { ...checkpoint, commitLatencies: sparseLatencies },
+    { documentId: "chapter-1", text: "helloxxx", revision: 3, sequence: 3 },
+    "book-1",
+    101
+  ), /métricas o tiempos inválidos/);
+  assert.equal(second.monitor.getSnapshot("chapter-1"), undefined);
+});
+
 test("rechaza timestamps de restauración anteriores al checkpoint", () => {
   const first = fixture();
   first.open();

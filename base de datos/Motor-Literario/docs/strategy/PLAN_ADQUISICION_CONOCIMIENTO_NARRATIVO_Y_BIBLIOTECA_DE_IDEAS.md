@@ -462,7 +462,7 @@ La clasificación distingue:
 
 Se validan proyecto, identidad del personaje, estructura de evidencias y límites de entrada. La cronología entre documentos solo se utiliza cuando el proyecto entrega `orderedDocumentIds`; dentro del mismo documento se exige misma revisión y orden de offsets. Se conserva evidencia del objetivo actual y de todos los antecedentes seleccionados.
 
-Se añaden siete pruebas unitarias y una prueba de integración del pipeline.
+Se añaden ocho pruebas unitarias y una prueba de integración del pipeline, incluida la ambigüedad entre revisiones del mismo documento.
 
 **Límites deliberados:** una meta diferente no sustituye por sí sola a una anterior; se considera coexistencia salvo marcador explícito. La retirada se detecta cuando el mismo objetivo aparece negado, no por inferencia psicológica. La señal de reemplazo requiere que el texto de la meta anterior aparezca en la misma evidencia. El sistema no jerarquiza metas, no deduce metas implícitas ni decide si una motivación es sincera. Los resultados siguen siendo candidatos revisables.
 

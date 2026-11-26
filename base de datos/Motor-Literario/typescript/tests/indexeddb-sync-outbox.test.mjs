@@ -33,15 +33,15 @@ test("la outbox es idempotente, rechaza colisiones y aísla secuencias por dispo
       operationId: "op-2",
       kind: "narrative.record.updated"
     })),
-    /ConstraintError|constraint|clave/i
+    /Secuencia fuera de orden/
   );
   assert.equal((await store.loadPendingSyncOperations("project-a")).length, 1);
 });
 
 test("la outbox pagina por proyecto, conserva pendientes y registra reintentos", async () => {
   const store = new IndexedDbProjectStore();
-  await store.enqueueSyncOperation(operation({ operationId: "op-later", projectId: "project-b", deviceId: "device-b", sequence: 2, createdAt: 300 }));
   await store.enqueueSyncOperation(operation({ operationId: "op-first", projectId: "project-b", deviceId: "device-b", sequence: 1, createdAt: 100 }));
+  await store.enqueueSyncOperation(operation({ operationId: "op-later", projectId: "project-b", deviceId: "device-b", sequence: 2, createdAt: 300 }));
   await store.enqueueSyncOperation(operation({
     operationId: "op-other-project",
     projectId: "project-c",
@@ -77,6 +77,11 @@ test("el acuse elimina únicamente la operación confirmada y valida el payload"
 
   await store.enqueueSyncOperation(operation({ operationId: "op-3", projectId: "project-c", deviceId: "device-c" }));
   assert.equal(await store.acknowledgeSyncOperation("op-3"), true);
+  assert.equal(await store.loadLastSyncOperationSequence("project-c", "device-c"), 1);
   assert.equal(await store.acknowledgeSyncOperation("op-3"), false);
   assert.deepEqual(await store.loadPendingSyncOperations("project-c"), []);
+  await assert.rejects(
+    store.enqueueSyncOperation(operation({ operationId: "op-4", projectId: "project-c", deviceId: "device-c" })),
+    /Secuencia fuera de orden/
+  );
 });

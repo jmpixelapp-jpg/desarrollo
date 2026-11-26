@@ -4,6 +4,7 @@ import "fake-indexeddb/auto";
 import {
   createNarrativeSyncOperationEnvelope,
   createNarrativeSyncJournalConsumer,
+  createRecoveryFirstNarrativeSyncConsumer,
   IndexedDbNarrativeSyncJournal
 } from "../dist/motor-literario.js";
 
@@ -128,5 +129,82 @@ test("consumidor solo reproduce el escritor solicitado y conserva el aislamiento
   assert.deepEqual(applied, ["consumer-operation-b"]);
   assert.equal((await journal.loadPendingOperations("consumer-project")).length, 1);
   assert.equal((await journal.loadPendingOperations("other-project")).length, 1);
+  journal.close();
+});
+
+
+test("la sincronización protegida recupera referencias antes de reproducir operaciones", async () => {
+  const journal = createJournal();
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "recovery-first-sync-1",
+    projectId: "recovery-first-project",
+    writerId: "remote-writer",
+    sequence: 1,
+    kind: "note",
+    payload: { value: "incoming" }
+  });
+  await journal.accept(envelope);
+  const order = [];
+  const store = {
+    loadNarrativeReferenceRepairPending: async projectId => {
+      order.push("recover:" + projectId);
+      return [];
+    },
+    appendNarrativeReferenceRepairAudit: async () => {},
+    deleteNarrativeReferenceRepairPending: async () => {}
+  };
+  const consume = createRecoveryFirstNarrativeSyncConsumer(store, journal, [{
+    kind: "note",
+    validate: payload => Boolean(payload && typeof payload.value === "string"),
+    apply: async () => { order.push("apply"); }
+  }]);
+
+  const result = await consume("recovery-first-project", "remote-writer");
+  assert.deepEqual(order, ["recover:recovery-first-project", "apply"]);
+  assert.equal(result.blockedByPendingRepairs, false);
+  assert.deepEqual(result.replay, { processed: 1, remaining: 0 });
+  assert.equal(result.recovery.recovered, 0);
+  journal.close();
+});
+
+test("la sincronización protegida retiene el replay si una reparación queda en conflicto", async () => {
+  const journal = createJournal();
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "recovery-first-sync-2",
+    projectId: "recovery-blocked-project",
+    writerId: "remote-writer",
+    sequence: 1,
+    kind: "note",
+    payload: { value: "must-wait" }
+  });
+  await journal.accept(envelope);
+  let applied = 0;
+  const store = {
+    loadNarrativeReferenceRepairPending: async () => [{
+      projectId: "recovery-blocked-project",
+      operationId: "tampered-operation-id",
+      recordType: "relation",
+      recordId: "relation-1",
+      referenceField: "fromEntityId",
+      missingReferenceId: "legacy-entity",
+      replacementEntityId: "canonical-entity",
+      issueCode: "missing-relation-entity",
+      appliedAt: 10
+    }],
+    appendNarrativeReferenceRepairAudit: async () => {},
+    deleteNarrativeReferenceRepairPending: async () => {}
+  };
+  const consume = createRecoveryFirstNarrativeSyncConsumer(store, journal, [{
+    kind: "note",
+    validate: payload => Boolean(payload && typeof payload.value === "string"),
+    apply: async () => { applied++; }
+  }]);
+
+  const result = await consume("recovery-blocked-project", "remote-writer");
+  assert.equal(result.blockedByPendingRepairs, true);
+  assert.equal(result.recovery.pending.length, 1);
+  assert.equal(result.replay, undefined);
+  assert.equal(applied, 0);
+  assert.equal((await journal.loadPendingOperations("recovery-blocked-project")).length, 1);
   journal.close();
 });

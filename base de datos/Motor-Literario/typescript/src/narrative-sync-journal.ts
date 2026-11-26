@@ -34,6 +34,16 @@ export interface NarrativeSyncWriterCursor {
   readonly updatedAt: number;
 }
 
+export type NarrativeSyncCursorRecoveryApplyResult =
+  | { readonly status: "applied"; readonly writerId: string; readonly lastSequence: number; readonly lastOperationId: string }
+  | { readonly status: "already-consistent"; readonly writerId: string; readonly lastSequence: number; readonly lastOperationId: string }
+  | { readonly status: "rejected"; readonly reason: "invalid-proposal" | "journal-not-complete" | "journal-changed" | "cursor-changed" | "transaction-failed" };
+
+/**
+ * Aplicación atómica de una propuesta. La verificación criptográfica se hace
+ * antes de abrir la transacción y el snapshot se compara de nuevo dentro de
+ * ella; así no se mantiene una transacción IndexedDB abierta durante WebCrypto.
+ */
 /**
  * Diario durable de recepción. La inserción de operación y avance de cursor
  * se confirman en una única transacción IndexedDB.
@@ -273,6 +283,163 @@ export class IndexedDbNarrativeSyncJournal {
         : reject(new Error("No se pudieron recuperar los cursores del proyecto."));
       transaction.onerror = () => reject(transaction.error ?? new Error("Falló la lectura de cursores."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura de cursores."));
+    });
+  }
+
+  /**
+   * Reconstruye un cursor únicamente desde un diario completo y verificado.
+   * Relee operaciones y cursor en una transacción readwrite y aborta si el
+   * diario cambió desde la verificación o si otro proceso alteró el cursor.
+   */
+  async applyCursorRecoveryProposal(
+    proposal: NarrativeSyncCursorRecoveryProposal
+  ): Promise<NarrativeSyncCursorRecoveryApplyResult> {
+    if (!proposal || typeof proposal.projectId !== "string" || !proposal.projectId.trim() ||
+        typeof proposal.writerId !== "string" || !proposal.writerId.trim() ||
+        !Number.isSafeInteger(proposal.lastSequence) || proposal.lastSequence < 1 ||
+        typeof proposal.lastOperationId !== "string" || !proposal.lastOperationId.trim()) {
+      return { status: "rejected", reason: "invalid-proposal" };
+    }
+
+    let snapshot: NarrativeSyncJournalEntry[];
+    try {
+      snapshot = (await this.loadOperations(proposal.projectId, proposal.writerId))
+        .slice().sort((a, b) => a.sequence - b.sequence);
+      if (snapshot.length !== proposal.lastSequence ||
+          snapshot.some((entry, index) =>
+            entry.projectId !== proposal.projectId ||
+            entry.writerId !== proposal.writerId ||
+            entry.sequence !== index + 1 ||
+            !Number.isFinite(entry.receivedAt) || entry.receivedAt < 0 ||
+            (entry.appliedAt !== undefined &&
+              (!Number.isFinite(entry.appliedAt) || entry.appliedAt < entry.receivedAt)))) {
+        return { status: "rejected", reason: "journal-not-complete" };
+      }
+      for (const entry of snapshot) {
+        const { receivedAt: _receivedAt, appliedAt: _appliedAt, ...envelope } = entry;
+        if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+          return { status: "rejected", reason: "journal-not-complete" };
+        }
+      }
+      const last = snapshot[snapshot.length - 1];
+      if (!last || last.sequence !== proposal.lastSequence ||
+          last.operationId !== proposal.lastOperationId) {
+        return { status: "rejected", reason: "journal-changed" };
+      }
+    } catch {
+      return { status: "rejected", reason: "transaction-failed" };
+    }
+
+    const database = await this.open();
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = (result: NarrativeSyncCursorRecoveryApplyResult): void => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      let transaction: IDBTransaction;
+      try {
+        transaction = database.transaction(["operations", "writer-cursors"], "readwrite");
+      } catch {
+        finish({ status: "rejected", reason: "transaction-failed" });
+        return;
+      }
+      const operationsStore = transaction.objectStore("operations");
+      const cursorsStore = transaction.objectStore("writer-cursors");
+      const operationsRequest = operationsStore.index("by-project").getAll(proposal.projectId);
+      const cursorRequest = cursorsStore.get([proposal.projectId, proposal.writerId]);
+      let currentOperations: StoredOperation[] | undefined;
+      let currentCursor: WriterCursor | undefined;
+      let operationsReady = false;
+      let cursorReady = false;
+      let outcome: NarrativeSyncCursorRecoveryApplyResult | undefined;
+      const abortWith = (reason: "journal-changed" | "cursor-changed"): void => {
+        outcome = { status: "rejected", reason };
+        try { transaction.abort(); } catch { /* la transacción ya terminó */ }
+      };
+      const evaluate = (): void => {
+        if (!operationsReady || !cursorReady || outcome) return;
+        const currentWriterOperations = (currentOperations ?? [])
+          .filter(entry => entry.writerId === proposal.writerId)
+          .sort((a, b) => a.sequence - b.sequence);
+        const sameSnapshot = currentWriterOperations.length === snapshot.length &&
+          currentWriterOperations.every((entry, index) => {
+            const expected = snapshot[index];
+            return entry.operationId === expected.operationId &&
+              entry.digest === expected.digest &&
+              entry.sequence === expected.sequence &&
+              entry.receivedAt === expected.receivedAt &&
+              entry.appliedAt === expected.appliedAt &&
+              entry.projectId === expected.projectId &&
+              entry.writerId === expected.writerId;
+          });
+        if (!sameSnapshot) {
+          abortWith("journal-changed");
+          return;
+        }
+        const last = snapshot[snapshot.length - 1];
+        if (currentCursor &&
+            (currentCursor.projectId !== proposal.projectId ||
+             currentCursor.writerId !== proposal.writerId ||
+             !Number.isSafeInteger(currentCursor.lastSequence) ||
+             currentCursor.lastSequence < 1 ||
+             !Number.isFinite(currentCursor.updatedAt) || currentCursor.updatedAt < 0 ||
+             typeof currentCursor.lastOperationId !== "string" ||
+             !currentCursor.lastOperationId)) {
+          abortWith("cursor-changed");
+          return;
+        }
+        if (currentCursor?.lastSequence === proposal.lastSequence &&
+            currentCursor.lastOperationId === proposal.lastOperationId) {
+          outcome = {
+            status: "already-consistent",
+            writerId: proposal.writerId,
+            lastSequence: proposal.lastSequence,
+            lastOperationId: proposal.lastOperationId
+          };
+          return;
+        }
+        if (currentCursor && currentCursor.lastSequence !== proposal.lastSequence) {
+          abortWith("cursor-changed");
+          return;
+        }
+        const nextCursor: WriterCursor = {
+          projectId: proposal.projectId,
+          writerId: proposal.writerId,
+          lastSequence: last.sequence,
+          lastOperationId: last.operationId,
+          updatedAt: Math.max(Date.now(), currentCursor?.updatedAt ?? 0, last.receivedAt)
+        };
+        cursorsStore.put(nextCursor);
+        outcome = {
+          status: "applied",
+          writerId: proposal.writerId,
+          lastSequence: last.sequence,
+          lastOperationId: last.operationId
+        };
+      };
+      operationsRequest.onsuccess = () => {
+        currentOperations = operationsRequest.result as StoredOperation[];
+        operationsReady = true;
+        evaluate();
+      };
+      cursorRequest.onsuccess = () => {
+        currentCursor = cursorRequest.result as WriterCursor | undefined;
+        cursorReady = true;
+        evaluate();
+      };
+      operationsRequest.onerror = () => abortWith("journal-changed");
+      cursorRequest.onerror = () => abortWith("cursor-changed");
+      transaction.oncomplete = () => finish(outcome ?? {
+        status: "rejected", reason: "transaction-failed"
+      });
+      transaction.onabort = () => finish(outcome ?? {
+        status: "rejected", reason: "transaction-failed"
+      });
+      transaction.onerror = () => finish(outcome ?? {
+        status: "rejected", reason: "transaction-failed"
+      });
     });
   }
 

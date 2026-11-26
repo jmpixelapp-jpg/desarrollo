@@ -523,3 +523,12 @@ La suite incluye un caso de carga que hace que el primer suscriptor produzca 999
 
 
 **Validación de carga adicional:** [Live Author Monitor — run 45755953392](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45755953392) aprobó 38/38 pruebas. La ráfaga de 1.000 snapshots se drenó en 2,31 ms y el benchmark de 100.000 commits terminó en 355,86 ms (~281.013 commits/s), con heap de 4,26 MiB al 50 % y al 100 % de carga y cero tickets pendientes. La conclusión global de Actions sigue siendo `failure` únicamente por controles de infraestructura/compilación compartidos fuera del núcleo del monitor.
+
+
+## 40. Diagnóstico visible de fallos de suscriptores y vistas
+
+El monitor cuenta por documento las excepciones de callbacks de suscriptores sin conservar sus mensajes. El snapshot expone `listenerErrors`; la escritura, la admisión y los demás suscriptores siguen funcionando. El contador es operativo de la instancia: se reinicia al restaurar la sesión y no se incluye en checkpoints.
+
+`subscribeLiveAuthorMonitorWithRefresh` acepta `onListenerError(snapshot)` para avisar de fallos del callback de una vista sin entregar el objeto Error. El panel muestra tanto los fallos registrados por el monitor como los fallos locales de su propio renderizado. El workspace presenta el contador del monitor en la tarjeta del capítulo correspondiente.
+
+Los avisos son genéricos, accesibles y no muestran mensajes internos ni texto del manuscrito. La prueba del núcleo verifica el aislamiento entre documentos; las pruebas de panel y workspace fuerzan fallos de visualización y comprueban que la escritura sigue admitiéndose y que la alerta se muestra en la tarjeta correcta.

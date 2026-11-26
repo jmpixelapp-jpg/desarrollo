@@ -14,8 +14,9 @@ Los handlers conectan las envolturas verificadas del diario con el almacenamient
 | `relation-upsert` | `{ relation: NarrativeRelation }` | `loadRelations` / `saveRelationIfUnchanged` |
 | `event-upsert` | `{ event: NarrativeEvent }` | `loadEvents` / `saveEventIfUnchanged` |
 | `entity-merge` | `{ targetEntityId, sourceEntityId, writerId? }` | `mergeNarrativeEntityIdentity` (transacción atómica del store) |
+| `personal-idea-archive` | `{ writerId, sourceProjectName, archivedAt, archivedIdeaIds, archiveChecksum }` | `archiveUnincorporatedIdeas` / `loadProjectFinalizationReceipt` (IDs exactos y recibo durable) |
 
-Las fábricas públicas son `createNarrativeIdeaUpsertHandler`, `createNarrativeEntityUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler`, `createNarrativeEventUpsertHandler` y `createNarrativeEntityMergeHandler`, en `typescript/src/narrative-sync-domain-handlers.ts`.
+Las fábricas públicas son `createNarrativeIdeaUpsertHandler`, `createNarrativeEntityUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler`, `createNarrativeEventUpsertHandler` y `createNarrativeEntityMergeHandler`, en `typescript/src/narrative-sync-domain-handlers.ts`. `createPersonalIdeaArchiveHandler` se habilita mediante `createNarrativeSyncDomainHandlers(store, { resolveAuthorizedWriterId })`; el resolvedor debe devolver la identidad del escritor de la sesión autenticada para el proyecto.
 
 ## Validación del dominio
 
@@ -24,6 +25,8 @@ Todos los handlers comprueban que el proyecto del registro coincide con el proye
 Las entidades comprueban coherencia de nombre canónico normalizado, alias únicos, tiempos de primera/última aparición y versión de extracción. Este handler no fusiona identidades: la consolidación se procesa por `entity-merge`, que delega exclusivamente en la operación atómica del store para redirigir referencias y conservar snapshots archivados. El validador de `mergedFromIds` comprueba IDs como identificadores, no como nombres normalizados.
 
 Las relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
+
+El archivo a la biblioteca personal es una operación distinta de `idea-upsert`. Solo se registra cuando el anfitrión proporciona un resolvedor de escritor autenticado. El payload contiene IDs ordenados y checksum del recibo; el store compara ese conjunto con las ideas todavía en estado `IDEA` y confirma el movimiento, el recibo y la operación de outbox en una única transacción. El receptor comprueba además que el recibo durable coincide exactamente antes de confirmar el replay. Una diferencia de IDs o de identidad del escritor mantiene la operación pendiente.
 
 ## Conflictos
 
@@ -43,7 +46,6 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 
 ## Alcance no implementado
 
-- No existe todavía handler de `entity-upsert`.
 - No hay resolución automática de conflictos ni fusión de ediciones de texto.
 - No hay transporte remoto ni autorización por proyecto.
 - El diario no autentica `writerId`; la identidad debe proceder de una sesión validada por el anfitrión/servidor.
@@ -53,7 +55,7 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 
 ## Pruebas
 
-- `tests/narrative-sync-domain-handlers.test.mjs`: ideas, CAS, reintentos y conflictos.
+- `tests/narrative-sync-domain-handlers.test.mjs`: ideas, CAS, reintentos y conflictos. Incluye autorización y recibo durable para el archivo personal.
 - `tests/narrative-sync-entity-handler.test.mjs`: entidades, normalización canónica, CAS y reintentos.
 - `tests/narrative-sync-entity-merge-handler.test.mjs`: delegación atómica, validación de IDs y soporte obligatorio del store.
 - `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.

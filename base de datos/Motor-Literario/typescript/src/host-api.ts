@@ -4,7 +4,8 @@ import {
 } from "./literary-analysis";
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
-  EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt, Diagnostic
+  EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
+  StoredLiveAuthorMonitorLease, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener } from "./live-author-monitor";
@@ -618,6 +619,11 @@ export class HostEngineApi {
   private readonly liveSubmissionTimes = new Map<string, number>();
   private readonly liveMonitorCheckpointTails = new Map<string, Promise<void>>();
   private readonly liveMonitorCheckpointErrors = new Map<string, unknown>();
+  private readonly liveMonitorLeases = new Map<string, StoredLiveAuthorMonitorLease>();
+  private readonly liveMonitorLeaseHeartbeats = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly liveMonitorOwnerId = globalThis.crypto?.randomUUID?.() ??
+    `monitor-owner:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  private static readonly LIVE_MONITOR_LEASE_DURATION_MS = 30_000;
   private readonly liveMetrics = {
     completedAnalyses: 0,
     failedAnalyses: 0,
@@ -3005,9 +3011,6 @@ export class HostEngineApi {
   async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
     return this.enqueueKnowledgeOperation(async () => {
       const projectId = this.requireProject().projectId;
-      // Carga y valida primero en variables temporales. Un catálogo con una
-      // referencia rota nunca debe quedar publicado parcialmente en la caché:
-      // el anfitrión puede reparar el registro y repetir la consulta.
       const pendingIdeas = !this.ideasLoaded;
       const ideas = pendingIdeas
         ? requireProjectScopedRecords(
@@ -3019,8 +3022,6 @@ export class HostEngineApi {
         if (!this.store.loadEntities) {
           throw new Error("Integridad narrativa: no se pueden verificar los vínculos de ideas sin acceso a entidades.");
         }
-        // La lectura de ideas también reconcilia entidades que otra instancia
-        // pudo eliminar. La validación debe ocurrir antes de publicar ambas cachés.
         entities = requireProjectScopedRecords(
           await this.requireKnowledgeReaderStore().loadEntities(projectId),
           projectId,
@@ -3031,7 +3032,7 @@ export class HostEngineApi {
           idea => idea.relatedEntityIds ?? [], "ideas"
         );
       }
-
+      // Publica la instantánea solo después de validar todas las referencias.
       if (pendingIdeas) {
         this.narrativeIdeas.clear();
         for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
@@ -3859,6 +3860,9 @@ export class HostEngineApi {
   dispose(): void {
     this.unsubscribeNarrativeChanges?.();
     this.unsubscribeNarrativeChanges = undefined;
+    for (const timer of this.liveMonitorLeaseHeartbeats.values()) clearInterval(timer);
+    this.liveMonitorLeaseHeartbeats.clear();
+    this.liveMonitorLeases.clear();
     this.liveAuthorMonitor.dispose();
   }
 
@@ -3890,11 +3894,21 @@ export class HostEngineApi {
     const recoveredSnapshot = this.engine.getSnapshot(documentId);
     if (recoveredSnapshot) {
       const projectId = this.requireProject().projectId;
+      const leaseCoordination = this.supportsLiveAuthorMonitorLeases();
+      let lease: StoredLiveAuthorMonitorLease | undefined;
+      if (leaseCoordination) {
+        try {
+          lease = await this.acquireOrRenewLiveAuthorMonitorLease(documentId);
+        } catch (error) {
+          this.reportKnowledgeError(error);
+        }
+      }
       const monitored = this.liveAuthorMonitor.getSnapshot(documentId);
       if (!monitored) {
         let restored = false;
         let checkpoint: import("./contracts").StoredLiveAuthorMonitorCheckpoint | undefined;
-        if (this.store.loadLiveAuthorMonitorCheckpoint) {
+        // Solo el titular del lease restaura/escribe el checkpoint compartido.
+        if ((!leaseCoordination || lease) && this.store.loadLiveAuthorMonitorCheckpoint) {
           try {
             checkpoint = await this.store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
           } catch (error) {
@@ -3919,6 +3933,8 @@ export class HostEngineApi {
         try { this.liveAuthorMonitor.resynchronizeDocument(recoveredSnapshot); } catch { /* La sesión conserva su estado si aún hay commits pendientes. */ }
       }
       this.scheduleLiveAuthorMonitorCheckpoint(documentId);
+      const initialCheckpoint = this.liveMonitorCheckpointTails.get(documentId);
+      if (initialCheckpoint) await initialCheckpoint.catch(() => undefined);
       const recovery = this.diagnosticsPersistenceTail.then(async () => {
         await this.restoreDocumentDiagnostics(recoveredSnapshot);
       });
@@ -4040,13 +4056,25 @@ export class HostEngineApi {
     if (!this.store.saveLiveAuthorMonitorCheckpoint) {
       throw new Error("El almacén no implementa persistencia de checkpoints del monitor.");
     }
+    if (this.supportsLiveAuthorMonitorLeases()) {
+      const lease = await this.acquireOrRenewLiveAuthorMonitorLease(documentId);
+      if (!lease) {
+        throw new Error("Esta pestaña no posee el lease del monitor y no puede confirmar el checkpoint compartido.");
+      }
+    }
     await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
+    await this.releaseLiveAuthorMonitorLease(documentId);
     return this.liveAuthorMonitor.closeDocument(documentId);
   }
 
   /** Espera los guardados de checkpoints ya programados antes de disponer el HostEngineApi. */
   async disposeSafely(): Promise<void> {
     await this.flushPendingChanges();
+    await Promise.all([...this.liveMonitorCheckpointTails.values()]);
+    for (const documentId of this.liveMonitorLeases.keys()) {
+      const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
+      if (checkpoint) await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
+    }
     await Promise.all([...this.liveMonitorCheckpointTails.values()]);
     if (this.liveMonitorCheckpointErrors.size > 0) {
       const firstError = this.liveMonitorCheckpointErrors.values().next().value as unknown;
@@ -4055,13 +4083,118 @@ export class HostEngineApi {
         { cause: firstError }
       );
     }
+    for (const documentId of [...this.liveMonitorLeases.keys()]) {
+      await this.releaseLiveAuthorMonitorLease(documentId);
+    }
     this.dispose();
+  }
+
+  private supportsLiveAuthorMonitorLeases(): boolean {
+    return typeof this.store.acquireLiveAuthorMonitorLease === "function" &&
+      typeof this.store.renewLiveAuthorMonitorLease === "function" &&
+      typeof this.store.releaseLiveAuthorMonitorLease === "function";
+  }
+
+  private startLiveAuthorMonitorLeaseHeartbeat(documentId: string): void {
+    if (this.liveMonitorLeaseHeartbeats.has(documentId)) return;
+    const timer = setInterval(() => {
+      const current = this.liveMonitorLeases.get(documentId);
+      if (!current) {
+        const activeTimer = this.liveMonitorLeaseHeartbeats.get(documentId);
+        if (activeTimer) clearInterval(activeTimer);
+        this.liveMonitorLeaseHeartbeats.delete(documentId);
+        return;
+      }
+      const renew = this.store.renewLiveAuthorMonitorLease;
+      if (!renew) return;
+      void renew.call(
+        this.store,
+        current,
+        Date.now(),
+        HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
+      ).then(renewed => {
+        if (!renewed) {
+          this.liveMonitorLeases.delete(documentId);
+          const activeTimer = this.liveMonitorLeaseHeartbeats.get(documentId);
+          if (activeTimer) clearInterval(activeTimer);
+          this.liveMonitorLeaseHeartbeats.delete(documentId);
+          return;
+        }
+        this.liveMonitorLeases.set(documentId, renewed);
+      }).catch(error => {
+        this.reportKnowledgeError(error);
+      });
+    }, Math.floor(HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS / 3));
+    (timer as ReturnType<typeof setInterval> & { unref?: () => void }).unref?.();
+    this.liveMonitorLeaseHeartbeats.set(documentId, timer);
+  }
+
+  private async acquireOrRenewLiveAuthorMonitorLease(
+    documentId: string
+  ): Promise<StoredLiveAuthorMonitorLease | undefined> {
+    if (!this.supportsLiveAuthorMonitorLeases()) return undefined;
+    const now = Date.now();
+    const current = this.liveMonitorLeases.get(documentId);
+    const renew = this.store.renewLiveAuthorMonitorLease;
+    const acquire = this.store.acquireLiveAuthorMonitorLease;
+    let lease: StoredLiveAuthorMonitorLease | undefined;
+    if (current && renew) {
+      lease = await renew.call(
+        this.store,
+        current,
+        now,
+        HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
+      );
+    }
+    if (!lease && acquire) {
+      lease = await acquire.call(
+        this.store,
+        this.requireProject().projectId,
+        documentId,
+        this.liveMonitorOwnerId,
+        now,
+        HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
+      );
+    }
+    if (!lease) {
+      this.liveMonitorLeases.delete(documentId);
+      const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
+      if (timer) clearInterval(timer);
+      this.liveMonitorLeaseHeartbeats.delete(documentId);
+      return undefined;
+    }
+    this.liveMonitorLeases.set(documentId, lease);
+    this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
+    return lease;
+  }
+
+  private async releaseLiveAuthorMonitorLease(documentId: string): Promise<void> {
+    const lease = this.liveMonitorLeases.get(documentId);
+    if (!lease || !this.store.releaseLiveAuthorMonitorLease) return;
+    const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
+    if (timer) clearInterval(timer);
+    this.liveMonitorLeaseHeartbeats.delete(documentId);
+    try {
+      await this.store.releaseLiveAuthorMonitorLease.call(this.store, lease, Date.now());
+      this.liveMonitorLeases.delete(documentId);
+    } catch (error) {
+      // Si el almacén no confirmó la liberación, conservamos la titularidad local
+      // y reanudamos el heartbeat para evitar una expiración accidental.
+      this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
+      throw error;
+    }
   }
 
   private scheduleLiveAuthorMonitorCheckpoint(documentId: string): void {
     if (!this.store.saveLiveAuthorMonitorCheckpoint) return;
     const previous = this.liveMonitorCheckpointTails.get(documentId) ?? Promise.resolve();
     const queued = previous.catch(() => undefined).then(async () => {
+      if (this.supportsLiveAuthorMonitorLeases() && !this.liveMonitorLeases.has(documentId)) {
+        // Las pestañas observadoras vuelven a competir solo en un punto seguro
+        // de persistencia; si el lease sigue ocupado, omiten este checkpoint.
+        const lease = await this.acquireOrRenewLiveAuthorMonitorLease(documentId);
+        if (!lease) return;
+      }
       const checkpoint = this.liveAuthorMonitor.createCheckpoint(documentId);
       if (checkpoint) await this.enqueueLiveAuthorMonitorCheckpoint(checkpoint);
     });
@@ -4085,7 +4218,16 @@ export class HostEngineApi {
     const save = this.store.saveLiveAuthorMonitorCheckpoint;
     if (!save) throw new Error("El almacén no implementa persistencia de checkpoints del monitor.");
     try {
-      await save.call(this.store, checkpoint);
+      if (this.supportsLiveAuthorMonitorLeases()) {
+        const lease = await this.acquireOrRenewLiveAuthorMonitorLease(checkpoint.documentId);
+        if (!lease) {
+          throw new Error("El checkpoint no se guardó: esta pestaña perdió la titularidad del monitor.");
+        }
+        await save.call(this.store, checkpoint, lease);
+      } else {
+        // Compatibilidad con almacenes de anfitrión antiguos; no ofrecen coordinación entre pestañas.
+        await save.call(this.store, checkpoint);
+      }
       this.liveMonitorCheckpointErrors.delete(checkpoint.documentId);
     } catch (error) {
       this.liveMonitorCheckpointErrors.set(checkpoint.documentId, error);

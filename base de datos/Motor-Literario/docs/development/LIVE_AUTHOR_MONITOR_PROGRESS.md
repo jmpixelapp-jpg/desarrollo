@@ -1762,3 +1762,20 @@ Se amplió el adaptador nativo de textarea para no dar por completa una operaci�
 **Documentación detallada:** LIVE_AUTHOR_MONITOR_BEFOREINPUT_PAIRING_2026-11-26.md, sección “Suspensión de captura ante Page Lifecycle y restauración BFCache”.
 
 **Próxima prioridad:** conectar el estado needsResync y el motivo de discontinuidad con el diagnóstico operativo del anfitrión/editor, y verificar que el ciclo de vida de la suscripción del host solicita y aplica el snapshot autoritativo antes de volver a admitir deltas.
+
+## Recuperación coordinada de HostEngineApi, binding FIFO y TextAreaSource — 26 de noviembre de 2026
+
+La integración real mountLiveAuthorMonitorTextArea().resynchronize() se ajustó al requisito de que el adaptador solo puede reanudarse con una suscripción activa. Después de comprobar que motor, sync state y textarea coinciden con el snapshot común, el orden ahora es:
+
+1. limpiar el backlog reconciliado y volver a conectar el binding FIFO;
+2. mantener la fuente nativa suspendida durante esa reconexión;
+3. aplicar source.resynchronize(authoritative) con el observador ya activo;
+4. devolver el estado recuperado al anfitrión.
+
+La prueba integrada live-author-monitor-change-binding.test.mjs une el LiveAuthorMonitorTextAreaSource real con el binding FIFO, provoca queue_full y overflow, valida que la fuente quede suspendida tras rearmar el binding, llama a resynchronize(snapshot) y verifica que el siguiente delta admitido conserve secuencia y revisión.
+
+Se hizo idempotente el método central de fallo del adaptador: si binding y callback de admisión solicitan la misma resincronización, se conserva el primer diagnóstico, la copia temporal ya liberada y el estado needsResync; no se repiten errores ni limpiezas.
+
+**Documentación operativa:** LIVE_AUTHOR_MONITOR_OPERATIONS.md, sección 25, define el orden obligatorio y la prohibición de reactivar la captura antes de que resynchronize() termine correctamente.
+
+**Validación:** los cambios de implementación, pruebas y documentación están publicados en main. No hay confirmación de CI para estos commits y no se declara una nueva suite aprobada.

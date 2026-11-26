@@ -553,3 +553,49 @@ test("el despachador mantiene el lock durante transporte y acuse local", async (
   assert.deepEqual(result, { processed: 1, remaining: 0, hasMore: false });
   assert.equal(lockHeld, false);
 });
+
+
+test("una segunda llamada local informa los pendientes mientras el primer despacho sigue activo", async () => {
+  const pending = operation({
+    operationId: "outbox-local-lock",
+    projectId: "outbox-local-lock-project",
+    deviceId: "outbox-local-lock-device"
+  });
+  let releaseTransport;
+  let notifyStarted;
+  const gate = new Promise(resolve => { releaseTransport = resolve; });
+  const started = new Promise(resolve => { notifyStarted = resolve; });
+  let sends = 0;
+  const store = {
+    async loadPendingSyncOperations() { return [pending]; },
+    async recordSyncOperationAttempt() { return true; },
+    async acknowledgeSyncOperation() { return true; }
+  };
+  const options = {
+    store,
+    projectId: pending.projectId,
+    transport: {
+      async send(envelope) {
+        sends++;
+        notifyStarted();
+        await gate;
+        return {
+          status: "accepted", durable: true, projectId: envelope.projectId,
+          operationId: envelope.operationId, writerId: envelope.writerId,
+          sequence: envelope.sequence, digest: envelope.digest
+        };
+      }
+    },
+    now: () => 500
+  };
+  const first = dispatchPendingNarrativeSyncOperations(options);
+  await started;
+  const second = await dispatchPendingNarrativeSyncOperations(options);
+  assert.deepEqual(second, {
+    processed: 0, remaining: 1, hasMore: false, failure: "already-running"
+  });
+  assert.equal(sends, 1);
+  releaseTransport();
+  assert.deepEqual(await first, { processed: 1, remaining: 0, hasMore: false });
+  assert.equal(sends, 1);
+});

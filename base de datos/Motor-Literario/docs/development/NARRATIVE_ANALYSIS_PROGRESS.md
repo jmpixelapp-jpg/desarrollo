@@ -631,3 +631,6 @@ Se agregan tres regresiones: lock ocupado sin envío, fallo del coordinador sin 
 La rama DB28 incorpora la comparación canónica que ya está en `main` al revalidar el snapshot de operaciones dentro de la transacción de reconstrucción del cursor. Así, IndexedDB puede devolver el mismo objeto con orden distinto de propiedades sin producir un falso conflicto; los valores y tipos siguen teniendo que ser idénticos. Se agrega una regresión que reordena las propiedades del registro durable y exige un resultado `already-consistent`.
 
 También se portan las validaciones actuales de IDs históricos opcionales y se reubica dentro de su prueba una aserción de atomicidad de outbox que había quedado fuera del módulo.
+
+
+La exclusión reentrante local también conserva el conteo observable: una segunda llamada del mismo runtime devuelve los pendientes reales del proyecto en vez de reportar cero mientras la primera llamada sigue enviando. Una regresión mantiene el transporte en espera, ejecuta una segunda llamada y verifica que no se duplica el envío y que `remaining` sigue en uno.

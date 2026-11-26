@@ -107,7 +107,11 @@ export async function dispatchPendingNarrativeSyncOperations(
   const now = options.now ?? Date.now;
   if (typeof now !== "function") throw new TypeError("now debe ser una función.");
   if (activeProjectDispatches.has(options.projectId)) {
-    return { processed: 0, remaining: 0, hasMore: false, failure: "already-running" };
+    const remaining = (await options.store.loadPendingSyncOperations(options.projectId, batchSize)).length;
+    return {
+      processed: 0, remaining, hasMore: remaining === batchSize,
+      failure: "already-running"
+    };
   }
   activeProjectDispatches.add(options.projectId);
   const runDispatch = async (): Promise<NarrativeSyncOutboxDispatchResult> => {

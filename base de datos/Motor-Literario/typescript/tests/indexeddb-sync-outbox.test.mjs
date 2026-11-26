@@ -292,3 +292,47 @@ test("el adaptador recupera un lease vencido tras el cierre del propietario ante
     await deleteDatabase();
   }
 });
+
+
+test("dos coordinadores completos comparten la bandeja y el lease antes de enviar", async () => {
+  await deleteDatabase();
+  const writerStore = new IndexedDbProjectStore();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  try {
+    await writerStore.enqueueSyncOperation(operation({
+      operationId: "op-real-shared-lock", projectId: "sync-outbox-project"
+    }));
+    const firstLock = new IndexedDbSyncExecutionLock(firstStore, {
+      ownerId: "coordinator-one", leaseDurationMs: 1_000, pollIntervalMs: 25
+    });
+    const secondLock = new IndexedDbSyncExecutionLock(secondStore, {
+      ownerId: "coordinator-two", leaseDurationMs: 1_000, pollIntervalMs: 25
+    });
+    let pushes = 0;
+    const transport = {
+      async push(_projectId, operations) {
+        pushes++;
+        assert.deepEqual(operations.map(item => item.operationId), ["op-real-shared-lock"]);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return {
+          acknowledgedOperationIds: ["op-real-shared-lock"],
+          conflicts: [],
+          retryableOperationIds: []
+        };
+      }
+    };
+    const first = new NarrativeSyncCoordinator(firstStore, transport, { executionLock: firstLock });
+    const second = new NarrativeSyncCoordinator(secondStore, transport, { executionLock: secondLock });
+    const results = await Promise.all([
+      first.syncOnce("sync-outbox-project"),
+      second.syncOnce("sync-outbox-project")
+    ]);
+    assert.equal(pushes, 1);
+    assert.equal(results.reduce((sum, result) => sum + result.acknowledged, 0), 1);
+    assert.equal(await writerStore.countPendingSyncOperations("sync-outbox-project"), 0);
+  } finally {
+    await Promise.all([writerStore.close(), firstStore.close(), secondStore.close()]);
+    await deleteDatabase();
+  }
+});

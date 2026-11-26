@@ -62,3 +62,4 @@ export * from "./narrative-dialogue-attribution";
 export * from "./narrative-information-provenance";
 export * from "./narrative-knowledge-evolution";
 export * from "./narrative-information-chain";
+export * from "./narrative-information-interpretation";

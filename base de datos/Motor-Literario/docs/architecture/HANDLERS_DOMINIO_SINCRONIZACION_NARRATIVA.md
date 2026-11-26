@@ -68,3 +68,10 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 `retireNarrativeDocumentProjection` publica un tombstone con inventarios vacíos y exige una revisión estrictamente posterior a la vigente. Repetir el mismo tombstone y revisión es idempotente; una retirada obsoleta se rechaza.
 
 El tombstone no borra entidades ni afirmaciones del proyecto. Esos registros pueden tener evidencia compartida con otros documentos y su eliminación requiere reconciliación referencial y política explícita de retención. El manifiesto enumera contribuciones por documento; no autoriza por sí solo un borrado físico.
+
+
+## Reconciliación de proyecciones tras reinicios
+
+`reconcileNarrativeDocumentProjections(store, projectId)` compara los manifiestos durables con la evidencia real de entidades, relaciones, acontecimientos, ideas y afirmaciones. Informa de manifiestos ausentes, IDs omitidos o sobrantes en inventarios y tombstones que todavía conservan evidencia del documento.
+
+La reconciliación es deliberadamente de sólo lectura. No infiere si una discrepancia debe resolverse restaurando un manifiesto, reextrayendo el documento o retirando evidencia; esa decisión depende del estado fuente y de la política editorial. El informe proporciona códigos, documento, tipo de registro e ID para que una capa de reparación aplique CAS explícito.

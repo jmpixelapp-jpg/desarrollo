@@ -1004,3 +1004,14 @@ El estado de cada capacidad deberá clasificarse por separado, al menos como:
 No se utilizará «completo» para un módulo que solo tenga contratos, documentación, pruebas aisladas o un prototipo. La validación del núcleo existente (incluida la ejecución histórica de 718 pruebas) no acredita las capacidades futuras enumeradas en esta ampliación.
 
 **Resultado de esta actualización:** el catálogo integral queda incorporado como alcance objetivo del producto. El siguiente trabajo de ingeniería debe convertirlo en inventario trazable de módulos, contratos, dependencias, prioridades, archivos responsables y pruebas, y después implementar cada frente sin confundir documentación con funcionalidad.
+
+
+## Auditoría de arquitectura y mapa del motor
+
+Se incorporó una auditoría inicial del repositorio que identifica la distribución real del motor, sus capas TypeScript, extractores narrativos, ingesta de libros, persistencia, puente JSON-RPC, crates Rust/MLDB y principales brechas entre alcance e implementación.
+
+Documento: [Arquitectura y mapa del motor](../base%20de%20datos/Motor-Literario/docs/architecture/ARQUITECTURA_Y_MAPA_DEL_MOTOR.md).
+
+**Hallazgo prioritario:** la ingesta de archivos comprobada acepta TXT y Markdown UTF-8; EPUB, PDF, DOCX y OCR no están implementados en esa ruta. La auditoría distingue además los módulos existentes de las capacidades integradas y validadas. La ejecución CI del HEAD inspeccionado estaba en curso al redactar el documento.
+
+Commit de la auditoría: `79a630c95e431943fe4e1aca39bc09b3d4fcbc56`.

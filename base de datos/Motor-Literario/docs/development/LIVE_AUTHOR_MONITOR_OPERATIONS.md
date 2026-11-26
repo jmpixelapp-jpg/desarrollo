@@ -64,7 +64,8 @@ Cada `EditorChange` puede incluir `activityKind`:
 
 | Categoría | Fuente preferida | Observación |
 |---|---|---|
-| `typing` | evento de inserción normal | Puede inferirse por delta. |
+| `typing` | `InputEvent.inputType` o transacción explícita del editor | Si la fuente no puede identificar la operación, no se debe asumir `typing`. |
+| `composition` | `insertCompositionText` o transacción explícita del editor | Cada delta aplicado de candidato se conserva; no equivale a texto final confirmado. |
 | `paste` | `InputEvent.inputType` o callback de pegado | El textarea reconoce variantes `insertFromPaste`. |
 | `deletion` | `InputEvent.inputType` o delta | También se infiere cuando se elimina sin insertar. |
 | `correction` | transacción/reemplazo del editor | Se infiere cuando se reemplaza un rango. |
@@ -72,9 +73,22 @@ Cada `EditorChange` puede incluir `activityKind`:
 | `redo` | transacción real del historial | No inferir solo por Ctrl/Cmd+Y/Shift+Z. |
 | `other` | tipo no identificado | Incluye histórico de checkpoints sin clasificación. |
 
-Se conservan siete contadores: seis categorías específicas y `otherChanges`. Su suma debe coincidir con `acceptedChanges`. Los checkpoints v1 antiguos sin estos campos se recuperan como operaciones históricas `other`; los checkpoints intermedios con seis contadores calculan el residual por diferencia.
+Se conservan ocho contadores por categoría (`typingChanges`, `compositionChanges`, `pasteChanges`, `deletionChanges`, `correctionChanges`, `undoChanges`, `redoChanges` y `otherChanges`). Su suma debe coincidir con `acceptedChanges`. Los checkpoints v1 antiguos sin estos campos se recuperan como operaciones históricas `other`; los checkpoints intermedios calculan el residual por diferencia cuando es seguro.
 
-El monitor no guarda el contenido de las transacciones. Solo recibe las posiciones, longitudes, secuencia, revisión y categoría necesarias para contabilizar.
+### 3.1 Unidades por procedencia y composición provisional
+
+Los acumulados brutos `insertedCharacters` y `deletedCharacters` siguen contando todos los deltas admitidos, también cada sustitución de candidato IME. Se agregan métricas separadas:
+
+- `typingInsertedCharacters`: unidades UTF-16 de operaciones clasificadas explícitamente como escritura normal.
+- `compositionInsertedCharacters`: suma de las unidades insertadas por todos los deltas IME aplicados, incluidos candidatos provisionales.
+- `compositionDeletedCharacters`: suma de los rangos reemplazados por esos deltas IME.
+- `activityUnitMetricsComplete`: indica si las unidades por procedencia cubren el historial observado. Es `false` tras restaurar un checkpoint histórico sin estas métricas y tras cualquier resincronización con snapshot, porque el snapshot confirma el texto pero no reconstruye la clasificación de deltas que pudieron faltar.
+
+Los campos nuevos son opcionales en checkpoints v1 para conservar compatibilidad. La restauración no reclasifica unidades históricas brutas como `typing` sin evidencia. Los paneles muestran la cobertura como completa o parcial.
+
+`estimatedWordsPerMinute` y `insertedCharactersPerMinute` usan solo `typingInsertedCharacters` en el numerador. Su denominador sigue siendo el tiempo activo total de la sesión, que puede incluir pegados, correcciones o composición IME; son estimaciones sobre tiempo activo total, no una medición pura del tiempo de teclado ni una confirmación de palabras finales.
+
+El monitor no guarda el contenido de las transacciones. Solo recibe las posiciones, longitudes, secuencia, revisión y categoría necesarias para contabilizar. Todos los rangos y longitudes se expresan en unidades UTF-16, no en grafemas lingüísticos.
 
 ## 4. Configuración y retención de datos
 

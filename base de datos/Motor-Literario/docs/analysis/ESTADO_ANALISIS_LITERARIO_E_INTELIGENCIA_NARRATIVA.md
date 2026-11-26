@@ -538,7 +538,8 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Nuevo `narrative-location-presence-discovery.ts`: extrae afirmaciones copulativas/perceptuales/modalizadas de presencia («Ana está en el castillo», «Ana parece estar cerca del puerto»), con personaje y lugar explícitos y no ambiguos.
 - Conserva evidencia separada de personaje, predicado, relación locativa, lugar y afirmación completa; distingue negación, futuro y condicional.
 - Integrado en la ingesta como `locationPresenceCandidates` y en la auditoría global mediante evidencia de afirmación. Añadidas pruebas unitarias y de integración.
-- Limitación explícita: exige un único personaje nombrado por oración; no resuelve pronombres, sujetos coordinados ni ubicación actual consolidada. CI pendiente para esta nueva capa.
+- Limitación explícita: exige un único personaje nombrado por oración; no resuelve pronombres, sujetos coordinados ni ubicación actual consolidada. Los tiempos desconocidos quedan como `unresolved`.
+- CI: run 3012 (`bc259a1c`) y run 3013 (`d6acd627`) completaron Type-check, build/pruebas automatizadas y benchmark. La revisión detectó y corrigió el orden de cálculo de offsets para la negación y la conservación de puntuación terminal en la evidencia.
 
 ### Trayectorias espaciales entre capítulos — 26-11-2026
 

@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
-import { IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 const { IndexedDbProjectStore } = await import("../dist/motor-literario.js");

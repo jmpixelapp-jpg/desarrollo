@@ -625,3 +625,14 @@ La evidencia original se conserva sin reconstruir ni parafrasear. Esto permite q
 La validación rechaza identidades duplicadas en los conjuntos de participantes y exige que los personajes pertenezcan al conjunto general de participantes. Se añadieron pruebas para la procedencia exacta de ambos acontecimientos y para participantes duplicados.
 
 **Límite:** ni un conector explícito ni una marca temporal prueban causalidad objetiva. Los dos tipos siguen siendo candidatos revisables; el campo `hypothesisBasis` explica la señal detectada, no una conclusión sobre el mundo narrativo.
+
+
+### Fase AK: relaciones conectadas con las acciones que las componen
+
+Los candidatos de relación entre acontecimientos incorporan ahora `supportingActionCandidateIds`, con dos listas separadas: acciones explícitas del acontecimiento de origen y acciones explícitas del acontecimiento posterior. Los IDs se conservan como referencias a los candidatos de acción ya extraídos; no se reinterpretan ni se convierten en una afirmación causal.
+
+Esto permite que el siguiente nivel de razonamiento consulte, para una relación propuesta, qué hizo explícitamente cada personaje y qué evidencia textual respalda esas acciones. También evita perder la conexión entre el grafo de acontecimientos y el grafo actor-acción-objetivo.
+
+La validación de acontecimientos exige que los IDs de acción sean cadenas no vacías y únicas, igual que las listas de participantes. Se añadieron pruebas para comprobar la conservación de las acciones de ambos extremos y para rechazar IDs de acción duplicados o mal formados.
+
+**Límite de inferencia:** disponer de acciones en ambos extremos no significa que una acción haya causado la otra. Esta fase únicamente preserva referencias estructuradas para análisis posterior y revisión humana.

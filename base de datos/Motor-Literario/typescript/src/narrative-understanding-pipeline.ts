@@ -37,6 +37,7 @@ import { extractNarrativeMemoryEvents, type NarrativeMemoryEvent } from "./narra
 import { buildNarrativeMemoryTimeline, type NarrativeCharacterMemoryState } from "./narrative-memory-timeline";
 import { linkNarrativeMemoryToActions, type NarrativeMemoryActionLink } from "./narrative-memory-action-links";
 import { linkNarrativeKnowledgeToActions, type NarrativeKnowledgeActionLink } from "./narrative-knowledge-action-links";
+import { buildNarrativeDecisionContexts, type NarrativeDecisionContextCandidate } from "./narrative-decision-context";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
   assignNarrativeEvidenceToScene,
@@ -121,6 +122,8 @@ export interface NarrativeUnderstandingResult {
   readonly memoryActionLinks: readonly NarrativeMemoryActionLink[];
   /** Precedencia verificable entre información atribuida al personaje y sus acciones. */
   readonly knowledgeActionLinks: readonly NarrativeKnowledgeActionLink[];
+  /** Contextos triangulados de conocimiento + intención + acción; no causalidad. */
+  readonly decisionContexts: readonly NarrativeDecisionContextCandidate[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   /** Cruces explicables entre relaciones de eventos y contrastes explícitos objetivo-acción. */
@@ -378,6 +381,11 @@ export function understandNarrativeFragment(
     actions: [...actions, ...pronounTargetActions],
     orderedDocumentIds: input.orderedDocumentIds
   });
+  const decisionContexts = buildNarrativeDecisionContexts({
+    projectId: input.projectId,
+    knowledgeActionLinks,
+    intentActionConsistency
+  });
   const eventActionRoles = new Map<string, Array<{
     consequenceCandidateId: string; eventRole: "source" | "consequence"
   }>>();
@@ -426,7 +434,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

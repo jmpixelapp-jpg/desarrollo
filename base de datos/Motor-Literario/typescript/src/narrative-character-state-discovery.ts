@@ -83,7 +83,7 @@ const STATE_PATTERNS: readonly {
   { state: "protected", category: "social", expression: /^protegid[oa]s?(?![\p{L}\p{M}])/iu }
 ];
 
-const COPULA = /^(?<marker>volvi[oó]\s+a\s+|dej[oó]\s+de\s+|ya\s+no\s+|todav[ií]a\s+no\s+|a[uú]n\s+no\s+|no\s+)?(?<copula>est[aá]s?|est[aá]n?|estaba(?:n)?|estuv(?:o|ieron)|estar|estar[aá]n?|er(?:a|an)|fu(?:e|eron)|ser[aá]n?|es|son|sigu(?:e|en|i[oó]|ieron)|permanece(?:n)?|contin[uú](?:a|an|ó)|se\s+encuentra|se\s+encontraba|qued[oó]|parece(?:n)?)\s+(?<adverb>(?:(?:muy|bastante|gravemente|ligeramente)\s+)?)(?<adjective>[\p{L}\p{M}]+)(?![\p{L}\p{M}])/iu;
+const COPULA = /^(?<marker>volvi[oó]\s+a\s+|dej[oó]\s+de\s+|ya\s+no\s+|todav[ií]a\s+no\s+|a[uú]n\s+no\s+|nunca\s+|jam[aá]s\s+|no\s+)?(?<copula>est[aá]s?|est[aá]n?|estaba(?:n)?|estuv(?:o|ieron)|estar|estar[aá]n?|er(?:a|an)|fu(?:e|eron)|ser[aá]n?|es|son|sigu(?:e|en|i[oó]|ieron)|permanece(?:n)?|contin[uú](?:a|an|ó)|se\s+encuentra|se\s+encontraba|qued[oó]|parece(?:n)?)\s+(?<adverb>(?:(?:muy|bastante|gravemente|ligeramente)\s+)?)(?<adjective>[\p{L}\p{M}]+)(?![\p{L}\p{M}])/iu;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -224,7 +224,7 @@ export function discoverNarrativeCharacterStateCandidates(
         );
         const stateStart = span.start + match.end + leadingWhitespace + adjectiveOffset;
         const stateEnd = stateStart + adjective.length;
-        const polarity = /(?:\bno\b|dej[oó]\s+de)/iu.test(marker) ? "negated" : "affirmed";
+        const polarity = /(?:\bno\b|\bnunca\b|\bjam[aá]s\b|dej[oó]\s+de)/iu.test(marker) ? "negated" : "affirmed";
         const aspect = /volvi[oó]\s+a/iu.test(marker) ? "recurrent"
           : /dej[oó]\s+de/iu.test(marker) ? "ceased"
           : /sigu|permanece|contin[uú]/iu.test(copula) ? "ongoing"

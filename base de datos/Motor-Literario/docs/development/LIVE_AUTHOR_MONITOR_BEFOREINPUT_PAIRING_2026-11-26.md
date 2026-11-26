@@ -494,13 +494,14 @@ live-author-monitor-textarea-source.test.mjs cubre:
 
 1. composición activa al recibir pagehide y freeze;
 2. ocultación de la pestaña durante una composición abierta;
-3. blur durante una composición y durante un par beforeinput/input incompleto;
-4. no interrumpir la continuidad cuando blur ocurre sin operación abierta;
-5. liberación de previousText y descarte del estado pendiente;
-6. eventos repetidos sin duplicar diagnósticos;
-7. edición ignorada hasta recibir un snapshot que coincide con el textarea visible;
-8. aceptación de una edición posterior con sequence y baseRevision consecutivos;
-9. retirada de listeners blur, visibilitychange, pagehide y freeze al cerrar la suscripción.
+3. blur durante una composición activa y retención visible de un beforeinput de texto pendiente;
+4. beforeinput de texto pendiente que se completa después de ocultar y volver a mostrar la pestaña;
+5. no interrumpir la continuidad cuando blur ocurre sin operación abierta;
+6. liberación de previousText y descarte del estado pendiente;
+7. eventos repetidos sin duplicar diagnósticos;
+8. edición ignorada hasta recibir un snapshot que coincide con el textarea visible;
+9. aceptación de una edición posterior con sequence y baseRevision consecutivos;
+10. retirada de listeners blur, visibilitychange, pagehide y freeze al cerrar la suscripción.
 
 Las pruebas unitarias de esta máquina usan EventTargets controlados. Además, live-author-monitor-browser.test.mjs ahora ejecuta una regresión en Chromium con automatización de teclado: observa un beforeinput confiable, un listener posterior cancela la acción por defecto, verifica que no aparece input y luego provoca blur real del textarea. La cancelación final debe liberar pendingInput sin emitir delta ni error; el blur posterior no suspende una fuente que permanece sincronizada. Esta prueba acredita el pipeline DOM de Chromium bajo automatización, no un teclado físico ni un proveedor IME del sistema operativo. Tampoco simula un congelamiento físico del proceso ni una entrada real en BFCache; pagehide/freeze siguen cubiertos por pruebas de estado separadas.
 

@@ -88,3 +88,39 @@ export function resolveBookEvidence(
     fragments
   };
 }
+
+/**
+ * Resuelve directamente una evidencia persistida por el conocimiento narrativo.
+ * Solo acepta evidencia activa cuya cita coincida exactamente con el texto de la
+ * revisión importada; las evidencias obsoletas requieren recuperar su revisión histórica.
+ */
+export function resolveNarrativeTextEvidence(
+  book: IngestedBook,
+  evidence: {
+    readonly documentId: string;
+    readonly revision: number;
+    readonly start: number;
+    readonly end: number;
+    readonly excerpt: string;
+    readonly status?: "stale";
+  }
+): ResolvedBookEvidence {
+  if (evidence.status === "stale") {
+    throw new Error("La evidencia está obsoleta; debe resolverse contra la revisión histórica correspondiente.");
+  }
+  if (!Number.isSafeInteger(evidence.revision) || evidence.revision < 0 ||
+      typeof evidence.excerpt !== "string" || !evidence.excerpt.length) {
+    throw new TypeError("La evidencia narrativa no tiene revisión o cita válidas.");
+  }
+  const chapter = book.chapters.find(item => item.documentId === evidence.documentId);
+  if (!chapter) {
+    throw new Error("El documento de la evidencia no pertenece al libro importado.");
+  }
+  if (!Number.isSafeInteger(evidence.start) || !Number.isSafeInteger(evidence.end) ||
+      evidence.start < 0 || evidence.end <= evidence.start ||
+      evidence.end > chapter.text.length ||
+      chapter.text.slice(evidence.start, evidence.end) !== evidence.excerpt) {
+    throw new Error("La cita no coincide con el rango de texto de la fuente importada.");
+  }
+  return resolveBookEvidence(book, chapter, evidence.start, evidence.end);
+}

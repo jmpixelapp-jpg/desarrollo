@@ -8,6 +8,7 @@ import {
   buildNarrativeIdeaEvolution,
   createNarrativeIdeaContinuityIndex,
   createNarrativeIdeaContinuityOutboxCallback,
+  createNarrativeIdeaContinuityIndexUpsertHandler,
   deliverNarrativeSyncOutboxBatch,
   IndexedDbNarrativeSyncOutbox
 } from "../dist/motor-literario.js";
@@ -388,6 +389,68 @@ test("dos generaciones encoladas concurrentemente nunca producen una secuencia d
       entries.map(item => item.sequence),
       entries.map((_, index) => index + 1)
     );
+  } finally {
+    outbox.close();
+  }
+});
+
+
+test("integra outbox, transporte y handler receptor con aplicación CAS e idempotencia", async () => {
+  const outbox = new IndexedDbNarrativeSyncOutbox({ databaseName: databaseName() });
+  const projectId = "outbox-roundtrip-" + randomUUID();
+  let remoteIndex;
+  let remoteWrites = 0;
+  const receiverStore = {
+    async loadNarrativeIdeaContinuityIndex(requestedProjectId) {
+      return requestedProjectId === projectId && remoteIndex
+        ? structuredClone(remoteIndex)
+        : undefined;
+    },
+    async saveNarrativeIdeaContinuityIndexIfUnchanged(index, expectedGeneration) {
+      assert.equal(remoteIndex?.generation, expectedGeneration);
+      remoteIndex = structuredClone(index);
+      remoteWrites++;
+    }
+  };
+  const handler = createNarrativeIdeaContinuityIndexUpsertHandler(receiverStore);
+
+  try {
+    const first = makeIndex(projectId, 1, 100);
+    await outbox.enqueueContinuityIndex({
+      index: first,
+      writerId: "source-device"
+    });
+    const firstDelivery = await deliverNarrativeSyncOutboxBatch(outbox, {
+      projectId,
+      workerId: "outbox-worker",
+      now: 1_000,
+      send: async envelope => handler.apply(envelope)
+    });
+    assert.equal(firstDelivery.delivered, 1);
+    assert.equal(remoteIndex.generation, 1);
+    assert.equal(remoteWrites, 1);
+
+    const deliveredFirst = await outbox.loadEntries(projectId, "delivered");
+    assert.equal(deliveredFirst.length, 1);
+    await handler.apply(deliveredFirst[0].envelope);
+    assert.equal(remoteWrites, 1, "el receptor no vuelve a escribir un snapshot idéntico");
+
+    const second = makeIndex(projectId, 2, 200, "destino oscuro del reino");
+    await outbox.enqueueContinuityIndex({
+      index: second,
+      writerId: "source-device",
+      expectedGeneration: 1
+    });
+    const secondDelivery = await deliverNarrativeSyncOutboxBatch(outbox, {
+      projectId,
+      workerId: "outbox-worker",
+      now: 2_000,
+      send: async envelope => handler.apply(envelope)
+    });
+    assert.equal(secondDelivery.delivered, 1);
+    assert.equal(remoteIndex.generation, 2);
+    assert.equal(remoteWrites, 2);
+    assert.equal((await outbox.loadEntries(projectId, "delivered")).length, 2);
   } finally {
     outbox.close();
   }

@@ -143,7 +143,7 @@ test("no ordena versiones distintas del mismo capítulo al compararlas con otro 
     projectId:"novel",entities,priorActions:[first,revised],
     currentActions:[later],orderedDocumentIds:["chapter-1","chapter-2"]
   });
-  assert.ok(result.every(item=>item.previousActionId!=="a2" && item.previousActionId!=="a1"));
+  assert.deepEqual(result,[]);
 });
 
 test("rechaza IDs repetidos en las referencias contextuales",()=>{
@@ -161,4 +161,28 @@ test("rechaza IDs repetidos en las referencias contextuales",()=>{
     priorActions:[action("a1","atacó","chapter-1")],currentActions:[current],
     decisionContexts:[context,context]
   }));
+});
+
+test("distingue una memoria vinculada temporalmente de un conector explícito",()=>{
+  const current=action("a2","ayudó","chapter-1",40);
+  const [shift]=detectNarrativeBehaviorEvolution({
+    projectId:"novel",entities,
+    priorActions:[action("a1","atacó","chapter-1")],currentActions:[current],
+    memoryActionLinks:[{
+      id:"memory-action:a2:m1",projectId:"novel",characterEntityId:"mara",
+      memoryEventIds:["m1"],actionId:"a2",relation:"temporal-cooccurrence",
+      memoryEvidence:[evidence("chapter-1","Mara recordó la promesa.",0)],
+      actionEvidence:current.evidence,reviewStatus:"candidate"
+    }]
+  });
+  assert.equal(shift.context.interpretation,"memory-link-present");
+  assert.deepEqual(shift.context.memoryActionLinkIds,["memory-action:a2:m1"]);
+});
+
+test("compara el verbo sin sensibilidad a mayúsculas cuando el patrón es idéntico",()=>{
+  assert.deepEqual(detectNarrativeBehaviorEvolution({
+    projectId:"novel",entities,
+    priorActions:[action("a1","ayudó","chapter-1")],
+    currentActions:[action("a2","AYUDÓ","chapter-1",40)]
+  }),[]);
 });

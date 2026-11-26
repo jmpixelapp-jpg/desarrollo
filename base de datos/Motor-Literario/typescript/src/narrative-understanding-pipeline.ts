@@ -7,7 +7,7 @@
  */
 import type { NarrativeEntity } from "./narrative-knowledge";
 import { discoverNarrativeIdeaCandidates } from "./narrative-idea-discovery";
-import { extractNarrativeActionCandidates } from "./narrative-action-extraction";
+import { extractNarrativeActionCandidates, type NarrativeActionCandidate } from "./narrative-action-extraction";
 import { extractNarrativeCharacterIntentCandidates, type NarrativeCharacterIntentCandidate } from "./narrative-character-intent-extraction";
 import { evolveNarrativeCharacterIntents, type NarrativeCharacterIntentEvolution } from "./narrative-character-intent-evolution";
 import { compareNarrativeIntentsWithActions, type NarrativeIntentActionConsistency } from "./narrative-intent-action-consistency";
@@ -38,6 +38,7 @@ import { buildNarrativeMemoryTimeline, type NarrativeCharacterMemoryState } from
 import { linkNarrativeMemoryToActions, type NarrativeMemoryActionLink } from "./narrative-memory-action-links";
 import { linkNarrativeKnowledgeToActions, type NarrativeKnowledgeActionLink } from "./narrative-knowledge-action-links";
 import { buildNarrativeDecisionContexts, type NarrativeDecisionContextCandidate } from "./narrative-decision-context";
+import { detectNarrativeBehaviorEvolution, type NarrativeBehaviorShiftCandidate } from "./narrative-behavior-evolution";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
   assignNarrativeEvidenceToScene,
@@ -94,6 +95,8 @@ export interface NarrativeUnderstandingInput {
   readonly priorKnowledgeEvolution?: readonly NarrativeKnowledgeEvolution[];
   /** Eventos explícitos de memoria anteriores, conservados entre fragmentos. */
   readonly priorMemoryEvents?: readonly NarrativeMemoryEvent[];
+  /** Acciones explícitas anteriores, conservadas con evidencia original. */
+  readonly priorActions?: readonly NarrativeActionCandidate[];
   /** Objetivos y motivaciones previos, conservados con su procedencia. */
   readonly priorCharacterIntents?: readonly NarrativeCharacterIntentCandidate[];
   /** Orden cronológico de documentos conocido por el proyecto; si falta, no se inventa. */
@@ -124,6 +127,8 @@ export interface NarrativeUnderstandingResult {
   readonly knowledgeActionLinks: readonly NarrativeKnowledgeActionLink[];
   /** Contextos triangulados de conocimiento + intención + acción; no causalidad. */
   readonly decisionContexts: readonly NarrativeDecisionContextCandidate[];
+  /** Cambios observables de conducta entre acciones cronológicamente comparables. */
+  readonly behaviorShifts: readonly NarrativeBehaviorShiftCandidate[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   /** Cruces explicables entre relaciones de eventos y contrastes explícitos objetivo-acción. */
@@ -386,6 +391,18 @@ export function understandNarrativeFragment(
     knowledgeActionLinks,
     intentActionConsistency
   });
+  const currentActions = [...actions, ...pronounTargetActions];
+  const behaviorShifts = detectNarrativeBehaviorEvolution({
+    projectId: input.projectId,
+    entities: input.entities,
+    priorActions: input.priorActions,
+    currentActions,
+    orderedDocumentIds: input.orderedDocumentIds,
+    knowledgeActionLinks,
+    decisionContexts,
+    memoryActionLinks,
+    intentEvolution: characterIntentEvolution
+  });
   const eventActionRoles = new Map<string, Array<{
     consequenceCandidateId: string; eventRole: "source" | "consequence"
   }>>();
@@ -434,7 +451,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, behaviorShifts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

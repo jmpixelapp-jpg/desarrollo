@@ -148,7 +148,8 @@ function validate(input: NarrativeCharacterStateDiscoveryInput): void {
     if (!entity || entity.projectId !== input.projectId ||
         typeof entity.id !== "string" || !entity.id.trim() || ids.has(entity.id) ||
         typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
-        !Array.isArray(entity.aliases)) {
+        !Array.isArray(entity.aliases) ||
+        entity.aliases.some(alias => typeof alias !== "string")) {
       throw new Error("La lista de entidades contiene identidades inválidas o ajenas al proyecto.");
     }
     ids.add(entity.id);
@@ -163,6 +164,7 @@ export function discoverNarrativeCharacterStateCandidates(
   const nameOwners = new Map<string, Set<string>>();
   for (const entity of characters) {
     for (const name of new Set([entity.canonicalName, ...entity.aliases])) {
+      if (typeof name !== "string" || !name.trim()) continue;
       const normalized = name.normalize("NFC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
       const owners = nameOwners.get(normalized) ?? new Set<string>();
       owners.add(entity.id);

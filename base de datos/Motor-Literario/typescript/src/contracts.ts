@@ -322,6 +322,10 @@ export interface ProjectStore {
   loadNarrativeDocumentProjectionManifest?(
     projectId: string, documentId: string
   ): Promise<NarrativeDocumentProjectionManifest | undefined>;
+  /** Enumera manifiestos activos y tombstones de un proyecto para reconciliación tras reinicio. */
+  loadNarrativeDocumentProjectionManifests?(
+    projectId: string
+  ): Promise<readonly NarrativeDocumentProjectionManifest[]>;
   saveNarrativeDocumentProjectionManifestIfUnchanged?(
     manifest: NarrativeDocumentProjectionManifest,
     expectedGeneration?: number

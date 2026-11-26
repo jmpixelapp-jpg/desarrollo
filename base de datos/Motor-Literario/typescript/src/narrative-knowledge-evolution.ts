@@ -176,7 +176,7 @@ export function extractNarrativeKnowledgeEvolution(
       if (found.size >= MAX_NARRATIVE_KNOWLEDGE_EVOLUTIONS) break;
       for (const signal of SIGNALS) {
         const expression = new RegExp(
-          String.raw`(?<![\\p{L}\\p{M}\\p{N}_])(${escapeRegExp(name)})(?![\\p{L}\\p{M}\\p{N}_])\\s+${escapeRegExp(signal.verb)}\\s+(?:que\\s+)?(.+?)(?=[.!?;]|$)`,
+          String.raw`(?<![\p{L}\p{M}\p{N}_])(${escapeRegExp(name)})(?![\p{L}\p{M}\p{N}_])\s+${escapeRegExp(signal.verb)}\s+(?:que\s+)?(.+?)(?=[.!?;]|$)`,
           "giu"
         );
         for (const match of line.matchAll(expression)) {

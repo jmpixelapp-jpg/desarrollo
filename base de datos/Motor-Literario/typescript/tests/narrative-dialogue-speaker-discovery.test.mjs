@@ -79,3 +79,10 @@ test("no asigna hablante si la atribución no contiene verbo de habla", () => {
   const [segment] = discover("«Te esperaba», Ana.", [ana]);
   assert.equal(segment.speakerStatus, "unattributed");
 });
+
+test("no atribuye una voz a objetos ni lugares aunque aparezcan en la etiqueta", () => {
+  const sword = { ...ana, id: "object:sword", kind: "object", canonicalName: "Espada Solar" };
+  const [segment] = discover("«¡Alto!», dijo Espada Solar.", [sword]);
+  assert.equal(segment.speakerStatus, "unattributed");
+  assert.deepEqual(segment.speakerCandidates, []);
+});

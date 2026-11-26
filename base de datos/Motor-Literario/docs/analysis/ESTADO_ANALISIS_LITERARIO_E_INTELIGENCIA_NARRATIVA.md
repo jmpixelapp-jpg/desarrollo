@@ -428,3 +428,11 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Añadidas pruebas de idempotencia, IDs duplicados, lista vacía y uso real del camino atómico desde el coordinador.
 - La atomicidad local no elimina la necesidad de deduplicación remota: una interrupción entre aceptación del servidor y commit local puede provocar reenvío seguro.
 - Pruebas incorporadas, pero no ejecutadas/verificadas en CI desde esta sesión.
+
+
+### Tanda — aceptación remota ambigua y recuperación local
+
+- Añadida prueba del coordinador donde el servidor simulado confirma durablemente una operación, pero la respuesta se pierde por desconexión; el reintento conserva exactamente el mismo `operationId`.
+- Añadida prueba con IndexedDB real donde el servidor simulado acepta el lote y falla la transacción local de acuses; la operación permanece en la outbox y se retira correctamente en el ciclo siguiente.
+- Documentado que timeout no equivale a rechazo, que el servidor debe deduplicar durablemente por proyecto y `operationId`, y que la garantía no es una transacción distribuida.
+- Las pruebas están escritas y publicadas; no se ha podido ejecutar el runner ni verificar CI en esta sesión.

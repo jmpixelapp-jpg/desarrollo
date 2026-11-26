@@ -247,7 +247,7 @@ export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_ENTITIES = 10_000;
 export function discoverNarrativeDescriptiveLabelCandidates(
   input: NarrativeDescriptiveLabelCandidateInput
 ): readonly NarrativeDescriptiveLabelCandidate[] {
-  const maxCandidates = input.maxCandidates ?? MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES;
+  const maxCandidates = input?.maxCandidates ?? MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES;
   if (!input || typeof input !== "object" ||
       typeof input.projectId !== "string" || !input.projectId.trim() ||
       typeof input.documentId !== "string" || !input.documentId.trim() ||
@@ -256,7 +256,7 @@ export function discoverNarrativeDescriptiveLabelCandidates(
       !Array.isArray(input.entities) || input.entities.length > MAX_NARRATIVE_DESCRIPTIVE_LABEL_ENTITIES || !Number.isSafeInteger(maxCandidates) ||
       maxCandidates < 1 || maxCandidates > MAX_NARRATIVE_DESCRIPTIVE_LABEL_CANDIDATES ||
       (input.baseOffset !== undefined && (!Number.isSafeInteger(input.baseOffset) ||
-        input.baseOffset < 0 || input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) {
+        input.baseOffset < 0 || input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {
     throw new Error("Contexto inválido para extraer etiquetas descriptivas candidatas.");
   }
   const base = input.baseOffset ?? 0;

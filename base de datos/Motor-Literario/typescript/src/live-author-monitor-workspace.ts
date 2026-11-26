@@ -158,7 +158,7 @@ function metricValue(
     case "typingUnits": return integer.format(snapshot.typingInsertedCharacters);
     case "compositionInserted": return integer.format(snapshot.compositionInsertedCharacters);
     case "compositionDeleted": return integer.format(snapshot.compositionDeletedCharacters);
-    case "unitCoverage": return snapshot.activityUnitMetricsComplete ? "Completa" : "Parcial (desde recuperación)";
+    case "unitCoverage": return snapshot.activityUnitMetricsComplete ? "Completa" : "Parcial (restauración o resincronización)";
     case "typing": return integer.format(snapshot.typingChanges);
     case "composition": return integer.format(snapshot.compositionChanges);
     case "paste": return integer.format(snapshot.pasteChanges);

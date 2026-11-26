@@ -30,7 +30,7 @@ El coordinador no conoce HTTP, credenciales, proveedor cloud ni formato de API. 
 - `conflicts`: el servidor reconoce la operación, pero requiere reconciliación explícita; debe permanecer pendiente.
 - `retryableOperationIds`: no se ha completado el procesamiento y puede reintentarse.
 
-Una respuesta no debe clasificar dos veces el mismo ID ni incluir IDs que no fueron enviados. El servidor debe tratar `operationId` como clave de idempotencia para soportar reenvíos tras timeouts en los que el cliente no pudo conocer el resultado.
+Una respuesta debe clasificar exactamente una vez cada operación enviada: no puede omitir IDs, clasificar dos veces el mismo ID ni incluir IDs que no fueron enviados. El servidor debe tratar `operationId` como clave de idempotencia para soportar reenvíos tras timeouts en los que el cliente no pudo conocer el resultado.
 
 ## Límites deliberados
 
@@ -48,6 +48,6 @@ El anfitrión no debe borrar una operación por timeout, respuesta ambigua o con
 
 ## Pruebas añadidas
 
-`tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, coalescencia concurrente por proyecto, ejecución paralela entre proyectos, persistencia del intento ante fallo de transporte, aislamiento de proyecto y validación del tamaño de lote.
+`tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, respuestas parciales, coalescencia concurrente por proyecto, ejecución paralela entre proyectos, persistencia del intento ante fallo de transporte, aislamiento de proyecto y validación del tamaño de lote.
 
 La existencia de estos tests acredita cobertura escrita, no ejecución satisfactoria. La validación requiere `npm run typecheck` y `npm test` desde `typescript/`.

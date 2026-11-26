@@ -508,3 +508,10 @@ La auditoría MLDB continúa ejecutándose como control independiente. Sus error
 ## 37. Preparar Chromium solo para pruebas de integración
 
 La instalación de Chromium se ejecuta después del bundle runtime y únicamente si ese bundle terminó correctamente. Las pruebas unitarias del núcleo, recuperación diagnóstica y benchmark no dependen del navegador y deben ejecutarse antes, incluso cuando una dependencia compartida rompa la compilación completa. Si el runtime compila, Chromium se instala antes de los tests de editor, host y múltiples pestañas.
+
+
+## 38. Evidencia de validación FIFO y rendimiento (run 45755687906)
+
+La ejecución del 26 de noviembre de 2026 aprobó 37/37 pruebas combinadas del núcleo y diagnósticos, incluidas las tres regresiones de notificación FIFO. El benchmark de memoria procesó 100.000 commits en ocho documentos grandes en 507,42 ms (~197.074 commits/s). Después de GC, el heap observado fue 4,26 MiB tanto a mitad como al final de la carga; las sesiones abiertas retuvieron 0,49 MiB y no quedó ningún ticket pendiente.
+
+Estos datos son una medición de CI en Node.js 22.23.5, no una garantía universal de latencia en todos los navegadores o equipos. La misma ejecución dejó constancia de que la auditoría MLDB y el bundle completo fallaron por cambios compartidos en persistencia, por lo que no se considera validada todavía la integración completa del motor.

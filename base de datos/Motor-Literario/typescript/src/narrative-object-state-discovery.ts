@@ -23,7 +23,12 @@ export type NarrativeObjectTransitionKind =
 export type NarrativeObjectEffectStatus =
   | "candidate"
   | "prospective"
-  | "not-applied";
+  | "not-applied"
+  | "attempted"
+  | "intended"
+  | "hypothetical"
+  | "in-progress"
+  | "unresolved";
 
 export interface NarrativeObjectTransitionCandidate {
   readonly id: string;
@@ -121,6 +126,32 @@ function effectStatus(
 ): NarrativeObjectEffectStatus {
   if (observation.polarity === "negated") return "not-applied";
   if (observation.grammaticalTense === "future") return "prospective";
+
+  // La forma verbal subordinada no demuestra que el cambio se haya ejecutado.
+  const actionOffset = observation.actionEvidence.start - observation.evidence.start;
+  const prefix = observation.evidence.excerpt
+    .slice(0, Math.max(0, actionOffset))
+    .toLocaleLowerCase("es")
+    .trimEnd();
+  if (/(?:no\\s+pudo|no\\s+logr[oó]|no\\s+consigui[oó]|fue\\s+incapaz\\s+de)$/u.test(prefix)) {
+    return "not-applied";
+  }
+  if (/(?:intent[oó]|intentaba|intentaron|intenta|intentan|trat[oó]|trataba|trataron|trata|tratan|procur[oó]|procuraba|quis[oó]|quer[ií]a|quisieron)\\s+(?:de\\s+)?$/u.test(prefix)) {
+    return "attempted";
+  }
+  if (/(?:querr[ií]a|querr[ií]an|podr[ií]a|podr[ií]an|quiz[aá]|tal\\s+vez|acaso|si)$/u.test(prefix)) {
+    return "hypothetical";
+  }
+  if (/(?:quer[ií]a|quer[ií]an|deseaba|deseaban|pensaba|pensaban)\\s+(?:en\\s+)?$/u.test(prefix)) {
+    return "intended";
+  }
+  if (observation.grammaticalTense === "gerund") return "in-progress";
+  if (observation.grammaticalTense === "infinitive" ||
+      observation.grammaticalTense === "unknown") return "unresolved";
+  if (observation.grammaticalTense === "participle" &&
+      !/(?:ha|han|hab[ií]a|hab[ií]an|hubo|hubieron)\\s+$/u.test(prefix)) {
+    return "unresolved";
+  }
   return "candidate";
 }
 

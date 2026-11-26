@@ -82,6 +82,10 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
     if (!event || typeof event.id !== "string" || !event.id.trim() ||
         seenEventIds.has(event.id) || !Array.isArray(event.participantEntityIds) ||
         event.participantEntityIds.some(id => typeof id !== "string" || !id.trim()) ||
+        !Array.isArray(event.characterParticipantEntityIds) ||
+        event.characterParticipantEntityIds.some(id =>
+          typeof id !== "string" || !id.trim() || !event.participantEntityIds.includes(id)
+        ) ||
         !event.evidence || event.projectId !== input.projectId ||
         event.evidence.documentId !== input.documentId ||
         event.evidence.revision !== input.revision ||
@@ -160,8 +164,8 @@ export function extractNarrativeConsequenceCandidates(
     const consequence = events[index];
     if (source.evidence.end > consequence.evidence.start ||
         explicitPairs.has(source.id + "=>" + consequence.id)) continue;
-    const shared = source.participantEntityIds.filter(id =>
-      consequence.participantEntityIds.includes(id)
+    const shared = source.characterParticipantEntityIds.filter(id =>
+      consequence.characterParticipantEntityIds.includes(id)
     );
     if (shared.length === 0) continue;
     const gap = input.text.slice(

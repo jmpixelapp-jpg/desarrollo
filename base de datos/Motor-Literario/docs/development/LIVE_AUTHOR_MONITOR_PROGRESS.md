@@ -1348,3 +1348,12 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Validación en [Live Author Monitor — run 45756516860](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756516860), checkout `29c0b351`:** aprobada para la lane aislada. El build reducido pasó; las regresiones diagnósticas aprobaron 17/17; el conjunto del núcleo, panel, workspace y diagnóstico aprobó 59/59, incluidas las cinco pruebas nuevas de error visible por suscriptor/vista y aislamiento por documento. El benchmark de 100.000 commits en ocho documentos de 1 MiB terminó en 499,17 ms (~200.332 commits/s); heap de 4,26 MiB al 50 % y 100 % de la carga, crecimiento 0 MiB, 0,50 MiB retenidos por las sesiones abiertas y cero tickets pendientes. El benchmark se ejecutó en Node.js 22.23.5 y no conserva texto del manuscrito.
 
 La conclusión global de la lane sigue siendo `failure` por controles compartidos ajenos al monitor: la auditoría MLDB informa desajuste de versión IndexedDB y almacenes de reparación pendientes de mapear; el bundle runtime general todavía falla al analizar `NarrativeReferenceRepairPendingEntry` en `indexeddb-store.ts:2560`. Por esa razón las pruebas que dependen del motor completo/editor/navegador siguen omitidas.
+
+
+## 84. Type-check estricto independiente para el monitor (26 de noviembre de 2026)
+
+**Motivación:** el build aislado de Vite transpila el entrypoint reducido y permite ejecutar pruebas aunque falle el motor general, pero por sí solo no ejecuta el análisis semántico completo de TypeScript. El `tsc --noEmit` global está bloqueado por errores en módulos de persistencia paralelos, por lo que no ofrece una señal aislada de los tipos del monitor.
+
+**Cambio:** se añade `tsconfig.live-author-monitor.json`, que extiende las opciones estrictas del proyecto y limita `include` al entrypoint `live-author-monitor-test-entry.ts`. Sus importaciones transitivas incluyen el núcleo, el panel y el workspace. La lane de Live Author Monitor ejecuta `npx tsc --noEmit --project tsconfig.live-author-monitor.json` antes del build Vite.
+
+**Validación:** pendiente de GitHub Actions.

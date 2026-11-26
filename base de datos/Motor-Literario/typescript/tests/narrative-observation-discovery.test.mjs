@@ -650,3 +650,36 @@ test("marca como hipotético el contenido introducido por si y conserva narraci�
   assert.equal(asserted[0].epistemicFrame, "narrator-asserted");
   assert.equal(asserted[0].epistemicFrameEvidence, undefined);
 });
+
+
+test("atribuye discurso referido al personaje explícito más próximo antes del marcador", () => {
+  const bruno = { ...character, id: "character:bruno", canonicalName: "Bruno" };
+  const text = "Ana dijo que Bruno llegó.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno], text
+  });
+  const reported = found.find(item => item.action === "llegar");
+  assert.ok(reported);
+  assert.equal(reported.epistemicFrame, "reported-speech");
+  assert.equal(reported.epistemicSourceCandidate?.entityId, character.id);
+  assert.equal(reported.epistemicSourceCandidate?.evidence.excerpt, "Ana");
+  const evidence = reported.epistemicSourceCandidate.evidence;
+  assert.equal(text.slice(evidence.start, evidence.end), "Ana");
+});
+
+test("no inventa emisor cuando no hay personaje o la atribución local es ambigua", () => {
+  const bruno = { ...character, id: "character:bruno", canonicalName: "Bruno" };
+  const noSpeaker = discoverNarrativeObservationCandidates({
+    ...context, entities: [bruno], text: "Se dijo que Bruno llegó."
+  }).find(item => item.action === "llegar");
+  assert.equal(noSpeaker?.epistemicFrame, "reported-speech");
+  assert.equal(noSpeaker?.epistemicSourceCandidate, undefined);
+
+  const ambiguousText = "Ana y Bruno dijeron que Clara llegó.";
+  const anaAndBruno = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno,
+      { ...character, id: "character:clara", canonicalName: "Clara" }],
+    text: ambiguousText
+  }).find(item => item.action === "llegar");
+  assert.equal(anaAndBruno?.epistemicSourceCandidate, undefined);
+});

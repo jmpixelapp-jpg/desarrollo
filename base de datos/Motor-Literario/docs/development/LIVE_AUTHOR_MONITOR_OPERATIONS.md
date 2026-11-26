@@ -58,22 +58,26 @@ Cuando el código sea `QuotaExceededError`, el panel identifica la cuota agotada
 
 El panel y cada tarjeta del workspace renderizan estos estados con regiones accesibles `role="status"` y `aria-live="polite"`.
 
-## 3. Clasificación de operaciones
+## 3. Clasificación y procedencia de operaciones
 
-Cada `EditorChange` puede incluir `activityKind`:
+Cada `EditorChange` puede incluir `activityKind` para los contadores agregados y `inputType` para conservar el identificador exacto de la entrada nativa cuando esté disponible.
 
-| Categoría | Fuente preferida | Observación |
+| `InputEvent.inputType` | Categoría | Tratamiento |
 |---|---|---|
-| `typing` | `InputEvent.inputType` o transacción explícita del editor | Si la fuente no puede identificar la operación, no se debe asumir `typing`. |
-| `composition` | `insertCompositionText` o transacción explícita del editor | Cada delta aplicado de candidato se conserva; no equivale a texto final confirmado. |
-| `paste` | `InputEvent.inputType` o callback de pegado | El textarea reconoce variantes `insertFromPaste`. |
-| `deletion` | `InputEvent.inputType` o delta | También se infiere cuando se elimina sin insertar. |
-| `correction` | transacción/reemplazo del editor | Se infiere cuando se reemplaza un rango. |
-| `undo` | transacción real del historial | No inferir solo por Ctrl/Cmd+Z. |
-| `redo` | transacción real del historial | No inferir solo por Ctrl/Cmd+Y/Shift+Z. |
-| `other` | tipo no identificado | Incluye histórico de checkpoints sin clasificación. |
+| `insertText`, `insertLineBreak`, `insertParagraph` | `typing` | Entrada de texto reportada por el navegador; no demuestra por sí sola un teclado físico. |
+| `insertFromPaste`, `insertFromPasteAsQuotation` | `paste` | Pegado identificado por el navegador. |
+| `insertReplacementText` | `correction` | Reemplazo/autocorrección identificado expresamente. |
+| `delete*` | `deletion` | El token exacto distingue backward, forward y otros subtipos. |
+| `insertCompositionText` | `composition` | Delta de candidato IME aplicado, que puede seguir siendo provisional. |
+| `insertFromDrop`, `insertFromYank`, `insertFromDictation` | `other` | No se reclasifica como pegado ni como escritura manual sin evidencia adicional. |
+| Otro `inputType` no vacío | `other` | El identificador nativo se conserva para auditoría. |
+| `inputType` vacío/ausente | Sin categoría | El delta puede ser exacto; la cobertura de procedencia queda parcial. |
 
-Se conservan ocho contadores por categoría (`typingChanges`, `compositionChanges`, `pasteChanges`, `deletionChanges`, `correctionChanges`, `undoChanges`, `redoChanges` y `otherChanges`). Su suma debe coincidir con `acceptedChanges`. Los checkpoints v1 antiguos sin estos campos se recuperan como operaciones históricas `other`; los checkpoints intermedios calculan el residual por diferencia cuando es seguro.
+`inputType` tiene un máximo de 128 caracteres, se rechazan caracteres de control y no lleva el payload `InputEvent.data`. El metadato es efímero en `EditorChange`: no se serializa en snapshots, checkpoints, diagnósticos ni logs del monitor. El texto insertado se usa solo para validar y formar el delta y no se agrega a esta metadata.
+
+La fuente textarea no inventa rangos para `historyUndo` / `historyRedo`; exige el adaptador transaccional del historial real. Este marca `undo` / `redo` desde la clase de transacción aplicada, nunca por detectar Ctrl/Cmd+Z o Ctrl/Cmd+Y.
+
+Se conservan ocho contadores por categoría (`typingChanges`, `compositionChanges`, `pasteChanges`, `deletionChanges`, `correctionChanges`, `undoChanges`, `redoChanges` y `otherChanges`). Su suma debe coincidir con `acceptedChanges`. Una categoría explícita `other` es conocida; un `activityKind` ausente no se debe tratar como evidencia suficiente de `typing` ni como procedencia completa.
 
 ### 3.1 Unidades por procedencia y composición provisional
 
@@ -82,13 +86,13 @@ Los acumulados brutos `insertedCharacters` y `deletedCharacters` siguen contando
 - `typingInsertedCharacters`: unidades UTF-16 de operaciones clasificadas explícitamente como escritura normal.
 - `compositionInsertedCharacters`: suma de las unidades insertadas por todos los deltas IME aplicados, incluidos candidatos provisionales.
 - `compositionDeletedCharacters`: suma de los rangos reemplazados por esos deltas IME.
-- `activityUnitMetricsComplete`: indica si las unidades por procedencia cubren el historial observado. Es `false` tras restaurar un checkpoint histórico sin estas métricas, después de cualquier resincronización con snapshot y cuando se admite un delta sin `activityKind` reconocido explícitamente. El snapshot confirma el texto, pero no reconstruye la clasificación de deltas que pudieron faltar; una operación no clasificada tampoco puede atribuirse honestamente a `typing` o composición.
+- `activityUnitMetricsComplete`: indica si las unidades por procedencia cubren el historial observado. Es `false` tras restaurar un checkpoint histórico sin estas métricas, después de cualquier resincronización con snapshot y cuando se admite un delta sin `activityKind` reconocido explícitamente.
 
 Los campos nuevos son opcionales en checkpoints v1 para conservar compatibilidad. La restauración no reclasifica unidades históricas brutas como `typing` sin evidencia. Los paneles muestran la cobertura como completa o parcial.
 
 `estimatedWordsPerMinute` y `insertedCharactersPerMinute` usan solo `typingInsertedCharacters` en el numerador. Su denominador sigue siendo el tiempo activo total de la sesión, que puede incluir pegados, correcciones o composición IME; son estimaciones sobre tiempo activo total, no una medición pura del tiempo de teclado ni una confirmación de palabras finales.
 
-El monitor no guarda el contenido de las transacciones. Solo recibe las posiciones, longitudes, secuencia, revisión y categoría necesarias para contabilizar. Todos los rangos y longitudes se expresan en unidades UTF-16, no en grafemas lingüísticos.
+El monitor no guarda el contenido de las transacciones. Solo recibe posiciones, longitudes, secuencia, revisión, categoría y el identificador nativo acotado necesarios para contabilizar. Los rangos y longitudes se expresan en unidades UTF-16, no en grafemas lingüísticos.
 
 ## 4. Configuración y retención de datos
 

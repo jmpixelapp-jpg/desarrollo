@@ -179,7 +179,7 @@ test("migra IndexedDB v22 a v27 creando stores narrativos, sync y checkpoints si
       request.onerror = () => reject(request.error);
     });
     try {
-      assert.equal(migratedDatabase.version, 27);
+      assert.equal(migratedDatabase.version, 28);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
       for (const name of ["sync-outbox", "sync-device-sequences", "narrative-reference-repair-audits", "narrative-reference-repair-pending"]) {

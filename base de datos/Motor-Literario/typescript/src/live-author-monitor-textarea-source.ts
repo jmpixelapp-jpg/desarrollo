@@ -339,7 +339,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       baseRevision: this.revision,
       start,
       end,
-      replacement: value.slice(start, start + insertedLength),
+      replacement: insertedText,
       ...(activityKind === undefined ? {} : { activityKind })
     });
 

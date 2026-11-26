@@ -80,6 +80,19 @@ export interface DeliverNarrativeSyncOutboxResult {
   readonly failedGenerations: readonly number[];
 }
 
+export interface NarrativeSyncOutboxAuditResult {
+  readonly projectId: string;
+  readonly intact: boolean;
+  readonly operationCount: number;
+  readonly pendingCount: number;
+  readonly leasedCount: number;
+  readonly deliveredCount: number;
+  readonly writerCount: number;
+  readonly firstGeneration?: number;
+  readonly lastGeneration?: number;
+  readonly issues: readonly string[];
+}
+
 export interface NarrativeSyncOutboxOptions {
   readonly databaseName?: string;
   readonly canonicalizationLimits?: NarrativeSyncCanonicalizationLimits;
@@ -353,6 +366,156 @@ export class IndexedDbNarrativeSyncOutbox {
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudieron leer las entradas del outbox."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura del outbox."));
     });
+  }
+
+  /**
+   * Audita estructura, cursores, secuencias y SHA-256 fuera de las transacciones
+   * IndexedDB. No cambia leases ni corrige automáticamente una cola corrupta.
+   */
+  async auditProject(projectId: string): Promise<NarrativeSyncOutboxAuditResult> {
+    validateIdentifier(projectId, "projectId");
+    const database = await this.open();
+    const snapshot = await new Promise<{
+      readonly entries: readonly NarrativeSyncOutboxEntry[];
+      readonly writerCursors: readonly OutboxWriterCursor[];
+      readonly projectCursor?: OutboxProjectCursor;
+    }>((resolve, reject) => {
+      const transaction = database.transaction(
+        [OPERATIONS, WRITER_CURSORS, PROJECT_CURSORS],
+        "readonly"
+      );
+      const operationsRequest = transaction.objectStore(OPERATIONS)
+        .index("by-project").getAll(projectId);
+      const writerCursorsRequest = transaction.objectStore(WRITER_CURSORS)
+        .index("by-project").getAll(projectId);
+      const projectCursorRequest = transaction.objectStore(PROJECT_CURSORS).get(projectId);
+      let entries: NarrativeSyncOutboxEntry[] | undefined;
+      let writerCursors: OutboxWriterCursor[] | undefined;
+      let projectCursor: OutboxProjectCursor | undefined;
+      operationsRequest.onsuccess = () => {
+        entries = operationsRequest.result as NarrativeSyncOutboxEntry[];
+      };
+      writerCursorsRequest.onsuccess = () => {
+        writerCursors = writerCursorsRequest.result as OutboxWriterCursor[];
+      };
+      projectCursorRequest.onsuccess = () => {
+        projectCursor = projectCursorRequest.result as OutboxProjectCursor | undefined;
+      };
+      operationsRequest.onerror = () => {
+        try { transaction.abort(); } catch { /* abortada */ }
+      };
+      writerCursorsRequest.onerror = () => {
+        try { transaction.abort(); } catch { /* abortada */ }
+      };
+      projectCursorRequest.onerror = () => {
+        try { transaction.abort(); } catch { /* abortada */ }
+      };
+      transaction.oncomplete = () => {
+        if (!entries || !writerCursors) {
+          reject(new Error("La auditoría del outbox terminó sin todas las lecturas."));
+          return;
+        }
+        resolve({
+          entries,
+          writerCursors,
+          ...(projectCursor ? { projectCursor } : {})
+        });
+      };
+      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo auditar el outbox."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la auditoría del outbox."));
+    });
+
+    const issues = new Set<string>();
+    const entries = [...snapshot.entries].sort((a, b) => a.generation - b.generation);
+    const cursorsByWriter = new Map<string, OutboxWriterCursor>();
+    for (const cursor of snapshot.writerCursors) {
+      if (cursorsByWriter.has(cursor.writerId)) issues.add("DUPLICATE_WRITER_CURSOR");
+      cursorsByWriter.set(cursor.writerId, cursor);
+      try {
+        validateOutboxCursor(cursor, projectId, cursor.writerId);
+      } catch {
+        issues.add("INVALID_WRITER_CURSOR");
+      }
+    }
+
+    const operationsByWriter = new Map<string, NarrativeSyncOutboxEntry[]>();
+    const operationIds = new Set<string>();
+    for (const entry of entries) {
+      try {
+        validateStoredEntry(entry);
+      } catch {
+        issues.add("INVALID_OPERATION_ENTRY");
+      }
+      if (operationIds.has(entry.operationId)) issues.add("DUPLICATE_OPERATION_ID");
+      operationIds.add(entry.operationId);
+      const writerEntries = operationsByWriter.get(entry.writerId) ?? [];
+      writerEntries.push(entry);
+      operationsByWriter.set(entry.writerId, writerEntries);
+    }
+
+    for (let index = 1; index < entries.length; index++) {
+      if (entries[index]!.generation !== entries[index - 1]!.generation + 1 ||
+          entries[index]!.envelope.payload?.expectedGeneration !== entries[index - 1]!.generation) {
+        issues.add("PROJECT_GENERATION_GAP");
+      }
+    }
+
+    try {
+      validateOutboxProjectCursor(snapshot.projectCursor, projectId);
+      if (entries.length === 0
+        ? snapshot.projectCursor !== undefined
+        : snapshot.projectCursor?.lastGeneration !== entries[entries.length - 1]!.generation) {
+        issues.add("PROJECT_CURSOR_MISMATCH");
+      }
+    } catch {
+      issues.add("INVALID_PROJECT_CURSOR");
+    }
+
+    for (const [writerId, writerEntries] of operationsByWriter) {
+      writerEntries.sort((a, b) => a.sequence - b.sequence);
+      for (let index = 0; index < writerEntries.length; index++) {
+        if (writerEntries[index]!.sequence !== index + 1) {
+          issues.add("WRITER_SEQUENCE_GAP");
+          break;
+        }
+      }
+      const cursor = cursorsByWriter.get(writerId);
+      const last = writerEntries[writerEntries.length - 1];
+      if (!cursor || cursor.lastSequence !== last?.sequence ||
+          cursor.lastOperationId !== last?.operationId) {
+        issues.add("WRITER_CURSOR_MISMATCH");
+      }
+      cursorsByWriter.delete(writerId);
+    }
+    if (cursorsByWriter.size > 0) issues.add("ORPHAN_WRITER_CURSOR");
+
+    for (const entry of entries) {
+      try {
+        if (!(await this.verifyEnvelope(entry.envelope))) {
+          issues.add("INVALID_ENVELOPE_DIGEST");
+        }
+      } catch {
+        issues.add("INVALID_ENVELOPE_DIGEST");
+      }
+    }
+
+    const pendingCount = entries.filter(entry => entry.status === "pending").length;
+    const leasedCount = entries.filter(entry => entry.status === "leased").length;
+    const deliveredCount = entries.filter(entry => entry.status === "delivered").length;
+    return {
+      projectId,
+      intact: issues.size === 0,
+      operationCount: entries.length,
+      pendingCount,
+      leasedCount,
+      deliveredCount,
+      writerCount: operationsByWriter.size,
+      ...(entries.length ? {
+        firstGeneration: entries[0]!.generation,
+        lastGeneration: entries[entries.length - 1]!.generation
+      } : {}),
+      issues: [...issues].sort((a, b) => a.localeCompare(b))
+    };
   }
 
   /**

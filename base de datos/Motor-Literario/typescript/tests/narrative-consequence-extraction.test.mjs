@@ -133,7 +133,7 @@ test("la sucesión temporal no se eleva a causalidad explícita",()=>{
 });
 
 test("no crea hipótesis temporal a través de un límite entre párrafos",()=>{
-  const text="Mara abrió la puerta.\\n\\nPoco después, Mara escapó.";
+  const text="Mara abrió la puerta.\n\nPoco después, Mara escapó.";
   const a=text.indexOf("Mara"), b=text.indexOf("Poco después");
   const events=[
     event("source-paragraph",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"]),
@@ -150,4 +150,21 @@ test("rechaza participantes mal formados y eventos duplicados",()=>{
   const malformed=event("malformed",a,text.indexOf(".")+1,"Mara abrió la puerta.");
   malformed.participantEntityIds=null;
   assert.throws(()=>extractNarrativeConsequenceCandidates(input(text,[malformed])),/únicos, válidos/);
+});
+
+test("mantiene offsets absolutos al analizar una ventana del documento",()=>{
+  const prefix="Prólogo sin eventos. ";
+  const fragment="Mara abrió la puerta. Poco después, Mara escapó.";
+  const text=prefix+fragment;
+  const baseOffset=prefix.length;
+  const a=baseOffset+fragment.indexOf("Mara");
+  const b=baseOffset+fragment.indexOf("Poco después");
+  const events=[
+    event("window-source",a,baseOffset+fragment.indexOf(".")+1,"Mara abrió la puerta.",["mara"]),
+    event("window-result",b,text.length,text.slice(b),["mara"])
+  ];
+  const [result]=extractNarrativeConsequenceCandidates({...input(fragment,events),text:fragment,baseOffset});
+  assert.equal(result.evidence.start,b);
+  assert.equal(result.evidence.end,b+"Poco después".length);
+  assert.equal(text.slice(result.evidence.start,result.evidence.end), "Poco después");
 });

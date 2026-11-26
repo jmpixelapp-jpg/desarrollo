@@ -64,7 +64,6 @@ function validate(input: NarrativeCharacterStateTransitionDiscoveryInput): void 
   for (const candidate of input.candidates) {
     if (!candidate || candidate.projectId !== input.projectId ||
         typeof candidate.id !== "string" || !candidate.id.trim() ||
-        ids.has(candidate.id) ||
         typeof candidate.entityId !== "string" || !candidate.entityId.trim() ||
         typeof candidate.state !== "string" ||
         typeof candidate.documentId !== "string" || !candidate.documentId.trim() ||
@@ -77,13 +76,21 @@ function validate(input: NarrativeCharacterStateTransitionDiscoveryInput): void 
         candidate.stateEvidence.revision !== candidate.revision) {
       throw new Error("La trayectoria contiene candidatos duplicados, ajenos o sin evidencia válida.");
     }
+    const identity = [candidate.documentId, candidate.revision, candidate.id].join(":");
+    if (ids.has(identity)) {
+      throw new Error("La trayectoria contiene el mismo candidato más de una vez.");
+    }
+    ids.add(identity);
+    if (candidate.stateEvidence.start < candidate.evidence.start ||
+        candidate.stateEvidence.end > candidate.evidence.end) {
+      throw new Error("La evidencia específica del estado queda fuera de su afirmación.");
+    }
     if (candidate.polarity !== "affirmed" && candidate.polarity !== "negated") {
       throw new Error("La polaridad del estado no es válida.");
     }
     if (!["ordinary", "ongoing", "recurrent", "ceased"].includes(candidate.aspect)) {
       throw new Error("El aspecto del estado no es válido.");
     }
-    ids.add(candidate.id);
   }
 }
 

@@ -897,7 +897,9 @@ test("no crea vínculos colgantes si el destino desaparece durante un conflicto 
     assert.deepEqual(persisted.relatedIdeaIds, []);
     assert.deepEqual(persisted.relatedEntityIds, []);
     assert.equal(store.writes, 1);
-    assert.equal(store.ideaReads, targetKind === "idea" ? 4 : 2);
+    // La carga inicial y la recarga posterior al conflicto cubren el CAS;
+    // no se duplica la lectura dentro del mismo intento.
+    assert.equal(store.ideaReads, targetKind === "idea" ? 3 : 2);
     if (targetKind === "entity") assert.equal(store.entityReads, 2);
     api.dispose();
   }
@@ -931,7 +933,9 @@ test("reconcilia escrituras simultáneas desde dos instancias independientes del
     assert.deepEqual(firstResult.relatedIdeaIds, ["idea-target-a"]);
     assert.deepEqual(secondResult.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
     assert.equal(store.writes, 3);
-    assert.equal(store.ideaReads, 3);
+    // Dos lecturas iniciales, una verificación de destino y una recarga
+    // tras el CAS perdido preservan ambos vínculos concurrentes.
+    assert.equal(store.ideaReads, 5);
 
     // La primera instancia conserva una instantánea anterior a la escritura
     // de la segunda. Su siguiente mutación debe detectar CAS, recargar y

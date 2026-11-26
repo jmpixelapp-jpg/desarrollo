@@ -867,3 +867,8 @@ Las pruebas añadidas cubren error de cuota simulado, apertura IndexedDB bloquea
 La carga simulada no equivale a ocho horas físicas ni a una medición real de RAM. Quedan pendientes el agotamiento real de cuota en navegador, suspensión real del sistema operativo y medición física prolongada de memoria. La validación integral de esta entrega está bloqueada por `TS1002` en `src/narrative-history.ts:7`, fuera de este módulo; véase `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
 
 La integración específica con un editor enriquecido de producción también continúa pendiente: el repositorio contiene textarea de referencia y contratos transaccionales genéricos, no el host visual final.
+
+ 
+## 48. Verificación DOM de estadísticas por sesión y capítulo
+
+La suite confirma que las siete categorías aparecen en el panel individual y en la tarjeta de workspace correspondiente. No basta con que los contadores existan en el snapshot del motor: las pruebas montan la interfaz DOM y comprueban los valores renderizados, además de confirmar que no aparece el contenido privado del documento.

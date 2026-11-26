@@ -192,3 +192,7 @@ Cada nueva entrega debe quedar registrada en `LIVE_AUTHOR_MONITOR_PROGRESS.md`, 
 6. integraciones externas que sigan pendientes.
 
 No marcar una tarea como validada cuando el workflow se haya detenido antes de ejecutarla.
+
+### Presentación comprobada de categorías
+
+Las pruebas `live-author-monitor-panel.test.mjs` y `live-author-monitor-workspace.test.mjs` montan el DOM con las siete categorías (seis operaciones y `other`) y verifican que cada valor se muestre como `1` en el capítulo correcto. También verifican que el texto privado no aparezca en la interfaz.

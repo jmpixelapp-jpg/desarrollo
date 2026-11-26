@@ -240,3 +240,43 @@ test("muestra errores de persistencia y lease por capítulo sin datos privados",
   assert.match(lease.textContent, /esta pestaña posee el lease/);
   unmount();
 });
+
+test("presenta las siete categorías de actividad en la tarjeta del capítulo correcto", () => {
+  const f = fixture();
+  let length = "uno".length;
+  const operations = [
+    { activityKind: "typing", start: () => [length, length], replacement: "x" },
+    { activityKind: "paste", start: () => [length, length], replacement: "yy" },
+    { activityKind: "deletion", start: () => [length - 1, length], replacement: "" },
+    { activityKind: "correction", start: () => [0, 1], replacement: "Z" },
+    { activityKind: "undo", start: () => [0, 1], replacement: "" },
+    { activityKind: "redo", start: () => [0, 0], replacement: "Z" },
+    { activityKind: "other", start: () => [length, length], replacement: "!" }
+  ];
+  operations.forEach((operation, index) => {
+    const [start, end] = operation.start();
+    const ticketId = "workspace-activity-" + index;
+    f.monitor.recordAdmission({
+      documentId: "chapter-1",
+      sequence: index + 1,
+      baseRevision: index,
+      start,
+      end,
+      replacement: operation.replacement,
+      activityKind: operation.activityKind
+    }, { status: "queued", ticketId });
+    f.monitor.recordCommit({ ticketId, status: "applied", revision: index + 1 });
+    length += operation.replacement.length - (end - start);
+  });
+
+  const unmount = mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    schedule: () => () => {}
+  });
+  const root = f.container.children[0];
+  const chapter = cardFor(root, "chapter-1");
+  for (const key of ["typing", "paste", "deletion", "correction", "undo", "redo", "other"]) {
+    assert.equal(metric(chapter, key).textContent, "1", "la tarjeta del capítulo debe presentar " + key);
+  }
+  assert.equal(root.textContent.includes("texto privado"), false);
+  unmount();
+});

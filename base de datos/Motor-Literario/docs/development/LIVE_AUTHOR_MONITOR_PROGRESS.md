@@ -734,3 +734,12 @@ El archivo que bloquea la compilación pertenece al área de historial narrativo
 - Aún pendiente de integración: conectar el callback transaccional, historial y selección del editor enriquecido real de producción, que no se encuentra en este repositorio.
 
 **Documentación:** se añade `LIVE_AUTHOR_MONITOR_OPERATIONS.md` como guía operativa consolidada; el contrato v0.1 y la guía de adaptadores incorporan las nuevas garantías, parámetros y límites.
+
+## 38. Nueva entrega — verificación visual de métricas clasificadas (25 de noviembre de 2026)
+
+Se añaden dos regresiones de presentación DOM:
+
+- El panel individual del capítulo debe mostrar los contadores de escritura, pegado, borrado, corrección, deshacer, rehacer y otras operaciones.
+- El workspace debe mostrar esos mismos siete valores en la tarjeta del documento correcto, sin trasladarlos a otro capítulo ni exponer el texto privado.
+
+Las pruebas crean operaciones válidas, admiten y confirman cada cambio, montan el panel después de generar las métricas y verifican los siete valores visibles. La validación CI queda pendiente de la ejecución del nuevo commit.

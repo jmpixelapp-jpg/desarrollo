@@ -202,3 +202,43 @@ test("presenta el estado del checkpoint y del lease sin revelar mensajes interno
   assert.equal(panel.textContent.includes("contenido privado"), false);
   unmount();
 });
+
+test("presenta las siete categorías de actividad en el panel de capítulo", () => {
+  const f = fixture();
+  let length = "contenido privado".length;
+  const operations = [
+    { activityKind: "typing", start: () => [length, length], replacement: "x" },
+    { activityKind: "paste", start: () => [length, length], replacement: "yy" },
+    { activityKind: "deletion", start: () => [length - 1, length], replacement: "" },
+    { activityKind: "correction", start: () => [0, 1], replacement: "Z" },
+    { activityKind: "undo", start: () => [0, 1], replacement: "" },
+    { activityKind: "redo", start: () => [0, 0], replacement: "Z" },
+    { activityKind: "other", start: () => [length, length], replacement: "!" }
+  ];
+  operations.forEach((operation, index) => {
+    const [start, end] = operation.start();
+    const ticketId = "panel-activity-" + index;
+    f.monitor.recordAdmission({
+      documentId: "chapter-1",
+      sequence: index + 1,
+      baseRevision: index,
+      start,
+      end,
+      replacement: operation.replacement,
+      activityKind: operation.activityKind
+    }, { status: "queued", ticketId });
+    f.monitor.recordCommit({ ticketId, status: "applied", revision: index + 1 });
+    length += operation.replacement.length - (end - start);
+  });
+
+  const unmount = mountLiveAuthorMonitorPanel(f.container, f.api, {
+    documentId: "chapter-1",
+    schedule: () => () => {}
+  });
+  const panel = f.container.children[0];
+  for (const key of ["typing", "paste", "deletion", "correction", "undo", "redo", "other"]) {
+    assert.equal(metric(panel, key).textContent, "1", "el panel debe presentar el contador " + key);
+  }
+  assert.equal(panel.textContent.includes("contenido privado"), false);
+  unmount();
+});

@@ -595,7 +595,7 @@ export interface NarrativeReferenceRepairResult {
 /**
  * Aplica una propuesta explícitamente aprobada. Vuelve a comprobar la relación
  * de fusión y lee el registro inmediatamente antes de escribir mediante CAS.
- * El evento de auditoría se devuelve al llamador para su persistencia durable.
+ * La función interna devuelve el evento; la API pública lo persiste durablemente antes de confirmar.
  */
 async function applyNarrativeReferenceRepairWithoutAudit(
   store: ProjectStore,

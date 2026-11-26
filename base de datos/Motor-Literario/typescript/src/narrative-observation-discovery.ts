@@ -23,6 +23,12 @@ export interface NarrativeObservationCandidate {
   readonly grammaticalTense: "past-preterite" | "past-imperfect" | "present" | "infinitive" | "gerund" | "participle" | "unknown";
   /** Único personaje mencionado, si lo hay; nunca equivale a sujeto o agente confirmado. */
   readonly singleMentionedCharacterId?: string;
+  /** Sujeto gramatical candidato solo ante un patrón local inequívoco; no implica agente semántico. */
+  readonly grammaticalSubjectCandidate?: {
+    readonly entityId: string;
+    readonly voice: "active" | "passive";
+    readonly evidence: TextEvidence;
+  };
   /** Referencia pronominal pendiente: nunca fusiona automáticamente el pronombre con una identidad. */
   readonly unresolvedReferences?: readonly {
     readonly pronoun: string;
@@ -240,6 +246,36 @@ export function discoverNarrativeObservationCandidates(
         const localStart = baseOffset + segment.start + match.index;
         const start = baseOffset + segment.start;
         const end = baseOffset + segment.end;
+        const subjectCandidate = mentionedCharacters.length === 1
+          ? (() => {
+              const entity = mentionedCharacters[0]!;
+              const names = [entity.canonicalName, ...entity.aliases]
+                .filter(name => name.trim().length > 0)
+                .sort((a, b) => b.length - a.length);
+              for (const name of names) {
+                if (!sentence.toLocaleLowerCase("es").startsWith(name.toLocaleLowerCase("es"))) continue;
+                const afterName = sentence.slice(name.length, match.index);
+                const activePattern = /^\s*(?:(?:no|nunca|jamás)\s+)?$/iu;
+                const passivePattern = /^\s+(?:(?:no|nunca|jamás)\s+)?(?:fue|fueron|era|eran|es|son|será|serán|ha sido|han sido|había sido|habían sido)\s+$/iu;
+                const voice = activePattern.test(afterName) ? "active" as const
+                  : passivePattern.test(afterName) && classifyGrammaticalTense(surface) === "participle"
+                    ? "passive" as const : undefined;
+                if (!voice) continue;
+                return {
+                  entityId: entity.id,
+                  voice,
+                  evidence: {
+                    documentId: input.documentId,
+                    revision: input.revision,
+                    start: baseOffset + segment.start,
+                    end: baseOffset + segment.start + name.length,
+                    excerpt: sentence.slice(0, name.length)
+                  }
+                };
+              }
+              return undefined;
+            })()
+          : undefined;
         const before = sentence.slice(0, match.index).match(/(?:\bno|\bnunca|\bjamás)\s*$/iu);
         const id = `observation:${input.documentId}:${localStart}:${signal.action}`;
         results.set(id, {
@@ -251,6 +287,7 @@ export function discoverNarrativeObservationCandidates(
           action: signal.action,
           surface,
           grammaticalTense: classifyGrammaticalTense(surface),
+          ...(subjectCandidate ? { grammaticalSubjectCandidate: subjectCandidate } : {}),
           ...(mentionedCharacters.length === 1
             ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),

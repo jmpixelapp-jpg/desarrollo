@@ -11,7 +11,7 @@ export type NarrativeLocationPresenceTense =
   | "present" | "past" | "future" | "conditional" | "unknown";
 
 export type NarrativeLocationPresenceStatus =
-  | "candidate" | "prospective" | "not-applied" | "hypothetical";
+  | "candidate" | "prospective" | "not-applied" | "hypothetical" | "unresolved";
 
 export interface NarrativeLocationPresenceCandidate {
   readonly id: string;
@@ -219,6 +219,7 @@ export function discoverNarrativeLocationPresenceCandidates(
         ? "not-applied"
         : tense === "future" ? "prospective"
         : tense === "conditional" ? "hypothetical"
+        : tense === "unknown" ? "unresolved"
         : "candidate";
       const id = "location-presence:" + input.documentId + ":" +
         input.revision + ":" + (input.baseOffset ?? 0) + ":" +

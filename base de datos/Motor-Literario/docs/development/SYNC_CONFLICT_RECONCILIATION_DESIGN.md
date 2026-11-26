@@ -60,3 +60,24 @@ La regresión en `tests/indexeddb-sync-outbox.test.mjs` inserta una operación n
 - Ejecutar `npm run typecheck` y `npm test` en el paquete TypeScript y verificar CI.
 
 **No se debe presentar la reconciliación como implementada hasta completar esos puntos.**
+
+
+## 7. Hallazgo de implementación: secuencia asignada fuera de la bandeja
+
+La inspección del almacenamiento actual confirma que `enqueueSyncOperation` **no asigna** secuencias: recibe una `StoredSyncOperation` ya numerada y la inserta. La bandeja valida la secuencia y el índice único `by-project-device-sequence` impide que dos operaciones del mismo proyecto/dispositivo ocupen el mismo número. No se encontró en el contrato público actual un asignador durable de secuencias por dispositivo.
+
+Por ello, la unicidad del índice es una defensa de integridad, no una autoridad para generar el siguiente número. Un llamador no debe calcular `max(sequence) + 1` desde una lectura previa y asumir que es seguro entre pestañas: dos contextos pueden observar el mismo máximo. Antes de habilitar sustituciones automáticas se necesita un asignador transaccional compartido, con contador durable por `(projectId, deviceId)`, que reserve el siguiente número en la misma transacción que inserta la operación (o un mecanismo equivalente con exclusión/fencing verificable).
+
+La nueva regresión crea dos instancias de `IndexedDbProjectStore` y trata de insertar concurrentemente dos operaciones distintas con la misma secuencia para el mismo dispositivo. Comprueba que el índice único deja persistir exactamente una. Esta prueba valida el rechazo de colisión; no implementa ni demuestra asignación automática, y no determina cuál pestaña debe ganar.
+
+## 8. Siguiente decisión de arquitectura
+
+No añadir un contador aislado ni inferir el siguiente número en la interfaz. Diseñar conjuntamente:
+- almacén durable de contadores por proyecto/dispositivo;
+- asignación e inserción atómicas, con rollback completo si la inserción falla;
+- idempotencia de solicitudes de asignación ante reintentos;
+- recuperación ante huecos de secuencia (permitidos o prohibidos, decisión explícita);
+- pruebas concurrentes con dos conexiones y cierre/reapertura;
+- migración compatible con IndexedDB v25 y datos existentes.
+
+Hasta entonces, la reconciliación debe recibir una secuencia reservada por una autoridad externa confiable o permanecer deshabilitada.

@@ -166,3 +166,12 @@ La outbox recibe operaciones con `sequence` ya asignada; `enqueueSyncOperation` 
 Los nuevos escritores pueden usar `ProjectStore.enqueueNextSyncOperation(draft)` / `IndexedDbProjectStore.enqueueNextSyncOperation(draft)`: el borrador omite `sequence` y el almacén devuelve la operación persistida con secuencia asignada. La comprobación idempotente del `operationId`, lectura de la última secuencia del dispositivo e inserción ocurren en una sola transacción `readwrite` sobre `SYNC_OUTBOX`. Dos conexiones IndexedDB competidoras del mismo origen quedan serializadas por el almacén y reciben secuencias consecutivas distintas. Repetir la misma identidad devuelve la secuencia ya asignada; reutilizar el ID con contenido distinto se rechaza.
 
 El método no requiere migración: utiliza el índice único existente y considera también operaciones legacy con secuencia explícita. El método antiguo `enqueueSyncOperation` se mantiene por compatibilidad, pero los nuevos escritores deben preferir el asignador. La garantía se limita a una base IndexedDB compartida en un mismo origen; no coordina dispositivos físicos independientes ni reemplaza la autoridad de secuencia del servidor para orden global.
+
+
+### Productor explícito desde la API anfitriona
+
+Se añade `HostEngineApi.enqueueNarrativeSyncOperation(input)`. El método obtiene `projectId` del proyecto inicializado, recibe del anfitrión un `operationId` estable, un `deviceId` estable por instalación, el tipo de operación y un payload JSON, y delega la secuencia a `ProjectStore.enqueueNextSyncOperation`. Rechaza si el almacén no ofrece el asignador atómico; no cae en una secuencia calculada por el cliente.
+
+El método es deliberadamente explícito: el anfitrión lo invoca después de confirmar el cambio local que desea sincronizar. Todavía no existe una transacción conjunta entre el journal de cambios del documento y `SYNC_OUTBOX`; por tanto, no se debe describir este paso como una captura automática ni como atomicidad entre contenido y outbox. El anfitrión debe poder reconstruir la operación desde su journal durable si falla entre el commit local y el encolado. El `operationId` debe ser reproducible/estable en esa recuperación para que el encolado sea idempotente.
+
+Pruebas añadidas: la API usa el proyecto activo, recibe secuencia 1, devuelve la misma secuencia al repetir el ID y deja un único registro; un almacén sin asignador atómico produce error en lugar de fallback inseguro.

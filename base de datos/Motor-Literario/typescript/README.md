@@ -1,5 +1,11 @@
 # Motor Literario — núcleo TypeScript inicial
 
+## Arquitectura de persistencia y sincronización
+
+La guía [Persistencia narrativa, biblioteca de ideas y sincronización](../docs/architecture/PERSISTENCIA_NARRATIVA_BIBLIOTECA_Y_SINCRONIZACION.md) documenta el modelo de datos, el aislamiento por proyecto, IndexedDB, las garantías de recuperación, el contrato propuesto de outbox, el protocolo remoto, los conflictos y los criterios de aceptación. Distingue el estado real del código de las capacidades que aún requieren implementación.
+
+
+
 Esta carpeta contiene la implementación definitiva en TypeScript. El código Rust anterior queda como referencia histórica y no forma parte del runtime del producto.
 
 **Integración con el programa anfitrión:** consulte la [Guía de integración TypeScript](../docs/integration/GUIA_INTEGRACION_ANFITRION_V1.md), que define el contrato público y los pasos de conexión.

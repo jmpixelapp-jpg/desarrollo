@@ -87,23 +87,6 @@ function validate(input: NarrativeCharacterStateTransitionDiscoveryInput): void 
   }
 }
 
-function transitionEvidence(
-  previous: NarrativeCharacterStateCandidate | undefined,
-  current: NarrativeCharacterStateCandidate
-): TextEvidence {
-  if (!previous) return current.evidence;
-  const start = Math.min(previous.evidence.start, current.evidence.start);
-  const end = Math.max(previous.evidence.end, current.evidence.end);
-  // Los dos fragmentos pueden estar separados por texto intermedio. La evidencia
-  // compuesta conserva ambos extractos sin fingir que el hueco fue citado.
-  return {
-    documentId: current.documentId,
-    revision: current.revision,
-    start,
-    end,
-    excerpt: previous.evidence.excerpt + " … " + current.evidence.excerpt
-  };
-}
 
 export function discoverNarrativeCharacterStateTransitions(
   input: NarrativeCharacterStateTransitionDiscoveryInput
@@ -143,7 +126,7 @@ export function discoverNarrativeCharacterStateTransitions(
     }
 
     if (transition) {
-      const evidence = transitionEvidence(previous, current);
+      const evidence = current.evidence;
       results.push({
         id: "character-state-transition:" + current.documentId + ":" +
           current.revision + ":" + current.id + ":" + transition,

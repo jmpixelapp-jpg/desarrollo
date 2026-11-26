@@ -868,3 +868,11 @@ No confundir:
 - input sin beforeinput: se mantiene missing-beforeinput.
 
 La regresión unitaria y el test Chromium de teclado automatizado cubren el primer caso. Chromium verifica además defaultPrevented=true, ausencia de input y que blur posterior no marque needsResync. La prueba no sustituye la matriz de teclado físico/IME ni una validación física de Page Lifecycle.
+
+## 28. Blur reentrante mientras beforeinput sigue propagándose
+
+Un listener del editor puede cancelar beforeinput y desenfocar el textarea sincrónicamente dentro de la misma propagación. Para operaciones de texto normales, el adaptador no decide missing-input dentro de handleBlur: captura la identidad de la pareja pendiente y difiere la decisión una microtarea. La comprobación defaultPrevented, encolada por handleBeforeInput, se ejecuta antes y puede liberar una operación cancelada; si la misma pareja sigue pendiente, el blur se considera una interrupción real y exige snapshot.
+
+La excepción es una composición activa: perder el foco cierra de inmediato esa continuidad y exige resync-required, aunque exista un beforeinput provisional. Una composición abierta no se conserva como válida tras blur.
+
+La prueba Chromium genera un beforeinput confiable por teclado automatizado; un listener posterior llama a preventDefault() y blur() antes de finalizar la propagación. Comprueba que se observa un solo blur, no aparece input, pendingInput queda vacío y no hay falso missing-input. La prueba unitaria separada confirma que un beforeinput no cancelado que pierde el foco sí produce missing-input.

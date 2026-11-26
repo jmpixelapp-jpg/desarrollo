@@ -94,7 +94,7 @@ function validate(input:NarrativeCharacterKnowledgeDiscoveryInput):void {
 function findNames(sentence:string,absoluteStart:number,entities:readonly NarrativeEntity[]):NameMatch[] {
  const out:NameMatch[]=[];
  for(const entity of entities) if(entity.kind==="character") for(const name of new Set([entity.canonicalName,...entity.aliases])) {
-  const re=new RegExp("(?<![\\\\p{L}\\\\p{M}\\\\p{N}_])"+escapeRegExp(name)+"(?![\\\\p{L}\\\\p{M}\\\\p{N}_])","giu");
+  const re=new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])"+escapeRegExp(name)+"(?![\\p{L}\\p{M}\\p{N}_])","giu");
   for(const m of sentence.matchAll(re)) out.push({entityId:entity.id,start:absoluteStart+m.index!,end:absoluteStart+m.index!+m[0].length});
  }
  return out.sort((a,b)=>a.start-b.start||b.end-a.end);

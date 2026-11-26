@@ -662,3 +662,44 @@ test("dos instancias IndexedDB no pueden asignar la misma secuencia al mismo dis
     await deleteDatabase();
   }
 });
+
+
+test("asigna secuencias consecutivas de forma atómica entre dos instancias IndexedDB", async () => {
+  await deleteDatabase();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  try {
+    await firstStore.enqueueSyncOperation(operation({
+      operationId: "legacy-sequence-4", deviceId: "shared-device", sequence: 4
+    }));
+    const draft = (operationId, text) => ({
+      operationId,
+      projectId: "sync-outbox-project",
+      deviceId: "shared-device",
+      kind: "narrative-idea-upsert",
+      payload: JSON.stringify({ text }),
+      createdAt: 500,
+      attemptCount: 0
+    });
+    const [a, b] = await Promise.all([
+      firstStore.enqueueNextSyncOperation(draft("allocated-a", "A")),
+      secondStore.enqueueNextSyncOperation(draft("allocated-b", "B"))
+    ]);
+    assert.deepEqual([a.sequence, b.sequence].sort((x, y) => x - y), [5, 6]);
+
+    const replay = await firstStore.enqueueNextSyncOperation(draft("allocated-a", "A"));
+    assert.equal(replay.sequence, a.sequence);
+    await assert.rejects(
+      secondStore.enqueueNextSyncOperation(draft("allocated-a", "payload diferente")),
+      /Colisión de idempotencia/
+    );
+    const pending = await firstStore.loadPendingSyncOperations("sync-outbox-project");
+    assert.deepEqual(
+      pending.filter(item => item.deviceId === "shared-device").map(item => item.sequence),
+      [4, 5, 6]
+    );
+  } finally {
+    await Promise.all([firstStore.close(), secondStore.close()]);
+    await deleteDatabase();
+  }
+});

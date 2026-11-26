@@ -65,3 +65,22 @@ Commits:
 - Prueba: `ed2482015f1e558b5d1c2ed78e4202f755e01f36`
 
 **Validación pendiente:** ejecutar el build aislado del monitor, suite específica y prueba de integración Chromium sobre este HEAD. La prueba unitaria nueva cubre el orden de eventos; no equivale a una prueba con IME real del sistema operativo.
+
+
+## Verificación exacta del contexto fuera del rango editado
+
+Se detectó que comparar solo longitudes permite aceptar una mutación programática concurrente de igual tamaño en una zona ajena a la selección anunciada por `beforeinput`. Por ejemplo, con `abcde`, una edición iniciada en el offset 2 no debe atribuirse como escritura válida si el valor final es `aZcde`: cambió el prefijo, aunque la longitud siga siendo cinco.
+
+El adaptador ahora mantiene `previousText` únicamente en memoria mientras está montado y verifica, antes de publicar:
+- que el prefijo anterior a `start` permanezca idéntico;
+- que el sufijo posterior a `end` permanezca idéntico y alineado después del reemplazo;
+- que las operaciones `delete*` no introduzcan texto de reemplazo;
+- que el snapshot efímero, la longitud capturada y el estado previo coincidan.
+
+Ante una diferencia fuera del rango, no emite el delta, informa `inconsistent-length` y exige resincronización. El snapshot se actualiza solo después de validar una edición y se reemplaza por el texto del snapshot autoritativo al resincronizar. No se persiste en IndexedDB ni se envía como diagnóstico.
+
+Regresiones añadidas:
+- mutación externa de igual longitud fuera del rango anunciado: debe rechazarse;
+- inserción legítima entre caracteres repetidos: debe aceptarse.
+
+**Límite conocido:** esta comprobación detecta cambios fuera del rango declarado, pero no puede demostrar la intención humana ni diferenciar una modificación programática que ocurra exactamente dentro del rango seleccionado. Para esa garantía, el anfitrión debe controlar las mutaciones del editor y proporcionar transacciones/origen de operación verificables.

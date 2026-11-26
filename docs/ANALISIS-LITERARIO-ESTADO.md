@@ -191,3 +191,37 @@ El commit incorpora además compatibilidad de lectura para catálogos de ideas e
 Son mediciones del runner de GitHub Actions de esa ejecución, no garantías universales de rendimiento.
 
 **Estado verificado de esta entrega:** el HEAD indicado supera el workflow configurado completo. Esto acredita el conjunto de pruebas, compilación, validación de esquemas y benchmark del paquete; no equivale a una garantía de ausencia de defectos ni a una auditoría editorial humana de resultados narrativos. Las suites IndexedDB usan `fake-indexeddb` en Node y no sustituyen pruebas en todos los navegadores y dispositivos de producción.
+
+### Auditoría de alcance funcional y criterios de aceptación
+
+Esta sección delimita qué significa que el núcleo de análisis literario e inteligencia narrativa esté implementado y qué no debe prometerse a partir de las pruebas automatizadas.
+
+#### Capacidades verificadas en el código TypeScript
+
+- **Análisis de fragmento no destructivo:** `analyzeLiteraryFragment` recibe texto, proyecto, documento, revisión y offset base; calcula métricas y señales descriptivas sin mutar el manuscrito ni persistir por sí mismo. Las ocurrencias devuelven rangos UTF-16 absolutos.
+- **Estructura y ritmo:** segmentación de oraciones y párrafos, diálogo, marcadores explícitos de capítulo/parte/acto/escena, cadencia y transiciones de ritmo, con muestras acotadas y contadores globales.
+- **Señales léxicas y retóricas:** repeticiones, frases recurrentes, aperturas, anáforas candidatas, ecos entre escenas, modalidades sensoriales y señales de voz. Son indicadores heurísticos y no dictámenes estéticos.
+- **Conocimiento narrativo con evidencia:** extracción conservadora de entidades, relaciones, acontecimientos, ideas y afirmaciones explícitas; normalización de nombres; fusión de evidencia sin duplicar ocurrencias; candidatos de identidad que no fusionan automáticamente personajes; y detección de contradicciones explícitas sin decidir cuál versión es verdadera.
+- **Cronología y evolución:** referencias temporales explícitas, pistas de línea temporal, perfiles de cambios de acontecimientos, historial de estados de ideas y separación entre evidencia vigente y obsoleta.
+- **Grafo global de ideas:** vínculos declarados, ciclos, convergencia, alcanzabilidad, conectividad y muestras deterministas; los límites de entrada y de exposición se informan y no deben confundirse con el tamaño real del catálogo.
+- **Sincronización y persistencia desde la API anfitriona:** aislamiento por proyecto, validación de registros y referencias, colas de operaciones, recuperación de cachés, concurrencia optimista/CAS, reconciliación de snapshots obsoletos, persistencia transaccional y recuperación probada por las suites del paquete.
+
+#### Límites explícitos del producto
+
+1. El análisis es **determinista y basado en reglas/lexicones**. No es un modelo generativo, no comprende de forma general la intención del autor y no sustituye interpretación humana, lectura crítica ni edición profesional.
+2. Una mención textual no confirma automáticamente una entidad, relación, acontecimiento o hecho canónico. Las identidades ambiguas y las contradicciones requieren decisión editorial; el motor expone evidencia y candidatos.
+3. Los offsets públicos de análisis son unidades UTF-16. No son bytes UTF-8, grafemas visuales ni coordenadas de pantalla. Los adaptadores deben convertirlos explícitamente cuando su almacenamiento use otra unidad.
+4. El fragmento admite hasta 2.000.000 unidades UTF-16; el catálogo global de ideas admite hasta 20.000 entradas en el analizador; la detección estructural expone como máximo 2.000 marcadores/escenas según el flujo correspondiente. Otros catálogos y muestras tienen presupuestos propios documentados en sus tipos y validadores.
+5. Las pruebas de IndexedDB ejecutadas en Node usan `fake-indexeddb`. Acreditan contratos del adaptador en el entorno simulado, pero no certifican todos los motores de navegador, cierres abruptos del sistema operativo, cuotas, migraciones de perfiles reales ni sincronización entre dispositivos.
+6. Los benchmarks son mediciones puntuales de GitHub Actions; deben repetirse en hardware y navegadores objetivo antes de fijar SLA o prometer rendimiento de producción.
+
+#### Lista de aceptación antes de desplegar con manuscritos reales
+
+- [ ] Ejecutar el flujo completo en cada navegador y versión que se vaya a soportar, usando IndexedDB nativo y perfiles nuevos y migrados.
+- [ ] Probar recuperación tras cierre forzado del navegador/proceso durante escritura, reinicio y reanudación, no solo fallos simulados de adaptador.
+- [ ] Validar conversión de offsets entre UTF-16, UTF-8 y el editor anfitrión con emojis, marcas combinantes, CRLF y ediciones en límites de rango.
+- [ ] Evaluar precisión y falsos positivos de extractores con corpus editoriales representativos por idioma, género y estilo; ajustar lexicones sin convertir heurísticas en afirmaciones canónicas.
+- [ ] Hacer revisión editorial humana de escenas, cronologías, contradicciones y grafos generados en proyectos de prueba con casos conocidos.
+- [ ] Medir memoria, latencia y tamaño de almacenamiento con proyectos reales anonimizados y fijar presupuestos operativos.
+
+**Criterio de cierre de ingeniería:** el paquete TypeScript supera su workflow integral en el HEAD documentado (718/718, sin omisiones, build, typecheck, esquemas y benchmark). Los puntos de la lista anterior son aceptación de despliegue e integración en entornos reales; no se declaran satisfechos por el CI actual ni bloquean afirmar que el núcleo de software y sus contratos automatizados están implementados.

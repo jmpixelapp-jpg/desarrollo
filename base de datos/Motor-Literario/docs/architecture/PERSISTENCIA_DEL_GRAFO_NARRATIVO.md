@@ -77,3 +77,20 @@ El replay también vuelve a verificar el SHA-256 de cada entrada recuperada inme
 ### Exclusión de consumidores concurrentes en el mismo runtime
 
 `replayPendingNarrativeSyncOperations` serializa llamadas simultáneas por proyecto dentro del mismo runtime JavaScript. Una segunda llamada concurrente devuelve `failure: "consumer-already-running"` sin ejecutar callbacks. El callback recibe la envoltura validada sin los metadatos locales del diario. Esta protección no coordina pestañas, workers ni dispositivos distintos; el anfitrión debe mantener un único consumidor por proyecto o aportar coordinación distribuida/lease con fencing antes de habilitar múltiples consumidores.
+
+## Despacho explícito de operaciones de sincronización
+
+El módulo `narrative-sync-dispatcher.ts` permite conectar el diario con handlers
+de dominio sin convertir cualquier `kind` recibido en una mutación implícita.
+Cada handler registra un `kind`, un validador de payload y una función de
+aplicación. El dispatcher rechaza kinds desconocidos, validadores que fallan,
+payloads inválidos y registros duplicados; opcionalmente notifica el rechazo
+sin registrar el contenido del payload.
+
+El dispatcher no autentica escritores, no valida permisos y no persiste cambios.
+La verificación SHA-256 sigue siendo responsabilidad del diario antes del
+despacho. Los handlers deben ser idempotentes por `operationId`, porque la
+confirmación del diario ocurre después de aplicar el efecto y existe una ventana
+de reentrega si el proceso termina entre ambas acciones. La integración concreta
+de cada tipo de operación con las proyecciones del grafo sigue siendo una fase
+posterior; no se declara sincronización automática del grafo.

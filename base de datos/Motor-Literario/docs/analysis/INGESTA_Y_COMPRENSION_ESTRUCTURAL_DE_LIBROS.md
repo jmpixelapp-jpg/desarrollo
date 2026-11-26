@@ -49,6 +49,8 @@ Las observaciones de acción ligadas a personajes distinguen ahora el futuro gra
 
 El descubrimiento de vínculos entre acciones valida también la forma de cada observación de entrada: exige evidencia de acción con offsets enteros, fragmento literal coincidente, documento y revisión correctos, e IDs únicos. Las entradas malformadas se rechazan con un error de validación controlado en vez de provocar una excepción interna por acceso a propiedades ausentes.
 
+La detección de futuro en observaciones de personajes se generalizó al inventario léxico de acciones: genera formas regulares a partir del infinitivo y contempla los futuros irregulares frecuentes de «decir» y «salir». Las expresiones mantienen límites Unicode de palabra para no aceptar coincidencias como prefijos. El resultado sigue siendo una clasificación morfológica candidata, no una fecha ni una afirmación de que el hecho ocurra.
+
 ## Garantías y límites
 
 1. La ingesta no modifica el manuscrito.

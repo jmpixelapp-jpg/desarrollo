@@ -51,3 +51,17 @@ La extracción es deliberadamente conservadora y basada en patrones explícitos.
 5. Pruebas de precisión/recuperación con corpus anotados y casos negativos, sin presentar métricas no medidas.
 
 **Validación:** la modificación del identificador y su regresión se han registrado en `main`; la suite completa y CI deben confirmarse por separado antes de declarar el cambio validado.
+
+## Validación de perfiles descriptivos (26-11-2026)
+
+La entrada de perfiles se valida antes de iniciar la búsqueda:
+- Solo se admiten perfiles asociados a entidades de tipo `character` del proyecto.
+- Máximo de 2.000 perfiles, 100 etiquetas por perfil y 120 unidades UTF-16 por etiqueta.
+- Cada etiqueta requiere texto no vacío y evidencia con documento, revisión no negativa, rango UTF-16 seguro y extracto no vacío.
+- El único estado histórico admitido es `stale`; una evidencia marcada como obsoleta se excluye de la extracción.
+- No se permiten etiquetas normalizadas duplicadas dentro de un perfil ni perfiles repetidos para una entidad.
+- Los alias deben ser cadenas no vacías.
+
+Estas reglas impiden que perfiles malformados o asociados a objetos/lugares se utilicen como identidad de personajes. La validación de forma no sustituye la revisión semántica del origen: una etiqueta no obsoleta sigue siendo una descripción previamente validada, no una prueba independiente de la relación en el capítulo actual.
+
+Se añadieron regresiones para perfiles de tipo incorrecto, rangos negativos y etiquetas vacías o demasiado largas. La ejecución completa de la suite aún debe verificarse en CI.

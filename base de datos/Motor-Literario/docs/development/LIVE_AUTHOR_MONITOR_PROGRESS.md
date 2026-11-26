@@ -434,3 +434,28 @@ Se amplió `live-author-monitor-browser.test.mjs`: tras el takeover y guardado d
 **Resultado verificado:** CI específica [45727834409](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727834409): build Vite correcto, MLDB 0.4.2 válido, auditoría de 25 tablas y 34 almacenes y **113/113 pruebas aprobadas, 0 fallidas, 0 omitidas**.
 
 **CI general:** [45727834577](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727834577) sigue fallando exclusivamente por errores TS2322, TS2677, TS18047 y TS2345 en `src/literary-analysis.ts`; no reporta errores en el módulo de monitoreo.
+
+
+
+## 21. Nueva entrega — proveedor transaccional reusable y validación ligera (26 de noviembre de 2026)
+
+**Objetivo:** simplificar la conexión del editor anfitrión y evitar lecturas completas del texto en cada evento de escritura.
+
+**Implementación:**
+- Nuevo `LiveAuthorMonitorEditorTransactionBridge`, proveedor reusable con lectores nativos de snapshot/metadatos y publicación explícita de transacciones aplicadas.
+- El contrato `LiveAuthorMonitorEditorTransactionProvider` admite `getDocumentState(documentId)` con revisión, secuencia y longitud UTF-16. El source lo usa por transacción; `getSnapshot` queda para montaje y resincronización. Se conserva fallback compatible para proveedores antiguos.
+- El puente protege el orden de entrega mediante cola FIFO incluso ante publicaciones reentrantes, captura los listeners asociados a cada publicación y aísla errores de cada suscriptor.
+- Export público desde `src/index.ts`.
+- Nueva guía de integración para el editor anfitrión, con reglas para deltas, undo/redo, transacciones compuestas, backpressure y cierre.
+
+**Pruebas:** metadata-only por transacción sin lectura del manuscrito completo; metadatos inválidos; edit/undo/redo a través del puente; listeners que fallan; aislamiento por documento; FIFO reentrante; disposer idempotente.
+
+**Archivos:** `typescript/src/live-author-monitor-editor-transaction-source.ts`, `typescript/src/live-author-monitor-editor-transaction-bridge.ts`, `typescript/src/index.ts`, `typescript/tests/live-author-monitor-editor-transaction-source.test.mjs`, `typescript/tests/live-author-monitor-editor-transaction-bridge.test.mjs`, `docs/development/LIVE_AUTHOR_MONITOR_EDITOR_ADAPTER_GUIDE.md`.
+
+**Commits:** [7b1fe0b — validación por metadatos](https://github.com/jmpixelapp-jpg/desarrollo/commit/7b1fe0b95eaf359e3e2ff647ff9d227baaee9324), [897f68f — crear puente de editor](https://github.com/jmpixelapp-jpg/desarrollo/commit/897f68f43bf5aea6b53a9e5100252aa594c9355f), [e916d3c — pruebas de puente](https://github.com/jmpixelapp-jpg/desarrollo/commit/e916d3cefb8d4ad8fcb2817677f15ef14fbda382), [843ebfd — export público](https://github.com/jmpixelapp-jpg/desarrollo/commit/843ebfd4699fb95289452774625f0c5426bfa84e), [3c8cd79 — FIFO reentrante](https://github.com/jmpixelapp-jpg/desarrollo/commit/3c8cd794cd65f2b5931089366c2d6a65b69f7270), [dc9bf15 — prueba FIFO](https://github.com/jmpixelapp-jpg/desarrollo/commit/dc9bf15dbdf1aa730b4945b7390d7d69252f4035), [c589613 — guía del anfitrión](https://github.com/jmpixelapp-jpg/desarrollo/commit/c5896131e4e9e02a441c24b91c644aad822c255d), [608f8e2 — contrato del retorno y prueba](https://github.com/jmpixelapp-jpg/desarrollo/commit/608f8e2a45a7bdff95db2e829dfa4eedb6a2050b).
+
+**Resultado CI:** [45728632431](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45728632431): build Vite correcto, esquema MLDB 0.4.2 válido, auditoría física de 25 tablas/34 almacenes y **120/120 pruebas aprobadas, 0 fallidas, 0 omitidas**.
+
+**CI general:** [45728632512](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45728632512) sigue mostrando errores TypeScript únicamente en `src/literary-analysis.ts` (TS2322, TS2677, TS18047 y TS2345).
+
+**Límite transparente:** el puente es código reusable probado con un editor falso controlado por tests. No equivale a una integración de producción. La app aún debe conectar el callback real de transacciones del editor anfitrión.

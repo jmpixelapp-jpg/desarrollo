@@ -8,6 +8,7 @@ import {
   commitNarrativeDocumentProjectionManifest,
   persistNarrativeKnowledgeGraphSnapshotWithManifests,
   retireNarrativeDocumentProjection,
+  reconcileNarrativeDocumentProjections,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
@@ -233,4 +234,50 @@ test("retira un documento con tombstone CAS y rechaza una retirada obsoleta", as
     retireNarrativeDocumentProjection(store, "novel-delete", "chapter-1", 4, 404),
     /posterior al manifiesto vigente/u
   );
+});
+
+
+test("reconcilia inventarios divergentes sin modificar registros ni manifiestos", async () => {
+  const { store, tables } = createMemoryStore();
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-reconcile", [
+    { documentId: "chapter-a", revision: 1, text: "personaje Mara aparece." }
+  ], { now: 500 });
+  await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 501);
+  const clean = await reconcileNarrativeDocumentProjections(store, "novel-reconcile");
+  assert.equal(clean.issues.length, 0);
+
+  const key = "novel-reconcile" + "\\u0000" + "chapter-a";
+  const manifest = tables.manifests.get(key);
+  tables.manifests.set(key, {
+    ...manifest,
+    entityIds: [...manifest.entityIds, "entity:ghost"]
+  });
+  const beforeEntityCount = tables.entities.size;
+  const report = await reconcileNarrativeDocumentProjections(store, "novel-reconcile");
+  assert.ok(report.issues.some(issue =>
+    issue.code === "stale-inventory-id" && issue.recordId === "entity:ghost"
+  ));
+  assert.equal(tables.entities.size, beforeEntityCount);
+  assert.equal(tables.manifests.get(key).entityIds.includes("entity:ghost"), true);
+});
+
+test("detecta tombstones con evidencia residual y documentos sin manifiesto", async () => {
+  const { store, tables } = createMemoryStore();
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-orphans", [
+    { documentId: "chapter-gone", revision: 2, text: "personaje Mara aparece." }
+  ], { now: 600 });
+  await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 601);
+  const key = "novel-orphans" + "\\u0000" + "chapter-gone";
+  const current = tables.manifests.get(key);
+  tables.manifests.set(key, {
+    ...current, generation: current.generation + 1, revision: 3,
+    status: "deleted", entityIds: [], relationIds: [], eventIds: [], ideaIds: [], assertionIds: []
+  });
+  const report = await reconcileNarrativeDocumentProjections(store, "novel-orphans");
+  assert.ok(report.issues.some(issue => issue.code === "tombstone-has-evidence"));
+  tables.manifests.delete(key);
+  const missing = await reconcileNarrativeDocumentProjections(store, "novel-orphans");
+  assert.ok(missing.issues.some(issue =>
+    issue.code === "missing-manifest" && issue.documentId === "chapter-gone"
+  ));
 });

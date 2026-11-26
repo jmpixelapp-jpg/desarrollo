@@ -110,3 +110,38 @@ test("conserva ambigüedad cuando el nombre objetivo pertenece a dos personajes"
   assert.equal(result.relation,"ambiguous-target");
   assert.equal(result.matchedTargetEntityId,undefined);
 });
+
+test("contrasta una meta de un capítulo anterior con una acción posterior", () => {
+  const prior = {
+    ...intent("proteger a Elian"),
+    id:"prior-goal",
+    evidence:{...intent("proteger a Elian").evidence,documentId:"chapter-1",start:20,end:38}
+  };
+  const laterAction = {
+    ...action("traicionó"),
+    id:"later-action",
+    evidence:{...action("traicionó").evidence,documentId:"chapter-2",start:5,end:25}
+  };
+  const [result] = compareNarrativeIntentsWithActions({
+    projectId:"novel",entities,intents:[],priorIntents:[prior],
+    actions:[laterAction],orderedDocumentIds:["chapter-1","chapter-2"]
+  });
+  assert.equal(result.relation,"opposes-intent");
+  assert.equal(result.intentId,"prior-goal");
+  assert.equal(result.actionId,"later-action");
+});
+
+test("no compara metas de otros capítulos cuando no se declaró el orden documental", () => {
+  const prior = {
+    ...intent("proteger a Elian"),
+    id:"prior-goal",
+    evidence:{...intent("proteger a Elian").evidence,documentId:"chapter-1",start:20,end:38}
+  };
+  const laterAction = {
+    ...action("traicionó"),
+    evidence:{...action("traicionó").evidence,documentId:"chapter-2",start:5,end:25}
+  };
+  assert.deepEqual(compareNarrativeIntentsWithActions({
+    projectId:"novel",entities,intents:[],priorIntents:[prior],actions:[laterAction]
+  }),[]);
+});

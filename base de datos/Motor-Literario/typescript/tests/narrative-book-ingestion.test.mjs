@@ -176,6 +176,36 @@ test("la ingesta no inventa transiciones de objeto sin entidades de objeto conoc
   assert.deepEqual(result.objectTransitionCandidates, []);
 });
 
+test("la ingesta publica afirmaciones de estado de personajes con evidencia y revisión", () => {
+  const ana = {
+    projectId: "p", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const text = "Ana está herida. Después, Ana ya no está herida.";
+  const baseOffset = 75;
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "state-scene", revision: 9,
+    text, baseOffset, entities: [ana]
+  });
+  assert.equal(result.characterStateCandidates.length, 2);
+  assert.deepEqual(result.characterStateCandidates.map(item => [
+    item.state, item.polarity, item.aspect
+  ]), [
+    ["injured", "affirmed", "ordinary"],
+    ["injured", "negated", "ordinary"]
+  ]);
+  for (const candidate of result.characterStateCandidates) {
+    assert.equal(candidate.entityId, ana.id);
+    assert.equal(candidate.reviewStatus, "candidate");
+    assert.equal(candidate.evidence.start >= baseOffset, true);
+    assert.equal(
+      text.slice(candidate.evidence.start - baseOffset, candidate.evidence.end - baseOffset),
+      candidate.evidence.excerpt
+    );
+  }
+});
+
 test("no infiere entidades de nombres propios sin etiqueta explícita", () => {
   const result = ingestNarrativeBookText({
     projectId: "p", documentId: "no-name-guess", revision: 1,

@@ -181,3 +181,18 @@ componente no autentica ni persiste: se conecta al diario verificado y cada
 handler debe ser idempotente por `operationId`. La mutación concreta del grafo
 aún requiere handlers de dominio y coordinación transaccional; no se presenta
 como sincronización automática ni exactamente-una-vez.
+
+
+## Continuación: consumidor integrado del diario durable (2026-11-26)
+
+Se añadió `typescript/src/narrative-sync-consumer.ts` y su exportación pública.
+
+- `createNarrativeSyncJournalConsumer` conecta `IndexedDbNarrativeSyncJournal`, `replayPendingNarrativeSyncOperations` y `createNarrativeSyncOperationDispatcher`.
+- La entrada pasa por la verificación de integridad del diario; el dispatcher aplica únicamente handlers registrados cuyo validador acepte el payload.
+- El acuse durable ocurre después de que el handler termina correctamente. Si la validación o aplicación falla, el replay se detiene y la operación permanece pendiente.
+- Permite filtrar por proyecto y, opcionalmente, por escritor.
+- Se añadieron pruebas de integración para recepción → despacho → acuse, rechazo y reintento, y aislamiento entre escritores/proyectos.
+
+**Límites preservados:** este consumidor integra el pipeline local, pero no implementa transporte remoto, autenticación/autorización del escritor, coordinación entre pestañas/dispositivos ni una transacción atómica entre el diario y las proyecciones narrativas. Los handlers de dominio deben ser idempotentes por `operationId` y aplicar sus mutaciones con CAS/transacciones propias. La entrega sigue siendo al menos una vez.
+
+**Validación:** los cambios de runtime y las nuevas pruebas están publicados en `main`; la ejecución de typecheck, build y suite completa queda pendiente de los checks de CI asociados al HEAD posterior a esta tanda. No se declara verde hasta observar esos resultados.

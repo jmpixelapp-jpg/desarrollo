@@ -2473,7 +2473,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 27);
+    assert.equal(openedVersion, 28);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -10477,7 +10477,7 @@ test("IndexedDB rechaza una entidad obsoleta sin sustituir la versión confirmad
     close() {},
     transaction(storeNames, mode) {
       assert.equal(mode, "readwrite");
-      assert.equal(storeNames, "narrative-entities");
+      assert.deepEqual(Array.isArray(storeNames) ? storeNames : [storeNames], ["narrative-entities"]);
       const transaction = {
         error: null,
         aborted: false,

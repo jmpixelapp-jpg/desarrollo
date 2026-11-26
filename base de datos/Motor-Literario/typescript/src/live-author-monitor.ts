@@ -52,7 +52,12 @@ export interface LiveAuthorMonitorSnapshot {
   readonly activityUnitMetricsComplete: boolean;
   readonly netCharacterDelta: number;
   readonly currentDocumentLength: number;
+  /**
+   * Estimate: typingInsertedCharacters / 5, divided by total active session time.
+   * Active time can include IME, paste and corrections; this is not pure keyboard time.
+   */
   readonly estimatedWordsPerMinute: number;
+  /** Typing-only inserted UTF-16 units divided by total active session time. */
   readonly insertedCharactersPerMinute: number;
   readonly latestRevision: number;
   readonly durableRevision: number;

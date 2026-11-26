@@ -6,7 +6,7 @@ import {
 } from "../dist/motor-literario.js";
 
 test("la ingesta expone frases no cubiertas por acciones o acontecimientos extraídos", () => {
-  const text = "Ana llegó al puerto.\nLa torre parecía abandonada.\nEVENTO: La campana sonó.";
+  const text = "Capítulo I\nAna llegó al puerto.\nLa torre parecía abandonada.\nEVENTO: La campana sonó.";
   const ana = {
     projectId: "p", id: "character:ana", kind: "character",
     canonicalName: "Ana", normalizedName: "ana", aliases: [],

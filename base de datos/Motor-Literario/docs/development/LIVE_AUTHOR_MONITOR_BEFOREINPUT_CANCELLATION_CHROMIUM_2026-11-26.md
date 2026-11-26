@@ -64,3 +64,14 @@ En consecuencia, hay dos observaciones distintas:
 - validación integrada del workflow habitual del monitor.
 
 Ninguna de ellas demuestra IME físico de todas las plataformas ni sustituye la conexión al editor enriquecido de producción.
+## Hallazgo reproducido en Chromium y corrección
+
+**Primera ejecución:** el test falló porque `pendingInput` seguía activo después de que el listener anfitrión cancelara el evento.
+
+**Traza de Chromium:** el evento fue `beforeinput`, `inputType=insertText`, `isTrusted=true`, `cancelable=true` y `defaultPrevented=true`. Una microtarea programada desde un listener posterior también observó `defaultPrevented=true`, pero el monitor todavía conservaba `pendingInput`. La evidencia muestra que la microtarea del listener inicial del monitor se ejecutó antes de que terminara la propagación y de que el anfitrión cancelara el evento.
+
+**Corrección de producción:** `LiveAuthorMonitorTextAreaSource` mantiene una comprobación rápida mediante `queueMicrotask`. Si el candidato sigue pendiente y el evento es cancelable, programa una comprobación adicional con `setTimeout(..., 0)`. La tarea posterior limpia únicamente si sigue siendo el mismo candidato y `defaultPrevented` quedó activado. Si el evento se aplica normalmente, el `input` asociado cierra el candidato antes y el fallback no altera la edición.
+
+**Propiedades conservadas:** la cancelación no incrementa secuencia/revisión, no publica un delta vacío ni exige resincronización. La siguiente edición aplicada sigue siendo admisible.
+
+El test mantiene la traza de evento, microtarea y tarea para que una futura regresión identifique el orden real del navegador. La validación CI de esta corrección está pendiente; no se marca todavía como aprobada.

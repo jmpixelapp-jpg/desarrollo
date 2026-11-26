@@ -2569,6 +2569,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
 test("IndexedDB reemplaza índices existentes con definición incompatible", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const names = [
+    "narrative-reference-repair-audits", "narrative-reference-repair-pending",
     "language-profiles", "language-resource-refs", "style-profiles", "timeline-tracks",
     "record-lifecycles", "relation-lifecycles", "event-lifecycles", "project-settings", "documents", "changes",
     "narrative-entities", "narrative-relations",

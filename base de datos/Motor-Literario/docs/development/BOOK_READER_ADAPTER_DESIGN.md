@@ -139,3 +139,18 @@ Se corrigió también la extracción de saltos XHTML `br` (se conservan como sal
 
 
 La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto del documento anfitrión. `resolveNarrativeTextEvidence()` exige que esa revisión coincida con la evidencia persistida, además de comprobar que la cita coincide carácter por carácter con el rango. Rechaza snapshots sin versión, revisiones distintas, citas modificadas y evidencias marcadas como obsoletas. Esta verificación evita enlazar accidentalmente una evidencia histórica a una edición actual que contenga texto parecido.
+
+
+## Actualización del estado implementado
+
+Esta sección actualiza las notas históricas anteriores de este documento. El lector EPUB ya incorpora:
+
+- Recuperación de navegación EPUB 3 `nav` y EPUB 2 `NCX`, con etiqueta, destino y profundidad.
+- Conservación de saltos XHTML `br` y líneas preformateadas/versificadas.
+- Reconocimiento de nombres de elementos XML con prefijos.
+- Inspección de cobertura estructural mediante bloques extraídos, documentos del spine vacíos y advertencias.
+- Validaciones ZIP adicionales de flags, CRC32, rangos de datos y directorio central.
+
+Por tanto, las frases de las primeras secciones que indiquen que nav/NCX o los saltos `br` aún no existen deben leerse como descripción histórica de la primera implementación. El detalle vigente, las limitaciones actuales y los criterios de validación están en `docs/analysis/REGISTRO_TECNICO_LECTURA_Y_TRAZABILIDAD_NARRATIVA.md`.
+
+También se añadió revisión al snapshot de ingesta y un resolver de evidencia narrativa que exige igualdad de revisión y coincidencia exacta de cita. Esto no sustituye el plan de importación transaccional: la resolución de evidencias y la confirmación de importación son responsabilidades distintas.

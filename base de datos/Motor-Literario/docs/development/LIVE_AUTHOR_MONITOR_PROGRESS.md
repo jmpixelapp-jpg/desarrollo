@@ -1659,3 +1659,14 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Invariantes:** la identidad de un lease incluye proyecto y documento; los fencing tokens se incrementan por clave de documento, no como un contador global del proyecto. Perder A no libera, renueva ni invalida B.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+## 108. Aislamiento de ciclo de vida al cerrar uno entre varios documentos (26 de noviembre de 2026)
+
+**Objetivo:** validar en `HostEngineApi` que cada documento mantiene su propio ciclo de vida de lease, heartbeat y checkpoint, incluso cuando varios documentos del mismo proyecto permanecen abiertos en una misma instancia.
+
+**Regresión:** abrir los capítulos A y B, confirmar ambos checkpoints y leases, cerrar A de forma segura y verificar que solo se libera el lease/heartbeat de A. B debe conservar titularidad y heartbeat, aceptar una edición posterior, persistir la nueva revisión y mantener su misma identidad de sesión. El checkpoint final de A y su liberación deben permanecer intactos.
+
+**Valor añadido:** complementa la prueba IndexedDB de aislamiento de fencing por documento; esta prueba cubre la coordinación de nivel host y la independencia de las colas automáticas de persistencia.
+
+**Validación:** pendiente de GitHub Actions.

@@ -28,6 +28,7 @@ interface ZipEntry {
   readonly method: number;
   readonly compressedSize: number;
   readonly expandedSize: number;
+  readonly crc32: number;
   readonly localOffset: number;
 }
 
@@ -40,6 +41,15 @@ const DEFAULT_LIMITS: Required<EpubReaderLimits> = {
 };
 
 function fail(message: string): never { throw new Error("EPUB: " + message); }
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
 
 function safePath(path: string): string {
   const normalized = path.replace(/\\/gu, "/");
@@ -150,6 +160,7 @@ class EpubArchive {
       if (offset + 46 > bytes.length || view.getUint32(offset, true) !== 0x02014b50) fail("entrada del directorio central truncada.");
       const flags = view.getUint16(offset + 8, true);
       const method = view.getUint16(offset + 10, true);
+      const expectedCrc32 = view.getUint32(offset + 16, true);
       const compressedSize = view.getUint32(offset + 20, true);
       const expandedSize = view.getUint32(offset + 24, true);
       const nameLength = view.getUint16(offset + 28, true);
@@ -168,7 +179,7 @@ class EpubArchive {
       }
       expandedTotal += expandedSize;
       if (expandedTotal > limits.maxExpandedBytes) fail("tamaño expandido total excesivo.");
-      this.entries.set(name, { name, method, compressedSize, expandedSize, localOffset });
+      this.entries.set(name, { name, method, compressedSize, expandedSize, crc32: expectedCrc32, localOffset });
       offset = end;
     }
     if (offset !== directoryOffset + directorySize) fail("longitud del directorio central inconsistente.");
@@ -182,14 +193,21 @@ class EpubArchive {
     const view = new DataView(this.bytes.buffer, this.bytes.byteOffset, this.bytes.byteLength);
     const at = entry.localOffset;
     if (at + 30 > this.bytes.length || view.getUint32(at, true) !== 0x04034b50) fail("cabecera local inválida para " + path);
+    const localFlags = view.getUint16(at + 6, true);
+    const localMethod = view.getUint16(at + 8, true);
     const nameLength = view.getUint16(at + 26, true);
     const extraLength = view.getUint16(at + 28, true);
+    const localName = new TextDecoder("utf-8", { fatal: true }).decode(this.bytes.subarray(at + 30, at + 30 + nameLength));
+    if (localName !== path || localMethod !== entry.method || (localFlags & 1)) {
+      fail("la cabecera local no coincide con el directorio central para " + path);
+    }
     const start = at + 30 + nameLength + extraLength;
     const end = start + entry.compressedSize;
     if (end > this.bytes.length) fail("datos truncados para " + path);
     const compressed = this.bytes.subarray(start, end);
     const raw = entry.method === 0 ? compressed : await inflateRaw(compressed);
     if (raw.byteLength !== entry.expandedSize) fail("longitud descomprimida inconsistente para " + path);
+    if (crc32(raw) !== entry.crc32) fail("CRC32 incorrecto en " + path);
     try { return new TextDecoder("utf-8", { fatal: true }).decode(raw); }
     catch { return fail("texto UTF-8 inválido en " + path); }
   }

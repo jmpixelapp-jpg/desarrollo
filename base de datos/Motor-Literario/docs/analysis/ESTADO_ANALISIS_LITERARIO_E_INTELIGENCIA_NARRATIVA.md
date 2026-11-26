@@ -263,4 +263,8 @@ La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualiza
 
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 
+La rama `improvements/persistence-narrative-sync-v2` integra también el ajuste de límites Unicode de nombres: `unicodeNamePattern` incluye ahora `\\p{M}` a ambos lados del nombre, evitando coincidencias parciales cuando hay marcas combinantes antes o después. Se incorpora una suite específica con cinco regresiones sobre participantes de acontecimientos y contradicciones de estado vital. El test debe ejecutarse junto con el typecheck y la suite completa; su presencia no demuestra ejecución satisfactoria.
+
+En el PR #51, el workflow asociado al commit `fed95e9becdd47143c004eb6e597085be71efb09` falló durante `npm run typecheck` por `TS1002` en `src/narrative-history.ts`; las pruebas y el benchmark quedaron omitidos. Ese archivo se corrige de forma independiente en la rama `improvements/persistence-narrative-sync-v2`, dentro del PR #52. No se atribuye el fallo al cambio Unicode ni se declara resuelta la validación hasta observar el nuevo CI.
+
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.

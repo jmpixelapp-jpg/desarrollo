@@ -496,6 +496,18 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - La validación completa de esta revisión y de la ingesta con BOM UTF-8 sigue pendiente de los runs 2844–2847.
 
 
+
+
+### Trayectoria de objetos: primera capa funcional — 26-11-2026
+
+- Run 2859 (commit `7f514c7`) completó correctamente Type-check, build/pruebas automatizadas y benchmark. La corrección de la prueba BOM quedó validada.
+- Runs 2860 y 2861 finalizaron correctamente sus pasos de Type-check, build/pruebas y benchmark; sus ejecuciones estaban completando el cierre del job al consultarlas.
+- Se amplió el reconocimiento del destinatario para construcciones como «Ana entregó la Espada Solar a Bruno»: ahora puede identificar «a + personaje» después de un sintagma nominal de objeto explícito. Cambio `c15b6e1`; prueba `fb6c57c`.
+- Nuevo módulo `narrative-object-state-discovery.ts` (`58d229d`), exportado desde el índice (`b5df7b8`). Propone cuatro transiciones revisables: `discovered`, `lost`, `transferred`, `received`. Conserva referencias de evidencia de acción, objeto, actor, receptor y contexto.
+- Salvaguardas: no consolida posesión ni ubicación; no inventa emisor de una recepción ni receptor de una pérdida; las negaciones quedan como `not-applied`, los futuros como `prospective`; rechaza evidencia obsoleta o de otra revisión.
+- Pruebas específicas agregadas en `f7398c4`; documentación funcional en `ef9793f`.
+- El módulo nuevo y la extensión de destinatario aún requieren CI completa. No declarar esta última tanda validada hasta que el run del commit final complete Type-check, build/pruebas y benchmark.
+
 ### Evidencia de objeto gramatical y correcciones de adquisición — 26-11-2026
 
 - Se añadió `grammaticalObjectCandidate` en `6099af6`: para una entidad `kind: "object"`, propone objeto gramatical solo si el nombre conocido aparece inmediatamente después del verbo con patrón nominal explícito (p. ej. «Ana perdió la Espada Solar»). Conserva evidencia y offsets; no afirma posesión ni pérdida/transferencia efectiva.

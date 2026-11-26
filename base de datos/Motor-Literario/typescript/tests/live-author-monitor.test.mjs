@@ -124,6 +124,27 @@ test("separa unidades typing de candidatos IME provisionales sin alterar los del
   assert.equal(restored.activityUnitMetricsComplete, true);
 });
 
+test("una edición aceptada sin activityKind no se atribuye a typing y marca cobertura parcial", () => {
+  const { monitor, open, change, queued } = fixture();
+  open("chapter-1", "abc");
+  monitor.recordAdmission(change(1, 0, 3, 3, "?"), queued("unclassified"));
+  const afterUnknown = monitor.getSnapshot("chapter-1");
+  assert.equal(afterUnknown.insertedCharacters, 1);
+  assert.equal(afterUnknown.typingInsertedCharacters, 0);
+  assert.equal(afterUnknown.otherChanges, 1);
+  assert.equal(afterUnknown.activityUnitMetricsComplete, false,
+    "sin procedencia explícita no se puede asegurar que el contador typing esté completo");
+
+  monitor.recordAdmission({
+    ...change(2, 1, 4, 4, "x"),
+    activityKind: "typing"
+  }, queued("classified"));
+  const afterKnownTyping = monitor.getSnapshot("chapter-1");
+  assert.equal(afterKnownTyping.typingInsertedCharacters, 1);
+  assert.equal(afterKnownTyping.activityUnitMetricsComplete, false,
+    "una edición clasificada posterior no reconstruye la procedencia del delta anterior");
+});
+
 test("restaurar un checkpoint antiguo marca incompleta la cobertura de unidades tipadas", () => {
   const first = fixture();
   first.open("chapter-1", "hello");

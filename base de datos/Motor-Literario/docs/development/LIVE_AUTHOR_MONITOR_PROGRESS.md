@@ -1500,3 +1500,14 @@ El benchmark terminó en 655,47 ms (~152.563 commits/s), con heap de 4,39 MiB a 
 **Regresión:** se generan tres admisiones y tres commits reales, se crea un checkpoint válido y se elimina deliberadamente la segunda posición de la ventana de latencia. La restauración debe rechazarlo y dejar el documento sin sesión parcial.
 
 **Validación CI:** [Live Author Monitor — run 45761935065](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45761935065), checkout exacto `a0d2aa925f311d77f66f1e20d687b10adec792d9` (incluye la corrección del núcleo `e5a79866f2677b8613f577c48ad4f7cb57aa8859`), terminó `success`. Type-check estricto, bundle aislado, auditoría MLDB/almacenamiento, bundle runtime y las 17/17 pruebas diagnósticas aprobaron. La suite focalizada del monitor terminó con **165/165 pruebas**, incluida la nueva regresión (test 162); Page Lifecycle en Chromium, 1/1; integraciones host/editor/browser, **168/168**. El benchmark de 100.000 commits en ocho documentos de 1 MiB terminó en **509,51 ms** (~196.267 commits/s), con heap de 4,39 MiB a mitad y al final, crecimiento medido de 0 MiB, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+
+## 97. Rechazo de contadores de pausa incompatibles con las admisiones (26 de noviembre de 2026)
+
+**Hallazgo:** `pauseCount` se incrementa únicamente al registrar una nueva admisión (aceptada o rechazada) después de un intervalo de inactividad. Por tanto, el número acumulado de pausas nunca puede superar la cantidad total de admisiones registradas (`acceptedChanges + rejectedChanges`). La restauración validaba que el contador fuera entero y no negativo, pero no comprobaba esta relación entre métricas.
+
+**Corrección:** `restoreCheckpoint()` rechaza un checkpoint cuyo `pauseCount` exceda la suma de admisiones aceptadas y rechazadas. La validación no restringe sesiones válidas: una sesión sin admisiones tiene cero pausas, y cada pausa exige una admisión previa que la origine.
+
+**Regresión:** se genera un checkpoint real recién abierto (cero admisiones y cero pausas), se altera únicamente `pauseCount` a uno y se comprueba que la restauración falla sin crear una sesión parcial.
+
+**Validación:** pendiente de GitHub Actions para el commit de esta sección.

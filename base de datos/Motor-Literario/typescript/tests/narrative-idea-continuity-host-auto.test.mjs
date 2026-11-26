@@ -602,3 +602,45 @@ test("refreshNarrativeKnowledge también reconcilia cambios documentales externo
     await store.close();
   }
 });
+
+
+test("recalcula cronología cuando cambia el orden editorial sin modificar los capítulos", async () => {
+  const store = new IndexedDbProjectStore();
+  const id = projectId();
+  const sourceText = "El tema central es la memoria compartida que une a dos ciudades.";
+  store.subscribeNarrativeChanges = undefined;
+  let editorialOrder = ["chapter-1", "chapter-2"];
+  const api = new HostEngineApi({
+    store,
+    getOrderedDocumentIds: () => editorialOrder
+  });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Reordenación de capítulos" });
+    await api.openDocument({
+      documentId: "chapter-1", text: sourceText, revision: 1, sequence: 2
+    });
+    await api.openDocument({
+      documentId: "chapter-2", text: sourceText, revision: 1, sequence: 2
+    });
+    await api.flushPendingChanges();
+    const first = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(first);
+    assert.equal(first.events.length, 1);
+    assert.equal(first.events[0].chronology, "ordered");
+    assert.equal(first.events[0].earlierOccurrenceId, first.events[0].firstOccurrenceId);
+
+    editorialOrder = ["chapter-2", "chapter-1"];
+    await api.refreshNarrativeKnowledge();
+    const second = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(second);
+    assert.ok(second.generation > first.generation);
+    assert.equal(second.events[0].chronology, "ordered");
+    assert.equal(second.events[0].earlierOccurrenceId, second.events[0].secondOccurrenceId);
+    assert.equal(second.occurrences[0].revision, 1);
+    assert.equal(second.occurrences[1].revision, 1);
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});

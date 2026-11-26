@@ -181,6 +181,7 @@ export function buildNarrativeObjectTrajectories(
     for (let index = 1; index < ordered.length; index += 1) {
       const previous = ordered[index - 1];
       const current = ordered[index];
+      if (!previous || !current) continue;
       // Vincular solo dos enunciados consecutivos, afirmados y no prospectivos:
       // «A entregó X a B» seguido de «B recibió X».
       if (previous.transition !== "transferred" ||

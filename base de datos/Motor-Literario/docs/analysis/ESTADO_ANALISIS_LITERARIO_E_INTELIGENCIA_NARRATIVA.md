@@ -146,6 +146,7 @@ El archivo `typescript/tests/literary-analysis-graph-determinism.test.mjs` conce
 | Truncamiento de resonancias léxicas | Genera 102 pares candidatos independientes y verifica que el motor conserva el total, expone las 100 mejores resonancias y declara dos pares omitidos. |
 | Truncamiento de términos compartidos | Construye una resonancia con 15 términos comunes y verifica que la muestra conserva 12, informa tres omitidos y mantiene frecuencias literales de ambos textos. |
 | Presupuesto léxico de ideas omitidas por el anfitrión | Verifica que las ideas marcadas `textOmitted: budget` se contabilizan como omitidas, no como ideas sin texto, no consumen presupuesto de tokenización y no impiden analizar ideas posteriores incluidas en la misma instantánea. |
+| Contabilidad del presupuesto léxico global | Auditoría estática del anfitrión comprueba que solo se descuenta texto realmente transferido al catálogo léxico global; las ideas enlazadas que ya se transfieren por `knownIdeas` no consumen ese presupuesto. |
 
 Estas pruebas describen contratos, no demuestran por sí mismas que la suite se haya ejecutado. La verificación automatizada completa se realiza desde `typescript/` con `npm test`, que primero compila, valida el esquema y almacenamiento, y después ejecuta las suites Node. También existen `npm run typecheck`, `npm run build` y `npm run bench`.
 
@@ -192,11 +193,13 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `389411d`: añade una regresión de cronología con 202 puntos y 201 transiciones para comprobar el límite de 200 muestras y los contadores de omisiones.
 - `eaa2614`: añade una regresión del límite de cien resonancias léxicas con 102 pares candidatos y dos omitidos.
 - `e42b287`: verifica que cada resonancia contabiliza términos compartidos más allá de su muestra de doce y conserva las frecuencias de los términos expuestos.
+- `f3e23fe`: corrige el presupuesto léxico del anfitrión para descontar solo textos copiados al catálogo global, y no textos enlazados que viajan por `knownIdeas`.
+- `f57dba8`: añade una auditoría estática que protege la contabilidad del presupuesto léxico frente a regresiones.
 ## 7. Pendientes y siguiente secuencia de trabajo
 
 1. Revisar y ejecutar la prueba de estrés que fuerza el límite de un millón de expansiones de dos saltos y confirma `truncated-by-work-budget`; verificar en ejecución que los contadores parciales no se interpreten como resultados completos.
 2. Completar casos límite adicionales de catálogo vacío, nodos sin referencias, referencias externas y snapshots con omisiones; ya hay cobertura para catálogo vacío, omisiones y referencias externas repetidas.
-3. Auditar los presupuestos de memoria y tiempo de cada fase del análisis, no solo del grafo y del texto léxico; la contabilidad de ideas marcadas como omitidas por el anfitrión ya tiene una regresión específica, pero falta forzar el límite de texto agregado en ejecución. La cronología ya tiene cobertura exacta de truncamiento; falta continuar la auditoría de las demás colecciones públicas.
+3. Auditar los presupuestos de memoria y tiempo de cada fase del análisis, no solo del grafo y del texto léxico; la contabilidad de ideas omitidas y el descuento de texto realmente transferido al catálogo global ya tienen cobertura, pero falta forzar el límite agregado de dos millones de unidades UTF-16 en una prueba de integración del anfitrión. La cronología ya tiene cobertura exacta de truncamiento; falta continuar la auditoría de las demás colecciones públicas.
 4. Revisar el comportamiento de muestras y truncamiento en cada colección pública: el grafo tiene regresión para 5.001 referencias y muestras exactas de componentes y ciclos; la cronología verifica 202 puntos y 201 transiciones con muestras de 200; las resonancias léxicas verifican 102 candidatos con muestras de 100 y 15 términos compartidos con muestras de 12; falta extender la auditoría sistemática a las demás colecciones públicas.
 5. Ampliar las pruebas de sincronización concurrente de ideas: el agotamiento de tres intentos CAS y la eliminación de destinos durante un reintento ya tienen regresión; quedan intercalado de eliminaciones y escrituras de varios registros, y revalidación de catálogos cuando cambian repetidamente durante una operación.
 6. Ampliar las pruebas de regresión para offsets UTF-16 por escena y por evento en cambios de revisión, rangos parciales y límites de fragmento; recurrencias y anclajes de eventos con caracteres suplementarios ya tienen cobertura.

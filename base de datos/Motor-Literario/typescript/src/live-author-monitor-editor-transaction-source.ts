@@ -183,7 +183,8 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
         this.attachProvider();
       } catch (error) {
         this.listeners.delete(listener);
-        this.unsubscribeProvider = undefined;
+        // attachProvider conserva un disposer anterior si su cierre falló;
+        // no lo descartes aquí o una reanudación podría duplicar listeners.
         throw error;
       }
     }
@@ -264,7 +265,12 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   }
 
   dispose(): void {
-    if (this.disposed) return;
+    if (this.disposed) {
+      // Un primer cierre pudo fallar dentro del proveedor; llamadas repetidas
+      // permiten terminar la retirada sin volver a registrar listeners.
+      this.detachProvider();
+      return;
+    }
     this.disposed = true;
     this.detachProvider();
     this.listeners.clear();
@@ -510,7 +516,16 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   }
 
   private attachProvider(): void {
-    if (this.unsubscribeProvider || this.disposed || this.needsResync || this.listeners.size === 0) return;
+    if (this.disposed || this.needsResync || this.listeners.size === 0) return;
+
+    // No se crea una suscripción nueva mientras el disposer de la anterior
+    // siga retenido por un fallo de cancelación.
+    if (this.unsubscribeProvider) {
+      this.detachProvider();
+      if (this.unsubscribeProvider) {
+        throw new Error("La suscripción anterior del editor aún no pudo cerrarse.");
+      }
+    }
 
     // Algunos editores reproducen eventos pendientes de forma síncrona al
     // suscribirse. Guardamos primero el disposer devuelto y después comprobamos
@@ -530,8 +545,13 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
 
   private detachProvider(): void {
     const unsubscribe = this.unsubscribeProvider;
-    this.unsubscribeProvider = undefined;
-    try { unsubscribe?.(); } catch (error) {
+    if (!unsubscribe) return;
+    try {
+      unsubscribe();
+      if (this.unsubscribeProvider === unsubscribe) this.unsubscribeProvider = undefined;
+    } catch (error) {
+      // Mantener el handle es esencial: el proveedor puede seguir conservando
+      // el listener y la siguiente reanudación debe intentar cerrarlo de nuevo.
       this.report(error instanceof Error ? error : new Error(String(error)));
     }
   }

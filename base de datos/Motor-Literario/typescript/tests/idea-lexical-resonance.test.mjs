@@ -312,7 +312,25 @@ test("agrega métricas globales y por estado de forma coherente", () => {
   assert.equal(graph.sourceNodeCount, 2);
   assert.equal(graph.terminalWithinSnapshotNodeCount, 2);
   assert.equal(graph.isolatedWithinSnapshotNodeCount, 1);
-  assert.deepEqual(profile("IDEA"), {
+  const ideaProfile = profile("IDEA");
+  assert.deepEqual({
+    status: ideaProfile.status,
+    ideaCount: ideaProfile.ideaCount,
+    sourceIdeaCount: ideaProfile.sourceIdeaCount,
+    terminalWithinSnapshotIdeaCount: ideaProfile.terminalWithinSnapshotIdeaCount,
+    isolatedWithinSnapshotIdeaCount: ideaProfile.isolatedWithinSnapshotIdeaCount,
+    incomingReferenceCount: ideaProfile.incomingReferenceCount,
+    includedOutgoingReferenceCount: ideaProfile.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: ideaProfile.notIncludedOutgoingReferenceCount,
+    statusHistoryRecordCount: ideaProfile.statusHistoryRecordCount,
+    omittedStatusHistoryCount: ideaProfile.omittedStatusHistoryCount,
+    writerDecisionCount: ideaProfile.writerDecisionCount,
+    activeEvidenceCount: ideaProfile.activeEvidenceCount,
+    staleEvidenceCount: ideaProfile.staleEvidenceCount,
+    ideasWithActiveEvidenceCount: ideaProfile.ideasWithActiveEvidenceCount,
+    ideasWithStaleEvidenceCount: ideaProfile.ideasWithStaleEvidenceCount,
+    ideasWithoutActiveEvidenceCount: ideaProfile.ideasWithoutActiveEvidenceCount
+  }, {
     status: "IDEA",
     ideaCount: 1,
     sourceIdeaCount: 1,

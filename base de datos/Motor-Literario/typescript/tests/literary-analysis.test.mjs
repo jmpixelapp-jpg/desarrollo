@@ -2905,6 +2905,45 @@ test("ancla eventos en offsets absolutos UTF-16 y excluye revisiones obsoletas",
   assert.equal(candidate.status, "candidate-needs-review");
 });
 
+test("el análisis léxico conserva el total de resonancias al limitar la muestra a cien", () => {
+  const projectId = "literary-analysis-test";
+  const knownProjectIdeas = Array.from({ length: 17 }, (_, cluster) => {
+    const suffix = String.fromCharCode(97 + cluster);
+    return Array.from({ length: 4 }, (_, member) => ({
+      projectId,
+      ideaId: "cluster-" + suffix + "-" + member,
+      text: "quartzword" + suffix + " nebula" + suffix,
+      status: "IDEA",
+      relatedIdeaIds: [],
+      evidenceCount: 0,
+      staleEvidenceCount: 0,
+      statusHistory: [{ status: "IDEA", reason: "initial" }],
+      writerDecisionCount: 0,
+      omittedStatusHistoryCount: 0
+    }));
+  }).flat();
+  const graph = analyzeLiteraryFragment({
+    projectId,
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nUna escena de prueba.",
+    knownProjectIdeas
+  }).ideaGraph;
+  const lexical = graph.lexicalResonances;
+
+  assert.equal(lexical.inputIdeaCount, 68);
+  assert.equal(lexical.analyzedIdeaCount, 68);
+  assert.equal(lexical.candidatePairCount, 102);
+  assert.equal(lexical.resonances.length, 100);
+  assert.equal(lexical.omittedCandidatePairCount, 2);
+  assert.ok(lexical.resonances.every(resonance =>
+    resonance.sharedTermCount === 2 &&
+    resonance.sharedTerms.length === 2 &&
+    resonance.omittedSharedTermCount === 0
+  ));
+});
+
+
 test("el análisis léxico conserva el recuento de ideas omitidas por presupuesto de texto", () => {
   const projectId = "literary-analysis-test";
   const makeIdea = (ideaId, text, extra = {}) => ({

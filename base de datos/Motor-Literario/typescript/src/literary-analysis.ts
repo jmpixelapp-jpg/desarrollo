@@ -6503,7 +6503,7 @@ function isValidNarrativeIdeaStatusHistory(
 ): value is readonly NarrativeIdeaStatusChange[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
   let visibleWriterDecisionCount = 0;
-  let previousChangedAt: number | undefined;
+  // La cronología de marcas heredadas se diagnostica, no invalida el historial.
   for (let index = 0; index < value.length; index++) {
     const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
     if (!change ||
@@ -6520,14 +6520,6 @@ function isValidNarrativeIdeaStatusHistory(
           (typeof change.changedAt !== "number" ||
             !Number.isFinite(change.changedAt) || change.changedAt < 0))) {
       return false;
-    }
-    // Las marcas de tiempo heredadas pueden estar desordenadas: se conservan
-    // y el análisis informa la anomalía en vez de descartar historia editorial.
-    if (change.changedAt !== undefined) {
-      if (previousChangedAt !== undefined && change.changedAt < previousChangedAt) {
-        // La secuencia se valida estructuralmente; la no monotonía es diagnóstica.
-      }
-      previousChangedAt = change.changedAt;
     }
     if (change.reason === "writer") visibleWriterDecisionCount++;
   }

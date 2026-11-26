@@ -66,7 +66,8 @@ function findNode(root, predicate) {
 function findCards(root) {
   const found = [];
   const walk = node => {
-    if (node.getAttribute("role") === "listitem") found.push(node);
+    if (node.getAttribute("role") === "listitem" &&
+        node.getAttribute("data-document-id") !== null) found.push(node);
     for (const child of node.children) walk(child);
   };
   walk(root);

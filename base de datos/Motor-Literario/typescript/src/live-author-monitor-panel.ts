@@ -66,13 +66,19 @@ function resolveVisibleMetrics(
   const definitions = new Map<string, MetricDefinition>();
   for (const metric of METRICS) definitions.set(metric.key, metric);
   const selected = new Set<string>();
-  return requested.map(key => {
+  const resolved: MetricDefinition[] = [];
+  for (let index = 0; index < requested.length; index++) {
+    if (!Object.prototype.hasOwnProperty.call(requested, index)) {
+      throw new TypeError("visibleMetrics no puede contener posiciones vacías.");
+    }
+    const key = requested[index];
     const definition = definitions.get(key);
     if (!definition) throw new RangeError("Métrica de panel desconocida: " + String(key) + ".");
     if (selected.has(key)) throw new TypeError("visibleMetrics no puede repetir la métrica " + key + ".");
     selected.add(key);
-    return definition;
-  });
+    resolved.push(definition);
+  }
+  return resolved;
 }
 
 /** Estilos autocontenidos: el anfitrión no necesita instalar CSS ni un framework. */

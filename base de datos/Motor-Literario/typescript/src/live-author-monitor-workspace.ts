@@ -68,13 +68,19 @@ function resolveVisibleWorkspaceMetrics(
   const definitions = new Map<string, (typeof WORKSPACE_METRICS)[number]>();
   for (const metric of WORKSPACE_METRICS) definitions.set(metric.key, metric);
   const selected = new Set<string>();
-  return requested.map(key => {
+  const resolved: (typeof WORKSPACE_METRICS)[number][] = [];
+  for (let index = 0; index < requested.length; index++) {
+    if (!Object.prototype.hasOwnProperty.call(requested, index)) {
+      throw new TypeError("visibleMetrics no puede contener posiciones vacías.");
+    }
+    const key = requested[index];
     const definition = definitions.get(key);
     if (!definition) throw new RangeError("Métrica de workspace desconocida: " + String(key) + ".");
     if (selected.has(key)) throw new TypeError("visibleMetrics no puede repetir la métrica " + key + ".");
     selected.add(key);
-    return definition;
-  });
+    resolved.push(definition);
+  }
+  return resolved;
 }
 
 const WORKSPACE_STYLES = [

@@ -194,3 +194,54 @@ test("ignora diagnósticos cruzados de otro documento", () => {
   assert.equal(diagnostic(root, "checkpoint").getAttribute("data-level"), "warning");
   unmount();
 });
+
+
+test("rechaza listas dispersas de métricas antes de montar panel o workspace", () => {
+  const f = fixture();
+  const sparseMetrics = new Array(2);
+  sparseMetrics[1] = "paste";
+
+  assert.throws(() => mountLiveAuthorMonitorPanel(f.container, {
+    getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
+    getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
+    getLiveAuthorMonitorPersistenceDiagnostics: () => undefined,
+    subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
+  }, {
+    documentId: "chapter-1",
+    visibleMetrics: sparseMetrics,
+    schedule: () => () => {}
+  }), /posiciones vacías/);
+  assert.equal(f.container.children.length, 0);
+
+  assert.throws(() => mountLiveAuthorMonitorWorkspace(f.container, {
+    getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
+    getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
+    getLiveAuthorMonitorPersistenceDiagnostics: () => undefined,
+    subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
+  }, {
+    visibleMetrics: sparseMetrics,
+    schedule: () => () => {}
+  }), /posiciones vacías/);
+  assert.equal(f.container.children.length, 0);
+});
+
+test("rechaza valores undefined explícitos en visibleMetrics sin crear vistas parciales", () => {
+  const f = fixture();
+  const api = {
+    getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
+    getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
+    getLiveAuthorMonitorPersistenceDiagnostics: () => undefined,
+    subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
+  };
+  assert.throws(() => mountLiveAuthorMonitorPanel(f.container, api, {
+    documentId: "chapter-1",
+    visibleMetrics: [undefined],
+    schedule: () => () => {}
+  }), /Métrica de panel desconocida/);
+  assert.equal(f.container.children.length, 0);
+  assert.throws(() => mountLiveAuthorMonitorWorkspace(f.container, api, {
+    visibleMetrics: [undefined],
+    schedule: () => () => {}
+  }), /Métrica de workspace desconocida/);
+  assert.equal(f.container.children.length, 0);
+});

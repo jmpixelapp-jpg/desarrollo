@@ -265,3 +265,9 @@ El workflow dedicado construye un bundle focalizado antes de instalar Chromium o
 **Límite de tipos:** no se afirma que este bundle realice un typecheck estricto. Aunque el monitor importa los contratos solo como tipos, `contracts.ts` forma parte de un grafo de imports de tipos del motor; el intento de compilarlo como proyecto TypeScript aislado volvió a alcanzar `src/narrative-history.ts(7,41): TS1002`. La comprobación Vite/esbuild elimina esos imports de tipo al generar JavaScript y permite ejecutar las regresiones de runtime. El typecheck estricto de todo el proyecto sigue a cargo del workflow general.
 
 Esta separación permite verificar la ejecución del panel y workspace aun cuando un módulo independiente del bundle general esté roto. No certifica integración completa con `HostEngineApi`, persistencia real IndexedDB, leases multi-pestaña ni editor de producción.
+
+## 15. Validación de listas de métricas visibles
+
+Los resolvers del panel y workspace recorren `visibleMetrics` por índice y verifican que cada posición sea una propiedad propia del arreglo. Las posiciones dispersas (`new Array(n)`) se rechazan con un `TypeError` explícito en lugar de ser omitidas silenciosamente por `Array.map()`. Los valores explícitos `undefined`, claves desconocidas y claves duplicadas también se rechazan.
+
+La validación se completa antes de insertar el panel o workspace en el contenedor DOM. Las regresiones se ejecutan en `tests/live-author-monitor-diagnostics-isolation.test.mjs` sobre el bundle aislado y comprueban que el contenedor permanece intacto ante ambas configuraciones inválidas.

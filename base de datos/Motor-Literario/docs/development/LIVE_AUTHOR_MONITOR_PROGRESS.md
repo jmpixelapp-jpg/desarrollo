@@ -881,3 +881,17 @@ Los tres fallos se concentran en `restoreCheckpoint()` y devuelven `ReferenceErr
 **Ajuste de alcance:** se restauró el import original de la suite unitaria (`dist/motor-literario.js`) para no romper `npm test` ni el workflow general. La lane aislada vuelve a ejecutar únicamente las tres regresiones de panel/workspace ya aprobadas. La suite de 20 casos se mantiene en el workflow general y podrá validar la corrección cuando el cambio paralelo llegue a `main` y el build general esté disponible.
 
 **Resultado de esta prueba exploratoria:** 17/20 casos pasan; los 3 fallos quedan documentados como un bloqueo de checkpoint en el archivo compartido. El caso de soak de más de ocho horas y 40.000 cambios sí pasó (140,32 ms en el runner de CI). No se afirma que la restauración de checkpoint esté validada.
+
+## 49. Validación estricta de métricas visibles (25 de noviembre de 2026)
+
+**Problema:** `Array.prototype.map()` omite posiciones vacías de arreglos dispersos. Una opción `visibleMetrics` con huecos podía superar la validación inicial y generar una lista incompleta o fallar más tarde durante el montaje.
+
+**Cambios:**
+- El panel y el workspace recorren cada índice y exigen una propiedad propia del arreglo.
+- Las posiciones vacías se rechazan con `TypeError` antes de crear nodos DOM.
+- Los valores explícitos `undefined`, las claves desconocidas y los duplicados siguen siendo rechazados.
+- Se añaden dos regresiones al bundle aislado: arreglos dispersos y valores `undefined` explícitos; ambas vistas deben dejar el contenedor sin cambios.
+
+**Archivos:** `src/live-author-monitor-panel.ts`, `src/live-author-monitor-workspace.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, guía operativa y registro de progreso.
+
+**Validación:** pendiente de CI para el commit de esta entrega.

@@ -399,6 +399,9 @@ test("reconcilia referencias cruzadas rotas sin modificar el grafo", async () =>
   assert.ok(codes.has("missing-assertion-entity"));
   assert.ok(codes.has("missing-related-entity"));
   assert.ok(codes.has("missing-related-idea"));
+  assert.ok(report.issues.some(issue => issue.recordId === "relation:broken" && issue.referenceField === "toEntityId"));
+  assert.ok(report.issues.some(issue => issue.recordId === "event:broken" && issue.referenceField === "participants"));
+  assert.ok(report.issues.some(issue => issue.recordId === "assertion:broken" && issue.referenceField === "entityId"));
   assert.equal(
     JSON.stringify([...tables.relations, ...tables.events, ...tables.assertions, ...tables.ideas]),
     before,
@@ -419,9 +422,9 @@ test("propone reparación sólo ante una correspondencia de merge explícita y �
     projectId: "novel-repair", checkedManifests: 0, checkedRecords: 1,
     issues: [
       { code: "missing-relation-entity", documentId: "", recordType: "relation",
-        recordId: "relation:1", relatedId: "entity:legacy", referenceField: "fromEntityId", detail: "missing" }
+        recordId: "relation:1", relatedId: "entity:legacy", referenceField: "fromEntityId", detail: "missing" },
       { code: "missing-event-participant", documentId: "", recordType: "event",
-        recordId: "event:1", relatedId: "entity:unknown", referenceField: "participants", detail: "missing" }
+        recordId: "event:1", relatedId: "entity:unknown", referenceField: "participants", detail: "missing" },
       { code: "missing-related-idea", documentId: "", recordType: "idea",
         recordId: "idea:1", relatedId: "idea:unknown", detail: "missing" }
     ]

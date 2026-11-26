@@ -93,3 +93,28 @@ test("rechaza referencias pronominales cuya superficie no coincide con el texto"
     }]
   }));
 });
+
+
+test("detecta automáticamente menciones y pronombres con perfil gramatical explícito", () => {
+  const text = "Mara llegó. Ella protegió a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-auto-pronouns", revision:5,
+    text, entities,
+    characterProfiles:[{ characterId:"mara", grammaticalGender:"feminine" }]
+  });
+  assert.equal(result.pronounResolutions.length, 1);
+  assert.equal(result.pronounResolutions[0].status, "resolved");
+  assert.equal(result.pronounResolutions[0].characterId, "mara");
+  assert.equal(result.pronounActions.length, 1);
+  assert.equal(result.pronounActions[0].actorEntityId, "mara");
+  assert.equal(result.pronounActions[0].action, "protegió");
+});
+
+test("no inventa género gramatical si el perfil del personaje no existe", () => {
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-unknown-gender", revision:1,
+    text:"Mara llegó. Ella protegió a Elian.", entities
+  });
+  assert.equal(result.pronounResolutions[0].status, "unresolved");
+  assert.equal(result.pronounActions.length, 0);
+});

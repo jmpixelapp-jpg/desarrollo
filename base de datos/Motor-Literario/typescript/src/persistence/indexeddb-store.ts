@@ -5906,8 +5906,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           }
           return;
         }
-        try { store.add(normalized); }
-        catch (error) {
+        try {
+          const addRequest = store.add(normalized);
+          addRequest.onerror = () => {
+            validationError = addRequest.error ?? new Error("No se pudo encolar la operación.");
+          };
+        } catch (error) {
           validationError = error instanceof Error ? error : new Error("No se pudo encolar la operación.");
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
         }

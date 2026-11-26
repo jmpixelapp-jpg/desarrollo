@@ -84,7 +84,7 @@ export interface LiveAuthorMonitorEditorTransactionSourceOptions {
   readonly initialSnapshot: DocumentSnapshot;
   readonly provider: LiveAuthorMonitorEditorTransactionProvider;
   readonly onError?: (error: LiveAuthorMonitorEditorTransactionSourceError) => void;
-  /** Ventana acotada de IDs recientes para descartar notificaciones duplicadas. */
+  /** Ventana acotada de firmas recientes para descartar duplicados idénticos. */
   readonly duplicateWindowSize?: number;
   /** Máximo de eventos reentrantes en espera; predeterminado: 4096. */
   readonly maxQueuedTransactions?: number;
@@ -104,7 +104,7 @@ export interface LiveAuthorMonitorEditorTransactionSourceState {
  *
  * No conserva el texto del documento ni los reemplazos recibidos. Solo guarda
  * longitud, revisión, secuencia, tipo de última transacción y una ventana
- * acotada de identificadores para eliminar notificaciones duplicadas.
+ * acotada de firmas compactas para distinguir duplicados exactos de IDs reutilizados.
  *
  * Los eventos undo/redo deben incluir el delta exacto que el editor ya aplicó.
  */
@@ -314,6 +314,11 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     const change = transaction.change;
     if (change.documentId !== this.documentId) {
       this.fail("document-mismatch", "El editor emitió una transacción para otro documento.");
+      return;
+    }
+
+    if (typeof change.replacement !== "string") {
+      this.fail("invalid-change-range", "El reemplazo de la transacción nativa no es una cadena válida.");
       return;
     }
 

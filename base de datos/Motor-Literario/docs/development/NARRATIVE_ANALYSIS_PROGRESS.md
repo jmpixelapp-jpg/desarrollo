@@ -515,3 +515,13 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - La reconciliación sigue siendo read-only; no inventa cursores, no avanza secuencias y no confirma operaciones automáticamente.
 
 **Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` en este entorno.
+
+
+## Endurecimiento del diagnóstico de cursores
+
+- La inspección ya no presupone que `writerId` y `lastOperationId` almacenados sean cadenas válidas: normaliza valores corruptos y emite `invalid-cursor` sin interrumpir el informe.
+- Valida explícitamente que el diario implemente `loadWriterCursors` antes de iniciar la auditoría.
+- Se añadieron pruebas para identificadores de cursor no textuales y para diarios que no implementan el contrato de lectura de cursores.
+- No se modifican datos persistidos durante estas comprobaciones.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado localmente; no hay resultados de CI asociados al HEAD comprobado.

@@ -131,3 +131,40 @@ test("ordena de forma estable los ciclos y conserva el total al limitar sus mues
   assert.equal(graph.weakComponentCount, cycleCount);
   assert.equal(graph.largestWeakComponentSize, 1);
 });
+
+test("rechaza catálogos globales por encima del límite documentado de 12.000 ideas", () => {
+  const ideas = Array.from({ length: 12_001 }, (_, index) => ({
+    projectId,
+    ideaId: "overflow-" + String(index).padStart(5, "0"),
+    status: "IDEA",
+    relatedIdeaIds: [],
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    statusHistory: [],
+    writerDecisionCount: 0,
+    omittedStatusHistoryCount: 0
+  }));
+
+  assert.throws(() => analyzeLiteraryFragment({
+    projectId,
+    documentId: "project-idea-limit",
+    revision: 1,
+    text: "El catálogo supera el máximo admitido.",
+    knownProjectIdeas: ideas
+  }), /catálogo de ideas y decisiones/);
+});
+
+test("limita escenas explícitas a 2.000 sin recorrer encabezados ilimitados", () => {
+  const text = Array.from({ length: 2_005 }, (_, index) =>
+    "Escena " + String(index + 1) + "\\nUna acción narrativa."
+  ).join("\\n");
+
+  const result = analyzeLiteraryFragment({
+    projectId,
+    documentId: "explicit-scene-limit",
+    revision: 1,
+    text
+  });
+
+  assert.equal(result.characterAttributeEvolution.explicitSceneCount, 2_000);
+});

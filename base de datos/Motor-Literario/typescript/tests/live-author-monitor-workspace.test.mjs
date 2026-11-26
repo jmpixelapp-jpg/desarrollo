@@ -1,9 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  LiveAuthorMonitor,
-  mountLiveAuthorMonitorWorkspace
-} from "../dist/motor-literario.js";
+const monitorModule = await import("../dist-monitor/live-author-monitor.js")
+  .catch(() => import("../dist/motor-literario.js"));
+const { LiveAuthorMonitor, mountLiveAuthorMonitorWorkspace } = monitorModule;
 
 class FakeElement {
   constructor(tagName, ownerDocument) {
@@ -239,6 +238,33 @@ test("muestra errores de persistencia y lease por capítulo sin datos privados",
   refresh();
   assert.match(checkpoint.textContent, /checkpoint guardado/);
   assert.match(lease.textContent, /esta pestaña posee el lease/);
+  unmount();
+});
+
+test("muestra fallos de suscriptores en la tarjeta correcta sin detener otras sesiones", () => {
+  const f = fixture();
+  let refresh;
+  f.monitor.openDocument({ documentId: "chapter-2", text: "dos", revision: 0, sequence: 0 }, "book-1");
+  f.monitor.subscribe(() => { throw new Error("private listener error"); }, "chapter-1");
+  const unmount = mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    schedule(callback) { refresh = callback; return () => {}; }
+  });
+  const root = f.container.children[0];
+  const firstCard = cardFor(root, "chapter-1");
+  const secondCard = cardFor(root, "chapter-2");
+  const firstDiagnostic = findNode(firstCard, node => node.getAttribute("data-diagnostic") === "listeners");
+  const secondDiagnostic = findNode(secondCard, node => node.getAttribute("data-diagnostic") === "listeners");
+  assert.match(firstDiagnostic.textContent, /sin errores/);
+  assert.match(secondDiagnostic.textContent, /sin errores/);
+
+  f.monitor.recordAdmission({
+    documentId: "chapter-1", sequence: 1, baseRevision: 0,
+    start: 3, end: 3, replacement: "!"
+  }, { status: "queued", ticketId: "workspace-listener-error" });
+  refresh();
+  assert.match(firstDiagnostic.textContent, /1 fallo/);
+  assert.match(secondDiagnostic.textContent, /sin errores/);
+  assert.equal(root.textContent.includes("private listener error"), false);
   unmount();
 });
 

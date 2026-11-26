@@ -356,7 +356,15 @@ export function bindLiveAuthorMonitorEditorChanges(
   }) as LiveAuthorMonitorChangeBindingControl;
 
   stop.retryPending = retryPending;
-  stop.getPendingChanges = () => Object.freeze([...pending]);
+  stop.getPendingChanges = () => Object.freeze(pending.map(change => Object.freeze({
+    documentId: change.documentId,
+    sequence: change.sequence,
+    baseRevision: change.baseRevision,
+    start: change.start,
+    end: change.end,
+    replacement: change.replacement,
+    ...(change.activityKind === undefined ? {} : { activityKind: change.activityKind })
+  })));
   stop.discardPendingAfterResynchronization = () => {
     if (disposed) return;
     const shouldResume = pausedForResynchronization;

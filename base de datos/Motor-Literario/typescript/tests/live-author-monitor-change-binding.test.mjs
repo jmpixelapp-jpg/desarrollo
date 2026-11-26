@@ -610,3 +610,29 @@ test("stop puede reintentar una desuscripción fallida sin procesar notificacion
   stop();
   assert.equal(unsubscribeAttempts, 2, "una limpieza completada ya no se repite");
 });
+
+
+test("getPendingChanges devuelve copias congeladas también a nivel de cada delta", () => {
+  const f = sourceFixture();
+  const original = change(1);
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source: f.source,
+    sink: { onEditorChange: () => ({ status: "rejected", reason: "queue_full" }) },
+    onAdmission: () => {},
+    onError: () => {}
+  });
+  f.emit(original);
+
+  const snapshot = stop.getPendingChanges();
+  assert.equal(Object.isFrozen(snapshot), true);
+  assert.equal(snapshot.length, 1);
+  assert.equal(Object.isFrozen(snapshot[0]), true);
+  assert.notEqual(snapshot[0], original, "la vista de diagnóstico no comparte referencias mutables");
+  assert.deepEqual(snapshot[0], original);
+  assert.throws(() => { snapshot[0].replacement = "contenido alterado"; }, TypeError);
+  assert.equal(stop.getPendingChanges()[0].replacement, "A",
+    "una modificación intentada sobre la copia no puede alterar el delta pendiente");
+  assert.equal(original.replacement, "A", "la inspección tampoco modifica el objeto del editor");
+  stop.discardPendingAfterResynchronization();
+  stop();
+});

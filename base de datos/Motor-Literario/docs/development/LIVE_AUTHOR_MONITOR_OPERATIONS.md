@@ -384,3 +384,10 @@ Después de obtener y validar un snapshot común, `discardPendingAfterResynchron
 El desmontaje también permite repetir `stop()` cuando una cancelación falló. Las notificaciones tardías no llegan al sink porque el enlace marca `disposed` antes de iniciar los intentos de liberación.
 
 Las pruebas `live-author-monitor-change-binding.test.mjs` cubren cancelación transitoria fallida durante overflow y durante stop. Se comprueban la ausencia de suscripciones duplicadas, la entrega única de la siguiente edición y el bloqueo de callbacks de una instancia dispuesta.
+
+
+## 20. Snapshot profundo e inmutable del backlog
+
+`getPendingChanges()` devuelve una instantánea de diagnóstico, no referencias a los objetos que el enlace reenviará al motor. Cada entrada es una copia plain-data limitada a los campos del contrato `EditorChange`, y tanto las entradas como el arreglo están congelados.
+
+Esta protección evita que un consumidor de JavaScript modifique accidentalmente un delta pendiente a través de la consulta de backlog. No modifica el objeto original que entregó el editor ni altera el orden FIFO. La regresión correspondiente intenta cambiar el reemplazo de una copia y comprueba que el delta pendiente original permanece intacto.

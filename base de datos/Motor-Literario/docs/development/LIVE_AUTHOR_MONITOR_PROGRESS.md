@@ -1109,3 +1109,16 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Validación:** pendiente de CI para este commit. No se cambia la política FIFO ni se descartan datos salvo después del snapshot autoritativo que exige el contrato.
 
 **Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+
+## 64. Snapshot de backlog inmutable a nivel de cada delta (26 de noviembre de 2026)
+
+**Hallazgo:** `getPendingChanges()` congelaba el arreglo devuelto, pero sus elementos seguían siendo referencias a los objetos internos de la cola. Un consumidor JavaScript podía modificar `snapshot[0].replacement` y alterar el cambio que se reenviaría al anfitrión, pese a que la API prometía una copia inmutable.
+
+**Corrección:** la consulta devuelve un nuevo arreglo congelado y crea una copia simple de cada campo permitido de `EditorChange`; cada objeto resultante también queda congelado. La copia no expone propiedades añadidas por el proveedor y no comparte referencias con el delta original ni con la cola interna.
+
+**Regresión:** se comprueba que el arreglo y cada delta estén congelados, que el objeto sea distinto del original, que los campos coincidan y que un intento de mutación lance sin cambiar el contenido que sigue pendiente.
+
+**Validación:** pendiente de CI para este commit. La recuperación de desuscripción del commit `e85f5302bc37eafa9af762734b28cf87633c07cc` terminó correctamente en [Live Author Monitor — run 45751018096](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018096) y [Motor Literario TypeScript — run 45751018120](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45751018120).
+
+**Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.

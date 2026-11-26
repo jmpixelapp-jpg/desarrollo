@@ -81,11 +81,12 @@ function sentenceSpans(text: string): readonly { start: number; end: number }[] 
   return spans;
 }
 
-function tenseOf(copula: string): NarrativeCharacterStateCandidate["grammaticalTense"] {
+function tenseOf(copula: string, marker: string): NarrativeCharacterStateCandidate["grammaticalTense"] {
   const form = copula.toLocaleLowerCase("es");
-  if (/(?:ar[aá]n?|estará|estarán)$/u.test(form)) return "future";
+  if (/(?:volvi[oó]|dej[oó])\\s+de?\\s*(?:a\\s+)?$/u.test(marker)) return "past";
+  if (/(?:estar[aá]n?|ser[aá]n?)$/u.test(form)) return "future";
   if (/(?:aba|aban|ía|ían|estuvo|estuvieron|sigui[oó]|siguieron|qued[oó]|encontraba)$/u.test(form)) return "past";
-  if (/^(?:est[aá]n?|sigue|siguen|permanece|permanecen|contin[uú]a|contin[uú]an|se encuentra|parece|parecen)$/u.test(form)) return "present";
+  if (/^(?:est[aá]s?|est[aá]n?|es|son|sigue|siguen|permanece|permanecen|contin[uú]a|contin[uú]an|se encuentra|parece|parecen)$/u.test(form)) return "present";
   return "unknown";
 }
 
@@ -194,7 +195,7 @@ export function discoverNarrativeCharacterStateCandidates(
           entityId: entity.id,
           state: stateMatch.pattern.state,
           polarity,
-          grammaticalTense: tenseOf(copula),
+          grammaticalTense: tenseOf(copula, marker),
           aspect,
           assertionMode: mode,
           reviewStatus: "candidate",

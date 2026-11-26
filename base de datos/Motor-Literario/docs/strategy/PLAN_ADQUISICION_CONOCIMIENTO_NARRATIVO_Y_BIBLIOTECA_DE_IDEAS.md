@@ -667,3 +667,19 @@ La relación se denomina `knowledge-precedes-action`: indica precedencia verific
 
 
 **Endurecimiento de la Fase AM:** la validación también exige un único estado por personaje e IDs de información globalmente únicos, para impedir colisiones en los identificadores de enlace. El límite de trabajo se aplica al total de elementos de conocimiento más acciones, no solo al número de estados. Las pruebas cubren estados de personaje duplicados e IDs repetidos entre personajes.
+
+
+### Fase AN: triangulación de contexto de decisión
+
+Se añade `narrative-decision-context.ts` y la salida integrada `decisionContexts`. Esta capa cruza tres referencias independientes:
+- información atribuida al personaje que precede a una acción (`knowledgeActionLinks`);
+- intención explícita del mismo personaje comparada con esa acción (`intentActionConsistency`);
+- la acción exacta compartida por ambos análisis.
+
+El candidato conserva las tres evidencias textuales, los IDs de información, intención, acción y personaje, además de la alineación obtenida por el comparador existente: `supports-intent`, `opposes-intent`, `conditional-intent` u `other-or-undetermined`.
+
+La triangulación exige coincidencia exacta de proyecto, personaje y acción. No combina conocimiento de un personaje con acciones de otro ni comparaciones de una acción distinta. La cronología de intención-acción procede de la comparación existente, que solo acepta posición posterior en la misma revisión o un orden explícito entre documentos.
+
+**Límite semántico:** el resultado es un contexto de decisión documentado, no una decisión mental confirmada. No afirma que el personaje recordara conscientemente la información, que la considerara verdadera, que deliberara sobre ella ni que esta causara la acción. La etiqueta de alineación describe la comparación lingüística ya existente, no una evaluación moral o psicológica.
+
+Se añadieron pruebas unitarias para alineación favorable, oposición, condición, coincidencia de actor y acción, referencias inválidas y duplicadas; además de una prueba de integración que recorre el pipeline principal desde conocimiento e intención hasta la acción.

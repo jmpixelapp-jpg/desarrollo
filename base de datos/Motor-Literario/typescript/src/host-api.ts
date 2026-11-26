@@ -5,7 +5,7 @@ import {
 import type {
   AnalysisResult, ChangeAdmission, CommitResult, DocumentSnapshot, EditorChange,
   EngineOptions, LiveAnalysisMetrics, ProjectIdentity, StoredDiagnostics, StoredProjectFinalizationReceipt,
-  StoredLiveAuthorMonitorLease, Diagnostic
+  StoredLiveAuthorMonitorLease, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
 import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener } from "./live-author-monitor";
@@ -262,6 +262,134 @@ function requireUniquePersonalIdeaEntries(
     }
   }
   return entries;
+}
+
+function comparePersonalIdeaLibraryCursor(
+  first: Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">,
+  second: Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">
+): number {
+  if (first.sourceProjectId !== second.sourceProjectId) {
+    return first.sourceProjectId < second.sourceProjectId ? -1 : 1;
+  }
+  if (first.ideaId === second.ideaId) return 0;
+  return first.ideaId < second.ideaId ? -1 : 1;
+}
+
+/** Valida una página sin suponer que sus referencias archivadas caben en la misma página. */
+function validatePersonalIdeaLibraryPage(
+  value: unknown,
+  writerId: string,
+  cursor: PersonalIdeaLibraryCursor | null,
+  limit: number
+): {
+  readonly page: PersonalIdeaLibraryPage;
+  readonly unresolved: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[];
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("La biblioteca devolvió una página inválida.");
+  }
+  const candidate = value as Partial<PersonalIdeaLibraryPage>;
+  if (!Array.isArray(candidate.items) || candidate.items.length > limit ||
+      !Object.prototype.hasOwnProperty.call(candidate, "nextCursor") ||
+      (candidate.nextCursor !== null &&
+        (!candidate.nextCursor || candidate.nextCursor.writerId !== writerId ||
+          typeof candidate.nextCursor.sourceProjectId !== "string" ||
+          !candidate.nextCursor.sourceProjectId.trim() ||
+          typeof candidate.nextCursor.ideaId !== "string" ||
+          !candidate.nextCursor.ideaId.trim() ||
+          !Number.isSafeInteger(candidate.nextCursor.libraryVersion) ||
+          (candidate.nextCursor.libraryVersion as number) < 0)) ||
+      !Number.isSafeInteger(candidate.libraryVersion) ||
+      (candidate.libraryVersion as number) < 0 ||
+      (candidate.restartRequired !== undefined && typeof candidate.restartRequired !== "boolean")) {
+    throw new Error("La página o el cursor de biblioteca están malformados.");
+  }
+
+  const libraryVersion = candidate.libraryVersion as number;
+  const restartRequired = candidate.restartRequired === true;
+  if (cursor?.libraryVersion !== undefined && cursor.libraryVersion !== libraryVersion &&
+      !restartRequired) {
+    throw new Error("La generación de la biblioteca cambió sin solicitar reiniciar la paginación.");
+  }
+  if (restartRequired &&
+      (candidate.items.length !== 0 || candidate.nextCursor !== null)) {
+    throw new Error("Una resincronización debe devolver una página vacía y sin cursor.");
+  }
+  if (candidate.nextCursor !== null &&
+      candidate.nextCursor.libraryVersion !== libraryVersion) {
+    throw new Error("El cursor siguiente pertenece a otra generación de biblioteca.");
+  }
+
+  const items = candidate.items as PersonalIdeaLibraryEntry[];
+  const pageKeys = new Set<string>();
+  let previous: PersonalIdeaLibraryEntry | undefined;
+  for (const entry of items) {
+    if (!isValidPersonalIdeaEntry(entry, writerId)) {
+      throw new Error("Una página contiene una idea de otro escritor o un registro malformado.");
+    }
+    if (previous && comparePersonalIdeaLibraryCursor(
+      { sourceProjectId: previous.sourceProjectId, ideaId: previous.idea.id },
+      { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }
+    ) >= 0) {
+      throw new Error("Las entradas de la página no están estrictamente ordenadas.");
+    }
+    if (cursor && comparePersonalIdeaLibraryCursor(
+      { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }, cursor
+    ) <= 0) {
+      throw new Error("El cursor devolvió una idea anterior o repetida.");
+    }
+    const key = JSON.stringify([entry.sourceProjectId, entry.idea.id]);
+    if (pageKeys.has(key)) throw new Error("La página repite una idea archivada.");
+    pageKeys.add(key);
+    previous = entry;
+  }
+
+  const unresolved = new Map<string, Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">>();
+  for (const entry of items) {
+    if (!entry.context) continue;
+    const contextIdeaIds = new Set(entry.context.relatedIdeas.map(idea => idea.id));
+    const contextEntityIds = new Set(entry.context.relatedEntities.map(entity => entity.id));
+    if ([...contextIdeaIds].some(id => pageKeys.has(JSON.stringify([entry.sourceProjectId, id])))) {
+      throw new Error("El contexto duplica una idea archivada de la página.");
+    }
+    for (const related of [entry.idea, ...entry.context.relatedIdeas]) {
+      if ((related.relatedEntityIds ?? []).some(id => !contextEntityIds.has(id))) {
+        throw new Error("Una idea archivada conserva una ficha relacionada sin contexto.");
+      }
+      for (const relatedId of related.relatedIdeaIds ?? []) {
+        const key = JSON.stringify([entry.sourceProjectId, relatedId]);
+        if (!contextIdeaIds.has(relatedId) && !pageKeys.has(key)) {
+          unresolved.set(key, { sourceProjectId: entry.sourceProjectId, ideaId: relatedId });
+        }
+      }
+    }
+  }
+
+  const nextCursor = candidate.nextCursor ?? null;
+  if (items.length === 0 && nextCursor !== null) {
+    throw new Error("Una página vacía no puede avanzar el cursor.");
+  }
+  if (items.length < limit && nextCursor !== null) {
+    throw new Error("Una página incompleta no puede indicar que existen más resultados.");
+  }
+  if (nextCursor !== null) {
+    const last = items[items.length - 1];
+    if (!last || nextCursor.sourceProjectId !== last.sourceProjectId ||
+        nextCursor.ideaId !== last.idea.id ||
+        (cursor && comparePersonalIdeaLibraryCursor(nextCursor, cursor) <= 0)) {
+      throw new Error("El cursor siguiente no coincide con la última idea de la página.");
+    }
+  }
+
+  return {
+    page: {
+      items,
+      nextCursor,
+      libraryVersion,
+      ...(restartRequired ? { restartRequired: true } : {})
+    },
+    unresolved: [...unresolved.values()]
+  };
 }
 
 function isValidPersonalIdeaContext(
@@ -3384,6 +3512,141 @@ export class HostEngineApi {
     return work;
   }
 
+
+  /**
+   * Consulta una página de la biblioteca privada del escritor autenticado.
+   * Los cursores de IndexedDB incluyen la generación durable y se invalidan
+   * automáticamente cuando una transferencia o consolidación modifica la biblioteca.
+   */
+  async getPersonalIdeaLibraryPage(
+    cursor: PersonalIdeaLibraryCursor | null = null,
+    limit = 50
+  ): Promise<PersonalIdeaLibraryPage> {
+    const writerId = this.requireWriterId();
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+        (cursor !== null && (!cursor || cursor.writerId !== writerId ||
+          typeof cursor.sourceProjectId !== "string" || !cursor.sourceProjectId.trim() ||
+          typeof cursor.ideaId !== "string" || !cursor.ideaId.trim() ||
+          (cursor.libraryVersion !== undefined &&
+            (!Number.isSafeInteger(cursor.libraryVersion) || cursor.libraryVersion < 0))))) {
+      throw new Error("Parámetros de paginación de biblioteca inválidos.");
+    }
+
+    const work = this.knowledgeTail.then(async () => {
+      if (this.store.loadPersonalIdeasPage) {
+        const rawPage = await this.store.loadPersonalIdeasPage(writerId, cursor, limit);
+        const checked = validatePersonalIdeaLibraryPage(rawPage, writerId, cursor, limit);
+        const pageLibraryVersion = checked.page.libraryVersion;
+        if (pageLibraryVersion === undefined) {
+          throw new Error("El adaptador paginado no devolvió la generación durable de la biblioteca.");
+        }
+
+        if (checked.page.restartRequired) {
+          return {
+            items: [],
+            nextCursor: null,
+            libraryVersion: pageLibraryVersion,
+            restartRequired: true
+          };
+        }
+
+        if (checked.unresolved.length > 0) {
+          const requested = new Map(checked.unresolved.map(reference => [
+            JSON.stringify([reference.sourceProjectId, reference.ideaId]), reference
+          ]));
+          const resolved = new Set<string>();
+
+          if (this.store.loadPersonalIdeasByKeys) {
+            for (let offset = 0; offset < checked.unresolved.length; offset += 128) {
+              const batch = checked.unresolved.slice(offset, offset + 128);
+              const targets = await this.store.loadPersonalIdeasByKeys(writerId, batch, pageLibraryVersion);
+              if (!Array.isArray(targets)) {
+                throw new Error("La lectura agrupada de la biblioteca devolvió una colección inválida.");
+              }
+              for (const target of targets) {
+                if (!isValidPersonalIdeaEntry(target, writerId) ||
+                    typeof target.sourceProjectId !== "string" ||
+                    target.idea.projectId !== target.sourceProjectId) {
+                  throw new Error("Una idea relacionada está malformada o pertenece a otro escritor.");
+                }
+                const key = JSON.stringify([target.sourceProjectId, target.idea.id]);
+                const expected = requested.get(key);
+                if (!expected || target.idea.id !== expected.ideaId || resolved.has(key)) {
+                  throw new Error("La lectura agrupada devolvió un destino ajeno o duplicado.");
+                }
+                resolved.add(key);
+              }
+            }
+          } else if (this.store.loadPersonalIdeas) {
+            // Adaptadores antiguos validan los vínculos leyendo la colección completa.
+            const allEntries = requireUniquePersonalIdeaEntries(
+              await this.store.loadPersonalIdeas(writerId), writerId
+            );
+            for (const entry of allEntries) {
+              resolved.add(JSON.stringify([entry.sourceProjectId, entry.idea.id]));
+            }
+          } else {
+            throw new Error("El almacenamiento no permite resolver vínculos a ideas fuera de la página.");
+          }
+
+          if (resolved.size < requested.size ||
+              [...requested.keys()].some(key => !resolved.has(key))) {
+            throw new Error("Una idea relacionada no existe en la biblioteca privada del escritor.");
+          }
+        }
+
+        return {
+          items: cloneNarrativeRecords(checked.page.items.map(entry => entry.context
+            ? entry
+            : { ...entry, contextStatus: "missing-legacy-context" as const }
+          )),
+          nextCursor: checked.page.nextCursor
+            ? cloneNarrativeRecord(checked.page.nextCursor)
+            : null,
+          libraryVersion: pageLibraryVersion
+        };
+      }
+
+      // Compatibilidad: los adaptadores sin lectura keyset conservan la API,
+      // pero se materializa la biblioteca completa y no se ofrece versión durable.
+      if (cursor?.libraryVersion !== undefined) {
+        throw new Error("El adaptador no admite continuar una lectura versionada de biblioteca.");
+      }
+      if (!this.store.loadPersonalIdeas) {
+        throw new Error("El almacenamiento no admite la biblioteca personal de ideas.");
+      }
+      const allEntries = requireUniquePersonalIdeaEntries(
+        await this.store.loadPersonalIdeas(writerId), writerId
+      );
+      const ordered = [...allEntries].sort((first, second) =>
+        comparePersonalIdeaLibraryCursor(
+          { sourceProjectId: first.sourceProjectId, ideaId: first.idea.id },
+          { sourceProjectId: second.sourceProjectId, ideaId: second.idea.id }
+        )
+      );
+      const remaining = cursor
+        ? ordered.filter(entry => comparePersonalIdeaLibraryCursor(
+            { sourceProjectId: entry.sourceProjectId, ideaId: entry.idea.id }, cursor
+          ) > 0)
+        : ordered;
+      const items = remaining.slice(0, limit);
+      const last = items[items.length - 1];
+      const nextCursor: PersonalIdeaLibraryCursor | null =
+        remaining.length > items.length && last
+          ? { writerId, sourceProjectId: last.sourceProjectId, ideaId: last.idea.id }
+          : null;
+      return {
+        items: cloneNarrativeRecords(items.map(entry => entry.context
+          ? entry
+          : { ...entry, contextStatus: "missing-legacy-context" as const }
+        )),
+        nextCursor
+      };
+    });
+
+    this.knowledgeTail = work.then(() => undefined, () => undefined);
+    return work;
+  }
 
   /** Consulta el recibo durable que demuestra la transferencia de cierre de este libro. */
   async getProjectFinalizationReceipt(): Promise<StoredProjectFinalizationReceipt | undefined> {

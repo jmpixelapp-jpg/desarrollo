@@ -738,3 +738,6 @@ El guardado de checkpoints debe preservar el error del request que escribe en `l
 El aborto afecta conjuntamente a la verificación del lease y a la escritura del checkpoint; por tanto, no debe quedar un snapshot parcial. Un checkpoint anterior se conserva. El host expone solamente el código de clase del error y no su mensaje, que podría contener texto privado.
 
 La regresión de cuota inyecta un error request-level asíncrono en el límite de almacenamiento y verifica rechazo con el nombre original y conservación del checkpoint previo. Es una simulación determinista de la ruta de error; no equivale a agotar físicamente la cuota del navegador. Para pruebas de cuota real hacen falta perfiles/dispositivos controlados con límites de almacenamiento distintos.
+
+
+**Validación CI:** [run 45765001413](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765001413) aprobó el request-level `QuotaExceededError` como test 114 y la suite host/editor/browser 175/175. La ruta conserva el checkpoint previo y no expone el mensaje de error del manuscrito. La simulación no sustituye una prueba física de cuota agotada en navegador.

@@ -58,19 +58,28 @@ function validate(input: NarrativeKnowledgeActionLinksInput): void {
       typeof entity.id !== "string" || !entity.id.trim())) {
     throw new Error("Las entidades deben pertenecer al proyecto y tener identificadores válidos.");
   }
+  const stateCharacters = new Set<string>();
+  const informationIds = new Set<string>();
+  let knowledgeItemCount = 0;
   for (const state of input.knowledgeStates) {
     if (!state || state.projectId !== input.projectId ||
-        !characters.has(state.characterEntityId) || !Array.isArray(state.items)) {
+        !characters.has(state.characterEntityId) || stateCharacters.has(state.characterEntityId) ||
+        !Array.isArray(state.items)) {
       throw new Error("Los estados de conocimiento deben pertenecer a personajes del proyecto.");
     }
-    const ids = new Set<string>();
+    stateCharacters.add(state.characterEntityId);
     for (const item of state.items) {
+      knowledgeItemCount++;
       if (!item || typeof item.informationId !== "string" || !item.informationId.trim() ||
-          ids.has(item.informationId) || typeof item.content !== "string" ||
-          !item.content.trim() || !validEvidence(item.evidence)) {
-        throw new Error("Cada elemento de conocimiento debe tener ID único, contenido y evidencia válidos.");
+          informationIds.has(item.informationId) || typeof item.content !== "string" ||
+          !item.content.trim() || !validEvidence(item.evidence) ||
+          typeof item.channel !== "string" || typeof item.status !== "string") {
+        throw new Error("Cada elemento de conocimiento debe tener ID global único, contenido, canal, estado y evidencia válidos.");
       }
-      ids.add(item.informationId);
+      informationIds.add(item.informationId);
+      if (knowledgeItemCount + input.actions.length > MAX_RECORDS) {
+        throw new Error("Se excedió el límite de registros para enlazar conocimiento y acciones.");
+      }
     }
   }
   const actionIds = new Set<string>();

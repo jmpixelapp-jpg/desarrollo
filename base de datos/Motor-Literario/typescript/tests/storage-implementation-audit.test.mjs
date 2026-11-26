@@ -215,7 +215,7 @@ test("los vínculos de escena limitan la evidencia intermedia a veinte muestras"
 
 test("la evolución de atributos localiza escenas mediante búsqueda binaria", () => {
   const start = literaryAnalysisSource.indexOf("const findSceneForEvidence = (start: number, end: number)");
-  const end = literaryAnalysisSource.indexOf("\\n  for (const assertion of assertions)", start + 10);
+  const end = literaryAnalysisSource.indexOf("\n  for (const assertion of assertions)", start + 10);
   assert.notEqual(start, -1, "debe existir el localizador binario de escenas");
   assert.ok(end > start, "el localizador debe delimitarse");
   const lookup = literaryAnalysisSource.slice(start, end);

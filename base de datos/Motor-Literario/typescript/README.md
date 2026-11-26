@@ -428,3 +428,6 @@ Los separadores de párrafo introducidos por la ingesta no se atribuyen falsamen
 
 
 La inspección EPUB también recupera la jerarquía de navegación de EPUB 3 (`nav`) y, como alternativa, el índice EPUB 2 (`NCX`). Cada entrada devuelve etiqueta, destino interno y profundidad jerárquica, y se advierte cuando no existe una tabla de contenidos utilizable o cuando apunta a un recurso ausente. Esta navegación complementa el orden real de lectura del spine: no lo sustituye ni se usa para reordenar el texto.
+
+
+La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto del documento anfitrión. `resolveNarrativeTextEvidence()` exige que esa revisión coincida con la evidencia persistida, además de comprobar que la cita coincide carácter por carácter con el rango. Rechaza snapshots sin versión, revisiones distintas, citas modificadas y evidencias marcadas como obsoletas. Esta verificación evita enlazar accidentalmente una evidencia histórica a una edición actual que contenga texto parecido.

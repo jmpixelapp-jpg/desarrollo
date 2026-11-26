@@ -487,6 +487,145 @@ export async function inspectNarrativeSyncJournalIntegrity(
   };
 }
 
+export type NarrativeSyncCursorRecoveryAction =
+  | "no-action"
+  | "rebuild-cursor-from-complete-journal"
+  | "manual-review";
+
+export interface NarrativeSyncCursorRecoveryProposal {
+  readonly projectId: string;
+  readonly writerId: string;
+  readonly lastSequence: number;
+  readonly lastOperationId: string;
+}
+
+export interface NarrativeSyncCursorRecoveryItem {
+  readonly writerId: string;
+  readonly action: NarrativeSyncCursorRecoveryAction;
+  readonly reason: string;
+  readonly proposal?: NarrativeSyncCursorRecoveryProposal;
+  readonly issueCodes: readonly NarrativeSyncJournalIntegrityIssueCode[];
+}
+
+export interface NarrativeSyncCursorRecoveryPlan {
+  readonly projectId: string;
+  readonly items: readonly NarrativeSyncCursorRecoveryItem[];
+  readonly manualReviewCount: number;
+  readonly proposedRebuildCount: number;
+  readonly safe: boolean;
+}
+
+/**
+ * Construye un plan consultivo para divergencias de cursores. Nunca escribe
+ * en IndexedDB. Solo propone reconstrucción cuando el diario de ese escritor
+ * es completo desde la secuencia 1, cada envoltura/metadato es válido y la
+ * única divergencia es un cursor ausente o una identidad final equivocada.
+ * La propuesta debe volver a validarse en una transacción antes de aplicarse.
+ */
+export async function planNarrativeSyncJournalCursorRecovery(
+  journal: IndexedDbNarrativeSyncJournal,
+  projectId: string
+): Promise<NarrativeSyncCursorRecoveryPlan> {
+  if (!journal || typeof journal.loadOperations !== "function" ||
+      typeof journal.loadWriterCursors !== "function" ||
+      typeof projectId !== "string" || !projectId.trim()) {
+    throw new TypeError("Se requiere un diario y un proyecto válidos para planificar recuperación.");
+  }
+
+  const operations = await journal.loadOperations(projectId);
+  const cursors = await journal.loadWriterCursors(projectId);
+  const snapshotJournal = {
+    loadOperations: async () => operations,
+    loadWriterCursors: async () => cursors
+  };
+  const integrity = await inspectNarrativeSyncJournalIntegrity(snapshotJournal, projectId);
+  const writers = new Set<string>([
+    ...operations.map(operation => typeof operation.writerId === "string" ? operation.writerId : ""),
+    ...cursors.map(cursor => typeof cursor.writerId === "string" ? cursor.writerId : "")
+  ]);
+  const items: NarrativeSyncCursorRecoveryItem[] = [];
+
+  for (const writerId of [...writers].sort((left, right) => left.localeCompare(right))) {
+    const entries = operations
+      .filter(operation => operation.writerId === writerId)
+      .slice()
+      .sort((left, right) => left.sequence - right.sequence);
+    const cursor = cursors.find(candidate => candidate.writerId === writerId);
+    const writerIssues = integrity.issues.filter(issue => issue.writerId === writerId);
+    const issueCodes = [...new Set(writerIssues.map(issue => issue.code))];
+    const last = entries[entries.length - 1];
+    const complete = entries.length > 0 &&
+      entries.every((entry, index) =>
+        entry.projectId === projectId &&
+        entry.writerId === writerId &&
+        Number.isSafeInteger(entry.sequence) &&
+        entry.sequence === index + 1
+      ) &&
+      !writerIssues.some(issue =>
+        issue.code !== "cursor-missing-for-operations" &&
+        issue.code !== "cursor-last-operation-mismatch"
+      );
+
+    if (writerIssues.length === 0 && cursor && last &&
+        cursor.lastSequence === last.sequence && cursor.lastOperationId === last.operationId) {
+      items.push({
+        writerId,
+        action: "no-action",
+        reason: "El cursor coincide con la última operación y no hay incidencias para este escritor.",
+        issueCodes
+      });
+      continue;
+    }
+
+    const onlyMissingCursor = !cursor &&
+      issueCodes.length === 1 &&
+      issueCodes[0] === "cursor-missing-for-operations";
+    const onlyLastIdentityMismatch = Boolean(cursor && last &&
+      cursor.lastSequence === last.sequence &&
+      issueCodes.length === 1 &&
+      issueCodes[0] === "cursor-last-operation-mismatch");
+
+    if (complete && last && (onlyMissingCursor || onlyLastIdentityMismatch)) {
+      items.push({
+        writerId,
+        action: "rebuild-cursor-from-complete-journal",
+        reason: onlyMissingCursor
+          ? "El historial es contiguo desde la secuencia 1 y sus envolturas son válidas; se puede proponer un cursor derivado de la última operación."
+          : "El historial completo confirma la última secuencia e identidad; solo diverge la identidad almacenada en el cursor.",
+        proposal: {
+          projectId,
+          writerId,
+          lastSequence: last.sequence,
+          lastOperationId: last.operationId
+        },
+        issueCodes
+      });
+      continue;
+    }
+
+    items.push({
+      writerId,
+      action: "manual-review",
+      reason: !entries.length
+        ? "No hay operaciones conservadas para reconstruir el cursor."
+        : "La divergencia no puede resolverse únicamente con un historial completo y verificable; no se propone modificar datos.",
+      issueCodes
+    });
+  }
+
+  const manualReviewCount = items.filter(item => item.action === "manual-review").length;
+  const proposedRebuildCount = items.filter(
+    item => item.action === "rebuild-cursor-from-complete-journal"
+  ).length;
+  return {
+    projectId,
+    items,
+    manualReviewCount,
+    proposedRebuildCount,
+    safe: manualReviewCount === 0
+  };
+}
+
 export interface NarrativeSyncReplayResult {
   readonly processed: number;
   readonly remaining: number;

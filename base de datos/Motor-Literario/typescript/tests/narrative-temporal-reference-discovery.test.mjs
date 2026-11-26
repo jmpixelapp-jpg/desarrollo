@@ -36,6 +36,13 @@ test("no inventa el orden de fechas numéricas ambiguas ni resuelve expresiones 
   assert.equal(result.find(item => item.surface.toLowerCase() === "dos días antes").relation, "before");
 });
 
+test("distingue duraciones de tiempo transcurrido antes y después de un ancla", () => {
+  const result = discover("Durante tres días esperó. Hace dos días había partido. Al cabo de una semana regresó.");
+  assert.equal(result.find(item => item.surface === "Durante tres días").relation, "duration");
+  assert.equal(result.find(item => item.surface === "Hace dos días").relation, "before");
+  assert.equal(result.find(item => item.surface === "Al cabo de una semana").relation, "after");
+});
+
 test("extrae referencias de orden, franjas del día y horas sin asignar fecha absoluta", () => {
   const text = "Mientras esperaba, al amanecer miró el reloj a las 18:30.";
   const result = discover(text);

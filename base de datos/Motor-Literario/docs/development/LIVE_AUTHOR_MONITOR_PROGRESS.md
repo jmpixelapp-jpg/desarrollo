@@ -1014,3 +1014,27 @@ En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelap
 **CI general:** [Motor Literario TypeScript — run 45747598008](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598008) seguía `in_progress` en la instalación de Chromium cuando se registró este avance (última actualización del run: 03:14:12 UTC, 26 de noviembre). No se atribuye resultado de typecheck ni suite general a esta ejecución mientras ese paso no termine.
 
 **Alcance:** el scheduler opera solo sobre timers de refresco visual. Los checkpoints, los heartbeats y la propiedad del lease siguen activos independientemente de la visibilidad.
+
+## 57. Verificación general completa en commit descendiente (26 de noviembre de 2026)
+
+**CI de monitor en el commit exacto del endurecimiento:** [Live Author Monitor — run 45747598005](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598005), `success` para `0a21f341ae1787a4ae82255295e4fdc79e3182cd`. Pasaron 10/10 regresiones aisladas, 169/169 pruebas del monitor, Chromium, auditoría MLDB, build runtime y benchmark.
+
+**CI general en su descendiente directo:** [Motor Literario TypeScript — run 45747608045](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747608045), `success` para `c90fa1ad3b3174b205564cd71a60f91ace30c4b7`. La comparación GitHub confirma que `c90fa1a` está un commit por delante de `0a21f34`, sin divergencia. Por tanto incluye el scheduler de visibilidad y el guard contra ticks retrasados. Typecheck aprobado, suite general **775/775**, 0 fallidas, benchmarks general y del monitor aprobados.
+
+**Benchmark del monitor en el workflow general:** Node.js v22.23.5; 8 documentos; 100.000 commits; 200.274 commits/s; heap retenido 0,48 MB; crecimiento de mitad a final 0 MB; RSS final 75,32 MB; todos los documentos finalizaron con 12.500 commits y cero pendientes.
+
+El workflow específico en `0a21f34` midió 274.897,17 commits/s y RSS final 73,89 MB. Las diferencias entre ejecuciones reflejan variación del runner; no deben interpretarse como una regresión entre mediciones.
+
+El run general original `45747598008` permaneció sin actualizar durante la instalación de Chromium. Su validación fue superada por el run descendiente `45747608045`, que finalizó correctamente.
+
+## 58. Page Lifecycle: restauración BFCache y congelación de pestaña (25 de noviembre de 2026)
+
+**Motivación:** Page Visibility cubre el cambio visible/oculto, pero Chromium también puede congelar una página o conservarla en Back/Forward Cache. La interfaz necesita revalidar sus métricas al recibir señales del ciclo de vida, sin despertar mientras siga oculta.
+
+**Implementación:** `scheduleLiveAuthorMonitorWhileVisible()` escucha `pagehide/pageshow` en la ventana propietaria y `freeze/resume` en el documento, además de `visibilitychange`. Las transiciones comparten un estado activo que impide doble cancelación/reanudación; la restauración ejecuta una lectura inmediata y solo rearma el intervalo si el documento está visible.
+
+**Regresiones:** pagehide cancela e invalida ticks encolados; pageshow refresca y rearma; freeze/resume repite el ciclo; pageshow/resume no reactivan un documento oculto; al desmontar se eliminan todos los listeners de documento y ventana.
+
+**Archivos:** `src/live-author-monitor-visibility.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, guía operativa y progreso.
+
+**Validación:** pendiente de CI para esta entrega.

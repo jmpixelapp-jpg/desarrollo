@@ -77,3 +77,40 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Arquitectura: [Grafo unificado de conocimiento narrativo](../architecture/GRAFO_CONOCIMIENTO_NARRATIVO.md).
 
 **Límite operativo:** es una proyección en memoria y no persiste ni sincroniza. El llamador debe seleccionar las revisiones documentales que desea analizar; no se decide automáticamente cuál es la versión canónica.
+
+
+## 7. Snapshots incrementales del grafo
+
+- Nuevo módulo `typescript/src/narrative-knowledge-graph-incremental.ts`.
+- API pública para crear snapshots por documento y actualizarlos reutilizando contribuciones no modificadas.
+- La invalidación compara ID, revisión, texto y offset base; cambios en el nombre de proyecto de origen invalidan el extractor de ideas.
+- Los documentos retirados desaparecen del grafo agregado y se informan separadamente.
+- Se recalculan los hallazgos de consistencia sobre el conjunto completo de afirmaciones después de combinar contribuciones.
+- Pruebas: `tests/narrative-knowledge-graph-incremental.test.mjs`.
+- Contrato y límites: [Actualización incremental del grafo narrativo](../architecture/GRAFO_CONOCIMIENTO_NARRATIVO_INCREMENTAL.md).
+
+**Límite:** el snapshot retiene texto en memoria y no se persiste ni transmite. La extracción se limita a documentos invalidados, pero la agregación y la consistencia global siguen recorriendo el snapshot completo.
+
+
+## 8. Integración inicial con persistencia
+
+- Nuevo módulo `typescript/src/narrative-knowledge-graph-persistence.ts`.
+- API `persistNarrativeKnowledgeGraphSnapshot(store, snapshot)` que integra el snapshot incremental con `ProjectStore`.
+- Exige lecturas y escrituras compare-and-swap para las cinco colecciones; ordena dependencias guardando entidades antes de relaciones, eventos e ideas.
+- Conserva evidencias cruzadas mediante las funciones de fusión del dominio y evita escrituras idénticas.
+- Las operaciones son secuenciales e idempotentes ante reintento, pero no constituyen una transacción global.
+- Pruebas: `tests/narrative-knowledge-graph-persistence.test.mjs`.
+- Contrato: [Persistencia del grafo narrativo](../architecture/PERSISTENCIA_DEL_GRAFO_NARRATIVO.md).
+
+**Limitación crítica documentada:** el contrato actual no ofrece borrado ni reemplazo transaccional por documento. La persistencia inicial puede conservar evidencias antiguas tras una revisión y no elimina registros que desaparecen del análisis. No se afirma reconciliación completa hasta implementar tombstones y reemplazo atómico por documento.
+
+
+## 9. Reconciliación de evidencia por revisión documental
+
+- La persistencia ahora retira las evidencias previas de cada documento incluido en el snapshot entrante y las reemplaza por las de la revisión actual.
+- La reconciliación se aplica a entidades, relaciones, acontecimientos, ideas y afirmaciones, usando CAS para cada escritura.
+- La evidencia de documentos no incluidos en el snapshot se conserva.
+- Si una entidad deja de aparecer en el texto revisado, se elimina su evidencia de ese documento; el registro sin evidencia se conserva porque el contrato no permite borrado seguro.
+- Pruebas de regresión para revisión actualizada, evidencia de otro documento y repetición idempotente.
+
+**Límites vigentes:** la persistencia continúa siendo secuencial, no atómica entre colecciones. Los documentos retirados del proyecto deben declararse explícitamente; omitirlos del snapshot no autoriza su eliminación. La siguiente fase debe incorporar manifiestos de documentos, tombstones y reemplazo transaccional.

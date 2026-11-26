@@ -279,10 +279,10 @@ export function extractNarrativeEntities(
   if (!new RegExp("\\b(?:" + allMarkers + ")\\b", "u").test(text)) return [];
 
   const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}]+){0,3}";
-  const prefixCharacter = String.raw`\b(?:${characterMarkers})\s+(?:el|la|a)?\s*`;
-  const prefixPlace = String.raw`\b(?:${placeMarkers})\s+(?:de|del|de la|de los|de las)?\s*`;
-  const prefixObject = String.raw`\b(?:${objectMarkers})\s+(?:llamado|llamada)?\s*`;
-  const suffix = String.raw`(?=$|[^\p{L}\p{N}_])`;
+  const prefixCharacter = String.raw`\\b(?:${characterMarkers})\\s+(?:el|la|a)?\\s*`;
+  const prefixPlace = String.raw`\\b(?:${placeMarkers})\\s+(?:de|del|de la|de los|de las)?\\s*`;
+  const prefixObject = String.raw`\\b(?:${objectMarkers})\\s+(?:llamado|llamada)?\\s*`;
+  const suffix = String.raw`(?=$|[^\\p{L}\\p{N}_])`;
   const patterns: readonly { kind: NarrativeEntityType; expression: RegExp }[] = [
     { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "gu") },
     { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "gu") },

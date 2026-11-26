@@ -6,6 +6,7 @@ import {
   analyzeNarrativeIdeaCrossDocumentRelations,
   buildNarrativeIdeaContinuityLines,
   buildNarrativeIdeaEvolution,
+  createNarrativeIdeaContinuityIndex,
   createNarrativeIdeaContinuityOutboxCallback,
   deliverNarrativeSyncOutboxBatch,
   IndexedDbNarrativeSyncOutbox
@@ -43,7 +44,6 @@ function makeIndex(projectId, generation, updatedAt, phrase = "memoria antigua d
     crossDocumentAnalysis
   });
   const result = buildNarrativeIdeaContinuityLines({ projectId, evolution });
-  const { createNarrativeIdeaContinuityIndex } = globalThis.__motorLiterarioOutboxImports;
   return createNarrativeIdeaContinuityIndex({
     projectId,
     generation,
@@ -55,9 +55,6 @@ function makeIndex(projectId, generation, updatedAt, phrase = "memoria antigua d
     result
   });
 }
-
-const { createNarrativeIdeaContinuityIndex } = await import("../dist/motor-literario.js");
-globalThis.__motorLiterarioOutboxImports = { createNarrativeIdeaContinuityIndex };
 
 function databaseName() {
   return "narrative-sync-outbox-" + randomUUID();

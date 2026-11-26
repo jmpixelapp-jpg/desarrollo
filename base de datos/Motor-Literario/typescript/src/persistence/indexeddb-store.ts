@@ -302,8 +302,7 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
           (change.status !== "IDEA" && change.status !== "incorporated" && change.status !== "discarded") ||
           (change.changedAt !== undefined &&
             (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-          (change.reason !== "initial" && change.reason !== "writer" && change.reason !== "text-revised") ||
-          (change.reason === "text-revised" && change.status !== "IDEA")) {
+          (change.reason !== "initial" && change.reason !== "writer" && change.reason !== "text-revised")) {
         throw new Error(`Registro de ${label} malformado: historial inválido.`);
       }
     }
@@ -340,6 +339,7 @@ function validateStrictNarrativeIdeaStatusHistory(idea: NarrativeIdea, label: st
     if ((index === 0
         ? change.reason !== "initial"
         : change.reason === "initial" || change.status === history[index - 1]?.status) ||
+        (change.reason === "text-revised" && change.status !== "IDEA") ||
         (change.changedAt !== undefined && previousChangedAt !== undefined &&
           change.changedAt < previousChangedAt)) {
       throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);

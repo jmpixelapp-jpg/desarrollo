@@ -373,3 +373,14 @@ Si una operación de limpieza lanza, el módulo continúa con las demás. Al fin
 La operación sigue siendo idempotente: una segunda llamada no vuelve a ejecutar la limpieza, incluso si la primera tuvo que informar un error. La regresión específica simula errores de retirada en listeners distintos y comprueba el intento de liberar los cinco listeners y el timer.
 
 Esta protección afecta al polling visual del monitor. No cambia el ciclo de vida de checkpoints, heartbeat ni leases.
+
+
+## 19. Reintento seguro de la desuscripción de la fuente del editor
+
+El enlace de cambios conserva la función de cancelación de la fuente hasta que esta termina correctamente. Si el proveedor lanza al desuscribirse durante un overflow, el monitor sigue en estado `resync-required` y no abre una segunda suscripción sobre el listener anterior.
+
+Después de obtener y validar un snapshot común, `discardPendingAfterResynchronization()` reintenta la desuscripción previa antes de volver a conectar la fuente. Si falla otra vez, conserva el estado de resincronización y permite repetir la operación; no mezcla dos streams.
+
+El desmontaje también permite repetir `stop()` cuando una cancelación falló. Las notificaciones tardías no llegan al sink porque el enlace marca `disposed` antes de iniciar los intentos de liberación.
+
+Las pruebas `live-author-monitor-change-binding.test.mjs` cubren cancelación transitoria fallida durante overflow y durante stop. Se comprueban la ausencia de suscripciones duplicadas, la entrega única de la siguiente edición y el bloqueo de callbacks de una instancia dispuesta.

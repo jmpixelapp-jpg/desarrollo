@@ -1094,3 +1094,18 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Validación:** pendiente de GitHub Actions para este commit. La corrección anterior de generaciones ya está cubierta por los workflows aprobados del commit `de4f2001ddbd0c9e60850abeeb3acfcbc70edc69`.
 
 **Archivos:** `typescript/src/live-author-monitor-visibility.ts`, `typescript/tests/live-author-monitor-diagnostics-isolation.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+
+## 63. Recuperación de desuscripciones fallidas sin duplicar la fuente (26 de noviembre de 2026)
+
+**Hallazgo:** `detachSource()` borraba la referencia al disposer antes de invocarlo. Si el editor lanzaba durante la cancelación de la fuente al producirse un overflow, el listener podía seguir instalado pero el enlace perdía la única referencia para volver a cerrarlo. Al confirmar después el snapshot común, `discardPendingAfterResynchronization()` podía abrir una segunda suscripción y recibir cada edición dos veces.
+
+**Corrección:** el enlace conserva el disposer hasta que la fuente confirma la desuscripción. La resincronización vuelve a intentar cerrar el listener anterior y no abre otro mientras la operación siga fallando. `attachSource()` guarda el disposer antes de procesar los eventos síncronos que pueda emitir el proveedor; esto también permite cerrar de forma verificable una suscripción que desborda durante su propio montaje.
+
+**Cierre manual:** `stop()` intenta liberar tanto la fuente como la señal de reintento. Si falla alguna operación, informa el primer error, mantiene el disposer pendiente y permite que una llamada posterior vuelva a intentarlo. Los callbacks quedan bloqueados en cuanto el enlace se dispone.
+
+**Regresiones añadidas:** (1) desuscripción transitoriamente fallida durante overflow, con verificación de que solo exista un listener después de resincronizar y de que la siguiente edición llegue una vez; (2) desuscripción fallida durante stop, con callback tardío ignorado y segundo intento exitoso.
+
+**Validación:** pendiente de CI para este commit. No se cambia la política FIFO ni se descartan datos salvo después del snapshot autoritativo que exige el contrato.
+
+**Archivos:** `typescript/src/live-author-monitor-change-binding.ts`, `typescript/tests/live-author-monitor-change-binding.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.

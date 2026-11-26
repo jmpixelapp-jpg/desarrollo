@@ -197,8 +197,11 @@ export function bindLiveAuthorMonitorEditorChanges(
 
   const detachSource = (): void => {
     const unsubscribe = unsubscribeSource;
-    unsubscribeSource = undefined;
-    unsubscribe?.();
+    if (!unsubscribe) return;
+    // Conserva el disposer si la fuente falla al cerrar: una resincronización
+    // posterior debe poder reintentar antes de crear otra suscripción.
+    unsubscribe();
+    if (unsubscribeSource === unsubscribe) unsubscribeSource = undefined;
   };
 
   const pauseForResynchronization = (change: EditorChange): void => {
@@ -293,17 +296,18 @@ export function bindLiveAuthorMonitorEditorChanges(
   };
 
   const attachSource = (): void => {
+    if (unsubscribeSource) {
+      throw new Error("La suscripción anterior del editor aún no pudo cerrarse.");
+    }
     const unsubscribe = options.source.subscribeChanges(submitNewChange);
     if (typeof unsubscribe !== "function") {
       throw new TypeError("subscribeChanges debe devolver una función de cancelación.");
     }
-    // El proveedor puede emitir de forma síncrona durante la suscripción.
-    // Si esa emisión desborda el buffer, la nueva suscripción se cierra aquí.
-    if (disposed || resyncRequired) {
-      unsubscribe();
-      return;
-    }
+    // Guardamos el disposer antes de procesar una emisión síncrona. Si esta
+    // emisión provoca overflow, pauseForResynchronization puede haber intentado
+    // cerrar la fuente antes de que subscribeChanges devolviera el disposer.
     unsubscribeSource = unsubscribe;
+    if (disposed || resyncRequired) detachSource();
   };
 
   try {
@@ -322,15 +326,33 @@ export function bindLiveAuthorMonitorEditorChanges(
   }
 
   const stop = (() => {
-    if (disposed) return;
-    if (pending.length > 0) {
+    if (!disposed && pending.length > 0) {
       throw new Error(
         "No se puede detener el enlace mientras existan cambios pendientes; reintente la cola FIFO o descarte solo tras resincronizar con un snapshot autoritativo."
       );
     }
     disposed = true;
     pendingReason = undefined;
-    try { unsubscribeSource?.(); } finally { unsubscribeRetrySignal?.(); }
+    let cleanupFailed = false;
+    let firstCleanupError: unknown;
+    const attemptCleanup = (cleanup: () => void): void => {
+      try {
+        cleanup();
+      } catch (error) {
+        if (!cleanupFailed) firstCleanupError = error;
+        cleanupFailed = true;
+      }
+    };
+    attemptCleanup(detachSource);
+    const unsubscribeRetry = unsubscribeRetrySignal;
+    if (unsubscribeRetry) {
+      attemptCleanup(() => {
+        unsubscribeRetry();
+        if (unsubscribeRetrySignal === unsubscribeRetry) unsubscribeRetrySignal = undefined;
+      });
+    }
+    // Si una liberación falla, una llamada posterior a stop() puede reintentarla.
+    if (cleanupFailed) throw firstCleanupError;
   }) as LiveAuthorMonitorChangeBindingControl;
 
   stop.retryPending = retryPending;
@@ -339,16 +361,19 @@ export function bindLiveAuthorMonitorEditorChanges(
     if (disposed) return;
     const shouldResume = pausedForResynchronization;
     const hadState = pending.length > 0 || resyncRequired;
-    pending.length = 0;
-    pendingReason = undefined;
-    overflowSequence = undefined;
-    resyncRequired = false;
-    pausedForResynchronization = false;
-    if (hadState) publishBackpressure();
 
     if (shouldResume) {
       try {
+        // Una desuscripción fallida durante el overflow conserva su disposer.
+        // Se debe completar antes de intentar abrir una nueva suscripción.
+        detachSource();
+        pending.length = 0;
+        pendingReason = undefined;
+        overflowSequence = undefined;
+        resyncRequired = false;
+        pausedForResynchronization = false;
         attachSource();
+        if (hadState && !resyncRequired) publishBackpressure();
       } catch (error) {
         resyncRequired = true;
         pausedForResynchronization = true;
@@ -356,7 +381,15 @@ export function bindLiveAuthorMonitorEditorChanges(
         publishBackpressure();
         throw error;
       }
+      return;
     }
+
+    pending.length = 0;
+    pendingReason = undefined;
+    overflowSequence = undefined;
+    resyncRequired = false;
+    pausedForResynchronization = false;
+    if (hadState) publishBackpressure();
   };
   return stop;
 }

@@ -516,3 +516,97 @@ test("valida maxPendingChanges antes de instalar listeners", () => {
     assert.equal(f.listeners.size, 0);
   }
 });
+
+
+test("no crea una suscripción duplicada si falla la desuscripción durante el overflow", () => {
+  const listeners = new Set();
+  const attempts = [];
+  const errors = [];
+  let unsubscribeAttempts = 0;
+  let subscriptionCount = 0;
+  const source = {
+    subscribeChanges(listener) {
+      listeners.add(listener);
+      subscriptionCount += 1;
+      return () => {
+        unsubscribeAttempts += 1;
+        if (unsubscribeAttempts === 1) throw new Error("unsubscribe_temporarily_failed");
+        listeners.delete(listener);
+      };
+    },
+    requireResynchronization() {}
+  };
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source,
+    sink: {
+      onEditorChange(value) {
+        attempts.push(value.sequence);
+        return value.sequence === 1
+          ? { status: "rejected", reason: "queue_full" }
+          : { status: "queued", ticketId: "ticket-" + value.sequence };
+      }
+    },
+    maxPendingChanges: 1,
+    onAdmission: () => {},
+    onError: error => errors.push(error)
+  });
+
+  for (const listener of [...listeners]) listener(change(1));
+  for (const listener of [...listeners]) listener(change(2));
+  assert.equal(listeners.size, 1, "la primera liberación falla y la fuente queda en pausa lógica");
+  assert.equal(unsubscribeAttempts, 1);
+  assert.ok(errors.some(error => error.message === "unsubscribe_temporarily_failed"));
+
+  // Mientras se requiere snapshot común, cualquier callback antiguo queda ignorado.
+  for (const listener of [...listeners]) listener(change(3));
+  assert.deepEqual(attempts, [1]);
+
+  stop.discardPendingAfterResynchronization();
+  assert.equal(unsubscribeAttempts, 2, "la resincronización vuelve a intentar cerrar el listener anterior");
+  assert.equal(subscriptionCount, 2);
+  assert.equal(listeners.size, 1, "solo queda instalada la suscripción nueva");
+
+  for (const listener of [...listeners]) listener(change(4));
+  assert.deepEqual(attempts, [1, 4], "el siguiente delta se entrega exactamente una vez");
+  stop();
+  assert.equal(listeners.size, 0);
+});
+
+test("stop puede reintentar una desuscripción fallida sin procesar notificaciones tardías", () => {
+  const listeners = new Set();
+  let unsubscribeAttempts = 0;
+  const received = [];
+  const source = {
+    subscribeChanges(listener) {
+      listeners.add(listener);
+      return () => {
+        unsubscribeAttempts += 1;
+        if (unsubscribeAttempts === 1) throw new Error("source_close_failed_once");
+        listeners.delete(listener);
+      };
+    }
+  };
+  const stop = bindLiveAuthorMonitorEditorChanges({
+    source,
+    sink: {
+      onEditorChange(value) {
+        received.push(value.sequence);
+        return { status: "queued", ticketId: "ticket-" + value.sequence };
+      }
+    },
+    onAdmission: () => {},
+    onError: () => {}
+  });
+  const staleListener = [...listeners][0];
+
+  assert.throws(stop, /source_close_failed_once/);
+  assert.equal(listeners.size, 1);
+  staleListener(change(1));
+  assert.deepEqual(received, [], "disposed bloquea los callbacks aunque el host no haya podido desuscribirse");
+
+  stop();
+  assert.equal(unsubscribeAttempts, 2);
+  assert.equal(listeners.size, 0);
+  stop();
+  assert.equal(unsubscribeAttempts, 2, "una limpieza completada ya no se repite");
+});

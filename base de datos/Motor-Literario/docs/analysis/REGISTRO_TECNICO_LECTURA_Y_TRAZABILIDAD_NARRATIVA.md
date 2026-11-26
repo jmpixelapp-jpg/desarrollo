@@ -304,3 +304,43 @@ La línea de lectura y trazabilidad no debe considerarse cerrada hasta que:
 El contrato de `TextEvidence` del conocimiento narrativo guarda `start/end` como rango de la ocurrencia y `excerpt` como línea contextual completa. Por ello, la verificación de evidencia debe comparar el excerpt con la línea que contiene el rango, no exigir que el excerpt sea idéntico al fragmento señalado. El resolver se ha ajustado a esta semántica.
 
 Sigue pendiente resolver una diferencia de identidad documental antes de activar la integración de extremo a extremo: la ingesta asigna IDs sintéticos `chapter:<id>` a los capítulos, mientras que `TextEvidence.documentId` identifica documentos del anfitrión. No se debe hacer coincidir ambos por suposición. La siguiente fase debe introducir un mapeo explícito entre documento anfitrión, capítulo importado y base de offsets, con pruebas de capítulos múltiples y offsets absolutos.
+
+
+## 11. Auditoría de compatibilidad de evidencia (última tanda)
+
+### Semántica real de `TextEvidence`
+
+La inspección de `narrative-knowledge.ts` confirmó que los extractores guardan:
+
+- `start/end`: offsets UTF-16 de la ocurrencia concreta (por ejemplo, el nombre o la frase).
+- `excerpt`: la línea completa que contiene esa ocurrencia, no necesariamente el mismo substring de `start/end`.
+
+Por tanto, el resolver no debe comparar `excerpt === text.slice(start, end)`. Ahora valida el rango y compara `excerpt` con la línea contextual del snapshot que contiene el rango. El resultado resuelto conserva como `excerpt` el substring exacto de la ocurrencia y entrega los fragmentos de origen.
+
+### Hallazgo pendiente: identidad y offsets de documento
+
+La ingesta común genera IDs internos `chapter:<id>` para capítulos. El modelo de conocimiento narrativo, en cambio, conserva `TextEvidence.documentId` del documento anfitrión. No hay todavía un contrato que pruebe que esos identificadores sean iguales.
+
+Además, los extractores narrativos aceptan `baseOffset` y guardan offsets absolutos del documento, mientras que los spans de la ingesta actual son locales al capítulo. Una comparación directa de esos offsets puede seleccionar un pasaje incorrecto en capítulos posteriores.
+
+**Decisión de seguridad:** no activar aún la resolución automática de evidencias de personajes, relaciones, acontecimientos o ideas sobre libros multipartes. La integración necesita una tabla explícita de correspondencia con, al menos:
+
+- ID del documento anfitrión.
+- ID interno del capítulo importado.
+- Revisión del documento anfitrión.
+- Offset inicial del capítulo dentro del documento anfitrión, si comparte documento.
+- Regla de transformación entre texto anfitrión y texto normalizado/extraído.
+- Localizadores del lector para regresar a página, archivo interno o fragmento.
+
+Si cada capítulo se almacena como documento independiente, el mapeo debe declarar ese ID y su offset base (normalmente cero). Si el libro entero es un solo documento, debe existir un índice global de offsets y una política explícita para separadores sintéticos. No se debe inferir cuál de estos modelos usa el anfitrión.
+
+### Corrección EPUB
+
+Se corrigió la extracción XHTML de `br`: el lector ahora emite un carácter de salto de línea real, no los dos caracteres literales barra invertida y `n`. Se corrigieron las expectativas de tests para exigir el salto real.
+
+### Estado de validación de esta tanda
+
+- Código de extracción y resolución actualizado.
+- Pruebas focalizadas actualizadas para saltos reales y cita contextual de línea completa.
+- Typecheck, tests y build siguen sin ejecutarse en esta sesión.
+- GitHub no reporta status checks ni workflow runs para el último SHA consultado; por tanto no existe una señal CI que permita declarar la validación aprobada.

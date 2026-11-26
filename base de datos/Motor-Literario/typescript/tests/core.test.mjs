@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import { HostEngineApi, IndexedDbProjectStore, PieceTable } from "../dist/motor-literario.js";
+
+// Ejecuta las pruebas de persistencia IndexedDB también en Node, sin depender del navegador.
+globalThis.indexedDB = new IDBFactory();
+globalThis.IDBKeyRange = IDBKeyRange;
 
 class MemoryStore {
   documents = new Map();

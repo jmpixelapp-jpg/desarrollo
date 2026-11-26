@@ -1393,4 +1393,6 @@ La lane global sigue en `failure` por controles compartidos de persistencia: `DA
 
 **CI:** se incluye el archivo en el comando aislado de pruebas junto al núcleo, panel, workspace y pruebas de diagnóstico. No necesita Chromium ni importar el almacenamiento general.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación en [Live Author Monitor — run 45757854690](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45757854690), checkout `efc4db4a`:** aprobada para la lane aislada. Type-check estricto, build Vite reducido y 17/17 pruebas diagnósticas correctos. La suite combinada terminó en **69/69** sin fallos; se ejecutaron las ocho regresiones nuevas de visibilidad/ciclo de vida, incluida la compatibilidad sin Page Visibility y el rollback cuando el scheduler lanza. El benchmark de 100.000 commits en ocho documentos de 1 MiB terminó en 660,83 ms (~151.325 commits/s), con heap de 4,27 MiB a mitad y 4,26 MiB al finalizar (0 MiB de crecimiento medido), 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+
+La conclusión global permanece en `failure` por el desajuste de versión IndexedDB, los dos almacenes de reparación sin mapear y el error sintáctico compartido en `indexeddb-store.ts:2560`. Se omitieron las integraciones que requieren el bundle general/editor/Chromium; la validación aislada del monitor está aprobada.

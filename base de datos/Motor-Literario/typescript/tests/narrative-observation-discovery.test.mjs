@@ -714,3 +714,21 @@ test("conserva colisiones de alias entre entidades como menciones ambiguas", () 
   assert.deepEqual(collisions.map(item => item.entityId).sort(),
     [character.id, anaAlias.id].sort());
 });
+
+test("no confunde un marcador epistémico dentro de otra palabra", () => {
+  const text = "Ana pensó que Bruno llegó.";
+  const bruno = { ...character, id: "character:bruno", canonicalName: "Bruno" };
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno], text
+  }).find(item => item.action === "llegar");
+  assert.equal(found?.epistemicFrame, "character-belief");
+  assert.equal(found?.epistemicFrameEvidence?.excerpt, "pensó que ");
+});
+
+test("mantiene el marco narratorial cuando solo hay una coincidencia parcial de palabra", () => {
+  const text = "Ana dijoBruno llegó.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text
+  }).find(item => item.action === "llegar");
+  assert.equal(found?.epistemicFrame, "narrator-asserted");
+});

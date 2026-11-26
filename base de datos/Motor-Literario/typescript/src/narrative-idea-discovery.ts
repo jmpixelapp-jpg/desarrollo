@@ -201,8 +201,8 @@ export function discoverNarrativeIdeaCandidates(
 
       const prefix = excerpt.slice(0, match.index + match[0].indexOf(captured));
       const polarity: NarrativeIdeaCandidatePolarity =
-        /\b(?:no|nunca|jam[aá]s|tampoco)\s*$/iu.test(prefix) ? "negated" :
-        /\b(?:si|cuando|en\s+caso\s+de)\s*$/iu.test(prefix) ? "conditional" :
+        /\b(?:no|nunca|jam[aá]s|tampoco)\b(?:\s+[\p{L}\p{M}]+){0,3}\s*$/iu.test(prefix) ? "negated" :
+        /\b(?:si|cuando|en\s+caso\s+de)\b(?:\s+[\p{L}\p{M}]+){0,4}\s*$/iu.test(prefix) ? "conditional" :
         pattern.kind === "hypothesis" || pattern.kind === "question" ? "hypothetical" : "affirmed";
       const captureOffset = match.index + match[0].lastIndexOf(captured);
       const leadingTrim = captured.search(/\S/u);

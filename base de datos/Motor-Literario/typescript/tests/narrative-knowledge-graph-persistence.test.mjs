@@ -432,6 +432,13 @@ test("distingue ambos extremos rotos de una relación reflexiva", async () => {
     proposals.find(item => item.referenceField === "fromEntityId").referenceField,
     proposals.find(item => item.referenceField === "toEntityId").referenceField
   );
+  for (const proposal of proposals) await applyNarrativeReferenceRepair(store, proposal, true, 20);
+  const repaired = tables.relations.get("relation:self");
+  assert.equal(repaired.fromEntityId, "entity:canonical");
+  assert.equal(repaired.toEntityId, "entity:canonical");
+  const audits = await store.loadNarrativeReferenceRepairAudits("novel-self");
+  assert.equal(audits.length, 2);
+  assert.notEqual(audits[0].operationId, audits[1].operationId);
 });
 
 test("propone reparación sólo ante una correspondencia de merge explícita y única", async () => {

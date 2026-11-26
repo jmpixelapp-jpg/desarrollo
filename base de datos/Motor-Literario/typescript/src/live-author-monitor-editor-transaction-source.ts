@@ -271,6 +271,9 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       // Un primer cierre pudo fallar dentro del proveedor; llamadas repetidas
       // permiten terminar la retirada sin volver a registrar listeners.
       this.detachProvider();
+      if (this.providerDetachFailed) {
+        throw new Error("No se pudo retirar el listener del proveedor; repita dispose() para reintentar.");
+      }
       return;
     }
     this.disposed = true;
@@ -279,6 +282,9 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.dispatchQueue.length = 0;
     this.pendingTransactions.length = 0;
     this.seenTransactions.clear();
+    if (this.providerDetachFailed) {
+      throw new Error("No se pudo retirar el listener del proveedor; repita dispose() para reintentar.");
+    }
   }
 
   private readonly handleTransaction = (transaction: LiveAuthorMonitorEditorTransaction): void => {

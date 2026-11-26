@@ -1,6 +1,15 @@
 name: Narrative storage integrity
 
 on:
+  push:
+    branches:
+      - work/narrative-integrity-ci-current-main-20261126
+    paths:
+      - ".github/workflows/narrative-storage-integrity.yml"
+      - "base de datos/Motor-Literario/typescript/package.json"
+      - "base de datos/Motor-Literario/typescript/src/persistence/**"
+      - "base de datos/Motor-Literario/typescript/tests/indexeddb-idea-transaction.test.mjs"
+      - "base de datos/Motor-Literario/typescript/tests/indexeddb-narrative-reference-integrity.test.mjs"
   pull_request:
     branches:
       - main

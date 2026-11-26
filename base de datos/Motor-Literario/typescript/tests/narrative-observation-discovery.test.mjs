@@ -23,6 +23,13 @@ test("detecta acciones explícitas de un personaje conocido y conserva la frase 
   assert.deepEqual(found.map(item => item.action), ["cruzar", "abrir"]);
   assert.ok(found.every(item => item.singleMentionedCharacterId === character.id));
   assert.ok(found.every(item => item.mentionedEntityIds.includes(other.id)));
+  const characterMention = found[0].entityMentionEvidence.find(item => item.entityId === character.id);
+  const objectMention = found[0].entityMentionEvidence.find(item => item.entityId === other.id);
+  assert.equal(characterMention?.evidence.excerpt, "Ana");
+  assert.equal(characterMention?.evidence.start, text.indexOf("Ana"));
+  assert.equal(objectMention?.evidence.excerpt, "Espada Solar");
+  assert.equal(objectMention?.evidence.start, text.indexOf("Espada Solar"));
+  assert.equal(objectMention?.entityKind, "object");
   assert.ok(found.every(item => item.evidence.excerpt === text));
   assert.ok(found.every(item => item.evidence.revision === 7));
   assert.deepEqual(found.map(item => item.actionEvidence.excerpt), ["cruzó", "abrió"]);
@@ -262,4 +269,17 @@ test("no inventa agente pasivo si el complemento por no identifica una entidad c
   assert.equal(found.length, 1);
   assert.equal(found[0].grammaticalSubjectCandidate?.voice, "passive");
   assert.equal(found[0].passiveAgentCandidate, undefined);
+});
+
+test("conserva offsets de la primera mención de cada alias de entidad", () => {
+  const sword = { ...other, aliases: ["la Espada Solar"] };
+  const text = "Ana miró la Espada Solar y después la Espada Solar brilló.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, sword], text
+  });
+  assert.equal(found.length, 1);
+  const mention = found[0].entityMentionEvidence.find(item => item.entityId === sword.id);
+  assert.equal(mention?.evidence.excerpt, "la Espada Solar");
+  assert.equal(mention?.evidence.start, text.indexOf("la Espada Solar"));
+  assert.equal(mention?.evidence.end, text.indexOf("la Espada Solar") + "la Espada Solar".length);
 });

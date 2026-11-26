@@ -138,7 +138,7 @@ const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "salir", expression: /(?<![\p{L}\p{M}\p{N}_])sal(?:ió|ía|ieron|e|en|ir|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "llegar", expression: /(?<![\p{L}\p{M}\p{N}_])lleg(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "huir", expression: /(?<![\p{L}\p{M}\p{N}_])hu(?:yó|ía|yeron|ye|yen|ir|ido|endo)(?![\p{L}\p{M}\p{N}_])/giu },
-  { action: "correr", expression: /(?<![\p{L}\p{M}\p{N}_])corr(?:ió|ía|ieron|e|en|er|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "correr", expression: /(?<![\p{L}\p{M}\p{N}_])corr(?:ió|ía|ieron|e|en|er|ido|iendo|iera|ieras|iéramos|ieran|iese|ieses|iésemos|iesen)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "caminar", expression: /(?<![\p{L}\p{M}\p{N}_])camin(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "mirar", expression: /(?<![\p{L}\p{M}\p{N}_])mir(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "decir", expression: /(?<![\p{L}\p{M}\p{N}_])(?:dijo|decía|dijeron|dice|dicen|decir|dicho)(?![\p{L}\p{M}\p{N}_])/giu },

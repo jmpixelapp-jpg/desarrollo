@@ -703,3 +703,12 @@ La regresión usa un almacén que completa la renovación pero retrasa la respue
 Dos llamadas de renovación pueden completarse en orden distinto al de su inicio. Cuando pertenecen al mismo propietario y al mismo fencing token, la publicación local combina `expiresAt` y `updatedAt` con el máximo de la respuesta y del estado ya publicado. Una respuesta con fencing token menor que el estado local se descarta; un token igual asociado a otro propietario no puede reemplazarlo.
 
 Esta regla evita que una respuesta atrasada reduzca el plazo local de titularidad. No modifica el token de fencing ni extiende artificialmente el lease persistido: solo conserva la información más reciente ya confirmada por el almacén. La prueba retrasa la primera respuesta hasta después de que una segunda renovación haya sido publicada y exige que los dos metadatos permanezcan monótonos.
+
+
+## 62. Contrato de persistencia para muestras densas y categorías de actividad
+
+La capa IndexedDB valida los checkpoints antes de iniciar una transacción. Las muestras `commitLatencies` deben formar una secuencia densa: cada índice entre cero y `length - 1` contiene una latencia finita no negativa. Se materializa el array con `Array.from()` para que los huecos se validen como `undefined`, ya que `some()`, `every()` y `reduce()` omiten posiciones ausentes.
+
+Dentro de la misma `sessionId`, los contadores de tipo de actividad no pueden retroceder aunque `acceptedChanges` permanezca igual. Se comparan tecleo, pegado, borrado, corrección, deshacer, rehacer y otros cambios. Para un checkpoint v1 histórico que no tenga ninguno de esos campos, el total aceptado anterior se interpreta como `otherChanges`; la comparación usa esa cantidad derivada. Esto evita falsos rechazos al guardar la primera versión nueva de una sesión antigua y, al mismo tiempo, impide reclasificar actividad histórica.
+
+Las pruebas trabajan sobre IndexedDB y verifican que una escritura inválida no deje checkpoint persistido, que una reclasificación se rechace preservando el registro anterior y que la evolución desde un checkpoint histórico siga permitida. No se modifica el esquema ni la versión v1.

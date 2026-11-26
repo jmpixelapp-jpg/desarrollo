@@ -61,3 +61,18 @@ test("rechaza identificadores duplicados y orden documental duplicado",()=>{
  assert.throws(()=>compare({projectId:"book",exposures:[exposure("c2")],knowledgeCandidates:[],
  documentOrder:[{documentId:"c1",order:1},{documentId:"c2",order:1}]}));
 });
+
+test("conserva una afirmación cognitiva negada sin convertirla en conocimiento afirmado",()=>{
+ const negated=knowledge("c1",1,80);
+ const [r]=compare({projectId:"book",exposures:[exposure()],knowledgeCandidates:[{...negated,polarity:"negated"}]});
+ assert.equal(r.knowledgePolarity,"negated");
+ assert.equal(r.contradictionEstablished,false);
+});
+test("rechaza modo cognitivo y polaridad no reconocidos",()=>{
+ assert.throws(()=>compare({projectId:"book",exposures:[exposure()],knowledgeCandidates:[
+  {...knowledge(),mode:"omniscient"}
+ ]}));
+ assert.throws(()=>compare({projectId:"book",exposures:[exposure()],knowledgeCandidates:[
+  {...knowledge(),polarity:"maybe"}
+ ]}));
+});

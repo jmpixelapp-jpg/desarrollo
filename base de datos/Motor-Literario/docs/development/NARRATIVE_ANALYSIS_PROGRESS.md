@@ -77,3 +77,16 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Arquitectura: [Grafo unificado de conocimiento narrativo](../architecture/GRAFO_CONOCIMIENTO_NARRATIVO.md).
 
 **Límite operativo:** es una proyección en memoria y no persiste ni sincroniza. El llamador debe seleccionar las revisiones documentales que desea analizar; no se decide automáticamente cuál es la versión canónica.
+
+
+## 7. Snapshots incrementales del grafo
+
+- Nuevo módulo `typescript/src/narrative-knowledge-graph-incremental.ts`.
+- API pública para crear snapshots por documento y actualizarlos reutilizando contribuciones no modificadas.
+- La invalidación compara ID, revisión, texto y offset base; cambios en el nombre de proyecto de origen invalidan el extractor de ideas.
+- Los documentos retirados desaparecen del grafo agregado y se informan separadamente.
+- Se recalculan los hallazgos de consistencia sobre el conjunto completo de afirmaciones después de combinar contribuciones.
+- Pruebas: `tests/narrative-knowledge-graph-incremental.test.mjs`.
+- Contrato y límites: [Actualización incremental del grafo narrativo](../architecture/GRAFO_CONOCIMIENTO_NARRATIVO_INCREMENTAL.md).
+
+**Límite:** el snapshot retiene texto en memoria y no se persiste ni transmite. La extracción se limita a documentos invalidados, pero la agregación y la consistencia global siguen recorriendo el snapshot completo.

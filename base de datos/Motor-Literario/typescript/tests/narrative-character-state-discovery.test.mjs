@@ -1,0 +1,108 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { discoverNarrativeCharacterStateCandidates } from "../dist/motor-literario.js";
+
+const ana = {
+  projectId: "book-1", id: "character:ana", kind: "character",
+  canonicalName: "Ana", normalizedName: "ana", aliases: [],
+  evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+};
+const bruno = {
+  ...ana, id: "character:bruno", canonicalName: "Bruno", normalizedName: "bruno"
+};
+const context = {
+  projectId: "book-1", documentId: "chapter-1", revision: 5,
+  entities: [ana, bruno]
+};
+
+function discover(text, baseOffset = 0) {
+  return discoverNarrativeCharacterStateCandidates({
+    ...context, text, baseOffset
+  });
+}
+
+test("extrae estados explícitos de personajes y conserva evidencias exactas", () => {
+  const text = "Ana está herida. Bruno permanece inconsciente. Ana está muy enferma.";
+  const candidates = discover(text, 120);
+  assert.deepEqual(candidates.map(item => [item.entityId, item.state]), [
+    [ana.id, "injured"],
+    [bruno.id, "unconscious"],
+    [ana.id, "sick"]
+  ]);
+  for (const candidate of candidates) {
+    for (const evidence of [
+      candidate.entityEvidence, candidate.stateEvidence,
+      candidate.predicateEvidence, candidate.evidence
+    ]) {
+      assert.equal(evidence.revision, 5);
+      assert.equal(
+        text.slice(evidence.start - 120, evidence.end - 120),
+        evidence.excerpt
+      );
+    }
+    assert.equal(candidate.reviewStatus, "candidate");
+  }
+  assert.equal(candidates[0].evidence.excerpt, "Ana está herida");
+  assert.equal(candidates[0].stateEvidence.excerpt, "herida");
+  assert.equal(candidates[0].predicateEvidence.excerpt, "está herida");
+});
+
+test("distingue estados negados, cesación y recurrencia sin borrar la evidencia anterior", () => {
+  const text = "Ana ya no está herida. Bruno dejó de estar enfermo. Ana volvió a estar herida.";
+  const candidates = discover(text);
+  assert.deepEqual(candidates.map(item => ({
+    entityId: item.entityId, state: item.state, polarity: item.polarity,
+    aspect: item.aspect, tense: item.grammaticalTense
+  })), [
+    { entityId: ana.id, state: "injured", polarity: "negated", aspect: "ordinary", tense: "present" },
+    { entityId: bruno.id, state: "sick", polarity: "negated", aspect: "ceased", tense: "past" },
+    { entityId: ana.id, state: "injured", polarity: "affirmed", aspect: "recurrent", tense: "past" }
+  ]);
+});
+
+test("distingue estados pasados, futuros y perceptuales", () => {
+  const candidates = discover("Ana estaba viva. Bruno estará libre. Ana parece consciente.");
+  assert.deepEqual(candidates.map(item => [
+    item.state, item.grammaticalTense, item.assertionMode
+  ]), [
+    ["alive", "past", "copular"],
+    ["free", "future", "copular"],
+    ["conscious", "present", "perceptual"]
+  ]);
+});
+
+test("no infiere estados desde adjetivos aislados, acciones ni objetos", () => {
+  const sword = {
+    projectId: "book-1", id: "object:sword", kind: "object",
+    canonicalName: "Espada Solar", normalizedName: "espada solar", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const result = discoverNarrativeCharacterStateCandidates({
+    ...context, entities: [ana, sword],
+    text: "Ana, herida, cruzó el puente. Bruno encontró a Ana herida. La Espada Solar está rota."
+  });
+  assert.deepEqual(result, []);
+});
+
+test("no resuelve pronombres ni nombres ambiguos entre dos fichas", () => {
+  const duplicate = {
+    ...ana, id: "character:ana-duplicate"
+  };
+  const result = discoverNarrativeCharacterStateCandidates({
+    ...context, entities: [ana, duplicate],
+    text: "Ella está herida. Ana está herida."
+  });
+  assert.deepEqual(result, []);
+});
+
+test("rechaza entidades ajenas, offsets inválidos y texto fuera de presupuesto", () => {
+  assert.throws(() => discoverNarrativeCharacterStateCandidates({
+    ...context, entities: [{ ...ana, projectId: "other" }], text: "Ana está herida."
+  }));
+  assert.throws(() => discoverNarrativeCharacterStateCandidates({
+    ...context, text: "Ana está herida.", baseOffset: -1
+  }));
+  assert.throws(() => discoverNarrativeCharacterStateCandidates({
+    ...context, text: "x".repeat(2_000_001)
+  }));
+});

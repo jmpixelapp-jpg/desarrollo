@@ -479,3 +479,17 @@ test("detecta oposición entre un objetivo explícito y una acción posterior de
   assert.equal(result.intentActionConsistency[0].characterEntityId, "mara");
   assert.equal(result.intentActionConsistency[0].matchedTargetEntityId, "elian");
 });
+
+test("integra acciones pronominales resueltas en el contraste con objetivos", () => {
+  const text = "Mara quiere proteger a Elian. Ella traicionó a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-pronoun-intent", revision:1, text, entities
+  });
+  assert.equal(result.characterIntents.length, 1);
+  assert.equal(result.pronounActions.length, 1);
+  assert.equal(result.pronounActions[0].actorEntityId, "mara");
+  assert.equal(result.pronounTargetActions.length, 1);
+  assert.equal(result.intentActionConsistency.length, 1);
+  assert.equal(result.intentActionConsistency[0].relation, "opposes-intent");
+  assert.equal(result.intentActionConsistency[0].actionId, result.pronounTargetActions[0].id);
+});

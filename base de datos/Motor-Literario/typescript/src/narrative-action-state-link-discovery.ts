@@ -9,7 +9,7 @@ import type { NarrativeCharacterStateCandidate } from "./narrative-character-sta
 import type { TextEvidence } from "./narrative-knowledge";
 
 export type NarrativeActionStateLinkPosition = "action-before-state" | "state-before-action";
-export type NarrativeActionStateLinkBasis = "grammatical-subject" | "directed-interaction-target";
+export type NarrativeActionStateLinkBasis = "grammatical-subject" | "personal-object" | "passive-agent" | "directed-interaction-target";
 
 export interface NarrativeActionStateLinkCandidate {
   readonly id: string;
@@ -118,8 +118,10 @@ export function discoverNarrativeActionStateLinks(
       // La mención en la misma oración no basta: debe existir un rol local
       // explícito del personaje en la acción (sujeto candidato o destinatario).
       const subjectMatch = action.grammaticalSubjectCandidate?.entityId === state.entityId;
+      const personalObjectMatch = action.personalObjectCandidate?.entityId === state.entityId;
+      const passiveAgentMatch = action.passiveAgentCandidate?.entityId === state.entityId;
       const directedTarget = action.directedInteractionCandidate?.toEntityId === state.entityId;
-      if (!subjectMatch && !directedTarget) continue;
+      if (!subjectMatch && !personalObjectMatch && !passiveAgentMatch && !directedTarget) continue;
 
       const actionStart = action.actionEvidence.start;
       const actionEnd = action.actionEvidence.end;
@@ -152,7 +154,11 @@ export function discoverNarrativeActionStateLinks(
       seen.add(identity);
       const basis: NarrativeActionStateLinkBasis = directedTarget
         ? "directed-interaction-target"
-        : "grammatical-subject";
+        : personalObjectMatch
+          ? "personal-object"
+          : passiveAgentMatch
+            ? "passive-agent"
+            : "grammatical-subject";
 
       result.push({
         id: "action-state-link:" + input.documentId + ":" + input.revision + ":" + identity,

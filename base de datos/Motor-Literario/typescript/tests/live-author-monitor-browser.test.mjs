@@ -748,8 +748,10 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
         event.dataLengthUtf16 === privateCompositionSentinel.length
       ));
       assert.ok(report.deltas.some(delta =>
-        delta.activityKind === "typing" && delta.replacementLengthUtf16 === 1
-      ));
+        delta.activityKind === "typing" &&
+        delta.inputType === "insertText" &&
+        delta.replacementLengthUtf16 === 1
+      ), "el delta exportado conserva el inputType nativo sin incluir InputEvent.data");
       assert.equal(serialized.includes(privateSentinel), false,
         "el texto inicial privado nunca debe aparecer en el archivo exportado");
       assert.equal(serialized.includes(privateCompositionSentinel), false,

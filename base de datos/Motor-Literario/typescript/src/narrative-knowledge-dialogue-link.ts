@@ -52,7 +52,7 @@ function normalize(value: string): string {
 }
 function containsProposition(utterance: string, proposition: string): boolean {
   const u = normalize(utterance), p = normalize(proposition);
-  return !!p && (u.includes(p) || p.includes(u));
+  return !!p && u.includes(p);
 }
 function validate(input: NarrativeKnowledgeDialogueLinkInput): void {
   if (!input || typeof input !== "object" || typeof input.projectId !== "string" ||

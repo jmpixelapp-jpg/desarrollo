@@ -4,6 +4,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
+const { IndexedDbProjectStore } = await import("../dist/motor-literario.js");
 
 test("diagnostica IndexedDB sin mutar datos y respeta las APIs opcionales del navegador", async () => {
   const store = new IndexedDbProjectStore();

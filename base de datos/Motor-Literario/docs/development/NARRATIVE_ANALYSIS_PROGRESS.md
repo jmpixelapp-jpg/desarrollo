@@ -164,3 +164,5 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Ajuste de verificación del replay: al recalcular SHA-256 se reconstruye la envoltura original y se excluyen los metadatos locales `receivedAt` y `appliedAt`, que no forman parte del contenido firmado por digest. Esto evita falsos rechazos de entradas válidas almacenadas en el diario.
 
 - La verificación de replay normaliza el payload recuperado de IndexedDB al subconjunto JSON antes de recalcular el digest, excluyendo los metadatos locales. Si el payload persistido no puede normalizarse, la operación se conserva pendiente y se informa como envoltura inválida.
+
+- El replay serializa consumidores simultáneos del mismo proyecto dentro del runtime y devuelve `consumer-already-running` al segundo intento. El callback recibe solo la envoltura verificada, sin `receivedAt`/`appliedAt`. La exclusión es local al runtime; no constituye coordinación entre pestañas o dispositivos.

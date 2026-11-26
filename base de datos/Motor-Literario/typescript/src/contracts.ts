@@ -13,6 +13,12 @@ export interface ProjectIdentity {
   readonly projectName: string;
   /** Identidad estable del escritor autenticado, entregada por el anfitrión. */
   readonly writerId?: string;
+  /**
+   * Identidad UUID estable de esta instalación, persistida por el anfitrión.
+   * Al definirla, las ediciones requieren un ProjectStore con outbox atómica.
+   * No debe regenerarse al abrir una sesión ni derivarse de datos personales.
+   */
+  readonly deviceId?: string;
 }
 
 export interface DocumentSnapshot {
@@ -87,6 +93,15 @@ export interface CommitResult {
  * Operación durable pendiente de transporte. El payload JSON se mantiene
  * desacoplado de proveedores de red y de los detalles del anfitrión.
  */
+export interface SyncOperationDraft {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  readonly kind: string;
+  readonly payload: string;
+  readonly createdAt: number;
+}
+
 export interface StoredSyncOperation {
   readonly operationId: string;
   readonly projectId: string;
@@ -306,6 +321,14 @@ export interface ProjectStore {
   }>;
   /** Opcional: almacenamiento incremental de cambios. */
   appendChange?(change: StoredChange): Promise<void>;
+  /**
+   * Confirma un delta y su operación de salida en una única transacción.
+   * La secuencia de sincronización la asigna el almacén, global por proyecto/dispositivo.
+   */
+  appendChangeAndEnqueueSyncOperation?(
+    change: StoredChange,
+    operation: SyncOperationDraft
+  ): Promise<void>;
   /** Lee deltas posteriores al snapshot, ordenados por secuencia ascendente. */
   loadChanges?(projectId: string, documentId: string, afterSequence: number): Promise<readonly StoredChange[]>;
   /** Opcional: elimina del journal los deltas ya incluidos en un snapshot durable. */

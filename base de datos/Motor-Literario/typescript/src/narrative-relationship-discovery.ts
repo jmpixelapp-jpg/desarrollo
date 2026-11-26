@@ -75,20 +75,50 @@ function validate(input: NarrativeRelationshipDiscoveryInput): void {
     throw new Error("Contexto inválido para descubrir relaciones narrativas.");
   }
   const ids = new Set<string>();
+  const entitiesById = new Map<string, NarrativeEntity>();
   for (const entity of input.entities) {
-    if (!entity || entity.projectId !== input.projectId || !entity.id?.trim() ||
-        ids.has(entity.id) || !entity.canonicalName?.trim() || !Array.isArray(entity.aliases)) {
-      throw new Error("Las entidades deben ser únicas y pertenecer al mismo proyecto.");
+    if (!entity || entity.projectId !== input.projectId ||
+        typeof entity.id !== "string" || !entity.id.trim() ||
+        ids.has(entity.id) || typeof entity.canonicalName !== "string" ||
+        !entity.canonicalName.trim() || !Array.isArray(entity.aliases) ||
+        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim())) {
+      throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
     }
     ids.add(entity.id);
+    entitiesById.set(entity.id, entity);
+  }
+  const profiles = input.descriptiveProfiles ?? [];
+  if (profiles.length > 2_000) {
+    throw new Error("Se excedió el máximo de perfiles descriptivos.");
   }
   const profileIds = new Set<string>();
-  for (const profile of input.descriptiveProfiles ?? []) {
-    if (!profile || !ids.has(profile.entityId) || profileIds.has(profile.entityId) ||
-        !Array.isArray(profile.labels)) {
-      throw new Error("Perfil descriptivo inválido para el proyecto.");
+  for (const profile of profiles) {
+    const entity = profile && entitiesById.get(profile.entityId);
+    if (!profile || !entity || entity.kind !== "character" ||
+        profileIds.has(profile.entityId) || !Array.isArray(profile.labels) ||
+        profile.labels.length > 100) {
+      throw new Error("Perfil descriptivo inválido: debe pertenecer a un personaje único.");
     }
     profileIds.add(profile.entityId);
+    const labels = new Set<string>();
+    for (const label of profile.labels) {
+      const ev = label?.evidence;
+      if (!label || typeof label.text !== "string" || !label.text.trim() ||
+          label.text.length > 120 || !ev ||
+          typeof ev.documentId !== "string" || !ev.documentId.trim() ||
+          !Number.isSafeInteger(ev.revision) || ev.revision < 0 ||
+          !Number.isSafeInteger(ev.start) || ev.start < 0 ||
+          !Number.isSafeInteger(ev.end) || ev.end <= ev.start ||
+          typeof ev.excerpt !== "string" || !ev.excerpt.trim() ||
+          (ev.status !== undefined && ev.status !== "stale")) {
+        throw new Error("Cada etiqueta descriptiva debe tener texto y evidencia de procedencia válidos.");
+      }
+      const normalized = normalize(label.text);
+      if (labels.has(normalized)) {
+        throw new Error("Un perfil no puede repetir descripciones equivalentes.");
+      }
+      labels.add(normalized);
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
+import { readFile } from "node:fs/promises";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
@@ -18,15 +19,46 @@ const operation = (overrides = {}) => ({
   ...overrides
 });
 
-test("la migración DB27 → DB28 conserva datos anteriores y crea las dos estructuras de sincronización", async () => {
-  const oldRequest = indexedDB.open("motor-literario-local", 27);
+test("migra una DB27 existente a DB28 sin perder documentos ni la recuperación de reparaciones", async () => {
+  const databaseName = "motor-literario-local";
+  const projectId = "migration-project";
+  const documentId = "chapter-before-db28";
+  const repairOperationId = "repair-pending-before-db28";
+  const auditOperationId = "repair-audit-before-db28";
+  const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.2.json", import.meta.url);
+  const mapping = JSON.parse(await readFile(mappingUrl, "utf8"));
+  const existingStores = mapping.runtime.object_stores.filter(
+    descriptor => !["sync-outbox", "sync-device-sequences"].includes(descriptor.name)
+  );
+  const oldRequest = indexedDB.open(databaseName, 27);
   const oldDatabase = await new Promise((resolve, reject) => {
-    oldRequest.onupgradeneeded = () => oldRequest.result.createObjectStore("migration-sentinel");
+    oldRequest.onupgradeneeded = () => {
+      const db = oldRequest.result;
+      for (const descriptor of existingStores) {
+        const objectStore = db.createObjectStore(descriptor.name, { keyPath: descriptor.keyPath });
+        for (const [indexName, keyPath, unique = false] of descriptor.indexes ?? []) {
+          objectStore.createIndex(indexName, keyPath, { unique });
+        }
+      }
+    };
     oldRequest.onsuccess = () => resolve(oldRequest.result);
     oldRequest.onerror = () => reject(oldRequest.error);
   });
-  const seedTransaction = oldDatabase.transaction("migration-sentinel", "readwrite");
-  seedTransaction.objectStore("migration-sentinel").put("dato-preservado", "key");
+  assert.equal(oldDatabase.version, 27);
+  const seedTransaction = oldDatabase.transaction(
+    ["documents", "narrative-reference-repair-pending", "narrative-reference-repair-audits"],
+    "readwrite"
+  );
+  seedTransaction.objectStore("documents").put({
+    projectId, documentId, text: "capítulo persistido antes de DB28",
+    revision: 0, sequence: 0, updatedAt: 1
+  });
+  seedTransaction.objectStore("narrative-reference-repair-pending").put({
+    projectId, operationId: repairOperationId, marker: "pending-repair-preserved"
+  });
+  seedTransaction.objectStore("narrative-reference-repair-audits").put({
+    projectId, operationId: auditOperationId, marker: "repair-audit-preserved"
+  });
   await new Promise((resolve, reject) => {
     seedTransaction.oncomplete = resolve;
     seedTransaction.onerror = () => reject(seedTransaction.error);
@@ -35,25 +67,41 @@ test("la migración DB27 → DB28 conserva datos anteriores y crea las dos estru
   oldDatabase.close();
 
   const store = new IndexedDbProjectStore();
-  assert.equal(await store.loadLastSyncOperationSequence("migration-project", "migration-device"), 0);
-  const migratedRequest = indexedDB.open("motor-literario-local");
+  assert.equal(await store.loadLastSyncOperationSequence(projectId, "migration-device"), 0);
+  const migratedRequest = indexedDB.open(databaseName);
   const migrated = await new Promise((resolve, reject) => {
     migratedRequest.onsuccess = () => resolve(migratedRequest.result);
     migratedRequest.onerror = () => reject(migratedRequest.error);
   });
   assert.equal(migrated.version, 28);
-  assert.equal(migrated.objectStoreNames.contains("migration-sentinel"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-outbox"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-device-sequences"), true);
   assert.equal(migrated.objectStoreNames.contains("narrative-reference-repair-audits"), true);
   assert.equal(migrated.objectStoreNames.contains("narrative-reference-repair-pending"), true);
+  assert.equal(
+    migrated.transaction("narrative-reference-repair-pending", "readonly")
+      .objectStore("narrative-reference-repair-pending").index("by-project").keyPath,
+    "projectId"
+  );
   const preserved = await new Promise((resolve, reject) => {
-    const request = migrated.transaction("migration-sentinel", "readonly")
-      .objectStore("migration-sentinel").get("key");
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    const transaction = migrated.transaction(
+      ["documents", "narrative-reference-repair-pending", "narrative-reference-repair-audits"],
+      "readonly"
+    );
+    const results = {};
+    const requests = [
+      ["document", transaction.objectStore("documents").get([projectId, documentId])],
+      ["pending", transaction.objectStore("narrative-reference-repair-pending").get([projectId, repairOperationId])],
+      ["audit", transaction.objectStore("narrative-reference-repair-audits").get([projectId, auditOperationId])]
+    ];
+    for (const [name, request] of requests) request.onsuccess = () => { results[name] = request.result; };
+    transaction.oncomplete = () => resolve(results);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
   });
-  assert.equal(preserved, "dato-preservado");
+  assert.equal(preserved.document.text, "capítulo persistido antes de DB28");
+  assert.equal(preserved.pending.marker, "pending-repair-preserved");
+  assert.equal(preserved.audit.marker, "repair-audit-preserved");
   migrated.close();
 });
 test("la outbox es idempotente, rechaza colisiones y aísla secuencias por dispositivo", async () => {

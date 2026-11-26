@@ -158,6 +158,21 @@ export interface StoredProjectFinalizationReceipt {
   readonly archiveChecksum: string;
 }
 
+/** Manifiesto durable de la proyección narrativa de un documento. */
+export interface NarrativeDocumentProjectionManifest {
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly generation: number;
+  readonly status: "active" | "deleted";
+  readonly entityIds: readonly string[];
+  readonly relationIds: readonly string[];
+  readonly eventIds: readonly string[];
+  readonly ideaIds: readonly string[];
+  readonly assertionIds: readonly string[];
+  readonly updatedAt: number;
+}
+
 export interface ProjectStore {
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
@@ -303,6 +318,14 @@ export interface ProjectStore {
   /** Guarda y recupera diagnósticos asociados a una revisión exacta. */
   saveDiagnostics?(diagnostics: StoredDiagnostics): Promise<void>;
   loadDiagnostics?(projectId: string, documentId: string): Promise<StoredDiagnostics | undefined>;
+  /** Manifiestos y tombstones de proyecciones por documento, con CAS monotónico. */
+  loadNarrativeDocumentProjectionManifest?(
+    projectId: string, documentId: string
+  ): Promise<NarrativeDocumentProjectionManifest | undefined>;
+  saveNarrativeDocumentProjectionManifestIfUnchanged?(
+    manifest: NarrativeDocumentProjectionManifest,
+    expectedGeneration?: number
+  ): Promise<void>;
   /** Opcional: conocimiento narrativo persistente, siempre aislado por projectId. */
   saveEntity?(entity: import("./narrative-knowledge").NarrativeEntity): Promise<void>;
   /** Inserta o actualiza una entidad solo si la versión actual coincide con la lectura. */

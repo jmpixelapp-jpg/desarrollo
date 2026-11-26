@@ -228,6 +228,14 @@ test("desmonta listeners y exige snapshot autoritativo tras un intervalo sin obs
 
   // Simula una edición no observada y de igual longitud durante el intervalo.
   f.element.value = "hXllo";
+  assert.throws(() => f.source.resynchronize({
+    documentId: "chapter-1",
+    text: "hXllo",
+    revision: 5,
+    sequence: 10
+  }), error => error.code === "resync-required",
+  "no debe reanudarse con cero observadores: la captura abriría otra ventana ciega");
+
   const stopAgain = f.source.subscribeChanges(change => f.changes.push(change));
   assert.equal(f.element.listeners.get("beforeinput").size, 1);
   assert.equal(f.element.listeners.get("input").size, 1);

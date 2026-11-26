@@ -760,3 +760,17 @@ Ambos adaptadores propagan el valor al mismo enlace FIFO, con predeterminado 409
 
 
 **Validación anticipada:** ambos montajes comprueban el rango de `maxPendingChanges` antes de tocar HostEngineApi o instalar listeners. Una configuración inválida no debe abrir una sesión del monitor ni dejar recursos parciales.
+
+
+## 40. Integración ejecutable de referencia en navegador
+
+Se incorpora una página de referencia que conecta el flujo de escritura con el motor real del repositorio:
+- `HostEngineApi` recibe el delta del textarea y procesa la cola de cambios.
+- `IndexedDbProjectStore` persiste el snapshot, el journal y el checkpoint local.
+- `mountLiveAuthorMonitorTextArea` adapta los eventos nativos de texto.
+- `mountLiveAuthorMonitorPanel` muestra las métricas sin mostrar el manuscrito.
+- El cierre seguro vacía la cola, guarda checkpoint, libera el lease y dispone el host.
+
+La prueba Chromium automatizada escribe con teclado real, comprueba cambios admitidos/confirmados y durabilidad, guarda la sesión, recarga la página, verifica la restauración del texto y métricas y realiza una edición adicional.
+
+**Límite:** el ejemplo es un anfitrión real de referencia con textarea nativo. No acredita la conexión a un editor enriquecido no presente en el repositorio; para ello se necesita el adaptador transaccional del editor real.

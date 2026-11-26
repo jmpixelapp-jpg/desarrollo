@@ -146,3 +146,12 @@ Las pruebas de integración recorren ahora el ciclo completo: primera admisión 
 
 
 La opción `maxPendingChanges` se valida al inicio de cada función de montaje, antes de inicializar una sesión o listeners. Valores que no sean enteros seguros entre 1 y 65536 se rechazan con `RangeError`; no se permite que una configuración inválida abra parcialmente recursos del monitor.
+
+
+## 10. Aplicación ejecutable de referencia
+
+El repositorio incorpora `typescript/examples/live-author-monitor/index.html`. La página demuestra el montaje completo sobre un textarea nativo: crea el `HostEngineApi`, abre o recupera el documento desde `IndexedDbProjectStore`, conecta `mountLiveAuthorMonitorTextArea` y renderiza `mountLiveAuthorMonitorPanel`. El botón de cierre ejecuta el cierre durable y la liberación de lease.
+
+Para ejecutarla, consulta `typescript/examples/live-author-monitor/README.md`. El test `tests/live-author-monitor-writing-browser.test.mjs` escribe mediante Chromium, valida los contadores, cierra, recarga y confirma la recuperación del documento y sus métricas.
+
+Esta referencia proporciona una integración de navegador reproducible. No sustituye el callback transaccional específico de un editor enriquecido ausente del repositorio; ese anfitrión debe seguir las reglas de esta guía para preservar el historial real.

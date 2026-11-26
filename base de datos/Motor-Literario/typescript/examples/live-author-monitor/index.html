@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Monitoreo del autor en tiempo real</title>
+  <style>
+    :root { color: #172033; background: #f4f6f8; font: 15px/1.5 system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; }
+    main { width: min(1180px, 100%); margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: clamp(23px, 4vw, 32px); }
+    .intro { margin: 0 0 22px; color: #566276; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(310px, .9fr); gap: 18px; align-items: start; }
+    .editor-card { padding: 18px; background: white; border: 1px solid #dce3eb; border-radius: 14px; }
+    label { display: block; margin-bottom: 9px; font-weight: 700; }
+    textarea { display: block; width: 100%; min-height: 460px; resize: vertical; padding: 16px; border: 1px solid #cbd5e1; border-radius: 9px; color: #172033; background: #fff; font: 16px/1.7 Georgia, serif; }
+    textarea:focus { outline: 3px solid #c8daf6; border-color: #4779c7; }
+    .status { margin: 12px 0 0; min-height: 24px; color: #475569; font-size: 13px; }
+    .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 15px; }
+    button { border: 0; border-radius: 8px; padding: 10px 14px; background: #1d4ed8; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .privacy { color: #64748b; font-size: 12px; }
+    #monitor-panel { min-width: 0; }
+    .notice { margin-top: 18px; color: #64748b; font-size: 12px; }
+    @media (max-width: 820px) { body { padding: 16px; } .layout { grid-template-columns: 1fr; } textarea { min-height: 320px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Monitoreo del autor en tiempo real</h1>
+    <p class="intro">Editor de referencia conectado al motor TypeScript, con métricas de escritura, confirmación y persistencia local.</p>
+    <div class="layout">
+      <section class="editor-card" aria-labelledby="editor-heading">
+        <label id="editor-heading" for="manuscript">Manuscrito</label>
+        <textarea id="manuscript" spellcheck="true" aria-describedby="privacy-note">La historia comienza con una decisión pequeña. El personaje observa el camino, recuerda lo que perdió y decide avanzar.</textarea>
+        <p id="connection-status" class="status" role="status" aria-live="polite">Inicializando el motor y recuperando la sesión...</p>
+        <div class="actions">
+          <button id="save-session" type="button" disabled>Guardar sesión y cerrar monitoreo</button>
+          <span id="privacy-note" class="privacy">El texto permanece en el almacenamiento local del navegador; el panel no muestra el manuscrito.</span>
+        </div>
+      </section>
+      <aside id="monitor-panel" aria-label="Métricas de escritura"></aside>
+    </div>
+    <p class="notice">Aplicación de referencia del módulo. Usa un textarea nativo; la integración con editores enriquecidos debe publicar las transacciones e historial reales del editor anfitrión.</p>
+  </main>
+
+  <script type="module">
+    import {
+      HostEngineApi,
+      IndexedDbProjectStore,
+      mountLiveAuthorMonitorPanel,
+      mountLiveAuthorMonitorTextArea
+    } from "/src/index.ts";
+
+    const PROJECT_ID = new URLSearchParams(location.search).get("project") || "live-author-monitor-reference";
+    const DOCUMENT_ID = new URLSearchParams(location.search).get("document") || "manuscript";
+    const INITIAL_TEXT = document.querySelector("#manuscript").value;
+    const textarea = document.querySelector("#manuscript");
+    const status = document.querySelector("#connection-status");
+    const saveButton = document.querySelector("#save-session");
+    const store = new IndexedDbProjectStore();
+    const hostApi = new HostEngineApi({ store });
+    let disposeEditor;
+    let disposePanel;
+    let closing = false;
+
+    function reportStatus(message, isError = false) {
+      status.textContent = message;
+      status.style.color = isError ? "#b42318" : "#475569";
+    }
+
+    async function start() {
+      hostApi.initializeProject({
+        projectId: PROJECT_ID,
+        projectName: "Proyecto de demostración — Monitoreo del autor",
+        writerId: "reference-writer"
+      });
+
+      const stored = await store.loadDocumentWithChanges(PROJECT_ID, DOCUMENT_ID);
+      if (stored.document) {
+        await hostApi.recoverDocument(DOCUMENT_ID);
+      } else {
+        await hostApi.openDocument({
+          documentId: DOCUMENT_ID,
+          text: INITIAL_TEXT,
+          revision: 0,
+          sequence: 0
+        });
+      }
+
+      const snapshot = hostApi.getSnapshot(DOCUMENT_ID);
+      if (!snapshot) throw new Error("El motor no devolvió el manuscrito inicial.");
+      textarea.value = snapshot.text;
+
+      disposeEditor = mountLiveAuthorMonitorTextArea({
+        element: textarea,
+        documentId: DOCUMENT_ID,
+        hostApi,
+        maxPendingChanges: 256,
+        onBackpressure: state => {
+          if (state.status === "resync-required") {
+            reportStatus("La captura se pausó para reconciliar el documento antes de continuar.", true);
+          } else if (state.status === "backpressured") {
+            reportStatus("El motor está procesando cambios pendientes...");
+          } else if (!closing) {
+            reportStatus("Monitoreo activo. Los cambios se sincronizan en segundo plano.");
+          }
+        },
+        onError: error => reportStatus(error instanceof Error ? error.message : String(error), true)
+      });
+
+      disposePanel = mountLiveAuthorMonitorPanel(
+        document.querySelector("#monitor-panel"),
+        hostApi,
+        { documentId: DOCUMENT_ID, intervalMs: 100, title: "Actividad del autor" }
+      );
+
+      const harness = {
+        ready: true,
+        closed: false,
+        projectId: PROJECT_ID,
+        documentId: DOCUMENT_ID,
+        getSnapshot: () => hostApi.getSnapshot(DOCUMENT_ID),
+        getMetrics: () => hostApi.getLiveAuthorMonitorSnapshot(DOCUMENT_ID),
+        flush: () => hostApi.flushPendingChanges(),
+        async closeSafely() {
+          if (closing || harness.closed) return;
+          closing = true;
+          saveButton.disabled = true;
+          try {
+            await hostApi.flushPendingChanges();
+            disposeEditor();
+            disposePanel();
+            await hostApi.closeLiveAuthorMonitorDocumentSafely(DOCUMENT_ID);
+            await hostApi.disposeSafely();
+            await store.close();
+            harness.closed = true;
+            reportStatus("Sesión guardada de forma segura. Puedes recargar para comprobar su restauración.");
+          } catch (error) {
+            closing = false;
+            saveButton.disabled = false;
+            reportStatus(error instanceof Error ? error.message : String(error), true);
+            throw error;
+          }
+        }
+      };
+      window.__liveAuthorMonitorDemo = harness;
+      saveButton.disabled = false;
+      saveButton.addEventListener("click", () => {
+        void harness.closeSafely().catch(() => undefined);
+      });
+      reportStatus("Monitoreo activo. Los cambios se sincronizan en segundo plano.");
+    }
+
+    start().catch(error => {
+      reportStatus(error instanceof Error ? error.message : String(error), true);
+      window.__liveAuthorMonitorDemo = { ready: false, error: String(error) };
+    });
+  </script>
+</body>
+</html>

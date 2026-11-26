@@ -542,3 +542,14 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 
 
 **Validación preventiva de configuración:** los montajes transaccional y textarea validan `maxPendingChanges` antes de consultar/reservar la sesión de monitoreo o instalar listeners. Un límite inválido (no entero seguro o fuera de 1–65536) falla de inmediato y no deja recursos parcialmente montados.
+
+
+## 26. Aplicación de referencia de escritura real en navegador (25 de noviembre de 2026)
+
+**Entrega funcional:** se añade `typescript/examples/live-author-monitor/index.html`, una página ejecutable que conecta un textarea nativo con `HostEngineApi`, `IndexedDbProjectStore`, `mountLiveAuthorMonitorTextArea` y `mountLiveAuthorMonitorPanel`. La página recupera documentos existentes, representa las métricas de actividad y ofrece un cierre seguro que vacía la cola, persiste el checkpoint, libera el lease y dispone recursos.
+
+**Prueba Chromium de extremo a extremo:** se añade `tests/live-author-monitor-writing-browser.test.mjs`. El caso escribe texto mediante eventos reales de teclado, comprueba admisiones, commits y secuencia durable, cierra la sesión, recarga la página, verifica restauración del texto y del checkpoint y continúa escribiendo en la sesión recuperada.
+
+**Workflow:** el workflow específico del monitor ahora también se ejecuta cuando cambia la aplicación de referencia.
+
+**Límite explícito:** esta página es una aplicación real de referencia sobre textarea, no la aplicación final de producción ni un editor enriquecido. Los editores con historial propio deben conectar sus callbacks nativos mediante el adaptador transaccional. La conexión de un editor anfitrión ausente no se declara completada.

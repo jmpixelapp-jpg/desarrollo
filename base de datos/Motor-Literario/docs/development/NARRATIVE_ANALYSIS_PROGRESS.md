@@ -515,3 +515,72 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - La reconciliación sigue siendo read-only; no inventa cursores, no avanza secuencias y no confirma operaciones automáticamente.
 
 **Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` en este entorno.
+
+
+## Endurecimiento del diagnóstico de cursores
+
+- La inspección ya no presupone que `writerId` y `lastOperationId` almacenados sean cadenas válidas: normaliza valores corruptos y emite `invalid-cursor` sin interrumpir el informe.
+- Valida explícitamente que el diario implemente `loadWriterCursors` antes de iniciar la auditoría.
+- Se añadieron pruebas para identificadores de cursor no textuales y para diarios que no implementan el contrato de lectura de cursores.
+- No se modifican datos persistidos durante estas comprobaciones.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado localmente; no hay resultados de CI asociados al HEAD comprobado.
+
+
+## Planificador conservador de recuperación de cursores
+
+- Se añadió `planNarrativeSyncJournalCursorRecovery`, una operación de solo lectura que clasifica cursores por escritor.
+- Cursor coherente: `no-action`.
+- Cursor ausente o `lastOperationId` divergente: solo propone reconstrucción cuando el diario está completo desde la secuencia 1, todas las envolturas y metadatos pasan auditoría y no existen otras incidencias.
+- Huecos, secuencias duplicadas, digest/metadatos inválidos, cursor adelantado/retrasado o cursor sin operaciones: `manual-review`.
+- El resultado contiene la propuesta tipada, códigos de incidencia, contadores y `requiresManualReview`; no incluye una operación de escritura.
+- Pruebas verifican propuesta por cursor ausente, discrepancia de identidad final, diario discontinuo, cursor adelantado, estado coherente y ausencia de mutaciones.
+
+**Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` localmente; comprobar CI antes de dar esta tanda por validada.
+
+
+## Aplicación atómica y revalidada de cursores
+
+- Se añadió `IndexedDbNarrativeSyncJournal.applyCursorRecoveryProposal(proposal)`, separada del planificador read-only.
+- Comprueba previamente que el historial del escritor sea completo desde secuencia 1, que `receivedAt/appliedAt` sean coherentes y que todas las envolturas superen SHA-256.
+- En una transacción `readwrite` conjunta de operaciones y cursores, relee el diario y el cursor, compara el snapshot validado y aplica únicamente si el cursor falta o su identidad final diverge manteniendo la secuencia correcta.
+- No sobrescribe cursores adelantados/retrasados, inválidos ni alterados concurrentemente. No modifica operaciones.
+- Resultado explícito: `applied`, `already-consistent` o `rejected`; repetir una propuesta ya aplicada es idempotente.
+- Se agregaron pruebas IndexedDB para cursor perdido, identidad divergente, reintento, diario obsoleto, cursor cambiado concurrentemente y diario incompleto.
+
+**Validación pendiente:** los cambios están registrados en GitHub, pero no se han ejecutado `npm run typecheck` ni `npm test` en este entorno. No se considera validada la tanda hasta ejecutar ambas comprobaciones.
+
+
+## Integración del plan de cursores con el consumidor protegido
+
+- `createRecoveryFirstNarrativeSyncConsumer` planifica la recuperación de cursores tras completar la recuperación de reparaciones y antes de habilitar el replay.
+- La escritura requiere un callback explícito `NarrativeSyncCursorRecoveryApproval.approve(proposal)` suministrado por el anfitrión.
+- Sin aprobación, el plan se devuelve como diagnóstico, no se modifica IndexedDB y el replay sigue bloqueado por la inconsistencia.
+- Las propuestas aprobadas se aplican mediante la transacción revalidada; el consumidor vuelve a auditar el diario y solo despacha handlers si la integridad completa queda restablecida.
+- El resultado expone el plan y cada resultado `applied`/`already-consistent`/`rejected` para facilitar observabilidad.
+- Pruebas nuevas verifican que sin aprobación no se modifica el cursor y que, con aprobación, se reconstruye antes de ejecutar el handler.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` siguen sin ejecutarse en este entorno. No hay una ejecución de CI confirmada para estos commits.
+
+
+## Exclusión de replay entre pestañas
+
+- El replay ahora adquiere `navigator.locks` cuando está disponible, usando un lock exclusivo por proyecto que coordina tanto replays completos como parciales.
+- Si el lock ya está ocupado, devuelve `consumer-already-running` y no ejecuta handlers.
+- Si el coordinador Web Locks falla, devuelve `consumer-lock-failed` y no cae silenciosamente en un replay sin exclusión.
+- En runtimes sin Web Locks se mantiene solo la exclusión local ya existente; no se promete coordinación cross-tab ni entre dispositivos.
+- Se añadió el adaptador `NarrativeSyncReplayLockManager` para poder probar la política de exclusión sin depender del navegador.
+- Pruebas nuevas cubren lock ocupado, error de adquisición y callback ejecutado mientras el lock permanece retenido.
+
+**Límite de entrega:** el protocolo continúa siendo al menos una vez. Web Locks impide dos replays cooperantes simultáneos en el mismo origen/proyecto, pero no vuelve atómica una mutación de dominio externa con el acuse IndexedDB. Los handlers deben seguir siendo idempotentes por `operationId`.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado en este entorno; no se declara aprobada la compilación ni la suite.
+
+
+## Recuperación de interrupciones y acuses idempotentes
+
+- Se añadieron pruebas para la ventana crítica entre la persistencia del efecto de dominio y `markApplied`.
+- El escenario simula que el handler registra un recibo durable por `operationId` y luego falla antes del acuse. El replay conserva la operación pendiente, la vuelve a entregar con la misma identidad y el recibo evita repetir el efecto.
+- Se añadieron pruebas de acuse desde dos instancias `IndexedDbNarrativeSyncJournal` que comparten el mismo nombre de base de datos. El primer `appliedAt` durable se conserva ante acuses repetidos y un digest incorrecto se rechaza.
+- Esto no convierte el sistema en exactly-once: el efecto y el acuse siguen siendo dos escrituras separadas. Cada handler debe ofrecer idempotencia/CAS o una bandeja durable de deduplicación atómica con su efecto.
+- El archivo de pruebas del consumidor pasa a contener 14 pruebas declaradas. No se han ejecutado en este entorno; typecheck, build y suite completa continúan pendientes.

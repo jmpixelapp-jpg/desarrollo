@@ -843,7 +843,7 @@ export class HostEngineApi {
       try {
         await this.reconcileNarrativeEvidence(result);
         await this.extractNarrativeKnowledge(
-          result.documentId, result.revision, result.affectedText, result.affectedStart
+          result.documentId, result.revision, result.affectedText, result.affectedStart, true
         );
         try {
           const snapshot = this.getSnapshot(result.documentId);
@@ -1047,18 +1047,31 @@ export class HostEngineApi {
     documentId: string,
     revision: number,
     text: string,
-    baseOffset = 0
+    baseOffset = 0,
+    deferTerminalName = false
   ): Promise<readonly NarrativeEntity[]> {
     const project = this.requireProject();
     if (typeof documentId !== "string" || !documentId.trim() ||
         !Number.isSafeInteger(revision) || revision < 0 || typeof text !== "string" ||
         !Number.isSafeInteger(baseOffset) || baseOffset < 0 ||
-        baseOffset > Number.MAX_SAFE_INTEGER - text.length) {
+        baseOffset > Number.MAX_SAFE_INTEGER - text.length ||
+        typeof deferTerminalName !== "boolean" ||
+        (deferTerminalName && baseOffset > Number.MAX_SAFE_INTEGER - text.length - 1)) {
       throw new Error("Fragmento narrativo inválido.");
     }
     const store = this.requireKnowledgeStore();
     const work = this.knowledgeTail.then(async () => {
-      const extracted = extractNarrativeEntities(project.projectId, documentId, revision, text, Date.now(), baseOffset);
+      const rawExtracted = extractNarrativeEntities(
+        project.projectId, documentId, revision,
+        deferTerminalName ? text + "_" : text, Date.now(), baseOffset
+      );
+      const extracted = deferTerminalName ? rawExtracted.map(entity => ({
+        ...entity,
+        evidence: entity.evidence.map(item => ({
+          ...item,
+          excerpt: item.excerpt.endsWith("_") ? item.excerpt.slice(0, -1) : item.excerpt
+        }))
+      })) : rawExtracted;
       if (!this.entitiesLoaded) {
         const existing = requireProjectScopedRecords(await store.loadEntities(project.projectId), project.projectId, "entidades");
         for (const entity of existing) this.narrativeEntities.set(entity.id, entity);

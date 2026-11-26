@@ -30,3 +30,5 @@ export * from "./narrative-consistency";
 export * from "./narrative-knowledge-graph";
 
 export * from "./narrative-knowledge-graph-incremental";
+
+export * from "./narrative-knowledge-graph-persistence";

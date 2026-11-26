@@ -489,3 +489,26 @@ test("no confunde un nombre propio más largo con el prefijo de un personaje con
   assert.equal(found[0].grammaticalSubjectCandidate, undefined);
   assert.equal(found[0].personalObjectCandidate?.entityId, bruno.id);
 });
+
+
+test("mantiene límites Unicode al detectar verbos con grafías variables", () => {
+  const validCases = [
+    ["Ana atravesó el valle.", "atravesar", "atravesó"],
+    ["Ana pasó la frontera.", "pasar", "pasó"],
+    ["Ana recorrió el camino.", "recorrer", "recorrió"]
+  ];
+  for (const [text, action, surface] of validCases) {
+    const found = discoverNarrativeObservationCandidates({ ...context, text });
+    const candidate = found.find(item => item.action === action);
+    assert.ok(candidate, text);
+    assert.equal(candidate.surface, surface);
+    assert.equal(text.slice(candidate.actionEvidence.start, candidate.actionEvidence.end), surface);
+  }
+});
+
+test("no reconoce un verbo como subcadena pegada a letras Unicode", () => {
+  for (const text of ["Ana ñatravesó el valle.", "Ana repasó el texto."]) {
+    const found = discoverNarrativeObservationCandidates({ ...context, text });
+    assert.equal(found.length, 0, text);
+  }
+});

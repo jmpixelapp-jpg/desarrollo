@@ -57,3 +57,5 @@ jobs:
         run: npx vite build
       - name: Run monitor-specific tests
         run: node --test tests/live-author-monitor*.test.mjs tests/storage-implementation-audit.test.mjs
+      - name: Measure bounded monitor heap across large documents
+        run: npm run bench:monitor

@@ -13,17 +13,26 @@ Los handlers conectan las envolturas verificadas del diario con el almacenamient
 | `assertion-upsert` | `{ assertion: NarrativeAssertion }` | `loadAssertions` / `saveAssertionIfUnchanged` |
 | `relation-upsert` | `{ relation: NarrativeRelation }` | `loadRelations` / `saveRelationIfUnchanged` |
 | `event-upsert` | `{ event: NarrativeEvent }` | `loadEvents` / `saveEventIfUnchanged` |
+| `entity-merge` | `{ targetEntityId, sourceEntityId, writerId? }` | `mergeNarrativeEntityIdentity` (transacción atómica del store) |
 
-Las fábricas públicas son `createNarrativeEntityUpsertHandler`, `createNarrativeIdeaUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler` y `createNarrativeEventUpsertHandler`. `createNarrativeSyncDomainHandlers(store)` las registra juntas y valida al inicializar que el almacén ofrezca todos los métodos CAS requeridos.
+Las fábricas públicas incluyen `createNarrativeEntityUpsertHandler`, `createNarrativeEntityMergeHandler`, `createNarrativeIdeaUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler` y `createNarrativeEventUpsertHandler`. `createNarrativeSyncDomainHandlers(store)` las registra juntas y valida al inicializar que el almacén ofrezca los métodos CAS y la fusión atómica requeridos.
 
 ## Validación del dominio
 
 Todos los handlers comprueban que el proyecto del registro coincide con el proyecto del sobre antes de escribir. Las validaciones limitan longitud y cardinalidad de campos, verifican IDs, y rechazan evidencia con revisiones o rangos UTF-16 inválidos.
 
-Las entidades comprueban coherencia de nombre canónico normalizado, alias únicos, tiempos de primera/última aparición y versión de extracción. Este handler no fusiona identidades: la consolidación debe usar la operación atómica de identidad del store para redirigir referencias y conservar snapshots archivados.
+Las entidades comprueban coherencia de nombre canónico normalizado, alias únicos, tiempos de primera/última aparición y versión de extracción. Este handler no fusiona identidades: la consolidación se procesa por `entity-merge`, que delega exclusivamente en la operación atómica del store para redirigir referencias y conservar snapshots archivados. El validador de `mergedFromIds` comprueba IDs como identificadores, no como nombres normalizados.
 
 Las relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
 
+
+## Persistencia saliente desde el editor y el grafo
+
+Con `ProjectIdentity.deviceId` estable, el anfitrión identifica la instalación y el motor emite operaciones salientes. Las ediciones de texto se guardan con el delta del journal y la operación `document.change` en una sola transacción IndexedDB. Las mutaciones locales de entidades, ideas, afirmaciones, relaciones y acontecimientos usan los métodos CAS del `ProjectStore` con un `SyncOperationDraft`; el registro, la operación y el cursor por dispositivo se confirman juntos.
+
+La consolidación local de entidades usa `entity-merge` y añade su operación saliente a la misma transacción que redirige relaciones, participantes, afirmaciones, vínculos de ideas y la biblioteca personal. Si falla la inserción en outbox, se revierte también la consolidación. Las operaciones entrantes llaman al CAS sin `SyncOperationDraft`, por lo que no se reenvían y no crean bucles de eco.
+
+El adaptador debe anunciar `supportsAtomicNarrativeSyncOutbox === true`. Un adaptador sin esa garantía debe rechazar las mutaciones sincronizables cuando se configura `deviceId`; no basta con guardar primero y enviar después.
 ## Conflictos
 
 Cada handler carga el registro actual del proyecto y ejecuta el método CAS con la versión observada como `expectedCurrent`. Si el registro cambia entre lectura y escritura, el store debe rechazar el CAS. El error detiene el replay y la operación permanece pendiente.
@@ -51,8 +60,58 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 
 ## Pruebas
 
-- `tests/narrative-sync-domain-handlers.test.mjs`: ideas, registro agregado, CAS, reintentos y conflictos.
+- `tests/narrative-sync-domain-handlers.test.mjs`: ideas, CAS, reintentos y conflictos.
 - `tests/narrative-sync-entity-handler.test.mjs`: entidades, normalización canónica, CAS y reintentos.
+- `tests/narrative-sync-entity-merge-handler.test.mjs`: delegación atómica, validación de IDs y soporte obligatorio del store.
 - `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.
 - `tests/narrative-sync-relation-event-handlers.test.mjs`: relaciones, acontecimientos y validación temporal.
 - `tests/narrative-sync-writer-concurrency.test.mjs`: replay paralelo entre escritores y exclusión de replay completo.
+
+
+## Manifiestos documentales y tombstones
+
+`persistNarrativeKnowledgeGraphSnapshotWithManifests` coordina dos fases ordenadas: primero persiste el grafo con CAS por registro; después publica el manifiesto activo de cada documento con CAS por generación. El manifiesto nunca se adelanta a los registros. Si falla una publicación, el grafo parcial permanece reintentable y el manifiesto anterior continúa siendo la referencia durable.
+
+`retireNarrativeDocumentProjection` publica un tombstone con inventarios vacíos y exige una revisión estrictamente posterior a la vigente. Repetir el mismo tombstone y revisión es idempotente; una retirada obsoleta se rechaza.
+
+El tombstone no borra entidades ni afirmaciones del proyecto. Esos registros pueden tener evidencia compartida con otros documentos y su eliminación requiere reconciliación referencial y política explícita de retención. El manifiesto enumera contribuciones por documento; no autoriza por sí solo un borrado físico.
+
+
+## Reconciliación de proyecciones tras reinicios
+
+`reconcileNarrativeDocumentProjections(store, projectId)` compara los manifiestos durables con la evidencia real de entidades, relaciones, acontecimientos, ideas y afirmaciones. Informa de manifiestos ausentes, IDs omitidos o sobrantes en inventarios y tombstones que todavía conservan evidencia del documento.
+
+La reconciliación es deliberadamente de sólo lectura. No infiere si una discrepancia debe resolverse restaurando un manifiesto, reextrayendo el documento o retirando evidencia; esa decisión depende del estado fuente y de la política editorial. El informe proporciona códigos, documento, tipo de registro e ID para que una capa de reparación aplique CAS explícito.
+
+
+### Reparación limitada de inventarios activos
+
+`repairNarrativeDocumentProjectionManifest(store, projectId, documentId)` reconstruye los cinco inventarios de un manifiesto **activo** usando exclusivamente la evidencia persistida. La actualización conserva la revisión documental, incrementa la generación y exige CAS sobre la generación previamente leída. Si el inventario ya coincide, devuelve un resultado idempotente sin escribir.
+
+La operación no repara manifiestos ausentes (no hay revisión fuente confiable), no reactiva tombstones y no modifica entidades, relaciones, eventos, ideas, afirmaciones ni sus evidencias. Los tombstones con evidencia residual deben pasar por una decisión explícita de recuperación o retirada; no se resuelven automáticamente.
+
+
+### Integridad de referencias cruzadas del grafo
+
+La reconciliación también verifica referencias internas: extremos de relaciones, participantes de acontecimientos, entidad propietaria de afirmaciones y vínculos explícitos entre ideas y entidades/otras ideas. Los códigos `missing-relation-entity`, `missing-event-participant`, `missing-assertion-entity`, `missing-related-entity` y `missing-related-idea` identifican la clase de inconsistencia.
+
+Cuando el registro no tiene evidencia documental, el diagnóstico usa `documentId: ""` para indicar alcance de proyecto y no atribuye el problema a un capítulo arbitrario. Estas incidencias no se reparan automáticamente: sin una fuente autoritativa no es seguro inventar, fusionar o reasignar identidades.
+
+
+### Propuestas conservadoras de reparación de referencias
+
+`proposeNarrativeReferenceRepairs(store, report)` transforma incidencias de referencias a entidades en propuestas no mutantes. Sólo propone un destino automático cuando exactamente una entidad del mismo proyecto declara el ID perdido dentro de `mergedFromIds`, evidencia explícita de una fusión anterior. Cero o varias coincidencias producen `manual-review`. Los enlaces a ideas no se resuelven por heurística. La función no guarda cambios ni sustituye la confirmación editorial.
+
+
+### Aplicación aprobada de reparaciones
+
+`applyNarrativeReferenceRepair(store, proposal, approved, appliedAt)` aplica una propuesta de entidad sólo tras aprobación explícita. Revalida que el ID perdido siga documentado en `mergedFromIds` de una única identidad destino, vuelve a leer el registro y usa el método CAS específico de relaciones, acontecimientos, afirmaciones o ideas. Una repetición reconocible es idempotente; una referencia que cambió de forma incompatible se rechaza.
+
+La operación devuelve un registro de auditoría con campo, valor anterior, valor nuevo, identidad sustituida y marca temporal. Este registro queda en manos del llamador para persistencia durable: esta función no presupone un almacén de auditoría que el contrato actual de `ProjectStore` todavía no define.
+
+
+### Auditoría durable de reparaciones
+
+El contrato `ProjectStore` incorpora `appendNarrativeReferenceRepairAudit` y `loadNarrativeReferenceRepairAudits`. IndexedDB almacena los registros en `narrative-reference-repair-audits`, aislados por proyecto y operación, con inserción append-only e idempotente. La base avanza a la versión 26; las bases existentes crean el almacén durante la migración sin alterar los registros previos.
+
+La API pública de aplicación exige que el almacenamiento ofrezca auditoría durable antes de iniciar una reparación. Después del CAS del registro, añade la auditoría antes de devolver éxito. Si la escritura de auditoría falla tras el CAS, el llamador puede reintentar la misma propuesta: la aplicación reconoce el estado ya actualizado y completa el registro pendiente. La mutación del grafo y la escritura de auditoría son dos transacciones, no una transacción IndexedDB conjunta.

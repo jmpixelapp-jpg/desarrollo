@@ -1648,3 +1648,14 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Alcance:** carrera determinista en un almacén de pruebas que suspende la llamada antes de aplicar el mismo guard de lease que usa `MemoryDocumentStore`. La validación atómica de IndexedDB se mantiene cubierta por las pruebas de fencing transaccional existentes.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+## 107. Aislamiento de leases entre documentos del mismo proyecto (26 de noviembre de 2026)
+
+**Objetivo:** impedir que un takeover en un documento invalide accidentalmente la titularidad de otros documentos abiertos por el mismo propietario.
+
+**Regresión:** el almacén IndexedDB adquiere leases independientes para dos capítulos del mismo proyecto. El lease de A expira y otro propietario obtiene el fencing token siguiente; el lease B debe poder renovarse con su token original y guardar su checkpoint. El snapshot antiguo de A debe ser rechazado y no debe aparecer un checkpoint suyo.
+
+**Invariantes:** la identidad de un lease incluye proyecto y documento; los fencing tokens se incrementan por clave de documento, no como un contador global del proyecto. Perder A no libera, renueva ni invalida B.
+
+**Validación:** pendiente de GitHub Actions.

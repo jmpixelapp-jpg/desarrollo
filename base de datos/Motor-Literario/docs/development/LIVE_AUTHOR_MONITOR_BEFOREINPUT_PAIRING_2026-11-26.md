@@ -408,3 +408,40 @@ La lógica de correlación vive ahora en `tests/browser/live-author-monitor-ime-
 - la clasificación de confianza identifica los eventos sintéticos del test como no confiables.
 
 **Importante:** esos 2.010 eventos sintéticos no representan una sesión IME ni son consumidos por el adaptador; solo prueban la retención y los contadores del banco manual. La evidencia del pipeline IME del navegador sigue procediendo de la prueba específica con `Input.imeSetComposition`, y la evidencia de IME físicos sigue pendiente de la matriz de dispositivos.
+
+
+## Correlador aislado y validación final de liberación de payload — 26 de noviembre de 2026
+
+La lógica de emparejamiento del banco manual se extrajo en `tests/browser/live-author-monitor-ime-pairing.js`. Esta separación deja claro el límite entre el monitor real del adaptador y la instrumentación de diagnóstico del banco. El correlador conserva temporalmente el dato anterior solo en su estado privado; los registros contienen el resultado de comparación y el identificador de pareja, nunca el string literal.
+
+### Regresiones unitarias del correlador
+
+El archivo `tests/live-author-monitor-ime-pairing.test.mjs` cubre nueve escenarios:
+1. pareja completa y datos idénticos;
+2. datos contradictorios sin serializar sus valores;
+3. solo un lado con dato disponible y ambos datos nulos;
+4. discrepancia de `inputType` entre los dos eventos;
+5. `input` sin `inputType` utilizable;
+6. `beforeinput` cancelado y `input` huérfano;
+7. nuevo `beforeinput` que sustituye uno pendiente;
+8. interrupción por error y liberación del dato;
+9. disposición de la página, liberación y rechazo de eventos tardíos.
+
+La integración manual también cubre un orden delicado del navegador: el `onError` del adaptador puede ejecutarse dentro de la misma propagación antes de que el listener de diagnóstico vea el mismo `beforeinput`. El banco marca ese error como pendiente de aplicar al siguiente evento observado y lo interrumpe después de que el listener registre el evento, evitando que el payload rechazado quede retenido.
+
+### CI final del correlador — commit `4c11338c640c38f8f801e4e14fd96412ae2b3445`
+
+Ambos workflows finalizaron en `success` sobre el mismo commit:
+
+- **[Live Author Monitor — run 45791748059](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45791748059):** type-check aislado, bundle, validación de esquema/almacenamiento, pruebas de recuperación, Page Lifecycle, integración Chromium y anfitrión/editor. Resultado: **209/209 pruebas, 0 fallos**. Las dos pruebas de navegador IME (candidatos CDP y exportación manual privada) aparecen aprobadas.
+- **[Motor Literario TypeScript — run 45791748116](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45791748116):** type-check global, build y suite completa **1.206/1.206 pruebas, 0 fallos**. Incluye las nueve pruebas de correlación y el test Playwright del banco manual.
+
+### Benchmark del núcleo en la validación final
+
+El escenario `live-author-monitor-bounded-heap` procesó 100.000 commits en 8 documentos, con 1.048.576 unidades UTF-16 iniciales por documento y 12.500 cambios por documento. Resultado del workflow dedicado: 644,21 ms, 155.229,35 commits/s, 0,5 MB retenidos por sesiones abiertas, 0 MB de crecimiento de heap entre media carga y carga completa y 71,71 MB de RSS. El workflow global observó 385,58 ms, 259.352,01 commits/s, los mismos 0,5 MB retenidos y 0 MB de crecimiento de heap, con 72,94 MB de RSS.
+
+Este benchmark mide el núcleo `LiveAuthorMonitor` (sesiones, commits y métricas), no el coste integral de comparar el manuscrito en el adaptador `TextArea`; los números son observaciones de CI, no garantías de rendimiento.
+
+### Alcance que sigue pendiente
+
+La validación de CI cubre automatización Chromium y el banco de metadatos. No hemos recibido todavía trazas de IME físicos en Windows, macOS o Linux. La matriz real de proveedores/idiomas/dispositivos sigue abierta; no se debe inferir su aprobación a partir de `Input.imeSetComposition` ni de eventos sintéticos usados para probar límites de retención.

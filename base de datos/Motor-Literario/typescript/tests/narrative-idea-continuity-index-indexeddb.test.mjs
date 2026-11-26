@@ -11,10 +11,11 @@ const {
   buildNarrativeIdeaEvolution,
   commitNarrativeIdeaContinuityIndex,
   createNarrativeIdeaContinuityIndex,
-  hydrateNarrativeIdeaContinuityIndex
+  hydrateNarrativeIdeaContinuityIndex,
+  updateNarrativeIdeaContinuityIndexIncrementally
 } = await import("../dist/motor-literario.js");
 
-function idea(id, documentId, text, revision = 1, projectId = "persisted-continuity-" + projectSuffix) {
+function idea(id, documentId, text, revision = 1, projectId = "persisted-continuity-" + projectSuffix, polarity = "affirmed") {
   const excerpt = "La idea expresada es " + text + ".";
   const start = 10 + excerpt.indexOf(text);
   return {
@@ -25,7 +26,7 @@ function idea(id, documentId, text, revision = 1, projectId = "persisted-continu
     kind: "theme",
     text,
     confidence: "high",
-    polarity: "affirmed",
+    polarity,
     reviewStatus: "candidate",
     evidence: { start, end: start + text.length, excerpt }
   };
@@ -175,5 +176,94 @@ test("dos instancias no pueden confirmar simultáneamente la misma generación C
   } finally {
     await storeA.close();
     await storeB.close();
+  }
+});
+
+
+test("actualiza y persiste incrementalmente solo las líneas afectadas por una revisión", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "persisted-incremental-" + randomUUID();
+  const orderedDocumentIds = ["chapter-1", "chapter-2", "chapter-3", "chapter-4"];
+  const sourceRevisions = orderedDocumentIds.map(documentId => ({
+    documentId, revision: 1, status: "active"
+  }));
+  const firstCandidates = [
+    idea("memory-a", "chapter-1", "memoria antigua de la ciudad", 1, projectId),
+    idea("memory-b", "chapter-2", "memoria antigua de la ciudad", 1, projectId),
+    idea("destiny-a", "chapter-3", "destino oscuro del reino", 1, projectId),
+    idea("destiny-b", "chapter-4", "destino oscuro del reino", 1, projectId)
+  ];
+  const buildEvolution = candidates => buildNarrativeIdeaEvolution({
+    projectId,
+    crossDocumentAnalysis: analyzeNarrativeIdeaCrossDocumentRelations({
+      projectId,
+      ideaCandidates: candidates,
+      orderedDocumentIds
+    })
+  });
+
+  try {
+    const first = await updateNarrativeIdeaContinuityIndexIncrementally(store, {
+      projectId,
+      updatedAt: 1_000,
+      sourceRevisions,
+      nextEvolution: buildEvolution(firstCandidates)
+    });
+    assert.equal(first.index.generation, 1);
+    assert.equal(first.reused, false);
+    assert.equal(first.index.lines.length, 2);
+    assert.equal(first.rebuiltLineCount, 2);
+    assert.equal(first.reusedLineCount, 0);
+
+    const revisedCandidates = [
+      firstCandidates[0],
+      idea("memory-b", "chapter-2", "memoria antigua de la ciudad", 2, projectId, "negated"),
+      firstCandidates[2],
+      firstCandidates[3]
+    ];
+    const revisedRevisions = sourceRevisions.map(item =>
+      item.documentId === "chapter-2" ? { ...item, revision: 2 } : item
+    );
+    const second = await updateNarrativeIdeaContinuityIndexIncrementally(store, {
+      projectId,
+      updatedAt: 2_000,
+      sourceRevisions: revisedRevisions,
+      nextEvolution: buildEvolution(revisedCandidates)
+    });
+    assert.equal(second.index.generation, 2);
+    assert.equal(second.reused, false);
+    assert.deepEqual(second.changedDocumentIds, ["chapter-2"]);
+    assert.equal(second.rebuiltLineCount, 1);
+    assert.equal(second.reusedLineCount, 1);
+    assert.ok(second.index.lines.some(line => line.modalityChangeCount > 0));
+
+    const replay = await updateNarrativeIdeaContinuityIndexIncrementally(store, {
+      projectId,
+      updatedAt: 3_000,
+      sourceRevisions: revisedRevisions,
+      nextEvolution: buildEvolution(revisedCandidates)
+    });
+    assert.equal(replay.reused, true);
+    assert.equal(replay.index.generation, 2);
+    assert.equal(replay.rebuiltLineCount, 0);
+    assert.equal(replay.reusedLineCount, 2);
+
+    const deletedRevisions = revisedRevisions.map(item =>
+      item.documentId === "chapter-2" ? { ...item, revision: 3, status: "deleted" } : item
+    );
+    const remainingCandidates = revisedCandidates.filter(item => item.documentId !== "chapter-2");
+    const deleted = await updateNarrativeIdeaContinuityIndexIncrementally(store, {
+      projectId,
+      updatedAt: 4_000,
+      sourceRevisions: deletedRevisions,
+      nextEvolution: buildEvolution(remainingCandidates)
+    });
+    assert.equal(deleted.index.generation, 3);
+    assert.equal(deleted.index.lines.length, 1);
+    assert.equal(deleted.index.lines[0].occurrenceIds.length, 2);
+    assert.ok(deleted.removedLineIds.length >= 1);
+    assert.ok(!deleted.index.occurrences.some(item => item.documentId === "chapter-2"));
+  } finally {
+    await store.close();
   }
 });

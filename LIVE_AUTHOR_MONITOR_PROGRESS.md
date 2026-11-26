@@ -1765,3 +1765,24 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Límite que permanece:** el adaptador textarea emite actualizaciones de composición IME conforme las aplica el navegador. Eso es una secuencia de estados aplicados, no necesariamente un único compromiso lingüístico final. El historial undo/redo continúa exigiendo la fuente transaccional autoritativa del editor.
 
 **Siguiente paso:** revisar el resultado CI; después diseñar una prueba de navegador real para el orden de eventos IME por motor/navegador y añadir un contrato explícito de procedencia (nativo/inferido/desconocido) sin presentar eventos provisionales como intención final.
+
+## 115. Cancelación tardía de beforeinput verificada con teclado real de Chromium (26 de noviembre de 2026)
+
+**Objetivo:** convertir la regresión de cancelación posterior al listener del monitor desde un fixture unitario en una prueba DOM real del navegador.
+
+**Prueba nueva:** `base de datos/Motor-Literario/typescript/tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs`.
+
+**Secuencia ejecutada por la prueba:**
+- Monta `LiveAuthorMonitorTextAreaSource` sobre un `HTMLTextAreaElement` real con snapshot inicial de revisión 0/secuencia 0.
+- Registra después del adaptador un listener del anfitrión que cancela la primera inserción `insertText`.
+- Usa `page.keyboard.type("x")` y exige que el evento observado sea confiable (`isTrusted === true`).
+- Comprueba que la cancelación no cambia el documento, no emite delta, no provoca error ni exige resincronización y deja `pendingInput === false`.
+- Escribe `y` con una segunda pulsación y exige un único delta consecutivo en el offset UTF-16 3, con revisión base 0 y secuencia 1.
+
+**Documentación nueva:** `base de datos/Motor-Literario/docs/development/LIVE_AUTHOR_MONITOR_BEFOREINPUT_CANCELLATION_CHROMIUM_2026-11-26.md`.
+
+**Reglas reafirmadas:** `beforeinput` es una señal previa; solo un `input` asociado y un estado posterior comprobable producen un delta aceptado. La cancelación dentro de la propagación síncrona debe observarse sin bloquear la operación posterior.
+
+**Límite:** esta prueba valida teclado y eventos DOM confiables en Chromium headless; no es una prueba de IME físico ni demuestra compatibilidad universal. La validación con IME del sistema operativo, idiomas y versiones de navegador sigue pendiente.
+
+**CI:** el archivo usa el patrón incluido en el workflow `Live Author Monitor`. Resultado pendiente de la ejecución disparada por este commit; no se marca la prueba como aprobada antes de consultar GitHub Actions.

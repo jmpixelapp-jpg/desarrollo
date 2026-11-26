@@ -185,3 +185,13 @@ test("no inventa fuente en discurso referido impersonal",()=>{
  assert.equal(result[0].epistemicFrame,"reported-speech");
  assert.equal(result[0].epistemicSourceCandidate,undefined);
 });
+
+test("rechaza alias vacíos, excesivos y entidades fuera del presupuesto",()=>{
+ assert.throws(()=>discover({entities:[{...ana,aliases:["   "]}],text:"Ana está herida."}));
+ assert.throws(()=>discover({entities:[{...ana,aliases:["x".repeat(257)]}],text:"Ana está herida."}));
+ assert.throws(()=>discover({entities:Array.from({length:5001},(_,i)=>({...ana,id:"c:"+i})),text:"Ana está herida."}));
+});
+test("rechaza búsquedas combinadas que superan el presupuesto sin devolver resultados parciales",()=>{
+ const text="Ana está herida. ".repeat(1200);
+ assert.throws(()=>discover({text}),/presupuesto de análisis/);
+});

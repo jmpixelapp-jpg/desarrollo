@@ -103,3 +103,14 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Contrato: [Persistencia del grafo narrativo](../architecture/PERSISTENCIA_DEL_GRAFO_NARRATIVO.md).
 
 **Limitación crítica documentada:** el contrato actual no ofrece borrado ni reemplazo transaccional por documento. La persistencia inicial puede conservar evidencias antiguas tras una revisión y no elimina registros que desaparecen del análisis. No se afirma reconciliación completa hasta implementar tombstones y reemplazo atómico por documento.
+
+
+## 9. Reconciliación de evidencia por revisión documental
+
+- La persistencia ahora retira las evidencias previas de cada documento incluido en el snapshot entrante y las reemplaza por las de la revisión actual.
+- La reconciliación se aplica a entidades, relaciones, acontecimientos, ideas y afirmaciones, usando CAS para cada escritura.
+- La evidencia de documentos no incluidos en el snapshot se conserva.
+- Si una entidad deja de aparecer en el texto revisado, se elimina su evidencia de ese documento; el registro sin evidencia se conserva porque el contrato no permite borrado seguro.
+- Pruebas de regresión para revisión actualizada, evidencia de otro documento y repetición idempotente.
+
+**Límites vigentes:** la persistencia continúa siendo secuencial, no atómica entre colecciones. Los documentos retirados del proyecto deben declararse explícitamente; omitirlos del snapshot no autoriza su eliminación. La siguiente fase debe incorporar manifiestos de documentos, tombstones y reemplazo transaccional.

@@ -1530,17 +1530,33 @@ function validateLiveAuthorMonitorCheckpoint(
     }
   }
   if (!integerNonNegative(checkpoint.rejectedChanges)) invalid.push("rejectedChanges");
+  if (integerNonNegative(checkpoint.pauseCount) &&
+      integerNonNegative(checkpoint.acceptedChanges) &&
+      integerNonNegative(checkpoint.rejectedChanges) &&
+      checkpoint.pauseCount > checkpoint.acceptedChanges + checkpoint.rejectedChanges) {
+    invalid.push("pauseCount.activity-balance");
+  }
   if (!integerNonNegative(checkpoint.committedChanges)) invalid.push("committedChanges");
   if (!integerNonNegative(checkpoint.failedChanges)) invalid.push("failedChanges");
   if (integerNonNegative(checkpoint.committedChanges) &&
       integerNonNegative(checkpoint.failedChanges) &&
-      integerNonNegative(checkpoint.acceptedChanges) &&
-      checkpoint.committedChanges + checkpoint.failedChanges > checkpoint.acceptedChanges) {
-    invalid.push("commit-counts");
+      integerNonNegative(checkpoint.acceptedChanges)) {
+    const commitOutcomeCount = checkpoint.committedChanges + checkpoint.failedChanges;
+    if (!Number.isSafeInteger(commitOutcomeCount) ||
+        commitOutcomeCount !== checkpoint.acceptedChanges) {
+      invalid.push("commit-counts");
+    }
   }
   if (!integerNonNegative(checkpoint.insertedCharacters)) invalid.push("insertedCharacters");
   if (!integerNonNegative(checkpoint.deletedCharacters)) invalid.push("deletedCharacters");
   if (!integerNonNegative(checkpoint.currentDocumentLength)) invalid.push("currentDocumentLength");
+  if (integerNonNegative(checkpoint.insertedCharacters) &&
+      integerNonNegative(checkpoint.deletedCharacters) &&
+      integerNonNegative(checkpoint.currentDocumentLength) &&
+      checkpoint.deletedCharacters >
+        checkpoint.currentDocumentLength + checkpoint.insertedCharacters) {
+    invalid.push("character-balance");
+  }
   if (!integerNonNegative(checkpoint.revision)) invalid.push("revision");
   if (!integerNonNegative(checkpoint.sequence)) invalid.push("sequence");
   if (!integerNonNegative(checkpoint.resynchronizations)) invalid.push("resynchronizations");
@@ -1553,11 +1569,29 @@ function validateLiveAuthorMonitorCheckpoint(
     if (Array.from(checkpoint.commitLatencies).some(value => !finiteNonNegative(value))) {
       invalid.push("commitLatencies.values");
     }
+    const denseCommitLatencies = Array.from(checkpoint.commitLatencies);
     if (finiteNonNegative(checkpoint.totalCommitLatencyMs) &&
-        checkpoint.commitLatencies.every(value => finiteNonNegative(value)) &&
-        checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
+        denseCommitLatencies.every(value => finiteNonNegative(value)) &&
+        denseCommitLatencies.reduce((sum, value) => sum + value, 0) >
           checkpoint.totalCommitLatencyMs + 1) {
       invalid.push("commitLatencies.total");
+    }
+    const commitOutcomeCount = checkpoint.committedChanges + checkpoint.failedChanges;
+    if (integerNonNegative(checkpoint.committedChanges) &&
+        integerNonNegative(checkpoint.failedChanges) &&
+        Number.isSafeInteger(commitOutcomeCount)) {
+      if (denseCommitLatencies.length > commitOutcomeCount ||
+          (commitOutcomeCount > 0 && denseCommitLatencies.length === 0)) {
+        invalid.push("commitLatencies.count");
+      }
+      if (denseCommitLatencies.length === 0 &&
+          (checkpoint.lastCommitLatencyMs !== 0 || checkpoint.totalCommitLatencyMs !== 0)) {
+        invalid.push("commitLatencies.empty-balance");
+      }
+      if (denseCommitLatencies.length > 0 &&
+          denseCommitLatencies[denseCommitLatencies.length - 1] !== checkpoint.lastCommitLatencyMs) {
+        invalid.push("commitLatencies.last");
+      }
     }
   }
   if (invalid.length > 0) {

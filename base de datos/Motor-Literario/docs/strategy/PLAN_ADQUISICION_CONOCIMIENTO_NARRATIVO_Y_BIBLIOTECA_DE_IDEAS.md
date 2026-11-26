@@ -871,13 +871,13 @@ Se incorpora `narrative-sync-outbox.ts` como infraestructura saliente separada d
 - El outbox valida snapshots compactos, identidad de la envoltura, generación esperada, cursor del proyecto y metadatos de lease/entrega al recuperar entradas.
 
 **Conexión con el anfitrión**
-- `HostEngineApi` acepta opcionalmente `continuityOutbox`. Cuando se configura, exige un `ProjectIdentity.writerId` estable y encola automáticamente cada generación reconciliada. Si también se proporciona `onNarrativeIdeaContinuityIndexUpdated`, ambos destinos se notifican.
+- `HostEngineApi` acepta opcionalmente `continuityOutbox` y `continuityOutboxWriterId`. Al activarlo exige un ID estable y único por instalación/replica, separado del `ProjectIdentity.writerId` autenticado; así dos dispositivos del mismo escritor no colisionan en sus secuencias de transporte. Cada generación reconciliada se encola automáticamente.
 - Si se proporciona además `onNarrativeIdeaContinuityIndexUpdated`, ambos destinos se notifican; los fallos se reportan sin revertir el documento ni el índice local.
 - El trabajador de transporte sigue siendo responsabilidad del anfitrión: debe invocar `deliverNarrativeSyncOutboxBatch(outbox, { projectId, workerId, send })` con un transporte real. El motor no afirma entrega remota hasta que ese transporte confirma.
 - La base del outbox es independiente del almacén principal del proyecto; no modifica el esquema MLDB ni los almacenes de IndexedDB del motor.
 
 **Pruebas añadidas**
 - 11 pruebas de outbox: secuencias, deduplicación, conflictos, generaciones consecutivas, concurrencia de encolado, leases, reclamación tras vencimiento, ack idempotente, reintentos, entrega, recuperación después de cerrar/reabrir la base, callback e integración con el handler CAS receptor.
-- Una prueba adicional en Fase AU verifica que `HostEngineApi` inserta las generaciones 1 y 2 automáticamente en el outbox y toma el escritor de la identidad del proyecto.
+- Una prueba adicional en Fase AU verifica que `HostEngineApi` inserta las generaciones 1 y 2 automáticamente en el outbox y mantiene separada la identidad de instalación de la identidad del escritor autenticado.
 
 La entrega remota se describe como al menos una vez, no exactamente una vez. La durabilidad de la cola y la idempotencia reducen duplicados; no sustituyen la autenticación del transporte, la autorización del proyecto ni el acuse durable del receptor.

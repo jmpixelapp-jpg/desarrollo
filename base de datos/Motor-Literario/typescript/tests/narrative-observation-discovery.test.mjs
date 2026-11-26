@@ -577,3 +577,33 @@ test("propaga la negación a través de auxiliares sin negar la acción matriz",
   assert.equal(matrix.find(item => item.action === "llegar")?.polarity, "negated");
 });
 
+
+
+test("rechaza entidades duplicadas, ajenas, alias inválidos y colecciones fuera de límites", () => {
+  assert.throws(() => discoverNarrativeObservationCandidates({
+    ...context, text: "Ana corrió.", entities: [character, character]
+  }), /únicos, válidos/);
+  assert.throws(() => discoverNarrativeObservationCandidates({
+    ...context, text: "Ana corrió.", entities: [{ ...character, projectId: "other" }]
+  }), /únicos, válidos/);
+  assert.throws(() => discoverNarrativeObservationCandidates({
+    ...context, text: "Ana corrió.", entities: [{ ...character, aliases: [""] }]
+  }), /únicos, válidos/);
+  assert.throws(() => discoverNarrativeObservationCandidates({
+    ...context, text: "Ana corrió.", entities: [{ ...character, aliases: ["A".repeat(257)] }]
+  }), /únicos, válidos/);
+  assert.throws(() => discoverNarrativeObservationCandidates({
+    ...context, text: "Ana corrió.", entities: Array.from({ length: 10_001 }, (_, index) => ({
+      ...character, id: "character:" + index
+    }))
+  }), /Contexto inválido/);
+});
+
+test("limita la segmentación de documentos patológicos sin alterar offsets de segmentos aceptados", () => {
+  const text = Array.from({ length: 20_100 }, () => "Ana corrió.").join("\\n");
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  assert.ok(found.length <= 200);
+  assert.ok(found.every(item => item.actionEvidence.start >= 0 && item.actionEvidence.end <= text.length));
+  assert.ok(found.every(item => text.slice(item.actionEvidence.start, item.actionEvidence.end) ===
+    item.actionEvidence.excerpt));
+});

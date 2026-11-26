@@ -2453,8 +2453,22 @@ export class IndexedDbProjectStore implements ProjectStore {
         !["relation", "event", "assertion", "idea"].includes(entry.recordType) ||
         !entry.recordId || !entry.referenceField || !entry.missingReferenceId ||
         !entry.replacementEntityId || !Number.isFinite(entry.appliedAt) || entry.appliedAt < 0 ||
-        entry.before === undefined || entry.after === undefined) {
+        (entry.recordType === "relation" && entry.referenceField !== "fromEntityId" && entry.referenceField !== "toEntityId") ||
+        (entry.recordType === "event" && entry.referenceField !== "participants") ||
+        (entry.recordType === "assertion" && entry.referenceField !== "entityId") ||
+        (entry.recordType === "idea" && entry.referenceField !== "relatedEntityIds") ||
+        (entry.recordType === "relation" || entry.recordType === "assertion"
+          ? entry.before !== entry.missingReferenceId || entry.after !== entry.replacementEntityId
+          : !Array.isArray(entry.before) || !entry.before.includes(entry.missingReferenceId) ||
+            !Array.isArray(entry.after) || !entry.after.includes(entry.replacementEntityId))) {
       throw new Error("Registro de auditoría de reparación narrativa inválido.");
+    }
+    const expectedOperationId = [
+      "reference-repair", entry.projectId, entry.recordType, entry.recordId,
+      entry.referenceField, entry.missingReferenceId, entry.replacementEntityId
+    ].join("|");
+    if (entry.operationId !== expectedOperationId) {
+      throw new Error("El ID de operación de auditoría no coincide con sus referencias.");
     }
     const db = await this.open();
     const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_AUDITS, "readwrite");

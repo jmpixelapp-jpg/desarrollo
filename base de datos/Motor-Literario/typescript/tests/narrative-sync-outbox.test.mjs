@@ -177,6 +177,7 @@ test("solo reclama la siguiente generación y recupera un lease vencido", async 
     });
     assert.equal(expiredClaim.length, 1);
     assert.equal(expiredClaim[0].generation, 1);
+    assert.equal(expiredClaim[0].operationId, firstClaim[0].operationId);
     assert.equal(expiredClaim[0].attempts, 2);
 
     await assert.rejects(outbox.markDelivered(
@@ -308,7 +309,7 @@ test("el trabajador entrega, reintenta y confirma sin perder la operación durab
   }
 });
 
-test("el callback de HostEngineApi se puede conectar al outbox durable y reanunciar generations", async () => {
+test("el callback de HostEngineApi se puede conectar al outbox durable y reanunciar generaciones", async () => {
   const outbox = new IndexedDbNarrativeSyncOutbox({ databaseName: databaseName() });
   const projectId = "outbox-callback-" + randomUUID();
   const callback = createNarrativeIdeaContinuityOutboxCallback(outbox, "device-a");
@@ -354,5 +355,40 @@ test("la reapertura del outbox recupera operaciones pendientes para otro trabaja
     assert.equal(claim.generation, 1);
   } finally {
     reopened.close();
+  }
+});
+
+
+test("dos generaciones encoladas concurrentemente nunca producen una secuencia de salida invertida", async () => {
+  const outbox = new IndexedDbNarrativeSyncOutbox({ databaseName: databaseName() });
+  const projectId = "outbox-race-" + randomUUID();
+  const generationOne = makeIndex(projectId, 1, 100);
+  const generationTwo = makeIndex(projectId, 2, 200);
+
+  try {
+    const outcomes = await Promise.allSettled([
+      outbox.enqueueContinuityIndex({
+        index: generationOne,
+        writerId: "device-race"
+      }),
+      outbox.enqueueContinuityIndex({
+        index: generationTwo,
+        writerId: "device-race",
+        expectedGeneration: 1
+      })
+    ]);
+    assert.ok(outcomes.some(item => item.status === "fulfilled"));
+    const entries = await outbox.loadEntries(projectId);
+    assert.ok(entries.length === 1 || entries.length === 2);
+    assert.deepEqual(
+      entries.map(item => item.generation),
+      entries.length === 1 ? [2] : [1, 2]
+    );
+    assert.deepEqual(
+      entries.map(item => item.sequence),
+      entries.map((_, index) => index + 1)
+    );
+  } finally {
+    outbox.close();
   }
 });

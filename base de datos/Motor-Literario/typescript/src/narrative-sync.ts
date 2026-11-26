@@ -38,6 +38,41 @@ export interface SyncOutboxPort {
   acknowledgeSyncOperations?(operationIds: readonly string[]): Promise<number>;
 }
 
+/** Payload versionado de un delta textual confirmado por el motor narrativo. */
+export interface NarrativeDocumentChangePayloadV1 {
+  readonly schemaVersion: 1;
+  readonly documentId: string;
+  readonly sequence: number;
+  readonly baseRevision: number;
+  readonly committedRevision: number;
+  /** Offsets UTF-16, compatibles con las posiciones del editor JavaScript. */
+  readonly start: number;
+  readonly end: number;
+  readonly replacement: string;
+}
+
+/** Valida el contrato público del payload narrative-document-change.v1. */
+export function validateNarrativeDocumentChangePayloadV1(
+  value: unknown
+): asserts value is NarrativeDocumentChangePayloadV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("El delta narrativo debe ser un objeto JSON.");
+  }
+  const payload = value as Record<string, unknown>;
+  if (payload.schemaVersion !== 1 ||
+      typeof payload.documentId !== "string" || !payload.documentId.trim() ||
+      payload.documentId.length > 512 ||
+      !Number.isSafeInteger(payload.sequence) || (payload.sequence as number) < 1 ||
+      !Number.isSafeInteger(payload.baseRevision) || (payload.baseRevision as number) < 0 ||
+      !Number.isSafeInteger(payload.committedRevision) ||
+      payload.committedRevision !== (payload.baseRevision as number) + 1 ||
+      !Number.isSafeInteger(payload.start) || (payload.start as number) < 0 ||
+      !Number.isSafeInteger(payload.end) || (payload.end as number) < (payload.start as number) ||
+      typeof payload.replacement !== "string") {
+    throw new TypeError("El payload narrative-document-change.v1 no cumple el esquema 1.");
+  }
+}
+
 export interface SyncConflict {
   readonly operationId: string;
   readonly code: string;
@@ -125,6 +160,9 @@ function validateOperation(operation: SyncOperation, projectId: string): void {
   catch { throw new TypeError("La bandeja devolvió un payload que no es JSON válido."); }
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new TypeError("El payload de sincronización debe ser un objeto JSON.");
+  }
+  if (operation.kind === "narrative-document-change.v1") {
+    validateNarrativeDocumentChangePayloadV1(payload);
   }
 }
 

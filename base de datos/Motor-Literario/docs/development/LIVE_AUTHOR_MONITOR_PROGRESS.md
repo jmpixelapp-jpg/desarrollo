@@ -1680,7 +1680,7 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Invariante:** la revalidación del conjunto de documentos no convierte un lease todavía válido en takeover ni hace que un documento herede la generación de otro.
 
-**Ajuste del fixture:** la primera ejecución mostró que un lease B con casi 30 segundos aún disponibles puede renovarse sin que `expiresAt` aumente, por el guard monótono `Math.max`. El escenario se ajustó para que B siga vigente pero venza en un segundo, de modo que la renovación debe extender la fecha sin cambiar owner/token. **Validación:** pendiente de CI para el commit `abc5b5d1`.
+**Ajuste del fixture:** la primera ejecución mostró que un lease B con casi 30 segundos aún disponibles puede renovarse sin que `expiresAt` aumente, por el guard monótono `Math.max`. El escenario se ajustó para que B siga vigente pero venza en un segundo, de modo que la renovación debe extender la fecha sin cambiar owner/token. **Validación CI dedicada:** [Live Author Monitor — run 45766785514](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766785514), checkout `abc5b5d169948014e12c80be663765f55c9c4d36`, terminó `success`. El test de reanudación parcial A/B aprobó como test 113. Type-check, bundle aislado, diagnósticos 17/17, auditoría MLDB/almacenamiento, monitor aislado 167/167, Page Lifecycle Chromium 1/1 e integración host/editor/browser **182/182** aprobaron. Benchmark de 100.000 commits en **495,81 ms** (~201.691 commits/s), heap de 4,39 MiB a mitad y final, crecimiento medido 0 MiB, 0,50 MiB retenidos y cero tickets pendientes.
 
 
 ## 110. Fencing de varios documentos entre dos páginas Chromium reales (26 de noviembre de 2026)

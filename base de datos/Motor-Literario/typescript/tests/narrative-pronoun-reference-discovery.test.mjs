@@ -135,3 +135,24 @@ test("rechaza nombres canónicos excesivamente largos y tipos vacíos", () => {
     entities: [{ ...ana, kind: " " }]
   }), /únicas, válidas/);
 });
+
+
+test("recorre segmentos de forma incremental y conserva evidencia en documentos densos", () => {
+  const chunks = ["Ana llegó. Ella corrió."];
+  for (let index = 0; index < 2_500; index++) {
+    chunks.push("La tormenta avanzó. Ella esperó.");
+  }
+  const text = chunks.join("\\n");
+  const references = discover(text, { entities: [ana] });
+  assert.equal(references.length, 2_000);
+  for (const reference of references) {
+    assert.equal(text.slice(
+      reference.pronounEvidence.start, reference.pronounEvidence.end
+    ), reference.pronoun);
+    for (const candidate of reference.antecedentCandidates) {
+      assert.equal(text.slice(
+        candidate.antecedentEvidence.start, candidate.antecedentEvidence.end
+      ), candidate.antecedentEvidence.excerpt);
+    }
+  }
+});

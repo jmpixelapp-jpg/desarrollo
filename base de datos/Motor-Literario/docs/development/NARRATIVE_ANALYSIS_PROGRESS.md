@@ -223,3 +223,8 @@ Se añadió `typescript/src/narrative-sync-consumer.ts` y su exportación públi
 - Se documenta que SHA-256 verifica integridad, no identidad del escritor, y que el handler implementado cubre ideas, no todas las entidades narrativas.
 
 **Validación pendiente:** estos cambios se han publicado en `main`, pero todavía no hay ejecuciones CI asociadas al commit de esta tanda. No se declaran typecheck, build ni suite aprobados hasta comprobarlos.
+
+
+### Ajuste de tipos para handlers heterogéneos
+
+La integración reveló que un handler tipado como `NarrativeSyncOperationHandler<NarrativeIdeaUpsertPayload>` no debe forzarse al tipo genérico por defecto `NarrativeSyncOperationHandler<unknown>`: bajo `strictFunctionTypes`, el parámetro de `apply` es más específico. Se añadió el alias explícito `AnyNarrativeSyncOperationHandler` para el registro heterogéneo y se utilizó tanto en el dispatcher como en el consumidor. El tipo concreto del handler de ideas se conserva en su fábrica; el borrado de tipo queda limitado al registro interno.

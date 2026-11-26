@@ -153,3 +153,18 @@ test("rechaza respuestas parciales que dejan operaciones sin clasificar", async 
   assert.equal(outbox.pending.length, 2);
   assert.equal(outbox.acknowledged.length, 0);
 });
+
+test("rechaza payloads que no sean objetos JSON antes de llamar al transporte", async () => {
+  const outbox = createOutbox([operation("op-invalid", 1, { payload: "[]" })]);
+  let pushed = false;
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push() {
+      pushed = true;
+      return { acknowledgedOperationIds: [], conflicts: [], retryableOperationIds: [] };
+    }
+  });
+  await assert.rejects(coordinator.syncOnce("project-a"), /objeto JSON/);
+  assert.equal(pushed, false);
+  assert.equal(outbox.pending.length, 1);
+  assert.equal(outbox.attempts.length, 0);
+});

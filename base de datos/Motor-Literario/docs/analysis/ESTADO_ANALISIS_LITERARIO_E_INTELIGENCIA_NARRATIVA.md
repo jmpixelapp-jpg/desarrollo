@@ -481,3 +481,14 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Añadida regresión con dos instancias de IndexedDB que intentan insertar simultáneamente secuencias iguales para el mismo dispositivo: exactamente una inserción debe persistir.
 - Documentado el requisito previo para reconciliación: contador durable compartido y asignación+inserción atómicas, o autoridad externa confiable. No se introdujo un contador parcial ni una migración especulativa.
 - **Validación:** regresión y documentación publicadas; no se ejecutaron localmente las pruebas ni se recibieron resultados CI.
+
+
+### Tanda — asignador local de secuencias en IndexedDB
+
+- Implementado `IndexedDbProjectStore.enqueueNextSyncOperation(draft)`: asigna la siguiente secuencia por proyecto/dispositivo y encola en una única transacción `readwrite`.
+- La transacción comprueba primero la idempotencia por `operationId`, consulta el último registro del índice `by-project-device-sequence` en orden inverso y añade la nueva operación con secuencia consecutiva.
+- Los reintentos con la misma identidad devuelven la secuencia ya persistida; el mismo ID con proyecto, dispositivo, tipo, fecha o payload diferentes se rechaza. El payload se compara en forma JSON canónica.
+- Expuesto como método opcional de `ProjectStore` para mantener compatibilidad con adaptadores anteriores. No se añade store ni migración: el índice único existente se reutiliza.
+- Añadida regresión con dos instancias IndexedDB concurrentes, una operación legacy previa, secuencias consecutivas, reintento idempotente y colisión de payload.
+- **Alcance:** la asignación es compartida entre conexiones IndexedDB del mismo origen; no coordina dispositivos físicos distintos ni reemplaza un orden global asignado por servidor.
+- **Validación:** cambios y prueba publicados. Falta ejecutar build/typecheck y suite; CI aún no confirmado.

@@ -391,6 +391,12 @@ test("rechaza un límite inválido antes de consultar el motor o suscribir el ed
     hostApi,
     maxPendingChanges: 0
   }), /maxPendingChanges/);
+  assert.throws(() => mountLiveAuthorMonitorEditorTransactions({
+    documentId: initial.documentId,
+    editor,
+    hostApi,
+    maxQueuedTextUnits: 0
+  }), /maxQueuedTextUnits/);
   assert.equal(hostApiCalls, 0);
   assert.equal(editor.listeners.size, 0);
 });

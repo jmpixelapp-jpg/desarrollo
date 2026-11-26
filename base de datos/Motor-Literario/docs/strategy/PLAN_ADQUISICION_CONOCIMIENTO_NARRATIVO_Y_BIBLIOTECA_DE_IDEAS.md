@@ -446,3 +446,24 @@ Se detectó que el extractor `narrative-character-intent-extraction.ts` existía
 **Límites:** el extractor sigue usando patrones léxicos españoles acotados y exige el personaje nombrado en la misma oración. No interpreta automáticamente deseos implícitos, objetivos compartidos, contradicciones entre metas, jerarquías de objetivos ni cambios de motivación. La detección de un objetivo no demuestra que el personaje actúe para cumplirlo.
 
 **Validación:** los cambios y pruebas están publicados en la rama. No se afirma que el build, type-check o suite se hayan ejecutado correctamente; se requiere CI sobre el head actualizado.
+
+## Fase AA: evolución conservadora de objetivos y motivaciones
+
+Se incorpora `narrative-character-intent-evolution.ts` con `evolveNarrativeCharacterIntents(input)`, conectado a `understandNarrativeFragment` como `characterIntentEvolution`. La entrada opcional `priorCharacterIntents` permite comparar objetivos y motivaciones conservados por la biblioteca entre capítulos.
+
+La clasificación distingue:
+- `maintained`: el mismo objetivo afirmado vuelve a aparecer y existe un antecedente único.
+- `withdrawn`: el mismo objetivo previo aparece explícitamente negado.
+- `replaced`: la frase actual contiene un marcador explícito de sustitución y menciona literalmente el objetivo anterior.
+- `conditional`: la intención actual está expresada como condición.
+- `coexisting`: hay una meta anterior, pero el texto no demuestra que haya sido abandonada o sustituida.
+- `ambiguous-predecessor`: existen varios antecedentes compatibles; se conservan todos.
+- `chronology-unresolved`: falta un orden documental fiable para comparar capítulos.
+
+Se validan proyecto, identidad del personaje, estructura de evidencias y límites de entrada. La cronología entre documentos solo se utiliza cuando el proyecto entrega `orderedDocumentIds`; dentro del mismo documento se exige misma revisión y orden de offsets. Se conserva evidencia del objetivo actual y de todos los antecedentes seleccionados.
+
+Se añaden siete pruebas unitarias y una prueba de integración del pipeline.
+
+**Límites deliberados:** una meta diferente no sustituye por sí sola a una anterior; se considera coexistencia salvo marcador explícito. La retirada se detecta cuando el mismo objetivo aparece negado, no por inferencia psicológica. La señal de reemplazo requiere que el texto de la meta anterior aparezca en la misma evidencia. El sistema no jerarquiza metas, no deduce metas implícitas ni decide si una motivación es sincera. Los resultados siguen siendo candidatos revisables.
+
+**Validación:** cambios, exportación pública, pruebas y documentación publicados en la rama. No se afirma que build, type-check o suite hayan pasado; deben verificarse mediante CI sobre el head actual.

@@ -261,6 +261,7 @@ export interface NarrativeProjectionReconciliationIssue {
   readonly recordType: "document" | "entity" | "relation" | "event" | "idea" | "assertion";
   readonly recordId?: string;
   readonly relatedId?: string;
+  readonly referenceField?: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
   readonly detail: string;
 }
 
@@ -384,23 +385,26 @@ export async function reconcileNarrativeDocumentProjections(
     recordId: string,
     targetId: string,
     documents: readonly string[],
-    description: string
+    description: string,
+    referenceField: NonNullable<NarrativeProjectionReconciliationIssue["referenceField"]>
   ) => {
     const scopes = documents.length ? documents : [""];
     for (const documentId of scopes) {
+      const before = issues.length;
       emit(code, documentId, recordType, recordId,
         description + " Referencia inexistente: " + targetId + ".", targetId);
+      if (issues.length > before) issues[issues.length - 1] = { ...issues[issues.length - 1]!, referenceField };
     }
   };
   for (const relation of relations) {
     const documents = evidenceDocuments(relation.evidence);
     if (!entityIds.has(relation.fromEntityId)) emitReference(
       "missing-relation-entity", "relation", relation.id, relation.fromEntityId,
-      documents, "La relación no encuentra su entidad de origen."
+      documents, "La relación no encuentra su entidad de origen.", "fromEntityId"
     );
     if (!entityIds.has(relation.toEntityId)) emitReference(
       "missing-relation-entity", "relation", relation.id, relation.toEntityId,
-      documents, "La relación no encuentra su entidad de destino."
+      documents, "La relación no encuentra su entidad de destino.", "toEntityId"
     );
   }
   for (const event of events) {
@@ -408,14 +412,14 @@ export async function reconcileNarrativeDocumentProjections(
     for (const participantId of event.participants) {
       if (!entityIds.has(participantId)) emitReference(
         "missing-event-participant", "event", event.id, participantId,
-        documents, "El acontecimiento referencia un participante inexistente."
+        documents, "El acontecimiento referencia un participante inexistente.", "participants"
       );
     }
   }
   for (const assertion of assertions) {
     if (!entityIds.has(assertion.entityId)) emitReference(
       "missing-assertion-entity", "assertion", assertion.id, assertion.entityId,
-      evidenceDocuments(assertion.evidence), "La afirmación no encuentra su entidad."
+      evidenceDocuments(assertion.evidence), "La afirmación no encuentra su entidad.", "entityId"
     );
   }
   for (const idea of ideas) {
@@ -423,7 +427,7 @@ export async function reconcileNarrativeDocumentProjections(
     for (const entityId of idea.relatedEntityIds ?? []) {
       if (!entityIds.has(entityId)) emitReference(
         "missing-related-entity", "idea", idea.id, entityId,
-        documents, "La idea referencia una entidad inexistente."
+        documents, "La idea referencia una entidad inexistente.", "relatedEntityIds"
       );
     }
     for (const relatedIdeaId of idea.relatedIdeaIds ?? []) {
@@ -522,6 +526,7 @@ export interface NarrativeReferenceRepairProposal {
   readonly recordType: "relation" | "event" | "assertion" | "idea";
   readonly recordId: string;
   readonly missingReferenceId: string;
+  readonly referenceField: NonNullable<NarrativeProjectionReconciliationIssue["referenceField"]>;
   readonly candidateEntityId?: string;
   readonly resolution: "explicit-merge-match" | "manual-review";
 }
@@ -546,7 +551,7 @@ export async function proposeNarrativeReferenceRepairs(
     "missing-assertion-entity", "missing-related-entity"
   ]);
   for (const issue of report.issues) {
-    if (!supported.has(issue.code) || !issue.recordId || !issue.relatedId) continue;
+    if (!supported.has(issue.code) || !issue.recordId || !issue.relatedId || !issue.referenceField) continue;
     if (!["relation", "event", "assertion", "idea"].includes(issue.recordType)) continue;
     const matches = entities.filter(entity =>
       entity.projectId === report.projectId &&
@@ -559,6 +564,7 @@ export async function proposeNarrativeReferenceRepairs(
       recordType: issue.recordType,
       recordId: issue.recordId,
       missingReferenceId: issue.relatedId,
+      referenceField: issue.referenceField,
       ...(matches.length === 1 ? { candidateEntityId: matches[0]!.id } : {}),
       resolution: matches.length === 1 ? "explicit-merge-match" : "manual-review"
     });
@@ -618,7 +624,7 @@ async function applyNarrativeReferenceRepairWithoutAudit(
   const auditBase = {
     operationId: [
       "reference-repair", proposal.projectId, proposal.recordType,
-      proposal.recordId, proposal.missingReferenceId, candidate.id
+      proposal.recordId, proposal.referenceField, proposal.missingReferenceId, candidate.id
     ].join("|"),
     operation: "narrative-reference-repair" as const,
     projectId: proposal.projectId,
@@ -637,14 +643,15 @@ async function applyNarrativeReferenceRepairWithoutAudit(
     const records = await store.loadRelations!(proposal.projectId);
     const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
     if (!current) throw new Error("La relación que se desea reparar ya no existe.");
-    const field = current.fromEntityId === proposal.missingReferenceId ? "fromEntityId"
-      : current.toEntityId === proposal.missingReferenceId ? "toEntityId" : undefined;
-    if (!field) {
-      const replay = current.fromEntityId === candidate.id || current.toEntityId === candidate.id;
-      if (!replay) throw new Error("La referencia propuesta ya no coincide con la relación actual.");
-      return { changed: false, replayed: true, audit: { ...auditBase,
-        referenceField: current.fromEntityId === candidate.id ? "fromEntityId" : "toEntityId",
-        before: proposal.missingReferenceId, after: candidate.id } };
+    if (proposal.referenceField !== "fromEntityId" && proposal.referenceField !== "toEntityId") {
+      throw new Error("El campo de referencia no corresponde a una relación.");
+    }
+    const field = proposal.referenceField;
+    if (current[field] !== proposal.missingReferenceId) {
+      if (current[field] === candidate.id) return { changed: false, replayed: true,
+        audit: { ...auditBase, referenceField: field,
+          before: proposal.missingReferenceId, after: candidate.id } };
+      throw new Error("La referencia propuesta ya no coincide con el extremo indicado de la relación.");
     }
     const next = { ...current, [field]: candidate.id };
     await store.saveRelationIfUnchanged!(next, current);
@@ -657,6 +664,7 @@ async function applyNarrativeReferenceRepairWithoutAudit(
     const records = await store.loadEvents!(proposal.projectId);
     const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
     if (!current) throw new Error("El acontecimiento que se desea reparar ya no existe.");
+    if (proposal.referenceField !== "participants") throw new Error("El campo de referencia no corresponde a participantes.");
     if (!current.participants.includes(proposal.missingReferenceId)) {
       if (current.participants.includes(candidate.id)) return { changed: false, replayed: true,
         audit: { ...auditBase, referenceField: "participants",
@@ -675,6 +683,7 @@ async function applyNarrativeReferenceRepairWithoutAudit(
     const records = await store.loadAssertions!(proposal.projectId);
     const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
     if (!current) throw new Error("La afirmación que se desea reparar ya no existe.");
+    if (proposal.referenceField !== "entityId") throw new Error("El campo de referencia no corresponde a la entidad de afirmación.");
     if (current.entityId !== proposal.missingReferenceId) {
       if (current.entityId === candidate.id) return { changed: false, replayed: true,
         audit: { ...auditBase, referenceField: "entityId",
@@ -691,6 +700,7 @@ async function applyNarrativeReferenceRepairWithoutAudit(
   const records = await store.loadIdeas!(proposal.projectId);
   const current = records.find(item => item.id === proposal.recordId && item.projectId === proposal.projectId);
   if (!current) throw new Error("La idea que se desea reparar ya no existe.");
+  if (proposal.referenceField !== "relatedEntityIds") throw new Error("El campo de referencia no corresponde a los vínculos de idea.");
   const related = current.relatedEntityIds ?? [];
   if (!related.includes(proposal.missingReferenceId)) {
     if (related.includes(candidate.id)) return { changed: false, replayed: true,

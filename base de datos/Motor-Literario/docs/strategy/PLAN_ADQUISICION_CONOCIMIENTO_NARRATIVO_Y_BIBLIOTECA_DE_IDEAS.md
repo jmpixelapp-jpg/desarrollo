@@ -730,7 +730,7 @@ Se separan dos señales:
 - `exact-recurrence`: texto equivalente tras normalizar Unicode NFKD, mayúsculas/minúsculas, diacríticos, puntuación y espacios.
 - `lexical-resonance`: coincidencia de al menos dos términos de contenido que supera un umbral de Jaccard o de solapamiento. Se excluyen palabras funcionales en español e inglés y términos presentes en demasiados documentos del lote.
 
-Cada relación conserva los dos candidatos, documento, revisión, tipo de idea, modalidad, texto y evidencias originales. Expone los términos compartidos y las métricas para que el resultado sea explicable. Los pares del mismo documento no se relacionan, incluso si pertenecen a revisiones distintas. Los IDs y el orden de salida son deterministas.
+Cada relación conserva los dos candidatos, documento, revisión, tipo de idea, modalidad, texto y evidencias originales. Añade `polarityRelation` para señalar si la modalidad cambió entre apariciones, sin etiquetar el cambio como contradicción objetiva. Expone los términos compartidos y las métricas para que el resultado sea explicable. Los pares del mismo documento no se relacionan, incluso si pertenecen a revisiones distintas. Los IDs y el orden de salida son deterministas.
 
 La cronología solo se orienta cuando ambos documentos figuran en `orderedDocumentIds`; de lo contrario queda como `unknown`. La salida permanece en estado `candidate`, no crea enlaces canónicos, no fusiona ideas y no escribe en IndexedDB ni en la biblioteca personal. La resonancia léxica no demuestra que dos expresiones sean paráfrasis, sinónimos o la misma idea. La revisión humana sigue siendo necesaria para esa decisión.
 

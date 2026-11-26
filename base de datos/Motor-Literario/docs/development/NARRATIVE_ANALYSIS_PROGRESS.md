@@ -152,3 +152,5 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 
 - Implementado `IndexedDbNarrativeSyncJournal` en una base IndexedDB separada. La recepción verifica SHA-256 y registra sobre + cursor de escritor en una única transacción local; exige secuencias contiguas desde 1, deduplica `operationId` con digest idéntico, rechaza colisiones, huecos y replay, y mantiene aislamiento por proyecto/escritor. Añadidas pruebas de persistencia tras reapertura, deduplicación, rechazos y aislamiento.
 - Límite: el diario hace durable la recepción, pero todavía no aplica operaciones al grafo ni comparte transacción con las colecciones narrativas. El estado `accepted` significa registrado en el diario, no aplicado al manuscrito/grafo. La autenticación de `writerId` sigue siendo responsabilidad del anfitrión.
+
+- Ampliado el diario con recuperación explícita (`loadOperations` y `loadOperation`), ordenación de operaciones por escritor/secuencia y pruebas de lectura tras reapertura. Añadida además una prueba de admisión concurrente para confirmar que dos operaciones distintas no pueden ocupar la misma secuencia del mismo escritor.

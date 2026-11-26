@@ -1785,3 +1785,9 @@ Se hizo idempotente el método central de fallo del adaptador: si binding y call
 Se corrigió el desmontaje de la integración TextArea: primero se dispone la fuente nativa y después se cierra el binding. Esto evita que una cancelación intencional seguida de destrucción de la fuente se registre como un incidente resync-required. La regresión de la integración verifica que dispose() no añada errores de captura tras una sesión correcta y que se limpien listeners y suscripciones de reintento.
 
 La pausa temporal sigue invalidando continuidad y exige snapshot; el cierre definitivo no intenta recuperación. Se documentó la distinción en LIVE_AUTHOR_MONITOR_OPERATIONS.md, sección 26.
+
+## Regresión Chromium de beforeinput cancelado y pérdida de foco — 26 de noviembre de 2026
+
+Se amplió live-author-monitor-browser.test.mjs con una prueba sobre Chromium real: Playwright genera una pulsación de teclado y el adaptador observa el beforeinput confiable. Un listener registrado después cancela la acción por defecto, por lo que no debe aparecer input; al desenfocar el textarea, la fuente debe informar missing-input, liberar el estado pendiente, exigir snapshot y no publicar deltas.
+
+Esta regresión distingue el evento nativo confiable generado por el pipeline DOM de los eventos dispatchEvent sintéticos. No equivale a teclado físico ni a proveedor IME de sistema operativo; esas matrices siguen pendientes. La prueba de browser quedó publicada, pero aún no hay confirmación de CI para esta revisión.

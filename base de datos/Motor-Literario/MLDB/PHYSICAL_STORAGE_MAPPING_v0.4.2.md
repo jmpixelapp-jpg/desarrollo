@@ -79,6 +79,17 @@ Las 25 tablas lógicas propiedad del motor están implementadas. `projects` perm
 
 El archivo `storage_mapping_v0.4.2.json` es la fuente verificable del mapeo: contiene todas las tablas, el ámbito lógico, el ámbito físico, prefijos, representación, contrato TypeScript y estado de implementación. El validador falla cuando falta una tabla, hay una tabla extra, se repite una entrada o el ámbito/contrato/representación es inválido.
 
+## IndexedDB DB27 — recuperación durable de referencias narrativas
+
+El manifiesto físico vigente usa mapping version 16 y `database_version: 27`. DB27 añade dos almacenes operativos al adaptador nativo, sin añadir tablas lógicas MLDB ni cambiar la responsabilidad del anfitrión sobre `projects`:
+
+| Almacén | Clave primaria | Índice | Propósito |
+|---|---|---|---|
+| `narrative-reference-repair-audits` | `[projectId, operationId]` | `by-project` (`projectId`) | Auditoría append-only de referencias reparadas |
+| `narrative-reference-repair-pending` | `[projectId, operationId]` | `by-project` (`projectId`) | Intenciones durables para recuperar interrupciones |
+
+Los índices se crean y verifican mediante el mismo helper `ensureIndex` que utiliza la migración para el resto de almacenes. La auditoría física compara nombre, keyPath y unicidad con el manifiesto. La prueba de migración parte de una base v22, deja ausentes estos almacenes y verifica que DB27 los cree, conserve el documento anterior y exponga ambos índices.
+
 ## Límites que no deben ocultarse
 
 La versión IndexedDB 22 añade el historial append-only de acontecimientos (`event-lifecycles`) con aislamiento por proyecto y revisión única, además de mantener las fichas genéricas, nombres, relaciones, evidencias, ocurrencias cronológicas y vínculos de diccionario en almacenes independientes (`project-records`, `record-names`, `project-relations`, `project-evidences` y `timeline-occurrences`), sin sustituir los almacenes especializados de extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.

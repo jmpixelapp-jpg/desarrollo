@@ -363,6 +363,9 @@ export class LiveAuthorMonitor {
     const at = this.readClock(session);
     this.advanceTimeline(session, at);
     session.currentDocumentLength = snapshot.text.length;
+    // Una resincronización confirma el estado textual, pero no recupera el
+    // historial de tipos/longitudes de los deltas que pudieron faltar.
+    session.activityUnitMetricsComplete = false;
     session.latestRevision = snapshot.revision;
     session.durableRevision = snapshot.revision;
     session.latestSequence = snapshot.sequence;

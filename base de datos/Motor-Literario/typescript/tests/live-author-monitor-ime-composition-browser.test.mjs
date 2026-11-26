@@ -91,7 +91,8 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
         start: change.start,
         end: change.end,
         replacement: change.replacement,
-        activityKind: change.activityKind
+        activityKind: change.activityKind,
+        inputType: change.inputType ?? null
       }));
 
       for (const type of [
@@ -217,6 +218,9 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
     assert.ok(afterCancel.deltas.every(change => change.activityKind === "composition" ||
       change.activityKind === "deletion"),
       "las actualizaciones/cancelación IME no deben etiquetarse como escritura ordinaria");
+    assert.ok(afterCancel.deltas.filter(change => change.activityKind === "composition")
+      .every(change => change.inputType === "insertCompositionText"),
+    "cada delta de candidato conserva el inputType IME exacto");
 
     const trustedCompositionInputs = afterCancel.events.filter(event =>
       event.type === "compositionstart" ||

@@ -43,6 +43,7 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `event-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de etiqueta y participantes de acontecimientos |
 | `sync-outbox` | `operationId` | `by-project-created-at`, `by-project-device-sequence` único | Operaciones pendientes y reintentos; no se borran hasta el acuse remoto durable |
 | `sync-device-sequences` | `[projectId, deviceId]` | — | Cursor monotónico por instalación/proyecto; no retrocede al confirmar operaciones |
+| `narrative-reference-repair-audits` | `[projectId, operationId]` | `by-project` | Recibos append-only e idempotentes de reparaciones de referencias del grafo narrativo |
 
 Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()`. Las lecturas deben esperar a que complete su transacción readonly; las colecciones y registros se validan antes de incorporarse a la API o a sus cachés.
 

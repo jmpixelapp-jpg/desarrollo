@@ -154,3 +154,36 @@ test("el puente separa documentos, hace disposer idempotente y no publica tras d
   assert.throws(() => bridge.getSnapshot("chapter-1"), /dispuesto/);
   assert.throws(() => bridge.subscribeTransactions("chapter-1", () => {}), /dispuesto/);
 });
+
+
+test("serializa publicaciones reentrantes para que todos los listeners vean el mismo orden", () => {
+  const native = new NativeEditorState();
+  const bridge = new LiveAuthorMonitorEditorTransactionBridge({
+    getSnapshot: documentId => native.getSnapshot(documentId),
+    getDocumentState: documentId => native.getDocumentState(documentId)
+  });
+  const order = [];
+  let nestedPublished = false;
+
+  bridge.subscribeTransactions("chapter-1", transaction => {
+    order.push("first:" + transaction.change.sequence);
+    if (transaction.change.sequence === 1 && !nestedPublished) {
+      nestedPublished = true;
+      const nested = native.apply("edit", "nested-edit", {
+        start: 4, end: 4, replacement: "?"
+      });
+      assert.equal(bridge.publishAppliedTransaction("chapter-1", nested), 2);
+    }
+  });
+  bridge.subscribeTransactions("chapter-1", transaction => {
+    order.push("second:" + transaction.change.sequence);
+  });
+
+  const outer = native.apply("edit", "outer-edit", {
+    start: 3, end: 3, replacement: "!"
+  });
+  assert.equal(bridge.publishAppliedTransaction("chapter-1", outer), 2);
+  assert.deepEqual(order, ["first:1", "second:1", "first:2", "second:2"]);
+  assert.equal(native.snapshot.text, "abc!?");
+  bridge.dispose();
+});

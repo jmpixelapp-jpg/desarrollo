@@ -643,3 +643,6 @@ La regresión "encadena dos recuperaciones tras cierres abruptos sin duplicar m�
 restoreCheckpoint recibe un snapshot durable tipado, pero valida también la frontera de runtime. Antes de leer documentId, text, revision o sequence, debe rechazar null y valores no objeto con un TypeError de contrato. Esta comprobación se ejecuta antes de insertar una nueva DocumentSession, por lo que un argumento inválido no deja estado parcial en el monitor.
 
 Después de este guard se mantienen las validaciones de correspondencia exacta de projectId/documentId y de revision/sequence/longitud del snapshot. El rechazo de un snapshot malformado no modifica las sesiones existentes ni las métricas acumuladas.
+
+
+**Validación CI del guard:** [Live Author Monitor — run 45760911836](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760911836) terminó success en el commit ce1b71bb: type-check/build aislados, 17 diagnósticos, 163/163 pruebas del monitor, Chromium Page Lifecycle 1/1 y host/editor/browser 168/168. La regresión de snapshot nulo quedó aprobada dentro de la prueba de rechazo de checkpoints malformados. La suite global [run 45760911868](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760911868) también pasó 927/927, sin fallos ni cancelaciones, con type-check y build completos.

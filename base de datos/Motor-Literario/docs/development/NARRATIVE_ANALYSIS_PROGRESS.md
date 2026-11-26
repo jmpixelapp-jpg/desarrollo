@@ -453,3 +453,12 @@ La recuperación durable ahora solicita un Web Lock exclusivo por proyecto cuand
 En entornos sin Web Locks, se mantiene la coordinación local y las escrituras CAS; la exclusión mutua entre pestañas queda explícitamente fuera de la garantía. No se usa un fallback de lease casero porque una concesión con expiración sin renovación/recuperación de propietario podría permitir dos recuperadores activos.
 
 **Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. CI aún no está configurado o no ha reportado ejecuciones para el HEAD revisado.
+
+
+## Reconciliación de los tres registros durables
+
+Se añadió `reconcileNarrativeRepairAndSyncState`, un diagnóstico de solo lectura que cruza la cola de reparaciones, las auditorías y el diario de sincronización. Informa si una reparación pendiente ya tiene auditoría, los resultados de integridad de las auditorías y el recuento/IDs de operaciones de sincronización aún no aplicadas. Una prueba verifica el escenario con una reparación lista y una operación remota pendiente, y comprueba que las fuentes permanecen intactas tras el diagnóstico.
+
+Los identificadores del diario remoto se mantienen separados de los identificadores de reparación: el sistema no debe inferir una relación entre operaciones distintas sin un contrato explícito.
+
+**Validación pendiente:** ejecutar `npm run typecheck` y `npm test` en Node 22.13+. CI no ha reportado resultados para el HEAD de esta tanda.

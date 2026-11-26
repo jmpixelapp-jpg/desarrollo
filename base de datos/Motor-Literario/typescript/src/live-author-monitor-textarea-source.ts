@@ -313,7 +313,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
               before.inputType === "insertLineBreak" ||
               before.inputType === "insertParagraph" ||
               before.inputType === "insertCompositionText"
-                ? "typing" as const
+                ? "composition" as const
                 : "other" as const;
     const change: EditorChange = Object.freeze({
       documentId: this.documentId,

@@ -43,7 +43,8 @@ const MARKERS: readonly {
   {
     kind: "contrast",
     expression: /\b(?:pero|sin\s+embargo|no\s+obstante|aunque|a[uú]n\s+as[ií]|a\s+pesar\s+de\s+ello|pese\s+a\s+ello|con\s+todo|en\s+cambio|por\s+el\s+contrario)\b/iu
-  };
+  }
+];
 
 function validate(input: NarrativeActionLinkDiscoveryInput): void {
   if (!input || typeof input !== "object" ||

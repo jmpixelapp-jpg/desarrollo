@@ -33,9 +33,9 @@ function escapeRegExp(value: string): string {
 
 
 function locateUniqueIdeaText(excerpt: string, ideaText: string): number | undefined {
-  const parts = ideaText.trim().split(/\\s+/u).filter(Boolean).map(escapeRegExp);
+  const parts = ideaText.trim().split(/\s+/u).filter(Boolean).map(escapeRegExp);
   if (!parts.length) return undefined;
-  const expression = new RegExp(parts.join("\\\\s+"), "gu");
+  const expression = new RegExp(parts.join("\\s+"), "gu");
   const matches = [...excerpt.matchAll(expression)];
   if (matches.length !== 1) return undefined;
   return matches[0]!.index;

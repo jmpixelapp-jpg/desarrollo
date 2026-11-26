@@ -1,4 +1,5 @@
 import {
+  areNarrativeSyncPayloadsEquivalent,
   verifyNarrativeSyncOperationEnvelope,
   type NarrativeSyncOperationEnvelope
 } from "./narrative-sync-integrity";
@@ -90,12 +91,52 @@ export class IndexedDbNarrativeSyncJournal {
       };
       const proceed = (): void => {
         if (!operationReady || !cursorReady || failure) return;
+        // El cursor es parte del contrato durable, no un contador confiable por
+        // defecto. Si está corrupto, aceptar una operación podría ocultar la
+        // divergencia y volver imposible reconstruir el historial con seguridad.
+        if (cursor !== undefined && (
+          !cursor || typeof cursor !== "object" ||
+          cursor.projectId !== envelope.projectId ||
+          cursor.writerId !== envelope.writerId ||
+          !Number.isSafeInteger(cursor.lastSequence) || cursor.lastSequence < 1 ||
+          typeof cursor.lastOperationId !== "string" || !cursor.lastOperationId.trim() ||
+          !Number.isFinite(cursor.updatedAt) || cursor.updatedAt < 0
+        )) {
+          fail("El cursor durable del escritor está malformado; se requiere auditoría y recuperación antes de aceptar operaciones.");
+          return;
+        }
+        if (cursor && cursor.lastSequence >= Number.MAX_SAFE_INTEGER) {
+          fail("El escritor alcanzó el límite de secuencia segura; no se puede aceptar otra operación.");
+          return;
+        }
         if (existingOperation) {
-          if (existingOperation.digest !== envelope.digest) {
-            fail("Conflicto: operationId ya existe con otro contenido.");
+          const {
+            receivedAt,
+            appliedAt,
+            ...storedEnvelope
+          } = existingOperation;
+          let sameEnvelope = false;
+          try {
+            sameEnvelope = areNarrativeSyncPayloadsEquivalent(storedEnvelope, envelope);
+          } catch {
+            sameEnvelope = false;
+          }
+          const validStoredMetadata =
+            Number.isFinite(receivedAt) && receivedAt >= 0 &&
+            (appliedAt === undefined ||
+              (Number.isFinite(appliedAt) && appliedAt >= receivedAt));
+          if (existingOperation.digest !== envelope.digest ||
+              !sameEnvelope || !validStoredMetadata) {
+            fail("Conflicto: operationId ya existe con contenido o metadatos inconsistentes.");
             return;
           }
-          result = { status: "duplicate", nextSequence: (cursor?.lastSequence ?? 0) + 1 };
+          if (!cursor || cursor.lastSequence < existingOperation.sequence ||
+              (cursor.lastSequence === existingOperation.sequence &&
+                cursor.lastOperationId !== existingOperation.operationId)) {
+            fail("Conflicto: la operación existe, pero el cursor durable no confirma su secuencia.");
+            return;
+          }
+          result = { status: "duplicate", nextSequence: cursor.lastSequence + 1 };
           return;
         }
         const expected = (cursor?.lastSequence ?? 0) + 1;

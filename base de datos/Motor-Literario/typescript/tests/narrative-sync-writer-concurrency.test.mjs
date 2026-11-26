@@ -99,6 +99,25 @@ async function mutateStoredCursor(databaseName, projectId, writerId, mutate) {
   database.close();
 }
 
+async function mutateStoredOperation(databaseName, projectId, operationId, mutate) {
+  const database = await openJournalDatabase(databaseName);
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction("operations", "readwrite");
+    const store = transaction.objectStore("operations");
+    const request = store.get([projectId, operationId]);
+    request.onsuccess = () => {
+      const current = request.result;
+      const next = mutate(current);
+      if (next === null) store.delete([projectId, operationId]);
+      else if (next !== undefined) store.put(next);
+    };
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+  database.close();
+}
+
 test("aplica una propuesta de cursor ausente y el reintento es idempotente", async () => {
   const databaseName = "narrative-sync-cursor-recovery-" + Math.random().toString(36).slice(2);
   const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
@@ -209,3 +228,86 @@ test("corrige una identidad final divergente sin alterar la secuencia", async ()
   journal.close();
 });
 
+
+
+test("accept reconoce un duplicado solo cuando payload, metadatos y cursor coinciden", async () => {
+  const journal = new IndexedDbNarrativeSyncJournal({
+    databaseName: "narrative-sync-valid-duplicate-" + Math.random().toString(36).slice(2)
+  });
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "valid-duplicate-op", projectId: "valid-duplicate-project",
+    writerId: "writer-valid", sequence: 1, kind: "note", payload: { value: "same" }
+  });
+  assert.deepEqual(await journal.accept(envelope), { status: "accepted", nextSequence: 2 });
+  assert.deepEqual(await journal.accept(envelope), { status: "duplicate", nextSequence: 2 });
+  journal.close();
+});
+
+test("accept rechaza un cursor durable malformado y conserva la evidencia para recuperación", async () => {
+  const databaseName = "narrative-sync-invalid-cursor-" + Math.random().toString(36).slice(2);
+  const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+  const first = await createNarrativeSyncOperationEnvelope({
+    operationId: "invalid-cursor-op-1", projectId: "invalid-cursor-project",
+    writerId: "writer-invalid", sequence: 1, kind: "note", payload: { n: 1 }
+  });
+  const second = await createNarrativeSyncOperationEnvelope({
+    operationId: "invalid-cursor-op-2", projectId: "invalid-cursor-project",
+    writerId: "writer-invalid", sequence: 2, kind: "note", payload: { n: 2 }
+  });
+  await journal.accept(first);
+  await mutateStoredCursor(databaseName, "invalid-cursor-project", "writer-invalid",
+    current => ({ ...current, lastSequence: 0, lastOperationId: "" }));
+
+  await assert.rejects(
+    journal.accept(second),
+    /cursor durable del escritor está malformado/u
+  );
+  assert.equal(await journal.loadOperation("invalid-cursor-project", second.operationId), undefined);
+  const [cursor] = await journal.loadWriterCursors("invalid-cursor-project");
+  assert.equal(cursor.lastSequence, 0);
+  assert.equal(cursor.lastOperationId, "");
+  journal.close();
+});
+
+test("accept no confirma como duplicada una operación cuyo payload durable fue alterado", async () => {
+  const databaseName = "narrative-sync-tampered-duplicate-" + Math.random().toString(36).slice(2);
+  const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "tampered-duplicate-op", projectId: "tampered-duplicate-project",
+    writerId: "writer-tampered", sequence: 1, kind: "idea-upsert",
+    payload: { ideaId: "idea-1", text: "Texto original" }
+  });
+  await journal.accept(envelope);
+  await mutateStoredOperation(databaseName, envelope.projectId, envelope.operationId,
+    current => ({ ...current, payload: { ideaId: "idea-1", text: "Texto alterado" } }));
+
+  await assert.rejects(
+    journal.accept(envelope),
+    /contenido o metadatos inconsistentes/u
+  );
+  const stored = await journal.loadOperation(envelope.projectId, envelope.operationId);
+  assert.equal(stored.payload.text, "Texto alterado");
+  assert.equal(stored.digest, envelope.digest);
+  assert.equal((await journal.loadPendingOperations(envelope.projectId)).length, 1);
+  journal.close();
+});
+
+test("accept no trata una operación huérfana como duplicada si perdió su cursor", async () => {
+  const databaseName = "narrative-sync-orphan-duplicate-" + Math.random().toString(36).slice(2);
+  const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "orphan-duplicate-op", projectId: "orphan-duplicate-project",
+    writerId: "writer-orphan", sequence: 1, kind: "note", payload: { value: 1 }
+  });
+  await journal.accept(envelope);
+  await mutateStoredCursor(databaseName, envelope.projectId, envelope.writerId, () => null);
+
+  await assert.rejects(
+    journal.accept(envelope),
+    /cursor durable no confirma su secuencia/u
+  );
+  assert.equal((await journal.loadOperation(envelope.projectId, envelope.operationId)).operationId,
+    envelope.operationId);
+  assert.equal((await journal.loadWriterCursors(envelope.projectId)).length, 0);
+  journal.close();
+});

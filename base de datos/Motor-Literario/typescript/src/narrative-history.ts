@@ -96,9 +96,9 @@ export function extractNarrativeAssertions(
             text.lastIndexOf(".", localStart - 1),
             text.lastIndexOf("!", localStart - 1),
             text.lastIndexOf("?", localStart - 1),
-            text.lastIndexOf("\\n", localStart - 1)
+            text.lastIndexOf("\n", localStart - 1)
           ) + 1;
-          const sentenceStops = [".", "!", "?", "\\n"]
+          const sentenceStops = [".", "!", "?", "\n"]
             .map(mark => text.indexOf(mark, localEnd))
             .filter(index => index >= 0);
           const sentenceEnd = sentenceStops.length ? Math.min(...sentenceStops) : text.length;

@@ -72,11 +72,10 @@ export function buildNarrativeKnowledgeGraph(
             document.baseOffset > Number.MAX_SAFE_INTEGER - document.text.length))) {
       throw new Error("Documento de entrada del grafo narrativo inválido.");
     }
-    const identity = JSON.stringify([document.documentId, document.revision]);
-    if (seenDocuments.has(identity)) {
-      throw new Error("El grafo no admite dos copias de la misma revisión documental.");
+    if (seenDocuments.has(document.documentId)) {
+      throw new Error("El grafo requiere una única revisión seleccionada por documento.");
     }
-    seenDocuments.add(identity);
+    seenDocuments.add(document.documentId);
   }
 
   const entitiesById = new Map<string, NarrativeEntity>();

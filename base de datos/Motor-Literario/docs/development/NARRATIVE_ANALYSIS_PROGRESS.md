@@ -494,3 +494,14 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - No se reconstruyen cursores automáticamente: la detección es de solo lectura hasta disponer de una política de reparación respaldada por evidencia.
 
 **Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` en este entorno.
+
+
+## Integridad bidireccional de cursores
+
+- La auditoría ahora detecta escritores con operaciones pero sin cursor (`cursor-missing-for-operations`).
+- Comprueba la forma del cursor: secuencia positiva segura, `updatedAt` válido, identidad de operación no vacía y correspondencia del proyecto (`invalid-cursor`).
+- Se añadieron pruebas para cursores malformados y operaciones huérfanas.
+- Se añadió una prueba IndexedDB real para `loadWriterCursors`, orden estable por escritor y concordancia con `getLastSequence`.
+- La política sigue siendo conservadora: los hallazgos no disparan reconstrucciones automáticas ni avanzan cursores.
+
+**Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` en este entorno.

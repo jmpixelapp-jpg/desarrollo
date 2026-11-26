@@ -14,6 +14,7 @@ export * from "./narrative-character-state-transition-discovery";
 export * from "./narrative-character-knowledge-discovery";
 export * from "./narrative-character-knowledge-timeline";
 export * from "./narrative-character-knowledge-comparison";
+export * from "./narrative-knowledge-dialogue-link";
 export * from "./narrative-location-transition-discovery";
 export * from "./narrative-location-presence-discovery";
 export * from "./narrative-temporal-reference-discovery";

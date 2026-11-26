@@ -46,6 +46,12 @@ export interface NarrativeObservationCandidate {
   readonly mentionedCharacterIds: readonly string[];
   /** Otras entidades mencionadas; no se interpreta su papel semántico. */
   readonly mentionedEntityIds: readonly string[];
+  /** Primera mención literal de cada entidad de la frase; no asigna roles semánticos. */
+  readonly entityMentionEvidence: readonly {
+    readonly entityId: string;
+    readonly entityKind: NarrativeEntity["kind"];
+    readonly evidence: TextEvidence;
+  }[];
   readonly polarity: "affirmed" | "negated";
   readonly confidence: "medium";
   readonly reviewStatus: "candidate";
@@ -182,9 +188,20 @@ function splitSentences(text: string): readonly { start: number; end: number }[]
   return result;
 }
 
+function findNameMatch(sentence: string, name: string): { start: number; end: number; excerpt: string } | undefined {
+  const escaped = name.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");
+  const expression = new RegExp(
+    "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
+    "(?![\\p{L}\\p{M}\\p{N}_])",
+    "iu"
+  );
+  const match = expression.exec(sentence);
+  if (!match) return undefined;
+  return { start: match.index, end: match.index + match[0].length, excerpt: match[0] };
+}
+
 function includesName(sentence: string, name: string): boolean {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escaped + "(?![\\p{L}\\p{M}\\p{N}_])", "iu").test(sentence);
+  return findNameMatch(sentence, name) !== undefined;
 }
 
 /**
@@ -257,6 +274,25 @@ export function discoverNarrativeObservationCandidates(
     const mentionedOthers = otherEntities.filter(entity =>
       [entity.canonicalName, ...entity.aliases].some(name => includesName(sentence, name))
     );
+    const entityMentionEvidence = input.entities.flatMap(entity => {
+      const matches = [entity.canonicalName, ...entity.aliases]
+        .map(name => findNameMatch(sentence, name))
+        .filter((match): match is NonNullable<typeof match> => match !== undefined)
+        .sort((a, b) => a.start - b.start || b.end - a.end);
+      const match = matches[0];
+      if (!match) return [];
+      return [{
+        entityId: entity.id,
+        entityKind: entity.kind,
+        evidence: {
+          documentId: input.documentId,
+          revision: input.revision,
+          start: baseOffset + segment.start + match.start,
+          end: baseOffset + segment.start + match.end,
+          excerpt: match.excerpt
+        }
+      }];
+    }).sort((a, b) => a.evidence.start - b.evidence.start || a.evidence.end - b.evidence.end);
     const lineStart = input.text.lastIndexOf("\n", segment.start - 1) + 1;
     const lineBreak = input.text.indexOf("\n", segment.end);
     const lineEnd = lineBreak < 0 ? input.text.length : lineBreak;
@@ -351,6 +387,7 @@ export function discoverNarrativeObservationCandidates(
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),
           ...(unresolvedReferences.length > 0 ? { unresolvedReferences } : {}),
           mentionedEntityIds: mentionedOthers.map(entity => entity.id).sort(),
+          entityMentionEvidence,
           polarity: before ? "negated" : "affirmed",
           confidence: "medium",
           reviewStatus: "candidate",

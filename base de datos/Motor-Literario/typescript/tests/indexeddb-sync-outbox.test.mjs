@@ -74,6 +74,32 @@ test("la bandeja durable es idempotente, ordenada y conserva operaciones hasta e
   }
 });
 
+test("la recuperación respeta secuencias del escritor aunque createdAt llegue desordenado", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    await store.enqueueSyncOperation(operation({
+      operationId: "op-sequence-1", sequence: 1, createdAt: 900
+    }));
+    await store.enqueueSyncOperation(operation({
+      operationId: "op-sequence-2", sequence: 2, createdAt: 100
+    }));
+    await store.enqueueSyncOperation(operation({
+      operationId: "op-other-device-1", deviceId: "device-b",
+      sequence: 1, createdAt: 50
+    }));
+
+    const pending = await store.loadPendingSyncOperations("sync-outbox-project");
+    assert.deepEqual(
+      pending.map(item => [item.deviceId, item.sequence]),
+      [["device-a", 1], ["device-a", 2], ["device-b", 1]]
+    );
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
 test("la idempotencia ignora metadatos mutables y orden de claves del payload", async () => {
   await deleteDatabase();
   const store = new IndexedDbProjectStore();

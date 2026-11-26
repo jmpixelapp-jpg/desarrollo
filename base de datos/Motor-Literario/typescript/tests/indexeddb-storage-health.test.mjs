@@ -5,7 +5,7 @@ import { IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 
-test("el diagnóstico de IndexedDB cuenta registros sin mutar el manuscrito", async () => {
+test("diagnostica IndexedDB sin mutar datos y respeta las APIs opcionales del navegador", async () => {
   const store = new IndexedDbProjectStore();
   const projectId = "storage-health-project";
   const documentId = "chapter-1";
@@ -20,40 +20,16 @@ test("el diagnóstico de IndexedDB cuenta registros sin mutar el manuscrito", as
   });
 
   const before = await store.loadDocument(projectId, documentId);
-  const report = await store.inspectStorageHealth();
+  const baseline = await store.inspectStorageHealth();
   const after = await store.loadDocument(projectId, documentId);
 
-  assert.equal(report.databaseName, "motor-literario-local");
-  assert.equal(report.databaseVersion, 25);
-  assert.equal(report.recordCounts["sync-outbox"], 0);
-  assert.equal(report.recordCounts.documents, 1);
-  assert.equal(report.recordCounts.changes, 0);
+  assert.equal(baseline.databaseName, "motor-literario-local");
+  assert.equal(baseline.databaseVersion, 25);
+  assert.equal(baseline.recordCounts["sync-outbox"], 0);
+  assert.equal(baseline.recordCounts.documents, 1);
+  assert.equal(baseline.recordCounts.changes, 0);
   assert.deepEqual(after, before);
-  assert.equal(typeof report.usageBytes === "number" || report.usageBytes === null, true);
-  assert.equal(typeof report.quotaBytes === "number" || report.quotaBytes === null, true);
-  assert.equal(
-    typeof report.persistentStorage === "boolean" || report.persistentStorage === null,
-    true
-  );
-});
 
-test("la solicitud de almacenamiento persistente devuelve false cuando el navegador no ofrece la API", async () => {
-  const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
-  try {
-    Object.defineProperty(globalThis, "navigator", {
-      configurable: true,
-      value: {}
-    });
-    const store = new IndexedDbProjectStore();
-    assert.equal(await store.requestPersistentStorage(), false);
-  } finally {
-    if (original) Object.defineProperty(globalThis, "navigator", original);
-    else delete globalThis.navigator;
-  }
-});
-
-
-test("el diagnóstico informa cuota estimada y respeta la decisión del navegador", async () => {
   const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   try {
     Object.defineProperty(globalThis, "navigator", {
@@ -66,12 +42,17 @@ test("el diagnóstico informa cuota estimada y respeta la decisión del navegado
         }
       }
     });
-    const store = new IndexedDbProjectStore();
     const report = await store.inspectStorageHealth();
     assert.equal(report.usageBytes, 128);
     assert.equal(report.quotaBytes, 1024);
     assert.equal(report.persistentStorage, false);
     assert.equal(await store.requestPersistentStorage(), true);
+
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {}
+    });
+    assert.equal(await store.requestPersistentStorage(), false);
   } finally {
     if (original) Object.defineProperty(globalThis, "navigator", original);
     else delete globalThis.navigator;

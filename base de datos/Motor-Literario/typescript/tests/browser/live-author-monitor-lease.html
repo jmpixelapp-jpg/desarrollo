@@ -21,6 +21,39 @@
       release: (...args) => store.releaseLiveAuthorMonitorLease(...args),
       saveCheckpoint: (...args) => store.saveLiveAuthorMonitorCheckpoint(...args),
       loadCheckpoint: (...args) => store.loadLiveAuthorMonitorCheckpoint(...args),
+      expire: async (projectId, documentId) => {
+        const db = await new Promise((resolve, reject) => {
+          const request = indexedDB.open("motor-literario-local");
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          await new Promise((resolve, reject) => {
+            const transaction = db.transaction("live-author-monitor-leases", "readwrite");
+            const leases = transaction.objectStore("live-author-monitor-leases");
+            const request = leases.get([projectId, documentId]);
+            let failure;
+            request.onsuccess = () => {
+              if (!request.result) {
+                failure = new Error("No existe el lease que se debe expirar.");
+                try { transaction.abort(); } catch {}
+                return;
+              }
+              const now = Date.now();
+              leases.put({ ...request.result, expiresAt: now - 1, updatedAt: now });
+            };
+            request.onerror = () => {
+              failure = request.error ?? new Error("No se pudo leer el lease.");
+              try { transaction.abort(); } catch {}
+            };
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(failure ?? transaction.error);
+            transaction.onabort = () => reject(failure ?? transaction.error);
+          });
+        } finally {
+          db.close();
+        }
+      },
       close: () => store.close()
     });
     document.querySelector("#ready").textContent = "ready";

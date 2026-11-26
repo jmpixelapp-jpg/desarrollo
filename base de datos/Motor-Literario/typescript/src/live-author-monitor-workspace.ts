@@ -1,5 +1,7 @@
 import {
-  LIVE_AUTHOR_MONITOR_PANEL_STYLES
+  LIVE_AUTHOR_MONITOR_PANEL_STYLES,
+  formatLiveAuthorMonitorCheckpointStatus,
+  formatLiveAuthorMonitorLeaseStatus
 } from "./live-author-monitor-panel";
 import type {
   LiveAuthorMonitorHostApi,
@@ -27,6 +29,8 @@ interface WorkspaceCard {
   readonly statusText: HTMLElement;
   readonly values: ReadonlyMap<CompactMetricKey, HTMLElement>;
   readonly durability: HTMLElement;
+  readonly persistence: HTMLElement;
+  readonly coordination: HTMLElement;
   readonly progress: HTMLElement;
   readonly progressTrack: HTMLElement;
   readonly openButton?: HTMLButtonElement;
@@ -224,6 +228,14 @@ export function mountLiveAuthorMonitorWorkspace(
     }
 
     const durability = makeElement(document, "p", "ml-author-workspace__durability");
+    const persistence = makeElement(document, "p", "ml-author-monitor__diagnostic");
+    persistence.setAttribute("data-diagnostic", "checkpoint");
+    persistence.setAttribute("role", "status");
+    persistence.setAttribute("aria-live", "polite");
+    const coordination = makeElement(document, "p", "ml-author-monitor__diagnostic");
+    coordination.setAttribute("data-diagnostic", "lease");
+    coordination.setAttribute("role", "status");
+    coordination.setAttribute("aria-live", "polite");
     const progressTrack = makeElement(document, "div", "ml-author-monitor__progress-track");
     progressTrack.setAttribute("role", "progressbar");
     progressTrack.setAttribute("aria-valuemin", "0");
@@ -244,7 +256,7 @@ export function mountLiveAuthorMonitorWorkspace(
       });
     }
 
-    cardRoot.append(cardHead, metricGrid, durability, progressTrack);
+    cardRoot.append(cardHead, metricGrid, durability, persistence, coordination, progressTrack);
     if (openButton) cardRoot.append(openButton);
     grid.append(cardRoot);
     return {
@@ -254,6 +266,8 @@ export function mountLiveAuthorMonitorWorkspace(
       statusText,
       values,
       durability,
+      persistence,
+      coordination,
       progress,
       progressTrack,
       ...(openButton === undefined ? {} : { openButton })
@@ -270,6 +284,13 @@ export function mountLiveAuthorMonitorWorkspace(
       node.textContent = metricValue(key, snapshot, integer, decimal);
     }
     card.durability.textContent = cardDurability(snapshot, integer);
+    const diagnostics = hostApi.getLiveAuthorMonitorPersistenceDiagnostics?.(snapshot.documentId);
+    card.persistence.textContent = formatLiveAuthorMonitorCheckpointStatus(diagnostics, locale);
+    card.persistence.setAttribute("data-level", diagnostics?.checkpointState === "error" ? "error" :
+      diagnostics?.checkpointState === "waiting-for-durability" ? "warning" : "info");
+    card.coordination.textContent = formatLiveAuthorMonitorLeaseStatus(diagnostics);
+    card.coordination.setAttribute("data-level", diagnostics?.leaseState === "error" ||
+      diagnostics?.leaseState === "lost" || diagnostics?.leaseState === "expired" ? "error" : "info");
     const latest = Math.max(0, snapshot.latestSequence);
     const durable = Math.max(0, snapshot.durableSequence);
     const percentage = latest === 0 ? 100 : Math.max(0, Math.min(100, durable / latest * 100));

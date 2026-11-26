@@ -78,12 +78,18 @@ function fixture() {
   const document = new FakeDocument();
   const container = document.createElement("div");
   monitor.openDocument({ documentId: "chapter-1", text: "uno", revision: 0, sequence: 0 }, "book-1");
+  const diagnostics = new Map();
   const api = {
     getLiveAuthorMonitorSnapshot: id => monitor.getSnapshot(id),
     getLiveAuthorMonitorSnapshots: () => monitor.getSnapshots(),
+    getLiveAuthorMonitorPersistenceDiagnostics: id => diagnostics.get(id),
     subscribeLiveAuthorMonitor: (listener, id) => monitor.subscribe(listener, id)
   };
-  return { monitor, container, api, setTime(value) { time = value; } };
+  return {
+    monitor, container, api,
+    setTime(value) { time = value; },
+    setDiagnostics(id, value) { diagnostics.set(id, value); }
+  };
 }
 function cardFor(root, documentId) {
   return findNode(root, node =>
@@ -201,4 +207,36 @@ test("valida el intervalo y limpia el contenedor si falla el planificador", () =
     schedule: () => undefined
   }), /cancelación/);
   assert.equal(f.container.children.length, 0);
+});
+
+test("muestra errores de persistencia y lease por capítulo sin datos privados", () => {
+  const f = fixture();
+  let refresh;
+  f.setDiagnostics("chapter-1", {
+    documentId: "chapter-1",
+    checkpointState: "error",
+    checkpointErrorCode: "QuotaExceededError",
+    leaseState: "lost"
+  });
+  const unmount = mountLiveAuthorMonitorWorkspace(f.container, f.api, {
+    schedule(callback) { refresh = callback; return () => {}; }
+  });
+  const root = f.container.children[0];
+  const card = cardFor(root, "chapter-1");
+  const checkpoint = findNode(card, node => node.getAttribute("data-diagnostic") === "checkpoint");
+  const lease = findNode(card, node => node.getAttribute("data-diagnostic") === "lease");
+  assert.match(checkpoint.textContent, /cuota de almacenamiento/);
+  assert.match(lease.textContent, /se perdió el lease/);
+  assert.equal(root.textContent.includes("contenido privado"), false);
+
+  f.setDiagnostics("chapter-1", {
+    documentId: "chapter-1",
+    checkpointState: "saved",
+    lastCheckpointAt: 1_800_000_000_000,
+    leaseState: "owner"
+  });
+  refresh();
+  assert.match(checkpoint.textContent, /checkpoint guardado/);
+  assert.match(lease.textContent, /esta pestaña posee el lease/);
+  unmount();
 });

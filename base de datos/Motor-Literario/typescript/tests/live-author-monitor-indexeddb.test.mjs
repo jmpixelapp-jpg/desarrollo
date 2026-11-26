@@ -453,3 +453,31 @@ test("un snapshot de lease anterior sigue válido mientras el fencing token pers
     await store.close();
   }
 });
+
+test("rechaza una apertura IndexedDB bloqueada y vuelve a abrir al cerrar la conexión externa", async () => {
+  globalThis.indexedDB = new IDBFactory();
+  const databaseName = "motor-literario-local";
+  const blocker = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 23);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const store = new IndexedDbProjectStore();
+
+  try {
+    await assert.rejects(
+      store.loadLiveAuthorMonitorCheckpoint("blocked-project", "chapter-1"),
+      /bloqueada por otra conexión/
+    );
+    blocker.close();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(
+      await store.loadLiveAuthorMonitorCheckpoint("blocked-project", "chapter-1"),
+      undefined,
+      "una operación nueva debe abrir IndexedDB cuando desaparezca el bloqueo"
+    );
+  } finally {
+    blocker.close();
+    await store.close();
+  }
+});

@@ -637,3 +637,14 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 - Archivos modificados limitados al monitor y su bitácora; no se modifican módulos narrativos ni archivos ajenos al módulo.
 
 **Validación:** pendiente de GitHub Actions para este commit. El resultado se añadirá en una entrada posterior tras comprobar el workflow.
+
+## 9. Entrega — pruebas de resistencia y recuperación de almacenamiento (25 de noviembre de 2026)
+
+- Se incorpora una prueba de sesión prolongada determinista: 8 documentos de 256 KiB iniciales, 40.000 commits confirmados y más de 8 horas simuladas. Se comprueba que cada documento termina sin pendientes, con ventana acotada de 32 muestras de latencia y sin filtrar el texto privado a los snapshots.
+- Se añade una prueba de recuperación tras una apertura de IndexedDB bloqueada por otra conexión. Primero se espera el error explícito; después de cerrar el bloqueo, una operación nueva debe abrir la base.
+- La prueba Chromium de coordinación ahora cierra la página propietaria sin ejecutar release, expira el lease en el almacén de prueba y comprueba que la pestaña superviviente toma el siguiente fencing token. El vencimiento se acelera en la prueba, no se esperan 30 segundos reales.
+- El workspace multi-documento muestra el estado de persistencia y lease por capítulo, con anuncios accesibles y sin exponer contenido del manuscrito.
+
+**Limitaciones de la prueba de soak:** simula el tiempo y el volumen de eventos de forma determinista; verifica límites de las muestras y ausencia de retención del manuscrito en snapshots. No se presenta como una medición de consumo de memoria del navegador ni como una sesión física de ocho horas.
+
+**Validación:** pendiente de GitHub Actions. El workflow vigente también está bloqueado por un error de sintaxis ajeno al monitor en `src/narrative-history.ts` (TS1002); no se modifica ese archivo porque pertenece a trabajo paralelo.

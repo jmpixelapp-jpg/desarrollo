@@ -108,7 +108,9 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
         "la segunda página no debe robar un lease activo"
       );
 
-      assert.equal(await invoke(ownerPage, "release", ownerLease, Date.now()), true);
+      // Cierre abrupto: la pestaña propietaria desaparece sin ejecutar release().
+      await ownerPage.close();
+      await invoke(observerPage, "expire", projectId, documentId);
       const takeoverTime = Date.now() + 5;
       const observerLease = await invoke(
         observerPage,
@@ -150,20 +152,20 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
       };
 
       await assert.rejects(
-        invoke(ownerPage, "saveCheckpoint", checkpoint, ownerLease),
+        invoke(observerPage, "saveCheckpoint", checkpoint, ownerLease),
         /fencing token/,
         "la página anterior debe quedar cercada aunque conserve el objeto de lease"
       );
 
       await invoke(observerPage, "saveCheckpoint", checkpoint, observerLease);
-      const observedByFormerOwner = await invoke(
-        ownerPage,
+      const observedAfterTakeover = await invoke(
+        observerPage,
         "loadCheckpoint",
         projectId,
         documentId
       );
-      assert.deepEqual(observedByFormerOwner, checkpoint,
-        "ambas páginas deben observar el mismo checkpoint persistido en IndexedDB");
+      assert.deepEqual(observedAfterTakeover, checkpoint,
+        "la nueva pestaña propietaria debe leer el checkpoint persistido en IndexedDB");
 
       // La segunda pestaña recarga el documento y crea una instancia nueva del
       // adaptador; IndexedDB debe conservar el checkpoint y el lease vigente.
@@ -176,10 +178,7 @@ test("dos páginas Chromium comparten IndexedDB real y aplican fencing del lease
       );
 
       assert.equal(await invoke(observerPage, "release", observerLease, Date.now()), true);
-      await Promise.all([
-        invoke(firstPage, "close"),
-        invoke(secondPage, "close")
-      ]);
+      await observerPage.close();
     } finally {
       await context.close();
     }

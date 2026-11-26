@@ -369,3 +369,73 @@ test("rechaza timestamps de restauración anteriores al checkpoint", () => {
     499
   ), /métricas o tiempos inválidos/);
 });
+
+test("mantiene métricas acotadas tras más de ocho horas y 40.000 cambios en ocho documentos grandes", () => {
+  let time = 0;
+  const sampleWindow = 32;
+  const documentCount = 8;
+  const changesPerDocument = 5_000;
+  const monitor = new LiveAuthorMonitor({
+    now: () => time,
+    idleAfterMs: 10_000,
+    maxOpenDocuments: documentCount,
+    commitSampleWindow: sampleWindow
+  });
+  const privateSentinel = "PRIVATE_MANUSCRIPT_SENTINEL";
+  const initialText = privateSentinel + "x".repeat(256 * 1024);
+  const revisions = new Array(documentCount).fill(0);
+  const sequences = new Array(documentCount).fill(0);
+  const lengths = new Array(documentCount).fill(initialText.length);
+
+  for (let index = 0; index < documentCount; index += 1) {
+    monitor.openDocument({
+      documentId: "long-session-" + index,
+      text: initialText,
+      revision: 0,
+      sequence: 0
+    }, "book-long-session");
+  }
+
+  for (let changeIndex = 0; changeIndex < changesPerDocument; changeIndex += 1) {
+    for (let documentIndex = 0; documentIndex < documentCount; documentIndex += 1) {
+      const documentId = "long-session-" + documentIndex;
+      const sequence = ++sequences[documentIndex];
+      const revision = revisions[documentIndex];
+      const ticketId = documentId + "-ticket-" + sequence;
+      time += 1_000;
+      const admission = monitor.recordAdmission({
+        documentId,
+        sequence,
+        baseRevision: revision,
+        start: lengths[documentIndex],
+        end: lengths[documentIndex],
+        replacement: "x"
+      }, { status: "queued", ticketId });
+      assert.equal(admission.pendingChanges, 1);
+      time += 1;
+      const committed = monitor.recordCommit({
+        ticketId,
+        status: "applied",
+        revision: revision + 1
+      });
+      assert.equal(committed.pendingChanges, 0);
+      revisions[documentIndex] = revision + 1;
+      lengths[documentIndex] += 1;
+    }
+  }
+
+  const snapshots = monitor.getSnapshots();
+  assert.equal(snapshots.length, documentCount);
+  for (const snapshot of snapshots) {
+    assert.equal(snapshot.acceptedChanges, changesPerDocument);
+    assert.equal(snapshot.committedChanges, changesPerDocument);
+    assert.equal(snapshot.failedChanges, 0);
+    assert.equal(snapshot.pendingChanges, 0);
+    assert.equal(snapshot.commitLatencySamples, sampleWindow);
+    assert.equal(snapshot.currentDocumentLength, initialText.length + changesPerDocument);
+    assert.ok(snapshot.sessionDurationMs >= 8 * 60 * 60 * 1_000,
+      "la simulación debe cubrir al menos ocho horas");
+  }
+  assert.equal(JSON.stringify(snapshots).includes(privateSentinel), false,
+    "los snapshots del monitor no deben retener ni exponer el texto del manuscrito");
+});

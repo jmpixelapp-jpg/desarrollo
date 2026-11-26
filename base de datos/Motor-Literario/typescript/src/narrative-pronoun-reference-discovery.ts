@@ -53,7 +53,7 @@ const INITIAL_PERSONAL_PRONOUN =
   /^\s*(él|ella|ellos|ellas|usted|ustedes)\b/iu;
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\\]\\]/gu, "\\return value.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&");");
 }
 
 function findLastNameMention(
@@ -85,10 +85,10 @@ function findLastNameMention(
 }
 
 function* sentenceSpans(text: string): Iterable<{ start: number; end: number }> {
-  const expression = /[^.!?\\n]+(?:[.!?]+|$)/gu;
+  const expression = /[^.!?\n]+(?:[.!?]+|$)/gu;
   for (const match of text.matchAll(expression)) {
     const raw = match[0];
-    const leading = raw.search(/\\S/u);
+    const leading = raw.search(/\S/u);
     const trailing = raw.trimEnd().length;
     if (leading < 0 || trailing <= leading) continue;
     yield {

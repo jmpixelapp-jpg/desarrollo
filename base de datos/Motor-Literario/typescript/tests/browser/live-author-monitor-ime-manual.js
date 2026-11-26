@@ -26,13 +26,121 @@ let source;
 let baselineLengthUtf16 = 0;
 let startedAt;
 let disposed = false;
+let beforeInputSequence = 0;
+let pendingBeforeInput;
+
+const eventCounters = {
+  beforeInputCount: 0,
+  inputCount: 0,
+  compositionStartCount: 0,
+  compositionUpdateCount: 0,
+  compositionEndCount: 0,
+  compositionBeforeInputCount: 0,
+  compositionInputCount: 0,
+  trustedEventCount: 0,
+  untrustedEventCount: 0,
+  monitorErrorCount: 0
+};
+const deltaCounters = {
+  total: 0,
+  composition: 0,
+  typing: 0,
+  paste: 0,
+  deletion: 0,
+  correction: 0,
+  undo: 0,
+  redo: 0,
+  other: 0
+};
+const errorCodeCounts = Object.create(null);
+const pairingCounters = {
+  pairedInputCount: 0,
+  pairedWithoutInputTypeCount: 0,
+  unmatchedBeforeInputCount: 0,
+  orphanInputCount: 0,
+  inputTypeMismatchCount: 0,
+  defaultPreventedBeforeInputCount: 0
+};
 
 function safeDataLength(event) {
   return typeof event.data === "string" ? event.data.length : null;
 }
 
+function appendTraceEntry(entry) {
+  if (events.length === MAX_TRACE_ITEMS) {
+    events.shift();
+    droppedEventCount += 1;
+  }
+  events.push(entry);
+}
+
+function correlateInputEvent(entry, event) {
+  if (entry.type === "beforeinput") {
+    eventCounters.beforeInputCount += 1;
+    if (entry.inputType === "insertCompositionText") {
+      eventCounters.compositionBeforeInputCount += 1;
+    }
+    if (pendingBeforeInput) {
+      pairingCounters.unmatchedBeforeInputCount += 1;
+      pendingBeforeInput.entry.pairStatus = "superseded-by-next-beforeinput";
+    }
+
+    const pairId = ++beforeInputSequence;
+    entry.pairId = pairId;
+    if (entry.defaultPrevented === true) {
+      entry.pairStatus = "default-prevented";
+      pairingCounters.defaultPreventedBeforeInputCount += 1;
+      pendingBeforeInput = undefined;
+    } else {
+      entry.pairStatus = "awaiting-input";
+      pendingBeforeInput = {
+        pairId,
+        inputType: entry.inputType,
+        entry
+      };
+    }
+    return;
+  }
+
+  if (entry.type !== "input") return;
+  eventCounters.inputCount += 1;
+  if (entry.inputType === "insertCompositionText") {
+    eventCounters.compositionInputCount += 1;
+  }
+  if (!pendingBeforeInput) {
+    pairingCounters.orphanInputCount += 1;
+    entry.pairStatus = "orphan-input";
+    return;
+  }
+
+  const pending = pendingBeforeInput;
+  entry.pairId = pending.pairId;
+  pending.entry.pairStatus = "paired";
+  const hasCurrentInputType = typeof entry.inputType === "string" && entry.inputType.length > 0;
+  const hasPreviousInputType = typeof pending.inputType === "string" && pending.inputType.length > 0;
+  if (hasCurrentInputType && hasPreviousInputType && entry.inputType !== pending.inputType) {
+    entry.pairStatus = "inputtype-mismatch";
+    pending.entry.pairStatus = "inputtype-mismatch";
+    pairingCounters.inputTypeMismatchCount += 1;
+  } else {
+    pairingCounters.pairedInputCount += 1;
+    if (!hasCurrentInputType) {
+      pairingCounters.pairedWithoutInputTypeCount += 1;
+      entry.pairStatus = "paired-inputtype-unavailable";
+      pending.entry.pairStatus = "paired-inputtype-unavailable";
+    } else {
+      entry.pairStatus = "paired";
+      pending.entry.pairStatus = "paired";
+    }
+  }
+  pendingBeforeInput = undefined;
+}
+
 function recordEvent(event) {
   eventCountTotal += 1;
+  if (event.isTrusted === true) eventCounters.trustedEventCount += 1;
+  else eventCounters.untrustedEventCount += 1;
+
   const target = event.currentTarget;
   const entry = {
     index: eventCountTotal,
@@ -41,46 +149,46 @@ function recordEvent(event) {
     inputType: typeof event.inputType === "string" ? event.inputType : null,
     isTrusted: event.isTrusted === true,
     isComposing: typeof event.isComposing === "boolean" ? event.isComposing : null,
+    cancelable: typeof event.cancelable === "boolean" ? event.cancelable : null,
+    defaultPrevented: typeof event.defaultPrevented === "boolean" ? event.defaultPrevented : null,
     dataLengthUtf16: safeDataLength(event),
+    valueLengthUtf16: target instanceof HTMLTextAreaElement ? target.value.length : null,
     selectionStart: target instanceof HTMLTextAreaElement ? target.selectionStart : null,
     selectionEnd: target instanceof HTMLTextAreaElement ? target.selectionEnd : null
   };
-  if (events.length === MAX_TRACE_ITEMS) {
-    events.shift();
-    droppedEventCount += 1;
-  }
-  events.push(entry);
+
+  if (event.type === "compositionstart") eventCounters.compositionStartCount += 1;
+  else if (event.type === "compositionupdate") eventCounters.compositionUpdateCount += 1;
+  else if (event.type === "compositionend") eventCounters.compositionEndCount += 1;
+
+  correlateInputEvent(entry, event);
+  appendTraceEntry(entry);
   render();
 }
 
 function recordError(error) {
   eventCountTotal += 1;
-  const entry = {
+  eventCounters.monitorErrorCount += 1;
+  errorCodeCounts[error.code] = (errorCodeCounts[error.code] ?? 0) + 1;
+  appendTraceEntry({
     index: eventCountTotal,
     atMs: Number(performance.now().toFixed(3)),
     type: "monitor-error",
     code: error.code
-  };
-  if (events.length === MAX_TRACE_ITEMS) {
-    events.shift();
-    droppedEventCount += 1;
-  }
-  events.push(entry);
+  });
   render();
+}
+
+function currentPairingSummary() {
+  return {
+    ...pairingCounters,
+    pendingBeforeInputCount: pendingBeforeInput ? 1 : 0,
+    pendingBeforeInputPairId: pendingBeforeInput?.pairId ?? null
+  };
 }
 
 function render() {
   const state = source?.getState();
-  const compositionBeforeInputCount = events.filter(entry =>
-    entry.type === "beforeinput" && entry.inputType === "insertCompositionText"
-  ).length;
-  const compositionInputCount = events.filter(entry =>
-    entry.type === "input" && entry.inputType === "insertCompositionText"
-  ).length;
-  const compositionStarts = events.filter(entry => entry.type === "compositionstart").length;
-  const compositionUpdates = events.filter(entry => entry.type === "compositionupdate").length;
-  const compositionEnds = events.filter(entry => entry.type === "compositionend").length;
-  const errorCodes = events.filter(entry => entry.type === "monitor-error").map(entry => entry.code);
   metricsNode.textContent = JSON.stringify({
     elapsedMs: startedAt === undefined ? 0 : Math.round(performance.now() - startedAt),
     baselineLengthUtf16,
@@ -89,14 +197,10 @@ function render() {
     retainedEventCount: events.length,
     droppedOldestEvents: droppedEventCount,
     droppedOldestDeltas: droppedDeltaCount,
-    compositionStarts,
-    compositionUpdates,
-    compositionEnds,
-    compositionBeforeInputCount,
-    compositionInputCount,
-    compositionDeltas: deltas.filter(delta => delta.activityKind === "composition").length,
-    typingDeltas: deltas.filter(delta => delta.activityKind === "typing").length,
-    errorCodes,
+    eventCounters,
+    deltaCounters,
+    pairing: currentPairingSummary(),
+    errorCodeCounts,
     state: state ? {
       revision: state.revision,
       sequence: state.sequence,
@@ -105,7 +209,7 @@ function render() {
       needsResync: state.needsResync
     } : null
   }, null, 2);
-  traceNode.textContent = events.slice(-80).map(entry => JSON.stringify(entry)).join("\n") ||
+  traceNode.textContent = events.slice(-80).map(entry => JSON.stringify(entry)).join("\\n") ||
     "Aún no hay eventos registrados.";
   statusNode.textContent = !source
     ? "Captura sin iniciar."
@@ -135,13 +239,20 @@ startButton.addEventListener("click", () => {
       deltas.shift();
       droppedDeltaCount += 1;
     }
+    deltaCounters.total += 1;
+    const kind = change.activityKind ?? "other";
+    if (Object.prototype.hasOwnProperty.call(deltaCounters, kind) && kind !== "total") {
+      deltaCounters[kind] += 1;
+    } else {
+      deltaCounters.other += 1;
+    }
     deltas.push({
       sequence: change.sequence,
       baseRevision: change.baseRevision,
       start: change.start,
       end: change.end,
       replacementLengthUtf16: change.replacement.length,
-      activityKind: change.activityKind ?? "other"
+      activityKind: kind
     });
     render();
   });
@@ -158,7 +269,7 @@ startButton.addEventListener("click", () => {
 exportButton.addEventListener("click", () => {
   if (!source || disposed) return;
   const report = {
-    format: "live-author-monitor-ime-trace-v1",
+    format: "live-author-monitor-ime-trace-v2",
     exportedAt: new Date().toISOString(),
     durationMs: Math.round(performance.now() - startedAt),
     environment: {
@@ -175,8 +286,14 @@ exportButton.addEventListener("click", () => {
     baselineLengthUtf16,
     finalLengthUtf16: editor.value.length,
     eventCountTotal,
+    retainedEventCount: events.length,
     droppedEventCount,
+    totalDeltaCount: deltaCounters.total,
     droppedDeltaCount,
+    eventCounters,
+    deltaCounters,
+    pairing: currentPairingSummary(),
+    errorCodeCounts,
     events,
     deltas,
     state: source.getState()

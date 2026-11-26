@@ -34,6 +34,8 @@ export interface BookReaderMetadata {
   readonly title?: string;
   readonly author?: string;
   readonly language?: string;
+  /** Revisión del documento anfitrión representada por este snapshot, si está versionado. */
+  readonly revision?: number;
 }
 
 export interface BookReaderAdapter<TSource = unknown> {
@@ -161,6 +163,9 @@ export async function ingestBookReaderBlocks(
 ): Promise<IngestedBook> {
   nonBlank(metadata?.sourceId, "sourceId", 1024);
   nonBlank(metadata?.sourceFormat, "sourceFormat", 128);
+  if (metadata.revision !== undefined && (!Number.isSafeInteger(metadata.revision) || metadata.revision < 0)) {
+    throw new RangeError("La revisión del libro debe ser un entero no negativo.");
+  }
   for (const [name, value] of [["title", metadata.title], ["author", metadata.author], ["language", metadata.language]] as const) {
     if (value !== undefined && (typeof value !== "string" || value.length > 1024)) {
       throw new TypeError("El metadato " + name + " no es válido.");

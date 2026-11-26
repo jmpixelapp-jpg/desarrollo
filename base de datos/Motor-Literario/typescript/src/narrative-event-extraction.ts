@@ -140,6 +140,9 @@ export function extractNarrativeEventCandidates(
   }
 
   const events: NarrativeEventCandidate[] = [];
+  const characterIds = new Set(input.entities
+    .filter(entity => entity.projectId === input.projectId && entity.kind === "character")
+    .map(entity => entity.id));
   for (const [key, group] of groups) {
     if (events.length >= MAX_NARRATIVE_EVENTS) break;
     const separator = key.indexOf(":");
@@ -148,9 +151,6 @@ export function extractNarrativeEventCandidates(
     const participantEntityIds = [...new Set(group.flatMap(action =>
       [action.actorEntityId, action.targetEntityId]
     ))].sort();
-    const characterIds = new Set(input.entities
-      .filter(entity => entity.projectId === input.projectId && entity.kind === "character")
-      .map(entity => entity.id));
     const characterParticipantEntityIds = participantEntityIds
       .filter(id => characterIds.has(id));
     const start = (input.baseOffset ?? 0) + localStart;

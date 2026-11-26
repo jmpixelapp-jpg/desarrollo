@@ -514,3 +514,17 @@ Se amplía `extractNarrativeCharacterIntentCandidates` para reconocer construcci
 - Se añaden tres pruebas unitarias y una prueba de integración en el pipeline.
 
 **Límite deliberado:** el sistema registra la relación causal o final expresada por el narrador/personaje, pero no decide si es verdadera, sincera, la causa principal o una racionalización. Tampoco infiere motivaciones a partir de conductas aisladas. Los candidatos siguen sujetos a revisión.
+
+## Fase AE: evolución explícita de motivaciones
+
+Se refuerza la continuidad de motivaciones entre capítulos sin interpretar automáticamente cada diferencia como un cambio interno.
+
+- La evolución conserva la clase `motivation` y puede reconocer una motivación idéntica como mantenida.
+- Una motivación distinta solo se marca como reemplazada cuando el texto aporta una señal explícita de cambio (por ejemplo, «cambió de motivación») y menciona la motivación anterior.
+- Se conserva por separado la evidencia de la motivación previa, la motivación actual y el marcador textual de transición.
+- Sin marcador explícito, dos motivaciones diferentes coexisten como candidatas; no se presupone que una haya eliminado a la otra.
+- La comparación entre capítulos sigue exigiendo `orderedDocumentIds`; no se infiere cronología a partir del nombre o número de capítulo.
+
+Durante esta fase también se corrigieron dos expresiones regulares de la fase AD que tenían escapes duplicados y no reconocían límites de palabra. Se añadieron pruebas para motivos causales, propósitos compuestos, continuidad y sustitución explícita de motivaciones, incluida una integración completa del pipeline.
+
+**Límite:** «reemplazada» describe una relación textual entre candidatos, no demuestra que el personaje haya dejado de sentir realmente la motivación anterior. Todos los resultados continúan como candidatos revisables.

@@ -263,7 +263,7 @@ export function extractNarrativeEntities(
   if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/u.test(text)) {
     return [];
   }
-  const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}]+){0,3}";
+  const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3}";
   const prefixCharacter = String.raw`\b(?:personaje|protagonista|antagonista)\s+(?:el|la|a)?\s*`;
   const prefixPlace = String.raw`\b(?:ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar)\s+(?:de|del|de la|de los|de las)?\s*`;
   const prefixObject = String.raw`\b(?:objeto|espada|arma|reliquia|amuleto|anillo|libro)\s+(?:llamado|llamada)?\s*`;
@@ -394,9 +394,9 @@ export function extractNarrativeRelations(
       }
     }
   }
-  const nameCapture = "[A-ZÁÉÍÓÚÜÑ][\\p{L}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}]+){0,3}";
-  const prefix = "(?<![\\p{L}\\p{N}_])";
-  const suffix = "(?![\\p{L}\\p{N}_])";
+  const nameCapture = "[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3}";
+  const prefix = "(?<![\\p{L}\\p{M}\\p{N}_])";
+  const suffix = "(?![\\p{L}\\p{M}\\p{N}_])";
   const scanText = text;
   const patterns = [
     {

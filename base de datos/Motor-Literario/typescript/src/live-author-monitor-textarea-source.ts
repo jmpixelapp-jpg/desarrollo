@@ -11,6 +11,7 @@ export type LiveAuthorMonitorTextAreaErrorCode =
   | "unsupported-input-type"
   | "composition-state-mismatch"
   | "input-type-mismatch"
+  | "input-data-mismatch"
   | "inconsistent-length"
   | "resync-required";
 
@@ -45,6 +46,7 @@ interface BeforeInputState {
   readonly end: number;
   readonly previousLength: number;
   readonly inputType: string;
+  readonly inputData: string | null;
   readonly isComposing: boolean;
 }
 
@@ -124,6 +126,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       end,
       previousLength,
       inputType,
+      inputData: typeof input.data === "string" ? input.data : null,
       isComposing
     };
   };
@@ -268,6 +271,20 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       this.fail(
         "inconsistent-length",
         "El valor del textarea no permite reconstruir un único delta seguro."
+      );
+      return;
+    }
+
+    // Si beforeinput declara el texto que va a insertar, contrastamos el
+    // payload real. Esto detecta una sustitución externa dentro de la selección
+    // que conservaría longitud, prefijo y sufijo y parecería un delta válido.
+    // Los navegadores que exponen data=null se mantienen en el camino estructural.
+    const insertedText = value.slice(start, start + insertedLength);
+    if (before.inputData !== null && before.inputType.startsWith("insert") &&
+        before.inputData !== insertedText) {
+      this.fail(
+        "input-data-mismatch",
+        "El texto insertado no coincide con el dato declarado por beforeinput; se requiere resincronización."
       );
       return;
     }

@@ -6,7 +6,7 @@
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 24,
+    "database_version": 25,
     "object_stores": [
       {
         "name": "project-settings",
@@ -857,6 +857,29 @@
             false
           ]
         ]
+      },
+      {
+        "name": "sync-outbox",
+        "keyPath": "operationId",
+        "indexes": [
+          [
+            "by-project-created-at",
+            [
+              "projectId",
+              "createdAt"
+            ],
+            false
+          ],
+          [
+            "by-project-device-sequence",
+            [
+              "projectId",
+              "deviceId",
+              "sequence"
+            ],
+            true
+          ]
+        ]
       }
     ]
   },
@@ -1442,6 +1465,27 @@
         [
           "projectId",
           "id"
+        ]
+      ]
+    },
+    {
+      "table": "sync_outbox",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [
+        "project/sync-outbox/"
+      ],
+      "representation": "record",
+      "contract": "StoredSyncOperation; bandeja durable idempotente de operaciones salientes por proyecto y dispositivo, con secuencia monotónica, reintentos y retirada solo tras acuse remoto.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "sync-outbox"
+      ],
+      "keyPath": [
+        [
+          "operationId"
         ]
       ]
     }

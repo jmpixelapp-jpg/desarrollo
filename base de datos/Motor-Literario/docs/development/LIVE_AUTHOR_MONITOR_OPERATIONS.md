@@ -655,3 +655,6 @@ Un checkpoint se crea únicamente cuando no quedan tickets pendientes. Por tanto
 La ventana de latencia es una cola de las últimas muestras confirmadas: nunca puede superar el número total de commits resueltos ni el máximo configurado. Cuando hay commits resueltos, la ventana debe contener al menos una muestra y su último elemento debe ser exactamente lastCommitLatencyMs. Sin commits resueltos, la ventana y ambas latencias (última y total) deben ser cero. El total de la ventana no puede superar la latencia acumulada histórica (con tolerancia numérica de 1 ms ya aplicada por el validador).
 
 Estos invariantes protegen solo la lectura/recuperación de checkpoint. No cambian el cálculo de métricas en escritura ni los registros históricos ya válidos generados por el monitor.
+
+
+**Validación CI de los invariantes:** [Live Author Monitor — run 45761138764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45761138764) terminó success con 164/164 pruebas aisladas, Page Lifecycle Chromium 1/1 y 168/168 pruebas host/editor/browser; el test de outcomes y latencias incoherentes pasó como test 161. La suite general [run 45761138762](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45761138762) aprobó 928/928, cero fallos y cero cancelaciones. El benchmark de 100.000 commits dejó heap estable de 4,39 MiB y cero tickets pendientes.

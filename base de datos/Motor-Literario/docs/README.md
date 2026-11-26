@@ -4,6 +4,7 @@
 
 - [Registro acumulativo del monitor de autor](development/LIVE_AUTHOR_MONITOR_PROGRESS.md): historial de avances, commits, validaciones CI, estado y pendientes del monitoreo en tiempo real.
 - [Integridad de payloads y sincronización narrativa](architecture/INTEGRIDAD_DE_PAYLOADS_Y_SINCRONIZACION_NARRATIVA.md): canonicalización JSON determinista, huellas de consistencia, límites de entrada y límites de seguridad.
+- [Análisis de afirmaciones narrativas](architecture/ANALISIS_DE_AFIRMACIONES_NARRATIVAS.md): extracción conservadora de atributos con evidencia, offsets, revisiones y referencias temporales explícitas.
 
 ## Integración con la aplicación anfitriona
 

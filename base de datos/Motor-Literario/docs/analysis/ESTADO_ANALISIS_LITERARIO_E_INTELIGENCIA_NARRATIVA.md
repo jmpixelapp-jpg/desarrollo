@@ -362,3 +362,11 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Se mantiene la barrera causal por dispositivo: una secuencia posterior del mismo escritor no adelanta a una operación anterior que aún espera reintento.
 - Se añadió una prueba con dos escritores: el flujo A queda en backoff y conserva ambas operaciones; el flujo B envía y confirma sus dos operaciones.
 - **Validación:** código, prueba y contrato publicados; ejecución de CI pendiente.
+
+### Tanda — recuperación de acuses parciales
+
+- Se añadió una prueba que simula una interrupción de IndexedDB al borrar el segundo acuse de un lote ya aceptado por el servidor.
+- La recuperación confirma que la primera operación, ya retirada localmente, no se reenvía; solo se reintenta la que permanece en la bandeja.
+- El contrato ahora explicita entrega al menos una vez: una interrupción entre aceptación remota y borrado local puede provocar reenvío, por lo que el servidor debe deduplicar por `operationId`.
+- No se presenta la sincronización como entrega exactamente una vez.
+- **Validación:** prueba y documentación publicadas; ejecución de CI pendiente.

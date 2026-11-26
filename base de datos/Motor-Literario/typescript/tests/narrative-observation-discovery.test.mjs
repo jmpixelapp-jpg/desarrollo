@@ -283,3 +283,33 @@ test("conserva offsets de la primera mención de cada alias de entidad", () => {
   assert.equal(mention?.evidence.start, text.indexOf("la Espada Solar"));
   assert.equal(mention?.evidence.end, text.indexOf("la Espada Solar") + "la Espada Solar".length);
 });
+
+test("reconoce un complemento personal explícito sin inventar la relación semántica", () => {
+  const bruno = {
+    ...character, id: "character:bruno", canonicalName: "Bruno",
+    normalizedName: "bruno"
+  };
+  const text = "Ana encontró a Bruno.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno], text
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].personalObjectCandidate?.entityId, bruno.id);
+  assert.equal(found[0].personalObjectCandidate?.marker, "a");
+  const evidence = found[0].personalObjectCandidate.evidence;
+  assert.equal(text.slice(evidence.start, evidence.end), "Bruno");
+});
+
+test("no propone complemento personal si el personaje solo se menciona antes del verbo", () => {
+  const bruno = {
+    ...character, id: "character:bruno", canonicalName: "Bruno",
+    normalizedName: "bruno"
+  };
+  const text = "Bruno vio a Ana.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno], text
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].personalObjectCandidate?.entityId, character.id);
+  assert.equal(found[0].grammaticalSubjectCandidate, undefined);
+});

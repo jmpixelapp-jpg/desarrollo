@@ -1,0 +1,52 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  ingestNarrativeBookText,
+  MAX_NARRATIVE_BOOK_TEXT_UNITS
+} from "../dist/motor-literario.js";
+
+test("ingesta capítulos, párrafos y señales con offsets UTF-16 absolutos", () => {
+  const text = "Prólogo\n\nAna llegó al castillo en 1842.\n\n—No entraré —dijo Ana.\n\nCapítulo I\n\nDespués, huyó porque oyó un ruido.";
+  const result = ingestNarrativeBookText({
+    projectId: "book-1", documentId: "doc-1", revision: 7, baseOffset: 120,
+    title: "La prueba", language: "es", text
+  });
+  assert.equal(result.coverage.chapterCount, 2);
+  assert.equal(result.chapters[0].heading, "Prólogo");
+  assert.equal(result.chapters[1].heading, "Capítulo I");
+  assert.ok(result.paragraphs.length >= 3);
+  const arrival = result.signals.find(signal => signal.label === "arrival");
+  assert.ok(arrival);
+  assert.equal(arrival.evidence.start, 120 + text.indexOf("llegó"));
+  assert.equal(arrival.evidence.excerpt.includes("llegó"), true);
+  assert.equal(result.signals.some(signal => signal.kind === "causal-marker" && signal.surface === "porque"), true);
+  assert.equal(result.signals.some(signal => signal.kind === "temporal-reference" && signal.surface.toLowerCase() === "después"), true);
+});
+
+test("mantiene las señales como candidatas y no inventa agentes ni causalidad", () => {
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "d", revision: 1,
+    text: "María atacó. Pedro cayó porque la puerta se cerró."
+  });
+  assert.ok(result.signals.length > 0);
+  assert.ok(result.signals.every(signal => signal.requiresReview === true));
+  assert.ok(result.signals.every(signal => !("agentEntityId" in signal)));
+  assert.ok(result.signals.every(signal => !("causeEventId" in signal)));
+});
+
+test("rechaza entradas inválidas y textos que exceden el presupuesto", () => {
+  assert.throws(() => ingestNarrativeBookText({
+    projectId: "p", documentId: "d", revision: -1, text: "texto"
+  }));
+  assert.throws(() => ingestNarrativeBookText({
+    projectId: "p", documentId: "d", revision: 1,
+    text: "x".repeat(MAX_NARRATIVE_BOOK_TEXT_UNITS + 1)
+  }));
+});
+
+test("los IDs y resultados son deterministas para una misma revisión y fuente", () => {
+  const input = { projectId: "p", documentId: "d", revision: 3, text: "Alicia llegó. Después salió." };
+  const first = ingestNarrativeBookText(input);
+  const second = ingestNarrativeBookText(input);
+  assert.deepEqual(first, second);
+});

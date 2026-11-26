@@ -6,7 +6,7 @@
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 26,
+    "database_version": 27,
     "object_stores": [
       {
         "name": "project-settings",

@@ -811,6 +811,44 @@ test("no confunde arrastrar/soltar ni yank con pegado o corrección", () => {
   f.element.edit({ start: 5, end: 5, nextValue: "abcdDY", inputType: "insertFromYank" });
   f.element.edit({ start: 1, end: 2, nextValue: "aRcdDY", inputType: "insertReplacementText" });
   assert.deepEqual(f.changes.map(change => change.activityKind), ["other", "other", "correction"]);
+  assert.deepEqual(f.changes.map(change => change.inputType), [
+    "insertFromDrop", "insertFromYank", "insertReplacementText"
+  ]);
+  assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});
+
+test("clasifica y conserva saltos de línea, párrafos y pegado como cita", () => {
+  const f = fixture("abc", 0, 0);
+  f.element.edit({
+    start: 3,
+    end: 3,
+    nextValue: "abc\\n",
+    inputType: "insertLineBreak"
+  });
+  f.element.edit({
+    start: 4,
+    end: 4,
+    nextValue: "abc\\n\\n",
+    inputType: "insertParagraph"
+  });
+  f.element.edit({
+    start: 5,
+    end: 5,
+    nextValue: "abc\\n\\n> quote",
+    inputType: "insertFromPasteAsQuotation"
+  });
+
+  assert.deepEqual(f.changes.map(change => ({
+    activityKind: change.activityKind,
+    inputType: change.inputType,
+    replacement: change.replacement
+  })), [
+    { activityKind: "typing", inputType: "insertLineBreak", replacement: "\\n" },
+    { activityKind: "typing", inputType: "insertParagraph", replacement: "\\n" },
+    { activityKind: "paste", inputType: "insertFromPasteAsQuotation", replacement: "> quote" }
+  ]);
   assert.equal(f.source.getState().needsResync, false);
   f.stop();
   f.source.dispose();

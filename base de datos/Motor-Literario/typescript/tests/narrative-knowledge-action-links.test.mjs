@@ -86,3 +86,17 @@ test("rechaza estados de otro proyecto, acciones duplicadas e IDs de informació
     ])],actions:[action("a","mara",60)]
   }));
 });
+
+test("rechaza estados repetidos del mismo personaje e IDs globales de información repetidos",()=>{
+  const first=state("mara",[item("shared-info","chapter-1",1,0,35)]);
+  const second=state("mara",[item("other-info","chapter-1",1,5,35)]);
+  assert.throws(()=>linkNarrativeKnowledgeToActions({
+    projectId:"book-1",entities,knowledgeStates:[first,second],
+    actions:[action("a","mara",60)]
+  }));
+  const otherCharacter=state("elian",[item("shared-info","chapter-1",1,0,35)]);
+  assert.throws(()=>linkNarrativeKnowledgeToActions({
+    projectId:"book-1",entities,knowledgeStates:[first,otherCharacter],
+    actions:[action("a","mara",60)]
+  }));
+});

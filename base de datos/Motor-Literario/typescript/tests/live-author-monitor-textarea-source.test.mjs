@@ -209,6 +209,24 @@ test("exige resincronización para undo/redo y no emite deltas inventados", () =
   f.source.dispose();
 });
 
+test("no inventa una categoría cuando el navegador entrega inputType vacío", () => {
+  const f = fixture("abc", 0, 0);
+  f.element.edit({
+    start: 3,
+    end: 3,
+    nextValue: "abcx",
+    inputType: ""
+  });
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].activityKind, undefined);
+  assert.equal(Object.prototype.hasOwnProperty.call(f.changes[0], "inputType"), false);
+  assert.equal(f.source.getState().needsResync, false,
+    "el delta textual puede ser exacto aunque su procedencia no esté identificada");
+  f.stop();
+  f.source.dispose();
+});
+
 test("conserva inputType nativo exacto sin exportar InputEvent.data", () => {
   const f = fixture("abcd", 0, 0);
   f.element.edit({

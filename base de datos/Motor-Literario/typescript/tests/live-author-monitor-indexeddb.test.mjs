@@ -115,7 +115,7 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
 });
 
 
-test("migra IndexedDB v22 a v25 creando stores narrativos y checkpoints sin perder documentos", async () => {
+test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";
   const projectId = "monitor-migration-" + randomUUID();
@@ -123,8 +123,12 @@ test("migra IndexedDB v22 a v25 creando stores narrativos y checkpoints sin perd
   const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.2.json", import.meta.url);
   const mapping = JSON.parse(await readFile(mappingUrl, "utf8"));
   const existingStores = mapping.runtime.object_stores.filter(
-    descriptor => descriptor.name !== "live-author-monitor-checkpoints" &&
-      descriptor.name !== "live-author-monitor-leases"
+    descriptor => ![
+      "live-author-monitor-checkpoints",
+      "live-author-monitor-leases",
+      "narrative-reference-repair-audits",
+      "narrative-reference-repair-pending"
+    ].includes(descriptor.name)
   );
 
   const legacyDatabase = await new Promise((resolve, reject) => {
@@ -178,9 +182,18 @@ test("migra IndexedDB v22 a v25 creando stores narrativos y checkpoints sin perd
       request.onerror = () => reject(request.error);
     });
     try {
-      assert.equal(migratedDatabase.version, 25);
+      assert.equal(migratedDatabase.version, 27);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-checkpoints"), true);
       assert.equal(migratedDatabase.objectStoreNames.contains("live-author-monitor-leases"), true);
+      for (const storeName of [
+        "narrative-reference-repair-audits",
+        "narrative-reference-repair-pending"
+      ]) {
+        assert.equal(migratedDatabase.objectStoreNames.contains(storeName), true);
+        const repairStore = migratedDatabase.transaction(storeName, "readonly").objectStore(storeName);
+        assert.deepEqual(repairStore.keyPath, ["projectId", "operationId"]);
+        assert.equal(repairStore.indexNames.contains("by-project"), true);
+      }
 
       const leaseStore = migratedDatabase.transaction(
         "live-author-monitor-leases",

@@ -48,6 +48,36 @@ function checkpoint(projectId, documentId, savedAt, overrides = {}) {
   };
 }
 
+test("IndexedDB conserva las unidades typing e IME y la cobertura histórica del checkpoint", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-ime-units-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+
+  try {
+    const lease = await acquireLease(store, projectId, documentId);
+    const complete = checkpoint(projectId, documentId, Date.now(), {
+      insertedCharacters: 8,
+      deletedCharacters: 3,
+      typingInsertedCharacters: 2,
+      compositionInsertedCharacters: 3,
+      compositionDeletedCharacters: 3,
+      activityUnitMetricsComplete: true
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(complete, lease);
+    const loaded = await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
+    assert.deepEqual(loaded, complete);
+    assert.notEqual(loaded, complete);
+
+    const legacy = checkpoint(projectId, documentId, Date.now() + 1);
+    await store.saveLiveAuthorMonitorCheckpoint(legacy, lease);
+    const legacyLoaded = await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId);
+    assert.deepEqual(legacyLoaded, legacy,
+      "un checkpoint histórico sin contadores de procedencia sigue siendo compatible");
+  } finally {
+    await store.close();
+  }
+});
+
 test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del monitor", async () => {
   const store = new IndexedDbProjectStore();
   const projectId = "live-author-monitor-" + randomUUID();
@@ -160,6 +190,46 @@ test("IndexedDB rechaza balances imposibles de pausas, caracteres, commits y lat
         label: "character-balance",
         overrides: { insertedCharacters: 6 },
         expected: /character-balance/
+      },
+      {
+        label: "activity-unit-metrics.partial",
+        overrides: { typingInsertedCharacters: 1 },
+        expected: /activity-unit-metrics\\.partial/
+      },
+      {
+        label: "activity-unit-metrics.missing",
+        overrides: { activityUnitMetricsComplete: true },
+        expected: /activity-unit-metrics\\.missing/
+      },
+      {
+        label: "activity-unit-metrics.values",
+        overrides: {
+          typingInsertedCharacters: -1,
+          compositionInsertedCharacters: 0,
+          compositionDeletedCharacters: 0,
+          activityUnitMetricsComplete: true
+        },
+        expected: /activity-unit-metrics\\.values/
+      },
+      {
+        label: "activity-unit-metrics.balance",
+        overrides: {
+          typingInsertedCharacters: 4,
+          compositionInsertedCharacters: 2,
+          compositionDeletedCharacters: 0,
+          activityUnitMetricsComplete: true
+        },
+        expected: /activity-unit-metrics\\.balance/
+      },
+      {
+        label: "activity-unit-metrics.deleted-balance",
+        overrides: {
+          typingInsertedCharacters: 2,
+          compositionInsertedCharacters: 1,
+          compositionDeletedCharacters: 1,
+          activityUnitMetricsComplete: true
+        },
+        expected: /activity-unit-metrics\\.balance/
       },
       {
         label: "commit-counts",

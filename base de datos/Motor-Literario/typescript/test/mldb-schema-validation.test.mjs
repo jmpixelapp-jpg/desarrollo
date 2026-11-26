@@ -8,9 +8,9 @@ const mappingUrl = new URL("../../MLDB/storage_mapping_v0.4.2.json", import.meta
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
 const storageMapping = JSON.parse(await readFile(mappingUrl, "utf8"));
 
-test("el esquema MLDB 0.4.2 completo supera la validación estructural", () => {
-  assert.equal(schema.format.schema_version, "0.4.2");
-  assert.equal(schema.tables.length, 26);
+test("el esquema MLDB 0.4.3 completo supera la validación estructural", () => {
+  assert.equal(schema.format.schema_version, "0.4.3");
+  assert.equal(schema.tables.length, 27);
   assert.deepEqual(validateMldbSchema(schema), []);
   assert.deepEqual(validateMldbStorageMapping(schema, storageMapping), []);
 });

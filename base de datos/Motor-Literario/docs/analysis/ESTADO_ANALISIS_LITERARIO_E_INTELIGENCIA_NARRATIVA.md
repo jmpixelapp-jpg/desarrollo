@@ -220,12 +220,12 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `0ccc036`: añade auditoría estática para evitar regresiones que vuelvan a duplicar esos buckets.
 - `5335e5b`: corrige el delimitador de la auditoría de evolución de atributos.
 - `6693c59`: indexa acontecimientos por ID y cuenta evidencias externas directamente, evitando escanear el catálogo completo por cada decisión y materializar arreglos de evidencia.
-- `3fc1f10`: evita duplicar la prueba de estrés del presupuesto de convergencia, ya cubierta por el commit `492753b` que trabaja en paralelo.
+- `95daff5`: añade una prueba de estrés autocontenida con cinco fuentes, quinientos intermediarios y quinientos destinos; comprueba el truncamiento tras 
 - `f9af2b0`: añade auditoría estática del recorrido acotado de continuidad entre documentos.
 - `98f31e0`: corrige el delimitador de la auditoría de continuidad.
 ## 7. Pendientes y siguiente secuencia de trabajo
 
-1. Revisar y ejecutar la prueba de estrés que fuerza el límite de un millón de expansiones de dos saltos y confirma `truncated-by-work-budget`; verificar en ejecución que los contadores parciales no se interpreten como resultados completos.
+1. Ejecutar la prueba de estrés que fuerza el límite de un millón de expansiones de dos saltos y confirma `truncated-by-work-budget`; el fixture autocontenido comprueba que cuatro fuentes completan un millón de expansiones y que la quinta se interrumpe, conservando contadores parciales explícitos.
 2. Completar casos límite adicionales de catálogo vacío, nodos sin referencias, referencias externas y snapshots con omisiones; ya hay cobertura para catálogo vacío, omisiones y referencias externas repetidas.
 3. Auditar los presupuestos de memoria y tiempo de cada fase del análisis, no solo del grafo y del texto léxico; la reserva del presupuesto para ideas enlazadas ya tiene auditoría estática conjunta y una prueba de integración con 21 textos de 100.000 unidades UTF-16. La cronología y los vínculos de acontecimientos limitan sus muestras intermedias; la evolución de atributos ordena buckets locales sin copias completas; la continuidad entre documentos cuenta evidencias sin materializar colecciones y resuelve acontecimientos mediante un índice por ID. Falta ejecutar y medir las pruebas en el entorno del proyecto y continuar la auditoría de las demás colecciones públicas.
 4. Revisar el comportamiento de muestras y truncamiento en cada colección pública: el grafo tiene regresión para 5.001 referencias y muestras exactas de componentes y ciclos; la cronología verifica 202 puntos y 201 transiciones con muestras de 200, 55 identificadores de eventos con muestra de 50 y 35 rangos de evidencia por vínculo con muestra de 20; las resonancias léxicas verifican 102 candidatos con muestras de 100 y 15 términos compartidos con muestras de 12; falta extender la auditoría sistemática a las demás colecciones públicas.

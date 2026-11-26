@@ -6,7 +6,8 @@
  * interpretaciones: cada señal permanece revisable y vinculada al texto.
  */
 import type { NarrativeEntity } from "./narrative-knowledge";
-import { discoverNarrativeIdeaCandidates } from "./narrative-idea-discovery";
+import { discoverNarrativeIdeaCandidates, type NarrativeIdeaCandidate } from "./narrative-idea-discovery";
+import { analyzeNarrativeIdeaCrossDocumentRelations, type NarrativeIdeaCrossDocumentAnalysis } from "./narrative-idea-cross-document-relations";
 import { attributeNarrativeIdeasToEntities, type NarrativeIdeaEntityAttribution } from "./narrative-idea-entity-attribution";
 import { extractNarrativeActionCandidates, type NarrativeActionCandidate } from "./narrative-action-extraction";
 import { extractNarrativeCharacterIntentCandidates, type NarrativeCharacterIntentCandidate } from "./narrative-character-intent-extraction";
@@ -90,6 +91,8 @@ export interface NarrativeUnderstandingInput {
   readonly priorClaims?: readonly NarrativeAttributedClaim[];
   /** Procedencias previas del mismo proyecto para reconstruir transmisiones entre capítulos. */
   readonly priorInformationProvenance?: readonly NarrativeInformationProvenance[];
+  /** Candidatos de ideas de otros capítulos; se comparan sin fusionarlos. */
+  readonly priorIdeaCandidates?: readonly NarrativeIdeaCandidate[];
   /** Interpretaciones explícitas previas, conservadas con su evidencia. */
   readonly priorInformationInterpretations?: readonly NarrativeInformationInterpretation[];
   /** Evaluaciones anteriores de afirmaciones, con evidencia y autoría originales. */
@@ -110,6 +113,8 @@ export interface NarrativeUnderstandingResult {
   readonly revision: number;
   readonly analyzedRange: { readonly start: number; readonly end: number };
   readonly ideas: ReturnType<typeof discoverNarrativeIdeaCandidates>;
+  /** Relaciones transversales de ideas; las coincidencias son candidatos explicables, no equivalencias. */
+  readonly ideaCrossDocumentAnalysis: NarrativeIdeaCrossDocumentAnalysis;
   /** Atribuciones explícitas y ambiguas de candidatos de idea a fichas; no canoniza vínculos. */
   readonly ideaEntityAttributions: readonly NarrativeIdeaEntityAttribution[];
   readonly actions: ReturnType<typeof extractNarrativeActionCandidates>;
@@ -199,6 +204,8 @@ function validate(input: NarrativeUnderstandingInput): void {
           input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) ||
       (input.characterMentions !== undefined && !Array.isArray(input.characterMentions)) ||
       (input.pronounReferences !== undefined && !Array.isArray(input.pronounReferences)) ||
+      (input.priorIdeaCandidates !== undefined &&
+        (!Array.isArray(input.priorIdeaCandidates) || input.priorIdeaCandidates.length > 100)) ||
       (input.priorAssertions !== undefined &&
         (!Array.isArray(input.priorAssertions) || input.priorAssertions.length > 5000)) ||
       (input.priorClaims !== undefined &&
@@ -286,6 +293,11 @@ export function understandNarrativeFragment(
   });
   const ideaEntityAttributions = attributeNarrativeIdeasToEntities({
     projectId: input.projectId, ideas, entities: input.entities
+  });
+  const ideaCrossDocumentAnalysis = analyzeNarrativeIdeaCrossDocumentRelations({
+    projectId: input.projectId,
+    ideaCandidates: [...(input.priorIdeaCandidates ?? []), ...ideas],
+    orderedDocumentIds: input.orderedDocumentIds
   });
   const actions = extractNarrativeActionCandidates(extractionContext);
   const characterIntents = extractNarrativeCharacterIntentCandidates(extractionContext);
@@ -459,7 +471,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, ideaEntityAttributions, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, behaviorShifts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, ideaEntityAttributions, ideaCrossDocumentAnalysis, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, knowledgeActionLinks, decisionContexts, behaviorShifts, events, consequences, consequenceIntentActionLinks, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

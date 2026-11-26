@@ -95,6 +95,25 @@ test("no resuelve pronombres ni nombres ambiguos entre dos fichas", () => {
   assert.deepEqual(result, []);
 });
 
+test("reconoce nombres con marcas Unicode descompuestas y conserva offsets UTF-16 originales", () => {
+  const jose = {
+    ...ana, id: "character:jose", canonicalName: "José",
+    normalizedName: "josé"
+  };
+  const text = "Jose\u0301 está vivo.";
+  const result = discoverNarrativeCharacterStateCandidates({
+    ...context, entities: [jose], text, baseOffset: 41
+  });
+  assert.equal(result.length, 1);
+  assert.equal(result[0].entityId, jose.id);
+  assert.equal(result[0].state, "alive");
+  assert.equal(result[0].entityEvidence.excerpt, "Jose\u0301");
+  assert.equal(
+    text.slice(result[0].entityEvidence.start - 41, result[0].entityEvidence.end - 41),
+    "Jose\u0301"
+  );
+});
+
 test("rechaza entidades ajenas, offsets inválidos y texto fuera de presupuesto", () => {
   assert.throws(() => discoverNarrativeCharacterStateCandidates({
     ...context, entities: [{ ...ana, projectId: "other" }], text: "Ana está herida."

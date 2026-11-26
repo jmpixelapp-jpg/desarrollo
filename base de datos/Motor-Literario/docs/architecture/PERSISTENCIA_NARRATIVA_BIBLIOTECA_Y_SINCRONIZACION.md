@@ -1,10 +1,10 @@
 # Persistencia narrativa, biblioteca de ideas y sincronización
 
-**Versión documental:** 1.1  
+**Versión documental:** 1.2  
 **Revisión de código de referencia:** `main` en `f99278768abb4fd0ad2fbb01dcc4bf4c49f1ed1f`  
 **Ámbito:** núcleo `base de datos/Motor-Literario/typescript`  
 **Lenguaje de implementación:** TypeScript/JavaScript puro  
-**Estado:** guía de arquitectura y plan de endurecimiento; incluye diagnóstico local implementado en esta rama y no declara implementadas las capacidades remotas descritas como objetivo.
+**Estado:** guía de arquitectura y plan de endurecimiento; incluye diagnóstico local y bandeja outbox implementados en esta rama, sin declarar terminado el transporte remoto.
 
 > Esta guía se ha redactado contrastando los contratos TypeScript, el adaptador IndexedDB, el esquema MLDB y los scripts de validación de la rama indicada. Cuando una capacidad no está conectada o no existe en ese código, se identifica como pendiente.
 
@@ -98,11 +98,13 @@ La cronología narrativa se almacena separada del orden del manuscrito. Las ocur
 
 ### 5.1 IndexedDB actual
 
-En la revisión de referencia:
+En la revisión base `main` usada para iniciar esta línea:
 - base: `motor-literario-local`;
 - versión de IndexedDB: **24**;
 - esquema lógico MLDB: **0.4.2**;
 - mapa físico: **mapping_version 14**.
+
+**Migración incorporada en esta rama:** IndexedDB **25**, mapa físico **mapping_version 15** y nuevo almacén `sync-outbox`. El esquema lógico MLDB permanece en 0.4.2 porque la outbox es infraestructura interna de transporte, no una tabla narrativa exportable.
 
 La versión real se obtiene del código y del mapa físico, no de una suposición. Cualquier migración debe incrementar la versión de IndexedDB y actualizar en el mismo cambio el mapa físico, los validadores y las pruebas.
 
@@ -191,6 +193,8 @@ Nombre propuesto: `sync-outbox`.
 - el mismo ID con contenido distinto es un error de integridad.
 
 La escritura del cambio de dominio y la inserción de su operación outbox deben ser atómicas. Si no pueden escribirse en la misma transacción, no se debe anunciar garantía de sincronización sin pérdida. La bandeja no debe poblarse de forma eventual después de confirmar la mutación: un cierre entre ambos pasos perdería el cambio remoto.
+
+**Implementación local de esta rama:** el almacén `sync-outbox` ya se crea en la migración v25, con clave `operationId`, índice de proyecto/fecha e índice único de proyecto/dispositivo/secuencia. El adaptador implementa encolar idempotentemente, leer pendientes paginadas sin borrarlas, registrar intentos y retirar una operación por acuse explícito. La implementación todavía no integra automáticamente las escrituras de documentos/fichas/ideas con la outbox, por lo que aún no garantiza sincronización de todas las mutaciones.
 
 ### 7.3 Cobertura de mutaciones
 
@@ -314,6 +318,12 @@ La suite actual ejecuta validación de esquema, auditoría de almacenamiento y p
 - concurrencia de ediciones y borrados.
 
 ### Outbox
+- migración desde IndexedDB v24 conserva todos los stores anteriores;
+- inserción idempotente y colisión de ID;
+- índice único de secuencia por proyecto/dispositivo;
+- lectura paginada y ordenada;
+- registro de intentos;
+- acuse y borrado;
 - inserción atómica con la mutación;
 - idempotencia por ID;
 - colisión de ID con contenido distinto;
@@ -353,13 +363,13 @@ La suite actual ejecuta validación de esquema, auditoría de almacenamiento y p
 | Capacidad | Estado |
 |---|---|
 | Núcleo TypeScript/JavaScript sin runtime Rust | Presente |
-| Persistencia IndexedDB | Presente, versión 24 |
+| Persistencia IndexedDB | Presente; versión 25 en esta rama (24 en main de referencia) |
 | Biblioteca personal de ideas y procedencia | Presente en el modelo/almacén |
 | Registros MLDB, relaciones, evidencias y cronología | Presentes |
 | Ciclos de vida append-only | Presentes |
 | Checkpoints y leases del monitor | Presentes |
-| Outbox durable de sincronización | No incorporada a esta revisión de `main` |
-| Encolado atómico de todas las mutaciones | Pendiente |
+| Outbox durable de sincronización | Implementada en IndexedDB v25 en esta rama |
+| Encolado automático/atómico de todas las mutaciones de dominio | Pendiente |
 | Diagnóstico de cuota y solicitud de persistencia | Implementado en la rama de trabajo; pendiente de CI final e integración |
 | Transporte remoto y autenticación | Pendiente |
 | Descarga y reconciliación | Pendiente |

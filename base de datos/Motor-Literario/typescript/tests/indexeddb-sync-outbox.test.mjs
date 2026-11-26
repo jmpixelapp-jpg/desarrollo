@@ -236,6 +236,7 @@ test("el adaptador IndexedDB serializa coordinadores con propietarios distintos"
     assert.equal(maximumActive, 1);
     assert.deepEqual(order, ["first:start", "first:end", "second:start", "second:end"]);
   } finally {
+    await Promise.all([firstStore.close(), secondStore.close()]);
     await deleteDatabase();
   }
 });
@@ -262,6 +263,7 @@ test("un mismo adaptador no permite reentrada concurrente del mismo propietario"
     )));
     assert.equal(maximumActive, 1);
   } finally {
+    await store.close();
     await deleteDatabase();
   }
 });

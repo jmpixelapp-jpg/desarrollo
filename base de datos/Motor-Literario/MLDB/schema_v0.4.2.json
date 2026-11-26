@@ -8,7 +8,7 @@
     "database_type": "MAIN_NARRATIVE",
     "schema_version": "0.4.3",
     "status": "DECLARATIVE_SCHEMA",
-    "description": "MLDB 0.4.2: añade el historial append-only de cambios de etiqueta y participantes de acontecimientos, con aislamiento por proyecto y revisiones consecutivas. Añade la bandeja durable de operaciones salientes para sincronización."
+    "description": "MLDB 0.4.3: conserva el historial append-only de cambios de etiqueta y participantes de acontecimientos, con aislamiento por proyecto y revisiones consecutivas; declara la bandeja durable de operaciones salientes para sincronización."
   },
   "principles": {
     "project_identity_source": "HOST_APPLICATION",

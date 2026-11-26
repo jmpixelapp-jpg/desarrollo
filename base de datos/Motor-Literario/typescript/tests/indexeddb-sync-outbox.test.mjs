@@ -422,3 +422,48 @@ test("el lease se libera aunque falle la tarea y permite continuar a otro propie
     await deleteDatabase();
   }
 });
+
+
+test("el acuse por lote elimina operaciones en una transacción y es idempotente", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    await store.enqueueSyncOperation(operation({ operationId: "op-bulk-1", sequence: 1 }));
+    await store.enqueueSyncOperation(operation({ operationId: "op-bulk-2", sequence: 2 }));
+    assert.equal(await store.acknowledgeSyncOperations(["op-bulk-1", "op-bulk-2"]), 2);
+    assert.equal(await store.acknowledgeSyncOperations(["op-bulk-1", "op-bulk-2"]), 0);
+    assert.equal(await store.countPendingSyncOperations("sync-outbox-project"), 0);
+    await assert.rejects(
+      store.acknowledgeSyncOperations(["op-bulk-1", "op-bulk-1"]),
+      /no contener duplicados/
+    );
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+
+test("el coordinador usa acuse atómico del almacén cuando el puerto lo ofrece", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    await store.enqueueSyncOperation(operation({ operationId: "op-coordinator-bulk-1", sequence: 1 }));
+    await store.enqueueSyncOperation(operation({ operationId: "op-coordinator-bulk-2", sequence: 2 }));
+    const coordinator = new NarrativeSyncCoordinator(store, {
+      async push(_projectId, operations) {
+        return {
+          acknowledgedOperationIds: operations.map(item => item.operationId),
+          conflicts: [],
+          retryableOperationIds: []
+        };
+      }
+    }, { now: () => 500 });
+    const result = await coordinator.syncOnce("sync-outbox-project");
+    assert.equal(result.acknowledged, 2);
+    assert.equal(result.remaining, 0);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

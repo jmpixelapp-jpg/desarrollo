@@ -845,7 +845,39 @@ Se conecta el índice de continuidad con el anfitrión del motor. La aplicación
 - Los cambios de la proyección no crean, confirman ni modifican registros `NarrativeIdea`; los candidatos siguen siendo señales analíticas revisables.
 
 **Pruebas añadidas**
-- 14 pruebas de actualización automática: apertura y extracción entre capítulos, actualización tras edición, cronología desconocida, inventario sin cuerpo textual, adaptador sin extracción de entidades, muestreo truncado en un proyecto de 201 documentos, límite de 16 lecturas en paralelo, rechazo de revisiones concurrentes, reutilización de caché ante cambios externos sin cambios documentales, detección de cambios de snapshot con revisión/secuencia reutilizadas, recuperación de una inserción de outbox fallida, presupuesto agregado ante once documentos grandes, redistribución del presupuesto al cambiar el tamaño del proyecto, refresco mediante la API pública y reordenación editorial sin cambiar los textos.
-- Total: 14 pruebas nuevas de Fase AU.
+- 15 pruebas de actualización automática: apertura y extracción entre capítulos, actualización tras edición, cronología desconocida, inventario sin cuerpo textual, adaptador sin extracción de entidades, muestreo truncado en un proyecto de 201 documentos, límite de 16 lecturas en paralelo, rechazo de revisiones concurrentes, reutilización de caché ante cambios externos sin cambios documentales, detección de cambios de snapshot con revisión/secuencia reutilizadas, recuperación de una inserción de outbox fallida, presupuesto agregado ante once documentos grandes, redistribución del presupuesto al cambiar el tamaño del proyecto, refresco mediante la API pública, reordenación editorial sin cambiar los textos e integración directa del outbox durable en `HostEngineApi`.
+- Total: 15 pruebas nuevas de Fase AU.
 
 La actualización local de la proyección queda automatizada. La entrega a otros dispositivos utiliza el callback/outbox del anfitrión; no se afirma que exista un transporte de red universal integrado en el motor.
+
+
+### Fase AV: outbox saliente durable, leases y entrega ordenada (26-11-2026)
+
+Se incorpora `narrative-sync-outbox.ts` como infraestructura saliente separada del diario de recepción `IndexedDbNarrativeSyncJournal`. La distinción es deliberada: las operaciones pendientes del diario entrante esperan aplicación local; las del outbox esperan entrega al dispositivo remoto.
+
+**Persistencia e identidad**
+- `IndexedDbNarrativeSyncOutbox` usa una base IndexedDB independiente, `motor-literario-sync-outbox`, con almacenes `outbox-operations`, `outbox-writer-cursors` y `outbox-project-cursors`.
+- Cada snapshot queda identificado por proyecto + generación. Su `operationId` es determinista por proyecto/generación, lo que permite reintentos idempotentes.
+- La asignación de secuencia por escritor, la inserción de la operación y el avance del cursor de generación del proyecto se confirman en una misma transacción.
+- La misma generación y huella se reconoce como duplicada; un contenido distinto para esa identidad se rechaza.
+- El outbox exige continuidad de generaciones después de su snapshot base inicial. No permite saltar una generación ya encolada.
+
+**Reclamación y entrega**
+- Estados durables: `pending`, `leased` y `delivered`.
+- El trabajador reclama solamente la siguiente generación no entregada. Una generación retrasada, en lease o en reintento bloquea las posteriores, conservando el orden CAS del receptor.
+- Los leases expiran y pueden ser reclamados por otro trabajador después de reiniciar el proceso.
+- Los fallos liberan la operación con `nextAttemptAt` y backoff exponencial acotado. El digest y el dueño del lease se verifican antes de confirmar o liberar.
+- `deliverNarrativeSyncOutboxBatch` verifica SHA-256 antes de ejecutar `send`. La política es entrega al menos una vez: un cierre entre envío y confirmación puede repetir la misma `operationId`; el diario entrante y el handler idempotente del receptor deduplican el replay.
+- El outbox valida snapshots compactos, identidad de la envoltura, generación esperada, cursor del proyecto y metadatos de lease/entrega al recuperar entradas.
+
+**Conexión con el anfitrión**
+- `HostEngineApi` acepta opcionalmente `continuityOutbox`. Cuando se configura, cada generación reconciliada se encola automáticamente utilizando el `ProjectIdentity.writerId` estable.
+- Si se proporciona además `onNarrativeIdeaContinuityIndexUpdated`, ambos destinos se notifican; los fallos se reportan sin revertir el documento ni el índice local.
+- El trabajador de transporte sigue siendo responsabilidad del anfitrión: debe invocar `deliverNarrativeSyncOutboxBatch(outbox, { projectId, workerId, send })` con un transporte real. El motor no afirma entrega remota hasta que ese transporte confirma.
+- La base del outbox es independiente del almacén principal del proyecto; no modifica el esquema MLDB ni los almacenes de IndexedDB del motor.
+
+**Pruebas añadidas**
+- 11 pruebas de outbox: secuencias, deduplicación, conflictos, generaciones consecutivas, concurrencia de encolado, leases, reclamación tras vencimiento, ack idempotente, reintentos, entrega, recuperación después de cerrar/reabrir la base, callback e integración con el handler CAS receptor.
+- Una prueba adicional en Fase AU verifica que `HostEngineApi` inserta las generaciones 1 y 2 automáticamente en el outbox y toma el escritor de la identidad del proyecto.
+
+La entrega remota se describe como al menos una vez, no exactamente una vez. La durabilidad de la cola y la idempotencia reducen duplicados; no sustituyen la autenticación del transporte, la autorización del proyecto ni el acuse durable del receptor.

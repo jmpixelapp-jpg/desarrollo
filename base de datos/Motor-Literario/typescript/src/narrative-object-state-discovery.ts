@@ -167,6 +167,10 @@ export function discoverNarrativeObjectTransitionCandidates(
   const results: NarrativeObjectTransitionCandidate[] = [];
 
   for (const observation of input.observations) {
+    // Un infinitivo subordinado (intentó abrir, no pudo activar, quiere destruir)
+    // no acredita que el cambio de estado haya ocurrido. Se conserva la acción
+    // en el stream de observaciones, pero no se materializa como transición.
+    if (observation.grammaticalTense === "infinitive") continue;
     const object = observation.grammaticalObjectCandidate;
     if (!object) continue;
 

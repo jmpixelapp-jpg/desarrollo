@@ -166,3 +166,86 @@ test("IndexedDB valida destinos idea dentro del proyecto y revierte referencias 
     await deleteDatabase();
   }
 });
+
+
+test("IndexedDB archiva la biblioteca personal y su operación outbox en una sola transacción", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const writerId = "writer-library-archive";
+  const archivedAt = 55;
+  const syncOperation = {
+    operationId: "personal-library-archive-operation",
+    projectId,
+    deviceId: "device-library-archive",
+    kind: "personal-idea-archive",
+    payload: JSON.stringify({ archive: "pending" }),
+    createdAt: archivedAt
+  };
+
+  try {
+    await store.saveIdea(idea());
+    const entries = await store.archiveUnincorporatedIdeas(
+      projectId, writerId, "Libro transaccional", archivedAt, syncOperation
+    );
+    assert.deepEqual(entries.map(entry => entry.idea.id), ["idea-source"]);
+    assert.deepEqual(await store.loadIdeas(projectId), []);
+
+    const library = await store.loadPersonalIdeas(writerId);
+    assert.deepEqual(library.map(entry => entry.idea.id), ["idea-source"]);
+    assert.equal(library[0].context.version, 1);
+
+    const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.deepEqual(receipt.archivedIdeaIds, ["idea-source"]);
+    assert.equal(receipt.archiveChecksum.startsWith("fnv1a64:"), true);
+
+    const [pending] = await store.loadPendingSyncOperations(projectId);
+    assert.equal(pending.operationId, syncOperation.operationId);
+    assert.equal(pending.kind, "personal-idea-archive");
+    assert.equal(pending.sequence, 1);
+    assert.equal(pending.deviceId, syncOperation.deviceId);
+    assert.deepEqual(JSON.parse(pending.payload), {
+      writerId,
+      sourceProjectName: "Libro transaccional",
+      archivedAt,
+      archivedIdeaIds: ["idea-source"],
+      archiveChecksum: receipt.archiveChecksum
+    });
+    assert.equal(await store.loadLastSyncOperationSequence(projectId, syncOperation.deviceId), 1);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+test("IndexedDB revierte el archivo y la outbox si los IDs esperados ya no coinciden", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const writerId = "writer-library-conflict";
+  const syncOperation = {
+    operationId: "personal-library-conflict-operation",
+    projectId,
+    deviceId: "device-library-conflict",
+    kind: "personal-idea-archive",
+    payload: JSON.stringify({ archive: "pending" }),
+    createdAt: 66
+  };
+
+  try {
+    await store.saveIdea(idea());
+    await assert.rejects(
+      store.archiveUnincorporatedIdeas(
+        projectId, writerId, "Libro transaccional", 66, syncOperation, []
+      ),
+      /conjunto de ideas del libro cambió/u
+    );
+
+    assert.deepEqual(await store.loadIdeas(projectId), [idea()]);
+    assert.deepEqual(await store.loadPersonalIdeas(writerId), []);
+    assert.equal(await store.loadProjectFinalizationReceipt(writerId, projectId), undefined);
+    assert.deepEqual(await store.loadPendingSyncOperations(projectId), []);
+    assert.equal(await store.loadLastSyncOperationSequence(projectId, syncOperation.deviceId), 0);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

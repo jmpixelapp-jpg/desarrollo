@@ -166,3 +166,18 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - La verificación de replay normaliza el payload recuperado de IndexedDB al subconjunto JSON antes de recalcular el digest, excluyendo los metadatos locales. Si el payload persistido no puede normalizarse, la operación se conserva pendiente y se informa como envoltura inválida.
 
 - El replay serializa consumidores simultáneos del mismo proyecto dentro del runtime y devuelve `consumer-already-running` al segundo intento. El callback recibe solo la envoltura verificada, sin `receivedAt`/`appliedAt`. La exclusión es local al runtime; no constituye coordinación entre pestañas o dispositivos.
+
+## Continuación: despacho explícito de operaciones (2026-11-25)
+
+Se añadió `narrative-sync-dispatcher.ts` y su exportación pública. El dispatcher
+usa una lista cerrada de handlers por `kind`, exige un validador de payload y
+solo invoca la aplicación cuando el contrato se cumple. Rechaza tipos sin
+handler, handlers duplicados y payloads inválidos; permite auditar el motivo
+del rechazo sin volcar el contenido narrativo.
+
+Se añadieron pruebas para ejecución válida, kind desconocido, payload inválido,
+handler duplicado y validador que lanza. La arquitectura documenta que este
+componente no autentica ni persiste: se conecta al diario verificado y cada
+handler debe ser idempotente por `operationId`. La mutación concreta del grafo
+aún requiere handlers de dominio y coordinación transaccional; no se presenta
+como sincronización automática ni exactamente-una-vez.

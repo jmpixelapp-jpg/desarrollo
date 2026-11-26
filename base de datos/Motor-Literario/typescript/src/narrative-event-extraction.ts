@@ -60,29 +60,29 @@ function extractTimeReference(sentence: string): NarrativeTimeReference | undefi
   const found: NarrativeTimeReference[] = [];
   const occupied: Array<[number, number]> = [];
   const datePatterns = [
-    { regex: /(?<![\\p{L}\\p{N}])((\\d{4})-(\\d{2})-(\\d{2}))(?![\\p{L}\\p{N}])/gu, iso: true },
-    { regex: /(?<![\\p{L}\\p{N}])((\\d{2})\\/(\\d{2})\\/(\\d{4}))(?![\\p{L}\\p{N}])/gu, iso: false }
+    { regex: /(?<![\p{L}\p{N}])((\d{4})-(\d{2})-(\d{2}))(?![\p{L}\p{N}])/gu, iso: true },
+    { regex: /(?<![\p{L}\p{N}])((\d{2})\/(\d{2})\/(\d{4}))(?![\p{L}\p{N}])/gu, iso: false }
   ];
   for (const pattern of datePatterns) {
     for (const match of sentence.matchAll(pattern.regex)) {
       const start = match.index ?? 0;
       const end = start + match[0].length;
       if (occupied.some(([a, b]) => start < b && end > a)) continue;
+      occupied.push([start, end]);
       const year = Number(pattern.iso ? match[2] : match[4]);
-      const month = Number(pattern.iso ? match[3] : match[3]);
+      const month = Number(match[3]);
       const day = Number(pattern.iso ? match[4] : match[2]);
       const orderValue = validCalendarDay(year, month, day);
       if (orderValue === undefined) continue;
-      occupied.push([start, end]);
       found.push({ basis: "calendar", precision: "date", raw: match[0], orderValue });
     }
   }
-  for (const match of sentence.matchAll(/(?<![\\p{L}\\p{N}])(?:día|dia)\\s+(?:n(?:ú|u)mero\\s+)?(\\d{1,9})(?![\\p{L}\\p{N}])/giu)) {
+  for (const match of sentence.matchAll(/(?<![\p{L}\p{N}])(?:día|dia)\s+(?:n(?:ú|u)mero\s+)?(\d{1,9})(?![\p{L}\p{N}])/giu)) {
     const value = Number(match[1]);
     if (!Number.isSafeInteger(value) || value < 1) continue;
     found.push({ basis: "story-day", precision: "day-index", raw: match[0], orderValue: value });
   }
-  for (const match of sentence.matchAll(/(?<![\\p{L}\\p{N}])((?:1[0-9]{3}|2[0-9]{3}))(?![\\p{L}\\p{N}])/gu)) {
+  for (const match of sentence.matchAll(/(?<![\p{L}\p{N}])((?:1[0-9]{3}|2[0-9]{3}))(?![\p{L}\p{N}])/gu)) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
     if (occupied.some(([a, b]) => start >= a && end <= b)) continue;

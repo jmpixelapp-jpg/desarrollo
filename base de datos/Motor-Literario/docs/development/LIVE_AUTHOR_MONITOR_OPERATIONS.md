@@ -271,3 +271,11 @@ Esta separación permite verificar la ejecución del panel y workspace aun cuand
 Los resolvers del panel y workspace recorren `visibleMetrics` por índice y verifican que cada posición sea una propiedad propia del arreglo. Las posiciones dispersas (`new Array(n)`) se rechazan con un `TypeError` explícito en lugar de ser omitidas silenciosamente por `Array.map()`. Los valores explícitos `undefined`, claves desconocidas y claves duplicadas también se rechazan.
 
 La validación se completa antes de insertar el panel o workspace en el contenedor DOM. Las regresiones se ejecutan en `tests/live-author-monitor-diagnostics-isolation.test.mjs` sobre el bundle aislado y comprueban que el contenedor permanece intacto ante ambas configuraciones inválidas.
+
+## 16. Copia y validación de diagnósticos del anfitrión
+
+`readLiveAuthorMonitorPersistenceDiagnosticsSafely()` no devuelve el objeto recibido del adaptador. Lee cada campo dentro del bloque protegido, valida los estados conocidos de checkpoint/lease y los metadatos opcionales, construye un objeto nuevo y lo congela con `Object.freeze()`.
+
+Se rechazan estados desconocidos, timestamps negativos/no finitos, fencing tokens que no sean enteros seguros no negativos y códigos de error vacíos o mayores de 64 caracteres. Una excepción de getter/proxy devuelve `undefined`; el panel y el workspace presentan diagnóstico no disponible y mantienen las métricas de actividad.
+
+La regresión aislada valida copia inmutable frente a mutación del origen, getter que lanza excepción, estado futuro y metadatos fuera de rango. Los valores se renderizan con `textContent`; no se interpretan como HTML.

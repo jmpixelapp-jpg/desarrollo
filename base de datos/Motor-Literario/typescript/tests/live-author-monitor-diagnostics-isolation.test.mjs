@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   LiveAuthorMonitor,
   mountLiveAuthorMonitorPanel,
-  mountLiveAuthorMonitorWorkspace
+  mountLiveAuthorMonitorWorkspace,
+  readLiveAuthorMonitorPersistenceDiagnosticsSafely
 } from "../dist-monitor/live-author-monitor.js";
 
 class FakeElement {
@@ -244,4 +245,92 @@ test("rechaza valores undefined explícitos en visibleMetrics sin crear vistas p
     schedule: () => () => {}
   }), /Métrica de workspace desconocida/);
   assert.equal(f.container.children.length, 0);
+});
+
+
+test("clona y congela diagnósticos para que el panel no dependa del objeto mutable del anfitrión", () => {
+  const source = {
+    documentId: "chapter-1",
+    checkpointState: "saved",
+    lastCheckpointAt: 1_800_000_000_000,
+    leaseState: "owner",
+    fencingToken: 7,
+    leaseExpiresAt: 1_800_000_030_000
+  };
+  const f = fixture();
+  const safe = readLiveAuthorMonitorPersistenceDiagnosticsSafely({
+    getLiveAuthorMonitorPersistenceDiagnostics: () => source,
+    getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
+    getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
+    subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
+  }, "chapter-1");
+
+  assert.ok(safe);
+  assert.equal(Object.isFrozen(safe), true);
+  source.checkpointState = "error";
+  source.fencingToken = 99;
+  assert.equal(safe.checkpointState, "saved");
+  assert.equal(safe.fencingToken, 7);
+});
+
+test("convierte getters defectuosos del diagnóstico en estado no disponible sin detener métricas", () => {
+  const f = fixture();
+  let refresh;
+  const diagnostic = {
+    documentId: "chapter-1",
+    leaseState: "owner"
+  };
+  Object.defineProperty(diagnostic, "checkpointState", {
+    enumerable: true,
+    get() { throw new Error("contenido privado del getter"); }
+  });
+  const api = {
+    getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
+    getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
+    getLiveAuthorMonitorPersistenceDiagnostics: () => diagnostic,
+    subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
+  };
+  const unmount = mountLiveAuthorMonitorPanel(f.container, api, {
+    documentId: "chapter-1",
+    schedule(callback) { refresh = callback; return () => {}; }
+  });
+  const root = f.container.children[0];
+  assert.match(diagnostic(root, "checkpoint").textContent, /diagnóstico no disponible/);
+  assert.equal(diagnostic(root, "checkpoint").getAttribute("data-level"), "warning");
+  recordPending(f.monitor, "chapter-1", "getter-ticket");
+  assert.equal(metric(root, "pending").textContent, "1");
+  assert.equal(root.textContent.includes("contenido privado del getter"), false);
+  unmount();
+});
+
+test("rechaza estados desconocidos y metadatos fuera de rango del adaptador", () => {
+  const f = fixture();
+  let supplied = {
+    documentId: "chapter-1",
+    checkpointState: "future-state",
+    leaseState: "owner"
+  };
+  const api = {
+    getLiveAuthorMonitorPersistenceDiagnostics: () => supplied,
+    getLiveAuthorMonitorSnapshot: id => f.monitor.getSnapshot(id),
+    getLiveAuthorMonitorSnapshots: () => f.monitor.getSnapshots(),
+    subscribeLiveAuthorMonitor: (listener, id) => f.monitor.subscribe(listener, id)
+  };
+  assert.equal(readLiveAuthorMonitorPersistenceDiagnosticsSafely(api, "chapter-1"), undefined);
+
+  supplied = {
+    documentId: "chapter-1",
+    checkpointState: "saved",
+    leaseState: "owner",
+    fencingToken: -1
+  };
+  assert.equal(readLiveAuthorMonitorPersistenceDiagnosticsSafely(api, "chapter-1"), undefined);
+
+  supplied = {
+    documentId: "chapter-1",
+    checkpointState: "saved",
+    leaseState: "owner",
+    checkpointErrorCode: "X".repeat(65)
+  };
+  assert.equal(readLiveAuthorMonitorPersistenceDiagnosticsSafely(api, "chapter-1"), undefined);
 });

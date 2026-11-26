@@ -212,9 +212,77 @@ export function readLiveAuthorMonitorPersistenceDiagnosticsSafely(
 ): LiveAuthorMonitorPersistenceDiagnostics | undefined {
   try {
     const diagnostics = hostApi.getLiveAuthorMonitorPersistenceDiagnostics?.(documentId);
-    if (!diagnostics || diagnostics.documentId !== documentId) return undefined;
-    return diagnostics;
+    if (!diagnostics || typeof diagnostics !== "object" || diagnostics.documentId !== documentId) {
+      return undefined;
+    }
+
+    const checkpointState = diagnostics.checkpointState;
+    switch (checkpointState) {
+      case "unavailable":
+      case "not-saved":
+      case "waiting-for-durability":
+      case "saving":
+      case "saved":
+      case "error":
+        break;
+      default:
+        return undefined;
+    }
+
+    const leaseState = diagnostics.leaseState;
+    switch (leaseState) {
+      case "unsupported":
+      case "uninitialized":
+      case "owner":
+      case "observer":
+      case "lost":
+      case "expired":
+      case "releasing":
+      case "error":
+        break;
+      default:
+        return undefined;
+    }
+
+    const lastCheckpointAt = diagnostics.lastCheckpointAt;
+    const checkpointErrorCode = diagnostics.checkpointErrorCode;
+    const fencingToken = diagnostics.fencingToken;
+    const leaseExpiresAt = diagnostics.leaseExpiresAt;
+    const leaseErrorCode = diagnostics.leaseErrorCode;
+
+    if (lastCheckpointAt !== undefined &&
+        (typeof lastCheckpointAt !== "number" || !Number.isFinite(lastCheckpointAt) || lastCheckpointAt < 0)) {
+      return undefined;
+    }
+    if (fencingToken !== undefined &&
+        (typeof fencingToken !== "number" || !Number.isSafeInteger(fencingToken) || fencingToken < 0)) {
+      return undefined;
+    }
+    if (leaseExpiresAt !== undefined &&
+        (typeof leaseExpiresAt !== "number" || !Number.isFinite(leaseExpiresAt) || leaseExpiresAt < 0)) {
+      return undefined;
+    }
+    if (checkpointErrorCode !== undefined &&
+        (typeof checkpointErrorCode !== "string" || !checkpointErrorCode.trim() || checkpointErrorCode.length > 64)) {
+      return undefined;
+    }
+    if (leaseErrorCode !== undefined &&
+        (typeof leaseErrorCode !== "string" || !leaseErrorCode.trim() || leaseErrorCode.length > 64)) {
+      return undefined;
+    }
+
+    return Object.freeze({
+      documentId,
+      checkpointState,
+      ...(lastCheckpointAt === undefined ? {} : { lastCheckpointAt }),
+      ...(checkpointErrorCode === undefined ? {} : { checkpointErrorCode }),
+      leaseState,
+      ...(fencingToken === undefined ? {} : { fencingToken }),
+      ...(leaseExpiresAt === undefined ? {} : { leaseExpiresAt }),
+      ...(leaseErrorCode === undefined ? {} : { leaseErrorCode })
+    });
   } catch {
+    // Un getter, proxy o adaptador defectuoso se trata igual que un diagnóstico ausente.
     return undefined;
   }
 }

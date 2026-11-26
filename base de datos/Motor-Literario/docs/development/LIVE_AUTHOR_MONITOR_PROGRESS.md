@@ -913,3 +913,18 @@ Los tres fallos se concentran en `restoreCheckpoint()` y devuelven `ReferenceErr
 **Conclusión:** el rechazo de arreglos dispersos y de valores `undefined` explícitos queda verificado en ambas vistas mediante las cinco regresiones de la lane aislada. La compilación global, los tests que dependen de `dist/motor-literario.js`, la integración IndexedDB/leases y el benchmark prolongado siguen sin certificación por el bloqueo narrativo externo.
 
 **Coordinación:** después de esta entrega, `main` recibió los commits `2f1820c`, `de8675e`, `9f7f94f`, `0b6fe55` y `d57a445` de sincronización narrativa. Esta documentación se añade sobre el HEAD actual para conservar esos cambios; no se modifica ningún archivo de esa área.
+
+## 51. Normalización defensiva de diagnósticos del anfitrión (25 de noviembre de 2026)
+
+**Problema:** el lector seguro anterior capturaba excepciones durante la invocación del proveedor y la lectura de `documentId`, pero devolvía el objeto original. Getters/proxies defectuosos podían lanzar posteriormente al consultar `checkpointState`, `leaseState` o campos opcionales; además, el anfitrión podía mutar el objeto después de la lectura.
+
+**Cambios:**
+- Validación de los estados de checkpoint y lease contra las uniones admitidas.
+- Validación de timestamp, fencing token y códigos de error opcionales, incluidos límites de longitud.
+- Copia explícita de los campos primitivos en un nuevo objeto y congelación del resultado.
+- Captura de excepciones de getters/proxies, devolviendo diagnóstico no disponible sin propagar mensajes internos.
+- Tres regresiones nuevas: inmutabilidad/copia, getter defectuoso durante el refresco del panel y valores/estados fuera de contrato.
+
+**Archivos:** `src/live-author-monitor-panel.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, guía operativa y registro de progreso.
+
+**Validación:** pendiente de CI para el commit de esta entrega.

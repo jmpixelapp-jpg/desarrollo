@@ -5677,37 +5677,39 @@ function buildCharacterAttributeEvolution(
     }
   }
 
+  const sceneByIndex = new Map(scenes.map(scene => [scene.sceneIndex,scene] as const));
   const profiles = [...groups.values()].map(group => {
-    const sceneSnapshots = scenes.flatMap(scene => {
-      const entries = group.byScene.get(scene.sceneIndex);
-      if (!entries?.length) return [];
-      // El arreglo pertenece al grupo local y ya no se reutiliza: ordenar
-      // in situ evita duplicar todas las aserciones para exponer veinte muestras.
-      const ordered = entries.sort((a,b) =>
-        a.evidence.start-b.evidence.start || a.id.localeCompare(b.id,"en")
-      );
-      const values = new Map<string,string | number>();
-      for (const assertion of ordered) {
-        const key = normalizeCharacterAttributeValue(assertion.value);
-        if (!values.has(key)) values.set(key,assertion.value);
-      }
-      return [{
-        sceneIndex:scene.sceneIndex,
-        assertionCount:entries.length,
-        distinctValueCount:values.size,
-        values:[...values.values()],
-        assertions:ordered.slice(0,20).map(assertion => ({
-          assertionId:assertion.id,
-          value:assertion.value,
-          documentId:assertion.evidence.documentId,
-          revision:assertion.evidence.revision,
-          occurrence:{start:assertion.evidence.start,end:assertion.evidence.end},
-          excerpt:assertion.evidence.excerpt,
-          ...(assertion.timeReference ? {timeReference:assertion.timeReference} : {})
-        })),
-        evidenceTruncated:entries.length>20
-      }];
-    });
+    const sceneSnapshots = [...group.byScene.entries()]
+      .sort(([left],[right]) => left-right)
+      .map(([sceneIndex,entries]) => {
+        const scene = sceneByIndex.get(sceneIndex)!;
+        // El arreglo pertenece al grupo local y ya no se reutiliza: ordenar
+        // in situ evita duplicar todas las aserciones para exponer veinte muestras.
+        const ordered = entries.sort((a,b) =>
+          a.evidence.start-b.evidence.start || a.id.localeCompare(b.id,"en")
+        );
+        const values = new Map<string,string | number>();
+        for (const assertion of ordered) {
+          const key = normalizeCharacterAttributeValue(assertion.value);
+          if (!values.has(key)) values.set(key,assertion.value);
+        }
+        return {
+          sceneIndex:scene.sceneIndex,
+          assertionCount:entries.length,
+          distinctValueCount:values.size,
+          values:[...values.values()],
+          assertions:ordered.slice(0,20).map(assertion => ({
+            assertionId:assertion.id,
+            value:assertion.value,
+            documentId:assertion.evidence.documentId,
+            revision:assertion.evidence.revision,
+            occurrence:{start:assertion.evidence.start,end:assertion.evidence.end},
+            excerpt:assertion.evidence.excerpt,
+            ...(assertion.timeReference ? {timeReference:assertion.timeReference} : {})
+          })),
+          evidenceTruncated:entries.length>20
+        };
+      });
     const transitions: LiteraryCharacterAttributeTransition[] = [];
     for (let index=1; index<sceneSnapshots.length; index++) {
       const previous = sceneSnapshots[index-1]!;

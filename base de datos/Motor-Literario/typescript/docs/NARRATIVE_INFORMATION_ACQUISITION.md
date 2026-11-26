@@ -41,7 +41,7 @@ El análisis de acciones usa el snapshot del documento abierto cuando su revisi�
 
 Módulo: `src/narrative-observation-discovery.ts`
 
-Reconoce un vocabulario controlado de acciones en frases que mencionan personajes previamente identificados. Devuelve verbo normalizado, forma superficial, clasificación morfológica del tiempo verbal (pretérito, imperfecto, presente, infinitivo, gerundio o participio), personajes y otras entidades mencionadas, polaridad afirmada/negada y frase probatoria. El tiempo verbal no se convierte en fecha ni en orden cronológico global.
+Reconoce un vocabulario controlado de acciones en frases que mencionan personajes previamente identificados. Devuelve verbo normalizado, forma superficial, evidencia exacta del verbo (`actionEvidence`) y evidencia contextual de toda la oración (`evidence`), clasificación morfológica del tiempo verbal (pretérito, imperfecto, presente, infinitivo, gerundio o participio), personajes y otras entidades mencionadas, polaridad afirmada/negada y frase probatoria. El tiempo verbal no se convierte en fecha ni en orden cronológico global.
 
 Reglas de prudencia:
 - Solo vincula nombres canónicos o alias confirmados.

@@ -1585,7 +1585,7 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
       ...input,
       knownProjectIdeas: [{
         ...idea,
-        relatedIdeaIds: Array.from({ length: 501 }, (_, index) => "linked-" + index)
+        relatedIdeaIds: Array.from({ length: 20_001 }, (_, index) => "linked-" + index)
       }]
     }),
     /catálogo global de ideas/
@@ -1604,14 +1604,9 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     }),
     /historial de decisiones del catálogo global/
   );
+  // Los historiales heredados vacíos, divergentes o repetidos se conservan;
+  // solo se rechazan valores estructuralmente inválidos.
   for (const invalidHistory of [
-    [],
-    [{ status: "incorporated", reason: "initial" }],
-    [{ status: "IDEA", reason: "writer", changedAt: 1 }],
-    [
-      { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "IDEA", reason: "writer", changedAt: 2 }
-    ],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
       { status: "unknown", reason: "writer", changedAt: 2 }

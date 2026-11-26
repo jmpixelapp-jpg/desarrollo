@@ -171,7 +171,14 @@ const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "escuchar", expression: /(?<![\p{L}\p{M}\p{N}_])escuch(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "sentir", expression: /(?<![\p{L}\p{M}\p{N}_])sinti(?:ó|ó|a|eron|r|ó|endo)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "pensar", expression: /(?<![\p{L}\p{M}\p{N}_])pens(?:ó|aba|aron|ó|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
-  { action: "creer", expression: /(?<![\p{L}\p{M}\p{N}_])cre(?:yó|ía|yeron|e|en|er|ído|yendo)(?![\p{L}\p{M}\p{N}_])/giu }
+  { action: "creer", expression: /(?<![\p{L}\p{M}\p{N}_])cre(?:yó|ía|yeron|e|en|er|ído|yendo)(?![\p{L}\p{M}\p{N}_])/giu },
+  // Formas irregulares de verbos de acontecimiento/percepción. Se excluyen
+  // auxiliares y modales frecuentes (ser, estar, haber, poder, querer) para
+  // no convertir perífrasis o estados en acciones independientes.
+  { action: "hacer", expression: /(?<![\p{L}\p{M}\p{N}_])(?:hizo|hicieron|hice|hiciste|hicimos|hacía|hacían|hace|hacen|hacer|hecho|haciendo)(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "venir", expression: /(?<![\p{L}\p{M}\p{N}_])(?:vino|vinieron|vine|viniste|vinimos|venía|venían|viene|vienen|venir|venido|viniendo)(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "ver", expression: /(?<![\p{L}\p{M}\p{N}_])(?:vio|vieron|vi|viste|vimos|veía|veían|ve|ven|ver|visto|viendo)(?![\p{L}\p{M}\p{N}_])/giu },
+  { action: "poner", expression: /(?<![\p{L}\p{M}\p{N}_])(?:puso|pusieron|puse|pusiste|pusimos|ponía|ponían|pone|ponen|poner|puesto|poniendo)(?![\p{L}\p{M}\p{N}_])/giu }
 ];
 
 function classifyGrammaticalTense(surface: string): NarrativeObservationCandidate["grammaticalTense"] {
@@ -180,7 +187,7 @@ function classifyGrammaticalTense(surface: string): NarrativeObservationCandidat
   if (/(?:ar|er|ir)$/u.test(form)) return "infinitive";
   if (/(?:aba|abas|ábamos|aban|ía|ías|íamos|ían)$/u.test(form)) return "past-imperfect";
   if (/(?:aré|arás|ará|aremos|aréis|arán|eré|erás|erá|eremos|eréis|erán|iré|irás|irá|iremos|iréis|irán|diré|dirás|dirá|diremos|diréis|dirán|saldré|saldrás|saldrá|saldremos|saldréis|saldrán)$/u.test(form)) return "future";
-  if (/(?:ó|ió|aron|ieron|yó|yeron|dijo|dijeron)$/u.test(form)) return "past-preterite";
+  if (/(?:ó|ió|aron|ieron|yó|yeron|dijo|dijeron|hizo|hicieron|hice|hiciste|hicimos|vino|vinieron|vine|viniste|vinimos|vio|vieron|vi|viste|vimos|puso|pusieron|puse|pusiste|pusimos)$/u.test(form)) return "past-preterite";
   if (/(?:ad[oa]s?|id[oa]s?|to|cho|so|abiert[oa]s?|muert[oa]s?|vist[oa]s?|puest[oa]s?|hech[oa]s?|escrit[oa]s?)$/u.test(form)) return "participle";
   if (/(?:a|an|e|en|o|es)$/u.test(form)) return "present";
   return "unknown";

@@ -147,3 +147,10 @@ La regresión correspondiente cubre tres momentos: conflicto inicial, ausencia d
 ### Regresión de recuperación con la outbox IndexedDB
 
 Además de la prueba del coordinador con una outbox en memoria, la suite de integración cubre el mismo ciclo usando `IndexedDbProjectStore`: el conflicto y su mensaje quedan persistidos, el vencimiento se respeta entre llamadas separadas, y el segundo envío conserva `operationId` y payload. La operación se elimina únicamente tras el acuse posterior. El transporte sigue siendo simulado, por lo que esta regresión verifica la persistencia y la coordinación del cliente, no el comportamiento de un servidor remoto real.
+
+
+## Sustitución y reconciliación explícita: límites actuales
+
+Una decisión de edición o fusión no puede reutilizar el `operationId` conflictivo con un payload diferente. Debe producir una identidad nueva y una secuencia posterior asignada por la autoridad del escritor. La operación conflictiva no se sobrescribe ni se elimina por una decisión local no confirmada. El registro de conflicto, la operación sustitutiva y cualquier cambio de estado futuro deberán actualizarse en una única transacción IndexedDB con precondiciones verificadas para evitar que dos pestañas apliquen decisiones obsoletas.
+
+La regresión añadida comprueba únicamente la invariante de no sobrescritura: una operación nueva con ID y secuencia diferentes puede coexistir con la original, y la original conserva payload y backoff. Esto no constituye todavía una API de resolución ni una transacción atómica de reconciliación. El modelo versionado de conflictos, la autoridad de secuencias, la migración y el recibo remoto de aceptación siguen pendientes. El diseño completo está en `docs/development/SYNC_CONFLICT_RECONCILIATION_DESIGN.md`.

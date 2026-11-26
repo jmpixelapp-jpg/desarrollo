@@ -3980,8 +3980,7 @@ export class IndexedDbProjectStore implements ProjectStore {
                 }
                 validateNarrativeEntityRecord(entity, "entidad contextual");
                 loadedEntities.set(id, entity);
-                remaining--;
-                if (remaining === 0) commitEntries(pendingEntries());
+                      if (remaining === 0) commitEntries(pendingEntries());
               } catch (error) {
                 abortWith(error);
               }
@@ -5964,7 +5963,6 @@ export class IndexedDbProjectStore implements ProjectStore {
       const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
       const store = transaction.objectStore(SYNC_OUTBOX);
       let acknowledged = 0;
-      let remaining = operationIds.length;
       let failure: Error | undefined;
       for (const operationId of operationIds) {
         const request = store.get(operationId);

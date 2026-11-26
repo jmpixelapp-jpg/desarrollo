@@ -217,3 +217,29 @@ test("cuarentena payloads runtime nulos sin lanzar al callback nativo", () => {
   source.dispose();
   bridge.dispose();
 });
+
+  const nativeWithProxy = new NativeEditorState();
+  const proxyBridge = new LiveAuthorMonitorEditorTransactionBridge({
+    getSnapshot: documentId => nativeWithProxy.getSnapshot(documentId),
+    getDocumentState: documentId => nativeWithProxy.getDocumentState(documentId)
+  });
+  const proxyErrors = [];
+  const proxySource = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: "chapter-1",
+    initialSnapshot: nativeWithProxy.getSnapshot("chapter-1"),
+    provider: proxyBridge,
+    onError: error => proxyErrors.push(error)
+  });
+  proxySource.subscribeChanges(() => {});
+  const throwingPayload = new Proxy({}, {
+    get() {
+      throw new Error("bridge_transaction_getter_failed");
+    }
+  });
+  assert.doesNotThrow(() => {
+    proxyBridge.publishAppliedTransaction("chapter-1", throwingPayload);
+  });
+  assert.equal(proxySource.getState().needsResync, true);
+  assert.equal(proxyErrors.at(-1).code, "invalid-transaction");
+  proxySource.dispose();
+  proxyBridge.dispose();

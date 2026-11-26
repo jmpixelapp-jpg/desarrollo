@@ -3034,20 +3034,32 @@ export class HostEngineApi {
         // La lectura de ideas es también un límite de reconciliación: el catálogo
         // de entidades puede haber cambiado desde otra instancia del anfitrión.
         // No validar contra una caché caliente que oculte destinos eliminados.
-        const entities = requireProjectScopedRecords(
-          await this.requireKnowledgeReaderStore().loadEntities(projectId),
-          projectId,
-          "entidades"
-        );
-        this.narrativeEntities.clear();
-        for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
-        this.entitiesLoaded = true;
-        this.entityEvidenceIndex = undefined;
-        this.entityNameIndex = undefined;
-        requireNarrativeEntityReferences(
-          ideas, projectId, entities,
-          idea => idea.relatedEntityIds ?? [], "ideas"
-        );
+        try {
+          const entities = requireProjectScopedRecords(
+            await this.requireKnowledgeReaderStore().loadEntities(projectId),
+            projectId,
+            "entidades"
+          );
+          this.narrativeEntities.clear();
+          for (const entity of entities) this.narrativeEntities.set(entity.id, entity);
+          this.entitiesLoaded = true;
+          this.entityEvidenceIndex = undefined;
+          this.entityNameIndex = undefined;
+          requireNarrativeEntityReferences(
+            ideas, projectId, entities,
+            idea => idea.relatedEntityIds ?? [], "ideas"
+          );
+        } catch (error) {
+          // Una lectura inválida no debe dejar el catálogo parcialmente cargado.
+          // La siguiente consulta vuelve a leer las ideas y entidades durables.
+          this.narrativeIdeas.clear();
+          this.ideasLoaded = false;
+          this.narrativeEntities.clear();
+          this.entitiesLoaded = false;
+          this.entityEvidenceIndex = undefined;
+          this.entityNameIndex = undefined;
+          throw error;
+        }
       }
       return cloneNarrativeRecords(ideas);
     });

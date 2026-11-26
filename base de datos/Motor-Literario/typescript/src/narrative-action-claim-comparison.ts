@@ -27,6 +27,15 @@ export interface NarrativeActionClaimDisagreement {
   readonly secondEpistemicFrame: NarrativeObservationCandidate["epistemicFrame"];
   readonly firstSourceEntityId?: string;
   readonly secondSourceEntityId?: string;
+  /** Evidencia literal del marco epistémico, si el extractor la identificó. */
+  readonly firstEpistemicEvidence?: TextEvidence;
+  readonly secondEpistemicEvidence?: TextEvidence;
+  /** Evidencia literal de negación, si existe; no se reconstruye desde la polaridad. */
+  readonly firstPolarityEvidence?: TextEvidence;
+  readonly secondPolarityEvidence?: TextEvidence;
+  /** Evidencia de la mención del emisor, separada de la afirmación que transmite. */
+  readonly firstSourceEvidence?: TextEvidence;
+  readonly secondSourceEvidence?: TextEvidence;
   readonly evidence: readonly [TextEvidence, TextEvidence];
   readonly classification: "polarity-disagreement-candidate";
   readonly reviewStatus: "candidate";
@@ -94,7 +103,12 @@ export function compareNarrativeActionClaims(
         (item.grammaticalSubjectCandidate !== undefined &&
           !validEvidence(item.grammaticalSubjectCandidate.evidence)) ||
         (item.grammaticalObjectCandidate !== undefined &&
-          !validEvidence(item.grammaticalObjectCandidate.evidence))) {
+          !validEvidence(item.grammaticalObjectCandidate.evidence)) ||
+        (item.epistemicFrameEvidence !== undefined && !validEvidence(item.epistemicFrameEvidence)) ||
+        (item.epistemicSourceCandidate !== undefined &&
+          (!item.epistemicSourceCandidate.entityId.trim() ||
+           !validEvidence(item.epistemicSourceCandidate.evidence))) ||
+        (item.polarityEvidence !== undefined && !validEvidence(item.polarityEvidence))) {
       throw new Error("Observación inválida: se requiere identidad única y evidencia textual vigente.");
     }
     ids.add(item.id);
@@ -160,6 +174,12 @@ export function compareNarrativeActionClaims(
             ? { firstSourceEntityId: left.epistemicSourceCandidate.entityId } : {}),
           ...(right.epistemicSourceCandidate
             ? { secondSourceEntityId: right.epistemicSourceCandidate.entityId } : {}),
+          ...(left.epistemicFrameEvidence ? { firstEpistemicEvidence: left.epistemicFrameEvidence } : {}),
+          ...(right.epistemicFrameEvidence ? { secondEpistemicEvidence: right.epistemicFrameEvidence } : {}),
+          ...(left.polarityEvidence ? { firstPolarityEvidence: left.polarityEvidence } : {}),
+          ...(right.polarityEvidence ? { secondPolarityEvidence: right.polarityEvidence } : {}),
+          ...(left.epistemicSourceCandidate ? { firstSourceEvidence: left.epistemicSourceCandidate.evidence } : {}),
+          ...(right.epistemicSourceCandidate ? { secondSourceEvidence: right.epistemicSourceCandidate.evidence } : {}),
           evidence: [left.evidence, right.evidence],
           classification: "polarity-disagreement-candidate",
           reviewStatus: "candidate"

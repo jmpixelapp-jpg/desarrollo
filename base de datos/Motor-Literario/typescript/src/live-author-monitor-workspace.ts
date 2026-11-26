@@ -22,7 +22,7 @@ export interface LiveAuthorMonitorWorkspaceOptions {
 }
 
 type CompactMetricKey = "wordsPerMinute" | "inserted" | "idle" | "pauses" | "pending" | "revision" | "commitP95" |
-  "typing" | "paste" | "deletion" | "correction" | "undo" | "redo";
+  "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
 interface WorkspaceCard {
   readonly root: HTMLElement;
   readonly heading: HTMLElement;
@@ -46,6 +46,7 @@ const WORKSPACE_METRICS: readonly { readonly key: CompactMetricKey; readonly lab
   { key: "correction", label: "Correcciones" },
   { key: "undo", label: "Deshacer" },
   { key: "redo", label: "Rehacer" },
+  { key: "other", label: "Otras operaciones" },
   { key: "idle", label: "Tiempo en pausa" },
   { key: "pauses", label: "Pausas detectadas" },
   { key: "pending", label: "Pendientes" },
@@ -122,6 +123,7 @@ function metricValue(
     case "correction": return integer.format(snapshot.correctionChanges);
     case "undo": return integer.format(snapshot.undoChanges);
     case "redo": return integer.format(snapshot.redoChanges);
+    case "other": return integer.format(snapshot.otherChanges);
     case "idle": return formatDuration(snapshot.idleDurationMs);
     case "pauses": return integer.format(snapshot.pauseCount);
     case "pending": return integer.format(snapshot.pendingChanges);

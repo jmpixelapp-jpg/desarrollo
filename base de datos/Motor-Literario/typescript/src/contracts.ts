@@ -122,6 +122,7 @@ export interface StoredLiveAuthorMonitorCheckpoint {
   readonly correctionChanges?: number;
   readonly undoChanges?: number;
   readonly redoChanges?: number;
+  readonly otherChanges?: number;
 }
 
 /** Lease temporal de titularidad del monitor, con fencing token monotónico por documento. */

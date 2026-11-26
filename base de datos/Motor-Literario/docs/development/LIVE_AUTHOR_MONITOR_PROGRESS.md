@@ -659,3 +659,5 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 - Se añaden pruebas para las seis categorías, pegado desde textarea, historial nativo y recuperación desde checkpoint.
 
 **Validación:** pendiente de CI. La compilación sigue condicionada por el error TS1002 de `src/narrative-history.ts`, fuera del ámbito de este módulo.
+
+- Compatibilidad adicional: los checkpoints v1 anteriores a las categorías restauran sus ediciones históricas como `otherChanges`; así, los nuevos totales siguen cuadrando al volver a guardar.

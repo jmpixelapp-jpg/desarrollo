@@ -14,7 +14,7 @@ export interface LiveAuthorMonitorPanelOptions {
 }
 type MetricKey = "session" | "active" | "idle" | "pauses" | "wordsPerMinute" | "charactersPerMinute" |
   "inserted" | "deleted" | "accepted" | "typing" | "paste" | "deletion" | "correction" |
-  "undo" | "redo" | "committed" | "pending" | "failed" |
+  "undo" | "redo" | "other" | "committed" | "pending" | "failed" |
   "revision" | "commitP95";
 interface MetricNode { readonly value: HTMLElement; }
 interface PanelNodes {
@@ -45,6 +45,7 @@ const METRICS: readonly MetricDefinition[] = [
   { key: "correction", label: "Correcciones" },
   { key: "undo", label: "Deshacer" },
   { key: "redo", label: "Rehacer" },
+  { key: "other", label: "Otras operaciones" },
   { key: "committed", label: "Ediciones guardadas" },
   { key: "pending", label: "Ediciones pendientes" },
   { key: "failed", label: "Ediciones fallidas" },
@@ -112,6 +113,7 @@ function formatMetric(
     case "correction": return integer.format(snapshot.correctionChanges);
     case "undo": return integer.format(snapshot.undoChanges);
     case "redo": return integer.format(snapshot.redoChanges);
+    case "other": return integer.format(snapshot.otherChanges);
     case "committed": return integer.format(snapshot.committedChanges);
     case "pending": return integer.format(snapshot.pendingChanges);
     case "failed": return integer.format(snapshot.failedChanges);

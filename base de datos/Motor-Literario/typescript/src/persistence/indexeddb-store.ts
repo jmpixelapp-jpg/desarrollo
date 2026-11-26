@@ -1488,7 +1488,7 @@ function validateLiveAuthorMonitorCheckpoint(
   if (!integerNonNegative(checkpoint.acceptedChanges)) invalid.push("acceptedChanges");
   const activityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
     checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges,
-    checkpoint.redoChanges];
+    checkpoint.redoChanges, checkpoint.otherChanges];
   const hasActivityCounts = activityCounts.some(value => value !== undefined);
   if (hasActivityCounts) {
     if (activityCounts.some(value => !integerNonNegative(value as number))) {

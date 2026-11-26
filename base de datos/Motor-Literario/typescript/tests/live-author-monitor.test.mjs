@@ -487,4 +487,18 @@ test("clasifica escritura, pegado, borrado, corrección, deshacer y rehacer; los
   assert.equal(recovered.correctionChanges, 1);
   assert.equal(recovered.undoChanges, 1);
   assert.equal(recovered.redoChanges, 1);
+  assert.equal(recovered.otherChanges, 0);
+
+  const legacy = { ...checkpoint };
+  for (const key of ["typingChanges", "pasteChanges", "deletionChanges", "correctionChanges",
+    "undoChanges", "redoChanges", "otherChanges"]) delete legacy[key];
+  const legacyMonitor = new LiveAuthorMonitor({ now: () => 0 });
+  const legacySnapshot = legacyMonitor.restoreCheckpoint(legacy, {
+    documentId: "chapter-activity", text: "Zbcdxy", revision: 6, sequence: 6
+  }, "book-activity", 200);
+  assert.equal(legacySnapshot.otherChanges, 6,
+    "las ediciones históricas sin clasificación deben conservarse como otras operaciones");
+  const nextCheckpoint = legacyMonitor.createCheckpoint("chapter-activity", 300);
+  assert.ok(nextCheckpoint);
+  assert.equal(nextCheckpoint.otherChanges, 6);
 });

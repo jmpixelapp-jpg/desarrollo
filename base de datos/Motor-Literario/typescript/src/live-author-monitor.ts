@@ -34,6 +34,7 @@ export interface LiveAuthorMonitorSnapshot {
   readonly correctionChanges: number;
   readonly undoChanges: number;
   readonly redoChanges: number;
+  readonly otherChanges: number;
   readonly rejectedChanges: number;
   readonly committedChanges: number;
   readonly failedChanges: number;
@@ -81,6 +82,7 @@ interface DocumentSession {
   correctionChanges: number;
   undoChanges: number;
   redoChanges: number;
+  otherChanges: number;
   rejectedChanges: number;
   committedChanges: number;
   failedChanges: number;
@@ -196,6 +198,7 @@ export class LiveAuthorMonitor {
       correctionChanges: 0,
       undoChanges: 0,
       redoChanges: 0,
+      otherChanges: 0,
       rejectedChanges: 0,
       committedChanges: 0,
       failedChanges: 0,
@@ -254,7 +257,7 @@ export class LiveAuthorMonitor {
       case "correction": session.correctionChanges++; break;
       case "undo": session.undoChanges++; break;
       case "redo": session.redoChanges++; break;
-      case "other": break;
+      case "other": session.otherChanges++; break;
     }
     session.insertedCharacters += change.replacement.length;
     session.deletedCharacters += change.end - change.start;
@@ -394,6 +397,7 @@ export class LiveAuthorMonitor {
       correctionChanges: session.correctionChanges,
       undoChanges: session.undoChanges,
       redoChanges: session.redoChanges,
+      otherChanges: session.otherChanges,
       rejectedChanges: session.rejectedChanges,
       committedChanges: session.committedChanges,
       failedChanges: session.failedChanges,
@@ -440,7 +444,7 @@ export class LiveAuthorMonitor {
     const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
     const activityCounts = [checkpoint.typingChanges, checkpoint.pasteChanges,
       checkpoint.deletionChanges, checkpoint.correctionChanges, checkpoint.undoChanges,
-      checkpoint.redoChanges];
+      checkpoint.redoChanges, checkpoint.otherChanges];
     const hasActivityCounts = activityCounts.some(value => value !== undefined);
     const validActivityCounts = activityCounts.every(value => value !== undefined && integerNonNegative(value));
     const activityCountTotal = activityCounts.reduce((sum, value) => sum + (value ?? 0), 0);
@@ -514,6 +518,7 @@ export class LiveAuthorMonitor {
       correctionChanges: checkpoint.correctionChanges ?? 0,
       undoChanges: checkpoint.undoChanges ?? 0,
       redoChanges: checkpoint.redoChanges ?? 0,
+      otherChanges: hasActivityCounts ? (checkpoint.otherChanges ?? 0) : checkpoint.acceptedChanges,
       rejectedChanges: checkpoint.rejectedChanges,
       committedChanges: checkpoint.committedChanges,
       failedChanges: checkpoint.failedChanges,
@@ -605,6 +610,7 @@ export class LiveAuthorMonitor {
       correctionChanges: session.correctionChanges,
       undoChanges: session.undoChanges,
       redoChanges: session.redoChanges,
+      otherChanges: session.otherChanges,
       rejectedChanges: session.rejectedChanges,
       committedChanges: session.committedChanges,
       failedChanges: session.failedChanges,

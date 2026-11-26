@@ -1081,3 +1081,16 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Archivos:** `typescript/src/live-author-monitor-visibility.ts`, `typescript/tests/live-author-monitor-diagnostics-isolation.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
 
 **Aislamiento:** no se modifican HostEngineApi, persistencia, IndexedDB, leases ni archivos del PR #56.
+
+
+## 62. Limpieza completa ante errores al desmontar (26 de noviembre de 2026)
+
+**Hallazgo:** la liberación de listeners y el intervalo estaban protegidos parcialmente. Si `removeEventListener` lanzaba al retirar un listener de `window`, la ejecución salía antes de retirar los listeners de `document` y antes de cancelar el timer. Un error individual podía dejar recursos del panel montados.
+
+**Corrección:** el desmontaje intenta retirar cada listener de manera independiente, intenta siempre cancelar el intervalo y conserva el primer error de limpieza para comunicarlo al llamador después de completar los intentos. La bandera `disposed` se establece antes de limpiar, por lo que los callbacks encolados quedan invalidados incluso cuando alguna operación de limpieza falla.
+
+**Regresión:** se fuerza un error al retirar `pagehide` y otro al retirar `freeze`. La prueba verifica que se intentan los cinco listeners, que el intervalo siempre se cancela, que no quedan listeners en el harness y que una segunda llamada a `dispose` no repite la limpieza.
+
+**Validación:** pendiente de GitHub Actions para este commit. La corrección anterior de generaciones ya está cubierta por los workflows aprobados del commit `de4f2001ddbd0c9e60850abeeb3acfcbc70edc69`.
+
+**Archivos:** `typescript/src/live-author-monitor-visibility.ts`, `typescript/tests/live-author-monitor-diagnostics-isolation.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.

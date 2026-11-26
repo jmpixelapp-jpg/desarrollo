@@ -107,8 +107,25 @@ export function scheduleLiveAuthorMonitorWhileVisible(
   return () => {
     if (disposed) return;
     disposed = true;
-    for (const [type, listener] of viewListeners) view?.removeEventListener(type, listener);
-    try { for (const [type, listener] of documentListeners) document.removeEventListener(type, listener); }
-    finally { stopInterval(); }
+    // Un fallo aislado al retirar un listener no debe impedir intentar la
+    // limpieza de los demás ni cancelar el intervalo que conserva el panel.
+    let cleanupFailed = false;
+    let firstCleanupError: unknown;
+    const attemptCleanup = (cleanup: () => void): void => {
+      try {
+        cleanup();
+      } catch (error) {
+        if (!cleanupFailed) firstCleanupError = error;
+        cleanupFailed = true;
+      }
+    };
+    for (const [type, listener] of viewListeners) {
+      attemptCleanup(() => view?.removeEventListener(type, listener));
+    }
+    for (const [type, listener] of documentListeners) {
+      attemptCleanup(() => document.removeEventListener(type, listener));
+    }
+    attemptCleanup(stopInterval);
+    if (cleanupFailed) throw firstCleanupError;
   };
 }

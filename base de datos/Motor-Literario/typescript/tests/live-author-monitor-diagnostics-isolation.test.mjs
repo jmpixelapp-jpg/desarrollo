@@ -566,3 +566,44 @@ test("un fallo durante el montaje invalida ticks encolados y retira listeners", 
   assert.equal(f.document.visibilityListenerCount(), 0);
   assert.equal(f.document.lifecycleListenerCount(), 0);
 });
+
+
+test("dispose intenta retirar todos los listeners y cancelar el intervalo aunque fallen limpiezas individuales", () => {
+  const f = fixture();
+  const attempts = [];
+  const originalViewRemove = f.document.defaultView.removeEventListener.bind(f.document.defaultView);
+  const originalDocumentRemove = f.document.removeEventListener.bind(f.document);
+  f.document.defaultView.removeEventListener = (name, listener) => {
+    attempts.push("window:" + name);
+    originalViewRemove(name, listener);
+    if (name === "pagehide") throw new Error("fallo al retirar pagehide");
+  };
+  f.document.removeEventListener = (name, listener) => {
+    attempts.push("document:" + name);
+    originalDocumentRemove(name, listener);
+    if (name === "freeze") throw new Error("fallo al retirar freeze");
+  };
+
+  let intervalCancelled = false;
+  const dispose = scheduleLiveAuthorMonitorWhileVisible(
+    f.document,
+    () => {},
+    400,
+    () => () => { intervalCancelled = true; }
+  );
+
+  assert.throws(dispose, /fallo al retirar pagehide/);
+  assert.deepEqual(attempts, [
+    "window:pagehide",
+    "window:pageshow",
+    "document:visibilitychange",
+    "document:freeze",
+    "document:resume"
+  ], "un error no debe interrumpir el intento de retirar listeners posteriores");
+  assert.equal(intervalCancelled, true, "el timer se cancela incluso si falla la limpieza de listeners");
+  assert.equal(f.document.visibilityListenerCount(), 0);
+  assert.equal(f.document.lifecycleListenerCount(), 0);
+
+  dispose();
+  assert.equal(attempts.length, 5, "dispose permanece idempotente después de reportar un error");
+});

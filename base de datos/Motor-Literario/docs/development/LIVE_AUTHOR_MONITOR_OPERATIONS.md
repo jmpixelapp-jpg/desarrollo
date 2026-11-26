@@ -362,3 +362,14 @@ La protección también cubre dos fallos del scheduler:
 Un scheduler que provoque una transición síncrona mientras crea un intervalo recibe cancelación inmediata cuando devuelve su función de cancelación, siempre que esa programación haya quedado obsoleta antes de finalizar la llamada.
 
 Las regresiones deterministas están en `tests/live-author-monitor-diagnostics-isolation.test.mjs`. La generación protege únicamente el polling del panel/workspace; no controla persistencia, heartbeat ni fencing del lease de datos.
+
+
+## 18. Desmontaje resistente a fallos de cleanup
+
+La disposición de panel y workspace invalida primero los callbacks pendientes. Después intenta retirar cada listener de `window` y `document` de forma independiente y cancela siempre el intervalo.
+
+Si una operación de limpieza lanza, el módulo continúa con las demás. Al finalizar, propaga el primer error observado para que el anfitrión pueda diagnosticar el problema; no oculta el fallo ni deja de intentar liberar recursos posteriores.
+
+La operación sigue siendo idempotente: una segunda llamada no vuelve a ejecutar la limpieza, incluso si la primera tuvo que informar un error. La regresión específica simula errores de retirada en listeners distintos y comprueba el intento de liberar los cinco listeners y el timer.
+
+Esta protección afecta al polling visual del monitor. No cambia el ciclo de vida de checkpoints, heartbeat ni leases.

@@ -225,7 +225,7 @@ function classifyEpistemicFrame(
 
   const possibleSources = characters.flatMap(entity =>
     [entity.canonicalName, ...entity.aliases].flatMap(name => {
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\function classifyEpistemicFrame(
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   sentence: string,
   actionStart: number
 ): { frame: NarrativeObservationCandidate["epistemicFrame"]; cue?: { start: number; end: number; excerpt: string } } {

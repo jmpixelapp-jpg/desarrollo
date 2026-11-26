@@ -362,7 +362,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function unicodeNamePattern(name: string): string {
-  return `(?<![\\p{L}\\p{N}_])${escapeRegExp(name)}(?![\\p{L}\\p{N}_])`;
+  return `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegExp(name)}(?![\\p{L}\\p{M}\\p{N}_])`;
 }
 
 /**

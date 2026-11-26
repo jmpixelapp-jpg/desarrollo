@@ -6,6 +6,7 @@ import {
   buildNarrativeIdeaEvolution,
   createNarrativeIdeaContinuityIndex,
   hydrateNarrativeIdeaContinuityIndex,
+  updateNarrativeIdeaContinuityIndexIncrementally,
   validateNarrativeIdeaContinuityIndex
 } from "../dist/motor-literario.js";
 
@@ -147,4 +148,38 @@ test("ordena vector documental, preserva revisiones y rechaza IDs repetidos", ()
     sourceRevisions: [...revisions.slice(0, 2), revisions[0]],
     result: source
   }));
+});
+
+
+test("la orquestación incremental rechaza un snapshot anterior corrupto antes de reutilizar líneas", async () => {
+  const source = result(candidates, ["chapter-1", "chapter-2", "chapter-3"]);
+  const evolution = buildNarrativeIdeaEvolution({
+    projectId: "book-index",
+    crossDocumentAnalysis: analyzeNarrativeIdeaCrossDocumentRelations({
+      projectId: "book-index",
+      ideaCandidates: candidates,
+      orderedDocumentIds: ["chapter-1", "chapter-2", "chapter-3"]
+    })
+  });
+  const valid = createNarrativeIdeaContinuityIndex({
+    projectId: "book-index",
+    generation: 1,
+    updatedAt: 1234,
+    sourceRevisions: revisions,
+    result: source
+  });
+  const corrupt = { ...valid, fingerprint: "fnv1a64:" + "0".repeat(16) };
+  let writes = 0;
+  const store = {
+    async loadNarrativeIdeaContinuityIndex() { return corrupt; },
+    async saveNarrativeIdeaContinuityIndexIfUnchanged() { writes++; }
+  };
+
+  await assert.rejects(updateNarrativeIdeaContinuityIndexIncrementally(store, {
+    projectId: "book-index",
+    updatedAt: 2000,
+    sourceRevisions: revisions,
+    nextEvolution: evolution
+  }), /huella|fingerprint|índice/u);
+  assert.equal(writes, 0);
 });

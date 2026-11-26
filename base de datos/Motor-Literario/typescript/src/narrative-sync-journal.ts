@@ -13,6 +13,7 @@ export type NarrativeSyncAcceptResult =
 
 export interface NarrativeSyncJournalEntry extends NarrativeSyncOperationEnvelope {
   readonly receivedAt: number;
+  readonly appliedAt?: number;
 }
 type StoredOperation = NarrativeSyncJournalEntry;
 
@@ -157,6 +158,62 @@ export class IndexedDbNarrativeSyncJournal {
     });
   }
 
+  /** Recupera solo operaciones aún no marcadas como aplicadas. */
+  async loadPendingOperations(
+    projectId: string,
+    writerId?: string
+  ): Promise<readonly NarrativeSyncJournalEntry[]> {
+    const entries = await this.loadOperations(projectId, writerId);
+    return entries.filter(entry => entry.appliedAt === undefined);
+  }
+
+  /**
+   * Marca una operación como aplicada después de que el consumidor termine.
+   * El digest evita que un consumidor confirme una identidad con otro contenido.
+   */
+  async markApplied(
+    projectId: string,
+    operationId: string,
+    expectedDigest: string,
+    appliedAt = Date.now()
+  ): Promise<void> {
+    if (!projectId.trim() || !operationId.trim() ||
+        !/^sha256:[a-f0-9]{64}$/u.test(expectedDigest) ||
+        !Number.isFinite(appliedAt) || appliedAt < 0) {
+      throw new TypeError("Datos inválidos para confirmar la aplicación de la operación.");
+    }
+    const database = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction("operations", "readwrite");
+      const store = transaction.objectStore("operations");
+      const request = store.get([projectId, operationId]);
+      let failure: Error | undefined;
+      request.onsuccess = () => {
+        const current = request.result as StoredOperation | undefined;
+        if (!current) {
+          failure = new Error("No existe la operación que se intenta marcar como aplicada.");
+          try { transaction.abort(); } catch { /* abortado */ }
+          return;
+        }
+        if (current.digest !== expectedDigest) {
+          failure = new Error("El digest no coincide con la operación recibida.");
+          try { transaction.abort(); } catch { /* abortado */ }
+          return;
+        }
+        if (current.appliedAt === undefined) {
+          store.put({ ...current, appliedAt });
+        }
+      };
+      request.onerror = () => {
+        failure = new Error("No se pudo leer la operación para confirmar su aplicación.");
+        try { transaction.abort(); } catch { /* abortado */ }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("Falló la confirmación de aplicación."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se abortó la confirmación de aplicación."));
+    });
+  }
+
   /** Recupera una operación por su identidad durable dentro del proyecto. */
   async loadOperation(
     projectId: string,
@@ -247,4 +304,41 @@ export class IndexedDbNarrativeSyncJournal {
     });
     return opening;
   }
+}
+
+
+export interface NarrativeSyncReplayResult {
+  readonly processed: number;
+  readonly remaining: number;
+  readonly stoppedAtOperationId?: string;
+}
+
+/**
+ * Reproduce operaciones pendientes en orden y confirma cada una tras el callback.
+ * Si el callback falla, la operación permanece pendiente y el replay se detiene.
+ * El callback debe ser idempotente: un fallo del proceso entre la mutación externa
+ * y markApplied puede provocar que la misma operación se entregue otra vez.
+ */
+export async function replayPendingNarrativeSyncOperations(
+  journal: IndexedDbNarrativeSyncJournal,
+  projectId: string,
+  apply: (operation: NarrativeSyncOperationEnvelope) => Promise<void>,
+  writerId?: string
+): Promise<NarrativeSyncReplayResult> {
+  if (!journal || typeof apply !== "function") {
+    throw new TypeError("Se requiere un diario y un procesador de operaciones.");
+  }
+  const pending = await journal.loadPendingOperations(projectId, writerId);
+  let processed = 0;
+  for (const operation of pending) {
+    try {
+      await apply(operation);
+      await journal.markApplied(projectId, operation.operationId, operation.digest);
+      processed++;
+    } catch {
+      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+      return { processed, remaining, stoppedAtOperationId: operation.operationId };
+    }
+  }
+  return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
 }

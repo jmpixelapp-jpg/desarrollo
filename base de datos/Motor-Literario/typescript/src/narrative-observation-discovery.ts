@@ -63,7 +63,7 @@ interface ActionSignal {
 }
 
 const ACTION_SIGNALS: readonly ActionSignal[] = [
-  { action: "cruzar", expression: /(?<![\\p{L}\\p{M}\\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando))(?![\\p{L}\\p{M}\\p{N}_])/giu },
+  { action: "cruzar", expression: /(?<![\p{L}\p{M}\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando))(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "entrar", expression: /(?<![\p{L}\p{M}\p{N}_])entr(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "salir", expression: /(?<![\p{L}\p{M}\p{N}_])sal(?:ió|ía|ieron|e|en|ir|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "llegar", expression: /(?<![\p{L}\p{M}\p{N}_])lleg(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
@@ -76,7 +76,7 @@ const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "preguntar", expression: /(?<![\p{L}\p{M}\p{N}_])pregunt(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "gritar", expression: /(?<![\p{L}\p{M}\p{N}_])grit(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "tomar", expression: /(?<![\p{L}\p{M}\p{N}_])tom(?:ó|aba|aron|a|an|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
-  { action: "abrir", expression: /(?<![\\p{L}\\p{M}\\p{N}_])(?:abri(?:ó|ía|aban|ábamos|abas|eron|r|endo)|abiert[oa]s?)(?![\\p{L}\\p{M}\\p{N}_])/giu },
+  { action: "abrir", expression: /(?<![\p{L}\p{M}\p{N}_])(?:abri(?:ó|ía|aban|ábamos|abas|eron|r|endo)|abiert[oa]s?)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "cerrar", expression: /(?<![\p{L}\p{M}\p{N}_])cerr(?:ó|aba|aron|ó|ar|ado|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "encontrar", expression: /(?<![\p{L}\p{M}\p{N}_])encontr(?:ó|aba|aron|ar|ad[oa]s?|ando)(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "perder", expression: /(?<![\p{L}\p{M}\p{N}_])perd(?:ió|ía|ieron|er|ido|iendo)(?![\p{L}\p{M}\p{N}_])/giu },
@@ -162,8 +162,8 @@ function splitSentences(text: string): readonly { start: number; end: number }[]
 
 function includesName(sentence: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escaped +
-    "(?![\\p{L}\\p{M}\\p{N}_])", "iu").test(sentence);
+  return new RegExp("(?<![\p{L}\p{M}\p{N}_])" + escaped +
+    "(?![\p{L}\p{M}\p{N}_])", "iu").test(sentence);
 }
 
 /**

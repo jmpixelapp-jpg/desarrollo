@@ -691,7 +691,7 @@ La regresión parte de un documento de cinco caracteres sin ediciones y manipula
 
 ## 60. Generaciones para renovaciones y adquisiciones asíncronas
 
-Las rutas genéricas de adquisición/renovación pueden solaparse con checkpoints automáticos, cierres seguros y revalidaciones del heartbeat. Cada operación captura una generación al iniciarse; solo puede publicar su lease o su error mientras esa generación siga vigente y no haya comenzado una liberación.
+Las rutas genéricas de adquisición/renovación pueden solaparse con checkpoints automáticos, cierres seguros y revalidaciones del heartbeat. Cada operación captura la generación de ciclo de vida vigente e inicializa una si todavía no existe. Las renovaciones normales concurrentes comparten esa época; solo una pérdida o liberación incrementa la generación. Una operación puede publicar su lease o error únicamente si la época sigue vigente y no comenzó una liberación.
 
 Un cierre seguro incrementa la generación antes de liberar el registro. Cualquier renovación que devuelva después queda invalidada: no repuebla `liveMonitorLeases`, no reactiva el heartbeat y devuelve `undefined`. La regla también evita que un error tardío de una operación antigua sobrescriba el diagnóstico de una operación posterior.
 

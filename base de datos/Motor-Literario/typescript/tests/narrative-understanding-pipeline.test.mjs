@@ -365,3 +365,31 @@ test("el pipeline produce un estado de conocimiento por personaje con su interpr
   assert.equal(maraState.items[0].interpretations[0].priorInformationId,
     "prior:mara:bridge");
 });
+
+
+test("el pipeline conserva evaluaciones previas y actualiza la valoración del personaje", () => {
+  const priorInformationProvenance = [{
+    id:"prior:mara:bridge",projectId:"novel",
+    informationHolderEntityId:"mara",sourceEntityId:"elian",
+    channel:"reported-speech",status:"reported",
+    content:"el puente había caído",reviewStatus:"candidate",
+    evidence:{documentId:"chapter-1",revision:1,start:0,end:49,excerpt:"Elian le contó a Mara que el puente había caído."},
+    contentEvidence:{documentId:"chapter-1",revision:1,start:28,end:49,excerpt:"el puente había caído"}
+  }];
+  const priorKnowledgeEvolution = [{
+    id:"assessment:uncertain",projectId:"novel",evaluatorEntityId:"mara",
+    evaluation:"uncertain",content:"el puente había caído",
+    matchStatus:"no-prior-match",reviewStatus:"candidate",
+    evidence:{documentId:"chapter-2",revision:1,start:0,end:37,excerpt:"Mara dudó que el puente había caído."}
+  }];
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-3",revision:1,
+    text:"Mara refutó que el puente había caído.",
+    entities,priorInformationProvenance,priorKnowledgeEvolution,
+    orderedDocumentIds:["chapter-1","chapter-2","chapter-3"]
+  });
+  const mara = result.characterKnowledgeStates.find(state =>
+    state.characterEntityId === "mara");
+  assert.equal(mara.items[0].evaluations.length,2);
+  assert.equal(mara.items[0].currentAssessment,"refuted-by-character");
+});

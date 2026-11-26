@@ -96,6 +96,31 @@ test("no presenta al único personaje mencionado como agente gramatical", () => 
   assert.equal("actorEntityId" in found[0], false);
 });
 
+test("propone sujeto gramatical solo con patrón local explícito y distingue voz pasiva", () => {
+  const active = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana no abrió la puerta."
+  })[0];
+  assert.equal(active?.grammaticalSubjectCandidate?.entityId, character.id);
+  assert.equal(active?.grammaticalSubjectCandidate?.voice, "active");
+  assert.equal(active?.grammaticalSubjectCandidate?.evidence.excerpt, "Ana");
+
+  const passive = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana fue encontrada por el guardia."
+  })[0];
+  assert.equal(passive?.grammaticalSubjectCandidate?.entityId, character.id);
+  assert.equal(passive?.grammaticalSubjectCandidate?.voice, "passive");
+  assert.equal(passive?.singleMentionedCharacterId, character.id);
+  assert.equal("actorEntityId" in (passive ?? {}), false);
+});
+
+test("no atribuye sujeto cuando el personaje aparece después del verbo o como complemento", () => {
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text: "A Ana la encontró Bruno."
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0]?.grammaticalSubjectCandidate, undefined);
+});
+
 test("reconoce participios pasivos sin atribuir el papel de agente al personaje", () => {
   const found = discoverNarrativeObservationCandidates({
     ...context, text: "Ana fue encontrada por el guardia."

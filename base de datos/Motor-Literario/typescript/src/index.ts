@@ -24,3 +24,4 @@ export * from "./live-author-monitor-textarea-integration";
 export * from "./live-author-monitor-editor-transaction-source";
 export * from "./live-author-monitor-editor-transaction-integration";
 export * from "./live-author-monitor-editor-transaction-bridge";
+export * from "./narrative-sync-indexeddb-lock";

@@ -319,3 +319,12 @@ Se añadió `reconcileNarrativeDocumentProjections(store, projectId)`, una opera
 El diagnóstico no modifica datos ni intenta adivinar reparaciones. Esta separación evita que una rutina automática borre o restaure contenido editorialmente válido después de una caída. Las pruebas cubren un proyecto coherente, inventarios divergentes, tombstones con evidencia residual y documentos sin manifiesto, comprobando que el diagnóstico no muta las tablas.
 
 **Pendiente:** ejecutar `npm test` y `npm run typecheck` en el entorno del proyecto; no se ha observado CI en esta sesión.
+
+
+## Reparación CAS de inventarios activos
+
+Se incorporó `repairNarrativeDocumentProjectionManifest(store, projectId, documentId)`. Reconstruye los inventarios de entidades, relaciones, eventos, ideas y afirmaciones a partir de la evidencia actualmente persistida y publica el resultado con compare-and-swap de generación. No cambia los registros narrativos. Si no hay discrepancias, la operación es idempotente y no escribe.
+
+Por seguridad, rechaza manifiestos inexistentes y tombstones: no inventa revisiones fuente ni reactiva documentos retirados. Se añadieron pruebas para reparar inventarios divergentes, comprobar que las tablas narrativas permanecen intactas, verificar el reintento sin cambios y rechazar casos que requieren decisión editorial.
+
+**Pendiente de verificación en entorno Node 22+:** `npm run typecheck` y `npm test`.

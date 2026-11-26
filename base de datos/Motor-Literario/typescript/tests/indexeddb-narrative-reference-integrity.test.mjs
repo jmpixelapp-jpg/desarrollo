@@ -4,6 +4,7 @@ import { IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 const DATABASE_NAME = "motor-literario-local";
 const projectId = "indexeddb-narrative-reference-integrity";
+const foreignProjectId = "indexeddb-narrative-reference-integrity-foreign";
 
 const entity = {
   projectId,
@@ -20,9 +21,17 @@ const entity = {
 
 const targetEntity = {
   ...entity,
-  id: "entity-target",
+  id: "entity-missing",
   canonicalName: "Mateo",
   normalizedName: "mateo"
+};
+
+const foreignEntity = {
+  ...entity,
+  projectId: foreignProjectId,
+  id: "entity-missing",
+  canonicalName: "Elena de otro libro",
+  normalizedName: "elena de otro libro"
 };
 
 const relation = (extra = {}) => ({
@@ -79,12 +88,14 @@ test("IndexedDB valida referencias de relaciones, acontecimientos y afirmaciones
 
   try {
     await store.saveEntity(entity);
+    await store.saveEntity(foreignEntity);
 
     await assert.rejects(store.saveRelation(relation()), /Referencia narrativa inválida/);
     await assert.rejects(store.saveEvent(event()), /Referencia narrativa inválida/);
     await assert.rejects(store.saveAssertion(assertion()), /Referencia narrativa inválida/);
 
     assert.deepEqual(await store.loadEntities(projectId), [entity]);
+    assert.deepEqual(await store.loadEntities(foreignProjectId), [foreignEntity]);
     assert.deepEqual(await store.loadRelations(projectId), []);
     assert.deepEqual(await store.loadEvents(projectId), []);
     assert.deepEqual(await store.loadAssertions(projectId), []);

@@ -525,6 +525,8 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 **Incidencia detectada y corregida durante CI:** los primeros runs de la nueva corroboración fallaron en Type-check porque TypeScript no estrechaba los elementos obtenidos por índice dentro del bucle. Se añadió una guarda explícita para ambos elementos (`8989b47c`). También se endureció la validación para exigir que la evidencia específica de acción/objeto/participantes esté contenida literalmente en el contexto de origen (`6fdcae4a`), y se ajustaron los fixtures para representar offsets coherentes (`d6f97d0f`). La nueva revisión sigue pendiente de CI completa.
 
+**Incidencias detectadas por CI y correcciones aplicadas:** la primera ejecución reveló que la evidencia histórica de acontecimientos declarados conserva el rango del rótulo pero el excerpt de la línea completa. La integración de auditoría ahora construye el fragmento exacto desde los offsets originales antes de validar. También se sustituyó la segmentación regex por un recorrido determinista UTF-16 para manejar puntuación, CRLF y líneas sin puntuación, y se optimizó la cobertura con un barrido de evidencias ordenadas. Se añadieron pruebas para colas limitadas y omisiones contabilizadas. Los runs iniciales con fallos no se consideran validación; la revisión posterior sigue pendiente de CI completa.
+
 ### Auditoría exhaustiva de cobertura de extracción — 26-11-2026
 
 - Nuevo módulo `typescript/src/narrative-extraction-audit.ts` (`53cb115c`): localiza frases del texto fuente que no se solapan con evidencia de acciones o acontecimientos extraídos.

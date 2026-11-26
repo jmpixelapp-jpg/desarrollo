@@ -214,12 +214,28 @@ export interface NarrativeReferenceRepairAuditEntry {
   readonly appliedAt: number;
 }
 
+export interface NarrativeReferenceRepairPendingEntry {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly issueCode: string;
+  readonly recordType: "relation" | "event" | "assertion" | "idea";
+  readonly recordId: string;
+  readonly referenceField: "fromEntityId" | "toEntityId" | "participants" | "entityId" | "relatedEntityIds";
+  readonly missingReferenceId: string;
+  readonly replacementEntityId: string;
+  readonly appliedAt: number;
+}
+
 export interface ProjectStore {
   /** True solo si las mutaciones CAS del dominio y la outbox comparten transacción. */
   readonly supportsAtomicNarrativeSyncOutbox?: boolean;
   /** Auditoría append-only e idempotente de reparaciones narrativas. */
   appendNarrativeReferenceRepairAudit?(entry: NarrativeReferenceRepairAuditEntry): Promise<void>;
   loadNarrativeReferenceRepairAudits?(projectId: string): Promise<readonly NarrativeReferenceRepairAuditEntry[]>;
+  /** Intención durable escrita antes del CAS; se conserva hasta completar la auditoría. */
+  saveNarrativeReferenceRepairPending?(entry: NarrativeReferenceRepairPendingEntry): Promise<void>;
+  loadNarrativeReferenceRepairPending?(projectId: string): Promise<readonly NarrativeReferenceRepairPendingEntry[]>;
+  deleteNarrativeReferenceRepairPending?(projectId: string, operationId: string): Promise<void>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */
@@ -424,8 +440,7 @@ export interface ProjectStore {
   /** Compatibilidad explícita para actualizar una idea existente. */
   updateIdeaIfUnchanged?(
     idea: import("./narrative-knowledge").NarrativeIdea,
-    expectedCurrent: import("./narrative-knowledge").NarrativeIdea,
-    syncOperation?: SyncOperationDraft
+    expectedCurrent: import("./narrative-knowledge").NarrativeIdea
   ): Promise<void>;
   loadIdeas?(projectId: string): Promise<readonly import("./narrative-knowledge").NarrativeIdea[]>;
   /** Historial versionado de afirmaciones explícitas sobre entidades. */

@@ -1707,3 +1707,14 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Invariante:** el coalescing es por `documentId`; un evento de uno o varios tipos no puede multiplicar solicitudes ni fusionar la renovación de documentos distintos. El test espera a que terminen las colas de checkpoint iniciales y reinicia sus contadores de renovación antes de disparar los eventos, para medir exclusivamente las solicitudes de reanudación.
 
 **Validación CI dedicada:** [Live Author Monitor — run 45767262316](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45767262316), checkout `45b2b0f5233283ebe7cd3fea0116a32facb45c47`, terminó `success`. La regresión de coalescencia pasó como test 114; la reanudación A/B aprobó como test 113. Suites: diagnósticos 17/17, monitor aislado 167/167, Page Lifecycle Chromium 1/1 e integración host/editor/browser **183/183**. Benchmark 100.000 commits en **646,92 ms** (~154.579 commits/s), heap de 4,39 MiB a mitad y final, crecimiento medido 0 MiB, 0,50 MiB retenidos y cero tickets pendientes.
+
+
+## 112. Disposición segura de varios documentos en una misma instancia (26 de noviembre de 2026)
+
+**Objetivo:** verificar que el cierre completo de `HostEngineApi` persista y libere todos los documentos administrados, no solo el último capítulo abierto.
+
+**Regresión:** abrir cuatro capítulos, comprobar que cada uno tiene lease y heartbeat, admitir una edición en cada documento, esperar la durabilidad de todas las colas y ejecutar `disposeSafely()`. Cada checkpoint final debe reflejar la revisión/secuencia nuevas y el carácter insertado; cada registro de lease debe conservar owner/fencing token y quedar expirado por liberación. La instancia debe quedar dispuesta sin heartbeats, leases locales ni errores de checkpoint.
+
+**Importancia:** prueba el flujo global de cierre ordenado tras una sesión multi-documento y comprueba que no quedan recursos locales activos ni checkpoints sin confirmar.
+
+**Validación:** pendiente de GitHub Actions.

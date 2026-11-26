@@ -296,7 +296,7 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
       continue;
     }
     if (tag === "br") {
-      if (currentKind) current.push("\\n");
+      if (currentKind) current.push("\n");
       continue;
     }
     const role = (attrs.get("epub:type") ?? attrs.get("role") ?? "").toLowerCase();

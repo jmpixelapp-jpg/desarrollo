@@ -23,6 +23,8 @@ export interface NarrativeIdeaCrossDocumentRelation {
   readonly projectId: string;
   readonly relationType: "exact-recurrence" | "lexical-resonance";
   readonly reviewStatus: "candidate";
+  /** Señala cambios de modalidad sin elevarlos a contradicción objetiva. */
+  readonly polarityRelation: "consistent" | "changed";
   readonly first: NarrativeIdeaOccurrenceReference;
   readonly second: NarrativeIdeaOccurrenceReference;
   /** Solo indica si el proyecto suministró un orden documental inequívoco. */
@@ -253,6 +255,7 @@ export function analyzeNarrativeIdeaCrossDocumentRelations(
         projectId: input.projectId,
         relationType,
         reviewStatus: "candidate",
+        polarityRelation: firstCandidate.polarity === secondCandidate.polarity ? "consistent" : "changed",
         first: occurrence(firstCandidate),
         second: occurrence(secondCandidate),
         chronology: chronologyKnown ? "ordered" : "unknown",

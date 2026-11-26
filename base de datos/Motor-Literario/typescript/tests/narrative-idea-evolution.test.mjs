@@ -192,3 +192,53 @@ test("integra evolución transversal en el pipeline sin modificar candidatos pre
   assert.equal(previous.documentId, "chapter-1");
   assert.equal(previous.revision, 1);
 });
+
+
+test("rechaza una recurrencia declarada exacta cuando los textos normalizados difieren", () => {
+  const analysis = sourceAnalysis([
+    idea("one", "chapter-1", "la memoria de la ciudad"),
+    idea("two", "chapter-2", "la memoria de la ciudad")
+  ], ["chapter-1", "chapter-2"]);
+  const relation = analysis.relations[0];
+  const changedText = "el destino de la ciudad";
+  const changedExcerpt = "La idea expresada es " + changedText + ".";
+  const changedStart = 10 + changedExcerpt.indexOf(changedText);
+
+  assert.throws(() => buildNarrativeIdeaEvolution({
+    projectId: "book-1",
+    crossDocumentAnalysis: {
+      ...analysis,
+      relations: [{
+        ...relation,
+        second: {
+          ...relation.second,
+          text: changedText,
+          evidence: {
+            ...relation.second.evidence,
+            start: changedStart,
+            end: changedStart + changedText.length,
+            excerpt: changedExcerpt
+          }
+        }
+      }]
+    }
+  }));
+});
+
+test("rechaza la modalidad declarada cuando no coincide con las dos apariciones", () => {
+  const analysis = sourceAnalysis([
+    idea("one", "chapter-1", "la memoria de la ciudad", { polarity: "affirmed" }),
+    idea("two", "chapter-2", "la memoria de la ciudad", { polarity: "negated" })
+  ], ["chapter-1", "chapter-2"]);
+
+  assert.throws(() => buildNarrativeIdeaEvolution({
+    projectId: "book-1",
+    crossDocumentAnalysis: {
+      ...analysis,
+      relations: [{
+        ...analysis.relations[0],
+        polarityRelation: "consistent"
+      }]
+    }
+  }));
+});

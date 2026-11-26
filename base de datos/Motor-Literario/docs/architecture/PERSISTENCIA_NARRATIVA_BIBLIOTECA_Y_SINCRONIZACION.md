@@ -1,6 +1,6 @@
 # Persistencia narrativa, biblioteca de ideas y sincronización
 
-**Versión documental:** 1.4  
+**Versión documental:** 1.5  
 **Revisión de código de referencia:** `main` en `f99278768abb4fd0ad2fbb01dcc4bf4c49f1ed1f`  
 **Ámbito:** núcleo `base de datos/Motor-Literario/typescript`  
 **Lenguaje de implementación:** TypeScript/JavaScript puro  
@@ -104,7 +104,7 @@ En la revisión base `main` usada para iniciar esta línea:
 - esquema lógico MLDB: **0.4.2**;
 - mapa físico: **mapping_version 14**.
 
-**Migración incorporada en esta rama:** IndexedDB **25**, mapa físico **mapping_version 15** y nuevo almacén `sync-outbox`. El esquema lógico MLDB permanece en 0.4.2 porque la outbox es infraestructura interna de transporte, no una tabla narrativa exportable.
+**Migración incorporada en esta rama:** IndexedDB **25**, mapa físico **mapping_version 15** y los almacenes internos `sync-outbox` y `sync-device-sequences`. El esquema lógico MLDB permanece en 0.4.2 porque la outbox es infraestructura interna de transporte, no una tabla narrativa exportable.
 
 La versión real se obtiene del código y del mapa físico, no de una suposición. Cualquier migración debe incrementar la versión de IndexedDB y actualizar en el mismo cambio el mapa físico, los validadores y las pruebas.
 
@@ -182,19 +182,46 @@ El tiempo de reloj del dispositivo no debe usarse como único criterio de orden 
 
 ### 7.2 Almacén local de salida
 
-Nombre propuesto: `sync-outbox`.
+La migración v25 crea dos almacenes internos:
 
-- clave primaria: `operationId`;
-- índice de pendientes: `[projectId, createdAt]`;
-- índice de secuencia: `[projectId, deviceId, sequence]`, único;
-- lecturas paginadas y orden estable;
-- conservar la operación hasta un acuse remoto durable;
-- una repetición del mismo ID y mismo contenido es idempotente;
-- el mismo ID con contenido distinto es un error de integridad.
+- `sync-outbox`, clave primaria `operationId`;
+- `sync-device-sequences`, clave compuesta `[projectId, deviceId]`, que conserva `lastSequence` aun después de retirar operaciones confirmadas.
 
-La escritura del cambio de dominio y la inserción de su operación outbox deben ser atómicas. Si no pueden escribirse en la misma transacción, no se debe anunciar garantía de sincronización sin pérdida. La bandeja no debe poblarse de forma eventual después de confirmar la mutación: un cierre entre ambos pasos perdería el cambio remoto.
+Índices de `sync-outbox`:
 
-**Implementación local de esta rama:** el almacén `sync-outbox` ya se crea en la migración v25, con clave `operationId`, índice de proyecto/fecha e índice único de proyecto/dispositivo/secuencia. El adaptador implementa lectura del cursor, encolado idempotente con secuencia estrictamente creciente en la misma transacción, lectura paginada sin borrar, registro de intentos y retirada por acuse explícito. La implementación todavía no integra automáticamente las escrituras de documentos/fichas/ideas con la outbox, por lo que aún no garantiza sincronización de todas las mutaciones.
+- `by-project-created-at`: `[projectId, createdAt]`, para lectura paginada y ordenada;
+- `by-project-device-sequence`: `[projectId, deviceId, sequence]`, único entre operaciones pendientes.
+
+La escritura de una operación en `sync-outbox` y el avance de `lastSequence` se realizan en la misma transacción IndexedDB. La secuencia debe ser exactamente la siguiente a la última guardada. Así se evita reutilizar secuencias después del acuse y no se consume una secuencia si la inserción aborta. Si dos pestañas leen el mismo cursor, solo una podrá encolar esa secuencia; la otra debe volver a leer el cursor y reintentar.
+
+**Métodos disponibles en `IndexedDbProjectStore`:**
+
+1. `loadLastSyncOperationSequence(projectId, deviceId)`: devuelve el cursor durable o cero.
+2. `enqueueSyncOperation(operation)`: valida e inserta idempotentemente y avanza la secuencia de forma atómica.
+3. `loadPendingSyncOperations(projectId, limit)`: lee pendientes paginadas sin borrarlas.
+4. `recordSyncOperationAttempt(operationId, attemptedAt, error?)`: registra contador, fecha y último error.
+5. `acknowledgeSyncOperation(operationId)`: retira la operación después del acuse remoto durable; el cursor de secuencia se conserva.
+
+Ejemplo de uso local (no realiza transporte de red):
+
+```ts
+const lastSequence = await store.loadLastSyncOperationSequence(projectId, deviceId);
+await store.enqueueSyncOperation({
+  operationId: crypto.randomUUID(),
+  projectId,
+  deviceId,
+  sequence: lastSequence + 1,
+  kind: "narrative.record.updated",
+  payload: JSON.stringify({ recordId, expectedRevision, nextRevision }),
+  createdAt: Date.now(),
+  attemptCount: 0
+});
+const pending = await store.loadPendingSyncOperations(projectId, 50);
+```
+
+Tras un error temporal, el anfitrión registra `recordSyncOperationAttempt(operationId, Date.now(), errorCode)`. Solo cuando el servidor confirma que la operación quedó almacenada durablemente debe llamarse a `acknowledgeSyncOperation(operationId)`. No se guardan tokens ni credenciales dentro del payload.
+
+La outbox es infraestructura local: todavía no integra automáticamente todas las mutaciones de documentos, fichas, relaciones e ideas. Por ello aún no garantiza sincronización completa ni pérdida cero de todas las escrituras del dominio. La escritura de dominio y su operación outbox deberán incorporarse en una misma transacción para obtener esa garantía.
 
 ### 7.3 Cobertura de mutaciones
 

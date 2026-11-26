@@ -116,7 +116,7 @@ export function discoverNarrativeActionStateLinks(
   for (const action of actions) {
     for (const state of states) {
       // La mención en la misma oración no basta: debe existir un rol local
-      // explícito del personaje en la acción (sujeto candidato o destinatario).
+      // explícito del personaje en la acción (sujeto, objeto personal, agente pasivo o destinatario).
       const subjectMatch = action.grammaticalSubjectCandidate?.entityId === state.entityId;
       const personalObjectMatch = action.personalObjectCandidate?.entityId === state.entityId;
       const passiveAgentMatch = action.passiveAgentCandidate?.entityId === state.entityId;

@@ -154,3 +154,16 @@ Se amplía el detector para reconocer las formas explícitas `él mismo` y `ella
 También se corrige el orden de validación del pipeline: las entidades se validan antes de recorrerlas para comprobar menciones. Así, una colección malformada produce un error controlado en vez de una excepción accidental por acceso a una propiedad.
 
 Se agregan pruebas de integración para `Ella misma protegió` y para colecciones de entidades nulas.
+
+
+### Fase K: completar acciones pronominales con objetivos expresos
+
+Se incorpora `typescript/src/narrative-pronoun-target-link.ts`. Cuando el sujeto ya fue resuelto de forma inequívoca, el módulo busca un objetivo personaje escrito inmediatamente después del verbo y dentro de la misma cláusula.
+
+- Produce una acción actor-verbo-objetivo compatible con el extractor de interacciones.
+- Solo acepta objetivos de personaje con nombre canónico o alias no ambiguo.
+- No completa objetos omitidos, no elige entre objetivos ambiguos y no convierte objetos no personales en relaciones entre personajes.
+- Conserva polaridad, documento, revisión y evidencia textual.
+- El pipeline integra estas acciones con las interacciones y los candidatos de cambio de señal.
+
+Se agregan pruebas para el recorrido «Mara llegó. Ella protegió a Elian. Después, Ella traicionó a Elian», y para comprobar que «Ella protegió» no genera un objetivo inventado.

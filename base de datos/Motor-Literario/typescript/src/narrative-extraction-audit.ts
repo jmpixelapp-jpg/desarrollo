@@ -59,7 +59,7 @@ function sentenceSpans(text: string): readonly Span[] {
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index]!;
     if (character !== "." && character !== "!" && character !== "?" &&
-        character !== "\\n" && character !== "\\r") continue;
+        character !== "\n" && character !== "\r") continue;
     if (character === "." || character === "!" || character === "?") {
       let end = index + 1;
       while (end < text.length && /[.!?]/u.test(text[end]!)) end += 1;

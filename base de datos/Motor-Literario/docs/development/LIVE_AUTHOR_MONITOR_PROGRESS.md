@@ -1661,6 +1661,8 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Validación CI dedicada:** [Live Author Monitor — run 45766548438](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766548438), checkout `7f9466d4343132d996c32ce1c2a722b5403e6d41`, terminó `success`. El test de leases A/B independientes aprobó como test 126; el cierre de A sin detener B aprobó como test 100. La suite host/editor/browser fue 181/181, monitor aislado 167/167, diagnósticos 17/17, Page Lifecycle Chromium 1/1. Benchmark 100.000 commits en 494,16 ms (~202.365 commits/s), heap de 4,39 MiB estable entre mitad y final y cero tickets pendientes.
 
 
+
+**Evidencia en Chromium real:** [run 45766901884](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766901884) aprobó dos páginas y dos documentos en IndexedDB real; la página superviviente tomó A, preservó el lease/checkpoint B y ambos snapshots sobrevivieron a reload. Integración host/editor/browser 182/182.
 ## 108. Aislamiento de ciclo de vida al cerrar uno entre varios documentos (26 de noviembre de 2026)
 
 **Objetivo:** validar en `HostEngineApi` que cada documento mantiene su propio ciclo de vida de lease, heartbeat y checkpoint, incluso cuando varios documentos del mismo proyecto permanecen abiertos en una misma instancia.
@@ -1691,4 +1693,4 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Alcance real:** Playwright Chromium, dos páginas en el mismo contexto/origen, IndexedDB real del navegador, cierre abrupto de una página y recarga real de la página superviviente. No simula todavía un cierre de proceso completo del perfil ni dos dispositivos físicos.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [Live Author Monitor — run 45766901884](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766901884), checkout `cfcd63966dbddd636ecd2973e609b648d0b6f890`, terminó `success`. La prueba de dos páginas Chromium con dos documentos pasó; la suite host/editor/browser completó **182/182**, monitor aislado 167/167, diagnósticos 17/17 y Page Lifecycle Chromium 1/1. El benchmark procesó 100.000 commits en **495,01 ms** (~202.015 commits/s), heap estable en 4,39 MiB entre mitad y final, 0,50 MiB retenidos y cero tickets pendientes.

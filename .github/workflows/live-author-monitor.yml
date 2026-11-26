@@ -45,6 +45,8 @@ jobs:
           node-version: 22
       - name: Install development tools
         run: npm install --no-audit --no-fund
+      - name: Install Chromium for cross-tab browser tests
+        run: npx playwright install --with-deps chromium
       - name: Validate MLDB schema and physical storage mapping
         run: npm run validate:schema
       - name: Build runtime bundle

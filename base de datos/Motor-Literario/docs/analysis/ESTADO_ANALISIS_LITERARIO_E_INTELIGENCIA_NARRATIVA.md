@@ -523,3 +523,13 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Privacidad: la función está desactivada por defecto porque el payload incluye texto editado; habilitarla implica autorizar el envío de esos deltas mediante el transporte del anfitrión.
 - Límite: atomicidad local IndexedDB únicamente. No hay confirmación remota exactamente-una-vez; el servidor debe deduplicar por `operationId`.
 - **Validación pendiente:** typecheck y suite todavía no ejecutados; CI sin resultados confirmados.
+
+
+### Endurecimiento del contrato de captura atómica
+
+- Se hizo explícita la capacidad opcional `ProjectStore.appendChangeAndEnqueueSyncOperation(change, syncDraft)`, separada de `appendChange` para que un adaptador antiguo que ignore argumentos adicionales no pueda aparentar sincronización atómica.
+- El motor exige esa capacidad cuando `syncDeviceId` está configurado. Si falta el journal durable o el método atómico, rechaza el commit en vez de guardar silenciosamente solo el snapshot.
+- `IndexedDbProjectStore` implementa la capacidad usando una transacción `readwrite` que incluye los tres stores `documents`, `changes` y `sync-outbox`.
+- Se corrigió y verificó por inspección el alcance de la transacción: el store de outbox forma parte de la misma transacción antes de leer/asignar secuencia e insertar la operación.
+- La prueba de colisión deliberada de `operationId` verifica que el delta del journal no queda persistido cuando falla la outbox.
+- **No se ha ejecutado aún** `npm test` ni `npm run typecheck`; no se declara validación de runtime.

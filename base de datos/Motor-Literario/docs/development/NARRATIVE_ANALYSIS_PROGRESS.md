@@ -472,3 +472,14 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - Documenta que la continuidad se evalúa sobre el historial conservado desde la secuencia 1 y que SHA-256 no equivale a autenticación.
 
 **Validación pendiente:** `npm run typecheck` y `npm test` no se han ejecutado en este entorno. Revisar los resultados de CI del HEAD antes de considerar esta tanda validada.
+
+
+## Barrera de integridad para sincronización entrante
+
+- El consumidor protegido recupera primero las reparaciones durables.
+- Si no hay conflictos de reparación, audita el diario completo del proyecto antes de cualquier replay.
+- Ante corrupción de digest, metadatos inválidos o secuencias inconsistentes, devuelve `blockedByJournalIntegrity` y no despacha operaciones.
+- La prueba de regresión altera deliberadamente el digest persistido, verifica que el replay queda bloqueado y confirma que la operación sigue pendiente.
+- Se amplió el resultado del consumidor con `journalIntegrity` y `blockedByJournalIntegrity` para que el anfitrión pueda mostrar un diagnóstico concreto.
+
+**Validación pendiente:** `npm run typecheck` y `npm test` aún no se han ejecutado en este entorno.

@@ -230,11 +230,16 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
   private readonly handleVisibilityChange = (): void => {
     if (this.disposed || this.needsResync || this.element.ownerDocument?.hidden !== true) return;
-    if (!this.pendingInput && !this.compositionActive) return;
-    this.fail(
-      this.pendingInput ? "missing-input" : "resync-required",
-      "El documento quedó oculto durante una edición o composición incompleta; se requiere un snapshot autoritativo."
-    );
+    if (this.compositionActive) {
+      this.fail(
+        "resync-required",
+        "El documento quedó oculto durante una composición activa; se requiere un snapshot autoritativo."
+      );
+      return;
+    }
+    // Un input de textarea puede estar pendiente en la cola de tareas incluso
+    // después de ocultar la pestaña. Mantener el par permite consumirlo si llega;
+    // pagehide/freeze siguen siendo las señales fuertes de discontinuidad.
   };
 
   private readonly handleInput = (event: Event): void => {

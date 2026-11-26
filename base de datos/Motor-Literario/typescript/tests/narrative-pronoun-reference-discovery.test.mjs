@@ -173,3 +173,22 @@ test("escapa signos especiales en nombres y alias", () => {
   assert.equal(reference.antecedentCandidates[0].antecedentEvidence.excerpt,
     "Ana (la viajera)");
 });
+
+test("expone distancia oracional y de párrafo sin confundirlas con certeza de correferencia", () => {
+  const text = "Ana llegó.\n\nLa lluvia comenzó.\n\nElla cerró la puerta.";
+  const [reference] = discover(text, { entities: [ana] });
+  const [candidate] = reference.antecedentCandidates;
+  assert.equal(candidate.sentenceDistance, 4);
+  assert.equal(candidate.paragraphDistance, 2);
+  assert.equal(reference.status, "single-candidate");
+  assert.equal(reference.reviewStatus, "candidate");
+});
+
+test("mantiene alternativas y mide sus contextos por separado", () => {
+  const text = "Ana llegó.\n\nBruno esperó. Ella abrió la puerta.";
+  const [reference] = discover(text, { entities: [ana, bruno] });
+  assert.equal(reference.status, "ambiguous");
+  assert.equal(reference.antecedentCandidates[0].entityId, bruno.id);
+  assert.equal(reference.antecedentCandidates[0].paragraphDistance, 0);
+  assert.equal(reference.antecedentCandidates[1].paragraphDistance, 1);
+});

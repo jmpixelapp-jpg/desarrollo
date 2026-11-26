@@ -113,6 +113,24 @@ test("no propone transición si faltan objeto o participante activo", () => {
   assert.deepEqual(transitions, []);
 });
 
+test("rechaza offsets de evidencia que no corresponden a su fragmento UTF-16", () => {
+  const [observation] = observe("Ana perdió la Espada Solar.");
+  assert.throws(() => discoverNarrativeObjectTransitionCandidates({
+    projectId: context.projectId, documentId: context.documentId,
+    revision: context.revision,
+    observations: [{
+      ...observation,
+      grammaticalObjectCandidate: {
+        ...observation.grammaticalObjectCandidate,
+        evidence: {
+          ...observation.grammaticalObjectCandidate.evidence,
+          end: observation.grammaticalObjectCandidate.evidence.end + 1
+        }
+      }
+    }]
+  }));
+});
+
 test("rechaza observaciones de otra revisión o con evidencia obsoleta", () => {
   const [observation] = observe("Ana perdió la Espada Solar.");
   assert.throws(() => discoverNarrativeObjectTransitionCandidates({

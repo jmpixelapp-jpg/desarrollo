@@ -108,7 +108,7 @@ export function understandNarrativeFragment(
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,
-    revision: input.revision, text: input.text, events
+    revision: input.revision, text: input.text, events, baseOffset
   });
   const scenes = segmentNarrativeScenes({
     projectId: input.projectId, documentId: input.documentId,

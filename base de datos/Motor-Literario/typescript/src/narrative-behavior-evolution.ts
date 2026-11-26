@@ -150,7 +150,9 @@ function validate(input: NarrativeBehaviorEvolutionInput): void {
   for (const link of input.knowledgeActionLinks ?? []) {
     if (!link || link.projectId !== input.projectId ||
         typeof link.id !== "string" || !link.id.trim() || knowledgeIds.has(link.id) ||
-        !actionIds.has(link.actionId) || !entities.has(link.characterEntityId) ||
+        !actionIds.has(link.actionId) || entities.get(link.characterEntityId)?.kind !== "character" ||
+        link.relation !== "knowledge-precedes-action" ||
+        !["same-document-position", "explicit-document-order"].includes(link.chronology) ||
         !validEvidence(link.knowledgeEvidence) || !validEvidence(link.actionEvidence)) {
       throw new Error("Los enlaces de conocimiento deben referir acciones válidas del proyecto.");
     }
@@ -164,7 +166,10 @@ function validate(input: NarrativeBehaviorEvolutionInput): void {
   for (const context of input.decisionContexts ?? []) {
     if (!context || context.projectId !== input.projectId ||
         typeof context.id !== "string" || !context.id.trim() || contextIds.has(context.id) ||
-        !actionIds.has(context.actionId) || !validEvidence(context.knowledgeEvidence) ||
+        !actionIds.has(context.actionId) ||
+        entities.get(context.characterEntityId)?.kind !== "character" ||
+        !["supports-intent", "opposes-intent", "conditional-intent", "other-or-undetermined"].includes(context.alignment) ||
+        !validEvidence(context.knowledgeEvidence) ||
         !validEvidence(context.intentEvidence) || !validEvidence(context.actionEvidence)) {
       throw new Error("El contexto de decisión debe referir una acción válida del proyecto.");
     }
@@ -179,8 +184,12 @@ function validate(input: NarrativeBehaviorEvolutionInput): void {
     if (!link || link.projectId !== input.projectId ||
         typeof link.id !== "string" || !link.id.trim() || memoryLinkIds.has(link.id) ||
         !link.actionId || !actionIds.has(link.actionId) ||
-        !entities.has(link.characterEntityId) || !Array.isArray(link.memoryEventIds) ||
-        !Array.isArray(link.memoryEvidence) || !link.memoryEvidence.every(validEvidence) ||
+        entities.get(link.characterEntityId)?.kind !== "character" ||
+        !Array.isArray(link.memoryEventIds) || link.memoryEventIds.length === 0 ||
+        link.memoryEventIds.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(link.memoryEventIds).size !== link.memoryEventIds.length ||
+        !Array.isArray(link.memoryEvidence) || link.memoryEvidence.length !== link.memoryEventIds.length ||
+        !link.memoryEvidence.every(validEvidence) ||
         !validEvidence(link.actionEvidence!) ||
         !["explicit-causal-link", "temporal-cooccurrence", "unresolved"].includes(link.relation) ||
         (link.connectorEvidence !== undefined && !validEvidence(link.connectorEvidence))) {
@@ -197,7 +206,10 @@ function validate(input: NarrativeBehaviorEvolutionInput): void {
     if (!evolution || evolution.projectId !== input.projectId ||
         typeof evolution.id !== "string" || !evolution.id.trim() || evolutionIds.has(evolution.id) ||
         typeof evolution.currentIntentId !== "string" || !evolution.currentIntentId.trim() ||
-        !entities.has(evolution.characterEntityId) ||
+        entities.get(evolution.characterEntityId)?.kind !== "character" ||
+        !validEvidence(evolution.currentEvidence) ||
+        !Array.isArray(evolution.priorEvidence) || !evolution.priorEvidence.every(validEvidence) ||
+        (evolution.transitionEvidence !== undefined && !validEvidence(evolution.transitionEvidence)) ||
         !["maintained", "withdrawn", "replaced", "conditional", "coexisting",
           "ambiguous-predecessor", "chronology-unresolved"].includes(evolution.transition)) {
       throw new Error("La evolución de intenciones debe pertenecer al proyecto y tener IDs únicos.");
@@ -223,7 +235,6 @@ export function detectNarrativeBehaviorEvolution(
     group.push(action);
     groups.set(key, group);
   }
-  const documentOrder = new Map((input.orderedDocumentIds ?? []).map((id, index) => [id, index]));
   const output: NarrativeBehaviorShiftCandidate[] = [];
   const addShift = (previous: NarrativeActionCandidate, current: NarrativeActionCandidate,
                     chronology: NarrativeBehaviorShiftCandidate["chronology"]) => {

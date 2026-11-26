@@ -408,6 +408,26 @@ test("no propone complemento personal si el personaje solo se menciona antes del
   assert.equal(found[0].grammaticalSubjectCandidate?.voice, "active");
 });
 
+test("detecta una acción completa en un fragmento sin punto final mientras se escribe", () => {
+  const text = "Ana corrió";
+  const baseOffset = 120;
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text, baseOffset
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].action, "correr");
+  assert.equal(found[0].actionEvidence.excerpt, "corrió");
+  assert.equal(found[0].actionEvidence.start, baseOffset + text.indexOf("corrió"));
+  assert.equal(found[0].actionEvidence.end, baseOffset + text.length);
+  assert.equal(found[0].reviewStatus, "candidate");
+});
+
+test("no anticipa una acción cuando el autor todavía está escribiendo el verbo", () => {
+  const text = "Ana corri";
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  assert.equal(found.length, 0);
+});
+
 test("no confunde un nombre propio más largo con el prefijo de un personaje conocido", () => {
   const bruno = {
     ...character, id: "character:bruno", canonicalName: "Bruno",

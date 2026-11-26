@@ -634,3 +634,6 @@ Se amplió `EpubBookReader.inspect()` para leer tablas de contenidos EPUB 3 `nav
 Se corrigieron saltos XHTML `br`, elementos XML con prefijo, validación de flags ZIP y límites para impedir que datos de entradas se solapen con el directorio central. También se valida la consistencia de entradas del directorio ZIP entre volúmenes.
 
 La capa de resolución de evidencias se incorporó como módulo independiente, con tests que verifican citas de varios bloques y offsets locales. El análisis ya dispone de una ruta técnica para volver a los pasajes de origen; aún falta integrar esta referencia en las respuestas/consultas de entidades, ideas, relaciones y acontecimientos.
+
+
+La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto del documento anfitrión. `resolveNarrativeTextEvidence()` exige que esa revisión coincida con la evidencia persistida, además de comprobar que la cita coincide carácter por carácter con el rango. Rechaza snapshots sin versión, revisiones distintas, citas modificadas y evidencias marcadas como obsoletas. Esta verificación evita enlazar accidentalmente una evidencia histórica a una edición actual que contenga texto parecido.

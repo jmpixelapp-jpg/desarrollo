@@ -3915,6 +3915,15 @@ function buildLiteraryIdeaGraph(
     return {
     ideaId: idea.ideaId,
     status: idea.status,
+    // Valores iniciales internos: las fases posteriores calculan y reemplazan
+    // cada métrica antes de que el grafo se publique.
+    cycleMembership: "acyclic-within-snapshot" as const,
+    cycleComponentSize: 0,
+    articulationPointStatus: "not-articulation-within-snapshot" as const,
+    undirectedReferenceDegree: 0,
+    weakComponentPiecesAfterRemoval: 0,
+    minimumDirectedHopsToTerminal: null,
+    terminalReachabilityStatus: "no-terminal-reachable-within-snapshot" as const,
     directReferenceStatusCounts,
     directReferenceStatusAlignment,
     incomingReferenceCount: incoming[index]!,
@@ -4993,16 +5002,16 @@ function buildCharacterNarrativeTrajectories(
             : omittedProjectEventCount > 0
               ? "unknown-due-to-incomplete-catalog" as const
               : "no-later-event-in-snapshot" as const;
-      const relatedIdeaStateProfiles = idea.relatedIdeaIds
-        .map(ideaId => {
+      const relatedIdeaStateProfiles: LiteraryCharacterRelatedIdeaState[] = idea.relatedIdeaIds
+        .flatMap(ideaId => {
           const relatedIdea = knownIdeaById.get(ideaId);
-          return relatedIdea ? {
+          if (!relatedIdea) return [];
+          return [{
             ideaId,
             status:relatedIdea.status,
             resolution:"included-in-analysis-snapshot" as const
-          } : null;
+          }];
         })
-        .filter((profile): profile is LiteraryCharacterRelatedIdeaState => profile !== null)
         .sort((left,right) => left.ideaId.localeCompare(right.ideaId,"en"));
       const relatedIdeaStatuses = new Set(relatedIdeaStateProfiles.map(profile => profile.status));
       const relatedIdeaStateDivergenceCount = Math.max(0,relatedIdeaStatuses.size-1);
@@ -5101,7 +5110,11 @@ function buildCharacterNarrativeTrajectories(
       decisionsByCharacter.set(entityId,decisions);
     }
   }
-  const relationsByCharacter = new Map<string,LiteraryCharacterCausalRelation[]>();
+  // La consistencia temporal se calcula al materializar la trayectoria,
+  // cuando ya están disponibles ambos acontecimientos del proyecto.
+  const relationsByCharacter = new Map<
+    string, Array<Omit<LiteraryCharacterCausalRelation,"temporalConsistency">>
+  >();
   for (const candidate of dependencies.candidates) {
     const firstParticipants = new Set(candidate.firstEventParticipantIds);
     const secondParticipants = new Set(candidate.secondEventParticipantIds);

@@ -118,3 +118,37 @@ Ejecución real del workflow **Motor Literario TypeScript** sobre el commit `0c9
 Ejecución: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45732604278
 
 **Lectura del resultado:** el chequeo de tipos está verde y el adaptador IndexedDB dispone ahora de pruebas de transacción activas en CI. El producto aún no supera la validación integral: los 18 fallos restantes incluyen contratos de integridad de ideas, expectativas de sincronización CAS, límites del catálogo y varios escenarios del análisis de grafos/cronología. No se deben ocultar ni rebajar estos fallos para conseguir un verde artificial. La siguiente fase debe resolverlos por grupos, empezando por reproducir y clasificar cada fallo contra el contrato vigente.
+
+### Correcciones guiadas por CI y validación integral aprobada
+
+La ejecución integral del workflow **Motor Literario TypeScript** sobre el commit `8855c23ed7d56c7041785150355835d38d42dc83` terminó correctamente:
+
+- `npm run typecheck`: aprobado.
+- Compilación, validación de esquemas y `npm test`: aprobados.
+- Resultado de Node Test Runner: **713 pruebas, 704 aprobadas, 0 fallidas y 9 omitidas**.
+- `npm run bench`: aprobado.
+- Ejecución CI: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734599092
+
+Correcciones incorporadas durante la depuración:
+
+1. La API descarta cachés parciales de ideas y entidades cuando falla la validación de referencias, permitiendo que la siguiente consulta vuelva a leer el almacenamiento durable.
+2. El analizador admite catálogos globales de hasta **12.000 ideas** y hasta **2.000 encabezados/escenas explícitas** por fragmento.
+3. La detección de conectores causales utiliza límites Unicode de letras y marcas, evitando que conectores acentuados como `provocó`, `causó` y `desencadenó` queden fuera por el comportamiento ASCII de `\\b`.
+4. Las métricas de convergencia a dos saltos conservan la distinción entre retornos cíclicos, destinos compartidos y ramas exclusivas.
+5. Las pruebas transaccionales de ideas usan `fake-indexeddb` y ya no dependen de que el runtime exponga IndexedDB nativo.
+6. Las expectativas de sincronización y de catálogos históricos se ajustaron a los contratos actuales: revalidación de referencias, historiales importados parciales y contadores explícitamente inválidos.
+
+#### Resultados del benchmark de edición en vivo
+
+Métricas observadas en la ejecución de CI; son mediciones de ese runner y no garantías universales:
+
+| Tamaño del documento | Ediciones | P95 commit | P95 extremo a extremo | Delta de heap |
+|---:|---:|---:|---:|---:|
+| 10.000 palabras | 40 | 5,06 ms | 5,49 ms | +0,75 MB |
+| 100.000 palabras | 40 | 2,21 ms | 2,63 ms | +1,83 MB |
+| 500.000 palabras | 40 | 3,54 ms | 4,04 ms | +3,61 MB |
+| 20.000 palabras, una sola línea | 5 | 61,59 ms | 61,80 ms | -9,65 MB |
+
+Escenario concurrente: 4 documentos, 10 ediciones por documento, 40 ediciones totales; P95 extremo a extremo de 1,21 ms y máximo de 4 documentos activos.
+
+**Estado de esta fase:** las comprobaciones automatizadas configuradas en el workflow pasan en el commit citado. Las 9 pruebas omitidas siguen contabilizadas como omitidas, no como aprobadas.

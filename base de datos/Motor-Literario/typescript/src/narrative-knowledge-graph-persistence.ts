@@ -206,13 +206,13 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
   const incomingEntities = new Map(graph.entities.map(item => [item.id, item]));
   for (const current of existingEntities) {
     const incoming = incomingEntities.get(current.id);
+    incomingEntities.delete(current.id);
     const base = documentIds.reduce((record, documentId) => withoutDocumentEvidence(record, documentId), current);
     const next = incoming ? mergeNarrativeEntity(base, incoming) : base;
     if (JSON.stringify(current) === JSON.stringify(next)) { reused.entities++; continue; }
     await store.saveEntityIfUnchanged!(next, current);
     entityMap.set(next.id, next);
     saved.entities++;
-    incomingEntities.delete(current.id);
   }
   for (const incoming of incomingEntities.values()) {
     await store.saveEntityIfUnchanged!(incoming);
@@ -225,13 +225,13 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
   const incomingRelations = new Map(graph.relations.map(item => [item.id, item]));
   for (const current of existingRelations) {
     const incoming = incomingRelations.get(current.id);
+    incomingRelations.delete(current.id);
     const base = documentIds.reduce((record, documentId) => withoutDocumentEvidence(record, documentId), current);
     const next = incoming ? mergeNarrativeRelation(base, incoming) : base;
     if (JSON.stringify(current) === JSON.stringify(next)) { reused.relations++; continue; }
     await store.saveRelationIfUnchanged!(next, current);
     relationMap.set(next.id, next);
     saved.relations++;
-    incomingRelations.delete(current.id);
   }
   for (const incoming of incomingRelations.values()) {
     await store.saveRelationIfUnchanged!(incoming);
@@ -244,13 +244,13 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
   const incomingEvents = new Map(graph.events.map(item => [item.id, item]));
   for (const current of existingEvents) {
     const incoming = incomingEvents.get(current.id);
+    incomingEvents.delete(current.id);
     const base = documentIds.reduce((record, documentId) => withoutDocumentEvidence(record, documentId), current);
     const next = incoming ? mergeNarrativeEvent(base, incoming) : base;
     if (JSON.stringify(current) === JSON.stringify(next)) { reused.events++; continue; }
     await store.saveEventIfUnchanged!(next, current);
     eventMap.set(next.id, next);
     saved.events++;
-    incomingEvents.delete(current.id);
   }
   for (const incoming of incomingEvents.values()) {
     await store.saveEventIfUnchanged!(incoming);
@@ -263,13 +263,13 @@ export async function persistNarrativeKnowledgeGraphSnapshot(
   const incomingIdeas = new Map(graph.ideas.map(item => [item.id, item]));
   for (const current of existingIdeas) {
     const incoming = incomingIdeas.get(current.id);
+    incomingIdeas.delete(current.id);
     const base = documentIds.reduce((record, documentId) => withoutDocumentEvidence(record, documentId), current);
     const next = incoming ? mergeNarrativeIdea(base, incoming) : base;
     if (JSON.stringify(current) === JSON.stringify(next)) { reused.ideas++; continue; }
     await store.saveIdeaIfUnchanged!(next, current);
     ideaMap.set(next.id, next);
     saved.ideas++;
-    incomingIdeas.delete(current.id);
   }
   for (const incoming of incomingIdeas.values()) {
     await store.saveIdeaIfUnchanged!(incoming);

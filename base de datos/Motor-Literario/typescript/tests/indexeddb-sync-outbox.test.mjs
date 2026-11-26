@@ -363,3 +363,62 @@ test("un lease antiguo no puede renovar ni liberar la titularidad tras el fencin
     await deleteDatabase();
   }
 });
+
+
+test("el heartbeat renueva el lease durante tareas que superan su duración inicial", async () => {
+  await deleteDatabase();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  const firstLock = new IndexedDbSyncExecutionLock(firstStore, {
+    ownerId: "heartbeat-owner", leaseDurationMs: 1_000, pollIntervalMs: 25
+  });
+  const secondLock = new IndexedDbSyncExecutionLock(secondStore, {
+    ownerId: "waiting-owner", leaseDurationMs: 1_000, pollIntervalMs: 25
+  });
+  const order = [];
+  try {
+    const first = firstLock.runExclusive("narrative-sync:heartbeat-project", async () => {
+      order.push("first:start");
+      await new Promise(resolve => setTimeout(resolve, 1_250));
+      order.push("first:end");
+    });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const second = secondLock.runExclusive("narrative-sync:heartbeat-project", async () => {
+      order.push("second:start");
+    });
+    await Promise.all([first, second]);
+    assert.deepEqual(order, ["first:start", "first:end", "second:start"]);
+  } finally {
+    await Promise.all([firstStore.close(), secondStore.close()]);
+    await deleteDatabase();
+  }
+});
+
+
+test("el lease se libera aunque falle la tarea y permite continuar a otro propietario", async () => {
+  await deleteDatabase();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  const firstLock = new IndexedDbSyncExecutionLock(firstStore, {
+    ownerId: "failing-owner", leaseDurationMs: 1_000, pollIntervalMs: 25
+  });
+  const secondLock = new IndexedDbSyncExecutionLock(secondStore, {
+    ownerId: "recovery-owner", leaseDurationMs: 1_000, pollIntervalMs: 25
+  });
+  try {
+    await assert.rejects(
+      firstLock.runExclusive("narrative-sync:failure-release-project", async () => {
+        throw new Error("simulated task failure");
+      }),
+      /simulated task failure/
+    );
+    let continued = false;
+    await secondLock.runExclusive("narrative-sync:failure-release-project", async () => {
+      continued = true;
+    });
+    assert.equal(continued, true);
+  } finally {
+    await Promise.all([firstStore.close(), secondStore.close()]);
+    await deleteDatabase();
+  }
+});

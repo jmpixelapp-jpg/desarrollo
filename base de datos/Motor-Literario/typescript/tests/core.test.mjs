@@ -10600,6 +10600,52 @@ test("IndexedDB serializa CAS concurrentes entre instancias y protege la creaci�
   assert.deepEqual(finalRecords.find(record => record.id === "entity-new"), createWinner);
 });
 
+test("IndexedDB coordina CAS de relaciones entre instancias dentro de la transacción de referencias", async () => {
+  const projectId = "indexeddb-relation-cas-cross-instance";
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  const entities = [
+    {
+      projectId, id: "entity-ana", kind: "character", canonicalName: "Ana",
+      normalizedName: "ana", aliases: [], evidence: [], firstSeenAt: 1,
+      lastSeenAt: 1, extractionVersion: 1
+    },
+    {
+      projectId, id: "entity-bruno", kind: "character", canonicalName: "Bruno",
+      normalizedName: "bruno", aliases: [], evidence: [], firstSeenAt: 1,
+      lastSeenAt: 1, extractionVersion: 1
+    }
+  ];
+  await Promise.all(entities.map(entity => firstStore.saveEntity(entity)));
+
+  const evidence = {
+    documentId: "chapter-1", revision: 1, start: 0, end: 19,
+    excerpt: "Ana conoce a Bruno."
+  };
+  const previous = {
+    projectId, id: "relation-ana-bruno",
+    fromEntityId: "entity-ana", toEntityId: "entity-bruno",
+    relationType: "acquaintance", evidence: [evidence]
+  };
+  await firstStore.saveRelation(previous);
+
+  const firstCandidate = { ...previous, relationType: "friendship" };
+  const secondCandidate = { ...previous, relationType: "rivalry" };
+  const results = await Promise.allSettled([
+    firstStore.saveRelationIfUnchanged(firstCandidate, previous),
+    secondStore.saveRelationIfUnchanged(secondCandidate, previous)
+  ]);
+  assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(results.filter(result => result.status === "rejected").length, 1);
+  const winner = results[0].status === "fulfilled" ? firstCandidate : secondCandidate;
+  const loser = results.find(result => result.status === "rejected");
+  assert.match(loser.reason.message, /cambió en otra instancia/u);
+  assert.deepEqual(await secondStore.loadRelations(projectId), [winner]);
+
+  await firstStore.saveRelationIfUnchanged(winner, winner);
+  assert.deepEqual(await secondStore.loadRelations(projectId), [winner]);
+});
+
 test("IndexedDB rechaza relaciones, acontecimientos y afirmaciones basados en versiones antiguas", async () => {
   const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
   const projectId = "indexeddb-narrative-record-cas";

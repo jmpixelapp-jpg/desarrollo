@@ -413,10 +413,13 @@ export function createNarrativeIdeaContinuityIndexUpsertHandler(
       } catch {
         return false;
       }
-      return item.expectedGeneration === undefined ||
-        (Number.isSafeInteger(item.expectedGeneration) && item.expectedGeneration >= 0)
-        ? item.index.generation === (item.expectedGeneration ?? 0) + 1
-        : false;
+      if (item.expectedGeneration !== undefined &&
+          (!Number.isSafeInteger(item.expectedGeneration) ||
+            item.expectedGeneration < 0 ||
+            item.expectedGeneration >= Number.MAX_SAFE_INTEGER)) {
+        return false;
+      }
+      return item.index.generation === (item.expectedGeneration ?? 0) + 1;
     },
     async apply(operation): Promise<void> {
       const { index, expectedGeneration } = operation.payload;

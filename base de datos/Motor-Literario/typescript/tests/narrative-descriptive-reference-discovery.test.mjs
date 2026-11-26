@@ -114,3 +114,37 @@ test("detiene el análisis cuando las etiquetas exceden el presupuesto agregado 
   assert.throws(() => discover(longText, profiles, entities),
     /presupuesto operativo de exploración/);
 });
+
+test("extrae una aposición descriptiva sin confirmar ni guardar automáticamente la etiqueta", () => {
+  const { discoverNarrativeDescriptiveLabelCandidates } = await import("../dist/motor-literario.js");
+  const text = "Ana, la heredera del reino, abrió la puerta.";
+  const [candidate] = discoverNarrativeDescriptiveLabelCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4, text, entities: [ana]
+  });
+  assert.equal(candidate.proposedLabel, "la heredera del reino");
+  assert.equal(candidate.anchorEntityId, ana.id);
+  assert.equal(candidate.relation, "appositive-description");
+  assert.equal(candidate.reviewStatus, "candidate");
+  assert.equal(candidate.labelEvidence.excerpt, "la heredera del reino");
+  assert.equal(candidate.anchorEvidence.excerpt, "Ana");
+});
+
+test("conserva offsets UTF-16 absolutos al proponer una descripción", async () => {
+  const { discoverNarrativeDescriptiveLabelCandidates } = await import("../dist/motor-literario.js");
+  const prefix = "😀 ";
+  const text = "Ana, la mujer con cicatriz llegó.";
+  const [candidate] = discoverNarrativeDescriptiveLabelCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4, text, entities: [ana], baseOffset: prefix.length
+  });
+  assert.equal(candidate.labelEvidence.start, prefix.length + text.indexOf("la mujer"));
+  assert.equal(candidate.anchorEvidence.start, prefix.length);
+});
+
+test("no propone aposiciones sin una entidad explícita inmediatamente anterior", async () => {
+  const { discoverNarrativeDescriptiveLabelCandidates } = await import("../dist/motor-literario.js");
+  const candidates = discoverNarrativeDescriptiveLabelCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "La heredera del reino abrió la puerta.", entities: [ana]
+  });
+  assert.deepEqual(candidates, []);
+});

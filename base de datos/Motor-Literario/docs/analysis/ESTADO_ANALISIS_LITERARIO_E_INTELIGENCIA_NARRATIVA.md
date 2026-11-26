@@ -312,3 +312,16 @@ La documentación debe seguir separando tres estados: implementación presente, 
 **Validación:** la prueba automatizada está escrita, pero no se declara ejecutada. No se dispone todavía de resultado observable de `npm run typecheck`, `npm run build` o `npm test` para esta tanda. Los adaptadores binarios EPUB/PDF/DOCX y OCR no forman parte de esta entrega: la API actual ingiere texto ya decodificado.
 
 **Siguiente trabajo prioritario:** conectar adaptadores reales de lectura de formatos con un mapa de procedencia entre texto extraído y ubicación original; después, resolver menciones y referencias entre párrafos, construir acontecimientos con roles explícitos, y contrastar continuidad y causalidad entre capítulos sin perder evidencia ni incertidumbre.
+
+
+### Tanda 26-11-2026 — lector TXT/Markdown, encabezados Markdown y precisión de señales
+
+- Se añadió `readNarrativeBookFile(file)` al módulo `narrative-book-ingestion.ts`: lectura de archivos TXT y Markdown mediante `arrayBuffer` y `TextDecoder` nativos, UTF-8 estricto, comprobación de extensión/MIME, rechazo de NUL y límite de 20 MB.
+- La segmentación de capítulos reconoce encabezados Markdown con uno a seis signos `#` y conserva el título sin el prefijo de formato.
+- Los extractores de acciones del módulo de ingesta usan límites Unicode de letras/marcas/números; esto evita perder verbos españoles con terminaciones acentuadas por el comportamiento ASCII de `\\b` en JavaScript.
+- La extracción de observaciones mantiene el orden de los verbos por sus offsets exactos de evidencia de acción, no por orden alfabético de etiquetas.
+- Las pruebas de ingesta cubren capítulos, párrafos, offsets, señales candidatas, determinismo, lectura TXT/Markdown, encabezados Markdown, MIME y UTF-8 inválido.
+- Commits de esta extensión publicados en `main`: `721a4d2` (lector de archivos), `595667f` (validación NUL), `2e472d9` (pruebas de lector), `ed6ba50` (corrección de pruebas), `ed14a00` (límites Unicode de acciones), `f1a8593` (límites Unicode de observaciones), `f4f3c0d` (orden por offsets), `d06ed8c` y `1c78237` (encabezados Markdown), `d3d931e` y `94b1230` (regresiones Markdown), `06ef12b` y `ce669da` (documentación).
+- **Verificación observada en GitHub Actions, ejecución 2753:** `Type-check` completado correctamente; compilación Vite completada; las pruebas específicas nuevas de ingesta estructural, TXT/Markdown y validación UTF-8 pasaron. La suite general registró 949 aprobadas y 39 fallidas de 988; por tanto, no se declara `npm test` verde. Los fallos incluyen rutas de entidades, relaciones, acontecimientos y proyecciones narrativas tras cambios concurrentes en `narrative-knowledge.ts`; ese frente requiere diagnóstico coordinado y no se considera resuelto por esta tanda.
+
+**Pendiente inmediato:** revisar junto con la línea de extracción de entidades el conjunto de 39 regresiones de la ejecución 2753, sin sobrescribir trabajo concurrente; mantener el lector TXT/Markdown y el analizador estructural aislados; después diseñar adaptadores EPUB/PDF/DOCX con procedencia por bloque y página antes de añadir inferencias narrativas de mayor nivel.

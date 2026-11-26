@@ -807,7 +807,7 @@ test("inspecciona reparaciones pendientes y distingue listas, aplicadas y confli
     makePending("relation:ready"),
     makePending("relation:applied"),
     makePending("relation:changed"),
-    makePending("relation:ready", "entity:unknown", "entity:missing"),
+    makePending("relation:ready", "entity:legacy", "entity:missing"),
     malformed
   ]) {
     await store.saveNarrativeReferenceRepairPending(entry);

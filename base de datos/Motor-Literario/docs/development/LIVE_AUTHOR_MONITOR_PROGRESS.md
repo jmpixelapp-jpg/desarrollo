@@ -697,3 +697,5 @@ La ejecución asociada al commit `ac86d54472e982148a3e7a818ac01b2b6024fc69` term
 - En el workflow específico, el paso de pruebas del monitor quedó omitido porque la compilación previa no produjo el bundle. No hay evidencia de aprobación ni de fallo de las pruebas nuevas.
 
 El archivo que bloquea la compilación pertenece al área de historial narrativo y no se modifica en esta entrega para evitar interferir con el trabajo paralelo. Se añade además una prueba fail-safe: si el lease de un checkpoint es malformado, la limpieza conserva ese checkpoint en lugar de inferir que puede borrarlo.
+
+- Ajuste del harness Chromium: el lease expirado conserva `acquiredAt <= updatedAt <= expiresAt`; se simula un lease válido pero vencido, no una estructura malformada.

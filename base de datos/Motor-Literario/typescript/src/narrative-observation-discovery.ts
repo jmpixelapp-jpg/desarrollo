@@ -4,9 +4,9 @@
  * Extrae señales léxicas explícitas vinculadas a personajes ya identificados.
  * No pretende resolver por sí solo el sujeto gramatical ni la causalidad:
  * cuando una frase menciona varios personajes, conserva todos como participantes
- * y deja actorEntityId sin resolver.
+ * y conserva la mención sin atribuir el papel sintáctico.
  */
-import { normalizeEntityName, type NarrativeEntity, type TextEvidence } from "./narrative-knowledge";
+import type { NarrativeEntity, TextEvidence } from "./narrative-knowledge";
 
 export const MAX_NARRATIVE_OBSERVATION_TEXT_UNITS = 2_000_000;
 export const MAX_NARRATIVE_OBSERVATION_CANDIDATES = 200;
@@ -19,8 +19,8 @@ export interface NarrativeObservationCandidate {
   readonly kind: "action";
   readonly action: string;
   readonly surface: string;
-  /** Solo se asigna cuando hay un único personaje identificado en la frase. */
-  readonly actorEntityId?: string;
+  /** Único personaje mencionado, si lo hay; nunca equivale a sujeto o agente confirmado. */
+  readonly singleMentionedCharacterId?: string;
   /** Personajes mencionados; no implica que todos ejecuten la acción. */
   readonly mentionedCharacterIds: readonly string[];
   /** Otras entidades mencionadas; no se interpreta su papel semántico. */
@@ -183,7 +183,7 @@ export function discoverNarrativeObservationCandidates(
           action: signal.action,
           surface,
           ...(mentionedCharacters.length === 1
-            ? { actorEntityId: mentionedCharacters[0]!.id } : {}),
+            ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),
           mentionedEntityIds: mentionedOthers.map(entity => entity.id).sort(),
           polarity: before ? "negated" : "affirmed",

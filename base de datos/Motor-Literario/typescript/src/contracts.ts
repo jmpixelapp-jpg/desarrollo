@@ -22,6 +22,9 @@ export interface DocumentSnapshot {
   readonly sequence: number;
 }
 
+export type EditorChangeActivityKind =
+  | "typing" | "paste" | "deletion" | "correction" | "undo" | "redo" | "other";
+
 export interface EditorChange {
   readonly documentId: string;
   readonly sequence: number;
@@ -30,6 +33,8 @@ export interface EditorChange {
   readonly start: number;
   readonly end: number;
   readonly replacement: string;
+  /** Optional operation metadata from native editor events. */
+  readonly activityKind?: EditorChangeActivityKind;
 }
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
@@ -110,6 +115,14 @@ export interface StoredLiveAuthorMonitorCheckpoint {
   readonly lastCommitLatencyMs: number;
   readonly totalCommitLatencyMs: number;
   readonly commitLatencies: readonly number[];
+  /** Optional v1 counters; absent in historic checkpoints means zero. */
+  readonly typingChanges?: number;
+  readonly pasteChanges?: number;
+  readonly deletionChanges?: number;
+  readonly correctionChanges?: number;
+  readonly undoChanges?: number;
+  readonly redoChanges?: number;
+  readonly otherChanges?: number;
 }
 
 /** Lease temporal de titularidad del monitor, con fencing token monotónico por documento. */
@@ -290,6 +303,8 @@ export interface ProjectStore {
     documentId: string
   ): Promise<StoredLiveAuthorMonitorCheckpoint | undefined>;
   deleteLiveAuthorMonitorCheckpoint?(projectId: string, documentId: string): Promise<void>;
+  /** Elimina checkpoints antiguos sin lease vigente; nunca elimina los tombstones de lease. */
+  cleanupLiveAuthorMonitorCheckpoints?(projectId: string, olderThan: number, now: number): Promise<number>;
   /** Guarda y recupera diagnósticos asociados a una revisión exacta. */
   saveDiagnostics?(diagnostics: StoredDiagnostics): Promise<void>;
   loadDiagnostics?(projectId: string, documentId: string): Promise<StoredDiagnostics | undefined>;
@@ -445,6 +460,8 @@ export interface StoredChange extends EditorChange {
 }
 
 
+
+
 /** Operación durable pendiente de transmitir a un proveedor de sincronización externo. */
 export interface StoredSyncOperation {
   readonly operationId: string;
@@ -458,5 +475,3 @@ export interface StoredSyncOperation {
   readonly lastAttemptAt?: number;
   readonly lastError?: string;
 }
-
-

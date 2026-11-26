@@ -355,3 +355,10 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Se cambió la recuperación al índice único `by-project-device-sequence`, que ordena por dispositivo y secuencia ascendente.
 - Se añadió una regresión con dos operaciones del mismo dispositivo cuyas fechas están deliberadamente invertidas, además de una operación de otro dispositivo; la expectativa verifica secuencia causal sin fingir que existe un reloj global entre dispositivos.
 - **Validación:** prueba añadida y cambio publicado; ejecución CI pendiente.
+
+### Tanda — aislamiento del backoff por escritor
+
+- Se corrigió el bloqueo global del coordinador: una operación retrasada de un dispositivo ya no detiene a todos los demás dispositivos del proyecto.
+- Se mantiene la barrera causal por dispositivo: una secuencia posterior del mismo escritor no adelanta a una operación anterior que aún espera reintento.
+- Se añadió una prueba con dos escritores: el flujo A queda en backoff y conserva ambas operaciones; el flujo B envía y confirma sus dos operaciones.
+- **Validación:** código, prueba y contrato publicados; ejecución de CI pendiente.

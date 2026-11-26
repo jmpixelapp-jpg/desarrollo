@@ -154,3 +154,122 @@ export function createNarrativeAssertionUpsertHandler(
     }
   };
 }
+
+
+import type {
+  NarrativeRelation,
+  NarrativeEvent,
+  NarrativeTimeReference,
+  TextEvidence
+} from "./narrative-knowledge";
+
+export interface NarrativeRelationUpsertPayload {
+  readonly relation: NarrativeRelation;
+}
+
+export interface NarrativeEventUpsertPayload {
+  readonly event: NarrativeEvent;
+}
+
+function isTextEvidence(value: unknown): value is TextEvidence {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Partial<TextEvidence>;
+  return typeof item.documentId === "string" && !!item.documentId.trim() &&
+    item.documentId.length <= 256 &&
+    Number.isSafeInteger(item.revision) && item.revision! >= 0 &&
+    Number.isSafeInteger(item.start) && item.start! >= 0 &&
+    Number.isSafeInteger(item.end) && item.end! >= item.start! &&
+    typeof item.excerpt === "string" && item.excerpt.length <= 20_000 &&
+    (item.status === undefined || item.status === "stale");
+}
+
+function isTimeReference(value: unknown): value is NarrativeTimeReference {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Partial<NarrativeTimeReference>;
+  return (item.basis === "calendar" || item.basis === "story-day") &&
+    (item.precision === "date" || item.precision === "year" || item.precision === "day-index") &&
+    typeof item.raw === "string" && !!item.raw.trim() && item.raw.length <= 128 &&
+    Number.isSafeInteger(item.orderValue) && item.orderValue! >= 0 &&
+    !((item.basis === "calendar" && item.precision === "day-index") ||
+      (item.basis === "story-day" && item.precision !== "day-index"));
+}
+
+function isNarrativeRelation(value: unknown): value is NarrativeRelation {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Partial<NarrativeRelation>;
+  return typeof item.projectId === "string" && !!item.projectId.trim() && item.projectId.length <= 256 &&
+    typeof item.id === "string" && !!item.id.trim() && item.id.length <= 512 &&
+    typeof item.fromEntityId === "string" && !!item.fromEntityId.trim() && item.fromEntityId.length <= 512 &&
+    typeof item.toEntityId === "string" && !!item.toEntityId.trim() && item.toEntityId.length <= 512 &&
+    typeof item.relationType === "string" && !!item.relationType.trim() && item.relationType.length <= 256 &&
+    Array.isArray(item.evidence) && item.evidence.length > 0 && item.evidence.length <= 10_000 &&
+    item.evidence.every(isTextEvidence);
+}
+
+function isNarrativeEvent(value: unknown): value is NarrativeEvent {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Partial<NarrativeEvent>;
+  return typeof item.projectId === "string" && !!item.projectId.trim() && item.projectId.length <= 256 &&
+    typeof item.id === "string" && !!item.id.trim() && item.id.length <= 512 &&
+    typeof item.label === "string" && !!item.label.trim() && item.label.length <= 2048 &&
+    Array.isArray(item.participants) && item.participants.length <= 500 &&
+    item.participants.every(id => typeof id === "string" && !!id.trim() && id.length <= 512) &&
+    new Set(item.participants).size === item.participants.length &&
+    Array.isArray(item.evidence) && item.evidence.length > 0 && item.evidence.length <= 10_000 &&
+    item.evidence.every(isTextEvidence) &&
+    (item.timelineTrackId === undefined ||
+      (typeof item.timelineTrackId === "string" && !!item.timelineTrackId.trim() && item.timelineTrackId.length <= 256)) &&
+    (item.timeReference === undefined || isTimeReference(item.timeReference));
+}
+
+export function createNarrativeRelationUpsertHandler(
+  store: ProjectStore
+): NarrativeSyncOperationHandler<NarrativeRelationUpsertPayload> {
+  if (!store || typeof store.loadRelations !== "function" ||
+      typeof store.saveRelationIfUnchanged !== "function") {
+    throw new TypeError("El store debe implementar loadRelations y saveRelationIfUnchanged.");
+  }
+  return {
+    kind: "relation-upsert",
+    validate(payload: unknown): payload is NarrativeRelationUpsertPayload {
+      return Boolean(payload && typeof payload === "object" && !Array.isArray(payload) &&
+        isNarrativeRelation((payload as { relation?: unknown }).relation));
+    },
+    async apply(operation): Promise<void> {
+      const relation = operation.payload.relation;
+      if (relation.projectId !== operation.projectId) {
+        throw new Error("La relación de la operación pertenece a otro proyecto.");
+      }
+      const existing = (await store.loadRelations!(operation.projectId))
+        .find(item => item.id === relation.id);
+      if (existing && JSON.stringify(existing) === JSON.stringify(relation)) return;
+      await store.saveRelationIfUnchanged!(relation, existing);
+    }
+  };
+}
+
+export function createNarrativeEventUpsertHandler(
+  store: ProjectStore
+): NarrativeSyncOperationHandler<NarrativeEventUpsertPayload> {
+  if (!store || typeof store.loadEvents !== "function" ||
+      typeof store.saveEventIfUnchanged !== "function") {
+    throw new TypeError("El store debe implementar loadEvents y saveEventIfUnchanged.");
+  }
+  return {
+    kind: "event-upsert",
+    validate(payload: unknown): payload is NarrativeEventUpsertPayload {
+      return Boolean(payload && typeof payload === "object" && !Array.isArray(payload) &&
+        isNarrativeEvent((payload as { event?: unknown }).event));
+    },
+    async apply(operation): Promise<void> {
+      const event = operation.payload.event;
+      if (event.projectId !== operation.projectId) {
+        throw new Error("El acontecimiento de la operación pertenece a otro proyecto.");
+      }
+      const existing = (await store.loadEvents!(operation.projectId))
+        .find(item => item.id === event.id);
+      if (existing && JSON.stringify(existing) === JSON.stringify(event)) return;
+      await store.saveEventIfUnchanged!(event, existing);
+    }
+  };
+}

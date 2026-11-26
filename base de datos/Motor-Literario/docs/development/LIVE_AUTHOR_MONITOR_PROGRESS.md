@@ -1295,3 +1295,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Causa externa observada en \`7f167c93\`:** la auditoría reportó \`DATABASE_VERSION_MISMATCH\` y el almacén \`narrative-reference-repair-audits\` fuera de \`runtime.object_stores\`; el type-check global reportó errores en \`narrative-knowledge-graph-persistence.ts\`. Esos errores no pertenecen a los archivos modificados por la mejora FIFO.
 
 **Validación:** pendiente de la nueva ejecución de la lane disparada por el cambio del workflow.
+
+
+## 80. Ejecutar regresiones FIFO y benchmark desde el bundle aislado (26 de noviembre de 2026)
+
+**Hallazgo:** la lane ampliada sí continuó tras fallos anteriores, pero el bundle runtime general falló por un error de sintaxis concurrente en `src/persistence/indexeddb-store.ts`. Las pruebas que importaban `dist/motor-literario.js` y el benchmark también fallaron al no existir ese artefacto; por tanto, las tres nuevas regresiones FIFO todavía no habían sido ejecutadas.
+
+**Corrección:** el test principal de `LiveAuthorMonitor` y el benchmark intentan importar primero `dist-monitor/live-author-monitor.js`, generado por el entrypoint reducido ya aprobado, y usan el bundle general solo como fallback. La lane ejecuta esas pruebas unitarias y diagnósticas incluso cuando la compilación global falla. Las pruebas que dependen de HostEngineApi/editor/Chromium quedan condicionadas al resultado correcto del bundle runtime; la auditoría MLDB conserva su resultado propio.
+
+**Límite de responsabilidad:** no se modifica `indexeddb-store.ts` ni el manifiesto físico que otro trabajo está actualizando. La lane registra el fallo compartido, pero no bloquea la comprobación independiente de las métricas y notificaciones del monitor.
+
+**Validación:** pendiente de la nueva ejecución de GitHub Actions.

@@ -321,3 +321,24 @@ test("integra cadenas de transmisión con procedencia previa de otros capítulos
     "information:chapter-1:0:visual-observation:elian");
   assert.equal(result.informationChain[0].recipientEntityId, "mara");
 });
+
+
+test("integra interpretaciones explícitas y las compara con información previa del personaje", () => {
+  const priorInformationProvenance = [{
+    id:"prior:mara:bridge",projectId:"novel",
+    informationHolderEntityId:"mara",sourceEntityId:"elian",
+    channel:"reported-speech",status:"reported",
+    content:"el puente había caído",reviewStatus:"candidate",
+    evidence:{documentId:"chapter-1",revision:1,start:0,end:49,excerpt:"Elian le contó a Mara que el puente había caído."},
+    contentEvidence:{documentId:"chapter-1",revision:1,start:28,end:49,excerpt:"el puente había caído"}
+  }];
+  const result = understandNarrativeFragment({
+    projectId:"novel",documentId:"chapter-2",revision:2,
+    text:"Mara entendió mal que el puente seguía en pie.",
+    entities,priorInformationProvenance
+  });
+  assert.equal(result.informationInterpretations.length,1);
+  assert.equal(result.informationInterpretations[0].signal,"explicit-misinterpretation");
+  assert.equal(result.informationInterpretations[0].comparison,"different-content");
+  assert.equal(result.informationInterpretations[0].priorInformationId,"prior:mara:bridge");
+});

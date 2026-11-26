@@ -456,7 +456,8 @@ export function validateNarrativeIdeaContinuityIndex(
     if (line.chronology === "complete" && !Array.isArray(line.orderedOccurrenceIds)) {
       throw new Error("Una línea con cronología completa debe conservar su orden total.");
     }    if (line.chronology === "complete") {
-      const orderPosition = new Map(line.orderedOccurrenceIds!.map((id, index) => [id, index]));
+      const orderPosition = new Map<string, number>();
+      line.orderedOccurrenceIds!.forEach((id, index) => orderPosition.set(id, index));
       for (const event of lineEvents) {
         if (orderPosition.get(event.earlierOccurrenceId!)! >= orderPosition.get(event.laterOccurrenceId!)!) {
           throw new Error("El orden total de una línea contradice una relación dirigida.");
@@ -469,8 +470,12 @@ export function validateNarrativeIdeaContinuityIndex(
     }
     const orderedEvents = lineEvents.filter(event => event.chronology === "ordered");
     const allEventsOrdered = orderedEvents.length === lineEvents.length;
-    const incoming = new Map(line.occurrenceIds.map(id => [id, 0]));
-    const outgoing = new Map(line.occurrenceIds.map(id => [id, 0]));
+    const incoming = new Map<string, number>();
+    const outgoing = new Map<string, number>();
+    for (const id of line.occurrenceIds) {
+      incoming.set(id, 0);
+      outgoing.set(id, 0);
+    }
     for (const event of orderedEvents) {
       const from = event.earlierOccurrenceId!;
       const to = event.laterOccurrenceId!;

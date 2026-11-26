@@ -178,6 +178,25 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.compositionActive = false;
   };
 
+  // pagehide puede dejar esta instancia viva en BFCache. freeze puede detener
+  // la página sin que el adaptador reciba el input final. En ambos casos se
+  // invalida la continuidad; pageshow/resume nunca reanudan sin snapshot.
+  private readonly handlePageHide = (): void => {
+    if (this.disposed || this.needsResync) return;
+    this.fail(
+      "resync-required",
+      "La página entró en pagehide; la captura requiere un snapshot autoritativo antes de reanudarse."
+    );
+  };
+
+  private readonly handlePageFreeze = (): void => {
+    if (this.disposed || this.needsResync) return;
+    this.fail(
+      "resync-required",
+      "La página entró en freeze; la captura requiere un snapshot autoritativo antes de reanudarse."
+    );
+  };
+
   private readonly handleInput = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
     const input = event as InputEvent;
@@ -431,6 +450,8 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       this.element.addEventListener("input", this.handleInput);
       this.element.addEventListener("compositionstart", this.handleCompositionStart);
       this.element.addEventListener("compositionend", this.handleCompositionEnd);
+      this.element.ownerDocument?.addEventListener("freeze", this.handlePageFreeze);
+      this.element.ownerDocument?.defaultView?.addEventListener("pagehide", this.handlePageHide);
     }
 
     let subscribed = true;
@@ -443,6 +464,8 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
         this.element.removeEventListener("input", this.handleInput);
         this.element.removeEventListener("compositionstart", this.handleCompositionStart);
         this.element.removeEventListener("compositionend", this.handleCompositionEnd);
+        this.element.ownerDocument?.removeEventListener("freeze", this.handlePageFreeze);
+        this.element.ownerDocument?.defaultView?.removeEventListener("pagehide", this.handlePageHide);
         const hadPendingInput = this.pendingInput !== undefined;
         if (!this.disposed && !this.needsResync) {
           this.fail(
@@ -518,6 +541,8 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.element.removeEventListener("input", this.handleInput);
     this.element.removeEventListener("compositionstart", this.handleCompositionStart);
     this.element.removeEventListener("compositionend", this.handleCompositionEnd);
+    this.element.ownerDocument?.removeEventListener("freeze", this.handlePageFreeze);
+    this.element.ownerDocument?.defaultView?.removeEventListener("pagehide", this.handlePageHide);
     this.listeners.clear();
     this.pendingInput = undefined;
     this.compositionActive = false;

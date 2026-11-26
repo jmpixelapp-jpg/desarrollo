@@ -3681,6 +3681,9 @@ export class HostEngineApi {
   ): SyncOperationDraft | undefined {
     const project = this.project;
     if (!project?.deviceId) return undefined;
+    if (!this.store.supportsAtomicNarrativeSyncOutbox) {
+      throw new Error("Este adaptador no confirma cambios narrativos y outbox en una sola transacción; no se guardará una mutación local no sincronizable.");
+    }
     if (record.projectId !== project.projectId) {
       throw new Error("El registro narrativo pertenece a otro proyecto y no puede sincronizarse.");
     }

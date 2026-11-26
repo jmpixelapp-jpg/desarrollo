@@ -39,6 +39,7 @@ import {
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
+import { discoverNarrativeIdeaCandidates, type NarrativeIdeaCandidate } from "./narrative-idea-discovery";
 import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
@@ -590,6 +591,8 @@ export interface HostCallbacks {
   readonly onCommit?: (result: CommitResult) => void;
   readonly onKnowledgeError?: (error: unknown) => void;
   readonly onKnowledgeChanged?: (projectId: string) => void;
+  /** Candidatos extraídos de cada revisión analizada; incluye [] para limpiar la ventana revisada. Nunca confirma hechos automáticamente. */
+  readonly onNarrativeIdeaCandidates?: (analysis: AnalysisResult, candidates: readonly NarrativeIdeaCandidate[]) => void;
 }
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
@@ -718,6 +721,19 @@ export class HostEngineApi {
         ? {} : { maxQueuedTextUnits: options.maxQueuedTextUnits }),
       onAnalysis: result => {
         try { options.callbacks?.onAnalysis?.(result); } catch { /* La UI no debe detener el análisis. */ }
+        try {
+          const projectId = this.project?.projectId;
+          if (projectId) {
+            const candidates = discoverNarrativeIdeaCandidates({
+              projectId,
+              documentId: result.documentId,
+              revision: result.revision,
+              text: result.affectedText,
+              baseOffset: result.affectedStart
+            });
+            options.callbacks?.onNarrativeIdeaCandidates?.(result, candidates);
+          }
+        } catch { /* El descubrimiento es observabilidad: nunca bloquea la escritura ni el análisis principal. */ }
         void this.persistLiveDiagnostics(result).catch(error => this.reportKnowledgeError(error));
         if (this.store.saveEntity && this.store.loadEntities) {
           void this.processLiveAnalysis(result).catch(error => {

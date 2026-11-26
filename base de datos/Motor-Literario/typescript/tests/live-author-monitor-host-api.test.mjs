@@ -473,3 +473,51 @@ test("dispose durante una adquisición pendiente libera el lease y no inicia hea
 
   api.dispose();
 });
+
+
+test("una pestaña observadora toma el lease expirado sin necesitar una nueva edición", async () => {
+  const store = new MemoryDocumentStore();
+  const owner = new HostEngineApi({ store });
+  owner.initializeProject({ projectId: "monitor-expired-takeover", projectName: "Expired takeover" });
+  await owner.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  const key = "monitor-expired-takeover:chapter-1";
+  const originalLease = structuredClone(store.monitorLeases.get(key));
+  assert.ok(originalLease);
+
+  const observer = new HostEngineApi({ store });
+  observer.initializeProject({ projectId: "monitor-expired-takeover", projectName: "Expired takeover" });
+  await observer.recoverDocument("chapter-1");
+  assert.equal(observer.liveMonitorLeases.has("chapter-1"), false);
+  assert.equal(observer.liveMonitorLeaseHeartbeats.has("chapter-1"), true,
+    "la pestaña observadora debe mantener el reintento de lease");
+
+  // Simula que el propietario se cerró abruptamente y no ejecutó release().
+  store.monitorLeases.set(key, {
+    ...store.monitorLeases.get(key),
+    expiresAt: Date.now() - 1
+  });
+
+  await observer.renewLiveAuthorMonitorLeaseFromHeartbeat("chapter-1");
+  const pendingCheckpoint = observer.liveMonitorCheckpointTails.get("chapter-1");
+  if (pendingCheckpoint) await pendingCheckpoint;
+
+  const takeoverLease = store.monitorLeases.get(key);
+  assert.ok(observer.liveMonitorLeases.has("chapter-1"));
+  assert.equal(takeoverLease.ownerId, observer.liveMonitorOwnerId);
+  assert.equal(takeoverLease.fencingToken, originalLease.fencingToken + 1);
+
+  const checkpoint = store.monitorCheckpoints.get(key);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.sessionId, observer.getLiveAuthorMonitorSnapshot("chapter-1").sessionId);
+
+  owner.dispose();
+  await observer.closeLiveAuthorMonitorDocumentSafely("chapter-1");
+  assert.equal(store.monitorLeases.get(key).expiresAt <= Date.now(), true);
+  await observer.disposeSafely();
+});

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
-import { IndexedDbProjectStore } from "../dist/motor-literario.js";
+import { IndexedDbProjectStore, NarrativeSyncCoordinator } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
@@ -87,6 +87,53 @@ test("la bandeja aísla proyectos y valida el payload antes de persistir", async
     await store.enqueueSyncOperation(operation());
     assert.equal((await store.loadPendingSyncOperations("another-project")).length, 0);
     assert.equal((await store.loadPendingSyncOperations("sync-outbox-project")).length, 1);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+test("el coordinador usa la bandeja IndexedDB real y conserva conflictos hasta su acuse", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  try {
+    const first = operation({ operationId: "op-sync-1", sequence: 1 });
+    const second = operation({ operationId: "op-sync-2", sequence: 2 });
+    await store.enqueueSyncOperation(first);
+    await store.enqueueSyncOperation(second);
+
+    let pushCount = 0;
+    const coordinator = new NarrativeSyncCoordinator(store, {
+      async push(projectId, operations) {
+        pushCount++;
+        assert.equal(projectId, "sync-outbox-project");
+        if (pushCount === 1) {
+          return {
+            acknowledgedOperationIds: ["op-sync-1"],
+            conflicts: [{ operationId: "op-sync-2", code: "revision_conflict" }],
+            retryableOperationIds: []
+          };
+        }
+        return {
+          acknowledgedOperationIds: ["op-sync-2"],
+          conflicts: [],
+          retryableOperationIds: []
+        };
+      }
+    }, { now: () => 500 });
+
+    const firstResult = await coordinator.syncOnce("sync-outbox-project");
+    assert.equal(firstResult.acknowledged, 1);
+    assert.equal(firstResult.conflicted, 1);
+    let pending = await store.loadPendingSyncOperations("sync-outbox-project");
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].operationId, "op-sync-2");
+    assert.equal(pending[0].attemptCount, 1);
+    assert.equal(pending[0].lastAttemptAt, 500);
+
+    const secondResult = await coordinator.syncOnce("sync-outbox-project");
+    assert.equal(secondResult.acknowledged, 1);
+    assert.equal((await store.loadPendingSyncOperations("sync-outbox-project")).length, 0);
   } finally {
     await store.close();
     await deleteDatabase();

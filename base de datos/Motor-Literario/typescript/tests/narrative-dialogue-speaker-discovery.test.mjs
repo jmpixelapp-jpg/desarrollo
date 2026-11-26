@@ -88,3 +88,10 @@ test("no atribuye una voz a objetos ni lugares aunque aparezcan en la etiqueta",
   assert.equal(segment.speakerStatus, "unattributed");
   assert.deepEqual(segment.speakerCandidates, []);
 });
+
+test("no usa un verbo de habla que solo aparece dentro de las palabras citadas", () => {
+  const text = "Ana entró. «Ana dijo que volvería al amanecer»";
+  const [segment] = discover(text, [ana]);
+  assert.equal(segment.speakerStatus, "unattributed");
+  assert.deepEqual(segment.speakerCandidates, []);
+});

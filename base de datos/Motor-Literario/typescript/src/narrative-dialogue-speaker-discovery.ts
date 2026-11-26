@@ -188,7 +188,7 @@ export function discoverNarrativeDialogueSpeakers(
     }
     const attributionText = attributionChars.join("");
     const verbMatches = [...attributionText.matchAll(SPEECH_VERB)];
-    const candidates = verbMatches.length === 0 ? [] : input.entities.flatMap(entity => {
+    const candidates = verbMatches.length === 0 ? [] : input.entities.filter(entity => entity.kind === "character").flatMap(entity => {
       const mentions = nameMatches(attributionText, entity);
       const mention = mentions.find(item => verbMatches.some(verb =>
         Math.abs((attributionStart + item.start) - (attributionStart + verb.index!)) <= distance

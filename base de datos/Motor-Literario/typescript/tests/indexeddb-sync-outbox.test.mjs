@@ -18,7 +18,7 @@ const operation = (overrides = {}) => ({
   ...overrides
 });
 
-test("la migración DB25 → DB26 conserva datos anteriores y crea las dos estructuras de sincronización", async () => {
+test("la migración DB25 → DB27 conserva datos anteriores y crea las dos estructuras de sincronización", async () => {
   const oldRequest = indexedDB.open("motor-literario-local", 25);
   const oldDatabase = await new Promise((resolve, reject) => {
     oldRequest.onupgradeneeded = () => oldRequest.result.createObjectStore("migration-sentinel");
@@ -41,10 +41,12 @@ test("la migración DB25 → DB26 conserva datos anteriores y crea las dos estru
     migratedRequest.onsuccess = () => resolve(migratedRequest.result);
     migratedRequest.onerror = () => reject(migratedRequest.error);
   });
-  assert.equal(migrated.version, 26);
+  assert.equal(migrated.version, 27);
   assert.equal(migrated.objectStoreNames.contains("migration-sentinel"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-outbox"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-device-sequences"), true);
+  assert.equal(migrated.objectStoreNames.contains("narrative-reference-repair-audits"), true);
+  assert.equal(migrated.objectStoreNames.contains("narrative-reference-repair-pending"), true);
   const preserved = await new Promise((resolve, reject) => {
     const request = migrated.transaction("migration-sentinel", "readonly")
       .objectStore("migration-sentinel").get("key");

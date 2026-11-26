@@ -155,7 +155,7 @@ test("respeta el límite de candidatos sin recorrer todas las señales del docum
   const text = Array.from(
     { length: 140 },
     (_, index) => `La historia trata sobre la memoria ${index}.`
-  ).join("\\n");
+  ).join("\n");
 
   const found = discoverNarrativeIdeaCandidates({ ...context, text });
   assert.equal(found.length, 100);

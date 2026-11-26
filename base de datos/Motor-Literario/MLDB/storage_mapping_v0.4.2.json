@@ -6,7 +6,7 @@
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 25,
+    "database_version": 26,
     "object_stores": [
       {
         "name": "project-settings",
@@ -863,6 +863,51 @@
         "keyPath": [
           "projectId",
           "documentId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
+      },
+      {
+        "name": "sync-outbox",
+        "keyPath": "operationId",
+        "indexes": [
+          [
+            "by-project-created-at",
+            [
+              "projectId",
+              "createdAt"
+            ],
+            false
+          ],
+          [
+            "by-project-device-sequence",
+            [
+              "projectId",
+              "deviceId",
+              "sequence"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "sync-device-sequences",
+        "keyPath": [
+          "projectId",
+          "deviceId"
+        ],
+        "indexes": []
+      },
+      {
+        "name": "narrative-reference-repair-audits",
+        "keyPath": [
+          "projectId",
+          "operationId"
         ],
         "indexes": [
           [

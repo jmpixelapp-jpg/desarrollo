@@ -5,6 +5,8 @@ import {
   createNarrativeSyncOperationEnvelope,
   createNarrativeSyncJournalConsumer,
   createNarrativeIdeaUpsertHandler,
+  createNarrativeEntityMergeHandler,
+  createNarrativeSyncDomainHandlers,
   IndexedDbNarrativeSyncJournal
 } from "../dist/motor-literario.js";
 
@@ -179,4 +181,20 @@ test("idea-upsert no permite que un sobre escriba en un proyecto distinto", asyn
     digest: "sha256:" + "0".repeat(64)
   }), /otro proyecto/u);
   assert.equal(store.ideas.size, 0);
+});
+
+test("la fábrica registra los seis handlers de dominio CAS y fusión sin duplicados", () => {
+  const store = {
+    loadEntities: async () => [], saveEntityIfUnchanged: async () => {},
+    mergeNarrativeEntityIdentity: async () => {},
+    loadIdeas: async () => [], saveIdeaIfUnchanged: async () => {},
+    loadAssertions: async () => [], saveAssertionIfUnchanged: async () => {},
+    loadRelations: async () => [], saveRelationIfUnchanged: async () => {},
+    loadEvents: async () => [], saveEventIfUnchanged: async () => {}
+  };
+  const handlers = createNarrativeSyncDomainHandlers(store);
+  assert.deepEqual(handlers.map(handler => handler.kind), [
+    "entity-upsert", "entity-merge", "idea-upsert", "assertion-upsert", "relation-upsert", "event-upsert"
+  ]);
+  assert.equal(new Set(handlers.map(handler => handler.kind)).size, handlers.length);
 });

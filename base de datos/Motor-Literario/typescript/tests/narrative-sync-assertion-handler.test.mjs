@@ -98,7 +98,7 @@ test("assertion-upsert es idempotente después de aplicar pero antes del acuse",
     }
   }]);
   assert.deepEqual(await consume("novel-assertions", "writer-1"), {
-    processed: 0, remaining: 1, failure: "apply-or-ack-failed"
+    processed: 0, remaining: 1, stoppedAtOperationId: "assertion-operation-retry", failure: "apply-or-ack-failed"
   });
   assert.deepEqual(await consume("novel-assertions", "writer-1"), {
     processed: 1, remaining: 0

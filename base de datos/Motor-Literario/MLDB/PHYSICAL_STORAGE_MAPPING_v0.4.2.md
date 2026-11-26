@@ -2,7 +2,7 @@
 
 ## Modelo de almacenamiento vigente
 
-La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `22` (manifiesto físico, mapping version `12`).
+La implementación de ejecución es TypeScript/JavaScript puro sobre IndexedDB nativo. No se emplea SQL ni se incorporan motores externos. La base local se denomina `motor-literario-local`, actualmente en versión IndexedDB `26` (manifiesto físico, mapping version `12`).
 
 El almacenamiento es journal-first: el snapshot durable del documento se conserva en `documents`; las operaciones aceptadas se escriben como deltas ordenados en `changes`. La confirmación de snapshot y compactación usa una misma transacción cuando el adaptador ofrece `saveDocumentAndCompactChanges`. La identidad del libro siempre incluye `projectId`; la biblioteca personal incluye además `writerId`.
 
@@ -41,6 +41,9 @@ El almacenamiento es journal-first: el snapshot durable del documento se conserv
 | `record-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de fichas |
 | `relation-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de relaciones |
 | `event-lifecycles` | `[projectId, id]` | `by-project`, `by-subject`, `by-subject-revision` único | Historial append-only de etiqueta y participantes de acontecimientos |
+| `sync-outbox` | `operationId` | `by-project-created-at`, `by-project-device-sequence` único | Operaciones pendientes y reintentos; no se borran hasta el acuse remoto durable |
+| `sync-device-sequences` | `[projectId, deviceId]` | — | Cursor monotónico por instalación/proyecto; no retrocede al confirmar operaciones |
+| `narrative-reference-repair-audits` | `[projectId, operationId]` | `by-project` | Recibos append-only e idempotentes de reparaciones de referencias del grafo narrativo |
 
 Los almacenes y sus índices se crean/migran desde `IndexedDbProjectStore.open()`. Las lecturas deben esperar a que complete su transacción readonly; las colecciones y registros se validan antes de incorporarse a la API o a sus cachés.
 

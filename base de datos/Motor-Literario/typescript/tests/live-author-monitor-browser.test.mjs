@@ -511,7 +511,12 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       await page.keyboard.type("Z");
       await page.waitForFunction(() => {
         const metrics = document.querySelector("#metrics")?.textContent ?? "";
-        try { return JSON.parse(metrics).totalEventCount >= 2; } catch { return false; }
+        try {
+          const parsed = JSON.parse(metrics);
+          return parsed.eventCounters.beforeInputCount >= 1 &&
+            parsed.eventCounters.inputCount >= 1 &&
+            parsed.deltaCounters.typing >= 1;
+        } catch { return false; }
       }, undefined, { timeout: 5_000 });
       const captureMetrics = JSON.parse(await page.locator("#metrics").textContent());
       assert.equal(captureMetrics.deltaCounters.typing, 1, JSON.stringify(captureMetrics));
@@ -519,6 +524,14 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
         "beforeinput e input deben quedar correlacionados");
       assert.equal(captureMetrics.pairing.pendingBeforeInputCount, 0);
       assert.equal(captureMetrics.pairing.orphanInputCount, 0);
+      assert.equal(
+        captureMetrics.pairing.inputDataMatchCount +
+        captureMetrics.pairing.inputDataOneSidedCount +
+        captureMetrics.pairing.inputDataUnavailableCount,
+        1,
+        "el par debe clasificar si los datos coinciden, están disponibles en un solo evento o faltan"
+      );
+      assert.equal(captureMetrics.pairing.inputDataMismatchCount, 0);
 
       // Solo para probar retención acotada y contadores acumulativos:
       // estos eventos son sintéticos, no modifican el textarea ni representan
@@ -569,6 +582,13 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
       assert.equal(report.pairing.pendingBeforeInputCount, 0);
       assert.equal(report.pairing.unmatchedBeforeInputCount, 0);
       assert.equal(report.pairing.orphanInputCount, 0);
+      assert.equal(
+        report.pairing.inputDataMatchCount +
+        report.pairing.inputDataOneSidedCount +
+        report.pairing.inputDataUnavailableCount,
+        1
+      );
+      assert.equal(report.pairing.inputDataMismatchCount, 0);
       assert.equal(report.retainedEventCount, 2_000);
       assert.equal(report.events.length, 2_000);
       assert.equal(report.droppedEventCount, 12);

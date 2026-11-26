@@ -1561,6 +1561,16 @@ function validateLiveAuthorMonitorLeaseRequest(
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
+export interface IndexedDbStorageHealthReport {
+  readonly databaseName: string;
+  readonly databaseVersion: number;
+  readonly usageBytes: number | null;
+  readonly quotaBytes: number | null;
+  /** null significa que el navegador no expone esta capacidad. */
+  readonly persistentStorage: boolean | null;
+  readonly recordCounts: Readonly<Record<string, number>>;
+}
+
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;
@@ -5631,4 +5641,72 @@ export class IndexedDbProjectStore implements ProjectStore {
       );
     });
   }
+  /**
+   * Inspección de solo lectura para detectar crecimiento anómalo y presión de cuota.
+   * Los conteos y la estimación de cuota son orientativos; no sustituyen una copia
+   * de seguridad exportada ni garantizan que el navegador no vaya a desalojar datos.
+   */
+  async inspectStorageHealth(): Promise<IndexedDbStorageHealthReport> {
+    const db = await this.open();
+    const stores = [
+      DOCUMENTS, CHANGES, ENTITIES, RELATIONS, EVENTS, IDEAS, PERSONAL_IDEAS,
+      ASSERTIONS, DIAGNOSTICS, PROJECT_RECORDS, PROJECT_RELATIONS,
+      PROJECT_EVIDENCES, TIMELINE_OCCURRENCES
+    ];
+    const recordCounts = await new Promise<Record<string, number>>((resolve, reject) => {
+      const transaction = db.transaction(stores, "readonly");
+      const counts: Record<string, number> = {};
+      let failed = false;
+      for (const name of stores) {
+        const request = transaction.objectStore(name).count();
+        request.onsuccess = () => { counts[name] = request.result; };
+        request.onerror = () => {
+          failed = true;
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        };
+      }
+      transaction.oncomplete = () => resolve(counts);
+      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudieron inspeccionar los registros locales."));
+      transaction.onabort = () => reject(transaction.error ?? new Error(
+        failed ? "Falló el conteo de registros locales." : "Se canceló la inspección del almacenamiento."
+      ));
+    });
+
+    let usageBytes: number | null = null;
+    let quotaBytes: number | null = null;
+    let persistentStorage: boolean | null = null;
+    if (typeof navigator !== "undefined" && "storage" in navigator) {
+      const storage = navigator.storage;
+      try {
+        const estimate = await storage.estimate();
+        usageBytes = typeof estimate.usage === "number" && Number.isFinite(estimate.usage)
+          ? estimate.usage : null;
+        quotaBytes = typeof estimate.quota === "number" && Number.isFinite(estimate.quota)
+          ? estimate.quota : null;
+      } catch { /* la estimación es opcional y no debe bloquear la inspección */ }
+      try {
+        persistentStorage = typeof storage.persisted === "function"
+          ? await storage.persisted() : null;
+      } catch { /* capacidad no disponible en este navegador */ }
+    }
+    return {
+      databaseName: DATABASE_NAME,
+      databaseVersion: db.version,
+      usageBytes,
+      quotaBytes,
+      persistentStorage,
+      recordCounts
+    };
+  }
+
+  /**
+   * Solicita al navegador protección frente al desalojo automático del origen.
+   * Debe invocarse desde una acción explícita del usuario; el navegador decide.
+   */
+  async requestPersistentStorage(): Promise<boolean> {
+    if (typeof navigator === "undefined" || !("storage" in navigator) ||
+        typeof navigator.storage.persist !== "function") return false;
+    return navigator.storage.persist();
+  }
+
 }

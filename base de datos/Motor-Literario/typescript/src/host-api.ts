@@ -3252,12 +3252,14 @@ export class HostEngineApi {
     const maxAttempts = 3;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let ideasLoadedThisAttempt = false;
       if (!this.ideasLoaded) {
         const ideas = requireProjectScopedRecords(
           await store.loadIdeas(projectId), projectId, "ideas"
         );
         for (const idea of ideas) this.narrativeIdeas.set(idea.id, idea);
         this.ideasLoaded = true;
+        ideasLoadedThisAttempt = true;
       }
 
       if (referenceKind === "relatedEntityIds" && (linked || !this.entitiesLoaded)) {
@@ -3273,7 +3275,8 @@ export class HostEngineApi {
         this.entitiesLoaded = true;
         this.entityEvidenceIndex = undefined;
         this.entityNameIndex = undefined;
-      } else if (referenceKind === "relatedIdeaIds" && linked && this.ideasLoaded) {
+      } else if (referenceKind === "relatedIdeaIds" && linked && this.ideasLoaded &&
+          !ideasLoadedThisAttempt) {
         // Solo se relee cuando el snapshot estaba caliente. Si la rama anterior
         // acaba de cargarlo, esa lectura ya valida el destino sin duplicar I/O.
         const ideas = requireProjectScopedRecords(

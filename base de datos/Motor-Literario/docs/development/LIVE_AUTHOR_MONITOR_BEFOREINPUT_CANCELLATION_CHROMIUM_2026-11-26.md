@@ -52,3 +52,15 @@ node --test tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs
 ```
 
 Esta separación evita que un fallo de compilación global en módulos narrativos ajenos impida ejecutar la regresión DOM específica. No sustituye el workflow integral del monitor: ambos resultados deben informarse por separado. El nuevo workflow debe terminar correctamente antes de marcar aprobada la prueba.
+
+## Integración en el workflow habitual del monitor
+
+Además del workflow focalizado, `.github/workflows/live-author-monitor.yml` ejecuta ahora este mismo test inmediatamente después de instalar Chromium y de la prueba Page Lifecycle, con una condición basada únicamente en que Chromium se haya instalado correctamente y el job no esté cancelado. Por tanto, se ejecuta aunque el build runtime general haya fallado en un módulo independiente.
+
+La prueba sigue aislada en su propio proceso Node/Vite y no depende de que el bundle general se haya generado. La suite host/editor/browser completa permanece condicionada al build runtime porque sus pruebas sí necesitan el bundle general.
+
+En consecuencia, hay dos observaciones distintas:
+- validación focalizada del único test de cancelación;
+- validación integrada del workflow habitual del monitor.
+
+Ninguna de ellas demuestra IME físico de todas las plataformas ni sustituye la conexión al editor enriquecido de producción.

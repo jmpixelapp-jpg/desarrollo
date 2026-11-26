@@ -77,18 +77,24 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
     throw new Error("Contexto inválido para extraer consecuencias narrativas.");
   }
   const baseOffset = input.baseOffset ?? 0;
+  const seenEventIds = new Set<string>();
   for (const event of input.events) {
-    if (!event || !event.evidence || event.projectId !== input.projectId ||
+    if (!event || typeof event.id !== "string" || !event.id.trim() ||
+        seenEventIds.has(event.id) || !Array.isArray(event.participantEntityIds) ||
+        event.participantEntityIds.some(id => typeof id !== "string" || !id.trim()) ||
+        !event.evidence || event.projectId !== input.projectId ||
         event.evidence.documentId !== input.documentId ||
         event.evidence.revision !== input.revision ||
         !Number.isSafeInteger(event.evidence.start) ||
         !Number.isSafeInteger(event.evidence.end) ||
         event.evidence.start < 0 || event.evidence.end < event.evidence.start ||
+        typeof event.evidence.excerpt !== "string" ||
         event.evidence.start < baseOffset ||
         event.evidence.end > baseOffset + input.text.length ||
         input.text.slice(event.evidence.start - baseOffset, event.evidence.end - baseOffset) !== event.evidence.excerpt) {
-      throw new Error("Los acontecimientos deben pertenecer al mismo documento y revisión.");
+      throw new Error("Los acontecimientos deben ser únicos, válidos y pertenecer al mismo documento y revisión.");
     }
+    seenEventIds.add(event.id);
   }
 }
 

@@ -238,8 +238,10 @@ function collectSignals(
     if (output.length >= MAX_NARRATIVE_BOOK_SIGNALS) { omitted++; continue; }
     const start = paragraph.start + match.index;
     const end = paragraph.start + match.end;
-    const contextStart = Math.max(paragraph.start, start - 100);
-    const contextEnd = Math.min(paragraph.end, end + 100);
+    // Las acciones exponen el token exacto para sincronización incremental y navegación;
+    // otros marcadores conservan una ventana contextual para revisión humana.
+    const contextStart = match.kind === "action" ? start : Math.max(paragraph.start, start - 100);
+    const contextEnd = match.kind === "action" ? end : Math.min(paragraph.end, end + 100);
     const negated = match.kind === "action" && isActionNegated(input.text, start, paragraph.start);
     output.push({
       id: "nbs-" + input.documentId + "-" + input.revision + "-" + (input.baseOffset ?? 0) + "-" + start + "-" + match.kind,

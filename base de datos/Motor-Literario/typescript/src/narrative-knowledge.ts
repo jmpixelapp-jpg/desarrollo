@@ -260,7 +260,7 @@ export function extractNarrativeEntities(
 ): readonly NarrativeEntity[] {
   validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset, undefined, now);
 
-  if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/u.test(text)) {
+  if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/iu.test(text)) {
     return [];
   }
   const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3}";
@@ -269,11 +269,11 @@ export function extractNarrativeEntities(
   const prefixObject = String.raw`\b(?:objeto|espada|arma|reliquia|amuleto|anillo|libro)\s+(?:llamado|llamada)?\s*`;
   const suffix = String.raw`(?=$|[^\p{L}\p{M}\p{N}_])`;
   const patterns: readonly { kind: NarrativeEntityType; expression: RegExp }[] = [
-    { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "gu") },
-    { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "gu") },
-    { kind: "object", expression: new RegExp(prefixObject + "(" + name + ")" + suffix, "gu") }
+    { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "giu") },
+    { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "giu") },
+    { kind: "object", expression: new RegExp(prefixObject + "(" + name + ")" + suffix, "giu") }
   ];
-  const scanText = text + "_";
+  const scanText = text + " ";
   const grouped = new Map<string, { kind: NarrativeEntityType; name: string; evidence: TextEvidence[] }>();
   for (const { kind, expression } of patterns) {
     expression.lastIndex = 0;

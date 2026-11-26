@@ -83,7 +83,9 @@ Regresiones añadidas:
 - mutación externa de igual longitud fuera del rango anunciado: debe rechazarse;
 - inserción legítima entre caracteres repetidos: debe aceptarse.
 
-**Límite conocido:** esta comprobación detecta cambios fuera del rango declarado, pero no puede demostrar la intención humana ni diferenciar una modificación programática que ocurra exactamente dentro del rango seleccionado. Para esa garantía, el anfitrión debe controlar las mutaciones del editor y proporcionar transacciones/origen de operación verificables.
+Si el navegador proporciona `beforeinput.data`, una segunda barrera compara ese valor con el segmento real del textarea tras la operación. Se probó tanto el caso coincidente (se acepta) como una mutación externa de igual longitud **dentro** de la selección (se rechaza con `input-data-mismatch`). Los eventos que entregan `data=null` conservan el comportamiento estructural anterior; no se inventa un payload esperado.
+
+**Límite conocido tras la validación del payload:** el contexto completo fuera del rango detecta cambios ajenos a la selección. Cuando `beforeinput.data` está disponible como string y el `inputType` es de inserción, el adaptador también exige que coincida exactamente con el texto realmente insertado; ante contradicción no emite el delta, informa `input-data-mismatch` y exige resincronización. Si el navegador expone `data=null`, esa comprobación de contenido no es posible: una mutación programática de igual longitud dentro del rango podría seguir siendo indistinguible. Ninguna de estas señales demuestra intención humana; el anfitrión debe controlar las mutaciones del editor y proporcionar transacciones/origen verificables para una garantía superior.
 
 ## Clasificación de actividad basada en inputType observable
 

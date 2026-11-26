@@ -13,6 +13,12 @@ export interface ProjectIdentity {
   readonly projectName: string;
   /** Identidad estable del escritor autenticado, entregada por el anfitrión. */
   readonly writerId?: string;
+  /**
+   * Identidad UUID estable de esta instalación, persistida por el anfitrión.
+   * Al definirla, las ediciones requieren un ProjectStore con outbox atómica.
+   * No debe regenerarse al abrir una sesión ni derivarse de datos personales.
+   */
+  readonly deviceId?: string;
 }
 
 export interface DocumentSnapshot {
@@ -83,6 +89,31 @@ export interface CommitResult {
   readonly reason?: string;
 }
 
+/**
+ * Operación durable pendiente de transporte. El payload JSON se mantiene
+ * desacoplado de proveedores de red y de los detalles del anfitrión.
+ */
+export interface SyncOperationDraft {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  readonly kind: string;
+  readonly payload: string;
+  readonly createdAt: number;
+}
+
+export interface StoredSyncOperation {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  readonly sequence: number;
+  readonly kind: string;
+  readonly payload: string;
+  readonly createdAt: number;
+  readonly attemptCount: number;
+  readonly lastAttemptAt?: number;
+  readonly lastErrorCode?: string;
+}
 export interface StoredDocument extends DocumentSnapshot {
   readonly projectId: string;
   readonly updatedAt: number;
@@ -271,6 +302,16 @@ export interface ProjectStore {
     linked: boolean
   ): Promise<void>;
 
+  /** Última secuencia durable asignada a un proyecto/dispositivo; cero si aún no hay operaciones. */
+  loadLastSyncOperationSequence?(projectId: string, deviceId: string): Promise<number>;
+  /** Encola una operación idempotente y avanza el cursor en una sola transacción local. */
+  enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
+  /** Lee pendientes sin eliminarlos; solo un acuse remoto durable permite retirarlos. */
+  loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
+  /** Conserva el diagnóstico del último intento sin guardar contenido sensible del error. */
+  recordSyncOperationAttempt?(operationId: string, attemptedAt: number, errorCode?: string): Promise<boolean>;
+  /** Retira la operación después de que el anfitrión haya verificado el acuse remoto durable. */
+  acknowledgeSyncOperation?(operationId: string): Promise<boolean>;
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;
   /** Obligatorio: lee snapshot y journal desde una misma vista transaccional consistente. */
@@ -280,6 +321,14 @@ export interface ProjectStore {
   }>;
   /** Opcional: almacenamiento incremental de cambios. */
   appendChange?(change: StoredChange): Promise<void>;
+  /**
+   * Confirma un delta y su operación de salida en una única transacción.
+   * La secuencia de sincronización la asigna el almacén, global por proyecto/dispositivo.
+   */
+  appendChangeAndEnqueueSyncOperation?(
+    change: StoredChange,
+    operation: SyncOperationDraft
+  ): Promise<void>;
   /** Lee deltas posteriores al snapshot, ordenados por secuencia ascendente. */
   loadChanges?(projectId: string, documentId: string, afterSequence: number): Promise<readonly StoredChange[]>;
   /** Opcional: elimina del journal los deltas ya incluidos en un snapshot durable. */

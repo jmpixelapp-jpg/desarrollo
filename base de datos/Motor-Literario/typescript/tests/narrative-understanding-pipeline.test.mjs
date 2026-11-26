@@ -421,3 +421,30 @@ test("el pipeline conserva el historial y proyecta la memoria explícita del per
   assert.equal(result.characterMemoryTimelines[0].memories[0].currentStatus,"forgotten");
   assert.equal(result.characterMemoryTimelines[0].memories[0].events.length,2);
 });
+
+test("integra objetivos explícitos de personajes en el pipeline", () => {
+  const text = "ESCENA 4\nMara quiere rescatar a Elian.";
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-intent", revision:1, text, entities
+  });
+  assert.equal(result.characterIntents.length, 1);
+  assert.equal(result.characterIntents[0].characterEntityId, "mara");
+  assert.equal(result.characterIntents[0].kind, "goal");
+  assert.equal(result.characterIntents[0].text, "rescatar a Elian");
+  assert.equal(result.characterIntents[0].polarity, "affirmed");
+  assert.equal(result.sceneAssignments.characterIntentCandidates[0].sceneAssignment, "explicit");
+});
+
+test("conserva offsets absolutos y polaridad de objetivos negados", () => {
+  const text = "Mara no quiere abandonar a Elian.";
+  const baseOffset = 1500;
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-intent-negated", revision:2,
+    text, entities, baseOffset
+  });
+  assert.equal(result.characterIntents.length, 1);
+  assert.equal(result.characterIntents[0].kind, "goal");
+  assert.equal(result.characterIntents[0].polarity, "negated");
+  assert.equal(result.characterIntents[0].evidence.start, baseOffset + text.indexOf("abandonar"));
+  assert.equal(result.characterIntents[0].evidence.end, baseOffset + text.indexOf("abandonar a Elian") + "abandonar a Elian".length);
+});

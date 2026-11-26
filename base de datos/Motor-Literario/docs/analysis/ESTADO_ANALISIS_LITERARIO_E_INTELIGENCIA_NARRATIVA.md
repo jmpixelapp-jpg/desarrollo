@@ -364,3 +364,15 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - GitHub Actions inició ejecuciones 2782 (cambio de lógica), 2783 (pruebas) y 2784 (documentación). En la última consulta, 2782 y 2783 estaban instalando Chromium y aún no habían llegado a Type-check ni a la suite; 2784 estaba en preparación. No se declara validación verde hasta ver sus conclusiones.
 
 **Siguiente paso:** ampliar cobertura verbal del español con pruebas positivas y negativas (presente, pretérito, imperfecto, futuro, infinitivo y formas compuestas) sin introducir coincidencias parciales; después abordar extracción de menciones y participantes con separación entre personaje mencionado y sujeto/ agente gramatical.
+
+
+### Tanda 26-11-2026 — ampliación de cobertura verbal y pruebas contra prefijos espurios
+
+- Se amplió el reconocimiento léxico de acciones de llegada y movimiento para incluir formas frecuentes del presente, pretérito, imperfecto, futuro, infinitivo, gerundio y participio en verbos regulares seleccionados.
+- La ampliación conserva límites Unicode de palabra, por lo que formas nominales como «caminante» y «llegada» no deben confundirse con las acciones «camina» y «llegará».
+- Se añadió una prueba con «Ana camina», «Mañana llegará» y los falsos positivos potenciales «caminante/llegada».
+- Se mantiene el alcance de negación por cláusula implementado en la tanda anterior.
+- Commits: `7322eb4` (cobertura verbal), `5d24d0e` (prueba de tiempos y límites), `21dd464` (documentación).
+- CI: las ejecuciones 2782–2784 estaban en curso o cola antes de esta tanda; las nuevas modificaciones generan validaciones posteriores. La suite completa aún no se declara aprobada.
+
+**Límite explícito:** el inventario verbal sigue siendo léxico y parcial, no un analizador morfológico completo del español. No se debe inferir el tiempo de la historia solo a partir de una forma verbal aislada. La siguiente ampliación debe incluir pruebas por verbo y variedad, así como resolución contextual de sujeto y participantes.

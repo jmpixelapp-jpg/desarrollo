@@ -498,6 +498,15 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 
 
+
+
+#### Verificación incremental de la primera capa de trayectoria
+
+- Runs 2865–2869: completaron satisfactoriamente Type-check, build y pruebas automatizadas en los commits de detección de destinatario y módulo inicial de transiciones. Los runs 2867–2869 incluyen el módulo y las pruebas básicas; 2867 terminó además benchmark con éxito.
+- Se endureció la validación del nuevo módulo: cada evidencia debe pertenecer al documento/revisión, tener rango UTF-16 de longitud exacta y, para el verbo, coincidir con la superficie de acción y quedar dentro del contexto. Código `53f3119`; prueba de rango inconsistente `be28675`.
+- Documentación de esta garantía: `70de1aa`.
+- Run 2875 corresponde a la última tanda con validación reforzada y seguía en cola al actualizar este registro. No se declara validada hasta que complete todos los pasos.
+
 ### Trayectoria de objetos: primera capa funcional — 26-11-2026
 
 - Run 2859 (commit `7f514c7`) completó correctamente Type-check, build/pruebas automatizadas y benchmark. La corrección de la prueba BOM quedó validada.

@@ -83,7 +83,7 @@ function sentenceSpans(text: string): readonly { start: number; end: number }[] 
 
 function tenseOf(copula: string, marker: string): NarrativeCharacterStateCandidate["grammaticalTense"] {
   const form = copula.toLocaleLowerCase("es");
-  if (/(?:volvi[oó]|dej[oó])\s+de?\s*(?:a\s+)?$/u.test(marker)) return "past";
+  if (/(?:volvi[oó]\s+a|dej[oó]\s+de)/u.test(marker)) return "past";
   if (/(?:estar[aá]n?|ser[aá]n?)$/u.test(form)) return "future";
   if (/(?:aba|aban|ía|ían|estuvo|estuvieron|sigui[oó]|siguieron|qued[oó]|encontraba)$/u.test(form)) return "past";
   if (/^(?:est[aá]s?|est[aá]n?|es|son|sigue|siguen|permanece|permanecen|contin[uú]a|contin[uú]an|se encuentra|parece|parecen)$/u.test(form)) return "present";
@@ -134,6 +134,15 @@ export function discoverNarrativeCharacterStateCandidates(
 ): readonly NarrativeCharacterStateCandidate[] {
   validate(input);
   const characters = input.entities.filter(entity => entity.kind === "character");
+  const nameOwners = new Map<string, Set<string>>();
+  for (const entity of characters) {
+    for (const name of new Set([entity.canonicalName, ...entity.aliases])) {
+      const normalized = name.trim().replace(/\\s+/gu, " ").toLocaleLowerCase("es");
+      const owners = nameOwners.get(normalized) ?? new Set<string>();
+      owners.add(entity.id);
+      nameOwners.set(normalized, owners);
+    }
+  }
   const results: NarrativeCharacterStateCandidate[] = [];
   const seen = new Set<string>();
 
@@ -145,6 +154,8 @@ export function discoverNarrativeCharacterStateCandidates(
         .sort((a, b) => b.length - a.length))];
       const matches: { name: string; index: number; end: number }[] = [];
       for (const name of names) {
+        const normalizedName = name.trim().replace(/\\s+/gu, " ").toLocaleLowerCase("es");
+        if ((nameOwners.get(normalizedName)?.size ?? 0) > 1) continue;
         const expression = new RegExp(
           "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(name) +
           "(?![\\p{L}\\p{M}\\p{N}_])", "giu"

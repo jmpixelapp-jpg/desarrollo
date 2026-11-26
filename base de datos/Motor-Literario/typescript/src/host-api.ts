@@ -621,7 +621,7 @@ export class HostEngineApi {
   private readonly liveMonitorCheckpointErrors = new Map<string, unknown>();
   private readonly liveMonitorLeases = new Map<string, StoredLiveAuthorMonitorLease>();
   private readonly liveMonitorLeaseHeartbeats = new Map<string, ReturnType<typeof setInterval>>();
-  private readonly liveMonitorLeaseGenerations = new Map<string, number>();
+  private readonly liveMonitorLeaseGenerations = new Map<string, object>();
   private readonly liveMonitorLeaseReleasing = new Set<string>();
   private readonly liveMonitorOwnerId = globalThis.crypto?.randomUUID?.() ??
     `monitor-owner:${Date.now()}:${Math.random().toString(36).slice(2)}`;
@@ -3865,6 +3865,7 @@ export class HostEngineApi {
     for (const timer of this.liveMonitorLeaseHeartbeats.values()) clearInterval(timer);
     this.liveMonitorLeaseHeartbeats.clear();
     this.liveMonitorLeases.clear();
+    this.liveMonitorLeaseGenerations.clear();
     this.liveMonitorLeaseReleasing.clear();
     this.liveAuthorMonitor.dispose();
   }
@@ -4098,8 +4099,8 @@ export class HostEngineApi {
       typeof this.store.releaseLiveAuthorMonitorLease === "function";
   }
 
-  private bumpLiveAuthorMonitorLeaseGeneration(documentId: string): number {
-    const next = (this.liveMonitorLeaseGenerations.get(documentId) ?? 0) + 1;
+  private bumpLiveAuthorMonitorLeaseGeneration(documentId: string): object {
+    const next = {};
     this.liveMonitorLeaseGenerations.set(documentId, next);
     return next;
   }
@@ -4140,7 +4141,7 @@ export class HostEngineApi {
     );
 
     // Una liberación, dispose o cambio de generación invalida esta respuesta.
-    if ((this.liveMonitorLeaseGenerations.get(documentId) ?? 0) !== generation ||
+    if (this.liveMonitorLeaseGenerations.get(documentId) !== generation ||
         this.liveMonitorLeaseReleasing.has(documentId)) return;
     const latest = this.liveMonitorLeases.get(documentId);
     if (!latest || latest.ownerId !== current.ownerId ||
@@ -4148,7 +4149,10 @@ export class HostEngineApi {
 
     if (!renewed) {
       this.liveMonitorLeases.delete(documentId);
-      this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
+      const invalidatedGeneration = this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
+      if (this.liveMonitorLeaseGenerations.get(documentId) === invalidatedGeneration) {
+        this.liveMonitorLeaseGenerations.delete(documentId);
+      }
       const timer = this.liveMonitorLeaseHeartbeats.get(documentId);
       if (timer) clearInterval(timer);
       this.liveMonitorLeaseHeartbeats.delete(documentId);
@@ -4216,6 +4220,9 @@ export class HostEngineApi {
             latest.fencingToken === lease.fencingToken) {
           this.liveMonitorLeases.delete(documentId);
         }
+      }
+      if (this.liveMonitorLeaseGenerations.get(documentId) === generation) {
+        this.liveMonitorLeaseGenerations.delete(documentId);
       }
       this.liveMonitorLeaseReleasing.delete(documentId);
     } catch (error) {

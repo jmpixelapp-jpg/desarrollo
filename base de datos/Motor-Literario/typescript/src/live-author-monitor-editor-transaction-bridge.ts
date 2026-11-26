@@ -96,8 +96,10 @@ implements LiveAuthorMonitorEditorTransactionProvider {
 
   /**
    * Publica un evento que el editor ya aplicó localmente.
-   * Retorna el número de listeners notificados; cero indica que no había una
-   * integración montada para ese documento o que el puente ya fue dispuesto.
+   * Retorna el número de listeners seleccionados al publicar; cero indica que
+   * no había una integración montada para ese documento o que el puente fue dispuesto.
+   * Una publicación reentrante queda en cola, por lo que el retorno cuenta los
+   * listeners capturados al encolar, no los callbacks que ya terminaron.
    */
   publishAppliedTransaction(
     documentId: string,

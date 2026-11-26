@@ -3700,7 +3700,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(
-        [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS], "readwrite"
+        [IDEAS, PERSONAL_IDEAS, ENTITIES, FINALIZATION_RECEIPTS, WRITER_LIBRARY_VERSIONS], "readwrite"
       );
       const ideas = transaction.objectStore(IDEAS);
       const personal = transaction.objectStore(PERSONAL_IDEAS);
@@ -3759,6 +3759,7 @@ export class IndexedDbProjectStore implements ProjectStore {
             archived.push(entry);
             didChange = true;
           }
+          if (pending.length > 0) advanceWriterLibraryVersion(transaction, writerId);
           const archivedIdeaIds = pending.map(item => item.idea.id).sort();
           if (supportsReceipts) receipts.add({
             writerId,
@@ -4323,7 +4324,9 @@ export class IndexedDbProjectStore implements ProjectStore {
     await new Promise<void>((resolve, reject) => {
       // La biblioteca se incluye incluso sin writerId para detectar
       // entradas archivadas que no podríamos mantener coherentes sin identidad.
-      const stores = [ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS];
+      const stores = [
+        ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS, WRITER_LIBRARY_VERSIONS
+      ];
       const transaction = db.transaction(stores, "readwrite");
       const entityStore = transaction.objectStore(ENTITIES);
       const relationStore = transaction.objectStore(RELATIONS);
@@ -4519,9 +4522,14 @@ export class IndexedDbProjectStore implements ProjectStore {
               ))];
               ideaStore.put({ ...idea, relatedEntityIds });
             }
+            let personalLibraryChanged = false;
             personalEntries.forEach((entry, index) => {
-              if (entry !== originalPersonalEntries[index]) personalIdeaStore.put(entry);
+              if (entry !== originalPersonalEntries[index]) {
+                personalIdeaStore.put(entry);
+                personalLibraryChanged = true;
+              }
             });
+            if (personalLibraryChanged) advanceWriterLibraryVersion(transaction, writerId!);
           } catch (error) {
             try { transaction.abort(); } catch { /* transacción ya finalizada */ }
             reject(error);

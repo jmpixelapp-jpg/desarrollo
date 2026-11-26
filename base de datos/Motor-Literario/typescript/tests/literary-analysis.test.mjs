@@ -820,7 +820,7 @@ test("la cronología limita las muestras de identificadores de eventos y conserv
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
-    text: "Escena 1\\nAna cruzó el umbral.",
+    text: "Escena 1\nAna cruzó el umbral.",
     knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
     knownProjectEvents
   });

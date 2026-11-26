@@ -902,6 +902,20 @@
           "deviceId"
         ],
         "indexes": []
+      },
+      {
+        "name": "narrative-reference-repair-audits",
+        "keyPath": [
+          "projectId",
+          "operationId"
+        ],
+        "indexes": [
+          [
+            "by-project",
+            "projectId",
+            false
+          ]
+        ]
       }
     ]
   },

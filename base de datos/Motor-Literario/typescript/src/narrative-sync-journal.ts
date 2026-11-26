@@ -30,7 +30,7 @@ interface WriterCursor {
  * Este componente registra y ordena operaciones; NO las aplica al grafo.
  */
 export class IndexedDbNarrativeSyncJournal {
-  private database?: Promise<IDBDatabase>;
+  private database: Promise<IDBDatabase> | undefined;
   private readonly databaseName: string;
 
   constructor(options: NarrativeSyncJournalOptions = {}) {

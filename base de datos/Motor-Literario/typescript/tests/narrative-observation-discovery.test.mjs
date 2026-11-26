@@ -607,3 +607,46 @@ test("limita la segmentación de documentos patológicos sin alterar offsets de 
   assert.ok(found.every(item => text.slice(item.actionEvidence.start, item.actionEvidence.end) ===
     item.actionEvidence.excerpt));
 });
+
+
+test("distingue acciones narradas de contenidos bajo creencia, memoria, deseo y discurso referido", () => {
+  const cases = [
+    ["Ana creyó que Bruno llegó.", "llegar", "character-belief", "creyó que "],
+    ["Ana recordó que Bruno huyó.", "huir", "character-memory", "recordó que "],
+    ["Ana deseaba que Bruno regresara.", "regresar", "character-desire", "deseaba que "],
+    ["Ana dijo que Bruno llegó.", "llegar", "reported-speech", "dijo que "]
+  ];
+  for (const [text, action, frame, cue] of cases) {
+    const bruno = { ...character, id: "character:bruno", canonicalName: "Bruno" };
+    const found = discoverNarrativeObservationCandidates({
+      ...context, entities: [character, bruno], text
+    });
+    const observation = found.find(item => item.action === action);
+    assert.ok(observation, text);
+    assert.equal(observation.epistemicFrame, frame, text);
+    assert.equal(observation.epistemicFrameEvidence?.excerpt, cue, text);
+    assert.equal(text.slice(
+      observation.epistemicFrameEvidence.start,
+      observation.epistemicFrameEvidence.end
+    ), cue);
+    assert.equal(observation.reviewStatus, "candidate");
+  }
+});
+
+test("marca como hipotético el contenido introducido por si y conserva narración no enmarcada", () => {
+  const hypotheticalText = "Si Ana llegara, Bruno huiría.";
+  const hypothetical = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, { ...character, id: "character:bruno", canonicalName: "Bruno" }],
+    text: hypotheticalText
+  });
+  const flight = hypothetical.find(item => item.action === "huir");
+  assert.ok(flight);
+  assert.equal(flight.epistemicFrame, "hypothetical");
+  assert.equal(flight.epistemicFrameEvidence?.excerpt, "Si ");
+
+  const asserted = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana corrió al refugio."
+  });
+  assert.equal(asserted[0].epistemicFrame, "narrator-asserted");
+  assert.equal(asserted[0].epistemicFrameEvidence, undefined);
+});

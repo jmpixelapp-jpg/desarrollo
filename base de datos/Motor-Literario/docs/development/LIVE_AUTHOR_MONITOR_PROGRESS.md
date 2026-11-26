@@ -532,9 +532,13 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 
 **Regresiones de configuración:** ambos montajes rechazan `maxPendingChanges: 0` antes de consultar HostEngineApi o instalar listeners, evitando inicializaciones parciales.
 
-**Archivos:** integraciones pública transaccional y textarea, pruebas de integración respectivas y guía del adaptador; especificación sección 39.
+**Archivos:** `typescript/src/live-author-monitor-editor-transaction-integration.ts`, `typescript/tests/live-author-monitor-editor-transaction-integration.test.mjs`, `typescript/src/live-author-monitor-textarea-integration.ts`, `typescript/tests/live-author-monitor-textarea-integration.test.mjs` y guía del adaptador; especificación sección 39.
 
-**Validación:** las regresiones se incluyen en el workflow específico del monitor. Pendiente de resultados de GitHub Actions para el commit de esta entrega.
+**Commits:** [8622b618 — exponer el límite configurable en ambos montajes](https://github.com/jmpixelapp-jpg/desarrollo/commit/8622b61856c32f5f62dd3aa416fe6c69b5509894), [c002ebb0 — validar el límite antes del montaje](https://github.com/jmpixelapp-jpg/desarrollo/commit/c002ebb04a4b33d632ef155b05edb2776bc2a949), [e4d58b3d — probar configuración inválida](https://github.com/jmpixelapp-jpg/desarrollo/commit/e4d58b3de1f140dd75b90fe4e3b95ebcd9e5345a).
+
+**Validación del monitor — commit `e4d58b3de1f140dd75b90fe4e3b95ebcd9e5345a`:** GitHub Actions [45733243548](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45733243548) terminó correctamente. Build Vite aprobado; MLDB 0.4.2 válido (26 tablas); auditoría física correcta (25 tablas del motor y 34 almacenes IndexedDB definidos y creados); prueba Chromium de dos páginas completada; **138/138 pruebas aprobadas, 0 fallidas y 0 omitidas**. Se incluyen las pruebas de desbordamiento, configuración pública, pausa del proveedor y recuperación tras snapshot común.
+
+**CI general — mismo commit:** [45733243591](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45733243591) aprobó `Type-check`, pero falló al ejecutar la suite completa: 712 pruebas, 691 aprobadas, 12 fallidas y 9 omitidas. Los fallos quedaron en `tests/idea-synchronization.test.mjs`, `tests/literary-analysis-graph-determinism.test.mjs` y `tests/literary-analysis.test.mjs`, fuera de los archivos del monitor. El benchmark general se omitió por el fallo de la suite.
 
 
 **Validación preventiva de configuración:** los montajes transaccional y textarea validan `maxPendingChanges` antes de consultar/reservar la sesión de monitoreo o instalar listeners. Un límite inválido (no entero seguro o fuera de 1–65536) falla de inmediato y no deja recursos parcialmente montados.

@@ -752,7 +752,11 @@ Ambos adaptadores propagan el valor al mismo enlace FIFO, con predeterminado 409
 
 **Cobertura de integración:** una prueba del proveedor transaccional comprueba retirada del listener nativo y edición posterior a la recuperación; otra prueba del textarea verifica la captura suspendida y reanudada.
 
-**Estado:** código y pruebas incluidos; CI pendiente.
+**Validación del monitor — commit `e4d58b3de1f140dd75b90fe4e3b95ebcd9e5345a`:** GitHub Actions [45733243548](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45733243548) terminó correctamente. Build Vite aprobado; MLDB 0.4.2 válido (26 tablas); auditoría física correcta (25 tablas del motor y 34 almacenes IndexedDB definidos y creados); prueba Chromium de dos páginas completada; **138/138 pruebas aprobadas, 0 fallidas y 0 omitidas**. Se incluyen las pruebas de desbordamiento, configuración pública, pausa del proveedor y recuperación tras snapshot común.
+
+**CI general — mismo commit:** [45733243591](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45733243591) aprobó `Type-check`, pero falló al ejecutar la suite completa: 712 pruebas, 691 aprobadas, 12 fallidas y 9 omitidas. Los fallos quedaron en `tests/idea-synchronization.test.mjs`, `tests/literary-analysis-graph-determinism.test.mjs` y `tests/literary-analysis.test.mjs`, fuera de los archivos del monitor. El benchmark general se omitió por el fallo de la suite.
+
+**Estado:** código integrado en `main` y validado por el workflow específico.
 
 
 **Validación anticipada:** ambos montajes comprueban el rango de `maxPendingChanges` antes de tocar HostEngineApi o instalar listeners. Una configuración inválida no debe abrir una sesión del monitor ni dejar recursos parciales.

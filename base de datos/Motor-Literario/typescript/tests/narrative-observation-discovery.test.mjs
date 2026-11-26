@@ -554,3 +554,22 @@ test("conserva el verbo léxico de una perífrasis y no extrae el auxiliar", () 
   assert.equal(found[0].grammaticalTense, "participle");
 });
 
+test("propaga la negación a través de auxiliares sin negar la acción matriz", () => {
+  const firstText = "Ana no había llegado al refugio.";
+  const first = discoverNarrativeObservationCandidates({ ...context, text: firstText });
+  assert.equal(first.length, 1);
+  assert.equal(first[0].action, "llegar");
+  assert.equal(first[0].polarity, "negated");
+
+  const secondText = "Ana no pudo abrir la puerta.";
+  const second = discoverNarrativeObservationCandidates({ ...context, text: secondText });
+  assert.equal(second.length, 1);
+  assert.equal(second[0].action, "abrir");
+  assert.equal(second[0].polarity, "negated");
+
+  const matrixText = "Ana dijo que no había llegado.";
+  const matrix = discoverNarrativeObservationCandidates({ ...context, text: matrixText });
+  assert.equal(matrix.find(item => item.action === "decir")?.polarity, "affirmed");
+  assert.equal(matrix.find(item => item.action === "llegar")?.polarity, "negated");
+});
+

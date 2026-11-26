@@ -1265,8 +1265,29 @@ export class HostEngineApi {
         throw new Error("La consolidación produciría un alias ambiguo con otra entidad del proyecto.");
       }
       try {
+        let syncOperation: SyncOperationDraft | undefined;
+        if (project.deviceId) {
+          if (!this.store.supportsAtomicNarrativeSyncOutbox) {
+            throw new Error("El adaptador no confirma fusiones y outbox en una sola transacción; no se realizará una fusión local no sincronizable.");
+          }
+          const operationId = globalThis.crypto?.randomUUID?.();
+          if (!operationId) {
+            throw new Error("No hay un generador criptográfico UUID disponible para identificar la fusión.");
+          }
+          syncOperation = {
+            operationId,
+            projectId,
+            deviceId: project.deviceId,
+            kind: "entity-merge",
+            payload: JSON.stringify({
+              targetEntityId, sourceEntityId,
+              ...(project.writerId === undefined ? {} : { writerId: project.writerId })
+            }),
+            createdAt: Date.now()
+          };
+        }
         await this.store.mergeNarrativeEntityIdentity!(
-          projectId, targetEntityId, sourceEntityId, project.writerId
+          projectId, targetEntityId, sourceEntityId, project.writerId, syncOperation
         );
       } catch (error) {
         this.invalidateNarrativeKnowledgeCaches();

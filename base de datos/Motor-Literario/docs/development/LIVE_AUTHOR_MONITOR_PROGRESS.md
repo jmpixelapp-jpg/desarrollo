@@ -1248,7 +1248,7 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresiones:** la prueba de source exige que la primera llamada lance cuando el proveedor falla una vez y que la segunda complete la retirada; la prueba de integración fuerza dos fallos transitorios (binding y source), exige el error al llamador y verifica que la segunda llamada pública elimina el último listener.
 
-**Validación:** pendiente de CI para este cambio.
+**Validación específica del monitor:** aprobada en [Live Author Monitor — run 45753736832](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753736832). Pasaron build aislado, regresiones diagnósticas, Chromium, auditoría MLDB, build runtime, suite completa del monitor y benchmark de memoria. La lane general de TypeScript correspondiente a `fac9cc8` todavía estaba ejecutándose al registrar esta entrada.
 
 
 ## 76. Incluir `activityKind` en la firma de deduplicación (26 de noviembre de 2026)

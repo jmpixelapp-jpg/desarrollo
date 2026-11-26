@@ -442,3 +442,82 @@ test("Web Locks mantiene la exclusión durante el procesamiento y libera al term
   journal.close();
 });
 
+
+
+test("recupera una interrupción entre mutación de dominio y acuse sin duplicar el efecto idempotente", async () => {
+  const journal = createJournal();
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "crash-window-operation-1",
+    projectId: "crash-window-project",
+    writerId: "crash-window-writer",
+    sequence: 1,
+    kind: "note",
+    payload: { value: "persist once" }
+  });
+  await journal.accept(envelope);
+
+  // Simula un efecto de dominio durable deduplicado por operationId.
+  const domainReceipts = new Set();
+  let domainMutations = 0;
+  let interruptAfterCommit = true;
+  const idempotentApply = async operation => {
+    if (!domainReceipts.has(operation.operationId)) {
+      domainReceipts.add(operation.operationId);
+      domainMutations++;
+    }
+    if (interruptAfterCommit) {
+      interruptAfterCommit = false;
+      throw new Error("interrupción simulada antes del acuse del diario");
+    }
+  };
+
+  const first = await replayPendingNarrativeSyncOperations(
+    journal, "crash-window-project", idempotentApply, "crash-window-writer"
+  );
+  assert.deepEqual(first, {
+    processed: 0,
+    remaining: 1,
+    stoppedAtOperationId: "crash-window-operation-1",
+    failure: "apply-or-ack-failed"
+  });
+  assert.equal(domainMutations, 1);
+  assert.equal((await journal.loadOperation("crash-window-project", "crash-window-operation-1")).appliedAt, undefined);
+
+  const second = await replayPendingNarrativeSyncOperations(
+    journal, "crash-window-project", idempotentApply, "crash-window-writer"
+  );
+  assert.deepEqual(second, { processed: 1, remaining: 0 });
+  assert.equal(domainMutations, 1);
+  assert.ok((await journal.loadOperation("crash-window-project", "crash-window-operation-1")).appliedAt >= 0);
+  journal.close();
+});
+
+test("el acuse durable es idempotente entre dos instancias del mismo diario", async () => {
+  const databaseName = "sync-ack-multi-instance-" + Math.random().toString(36).slice(2);
+  const firstJournal = createJournal(databaseName);
+  const secondJournal = createJournal(databaseName);
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "multi-instance-ack-1",
+    projectId: "multi-instance-ack-project",
+    writerId: "multi-instance-ack-writer",
+    sequence: 1,
+    kind: "note",
+    payload: { value: "ack once" }
+  });
+  await firstJournal.accept(envelope);
+
+  await Promise.all([
+    firstJournal.markApplied(envelope.projectId, envelope.operationId, envelope.digest, 100),
+    secondJournal.markApplied(envelope.projectId, envelope.operationId, envelope.digest, 200)
+  ]);
+  const stored = await firstJournal.loadOperation(envelope.projectId, envelope.operationId);
+  assert.ok(stored.appliedAt === 100 || stored.appliedAt === 200);
+  await secondJournal.markApplied(envelope.projectId, envelope.operationId, envelope.digest, 300);
+  assert.equal((await firstJournal.loadOperation(envelope.projectId, envelope.operationId)).appliedAt, stored.appliedAt);
+  await assert.rejects(
+    () => secondJournal.markApplied(envelope.projectId, envelope.operationId, "sha256:" + "0".repeat(64)),
+    /digest no coincide/u
+  );
+  firstJournal.close();
+  secondJournal.close();
+});

@@ -1,6 +1,8 @@
 import {
   extractNarrativeEntities,
-  type NarrativeEntity
+  extractNarrativeEvents,
+  type NarrativeEntity,
+  type NarrativeEvent
 } from "./narrative-knowledge";
 import {
   discoverNarrativeObservationCandidates,
@@ -90,6 +92,8 @@ export interface NarrativeBookIngestionResult {
   readonly chapters: readonly NarrativeBookChapter[];
   readonly paragraphs: readonly NarrativeBookParagraph[];
   readonly signals: readonly NarrativeBookSignal[];
+  /** Acontecimientos declarados explícitamente con ACONTECIMIENTO:/EVENTO:; no inferidos. */
+  readonly eventCandidates: readonly NarrativeEvent[];
   /** Entidades nombradas explícitamente con etiquetas como «Personaje Ana»; candidatas, no confirmadas. */
   readonly entityCandidates: readonly NarrativeEntity[];
   /** Acciones vinculadas a entidades conocidas; siguen siendo candidatos revisables. */
@@ -425,6 +429,18 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
         baseOffset: input.baseOffset ?? 0
       })
     : [];
+  // Los acontecimientos se extraen solo cuando el escritor usa una etiqueta explícita.
+  // Las entidades locales sirven para sugerir participantes, nunca para confirmar roles.
+  const eventCandidates = input.text.length <= MAX_NARRATIVE_BOOK_TEXT_UNITS
+    ? extractNarrativeEvents(
+        input.projectId,
+        input.documentId,
+        input.revision,
+        input.text,
+        entitiesForObservation,
+        input.baseOffset ?? 0
+      )
+    : [];
   return {
     version: 1,
     projectId: input.projectId,
@@ -439,6 +455,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     entityCandidates,
     observations,
     actionLinks,
+    eventCandidates,
     observationStatus,
     coverage: {
       chapterCount: chapters.length,

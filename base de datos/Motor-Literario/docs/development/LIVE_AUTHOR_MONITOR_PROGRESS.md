@@ -1345,4 +1345,6 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Corrección tras primera ejecución:** CI detectó un separador `;` accidental en la inicialización del contador de sesión nueva, en `live-author-monitor.ts:222`. Se corrigió en el commit `29c0b351`; la validación se está repitiendo con ese ajuste.
 
-**Validación:** pendiente de la nueva ejecución de GitHub Actions.
+**Validación en [Live Author Monitor — run 45756516860](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756516860), checkout `29c0b351`:** aprobada para la lane aislada. El build reducido pasó; las regresiones diagnósticas aprobaron 17/17; el conjunto del núcleo, panel, workspace y diagnóstico aprobó 59/59, incluidas las cinco pruebas nuevas de error visible por suscriptor/vista y aislamiento por documento. El benchmark de 100.000 commits en ocho documentos de 1 MiB terminó en 499,17 ms (~200.332 commits/s); heap de 4,26 MiB al 50 % y 100 % de la carga, crecimiento 0 MiB, 0,50 MiB retenidos por las sesiones abiertas y cero tickets pendientes. El benchmark se ejecutó en Node.js 22.23.5 y no conserva texto del manuscrito.
+
+La conclusión global de la lane sigue siendo `failure` por controles compartidos ajenos al monitor: la auditoría MLDB informa desajuste de versión IndexedDB y almacenes de reparación pendientes de mapear; el bundle runtime general todavía falla al analizar `NarrativeReferenceRepairPendingEntry` en `indexeddb-store.ts:2560`. Por esa razón las pruebas que dependen del motor completo/editor/navegador siguen omitidas.

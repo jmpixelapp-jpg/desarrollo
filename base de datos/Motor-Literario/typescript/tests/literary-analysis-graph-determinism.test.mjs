@@ -391,12 +391,20 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
     ["not-in-snapshot", "included-in-snapshot"]
   );
 
+  const legacyIdeas = [source, included].map(item => ({
+    ...item,
+    text: item.text ?? "Idea " + item.ideaId,
+    originDocumentId: "chapter-graph",
+    sourceProjectName: "Libro de prueba",
+    relatedEntityIds: [],
+    evidence: []
+  }));
   const legacy = analyzeLiteraryFragment({
     projectId,
     documentId: "chapter-graph",
     revision: 1,
     text: "Escena 1\nLas ideas se conectan en distintas direcciones.",
-    knownIdeas: [source, included]
+    knownIdeas: legacyIdeas
   }).ideaGraph;
   assert.equal(legacy.catalogScope, "character-linked-fallback");
   assert.equal(legacy.projectCatalogComplete, false);

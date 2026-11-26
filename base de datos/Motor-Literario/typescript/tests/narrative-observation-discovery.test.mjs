@@ -44,6 +44,7 @@ test("distingue formas verbales sin convertir el tiempo gramatical en cronologí
   for (const [text, expected] of forms) {
     const found = discoverNarrativeObservationCandidates({ ...context, text });
     assert.equal(found[0]?.grammaticalTense, expected, text);
+    if (text === "Ana cruzar el puente.") assert.equal(found[0]?.surface, "cruzar");
   }
 });
 

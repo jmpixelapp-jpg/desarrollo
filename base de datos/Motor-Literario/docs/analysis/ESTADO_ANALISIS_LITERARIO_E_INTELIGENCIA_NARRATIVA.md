@@ -455,3 +455,11 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - La prueba verifica que el contador de intentos avanza y que la operación desaparece únicamente después del acuse.
 - El contrato aclara que el tiempo no resuelve el conflicto, que el coordinador no altera el payload y que la prueba usa un transporte simulado.
 - **Validación:** prueba y documentación publicadas. Aún no se ha ejecutado la suite ni se dispone de resultados CI para estos commits.
+
+### Tanda — recuperación de conflictos sobre IndexedDB real
+
+- Añadida una prueba de integración del ciclo de conflicto y recuperación usando `IndexedDbProjectStore`, no solo una outbox en memoria.
+- Verifica persistencia del código/mensaje, contador de intentos y fecha de backoff tras cerrar el primer ciclo.
+- Comprueba que no hay envío un milisegundo antes del vencimiento y que al vencer se reenvían exactamente el mismo `operationId` y payload.
+- La operación solo desaparece después del acuse explícito del segundo ciclo.
+- **Validación:** regresión y documentación publicadas; no se ha ejecutado localmente la suite ni se han recibido resultados CI para este commit.

@@ -81,3 +81,20 @@ No añadir un contador aislado ni inferir el siguiente número en la interfaz. D
 - migración compatible con IndexedDB v25 y datos existentes.
 
 Hasta entonces, la reconciliación debe recibir una secuencia reservada por una autoridad externa confiable o permanecer deshabilitada.
+
+
+## 9. Asignación atómica de secuencia implementada
+
+Se incorpora `IndexedDbProjectStore.enqueueNextSyncOperation(draft)` y su contrato opcional en `ProjectStore`. El llamador entrega la operación sin `sequence`; el almacén:
+
+1. abre una transacción `readwrite` sobre `SYNC_OUTBOX`;
+2. comprueba primero si el `operationId` ya existe y, si su identidad inmutable coincide, devuelve la operación ya asignada (reintento idempotente);
+3. consulta en orden inverso el índice único `by-project-device-sequence` para el mismo proyecto/dispositivo;
+4. asigna `última secuencia + 1` (o 1 si no hay operaciones);
+5. inserta la operación dentro de esa misma transacción.
+
+Como las dos operaciones de lectura y escritura se realizan dentro de una transacción `readwrite` que abarca el mismo object store, IndexedDB serializa las transacciones competidoras entre conexiones. No se añade contador ni se incrementa la versión de base de datos: el índice existente es suficiente para calcular el siguiente valor bajo exclusión transaccional. El método rechaza el agotamiento del entero seguro y las colisiones de identidad. El encolado legado con secuencia explícita se conserva por compatibilidad; los nuevos escritores deben preferir el método asignador.
+
+La regresión con dos instancias verifica que, partiendo de una operación legacy en secuencia 4, dos inserciones simultáneas obtienen 5 y 6, el reintento del mismo ID devuelve la misma secuencia y un payload diferente para ese ID se rechaza. La prueba está escrita pero requiere ejecutar build y suite para validar el artefacto compilado.
+
+**Límite:** esto garantiza asignación local serializada dentro de una base IndexedDB compartida en el mismo origen. No coordina dispositivos físicos distintos ni sustituye secuencias asignadas por un servidor para un registro global.

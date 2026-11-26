@@ -395,3 +395,15 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - La ejecución 2795, correspondiente al commit `1edc636`, superó Type-check.
 - En la última consulta, el paso «Build and run automated tests» seguía en ejecución; por tanto, todavía no hay conclusión sobre las pruebas completas ni sobre el benchmark.
 - La ejecución 2794 corresponde al commit intermedio `db82b9e`, que falló Type-check por un literal de plantilla mal formado. Ese commit fue corregido inmediatamente en `1edc636`; no es la versión vigente.
+
+
+### Tanda adicional — corrección de regresiones en el clasificador de señales de ingesta
+
+- El análisis de la ejecución 2795 (commit `1edc636`) mostró que los cambios de polaridad y ampliación verbal no estaban aplicados en el módulo que realmente produce las señales de ingesta: `narrative-book-ingestion.ts`. La lógica anterior seguía usando una ventana fija de 36 caracteres y un inventario verbal limitado a formas de pasado.
+- Se corrigió el módulo efectivo: la negación de acciones ahora se limita a la cláusula/oración precedente, y no modifica señales temporales/causales/contrastivas por proximidad.
+- Se ampliaron los patrones de llegada y movimiento en la ingesta, incluyendo presente, pretérito, imperfecto, futuro, infinitivo, gerundio y participio en verbos seleccionados, con límites Unicode de palabra.
+- Commit correctivo: `4fb98f9`.
+- La ejecución 2800 se generó para este commit y estaba en cola en la última consulta. No se afirma aún que Type-check, pruebas ni benchmark hayan pasado.
+- Las ejecuciones 2795–2799 fallaron en distintas pruebas: 2795 tuvo dos fallos de negación y reconocimiento de formas verbales; 2796–2798/2799 incluyen validaciones de los cambios de límites Unicode de nombres. Las correcciones se están consolidando por separado para no confundir el estado de cada rama de validación.
+
+**Criterio antes de ampliar formatos o añadir más heurísticas:** conseguir que la suite completa y el benchmark pasen con el clasificador de ingesta efectivo, no solo con el módulo auxiliar de observaciones.

@@ -1,9 +1,49 @@
 import type { ProjectStore } from "./contracts";
-import type { NarrativeIdea } from "./narrative-knowledge";
+import { MAX_NARRATIVE_IDEA_REFERENCES, type NarrativeIdea } from "./narrative-knowledge";
 import type { NarrativeSyncOperationHandler } from "./narrative-sync-dispatcher";
 
 export interface NarrativeIdeaUpsertPayload {
   readonly idea: NarrativeIdea;
+}
+
+function isBoundedIdentifierList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.length <= MAX_NARRATIVE_IDEA_REFERENCES &&
+    value.every(item => typeof item === "string" && item.trim().length > 0 && item.length <= 256) &&
+    new Set(value).size === value.length;
+}
+
+function isNarrativeIdea(value: unknown): value is NarrativeIdea {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const idea = value as Partial<NarrativeIdea>;
+  if (typeof idea.projectId !== "string" || !idea.projectId.trim() || idea.projectId.length > 256 ||
+      typeof idea.id !== "string" || !idea.id.trim() || idea.id.length > 512 ||
+      typeof idea.text !== "string" || idea.text.length > 1_000_000 ||
+      !["IDEA", "incorporated", "discarded"].includes(idea.status ?? "") ||
+      typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
+      idea.originDocumentId.length > 256 ||
+      typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||
+      idea.sourceProjectName.length > 512 ||
+      !Array.isArray(idea.evidence) || idea.evidence.length > 10_000) return false;
+
+  if (!idea.evidence.every(item => item && typeof item.documentId === "string" &&
+      item.documentId.trim().length > 0 && item.documentId.length <= 256 &&
+      Number.isSafeInteger(item.revision) && item.revision >= 0 &&
+      Number.isSafeInteger(item.start) && item.start >= 0 &&
+      Number.isSafeInteger(item.end) && item.end >= item.start &&
+      typeof item.excerpt === "string" && item.excerpt.length <= 20_000 &&
+      (item.status === undefined || item.status === "stale"))) return false;
+
+  if (idea.relatedEntityIds !== undefined && !isBoundedIdentifierList(idea.relatedEntityIds)) return false;
+  if (idea.relatedIdeaIds !== undefined && !isBoundedIdentifierList(idea.relatedIdeaIds)) return false;
+  if (idea.statusHistory !== undefined) {
+    if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length > 10_000 ||
+        !idea.statusHistory.every(change => change &&
+          ["IDEA", "incorporated", "discarded"].includes(change.status) &&
+          ["initial", "writer", "text-revised"].includes(change.reason) &&
+          (change.changedAt === undefined ||
+            (Number.isFinite(change.changedAt) && change.changedAt >= 0)))) return false;
+  }
+  return true;
 }
 
 /**
@@ -14,8 +54,9 @@ export interface NarrativeIdeaUpsertPayload {
  * la idea entre lectura y escritura, el conflicto se propaga y el diario deja
  * la operación pendiente para que el anfitrión reconcilie la edición.
  *
- * Repetir la misma operación después de una caída entre escritura y acuse es
- * inocuo: la comparación exacta detecta que el estado ya fue aplicado.
+ * Repetir la misma operación después de una caída entre el CAS de dominio y
+ * el acuse del diario es inocuo: la comparación exacta detecta que el estado
+ * ya fue aplicado.
  */
 export function createNarrativeIdeaUpsertHandler(
   store: ProjectStore
@@ -28,22 +69,8 @@ export function createNarrativeIdeaUpsertHandler(
   return {
     kind: "idea-upsert",
     validate(payload: unknown): payload is NarrativeIdeaUpsertPayload {
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
-      const idea = (payload as { idea?: unknown }).idea;
-      if (!idea || typeof idea !== "object" || Array.isArray(idea)) return false;
-      const value = idea as Partial<NarrativeIdea>;
-      return typeof value.projectId === "string" && value.projectId.trim().length > 0 &&
-        typeof value.id === "string" && value.id.trim().length > 0 &&
-        typeof value.text === "string" &&
-        (value.status === "IDEA" || value.status === "incorporated" || value.status === "discarded") &&
-        typeof value.originDocumentId === "string" && value.originDocumentId.trim().length > 0 &&
-        typeof value.sourceProjectName === "string" && value.sourceProjectName.trim().length > 0 &&
-        Array.isArray(value.evidence) &&
-        value.evidence.every(item => item && typeof item.documentId === "string" &&
-          Number.isSafeInteger(item.revision) && item.revision >= 0 &&
-          Number.isSafeInteger(item.start) && item.start >= 0 &&
-          Number.isSafeInteger(item.end) && item.end >= item.start &&
-          typeof item.excerpt === "string");
+      return Boolean(payload && typeof payload === "object" && !Array.isArray(payload) &&
+        isNarrativeIdea((payload as { idea?: unknown }).idea));
     },
     async apply(operation): Promise<void> {
       const idea = operation.payload.idea;

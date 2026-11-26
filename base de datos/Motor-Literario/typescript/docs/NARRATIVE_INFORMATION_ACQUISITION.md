@@ -33,6 +33,10 @@ Reconoce señales lingüísticas explícitas para premisa, tema, conflicto, obje
 
 Callback: `onNarrativeIdeaCandidates(analysis, candidates)`.
 
+### Contexto de análisis incremental
+
+El análisis de acciones usa el snapshot del documento abierto cuando su revisión coincide exactamente con la revisión del resultado. Examina hasta 12.000 unidades UTF-16 a cada lado del fragmento afectado, conserva offsets absolutos y no mezcla revisiones. Si no existe un snapshot coherente, analiza solo el fragmento afectado. Esta ventana mejora el contexto local, pero todavía no resuelve pronombres ni referencias anafóricas.
+
 ### Acciones narrativas candidatas
 
 Módulo: `src/narrative-observation-discovery.ts`
@@ -41,7 +45,7 @@ Reconoce un vocabulario controlado de acciones en frases que mencionan personaje
 
 Reglas de prudencia:
 - Solo vincula nombres canónicos o alias confirmados.
-- Si aparece un solo personaje conocido, lo señala como actor candidato, no como sujeto gramatical confirmado.
+- Si aparece un solo personaje conocido, conserva su ID como única mención; nunca lo presenta como sujeto, agente o actor sin análisis sintáctico.
 - Si aparecen varios personajes, conserva todos como mencionados y deja el actor sin resolver.
 - La presencia de una entidad en una frase no demuestra que sea objeto directo o destinatario.
 - La negación explícita se conserva; "no abrió" nunca se transforma en una acción afirmada.
@@ -53,7 +57,7 @@ Callback: `onNarrativeObservationCandidates(analysis, candidates)`.
 
 - El vocabulario verbal es deliberadamente finito y debe ampliarse con pruebas por idioma y morfología.
 - La extracción actual de entidades nuevas depende de expresiones de identificación explícitas (por ejemplo, "personaje Ana"). Una mención aislada de nombre propio no basta para crear una ficha automáticamente.
-- Los callbacks incrementales reciben el fragmento afectado; para comprender referencias anafóricas y contexto de escena se necesita una capa contextual que consulte un snapshot coherente de la revisión.
+- El callback de acciones consulta una ventana contextual de hasta 12.000 unidades UTF-16 alrededor del cambio, únicamente si el snapshot abierto coincide con la revisión analizada; mantiene offsets absolutos y usa el fragmento afectado como fallback.
 - El callback de acciones se ejecuta después de la extracción de conocimiento en el flujo que requiere un adaptador con `saveEntity` y `loadEntities`; sin ese contrato de almacenamiento, el flujo actual de extracción narrativa no se activa.
 - Los eventos de la base actual requieren marcadores explícitos `EVENTO:` o `ACONTECIMIENTO:`; no se debe confundir esa extracción editorial con comprensión libre de acontecimientos narrados.
 - Las relaciones se reconocen con patrones explícitos limitados; la ausencia de una relación extraída no prueba que no exista.

@@ -51,3 +51,14 @@ La extracción de aposiciones ahora rechaza IDs duplicados, alias vacíos, alias
 Se elimina el truncamiento silencioso por `maxCandidates`: si aparece una propuesta adicional al límite, la función lanza un error explícito y no devuelve una muestra que pudiera confundirse con el conjunto completo. La ordenación final es textual (inicio, fin y luego ID de entidad), independiente del orden de entrada de las entidades.
 
 Se añaden regresiones para IDs duplicados, alias inválidos/equivalentes, exceso de resultados y orden cronológico determinista. Estas pruebas quedan incorporadas al archivo de test; su ejecución debe verificarse en CI.
+
+
+## Descubrimiento de cláusulas relativas — 26 de noviembre de 2026
+
+Se añade `discoverNarrativeRelativeClauseCandidates` para localizar incisos relativos explícitos anclados a una entidad nombrada: «Ana, que conocía la ciudad, abrió la puerta». La salida conserva el texto de la cláusula y dos evidencias separadas (ancla y cláusula), con relación `relative-clause` y estado `candidate`.
+
+La detección exige: nombre canónico o alias explícito; coma después del nombre; inicio con «que»; una forma verbal finita reconocida por una lista conservadora/terminaciones frecuentes; coma de cierre; y ausencia de puntuación de cierre de oración dentro del inciso. El límite predeterminado de cláusula es 240 caracteres (máximo configurable: 600). Conserva offsets UTF-16 y aplica el presupuesto agregado de exploración de 25.000.000 de unidades.
+
+**Límite semántico importante:** esto no es análisis sintáctico completo ni determina si la cláusula expresa verdad, creencia, memoria, hipótesis o discurso referido. Tampoco infiere propiedades a partir del contenido. Las formas verbales se reconocen mediante heurística morfológica acotada; por ello se requiere revisión editorial y evaluación con corpus literarios antes de usar los resultados como datos confirmados.
+
+Se incorporan pruebas para una relativa explícita, offsets con emoji, rechazo de cláusula sin verbo finito, límites de oración y exceso de resultados. La ejecución debe confirmarse en CI.

@@ -39,6 +39,13 @@ import {
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
+import { discoverNarrativeIdeaCandidates, MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS, type NarrativeIdeaCandidate } from "./narrative-idea-discovery";
+import { analyzeNarrativeIdeaCrossDocumentRelations, MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES } from "./narrative-idea-cross-document-relations";
+import { buildNarrativeIdeaEvolution } from "./narrative-idea-evolution";
+import {
+  updateNarrativeIdeaContinuityIndexIncrementally,
+  type NarrativeIdeaContinuityIndex
+} from "./narrative-idea-continuity-index";
 import { MAX_NARRATIVE_IDEA_REFERENCES, extractNarrativeEntities, extractNarrativeRelations, extractNarrativeEvents, extractNarrativeIdeas, detectExplicitStateContradictions, normalizeEntityName, findNarrativeEntityIdentityCandidates, mergeNarrativeEntity, mergeNarrativeRelation, mergeNarrativeEvent, mergeNarrativeIdea, nextNarrativeIdeaStatusChangeAt, type NarrativeEntity, type NarrativeRelation, type NarrativeEvent, type NarrativeIdea, type NarrativeContradiction, type TextEvidence, type PersonalIdeaLibraryEntry, type PersonalIdeaLibraryContext } from "./narrative-knowledge";
 
 export const MOTOR_LITERARIO_API_VERSION = "0.1.0";
@@ -585,11 +592,30 @@ function addEntityNameIndex(
   }
 }
 
+export interface NarrativeIdeaContinuityIndexUpdateNotice {
+  readonly projectId: string;
+  readonly index: NarrativeIdeaContinuityIndex;
+  /** Generación local anterior; undefined cuando se crea la primera generación. */
+  readonly expectedGeneration?: number;
+  readonly sourceDocumentCount: number;
+  readonly analyzedCandidateCount: number;
+  readonly truncated: boolean;
+  readonly reused: boolean;
+}
+
 export interface HostCallbacks {
   readonly onAnalysis?: (result: AnalysisResult) => void;
   readonly onCommit?: (result: CommitResult) => void;
   readonly onKnowledgeError?: (error: unknown) => void;
   readonly onKnowledgeChanged?: (projectId: string) => void;
+  /**
+   * Se emite automáticamente tras reconciliar el índice. El anfitrión puede
+   * insertar aquí la envoltura en su outbox de transporte; debe deduplicar por
+   * projectId + index.generation. Se re-emite en reconciliaciones idempotentes.
+   */
+  readonly onNarrativeIdeaContinuityIndexUpdated?: (
+    notice: NarrativeIdeaContinuityIndexUpdateNotice
+  ) => void | Promise<void>;
 }
 
 export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "onCommit"> {
@@ -598,6 +624,11 @@ export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "o
   readonly liveAuthorMonitor?: LiveAuthorMonitorOptions;
   /** Retención de checkpoints locales del monitor; predeterminado 90 días, 0 desactiva limpieza. */
   readonly liveAuthorMonitorCheckpointRetentionMs?: number;
+  /**
+   * Orden editorial aportado por la aplicación anfitriona. Sin esta función,
+   * las recurrencias se detectan pero su cronología permanece desconocida.
+   */
+  readonly getOrderedDocumentIds?: (projectId: string) => readonly string[] | undefined;
 }
 
 /**
@@ -615,8 +646,16 @@ export class HostEngineApi {
   private readonly onKnowledgeError: HostCallbacks["onKnowledgeError"];
   private readonly onKnowledgeChanged: HostCallbacks["onKnowledgeChanged"];
   private readonly onAnalysis: HostCallbacks["onAnalysis"];
+  private readonly onNarrativeIdeaContinuityIndexUpdated: HostCallbacks["onNarrativeIdeaContinuityIndexUpdated"];
+  private readonly getOrderedDocumentIds: HostEngineOptions["getOrderedDocumentIds"];
   private knowledgeTail: Promise<void> = Promise.resolve();
   private liveAnalysisTail: Promise<void> = Promise.resolve();
+  private continuityIndexTail: Promise<void> = Promise.resolve();
+  private readonly continuityCandidatesByDocument = new Map<string, {
+    readonly revision: number;
+    readonly candidates: readonly NarrativeIdeaCandidate[];
+    readonly truncated: boolean;
+  }>();
   private diagnosticsRecoveryTail: Promise<void> = Promise.resolve();
   private diagnosticsPersistenceTail: Promise<void> = Promise.resolve();
   private readonly documentDiagnostics = new Map<string, StoredDiagnostics>();
@@ -709,6 +748,8 @@ export class HostEngineApi {
     this.onKnowledgeError = options.callbacks?.onKnowledgeError;
     this.onKnowledgeChanged = options.callbacks?.onKnowledgeChanged;
     this.onAnalysis = options.callbacks?.onAnalysis;
+    this.onNarrativeIdeaContinuityIndexUpdated = options.callbacks?.onNarrativeIdeaContinuityIndexUpdated;
+    this.getOrderedDocumentIds = options.getOrderedDocumentIds;
     this.engine = new LiteraryEngine({
       store: options.store,
       ...(options.queueCapacity === undefined ? {} : { queueCapacity: options.queueCapacity }),

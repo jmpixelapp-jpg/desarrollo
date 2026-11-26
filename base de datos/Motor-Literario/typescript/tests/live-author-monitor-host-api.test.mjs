@@ -362,3 +362,59 @@ test("conserva la titularidad local y permite reintentar si falla la liberación
   );
   await api.disposeSafely();
 });
+
+
+test("una renovación de heartbeat tardía no restaura el lease después del cierre seguro", async () => {
+  class DelayedHeartbeatStore extends MemoryDocumentStore {
+    delayNextRenew = false;
+    resolveDelayedRenewal;
+
+    async renewLiveAuthorMonitorLease(lease, now, durationMs) {
+      const renewed = await super.renewLiveAuthorMonitorLease(lease, now, durationMs);
+      if (this.delayNextRenew && renewed) {
+        this.delayNextRenew = false;
+        return await new Promise(resolve => {
+          this.resolveDelayedRenewal = () => resolve(renewed);
+        });
+      }
+      return renewed;
+    }
+  }
+
+  const store = new DelayedHeartbeatStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "monitor-heartbeat-race", projectName: "Heartbeat race" });
+  await api.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  store.delayNextRenew = true;
+  // Método privado invocado directamente para controlar el orden de la carrera.
+  const heartbeat = api.renewLiveAuthorMonitorLeaseFromHeartbeat("chapter-1");
+  for (let attempt = 0; attempt < 20 && !store.resolveDelayedRenewal; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(typeof store.resolveDelayedRenewal, "function");
+
+  await api.closeLiveAuthorMonitorDocumentSafely("chapter-1");
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1"), undefined);
+  assert.equal(api.liveMonitorLeases.has("chapter-1"), false);
+
+  store.resolveDelayedRenewal();
+  await heartbeat;
+  assert.equal(
+    api.liveMonitorLeases.has("chapter-1"),
+    false,
+    "la respuesta tardía del heartbeat no debe volver a insertar el lease local"
+  );
+  assert.equal(
+    store.monitorLeases.get("monitor-heartbeat-race:chapter-1").expiresAt <= Date.now(),
+    true,
+    "el registro persistido debe permanecer liberado"
+  );
+
+  await api.disposeSafely();
+});

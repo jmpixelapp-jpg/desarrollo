@@ -46,7 +46,7 @@ function normalizeName(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
 }
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function validate(input: NarrativeClaimExtractionInput): void {
   if (!input || typeof input !== "object" ||
@@ -102,7 +102,7 @@ export function extractNarrativeAttributedClaims(
   for (const line of input.text.matchAll(/[^\n]+/gu)) {
     for (const { entity, name } of names) {
       const expression = new RegExp(
-        String.raw\`(?<![\p{L}\p{M}\p{N}_])(\${escapeRegExp(name)})(?![\p{L}\p{M}\p{N}_])\s+(no\s+)?(\${verbAlternation})\s+(?:que\s+)?(.+?)(?=[.!?;]|$)\`,
+        String.raw`(?<![\p{L}\p{M}\p{N}_])(${escapeRegExp(name)})(?![\p{L}\p{M}\p{N}_])\s+(no\s+)?(${verbAlternation})\s+(?:que\s+)?(.+?)(?=[.!?;]|$)`,
         "giu"
       );
       for (const match of line[0].matchAll(expression)) {
@@ -117,7 +117,7 @@ export function extractNarrativeAttributedClaims(
         const contentEnd = contentStart + content.length;
         const evidenceStart = baseOffset + lineStart + match.index;
         const evidenceEnd = baseOffset + contentEnd;
-        const id = \`claim:\${input.documentId}:\${evidenceStart}:\${entity.id}\`;
+        const id = `claim:${input.documentId}:${evidenceStart}:${entity.id}`;
         found.set(id, {
           id,
           projectId: input.projectId,

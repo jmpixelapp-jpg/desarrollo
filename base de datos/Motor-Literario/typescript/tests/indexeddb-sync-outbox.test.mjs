@@ -18,8 +18,8 @@ const operation = (overrides = {}) => ({
   ...overrides
 });
 
-test("la migración DB25 → DB27 conserva datos anteriores y crea las dos estructuras de sincronización", async () => {
-  const oldRequest = indexedDB.open("motor-literario-local", 25);
+test("la migración DB27 → DB28 conserva datos anteriores y crea las dos estructuras de sincronización", async () => {
+  const oldRequest = indexedDB.open("motor-literario-local", 27);
   const oldDatabase = await new Promise((resolve, reject) => {
     oldRequest.onupgradeneeded = () => oldRequest.result.createObjectStore("migration-sentinel");
     oldRequest.onsuccess = () => resolve(oldRequest.result);
@@ -41,7 +41,7 @@ test("la migración DB25 → DB27 conserva datos anteriores y crea las dos estru
     migratedRequest.onsuccess = () => resolve(migratedRequest.result);
     migratedRequest.onerror = () => reject(migratedRequest.error);
   });
-  assert.equal(migrated.version, 27);
+  assert.equal(migrated.version, 28);
   assert.equal(migrated.objectStoreNames.contains("migration-sentinel"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-outbox"), true);
   assert.equal(migrated.objectStoreNames.contains("sync-device-sequences"), true);

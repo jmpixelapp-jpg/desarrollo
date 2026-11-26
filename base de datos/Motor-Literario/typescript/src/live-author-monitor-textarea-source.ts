@@ -473,6 +473,12 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
   /** Reanuda el stream solo si el textarea coincide con el snapshot autoritativo. */
   resynchronize(snapshot: DocumentSnapshot): LiveAuthorMonitorTextAreaSourceState {
     if (this.disposed) throw new Error("No se puede resincronizar un adaptador ya dispuesto.");
+    if (this.needsResync && this.listeners.size === 0) {
+      throw new LiveAuthorMonitorTextAreaSourceError(
+        "resync-required",
+        "La resincronización requiere una suscripción activa para evitar otra ventana sin observación."
+      );
+    }
     if (!snapshot || snapshot.documentId !== this.documentId ||
         typeof snapshot.text !== "string" ||
         !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0 ||

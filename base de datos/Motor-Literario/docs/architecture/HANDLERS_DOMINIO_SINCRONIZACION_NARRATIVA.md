@@ -194,3 +194,8 @@ La inspección cubre el historial del proyecto completo, no solo el escritor sol
 ### Reconciliación entre cursores y operaciones
 
 La auditoría del diario también lee los cursores durables por proyecto y contrasta cada escritor con su última operación almacenada. Detecta cursores sin operaciones, cursores adelantados o retrasados respecto del diario y discrepancias en el `lastOperationId`. Esto permite detectar la pérdida de la última operación aunque las secuencias que todavía existen formen un prefijo continuo. La auditoría no reconstruye ni mueve cursores automáticamente: deja la decisión de recuperación al anfitrión, evitando inventar operaciones o confirmar recepción sin evidencia.
+
+
+### Detección de cursores huérfanos y malformados
+
+La auditoría también verifica la relación en ambos sentidos: no solo que cada cursor tenga operaciones, sino que cada escritor con operaciones conservadas tenga su cursor durable. Se informan `cursor-missing-for-operations` cuando faltan cursores y `invalid-cursor` cuando la secuencia, identidad, proyecto o marca temporal del cursor no cumple el contrato. Esto cubre escenarios de pérdida parcial de stores o corrupción del registro de cursor. La inspección continúa siendo de solo lectura; no recrea cursores ni reescribe operaciones.

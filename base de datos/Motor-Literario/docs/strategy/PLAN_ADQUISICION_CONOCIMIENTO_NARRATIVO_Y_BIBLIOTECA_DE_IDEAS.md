@@ -574,3 +574,18 @@ Se amplió el vocabulario de conectores que permite proponer una relación de co
 - Se mantiene la barrera de párrafo: no se enlazan acontecimientos a través de un salto de párrafo en blanco.
 
 Se añadieron cuatro casos de prueba para las variantes nuevas. La validación completa del proyecto debe ejecutarse sobre el último commit; no se declara CI aprobado.
+
+
+## Fase AI: hipótesis de asociación temporal sin afirmar causalidad
+
+Se amplió el análisis de relaciones entre acontecimientos para conservar una señal débil que antes se descartaba: dos acontecimientos consecutivos pueden compartir un participante y estar unidos por un marcador temporal («poco después», «inmediatamente después», «al instante», «acto seguido», «a continuación», «después» o «entonces»).
+
+El motor puede registrar esa relación como:
+- `relationType: "temporal-association-hypothesis"`
+- `causalStatus: "unproven-hypothesis"`
+
+Condiciones: mismo documento y revisión, participante compartido, marcador temporal al inicio del segundo acontecimiento y ausencia de salto de párrafo en blanco. No duplica un vínculo explícito para el mismo par.
+
+Los vínculos causales expresos mantienen `relationType: "explicit-consequence-marker"` y `causalStatus: "explicitly-signaled-candidate"`. Ninguno confirma causalidad objetiva: la primera categoría es solo proximidad temporal con participante compartido; la segunda es una señal lingüística expresa todavía revisable.
+
+Se añadieron tres pruebas para detección, abstención sin participante compartido y separación entre sucesión temporal y causalidad explícita.

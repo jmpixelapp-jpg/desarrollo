@@ -419,3 +419,10 @@ Se añadió `createRecoveryFirstNarrativeSyncConsumer` en el consumidor de sincr
 La API queda exportada por el barrel existente. No se declara una transacción distribuida ni un bloqueo global entre pestañas: el diario sigue siendo al menos una vez y los handlers conservan su obligación de idempotencia. La nueva garantía se limita al orden del consumidor protegido.
 
 **Validación pendiente:** ejecutar `npm run typecheck` y `npm test` con Node 22.13+. CI no informa ejecuciones para el HEAD consultado.
+
+
+## Concurrencia local de recuperación
+
+Se añadió coalescencia de llamadas a `recoverNarrativeReferenceRepairs`: las solicitudes simultáneas del mismo proyecto en un runtime comparten la misma promesa, evitando que consumidores locales dupliquen la lectura y el procesamiento de intenciones. La exclusión se libera al completar o fallar para permitir reintentos. Se incorporó una prueba concurrente que verifica una sola lectura durable y un resultado compartido.
+
+**Límite explícito:** esta coordinación no es un mutex entre pestañas o dispositivos. Para otros contextos, las escrituras siguen dependiendo del CAS de IndexedDB; los conflictos permanecen pendientes y pueden reintentarse.

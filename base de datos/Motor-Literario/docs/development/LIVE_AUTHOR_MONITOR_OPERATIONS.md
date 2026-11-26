@@ -335,3 +335,16 @@ Las pruebas deterministas simulan pagehide/pageshow, freeze/resume, ticks encola
 La prueba despacha `PageTransitionEvent` (`pagehide/pageshow`) y `Event` (`freeze/resume`, `visibilitychange`). Usa un scheduler de intervalos inyectado para observar programaciones y cancelaciones sin depender de cronómetros reales. Comprueba callbacks antiguos, eventos duplicados, señal de reanudación mientras `document.hidden` es verdadero, refresco inmediato al volver y que después del desmontaje no se producen reactivaciones.
 
 Esta prueba verifica integración con DOM/EventTarget de Chromium, pero los eventos se despachan desde el harness: no afirma que el runner haya congelado físicamente el proceso ni que haya provocado una entrada real en BFCache.
+
+## 16. Fallback del polling en entornos sin Page Visibility
+
+Cuando el objeto `Document` no expone `hidden` booleano o los listeners de visibilidad, el scheduler mantiene el refresco periódico normal. Este camino no puede suspenderse automáticamente al ocultar la pestaña, porque el entorno no ofrece una señal fiable de visibilidad.
+
+La cancelación conserva las mismas garantías de ciclo de vida que el camino completo:
+
+- el callback periódico queda envuelto por un indicador de disposición;
+- un tick que ya estaba encolado no refresca después de desmontar la vista;
+- la cancelación es idempotente;
+- se rechaza un scheduler que no devuelva una función de cancelación.
+
+Las regresiones están en `tests/live-author-monitor-diagnostics-isolation.test.mjs`. Cubren el fallback y el callback atrasado mediante un scheduler determinista; no simulan ni afirman disponibilidad de Page Visibility.

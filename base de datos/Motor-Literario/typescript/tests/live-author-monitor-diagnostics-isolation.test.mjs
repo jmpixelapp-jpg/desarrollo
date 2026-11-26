@@ -440,3 +440,46 @@ test("reanuda desde pagehide/pageshow y freeze/resume sin duplicar intervalos", 
   assert.equal(f.document.defaultView.listenerCount("pageshow"), 0);
   scheduleCalls[3].callback(); assert.equal(refreshes, 3);
 });
+
+test("el fallback sin Page Visibility invalida ticks encolados y cancela una sola vez", () => {
+  const scheduled = [];
+  let refreshes = 0;
+  let cancellations = 0;
+  const dispose = scheduleLiveAuthorMonitorWhileVisible(
+    { hidden: undefined },
+    () => { refreshes += 1; },
+    625,
+    (callback, intervalMs) => {
+      scheduled.push({ callback, intervalMs });
+      return () => { cancellations += 1; };
+    }
+  );
+
+  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled[0].intervalMs, 625);
+  scheduled[0].callback();
+  assert.equal(refreshes, 1);
+
+  dispose();
+  dispose();
+  scheduled[0].callback();
+  assert.equal(refreshes, 1, "un tick ya encolado no debe refrescar una vista desmontada");
+  assert.equal(cancellations, 1, "la cancelación del planificador debe ser idempotente");
+});
+
+test("el fallback rechaza un planificador sin cancelación e invalida su callback", () => {
+  let queuedCallback;
+  let refreshes = 0;
+  assert.throws(() => scheduleLiveAuthorMonitorWhileVisible(
+    { hidden: undefined },
+    () => { refreshes += 1; },
+    500,
+    callback => {
+      queuedCallback = callback;
+      return undefined;
+    }
+  ), /función de cancelación/);
+
+  queuedCallback();
+  assert.equal(refreshes, 0, "un scheduler inválido no debe dejar callbacks activos");
+});

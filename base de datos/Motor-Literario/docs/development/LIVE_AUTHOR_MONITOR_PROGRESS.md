@@ -1050,3 +1050,17 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Archivos:** `tests/live-author-monitor-lifecycle-browser.test.mjs`, `tests/browser/live-author-monitor-lifecycle.html` y documentación operativa.
 
 **Validación:** pendiente de CI para esta entrega.
+
+## 60. Fallback seguro cuando Page Visibility no está disponible (25 de noviembre de 2026)
+
+**Problema:** el scheduler tenía dos caminos distintos. Con una API `Document` completa, los callbacks periódicos quedaban protegidos por `disposed`; en el fallback (entornos sin `document.hidden` o sin listeners de visibilidad), se devolvía directamente la cancelación del temporizador. Un tick ya encolado podía ejecutarse después del desmontaje, aunque el intervalo se hubiera cancelado.
+
+**Cambio:** el fallback ahora envuelve el callback con un indicador de disposición, valida que el planificador devuelva una función de cancelación y expone una cancelación idempotente. No intenta simular Page Visibility cuando el navegador no ofrece esa API: mantiene el polling normal mientras la vista está montada.
+
+**Regresiones añadidas:** dos pruebas cubren (1) callback atrasado después del desmontaje y cancelación idempotente; (2) rechazo de un planificador sin función de cancelación y desactivación de su callback pendiente.
+
+**Archivos:** `typescript/src/live-author-monitor-visibility.ts`, `typescript/tests/live-author-monitor-diagnostics-isolation.test.mjs`, esta bitácora y `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+**Validación:** las regresiones quedan incorporadas a la lane específica del monitor y a `npm test`. No se declara ejecución aprobada en el momento de crear este commit; se registrará el resultado real de GitHub Actions cuando finalice.
+
+**Aislamiento:** no se modifican `HostEngineApi`, persistencia IndexedDB, leases, contratos narrativos ni archivos incluidos en el PR #56.

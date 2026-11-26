@@ -18,7 +18,20 @@ export function scheduleLiveAuthorMonitorWhileVisible(
 ): () => void {
   if (!document || typeof document.hidden !== "boolean" ||
       typeof document.addEventListener !== "function" || typeof document.removeEventListener !== "function") {
-    return schedule(callback, intervalMs);
+    // Incluso sin Page Visibility, un tick que ya entró en la cola del event loop
+    // debe quedar invalidado después del desmontaje.
+    let disposed = false;
+    const guardedCallback = (): void => { if (!disposed) callback(); };
+    const cancel = schedule(guardedCallback, intervalMs);
+    if (typeof cancel !== "function") {
+      disposed = true;
+      throw new TypeError("El planificador debe devolver una función de cancelación.");
+    }
+    return () => {
+      if (disposed) return;
+      disposed = true;
+      cancel();
+    };
   }
   let disposed = false;
   let active = !document.hidden;

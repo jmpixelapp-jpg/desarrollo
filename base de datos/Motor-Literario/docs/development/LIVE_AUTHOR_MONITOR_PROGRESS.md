@@ -1371,6 +1371,8 @@ La conclusión global de la lane sigue siendo `failure` por controles compartido
 
 **Validación CI:** en la misma ejecución dedicada [run 45763663440](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45763663440), la regresión de respuestas fuera de orden aprobó como test 104. El pipeline terminó `success`: **167/167** pruebas aisladas, Chromium Page Lifecycle 1/1 y **170/170** pruebas host/editor/browser. El orden invertido conservó los máximos de `expiresAt` y `updatedAt`; no se observaron fallos ni tickets pendientes al completar el benchmark.
 
+**Estado de la suite general del repositorio:** [Motor Literario TypeScript — run 45763688872](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45763688872), sobre el checkout `4dd7673234dde77bbfc8df9cbb1c2055e5f5fd49`, terminó con **945/946** pruebas. El único fallo fue `tests/narrative-unicode-boundaries.test.mjs:107` (extracción de entidades con marcas combinantes, expectativa 1 y resultado 0), fuera de `host-api.ts` y del monitor. Type-check y build aprobaron; no se modificó el trabajo paralelo de extracción. La lane dedicada del monitor indicada arriba está completamente verde.
+
 
 ## 86. Aislamiento visible de fallos de reconciliación del workspace (26 de noviembre de 2026)
 

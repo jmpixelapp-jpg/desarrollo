@@ -101,6 +101,9 @@ test("la auditoría detecta operaciones posteriores al cursor y última identida
     loadWriterCursors: async () => [{
       projectId: "cursor-project-2", writerId: "writer-a",
       lastSequence: 1, lastOperationId: "cursor-op-a", updatedAt: 15
+    }, {
+      projectId: "cursor-project-2", writerId: "writer-a-mismatch",
+      lastSequence: 2, lastOperationId: "wrong-last-operation", updatedAt: 25
     }]
   };
   const report = await inspectNarrativeSyncJournalIntegrity(journal, "cursor-project-2");

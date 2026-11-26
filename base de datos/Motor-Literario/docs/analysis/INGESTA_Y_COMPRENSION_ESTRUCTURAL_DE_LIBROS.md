@@ -85,6 +85,16 @@ El lector acepta TXT y Markdown UTF-8 estricto. La decodificación conserva expl
 
 Para entidades de tipo `object`, el descubrimiento de observaciones puede proponer `grammaticalObjectCandidate` cuando una mención literal única aparece inmediatamente después del verbo con un patrón nominal explícito (por ejemplo, «Ana perdió la Espada Solar»). Se conserva el ID y la evidencia exacta del nombre con offsets absolutos. Esto identifica un candidato a objeto gramatical, no confirma posesión, transferencia, pérdida efectiva ni estado del objeto. Si falta el marcador nominal o la entidad es ambigua, no se asigna candidato.
 
+### Ordenación de trayectorias de objetos entre capítulos
+
+Módulo: `typescript/src/narrative-object-trajectory.ts`
+
+`buildNarrativeObjectTrajectories(input)` agrupa las transiciones candidatas por identidad de objeto y las ordena mediante `documentOrder`, que debe proporcionar el proyecto con una posición editorial explícita por documento. Dentro del mismo capítulo se usa el offset de la evidencia de acción. No se deduce el orden por nombre de archivo, fecha de modificación ni orden accidental de llegada de los datos.
+
+Cada entrada conserva la transición completa y su evidencia. Si entre dos capítulos con transiciones hay documentos intermedios sin otra transición candidata para ese objeto, sus identificadores se muestran en `interveningDocumentsWithoutTransitionCandidate`. Esto no significa que el objeto no aparezca en esos capítulos: solo indica que el motor no encontró una transición de las cuatro clases implementadas.
+
+La cobertura se declara como `candidate-transitions-only`; el resultado no confirma posesión, custodia, causalidad, ubicación ni continuidad física. Se rechazan capítulos con posiciones duplicadas, documentos no ordenados, IDs de transición duplicados, evidencias con rangos incoherentes y revisiones mezcladas dentro de un mismo documento. La función no modifica entidades ni consolida estados.
+
 ### Trayectoria de objetos y cambios de estado candidatos
 
 Módulo: `typescript/src/narrative-object-state-discovery.ts`

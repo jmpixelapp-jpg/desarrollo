@@ -156,8 +156,8 @@ test("rechaza catálogos globales por encima del límite documentado de 12.000 i
 
 test("limita escenas explícitas a 2.000 sin recorrer encabezados ilimitados", () => {
   const text = Array.from({ length: 2_005 }, (_, index) =>
-    "Escena " + String(index + 1) + "\\nUna acción narrativa."
-  ).join("\\n");
+    "Escena " + String(index + 1) + "\nUna acción narrativa."
+  ).join("\n");
 
   const result = analyzeLiteraryFragment({
     projectId,

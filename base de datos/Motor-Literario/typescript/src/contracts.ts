@@ -145,6 +145,24 @@ export interface StoredProjectFinalizationReceipt {
   readonly archiveChecksum: string;
 }
 
+/** Cursor keyset de una biblioteca personal, ligado al escritor autenticado y a una generación durable. */
+export interface PersonalIdeaLibraryCursor {
+  readonly writerId: string;
+  readonly sourceProjectId: string;
+  readonly ideaId: string;
+  /** Versión monotónica; ausente únicamente en adaptadores legacy sin control de generación. */
+  readonly libraryVersion?: number;
+}
+
+/** Página acotada de una biblioteca privada de ideas. */
+export interface PersonalIdeaLibraryPage {
+  readonly items: readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[];
+  readonly nextCursor: PersonalIdeaLibraryCursor | null;
+  readonly libraryVersion?: number;
+  /** Exige reiniciar desde cursor null porque la biblioteca cambió entre páginas. */
+  readonly restartRequired?: boolean;
+}
+
 export interface ProjectStore {
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
@@ -343,6 +361,17 @@ export interface ProjectStore {
   /** Transfiere atómicamente ideas aún no incorporadas a la biblioteca privada del escritor. */
   archiveUnincorporatedIdeas?(projectId: string, writerId: string, sourceProjectName: string, archivedAt: number): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadPersonalIdeas?(writerId: string): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
+  /** Lectura keyset limitada a 200 entradas; usa versión durable para no mezclar páginas de generaciones distintas. */
+  loadPersonalIdeasPage?(
+    writerId: string,
+    cursor: PersonalIdeaLibraryCursor | null,
+    limit: number
+  ): Promise<PersonalIdeaLibraryPage>;
+  /** Resuelve referencias a ideas archivadas fuera de la página, en una lectura agrupada y limitada a 128 claves. */
+  loadPersonalIdeasByKeys?(
+    writerId: string,
+    references: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[]
+  ): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadProjectFinalizationReceipt?(
     writerId: string,
     projectId: string

@@ -256,7 +256,7 @@ export async function readNarrativeBookFile(file: NarrativeBookFileInput): Promi
   } catch {
     throw new Error("El archivo no contiene texto UTF-8 válido.");
   }
-  if (text.includes("\\u0000")) {
+  if (text.includes("\u0000")) {
     throw new Error("El archivo contiene bytes nulos y no parece ser texto.");
   }
   return { fileName: file.name, mediaType, byteLength: bytes.byteLength, text };

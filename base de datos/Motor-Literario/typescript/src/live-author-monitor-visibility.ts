@@ -37,7 +37,10 @@ export function scheduleLiveAuthorMonitorWhileVisible(
   };
   const startInterval = (): void => {
     if (disposed || document.hidden || cancelInterval) return;
-    const cancel = schedule(callback, intervalMs);
+    const guardedCallback = (): void => {
+      if (!disposed && !document.hidden) callback();
+    };
+    const cancel = schedule(guardedCallback, intervalMs);
     if (typeof cancel !== "function") throw new TypeError("El planificador debe devolver una función de cancelación.");
     cancelInterval = cancel;
   };

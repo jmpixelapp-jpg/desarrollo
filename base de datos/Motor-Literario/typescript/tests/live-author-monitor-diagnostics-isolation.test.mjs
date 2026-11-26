@@ -398,11 +398,15 @@ test("el scheduler visible actualiza de inmediato y cancela de forma idempotente
   assert.equal(scheduleCalls.length, 1);
   f.document.setHidden(true);
   assert.equal(cancellations, 1);
+  scheduleCalls[0].callback();
+  assert.equal(refreshes, 0, "un callback que quedó encolado no se ejecuta mientras la pestaña está oculta");
   f.document.setHidden(false);
   assert.equal(refreshes, 1);
   assert.equal(scheduleCalls.length, 2);
   cancel();
   cancel();
+  scheduleCalls[1].callback();
+  assert.equal(refreshes, 1, "un callback antiguo tampoco se ejecuta después del desmontaje");
   assert.equal(cancellations, 2);
   assert.equal(f.document.visibilityListenerCount(), 0);
 });

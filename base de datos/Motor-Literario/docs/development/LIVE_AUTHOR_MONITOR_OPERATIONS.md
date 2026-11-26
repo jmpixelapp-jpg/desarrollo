@@ -301,3 +301,5 @@ El panel individual y el workspace global utilizan `scheduleLiveAuthorMonitorWhi
 Este scheduler afecta exclusivamente a la actualización visual de métricas y diagnósticos. No pausa el motor de escritura, los checkpoints, los heartbeats ni la renovación de leases. Esos procesos permanecen bajo control de `HostEngineApi` y sus coordinadores.
 
 Si el entorno no ofrece Page Visibility API, mantiene el polling convencional. Las opciones `schedule` permiten inyectar relojes deterministas y también se someten al ciclo visible/oculto. La regresión verifica montaje con la pestaña oculta, pausa, refresco inmediato al volver, reprogramación y cancelación al desmontar.
+
+La envoltura del callback también comprueba visibilidad y estado de desmontaje al ejecutarse. Así, un tick que ya estaba encolado en el event loop y llega después de `clearInterval()` no actualiza una vista oculta ni una instancia ya desmontada. La prueba invoca deliberadamente ambos callbacks antiguos para verificar que se descartan.

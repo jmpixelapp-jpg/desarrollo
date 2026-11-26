@@ -994,3 +994,11 @@ En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelap
 **Archivos:** nuevo `src/live-author-monitor-visibility.ts`, panel, workspace, suite de diagnóstico aislada y esta guía.
 
 **Validación:** pendiente de los workflows CI disparados por este commit.
+
+## 55. Descarte de ticks encolados después de suspender o desmontar (25 de noviembre de 2026)
+
+**Endurecimiento adicional:** el scheduler de visibilidad ya no entrega el callback de la vista directamente al timer. Usa una envoltura que comprueba `document.hidden` y el flag `disposed` en el instante de ejecución. Esto descarta ticks que el event loop hubiera encolado antes de cancelar el intervalo y que lleguen tras ocultar o desmontar.
+
+**Regresión:** se invocan deliberadamente callbacks guardados del intervalo después de ocultar y después de desmontar; ninguno puede actualizar métricas.
+
+**Validación:** pendiente de CI para esta corrección.

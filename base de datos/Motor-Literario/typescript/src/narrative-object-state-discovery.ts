@@ -11,7 +11,14 @@ export type NarrativeObjectTransitionKind =
   | "discovered"
   | "lost"
   | "transferred"
-  | "received";
+  | "received"
+  | "opened"
+  | "closed"
+  | "broken"
+  | "repaired"
+  | "destroyed"
+  | "activated"
+  | "deactivated";
 
 export type NarrativeObjectEffectStatus =
   | "candidate"
@@ -118,8 +125,9 @@ function effectStatus(
 }
 
 /**
- * Reconoce únicamente cuatro patrones léxicos con objeto directo identificado:
- * encontrar, perder, entregar y recibir. No calcula un inventario de posesión.
+ * Reconoce patrones léxicos explícitos con objeto directo identificado:
+ * transiciones de descubrimiento/posesión y cambios de condición del objeto.
+ * No calcula un inventario de posesión ni presupone que el cambio tuvo éxito.
  */
 export function discoverNarrativeObjectTransitionCandidates(
   input: NarrativeObjectStateDiscoveryInput
@@ -165,6 +173,48 @@ export function discoverNarrativeObjectTransitionCandidates(
         transition = "received";
         recipientEntityId = activeSubject.entityId;
         recipientEvidence = activeSubject.evidence;
+        break;
+      case "abrir":
+        if (!activeSubject) continue;
+        transition = "opened";
+        actorEntityId = activeSubject.entityId;
+        actorEvidence = activeSubject.evidence;
+        break;
+      case "cerrar":
+        if (!activeSubject) continue;
+        transition = "closed";
+        actorEntityId = activeSubject.entityId;
+        actorEvidence = activeSubject.evidence;
+        break;
+      case "romper":
+        if (!activeSubject) continue;
+        transition = "broken";
+        actorEntityId = activeSubject.entityId;
+        actorEvidence = activeSubject.evidence;
+        break;
+      case "reparar":
+        if (!activeSubject) continue;
+        transition = "repaired";
+        actorEntityId = activeSubject.entityId;
+        actorEvidence = activeSubject.evidence;
+        break;
+      case "destruir":
+        if (!activeSubject) continue;
+        transition = "destroyed";
+        actorEntityId = activeSubject.entityId;
+        actorEvidence = activeSubject.evidence;
+        break;
+      case "activar":
+        if (!activeSubject) continue;
+        transition = "activated";
+        actorEntityId = activeSubject.entityId;
+        actorEvidence = activeSubject.evidence;
+        break;
+      case "desactivar":
+        if (!activeSubject) continue;
+        transition = "deactivated";
+        actorEntityId = activeSubject.entityId;
+        actorEvidence = activeSubject.evidence;
         break;
       default:
         continue;

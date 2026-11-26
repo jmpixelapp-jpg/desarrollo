@@ -502,6 +502,9 @@ export class LiteraryEngine {
     nextBuffer.replace(change.start, change.end, change.replacement);
     const nextRevision = document.revision + 1;
     try {
+      if (this.options.syncDeviceId !== undefined && !this.options.store.appendChange) {
+        throw new Error("La sincronización automática requiere journal durable y commit atómico de outbox.");
+      }
       if (this.options.store.appendChange) {
         const journalEntry: StoredChange = {
           ...change,

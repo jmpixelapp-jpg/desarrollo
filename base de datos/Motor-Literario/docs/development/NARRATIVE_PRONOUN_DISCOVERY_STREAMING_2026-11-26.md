@@ -42,3 +42,12 @@ La búsqueda de antecedentes recorría la ventana de texto por cada entidad y po
 Se incorpora `MAX_NARRATIVE_PRONOUN_SCAN_UNITS = 25_000_000`. Antes de ejecutar la búsqueda de cada entidad se estima el trabajo como longitud de ventana multiplicada por cantidad de nombres (nombre canónico más alias). Si el presupuesto agregado se supera, la operación falla explícitamente; no devuelve un resultado parcial que pudiera confundirse con una extracción completa.
 
 La prueba combina 100 entidades, 100 alias por entidad y la ventana máxima. El límite es una cota conservadora del trabajo estimado, no una medición exacta de operaciones de motor de expresiones regulares. La optimización futura apropiada sería un índice de menciones reutilizable por documento/revisión, en vez de repetir búsquedas por entidad.
+
+
+## Descripciones nominales confirmadas como menciones — 26 de noviembre de 2026
+
+Se amplía `NarrativeEntity` con `descriptions?`, una colección opcional de descripciones nominales explícitamente confirmadas por el escritor (por ejemplo, «la joven» o «la heredera»). El descubridor de antecedentes busca esas descripciones junto al nombre canónico y los alias.
+
+Cada candidato expone `mentionType`: `canonical-name`, `alias` o `description`. Así se conserva la procedencia lingüística de la mención y se evita confundir una descripción con un nombre propio. Si dos entidades comparten la misma descripción, ambas permanecen como candidatas y el resultado sigue siendo ambiguo.
+
+Las descripciones se validan con el mismo límite de longitud de 256 unidades y un máximo de 100 por entidad. También se incluyen en el presupuesto agregado de exploración. No se generan descripciones automáticamente: «la joven» solo puede vincularse a una identidad si fue registrada/confirmada previamente. La ausencia de una descripción registrada no se interpreta como evidencia negativa sobre el texto.

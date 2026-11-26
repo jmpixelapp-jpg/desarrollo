@@ -418,3 +418,58 @@ test("una renovación de heartbeat tardía no restaura el lease después del cie
 
   await api.disposeSafely();
 });
+
+
+test("dispose durante una adquisición pendiente libera el lease y no inicia heartbeat", async () => {
+  class DelayedAcquireStore extends MemoryDocumentStore {
+    delayNextAcquire = true;
+    resolvePendingAcquire;
+
+    async acquireLiveAuthorMonitorLease(projectId, documentId, ownerId, now, durationMs) {
+      const lease = await super.acquireLiveAuthorMonitorLease(
+        projectId,
+        documentId,
+        ownerId,
+        now,
+        durationMs
+      );
+      if (this.delayNextAcquire && lease) {
+        this.delayNextAcquire = false;
+        return await new Promise(resolve => {
+          this.resolvePendingAcquire = () => resolve(lease);
+        });
+      }
+      return lease;
+    }
+  }
+
+  const store = new DelayedAcquireStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "monitor-dispose-acquire-race", projectName: "Dispose acquire race" });
+  const opening = api.openDocument({
+    documentId: "chapter-1",
+    text: "A",
+    revision: 0,
+    sequence: 0
+  });
+
+  for (let attempt = 0; attempt < 20 && !store.resolvePendingAcquire; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(typeof store.resolvePendingAcquire, "function");
+  assert.ok(store.monitorLeases.get("monitor-dispose-acquire-race:chapter-1"));
+
+  api.dispose();
+  store.resolvePendingAcquire();
+  await opening;
+
+  const persistedLease = store.monitorLeases.get("monitor-dispose-acquire-race:chapter-1");
+  assert.ok(persistedLease);
+  assert.equal(persistedLease.expiresAt <= Date.now(), true,
+    "un lease adquirido tarde debe liberarse en cuanto detecta dispose()");
+  assert.equal(api.liveMonitorLeases.size, 0);
+  assert.equal(api.liveMonitorLeaseHeartbeats.size, 0);
+  assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1"), undefined);
+
+  api.dispose();
+});

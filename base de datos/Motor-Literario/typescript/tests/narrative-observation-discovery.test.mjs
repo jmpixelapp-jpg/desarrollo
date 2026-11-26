@@ -537,12 +537,19 @@ test("no convierte auxiliares y verbos modales excluidos en acciones nuevas", ()
   for (const text of [
     "Ana fue valiente.",
     "Ana estaba cansada.",
-    "Ana había llegado.",
     "Ana pudo escapar.",
     "Ana quiso marcharse."
   ]) {
     const found = discoverNarrativeObservationCandidates({ ...context, text });
     assert.equal(found.length, 0, text);
   }
+});
+
+test("conserva el verbo léxico de una perífrasis y no extrae el auxiliar", () => {
+  const text = "Ana había llegado al refugio.";
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  assert.deepEqual(found.map(item => item.action), ["llegar"]);
+  assert.equal(found[0].surface, "llegado");
+  assert.equal(found[0].grammaticalTense, "participle");
 });
 

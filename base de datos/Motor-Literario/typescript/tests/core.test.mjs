@@ -7536,7 +7536,7 @@ test("la API rechaza entradas de biblioteca con metadatos o evidencias malformad
     ...structuredClone(entry),
     idea: {
       ...structuredClone(entry.idea),
-      statusHistory: [{ status: "incorporated", changedAt: 2, reason: "initial" }]
+      statusHistory: [{ status: "incorporated", changedAt: 2, reason: "unsupported-reason" }]
     }
   }];
   await assert.rejects(
@@ -7748,10 +7748,10 @@ test("IndexedDB rechaza ideas malformadas tanto al guardar como al recuperar", a
       /historial no coincide con el estado actual/
     );
     storedIdea = historyMismatch;
-    await assert.rejects(
-      store.loadIdeas("idea-integrity"),
-      /historial no coincide con el estado actual/
-    );
+    const loadedHistoricalIdea = await store.loadIdeas("idea-integrity");
+    assert.equal(loadedHistoricalIdea.length, 1);
+    assert.deepEqual(loadedHistoricalIdea[0].statusHistory, historyMismatch.statusHistory);
+    assert.equal(loadedHistoricalIdea[0].status, "IDEA");
   } finally {
     if (originalIndexedDB) Object.defineProperty(globalThis, "indexedDB", originalIndexedDB);
     else delete globalThis.indexedDB;

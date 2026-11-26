@@ -275,9 +275,8 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
       emit();
       currentKind = /^h1$/u.test(tag) ? "chapter-heading" :
         /^h[2-6]$/u.test(tag) ? "section-heading" :
-        (role.includes("footnote") || classes.includes("footnote") ? "footnote" :
-          (role.includes("footnote") || classes.includes("footnote") || stack.includes("__footnote__") ? "footnote" :
-            (tag === "pre" || role.includes("verse") || classes.includes("verse") ? "poem-line" : "paragraph")));
+        (role.includes("footnote") || classes.includes("footnote") || stack.includes("__footnote__") ? "footnote" :
+          (tag === "pre" || role.includes("verse") || classes.includes("verse") ? "poem-line" : "paragraph"));
       if (tag === "br") emit();
     }
     if (tag === "aside" && (role.includes("footnote") || classes.includes("footnote"))) {

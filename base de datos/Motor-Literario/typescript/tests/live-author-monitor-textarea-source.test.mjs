@@ -272,6 +272,7 @@ test("desmonta listeners y exige snapshot autoritativo tras un intervalo sin obs
 
   stopAgain();
   f.source.dispose();
+  assert.throws(() => f.source.subscribeChanges(() => {}), /ya dispuesto/);
 });
 
 test("no inicia la primera suscripción si el textarea ya difiere del snapshot", () => {

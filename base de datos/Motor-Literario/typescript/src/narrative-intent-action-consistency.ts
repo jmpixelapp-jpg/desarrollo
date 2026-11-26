@@ -121,11 +121,12 @@ export function compareNarrativeIntentsWithActions(
       const target = entities.get(action.targetEntityId);
       const targetIsNamed = !!target && targetMatches(intent.text, target);
       let relation: NarrativeIntentActionRelation;
-      if (intent.polarity === "negated") relation = "intent-negated";
+      if (targetEntities.length === 0) relation = "not-comparable";
+      else if (targetEntities.length > 1) relation = targetIsNamed ? "ambiguous-target" : "unrelated-action";
+      else if (!targetIsNamed) relation = "unrelated-action";
+      else if (intent.evidence.status === "stale" || action.evidence.status === "stale") relation = "not-comparable";
+      else if (intent.polarity === "negated") relation = "intent-negated";
       else if (intent.polarity === "conditional") relation = "conditional-intent";
-      else if (targetEntities.length > 1 && targetIsNamed) relation = "ambiguous-target";
-      else if (targetEntities.length === 1 && !targetIsNamed) relation = "unrelated-action";
-      else if (targetEntities.length === 0) relation = "not-comparable";
       else if (!verb) relation = "not-comparable";
       else if (action.polarity === "negated") relation = "not-comparable";
       else if (SUPPORTS[verb]?.includes(action.action)) relation = "supports-intent";

@@ -25,6 +25,12 @@ test("detecta acciones explícitas de un personaje conocido y conserva la frase 
   assert.ok(found.every(item => item.mentionedEntityIds.includes(other.id)));
   assert.ok(found.every(item => item.evidence.excerpt === text));
   assert.ok(found.every(item => item.evidence.revision === 7));
+  assert.deepEqual(found.map(item => item.actionEvidence.excerpt), ["cruzó", "abrió"]);
+  assert.deepEqual(found.map(item => item.actionEvidence.start), [
+    text.indexOf("cruzó"), text.indexOf("abrió")
+  ]);
+  assert.ok(found.every(item => text.slice(item.actionEvidence.start, item.actionEvidence.end) ===
+    item.actionEvidence.excerpt));
 });
 
 test("distingue formas verbales sin convertir el tiempo gramatical en cronología", () => {

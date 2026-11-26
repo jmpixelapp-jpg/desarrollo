@@ -477,3 +477,10 @@ La firma compacta de una transacción incluye también la categoría que recibir
 ## 33. Presupuesto de texto para eventos reentrantes
 
 La cola reentrante queda limitada simultáneamente por cantidad (`maxQueuedTransactions`, predeterminado 4096) y por tamaño agregado del texto de reemplazo (`maxQueuedTextUnits`, predeterminado 4 194 304 unidades UTF-16, alineado con el motor). Este presupuesto se consume solo mientras un evento espera detrás de otro que está siendo procesado; no limita un pegado grande que llega cuando el source está en reposo. Al agotar el presupuesto, se detiene la captura y se exige snapshot para evitar retener una cola de tamaño impredecible.
+
+
+## 34. Entrega FIFO de snapshots a los suscriptores
+
+Las notificaciones de `LiveAuthorMonitor` se entregan de forma serializada. Si un callback provoca una nueva admisión durante la publicación de un snapshot, el nuevo estado queda en cola y se entrega después de terminar todos los destinatarios del snapshot anterior; así ningún panel puede observar primero la revisión más nueva y después una más antigua.
+
+La lista de destinatarios se fija para cada publicación. Un suscriptor añadido durante una notificación no recibe retroactivamente ese snapshot, y uno retirado antes de su turno ya no se invoca. Las excepciones de un panel siguen aisladas. `dispose()` vacía la cola y la lista de suscriptores, por lo que tampoco se entregan avisos reentrantes pendientes después de la limpieza.

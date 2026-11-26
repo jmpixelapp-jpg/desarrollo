@@ -191,9 +191,15 @@ export function discoverNarrativeDialogueSpeakers(
     const verbMatches = [...attributionText.matchAll(SPEECH_VERB)];
     const candidates = verbMatches.length === 0 ? [] : input.entities.filter(entity => entity.kind === "character").flatMap(entity => {
       const mentions = nameMatches(attributionText, entity);
-      const mention = mentions.find(item => verbMatches.some(verb =>
-        Math.abs((attributionStart + item.start) - (attributionStart + verb.index!)) <= distance
-      ));
+      const mention = mentions.find(item => {
+        const preceding = attributionText.slice(Math.max(0, item.start - 16), item.start);
+        // A name governed by «a/para/hacia» is a likely addressee or complement,
+        // not the grammatical subject of the speech verb.
+        if (/(?:\\b(?:a|para|hacia)\\s+)$/iu.test(preceding)) return false;
+        return verbMatches.some(verb =>
+          Math.abs((attributionStart + item.start) - (attributionStart + verb.index!)) <= distance
+        );
+      });
       if (!mention) return [];
       const verb = verbMatches.sort((a, b) =>
         Math.abs((attributionStart + mention.start) - (attributionStart + a.index!)) -

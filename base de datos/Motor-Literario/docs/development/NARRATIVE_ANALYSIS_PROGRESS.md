@@ -344,3 +344,12 @@ Se añadieron pruebas con datos deliberadamente inconsistentes y una comprobaci�
 Se añadió `proposeNarrativeReferenceRepairs(store, report)`. La función sólo propone redirigir referencias a entidades cuando el ID perdido aparece como origen de fusión en exactamente una entidad del mismo proyecto (`mergedFromIds`). Sin coincidencia o con coincidencias ambiguas, exige revisión manual. No modifica el grafo y no aplica heurísticas para resolver vínculos entre ideas.
 
 Se añadieron pruebas para correspondencia explícita, ausencia de correspondencia y ausencia de mutaciones. **Pendiente:** ejecutar typecheck y suite completa en Node 22+; todavía no se dispone de resultado de CI.
+
+
+## Aplicación controlada de referencias
+
+Se implementó `applyNarrativeReferenceRepair`: exige aprobación explícita, revalida la procedencia de fusión, lee el registro vigente y aplica la sustitución mediante CAS para relaciones, acontecimientos, afirmaciones e ideas. Reconoce reintentos idempotentes y rechaza cambios incompatibles o propuestas obsoletas.
+
+La operación devuelve un registro de auditoría con valores anterior/nuevo, campo modificado, IDs y fecha. **La persistencia durable de ese registro aún corresponde al llamador**, porque el contrato actual de `ProjectStore` no define un almacén de auditoría genérico. Se añadieron pruebas para aprobación, CAS, replay y procedencia obsoleta.
+
+**Pendiente:** ejecutar `npm run typecheck` y `npm test` en Node 22.13+ y, después, incorporar almacenamiento durable de auditoría al contrato del repositorio.

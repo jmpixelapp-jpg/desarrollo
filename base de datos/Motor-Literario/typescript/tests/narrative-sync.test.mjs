@@ -113,3 +113,31 @@ test("valida el aislamiento del proyecto y los límites del lote", async () => {
     return { acknowledgedOperationIds: [], conflicts: [], retryableOperationIds: [] };
   } }, { batchSize: 501 }), /batchSize/);
 });
+
+test("permite sincronizar proyectos distintos en paralelo", async () => {
+  const outbox = createOutbox([
+    operation("op-a", 1, { projectId: "project-a" }),
+    operation("op-b", 1, { projectId: "project-b", deviceId: "device-b" })
+  ]);
+  const started = new Set();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push(projectId, operations) {
+      started.add(projectId);
+      await gate;
+      return {
+        acknowledgedOperationIds: operations.map(item => item.operationId),
+        conflicts: [], retryableOperationIds: []
+      };
+    }
+  });
+  const a = coordinator.syncOnce("project-a");
+  const b = coordinator.syncOnce("project-b");
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual([...started].sort(), ["project-a", "project-b"]);
+  release();
+  await Promise.all([a, b]);
+  assert.deepEqual(outbox.acknowledged.sort(), ["op-a", "op-b"]);
+});

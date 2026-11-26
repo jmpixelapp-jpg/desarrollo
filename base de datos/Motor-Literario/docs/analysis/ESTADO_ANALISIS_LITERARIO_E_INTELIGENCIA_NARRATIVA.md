@@ -275,7 +275,7 @@ La rama `feat/narrative-sync-coordinator-v2`, basada en el HEAD `481b0dde05b7878
 - Aislamiento por proyecto, validación de secuencias e IDs, coalescencia de llamadas simultáneas por proyecto y ejecución paralela de proyectos diferentes.
 - Clasificación remota estricta y disjunta: acuse, conflicto o reintento. Solo los IDs confirmados explícitamente se retiran de la bandeja.
 - Registro del intento antes de retirar operaciones aceptadas; ante fallo de transporte o respuesta inválida no se confirma ninguna operación.
-- Siete pruebas en `typescript/tests/narrative-sync.test.mjs` y contrato documentado en `docs/development/NARRATIVE_SYNC_TRANSPORT_CONTRACT.md`.
+- Ocho pruebas en `typescript/tests/narrative-sync.test.mjs` y contrato documentado en `docs/development/NARRATIVE_SYNC_TRANSPORT_CONTRACT.md`.
 
 Durante la inspección de CI se detectó en `src/narrative-history.ts` una declaración duplicada y malformada (`export interface NarrativeAssertion {");`), que provocaba `TS1002: Unterminated string literal`. Esta rama elimina el bloque vacío corrupto y conserva la interfaz completa inmediatamente posterior. El cambio se incluye para que el typecheck de la rama pueda avanzar; no se ha modificado `main` directamente.
 

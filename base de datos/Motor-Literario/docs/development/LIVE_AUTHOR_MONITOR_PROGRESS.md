@@ -1227,3 +1227,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresiones:** una cancelación que falla una vez se reintenta antes de reanudar el proveedor; otra prueba confirma que un `dispose()` posterior termina de retirar el listener; una prueba de integración fuerza dos fallos transitorios y verifica que la segunda llamada pública libera el único listener restante.
 
 **Validación:** pendiente de CI para este commit.
+
+
+## 74. Distinguir cancelador activo de cancelador que falló (26 de noviembre de 2026)
+
+**Fallo detectado en CI:** la primera implementación conservaba correctamente el handle cuando `unsubscribe()` lanzaba, pero `attachProvider()` trataba cualquier handle presente como si el cierre hubiera fallado. Durante `resynchronize()`, el callback `beforeResume` puede volver a registrar la fuente; una segunda llamada a `attachProvider()` retiraba el listener recién creado y lo suscribía otra vez, elevando el contador de suscripciones de 2 a 3. Además, TypeScript detectó una comprobación redundante del handle después de llamar al método.
+
+**Corrección:** se introduce `providerDetachFailed`, que solo se activa al capturar una excepción de cancelación. Si hay disposer y no existe fallo registrado, la suscripción ya está activa y `attachProvider()` retorna sin alterarla. Solo se vuelve a intentar un handle marcado como fallido; al cerrarlo con éxito se limpia el estado. La comprobación posterior usa el flag explícito, evitando el estrechamiento de tipos redundante.
+
+**Regresión:** la prueba de resincronización transaccional confirma que se crea exactamente una nueva suscripción tras retirar la anterior; las pruebas de cancelación fallida siguen verificando reintento y `dispose()` repetido.
+
+**Validación previa:** [Live Author Monitor — run 45753234938](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753234938) falló la prueba de resincronización (esperaba 2 suscripciones y observó 3); [Motor Literario TypeScript — run 45753234976](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45753234976) detectó además TS2774. El nuevo commit queda pendiente de ambas lanes.

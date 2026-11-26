@@ -228,6 +228,29 @@ test("la ingesta extrae movimientos de personajes hacia lugares con evidencia ex
   assert.equal(result.locationTransitionCandidates[0].contextEvidence.excerpt, text);
 });
 
+test("la ingesta extrae presencia locativa explícita y la incluye en la cobertura", () => {
+  const ana = {
+    projectId: "p", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const castle = {
+    projectId: "p", id: "location:castle", kind: "location",
+    canonicalName: "castillo", normalizedName: "castillo", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const text = "Ana está en el castillo.";
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "presence-scene", revision: 4,
+    text, entities: [ana, castle]
+  });
+  assert.equal(result.locationPresenceCandidates.length, 1);
+  assert.equal(result.locationPresenceCandidates[0].characterEntityId, ana.id);
+  assert.equal(result.locationPresenceCandidates[0].locationEntityId, castle.id);
+  assert.equal(result.extractionAudit.sentencesWithAnyExtractedEvidence, 1);
+  assert.deepEqual(result.extractionAudit.uncoveredSentences, []);
+});
+
 test("no infiere entidades de nombres propios sin etiqueta explícita", () => {
   const result = ingestNarrativeBookText({
     projectId: "p", documentId: "no-name-guess", revision: 1,

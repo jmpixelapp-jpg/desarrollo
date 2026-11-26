@@ -41,10 +41,10 @@ const METRICS: readonly MetricDefinition[] = [
   { key: "active", label: "Tiempo escribiendo" },
   { key: "idle", label: "Tiempo acumulado en pausa" },
   { key: "pauses", label: "Pausas detectadas" },
-  { key: "wordsPerMinute", label: "Ritmo estimado (palabras/min)" },
-  { key: "charactersPerMinute", label: "Ritmo (caracteres/min)" },
-  { key: "inserted", label: "Caracteres insertados" },
-  { key: "deleted", label: "Caracteres eliminados" },
+  { key: "wordsPerMinute", label: "Ritmo bruto estimado (palabras/min)" },
+  { key: "charactersPerMinute", label: "Ritmo bruto (caracteres/min)" },
+  { key: "inserted", label: "Caracteres insertados brutos (UTF-16)" },
+  { key: "deleted", label: "Caracteres eliminados brutos (UTF-16)" },
   { key: "accepted", label: "Ediciones aceptadas" },
   { key: "typing", label: "Escritura" },
   { key: "composition", label: "Composición IME" },
@@ -427,7 +427,7 @@ export function mountLiveAuthorMonitorPanel(
   const progress = makeElement(document, "div", "ml-author-monitor__progress");
   progressTrack.append(progress);
   const note = makeElement(document, "p", "ml-author-monitor__note");
-  note.textContent = "Métricas locales de esta sesión. El contenido del manuscrito no se muestra ni se transmite.";
+  note.textContent = "Métricas locales de esta sesión. El contenido del manuscrito no se muestra ni se transmite. Los caracteres y ritmos acumulan deltas brutos; las sustituciones provisionales IME pueden contarse varias veces.";
   root.append(header, grid, durability, persistence, coordination, listenerErrors, progressTrack, note);
   container.append(root);
 

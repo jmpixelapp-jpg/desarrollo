@@ -175,3 +175,10 @@ La API `reconcileNarrativeRepairAndSyncState(store, projectId, journal)` produce
 - cantidad e identidades de operaciones remotas pendientes y ya aplicadas en el diario de sincronización.
 
 Una intención que conserva su auditoría indica que el proceso pudo interrumpirse después de escribirla y antes de borrar la intención. La recuperación existente puede completar esa ventana de forma idempotente. Los IDs del diario de sincronización se muestran separadamente: no se presupone que sean equivalentes a IDs de reparación. La API no corrige, confirma ni borra datos.
+
+
+### Inspección de integridad del diario
+
+`inspectNarrativeSyncJournalIntegrity(journal, projectId)` audita el diario sin alterar operaciones ni cursores. Verifica el digest SHA-256 de cada envoltura, los metadatos locales de recepción/aplicación, las identidades repetidas y la continuidad de secuencias por escritor. El informe enumera incidencias con códigos estables (`invalid-envelope`, `invalid-received-at`, `invalid-applied-at`, `duplicate-operation`, `duplicate-writer-sequence`, `sequence-gap`) y declara `intact` únicamente cuando no hay incidencias.
+
+El diagnóstico asume que el diario conserva el historial completo de operaciones de cada escritor desde la secuencia 1. No autentica al escritor: la huella SHA-256 detecta alteraciones del contenido, pero la autorización debe resolverse en el límite servidor/anfitrión.

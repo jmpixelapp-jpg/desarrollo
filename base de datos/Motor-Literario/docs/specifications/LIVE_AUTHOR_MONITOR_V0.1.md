@@ -607,4 +607,4 @@ El lease protege exclusivamente los checkpoints de métricas. No bloquea el edit
 
 Las pruebas cubren contienda de dos propietarios, renovación, incremento del token después de liberación/expiración, rechazo de escritura del propietario anterior, handoff en HostEngineApi, renovación con snapshot local antiguo y fallo temporal de liberación.
 
-**Validación CI de esta entrega:** pendiente de la ejecución que incluye el test de reintento de liberación y las últimas correcciones de lease. La ejecución previa [45725988078](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45725988078) aprobó 106/106 pruebas, MLDB 0.4.2, auditoría de 25 tablas y 34 almacenes y build Vite.
+**Validación CI verificada:** ejecución específica [45726102805](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726102805), commit `56f7269ba27afcd1883c3232c0968eef19ba76f2`: esquema MLDB 0.4.2 válido, auditoría física correcta (25 tablas y 34 almacenes), build Vite y **107 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye la regresión que fuerza un fallo de liberación y verifica que se conserva la reserva para reintentar.

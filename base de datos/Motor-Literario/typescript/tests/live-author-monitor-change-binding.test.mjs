@@ -1,10 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  bindLiveAuthorMonitorEditorChanges,
-  LiveAuthorMonitorBackpressureOverflowError,
-  LiveAuthorMonitorAdmissionResynchronizationError
-} from "../dist/motor-literario.js";
+const monitorModule = await import("../dist-monitor/live-author-monitor.js")
+  .catch(() => import("../dist/motor-literario.js"));
+const { bindLiveAuthorMonitorEditorChanges, LiveAuthorMonitorBackpressureOverflowError, LiveAuthorMonitorAdmissionResynchronizationError } = monitorModule;
 
 function sourceFixture() {
   const listeners = new Set();

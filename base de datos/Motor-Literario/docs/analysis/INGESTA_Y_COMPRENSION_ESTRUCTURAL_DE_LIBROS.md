@@ -87,6 +87,16 @@ Para entidades de tipo `object`, el descubrimiento de observaciones puede propon
 
 Además, cada evidencia específica (acción, objeto, actor y destinatario) debe quedar contenida en el fragmento contextual de la misma transición. Se verifica tanto el rango como la coincidencia literal del subfragmento. Esto evita aceptar una mención de participante que esté fuera de la oración/línea aportada como contexto o que no coincida con el texto fuente.
 
+### Auditoría de cobertura: localizar lo que el extractor todavía no comprende
+
+Módulo: `typescript/src/narrative-extraction-audit.ts`
+
+La ingesta incorpora `extractionAudit`, que divide el texto en unidades de frase operativas y contrasta cada una con evidencias exactas de acciones extraídas y acontecimientos explícitos. Las frases sin solapamiento de evidencia se devuelven como `uncoveredSentences`, cada una con fragmento literal, offsets UTF-16 absolutos, documento, revisión, ID estable y estado `unreviewed`.
+
+La auditoría informa cantidad total de frases, frases cubiertas, frases pendientes, proporción de cobertura, pendientes omitidos por límite y truncamiento. Los encabezados estructurales de capítulo no se cuentan como frases pendientes. La salida tiene límites explícitos para no permitir que textos enormes creen colas ilimitadas.
+
+**Interpretación obligatoria:** `coverageRatio` mide cobertura de los extractores actuales, no comprensión semántica total ni calidad literaria. Una frase pendiente puede contener una acción, un cambio de estado, una descripción, una relación, una emoción, una pista o cualquier información que el inventario de patrones aún no reconoce. Por eso la cola es una herramienta para descubrir omisiones, no una clasificación de irrelevancia. La auditoría valida que toda evidencia aportada pertenezca al documento/revisión y coincida literalmente con el texto fuente.
+
 ### Corroboración textual de entrega y recepción
 
 La trayectoria ahora puede emitir `continuitySignals` de tipo `transfer-reception-corroboration` cuando dos transiciones consecutivas del mismo objeto contienen: una entrega afirmada, seguida por una recepción afirmada, y ambas identifican explícitamente al mismo destinatario. El vínculo conserva las dos evidencias de destinatario y los IDs de las transiciones relacionadas.

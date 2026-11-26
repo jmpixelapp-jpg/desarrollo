@@ -271,6 +271,10 @@ test("presenta las ocho categorías de actividad en el panel de capítulo", () =
   for (const key of ["typing", "composition", "paste", "deletion", "correction", "undo", "redo", "other"]) {
     assert.equal(metric(panel, key).textContent, "1", "el panel debe presentar el contador " + key);
   }
+  assert.equal(metric(panel, "typingUnits").textContent, "1");
+  assert.equal(metric(panel, "compositionInserted").textContent, "1");
+  assert.equal(metric(panel, "compositionDeleted").textContent, "0");
+  assert.equal(metric(panel, "unitCoverage").textContent, "Completa");
   assert.equal(panel.textContent.includes("contenido privado"), false);
   unmount();
 });

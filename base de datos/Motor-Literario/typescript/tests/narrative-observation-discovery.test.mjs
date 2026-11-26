@@ -237,3 +237,29 @@ test("no reconoce futuros como prefijos de otras palabras", () => {
   assert.equal(found.length, 1);
   assert.equal(found[0].surface, "abrirá");
 });
+
+test("identifica un agente explícito en pasiva sin confundirlo con el sujeto paciente", () => {
+  const bruno = {
+    ...character, id: "character:bruno", canonicalName: "Bruno",
+    normalizedName: "bruno"
+  };
+  const text = "Ana fue encontrada por Bruno.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, bruno], text
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].grammaticalSubjectCandidate?.entityId, character.id);
+  assert.equal(found[0].grammaticalSubjectCandidate?.voice, "passive");
+  assert.equal(found[0].passiveAgentCandidate?.entityId, bruno.id);
+  assert.equal(found[0].passiveAgentCandidate?.marker, "por");
+  const evidence = found[0].passiveAgentCandidate.evidence;
+  assert.equal(text.slice(evidence.start, evidence.end), "Bruno");
+});
+
+test("no inventa agente pasivo si el complemento por no identifica una entidad conocida", () => {
+  const text = "Ana fue encontrada por un desconocido.";
+  const found = discoverNarrativeObservationCandidates({ ...context, text });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].grammaticalSubjectCandidate?.voice, "passive");
+  assert.equal(found[0].passiveAgentCandidate, undefined);
+});

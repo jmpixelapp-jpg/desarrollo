@@ -1893,16 +1893,14 @@ export class IndexedDbProjectStore implements ProjectStore {
         }
         const db = request.result;
         if (!db.objectStoreNames.contains(NARRATIVE_REFERENCE_REPAIR_AUDITS)) {
-          const audits = db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_AUDITS, {
+          db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_AUDITS, {
             keyPath: ["projectId", "operationId"]
           });
-          audits.createIndex("by-project", "projectId", { unique: false });
         }
         if (!db.objectStoreNames.contains(NARRATIVE_REFERENCE_REPAIR_PENDING)) {
-          const pending = db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_PENDING, {
+          db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_PENDING, {
             keyPath: ["projectId", "operationId"]
           });
-          pending.createIndex("by-project", "projectId", { unique: false });
         }
         if (!db.objectStoreNames.contains(PROJECT_SETTINGS)) {
           const settings = db.createObjectStore(PROJECT_SETTINGS, {
@@ -2161,6 +2159,10 @@ export class IndexedDbProjectStore implements ProjectStore {
           }
           store.createIndex(indexName, keyPath, { unique });
         };
+        // Los índices de las colas de reparación se aseguran también cuando
+        // el almacén ya existía en una versión anterior de la base.
+        ensureIndex(NARRATIVE_REFERENCE_REPAIR_AUDITS, "by-project", "projectId");
+        ensureIndex(NARRATIVE_REFERENCE_REPAIR_PENDING, "by-project", "projectId");
         ensureIndex(PROJECT_SETTINGS, "by-project", "projectId");
         ensureIndex(LANGUAGE_PROFILES, "by-project", "projectId");
         ensureIndex(LANGUAGE_PROFILES, "by-project-language", ["projectId", "languageIdentifier"]);
@@ -2736,8 +2738,9 @@ export class IndexedDbProjectStore implements ProjectStore {
     const db = await this.open();
     const transaction = db.transaction(NARRATIVE_REFERENCE_REPAIR_PENDING, "readonly");
     const request = transaction.objectStore(NARRATIVE_REFERENCE_REPAIR_PENDING).index("by-project").getAll(projectId);
-    const records = await readAfterTransaction(transaction, request, "No se pudieron leer las intenciones pendientes.")
-      as NarrativeReferenceRepairPendingEntry[];
+    const records = await readAfterTransaction(
+      transaction, request, "No se pudieron leer las intenciones pendientes."
+    ) as NarrativeReferenceRepairPendingEntry[];
     return records.map(item => structuredClone(item));
   }
 

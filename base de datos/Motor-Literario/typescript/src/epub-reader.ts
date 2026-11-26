@@ -372,7 +372,7 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
           if (!href || !label || /^[a-z][a-z0-9+.-]*:/iu.test(href) || href.startsWith("//")) continue;
           const [filePart, fragment] = href.split("#", 2);
           const targetPath = filePart ? resolvePath(navigationPath, filePart) : navigationPath;
-          navigation.push({ label, href, targetPath, depth: Math.max(0, depth) });
+          navigation.push({ label, href, targetPath, depth: Math.max(0, depth - 1) });
           void fragment;
         }
         if (navigation.length) break;

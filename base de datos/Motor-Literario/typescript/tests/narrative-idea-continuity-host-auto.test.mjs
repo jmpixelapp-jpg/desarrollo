@@ -247,6 +247,20 @@ test("reparte 200 candidatos entre más de 200 documentos y señala cobertura pa
       });
     }
 
+    const originalLoadDocument = store.loadDocument.bind(store);
+    let reads = 0;
+    let inFlight = 0;
+    let maximumInFlight = 0;
+    store.loadDocument = async (projectId, documentId) => {
+      reads++;
+      inFlight++;
+      maximumInFlight = Math.max(maximumInFlight, inFlight);
+      try {
+        return await originalLoadDocument(projectId, documentId);
+      } finally {
+        inFlight--;
+      }
+    };
     const api = new HostEngineApi({ store });
     try {
       api.initializeProject({ projectId: id, projectName: "Proyecto extenso" });
@@ -259,6 +273,9 @@ test("reparte 200 candidatos entre más de 200 documentos y señala cobertura pa
       assert.equal(index.summary.sourceAnalysisTruncated, true);
       assert.ok(index.occurrences.some(item => item.documentId === "chapter-000"));
       assert.ok(index.occurrences.some(item => item.documentId === "chapter-200"));
+      assert.equal(reads, 201);
+      assert.ok(maximumInFlight > 1);
+      assert.ok(maximumInFlight <= 16);
     } finally {
       api.dispose();
     }

@@ -115,6 +115,34 @@ test("IndexedDB persiste, clona, ordena por timestamp y elimina checkpoints del 
 });
 
 
+test("IndexedDB rechaza ventanas de latencia dispersas antes de persistir el checkpoint", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-sparse-storage-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+
+  try {
+    const lease = await acquireLease(store, projectId, documentId);
+    const sparseLatencies = new Array(1);
+    assert.equal(sparseLatencies.length, 1);
+    assert.equal(0 in sparseLatencies, false);
+
+    const malformed = checkpoint(projectId, documentId, Date.now(), {
+      commitLatencies: sparseLatencies
+    });
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(malformed, lease),
+      /commitLatencies\.values/
+    );
+    assert.equal(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      undefined,
+      "un checkpoint rechazado no debe quedar parcialmente persistido"
+    );
+  } finally {
+    await store.close();
+  }
+});
+
 test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";

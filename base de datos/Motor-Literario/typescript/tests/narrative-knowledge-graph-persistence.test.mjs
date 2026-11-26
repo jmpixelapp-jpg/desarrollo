@@ -12,6 +12,7 @@ import {
   repairNarrativeDocumentProjectionManifest,
   proposeNarrativeReferenceRepairs,
   applyNarrativeReferenceRepair,
+  recoverNarrativeReferenceRepairs,
   verifyNarrativeReferenceRepairAuditIntegrity,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
@@ -19,7 +20,7 @@ import {
 function createMemoryStore() {
   const tables = {
     entities: new Map(), relations: new Map(), events: new Map(),
-    ideas: new Map(), assertions: new Map(), manifests: new Map(), audits: new Map()
+    ideas: new Map(), assertions: new Map(), manifests: new Map(), audits: new Map(), pendingRepairs: new Map()
   };
   const copy = value => structuredClone(value);
   const methods = {};
@@ -53,6 +54,16 @@ function createMemoryStore() {
   };
   methods.loadNarrativeReferenceRepairAudits = async projectId =>
     [...tables.audits.values()].filter(item => item.projectId === projectId).map(copy);
+  methods.saveNarrativeReferenceRepairPending = async entry => {
+    const key = entry.projectId + "\\u0000" + entry.operationId;
+    const current = tables.pendingRepairs.get(key);
+    if (current) assert.deepEqual(current, entry, "la intención pendiente es inmutable");
+    else tables.pendingRepairs.set(key, copy(entry));
+  };
+  methods.loadNarrativeReferenceRepairPending = async projectId =>
+    [...tables.pendingRepairs.values()].filter(item => item.projectId === projectId).map(copy);
+  methods.deleteNarrativeReferenceRepairPending = async (projectId, operationId) =>
+    tables.pendingRepairs.delete(projectId + "\\u0000" + operationId);
   methods.loadNarrativeDocumentProjectionManifest = async (projectId, documentId) =>
     copy(tables.manifests.get(projectId + "\\u0000" + documentId));
   methods.saveNarrativeDocumentProjectionManifestIfUnchanged = async (manifest, expectedGeneration) => {
@@ -540,6 +551,46 @@ test("aplica reparación aprobada de relación mediante CAS y devuelve auditorí
   assert.equal(replay.replayed, true);
   assert.equal((await store.loadNarrativeReferenceRepairAudits("novel-apply")).length, 1,
     "un reintento no debe duplicar la auditoría");
+});
+
+test("recupera una reparación confirmada cuyo guardado de auditoría falló", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-recovery", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:recover", {
+    projectId: "novel-recovery", id: "relation:recover",
+    fromEntityId: "entity:legacy", toEntityId: "entity:other",
+    relationType: "knows", evidence: []
+  });
+  const proposal = {
+    projectId: "novel-recovery", issueCode: "missing-relation-entity",
+    recordType: "relation", recordId: "relation:recover",
+    missingReferenceId: "entity:legacy", referenceField: "fromEntityId",
+    candidateEntityId: "entity:canonical", resolution: "explicit-merge-match"
+  };
+  const append = store.appendNarrativeReferenceRepairAudit;
+  let failOnce = true;
+  store.appendNarrativeReferenceRepairAudit = async entry => {
+    if (failOnce) { failOnce = false; throw new Error("simulated audit write failure"); }
+    return append(entry);
+  };
+  await assert.rejects(applyNarrativeReferenceRepair(store, proposal, true, 31), /simulated audit write failure/);
+  assert.equal(tables.relations.get("relation:recover").fromEntityId, "entity:canonical");
+  assert.equal(tables.pendingRepairs.size, 1);
+  assert.equal(tables.audits.size, 0);
+
+  const recovery = await recoverNarrativeReferenceRepairs(store, "novel-recovery");
+  assert.equal(recovery.checked, 1);
+  assert.equal(recovery.recovered, 1);
+  assert.equal(recovery.pending.length, 0);
+  assert.equal(tables.relations.get("relation:recover").fromEntityId, "entity:canonical",
+    "la recuperación no debe aplicar una segunda mutación");
+  assert.equal(tables.audits.size, 1);
+  assert.equal(tables.pendingRepairs.size, 0);
 });
 
 test("verifica integridad durable y distingue cambios posteriores del registro", async () => {

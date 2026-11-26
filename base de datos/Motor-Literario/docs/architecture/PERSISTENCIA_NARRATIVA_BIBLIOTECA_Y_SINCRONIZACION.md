@@ -1,6 +1,6 @@
 # Persistencia narrativa, biblioteca de ideas y sincronización
 
-**Versión documental:** 1.6  
+**Versión documental:** 1.7  
 **Revisión de código de referencia:** `main` en `f99278768abb4fd0ad2fbb01dcc4bf4c49f1ed1f`  
 **Ámbito:** núcleo `base de datos/Motor-Literario/typescript`  
 **Lenguaje de implementación:** TypeScript/JavaScript puro  
@@ -199,7 +199,7 @@ La escritura de una operación en `sync-outbox` y el avance de `lastSequence` se
 1. `loadLastSyncOperationSequence(projectId, deviceId)`: devuelve el cursor durable o cero.
 2. `enqueueSyncOperation(operation)`: valida e inserta idempotentemente y avanza la secuencia de forma atómica.
 3. `loadPendingSyncOperations(projectId, limit)`: lee pendientes paginadas sin borrarlas.
-4. `recordSyncOperationAttempt(operationId, attemptedAt, error?)`: registra contador, fecha y último error.
+4. `recordSyncOperationAttempt(operationId, attemptedAt, error?)`: registra contador, fecha y código de error no sensible.
 5. `acknowledgeSyncOperation(operationId)`: retira la operación después del acuse remoto durable; el cursor de secuencia se conserva.
 
 Ejemplo de uso local (no realiza transporte de red):
@@ -219,7 +219,7 @@ await store.enqueueSyncOperation({
 const pending = await store.loadPendingSyncOperations(projectId, 50);
 ```
 
-Tras un error temporal, el anfitrión registra `recordSyncOperationAttempt(operationId, Date.now(), errorCode)`. Solo cuando el servidor confirma que la operación quedó almacenada durablemente debe llamarse a `acknowledgeSyncOperation(operationId)`. No se guardan tokens ni credenciales dentro del payload.
+Tras un error temporal, el anfitrión registra `recordSyncOperationAttempt(operationId, Date.now(), errorCode)` usando un código estable y no sensible, nunca el texto completo de una excepción. Solo cuando el servidor confirma que la operación quedó almacenada durablemente debe llamarse a `acknowledgeSyncOperation(operationId)`. No se guardan tokens ni credenciales dentro del payload.
 
 La outbox es infraestructura local: todavía no integra automáticamente todas las mutaciones de documentos, fichas, relaciones e ideas. Por ello aún no garantiza sincronización completa ni pérdida cero de todas las escrituras del dominio. La escritura de dominio y su operación outbox deberán incorporarse en una misma transacción para obtener esa garantía.
 

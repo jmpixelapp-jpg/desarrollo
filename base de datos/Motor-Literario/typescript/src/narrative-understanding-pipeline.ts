@@ -18,6 +18,13 @@ import {
   extractNarrativeCharacterInteractions,
   detectNarrativeInteractionShifts
 } from "./narrative-character-interaction-evolution";
+import {
+  resolveNarrativePronounReferences,
+  type NarrativeCharacterMention,
+  type NarrativePronounReference,
+  type NarrativePronounResolutionOptions
+} from "./narrative-pronoun-resolution";
+import { extractNarrativePronounActionCandidates } from "./narrative-pronoun-action-link";
 
 export interface NarrativeUnderstandingInput {
   readonly projectId: string;
@@ -27,6 +34,11 @@ export interface NarrativeUnderstandingInput {
   readonly entities: readonly NarrativeEntity[];
   /** Offset UTF-16 absoluto cuando el fragmento es una ventana del documento. */
   readonly baseOffset?: number;
+  /** Menciones detectadas externamente; offsets UTF-16 absolutos del documento. */
+  readonly characterMentions?: readonly NarrativeCharacterMention[];
+  /** Pronombres detectados externamente; offsets UTF-16 absolutos del documento. */
+  readonly pronounReferences?: readonly NarrativePronounReference[];
+  readonly pronounResolutionOptions?: NarrativePronounResolutionOptions;
 }
 
 export interface NarrativeUnderstandingResult {

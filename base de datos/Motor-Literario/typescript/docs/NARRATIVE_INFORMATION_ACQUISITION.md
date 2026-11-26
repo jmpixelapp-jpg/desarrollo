@@ -186,3 +186,34 @@ La presencia de un verbo de cambio no basta para concluir que el cambio se ejecu
 
 El clasificador de efecto también conserva estados no concluyentes para formas no finitas o en desarrollo (`attempted`, `intended`, `hypothetical`, `in-progress`, `unresolved`) cuando el contexto de evidencia permite identificarlas. Solo `candidate` representa una acción finita afirmada pendiente de revisión; no equivale a éxito ni a estado confirmado. La negación y el futuro mantienen prioridad (`not-applied` y `prospective`).
 
+## Afirmaciones explícitas de condición de personajes
+
+Se incorpora `narrative-character-state-discovery.ts` para capturar estados descritos directamente por el autor. La regla requiere una ficha de personaje conocida, una mención nominal inequívoca y una construcción copulativa explícita con un predicado incluido en el vocabulario controlado. La primera cobertura incluye: herido, vivo, muerto, consciente, inconsciente, atado, libre, enfermo, sano, desaparecido y presente.
+
+El resultado `characterStateCandidates` se integra en la ingesta del libro. Cada candidato conserva por separado:
+
+- identidad mencionada;
+- predicado de estado;
+- cópula y modificadores;
+- fragmento completo de evidencia;
+- polaridad afirmada o negada;
+- tiempo gramatical;
+- aspecto ordinario, continuo, recurrente o cesativo;
+- modo copulativo o perceptual.
+
+Ejemplos de distinciones preservadas:
+
+| Texto | Interpretación candidata |
+|---|---|
+| Ana está herida | estado herido afirmado, presente |
+| Ana ya no está herida | estado herido negado, presente |
+| Ana dejó de estar enferma | estado enfermo negado, cesación |
+| Ana volvió a estar herida | estado herido afirmado, recurrencia |
+| Ana estaba viva | estado vivo afirmado, pasado |
+| Ana estará libre | estado libre afirmado, futuro |
+| Ana parece consciente | percepción, no certeza objetiva |
+
+La extracción no confunde «Bruno encontró a Ana herida» con «Ana está herida»: exige la cópula junto al nombre. Tampoco resuelve «ella», ni selecciona arbitrariamente entre dos fichas que comparten el mismo nombre. Un adjetivo aislado o el estado de un objeto no genera una afirmación de personaje.
+
+Los estados no se consolidan ni se sobrescriben entre sí. Dos afirmaciones distintas pueden corresponder a momentos diferentes, una corrección del autor o una contradicción real; decidirlo exige cronología y contexto narrativo. Los offsets UTF-16 absolutos y la revisión de origen permiten reconstruir esa procedencia. La cobertura es deliberadamente explícita y extensible: los estados no incluidos no se inventan ni se fuerzan a una categoría aproximada.
+

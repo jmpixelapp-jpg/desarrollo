@@ -1550,7 +1550,7 @@ function validateLiveAuthorMonitorCheckpoint(
     invalid.push("commitLatencies");
   } else {
     if (checkpoint.commitLatencies.length > 4096) invalid.push("commitLatencies.length");
-    if (checkpoint.commitLatencies.some(value => !finiteNonNegative(value))) {
+    if (Array.from(checkpoint.commitLatencies).some(value => !finiteNonNegative(value))) {
       invalid.push("commitLatencies.values");
     }
     if (finiteNonNegative(checkpoint.totalCommitLatencyMs) &&

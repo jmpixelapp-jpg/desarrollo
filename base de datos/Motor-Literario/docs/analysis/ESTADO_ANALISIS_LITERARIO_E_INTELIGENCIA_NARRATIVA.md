@@ -511,3 +511,15 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - README y contrato de transporte documentan que el anfitrión invoca el método después de confirmar el cambio local. La outbox y el journal del documento aún no comparten una transacción; la recuperación debe reconstruir la operación con el mismo ID estable. No se afirma atomicidad entre ambos.
 - **Pendiente:** integrar un productor concreto con los eventos/cambios del dominio y definir payloads versionados por tipo; resolver la ventana de fallo entre commit del journal y enqueue; probar recuperación end-to-end.
 - **Validación:** pruebas escritas; aún no ejecutadas. CI no confirmado.
+
+### Captura automática atómica de cambios del manuscrito
+
+- Se añadió la opción opt-in `syncDeviceId` a `EngineOptions` y se transmite desde `HostEngineApi` al motor.
+- Cuando está activa, cada edición confirmada construye una operación `narrative-document-change.v1` con payload `schemaVersion: 1`, delta de texto, revisiones y offsets UTF-16.
+- `IndexedDbProjectStore.appendChange(change, syncDraft)` realiza en una transacción `readwrite` la validación de continuidad del journal, la inserción del delta, la asignación de secuencia por dispositivo y la inserción en `sync-outbox`.
+- La transacción abarca `documents`, `changes` y `sync-outbox`. Una colisión de `operationId` o fallo de inserción aborta la transacción completa; el delta no queda persistido sin su operación.
+- Se derivó un `operationId` estable de proyecto/documento/secuencia para permitir correlación y recuperación.
+- Pruebas añadidas para commit conjunto y rollback cuando existe colisión de identidad en outbox.
+- Privacidad: la función está desactivada por defecto porque el payload incluye texto editado; habilitarla implica autorizar el envío de esos deltas mediante el transporte del anfitrión.
+- Límite: atomicidad local IndexedDB únicamente. No hay confirmación remota exactamente-una-vez; el servidor debe deduplicar por `operationId`.
+- **Validación pendiente:** typecheck y suite todavía no ejecutados; CI sin resultados confirmados.

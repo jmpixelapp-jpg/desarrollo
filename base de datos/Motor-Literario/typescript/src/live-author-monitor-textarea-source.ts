@@ -208,6 +208,15 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     );
   };
 
+  private readonly handleVisibilityChange = (): void => {
+    if (this.disposed || this.needsResync || this.element.ownerDocument?.hidden !== true) return;
+    if (!this.pendingInput && !this.compositionActive) return;
+    this.fail(
+      this.pendingInput ? "missing-input" : "resync-required",
+      "El documento quedó oculto durante una edición o composición incompleta; se requiere un snapshot autoritativo."
+    );
+  };
+
   private readonly handleInput = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
     const input = event as InputEvent;
@@ -463,6 +472,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       this.element.addEventListener("compositionstart", this.handleCompositionStart);
       this.element.addEventListener("compositionend", this.handleCompositionEnd);
       this.element.ownerDocument?.addEventListener("freeze", this.handlePageFreeze);
+      this.element.ownerDocument?.addEventListener("visibilitychange", this.handleVisibilityChange);
       this.element.ownerDocument?.defaultView?.addEventListener("pagehide", this.handlePageHide);
     }
 
@@ -478,6 +488,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
         this.element.removeEventListener("compositionstart", this.handleCompositionStart);
         this.element.removeEventListener("compositionend", this.handleCompositionEnd);
         this.element.ownerDocument?.removeEventListener("freeze", this.handlePageFreeze);
+        this.element.ownerDocument?.removeEventListener("visibilitychange", this.handleVisibilityChange);
         this.element.ownerDocument?.defaultView?.removeEventListener("pagehide", this.handlePageHide);
         const hadPendingInput = this.pendingInput !== undefined;
         if (!this.disposed && !this.needsResync) {
@@ -556,6 +567,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.element.removeEventListener("compositionstart", this.handleCompositionStart);
     this.element.removeEventListener("compositionend", this.handleCompositionEnd);
     this.element.ownerDocument?.removeEventListener("freeze", this.handlePageFreeze);
+    this.element.ownerDocument?.removeEventListener("visibilitychange", this.handleVisibilityChange);
     this.element.ownerDocument?.defaultView?.removeEventListener("pagehide", this.handlePageHide);
     this.listeners.clear();
     this.pendingInput = undefined;

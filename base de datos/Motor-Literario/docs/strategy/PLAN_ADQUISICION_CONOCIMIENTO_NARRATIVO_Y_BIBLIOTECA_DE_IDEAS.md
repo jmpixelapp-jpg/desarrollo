@@ -736,4 +736,4 @@ La cronología solo se orienta cuando ambos documentos figuran en `orderedDocume
 
 Límites de recursos: máximo 200 candidatos, 500 unidades UTF-16 por texto de idea, 10.000 relaciones publicadas y señal explícita `truncated` si el límite de resultados recorta la lista. Se cuentan los pares comparados entre documentos para permitir diagnóstico del coste.
 
-Se agregan nueve pruebas para recurrencia normalizada, resonancia, coincidencia insuficiente, aislamiento por documento, cronología explícita/desconocida, filtrado de términos frecuentes, determinismo, entradas inválidas e integración con candidatos previos en el pipeline.
+Se agregan once pruebas para recurrencia normalizada, resonancia, coincidencia insuficiente, aislamiento por documento, cronología explícita/desconocida, filtrado de términos frecuentes, determinismo, cambios de modalidad, entradas inválidas, truncamiento e integración con candidatos previos en el pipeline.

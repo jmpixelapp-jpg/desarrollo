@@ -285,3 +285,4 @@ Commits de seguimiento:
 
 La última ejecución observada para el HEAD `46098b8607020a5c32d94f242feac1614be93455` tenía los dos workflows en curso, todavía instalando Chromium. El estado de typecheck, suite completa, pruebas del monitor y benchmark queda pendiente de esos resultados. No se considera validación verde.
 
+La ejecución posterior del typecheck detectó además inconsistencias en la restauración de contadores de actividad del monitor: un identificador antiguo (`activityCountTotal`) y acumuladores `reduce` sobre valores opcionales. Se sustituyeron esas sumas por bucles explícitos con acumuladores numéricos, manteniendo la validación previa de que cada contador sea entero no negativo. Cambios registrados en `87599f4` y `e4f26a1`. El siguiente CI debe confirmar que desaparecieron estos errores; todavía no hay resultado de CI para esos commits en el momento de esta anotación.

@@ -57,7 +57,7 @@ function sampleEpub() {
     ["mimetype", "application/epub+zip"],
     ["META-INF/container.xml", '<?xml version="1.0"?><container><rootfiles><rootfile full-path="OPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'],
     ["OPS/book.opf", '<?xml version="1.0"?><package><metadata><dc:title>La novela &amp; el viaje</dc:title><dc:creator>Ana Autora</dc:creator><dc:language>es</dc:language><dc:identifier>urn:test:book</dc:identifier></metadata><manifest><item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>'],
-    ["OPS/chapter1.xhtml", '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><h1>Capítulo primero</h1><p>Una <em>historia</em> &amp; su comienzo.</p><p>Segunda línea.</p><script>texto que no debe entrar</script></body></html>'],
+    ["OPS/chapter1.xhtml", '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><h1>Capítulo primero</h1><p>Una <em>historia</em> &amp; su comienzo.</p><p>Segunda línea.</p><aside epub:type="footnote"><p>Nota al pie.</p></aside><script>texto que no debe entrar</script></body></html>'],
     ["OPS/chapter2.xhtml", '<html><body><h1>Capítulo segundo</h1><p>El viaje continúa.</p><h2>Una sección</h2><p>Y termina.</p></body></html>']
   ]);
 }

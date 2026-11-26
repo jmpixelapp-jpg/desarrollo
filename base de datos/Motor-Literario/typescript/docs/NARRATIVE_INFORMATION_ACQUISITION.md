@@ -37,6 +37,10 @@ Callback: `onNarrativeIdeaCandidates(analysis, candidates)`.
 
 El análisis de acciones usa el snapshot del documento abierto cuando su revisión coincide exactamente con la revisión del resultado. Examina hasta 12.000 unidades UTF-16 a cada lado del fragmento afectado, conserva offsets absolutos y no mezcla revisiones. Si no existe un snapshot coherente, analiza solo el fragmento afectado. Esta ventana aporta contexto local y permite registrar algunos pronombres iniciales como referencias pendientes, pero todavía no resuelve identidad, concordancia ni referencias anafóricas complejas.
 
+### Entidades explícitamente etiquetadas durante la ingesta
+
+Cuando el anfitrión todavía no aporta fichas de entidades, la ingesta reconoce únicamente nombres precedidos por etiquetas explícitas del manuscrito, como «Personaje Ana», «Ciudad de Liria» u «Objeto Espada». Los resultados se devuelven en `entityCandidates` y se usan como contexto local para descubrir acciones en el mismo texto. No se persisten ni se consideran identidades confirmadas. Un nombre propio aislado como «Ana» no basta para crear una entidad. Si el anfitrión ya entrega entidades conocidas, estas conservan prioridad y no se generan duplicados automáticos.
+
 ### Acciones narrativas candidatas
 
 Módulo: `src/narrative-observation-discovery.ts`

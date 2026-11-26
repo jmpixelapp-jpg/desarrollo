@@ -18,7 +18,7 @@ function isNarrativeIdea(value: unknown): value is NarrativeIdea {
   if (typeof idea.projectId !== "string" || !idea.projectId.trim() || idea.projectId.length > 256 ||
       typeof idea.id !== "string" || !idea.id.trim() || idea.id.length > 512 ||
       typeof idea.text !== "string" || idea.text.length > 1_000_000 ||
-      !["IDEA", "incorporated", "discarded"].includes(idea.status ?? "") ||
+      (idea.status !== "IDEA" && idea.status !== "incorporated" && idea.status !== "discarded") ||
       typeof idea.originDocumentId !== "string" || !idea.originDocumentId.trim() ||
       idea.originDocumentId.length > 256 ||
       typeof idea.sourceProjectName !== "string" || !idea.sourceProjectName.trim() ||

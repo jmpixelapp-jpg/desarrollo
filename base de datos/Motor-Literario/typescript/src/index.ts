@@ -5,6 +5,7 @@ export * from "./persistence/indexeddb-store";
 export * from "./host-api";
 export * from "./text-buffer";
 export * from "./narrative-knowledge";
+export * from "./narrative-idea-discovery";
 
 export * from "./narrative-history";
 export * from "./dictionaries";

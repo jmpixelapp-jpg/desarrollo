@@ -66,3 +66,7 @@ La recuperación de pendientes usa el índice `by-project-device-sequence`, no e
 ## Aislamiento del backoff entre escritores
 
 El orden y el bloqueo por reintento se aplican dentro de cada flujo `(projectId, deviceId)`. Una operación retrasada bloquea las secuencias posteriores de ese mismo dispositivo, pero no impide que otros dispositivos del proyecto envíen sus propios flujos independientes. El servidor sigue siendo responsable de deduplicar `operationId` y aplicar autorización por proyecto.
+
+## Recuperación ante interrupción durante acuses locales
+
+El servidor puede haber aceptado un lote completo aunque el cliente se interrumpa mientras elimina sus acuses locales. La bandeja elimina cada operación confirmada de forma independiente y transaccional: si falla un borrado posterior, las ya retiradas no se reenvían y las restantes se recuperan en el siguiente ciclo. Si la interrupción ocurre antes de retirar una operación ya aceptada remotamente, esta podrá reenviarse; por ello el transporte remoto debe deduplicar por `operationId`. La entrega es, por diseño, al menos una vez, no exactamente una vez.

@@ -163,3 +163,20 @@ test("informa cuando el límite de relaciones recorta una salida grande", () => 
   assert.equal(result.truncated, true);
   assert.equal(result.relations.length, 10_000);
 });
+
+
+test("señala un cambio de modalidad entre apariciones sin llamarlo contradicción confirmada", () => {
+  const first = idea("idea-affirmed", "chapter-1", "proteger la ciudad");
+  const second = {
+    ...idea("idea-negated", "chapter-2", "proteger la ciudad"),
+    polarity: "negated"
+  };
+  const result = analyze([first, second]);
+
+  assert.equal(result.relations.length, 1);
+  assert.equal(result.relations[0].relationType, "exact-recurrence");
+  assert.equal(result.relations[0].polarityRelation, "changed");
+  assert.equal(result.relations[0].first.polarity, "affirmed");
+  assert.equal(result.relations[0].second.polarity, "negated");
+  assert.equal(result.relations[0].reviewStatus, "candidate");
+});

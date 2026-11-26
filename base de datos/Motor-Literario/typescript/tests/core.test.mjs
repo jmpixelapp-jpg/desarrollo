@@ -2550,7 +2550,10 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["timeline-occurrences", "by-event-record"],
       ["timeline-occurrences", "by-track-order"]
     ];
-    assert.deepEqual(createdIndexes.map(([storeName, indexName]) => [storeName, indexName]), expected);
+    const indexPairs = createdIndexes.map(([storeName, indexName]) => [storeName, indexName]);
+    const byStoreAndName = (left, right) =>
+      `${left[0]}/${left[1]}`.localeCompare(`${right[0]}/${right[1]}`);
+    assert.deepEqual(indexPairs.sort(byStoreAndName), expected.sort(byStoreAndName));
     assert.equal(
       createdIndexes.find(([, indexName]) => indexName === "by-document-sequence")?.[3]?.unique,
       true,

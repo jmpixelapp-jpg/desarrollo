@@ -756,3 +756,26 @@ test("dispose repetido vuelve a intentar liberar el listener del proveedor", () 
   source.dispose();
   assert.equal(unsubscribeAttempts, 2, "una vez liberado, dispose sigue siendo idempotente");
 });
+
+
+test("exige resincronización si se reutiliza transactionId cambiando activityKind", () => {
+  const f = fixture();
+  const original = f.editor.apply("edit", "tx-activity-kind-reused", {
+    start: 3, end: 3, replacement: "x"
+  });
+  f.editor.publish({
+    ...structuredClone(original),
+    change: {
+      ...structuredClone(original.change),
+      activityKind: "paste"
+    }
+  });
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.source.getState().sequence, 1);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "transaction-id-reused");
+  assert.equal(f.editor.listeners.size, 0);
+  f.stop();
+  f.source.dispose();
+});

@@ -39,7 +39,12 @@ import {
 } from "./project-data";
 import { proofreadFragment } from "./proofreading";
 import { extractNarrativeAssertions, type NarrativeAssertion } from "./narrative-history";
-import { discoverNarrativeIdeaCandidates, MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS, type NarrativeIdeaCandidate } from "./narrative-idea-discovery";
+import {
+  discoverNarrativeIdeaCandidates,
+  MAX_NARRATIVE_IDEA_DISCOVERY_CANDIDATES,
+  MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS,
+  type NarrativeIdeaCandidate
+} from "./narrative-idea-discovery";
 import { analyzeNarrativeIdeaCrossDocumentRelations, MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES } from "./narrative-idea-cross-document-relations";
 import { buildNarrativeIdeaEvolution } from "./narrative-idea-evolution";
 import {
@@ -906,8 +911,8 @@ export class HostEngineApi {
         }
 
         let discoveryText = document.text;
-        let truncated = discoveryText.length > MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS;
-        if (truncated) {
+        const documentTextTruncated = discoveryText.length > MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS;
+        if (documentTextTruncated) {
           let end = MAX_NARRATIVE_IDEA_DISCOVERY_TEXT_UNITS;
           const lastUnit = discoveryText.charCodeAt(end - 1);
           if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF) end--;
@@ -919,6 +924,10 @@ export class HostEngineApi {
           revision: item.revision,
           text: discoveryText
         });
+        // El extractor tiene su propio tope. Alcanzarlo implica que pudo haber
+        // más señales al final del documento, así que no proclamamos cobertura total.
+        const truncated = documentTextTruncated ||
+          candidates.length === MAX_NARRATIVE_IDEA_DISCOVERY_CANDIDATES;
         this.continuityCandidatesByDocument.set(item.documentId, {
           revision: item.revision,
           candidates,

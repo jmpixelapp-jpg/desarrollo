@@ -262,3 +262,24 @@ test("la sincronización protegida bloquea replay ante digest corrupto del diari
   assert.equal((await reopenedJournal.loadPendingOperations("corrupt-journal-project")).length, 1);
   reopenedJournal.close();
 });
+
+
+test("el diario expone cursores durables ordenados por escritor sin permitir mutación", async () => {
+  const journal = createJournal();
+  const secondWriter = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-read-b", projectId: "cursor-read-project",
+    writerId: "writer-b", sequence: 1, kind: "note", payload: { value: "b" }
+  });
+  const firstWriter = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-read-a", projectId: "cursor-read-project",
+    writerId: "writer-a", sequence: 1, kind: "note", payload: { value: "a" }
+  });
+  await journal.accept(secondWriter);
+  await journal.accept(firstWriter);
+  const cursors = await journal.loadWriterCursors("cursor-read-project");
+  assert.deepEqual(cursors.map(cursor => cursor.writerId), ["writer-a", "writer-b"]);
+  assert.deepEqual(cursors.map(cursor => cursor.lastSequence), [1, 1]);
+  assert.deepEqual(cursors.map(cursor => cursor.lastOperationId), ["cursor-read-a", "cursor-read-b"]);
+  assert.equal(await journal.getLastSequence("cursor-read-project", "writer-a"), 1);
+  journal.close();
+});

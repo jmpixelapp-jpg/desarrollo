@@ -646,3 +646,12 @@ Después de este guard se mantienen las validaciones de correspondencia exacta d
 
 
 **Validación CI del guard:** [Live Author Monitor — run 45760911836](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760911836) terminó success en el commit ce1b71bb: type-check/build aislados, 17 diagnósticos, 163/163 pruebas del monitor, Chromium Page Lifecycle 1/1 y host/editor/browser 168/168. La regresión de snapshot nulo quedó aprobada dentro de la prueba de rechazo de checkpoints malformados. La suite global [run 45760911868](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45760911868) también pasó 927/927, sin fallos ni cancelaciones, con type-check y build completos.
+
+
+## 56. Invariantes de integridad de checkpoints de escritura
+
+Un checkpoint se crea únicamente cuando no quedan tickets pendientes. Por tanto, cada cambio aceptado debe haber terminado en exactamente uno de dos resultados: commit aplicado o commit fallido. La restauración exige committedChanges + failedChanges = acceptedChanges; un registro con outcomes faltantes no representa un estado durable completo.
+
+La ventana de latencia es una cola de las últimas muestras confirmadas: nunca puede superar el número total de commits resueltos ni el máximo configurado. Cuando hay commits resueltos, la ventana debe contener al menos una muestra y su último elemento debe ser exactamente lastCommitLatencyMs. Sin commits resueltos, la ventana y ambas latencias (última y total) deben ser cero. El total de la ventana no puede superar la latencia acumulada histórica (con tolerancia numérica de 1 ms ya aplicada por el validador).
+
+Estos invariantes protegen solo la lectura/recuperación de checkpoint. No cambian el cálculo de métricas en escritura ni los registros históricos ya válidos generados por el monitor.

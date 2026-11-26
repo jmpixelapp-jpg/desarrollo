@@ -25,6 +25,8 @@ test("atribuye una cita a un personaje cuando nombre y verbo de habla son explí
   assert.equal(segment.speakerStatus, "explicit-single");
   assert.equal(segment.speakerCandidates[0].entityId, ana.id);
   assert.equal(segment.speakerCandidates[0].speechVerbEvidence.excerpt, "dijo");
+  assert.equal(text.slice(segment.attributionEvidence.start, segment.attributionEvidence.end),
+    segment.attributionEvidence.excerpt);
   assert.equal(text.slice(segment.speakerCandidates[0].nameEvidence.start,
     segment.speakerCandidates[0].nameEvidence.end), "Ana");
 });

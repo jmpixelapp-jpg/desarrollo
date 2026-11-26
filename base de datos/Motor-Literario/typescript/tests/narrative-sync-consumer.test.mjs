@@ -283,3 +283,88 @@ test("el diario expone cursores durables ordenados por escritor sin permitir mut
   assert.equal(await journal.getLastSequence("cursor-read-project", "writer-a"), 1);
   journal.close();
 });
+
+
+async function removeWriterCursor(databaseName, projectId, writerId) {
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction("writer-cursors", "readwrite");
+    transaction.objectStore("writer-cursors").delete([projectId, writerId]);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+  database.close();
+}
+
+test("la sincronización protegida informa el plan pero no repara cursores sin aprobación", async () => {
+  const databaseName = "recovery-cursor-no-approval-" + Math.random().toString(36).slice(2);
+  const journal = createJournal(databaseName);
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-no-approval-1", projectId: "cursor-no-approval-project",
+    writerId: "remote-writer", sequence: 1, kind: "note", payload: { value: "pending" }
+  });
+  await journal.accept(envelope);
+  await removeWriterCursor(databaseName, "cursor-no-approval-project", "remote-writer");
+  let applied = 0;
+  const store = {
+    loadNarrativeReferenceRepairPending: async () => [],
+    appendNarrativeReferenceRepairAudit: async () => {},
+    deleteNarrativeReferenceRepairPending: async () => {}
+  };
+  const consume = createRecoveryFirstNarrativeSyncConsumer(store, journal, [{
+    kind: "note",
+    validate: payload => Boolean(payload && typeof payload.value === "string"),
+    apply: async () => { applied++; }
+  }]);
+  const result = await consume("cursor-no-approval-project", "remote-writer");
+  assert.equal(result.cursorRecovery.plan.proposedRebuildCount, 1);
+  assert.deepEqual(result.cursorRecovery.applications, []);
+  assert.equal(result.blockedByJournalIntegrity, true);
+  assert.equal(result.replay, undefined);
+  assert.equal(applied, 0);
+  assert.equal(await journal.getLastSequence("cursor-no-approval-project", "remote-writer"), 0);
+  journal.close();
+});
+
+test("la sincronización protegida repara un cursor solo tras aprobación y luego reanuda replay", async () => {
+  const databaseName = "recovery-cursor-approved-" + Math.random().toString(36).slice(2);
+  const journal = createJournal(databaseName);
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "cursor-approved-1", projectId: "cursor-approved-project",
+    writerId: "remote-writer", sequence: 1, kind: "note", payload: { value: "approved" }
+  });
+  await journal.accept(envelope);
+  await removeWriterCursor(databaseName, "cursor-approved-project", "remote-writer");
+  const approved = [];
+  let applied = 0;
+  const store = {
+    loadNarrativeReferenceRepairPending: async () => [],
+    appendNarrativeReferenceRepairAudit: async () => {},
+    deleteNarrativeReferenceRepairPending: async () => {}
+  };
+  const consume = createRecoveryFirstNarrativeSyncConsumer(store, journal, [{
+    kind: "note",
+    validate: payload => Boolean(payload && typeof payload.value === "string"),
+    apply: async () => { applied++; }
+  }], {}, {
+    approve: proposal => {
+      approved.push(proposal);
+      return true;
+    }
+  });
+  const result = await consume("cursor-approved-project", "remote-writer");
+  assert.equal(approved.length, 1);
+  assert.equal(approved[0].lastOperationId, "cursor-approved-1");
+  assert.deepEqual(result.cursorRecovery.applications.map(item => item.status), ["applied"]);
+  assert.equal(result.blockedByJournalIntegrity, false);
+  assert.deepEqual(result.replay, { processed: 1, remaining: 0 });
+  assert.equal(applied, 1);
+  assert.equal(await journal.getLastSequence("cursor-approved-project", "remote-writer"), 1);
+  journal.close();
+});
+

@@ -32,6 +32,8 @@ export interface SyncOutboxPort {
   ): Promise<void>;
   countPendingSyncOperations(projectId: string): Promise<number>;
   acknowledgeSyncOperation(operationId: string): Promise<boolean>;
+  /** Retira acuses en una única transacción cuando el almacén lo soporta. */
+  acknowledgeSyncOperations?(operationIds: readonly string[]): Promise<number>;
 }
 
 export interface SyncConflict {
@@ -327,8 +329,12 @@ export class NarrativeSyncCoordinator {
     }));
 
     let acknowledged = 0;
-    for (const operationId of response.acknowledgedOperationIds) {
-      if (await this.outbox.acknowledgeSyncOperation(operationId)) acknowledged++;
+    if (this.outbox.acknowledgeSyncOperations) {
+      acknowledged = await this.outbox.acknowledgeSyncOperations(response.acknowledgedOperationIds);
+    } else {
+      for (const operationId of response.acknowledgedOperationIds) {
+        if (await this.outbox.acknowledgeSyncOperation(operationId)) acknowledged++;
+      }
     }
     const remaining = await this.outbox.countPendingSyncOperations(projectId);
 

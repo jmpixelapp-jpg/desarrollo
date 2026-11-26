@@ -9,6 +9,7 @@ Los handlers conectan las envolturas verificadas del diario con el almacenamient
 | Tipo | Payload | Almacenamiento CAS |
 |---|---|---|
 | `idea-upsert` | `{ idea: NarrativeIdea }` | `loadIdeas` / `saveIdeaIfUnchanged` |
+| `entity-upsert` | `{ entity: NarrativeEntity }` | `loadEntities` / `saveEntityIfUnchanged` |
 | `assertion-upsert` | `{ assertion: NarrativeAssertion }` | `loadAssertions` / `saveAssertionIfUnchanged` |
 | `relation-upsert` | `{ relation: NarrativeRelation }` | `loadRelations` / `saveRelationIfUnchanged` |
 | `event-upsert` | `{ event: NarrativeEvent }` | `loadEvents` / `saveEventIfUnchanged` |
@@ -19,7 +20,7 @@ Las fábricas públicas son `createNarrativeIdeaUpsertHandler`, `createNarrative
 
 Todos los handlers comprueban que el proyecto del registro coincide con el proyecto del sobre antes de escribir. Las validaciones limitan longitud y cardinalidad de campos, verifican IDs, y rechazan evidencia con revisiones o rangos UTF-16 inválidos.
 
-Las relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
+Las entidades comprueban coherencia de nombre canónico normalizado, alias únicos, tiempos de primera/última aparición y versión de extracción. Este handler no fusiona identidades: la consolidación debe usar la operación atómica de identidad del store para redirigir referencias y conservar snapshots archivados.\n\nLas relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
 
 ## Conflictos
 
@@ -50,6 +51,6 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 ## Pruebas
 
 - `tests/narrative-sync-domain-handlers.test.mjs`: ideas, CAS, reintentos y conflictos.
-- `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.
+- `tests/narrative-sync-entity-handler.test.mjs`: entidades, normalización canónica, CAS y reintentos.\n- `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.
 - `tests/narrative-sync-relation-event-handlers.test.mjs`: relaciones, acontecimientos y validación temporal.
 - `tests/narrative-sync-writer-concurrency.test.mjs`: replay paralelo entre escritores y exclusión de replay completo.

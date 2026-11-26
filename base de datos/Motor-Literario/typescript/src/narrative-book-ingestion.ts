@@ -181,6 +181,19 @@ function classifyParagraph(text: string): NarrativeBookParagraph["kind"] {
   return hasDialogue && hasNarration ? "mixed" : hasDialogue ? "dialogue" : "narration";
 }
 
+function isActionNegated(text: string, actionStart: number, paragraphStart: number): boolean {
+  const prefix = text.slice(paragraphStart, actionStart);
+  const boundary = Math.max(
+    prefix.lastIndexOf("."),
+    prefix.lastIndexOf("!"),
+    prefix.lastIndexOf("?"),
+    prefix.lastIndexOf(";"),
+    prefix.lastIndexOf("\n")
+  );
+  const clausePrefix = prefix.slice(boundary + 1);
+  return /(?:^|[\s(])(?:no|nunca|jamás|tampoco)(?:\s+[\p{L}\p{M}]+){0,2}\s*$/iu.test(clausePrefix);
+}
+
 function collectSignals(
   input: NarrativeBookIngestionInput,
   chapterId: string,
@@ -210,7 +223,7 @@ function collectSignals(
     const end = paragraph.start + match.end;
     const contextStart = Math.max(paragraph.start, start - 100);
     const contextEnd = Math.min(paragraph.end, end + 100);
-    const negated = /\b(?:no|nunca|jam[aá]s|tampoco)\b/iu.test(input.text.slice(Math.max(paragraph.start, start - 36), start));
+    const negated = match.kind === "action" && isActionNegated(input.text, start, paragraph.start);
     output.push({
       id: "nbs-" + input.documentId + "-" + input.revision + "-" + (input.baseOffset ?? 0) + "-" + start + "-" + match.kind,
       chapterId,

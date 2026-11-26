@@ -382,3 +382,10 @@ IndexedDB también valida el tipo de campo, los valores anterior/posterior y el 
 
 
 La verificación también estrecha explícitamente el tipo de las entradas después de validarlas, evitando propagar campos opcionales al análisis de registros. La función queda exportada por el punto de entrada TypeScript existente.
+
+
+## Recuperación de reparaciones interrumpidas
+
+Se introdujo un registro durable de intenciones pendientes para reparaciones aprobadas. La intención se guarda antes del CAS; la auditoría append-only se confirma después del CAS; solo entonces se elimina la intención. La función pública `recoverNarrativeReferenceRepairs(store, projectId)` reanuda los casos pendientes con revalidación del vínculo de fusión y del estado actual. Los conflictos permanecen registrados para revisión, sin forzar escrituras.
+
+IndexedDB incorpora el almacén `narrative-reference-repair-pending` mediante migración a versión 27. La persistencia de intenciones es idempotente para la misma operación incluso si el reintento llega con otro timestamp. Se añadió una prueba de fallo simulado en la escritura de auditoría: la recuperación reconoce la mutación ya confirmada, no la repite y completa el registro durable. **Pendiente de validación:** typecheck, suite completa y prueba de migración IndexedDB en navegador/runtime compatible.

@@ -410,3 +410,11 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Corregida la documentación que todavía describía la ausencia de leases; ahora refleja el adaptador opcional disponible, la configuración por contexto y la semántica de resultado incierto al perder titularidad.
 - Se mantiene la exigencia de idempotencia remota por `operationId`.
 - No se ha ejecutado el conjunto de pruebas ni se dispone de resultados de CI en esta sesión.
+
+
+### Tanda — heartbeat y liberación en fallos
+
+- Añadida prueba multi-contexto donde la primera tarea dura más que el lease inicial; el segundo propietario debe esperar mientras el heartbeat renueva la titularidad.
+- Añadida prueba de excepción de tarea que verifica liberación y adquisición posterior por otro propietario.
+- Ampliado el contrato con el ciclo de vida de renovación, espera de renovaciones en vuelo, liberación y límites ante suspensión del navegador.
+- Pruebas añadidas al repositorio; ejecución local y CI no verificados desde esta sesión.

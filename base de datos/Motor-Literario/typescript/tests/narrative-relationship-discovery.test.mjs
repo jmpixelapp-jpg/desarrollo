@@ -75,3 +75,18 @@ test("asigna IDs únicos y deterministas a candidatos ambiguos",()=>{
  assert.equal(new Set(first.map(item=>item.id)).size,first.length);
  assert.deepEqual(first.map(item=>item.id),second.map(item=>item.id));
 });
+
+test("rechaza perfiles descriptivos que no pertenecen a personajes",()=>{
+ const objectEntity={...bruno,kind:"object"};
+ assert.throws(()=>run("El hermano de Ana llegó.",[ana,objectEntity],[{entityId:"bruno",labels:[label]}]),/personaje único/);
+});
+test("rechaza evidencia descriptiva con rangos inválidos",()=>{
+ const invalid={...label,evidence:{...label.evidence,start:-1}};
+ assert.throws(()=>run("El hermano de Ana llegó.",[ana,bruno],[{entityId:"bruno",labels:[invalid]}]),/evidencia de procedencia válidos/);
+});
+test("rechaza etiquetas descriptivas vacías o excesivamente largas",()=>{
+ const empty={...label,text:"   "};
+ const tooLong={...label,text:"x".repeat(121)};
+ assert.throws(()=>run("El hermano de Ana llegó.",[ana,bruno],[{entityId:"bruno",labels:[empty]}]),/texto y evidencia/);
+ assert.throws(()=>run("El hermano de Ana llegó.",[ana,bruno],[{entityId:"bruno",labels:[tooLong]}]),/texto y evidencia/);
+});

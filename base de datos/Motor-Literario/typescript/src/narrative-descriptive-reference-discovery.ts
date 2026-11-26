@@ -46,6 +46,8 @@ export interface NarrativeDescriptiveReferenceDiscoveryInput {
 export const DEFAULT_NARRATIVE_DESCRIPTIVE_REFERENCE_MATCHES = 2_000;
 export const MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_MATCHES = 5_000;
 export const MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_TEXT_UNITS = 2_000_000;
+export const MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_SCAN_UNITS = 25_000_000;
+export const MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_TOTAL_LABELS = 20_000;
 export const MAX_NARRATIVE_DESCRIPTIVE_PROFILES = 2_000;
 export const MAX_NARRATIVE_DESCRIPTIVE_LABELS_PER_PROFILE = 100;
 export const MAX_NARRATIVE_DESCRIPTIVE_LABEL_LENGTH = 120;
@@ -101,6 +103,7 @@ function validate(input: NarrativeDescriptiveReferenceDiscoveryInput): void {
   }
 
   const profileIds = new Set<string>();
+  let totalLabels = 0;
   for (const profile of input.profiles) {
     const entity = profile && entities.get(profile.entityId);
     if (!profile || !entity || entity.kind !== "character" ||
@@ -109,6 +112,10 @@ function validate(input: NarrativeDescriptiveReferenceDiscoveryInput): void {
       throw new Error("Cada perfil descriptivo debe pertenecer a un personaje único del proyecto.");
     }
     profileIds.add(profile.entityId);
+    totalLabels += profile.labels.length;
+    if (totalLabels > MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_TOTAL_LABELS) {
+      throw new Error("Los perfiles descriptivos superan el límite agregado de etiquetas.");
+    }
     const labels = new Set<string>();
     for (const label of profile.labels) {
       if (!label || typeof label.text !== "string" || !label.text.trim() ||
@@ -144,11 +151,16 @@ export function discoverNarrativeDescriptiveReferences(
     candidates: Map<string, NarrativeDescriptiveReferenceCandidate>;
   }>();
 
+  let scanUnits = 0;
   for (const profile of input.profiles) {
     const entity = entities.get(profile.entityId)!;
     for (const label of profile.labels) {
       // Evidencia histórica marcada como obsoleta no autoriza una nueva asociación.
       if (label.evidence.status === "stale") continue;
+      scanUnits += input.text.length;
+      if (scanUnits > MAX_NARRATIVE_DESCRIPTIVE_REFERENCE_SCAN_UNITS) {
+        throw new Error("La búsqueda de referencias descriptivas supera el presupuesto operativo de exploración.");
+      }
       const expression = new RegExp(
         "(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(label.text) +
         "(?![\\p{L}\\p{M}\\p{N}_])",

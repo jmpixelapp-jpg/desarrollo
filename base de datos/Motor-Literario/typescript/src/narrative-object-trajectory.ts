@@ -66,6 +66,12 @@ function validEvidence(
     evidence.status !== "stale";
 }
 
+function containedInContext(evidence: TextEvidence, context: TextEvidence): boolean {
+  if (evidence.start < context.start || evidence.end > context.end) return false;
+  const relativeStart = evidence.start - context.start;
+  const relativeEnd = evidence.end - context.start;
+  return context.excerpt.slice(relativeStart, relativeEnd) === evidence.excerpt;
+}
 function validateInput(input: NarrativeObjectTrajectoryInput): Map<string, NarrativeDocumentOrder> {
   if (!input || typeof input !== "object" ||
       typeof input.projectId !== "string" || !input.projectId.trim() ||
@@ -108,11 +114,16 @@ function validateInput(input: NarrativeObjectTrajectoryInput): Map<string, Narra
       throw new Error("No se pueden mezclar revisiones de un mismo capítulo en una trayectoria.");
     }
     revisions.set(transition.documentId, transition.revision);
-    if (transition.actorEvidence && !validEvidence(transition.actorEvidence, transition)) {
-      throw new Error("La evidencia del actor no es válida.");
-    }
-    if (transition.recipientEvidence && !validEvidence(transition.recipientEvidence, transition)) {
-      throw new Error("La evidencia del receptor no es válida.");
+    const linkedEvidence = [
+      transition.actionEvidence,
+      transition.objectEvidence,
+      ...(transition.actorEvidence ? [transition.actorEvidence] : []),
+      ...(transition.recipientEvidence ? [transition.recipientEvidence] : [])
+    ];
+    if (linkedEvidence.some(evidence =>
+      !containedInContext(evidence, transition.contextEvidence)
+    )) {
+      throw new Error("Una evidencia específica no coincide con el fragmento contextual de la transición.");
     }
   }
   return documents;

@@ -702,3 +702,21 @@ Cada cambio conserva las dos acciones, sus IDs y evidencias, y puede adjuntar al
 Las pruebas cubren cambios dentro de una revisión, orden entre capítulos, ausencia de orden, acciones negadas, repetición, cambio de patrón, señales contextuales, evidencia incompatible, IDs duplicados y ambigüedad entre revisiones. Se añadió además una prueba de integración desde `understandNarrativeFragment`.
 
 **Endurecimiento adicional de Fase AO:** las referencias contextuales deben tener IDs únicos y pertenecer al mismo proyecto; sus evidencias de acción deben coincidir exactamente con la acción comparada. Se validan también el tipo de relación, los fragmentos de memoria y las transiciones de objetivos. Una señal de memoria meramente temporal se etiqueta como enlace de memoria, nunca como conector explícito. El pipeline valida el tamaño y la forma de `priorActions` antes de iniciar el análisis.
+
+
+### Fase AP: atribución explícita de candidatos de idea a fichas narrativas
+
+Se incorpora `narrative-idea-entity-attribution.ts` y se integra en `understandNarrativeFragment` como `ideaEntityAttributions`.
+
+La capa conecta cada idea candidata con las fichas del mismo proyecto únicamente cuando el nombre canónico o un alias aparece literalmente antes del fragmento que expresa la idea, dentro de la misma evidencia oracional. Esta regla evita atribuir al personaje que aparece como objetivo («Mara desea ayudar a Elian») la intención que el texto atribuye a Mara.
+
+Estados publicados:
+- `attributed`: una sola identidad explícita; incluye `entityId`.
+- `ambiguous`: dos o más identidades compatibles; conserva todos los IDs y no elige una.
+- `unattributed`: no hay titular explícito o la evidencia no permite localizar de forma inequívoca el texto candidato.
+
+Cada resultado conserva el ID de la idea, proyecto, documento, revisión, nombres coincidentes y evidencia original. La salida es una propuesta de asociación: no escribe `relatedEntityIds`, no modifica la biblioteca y no convierte la idea en canon.
+
+Se validan límites de ideas, entidades, alias y evidencia; se rechazan proyectos cruzados, IDs duplicados y entradas malformadas. Se añadieron pruebas para atribución del titular, exclusión del objetivo, ambigüedad entre personajes, alias compartidos, ausencia de titular, coincidencias repetidas e integración del pipeline.
+
+**Límite deliberado:** la atribución exige que el nombre aparezca antes de la idea en la misma oración. No resuelve pronombres, sujetos omitidos, coreferencia entre oraciones ni titulares implícitos. En esos casos se abstiene; no intenta deducir la autoría por cercanía.

@@ -233,7 +233,11 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
   let currentKind: "paragraph" | "poem-line" | "footnote" | "chapter-heading" | "section-heading" | undefined;
   let blockNumber = 0;
   const emit = () => {
-    const text = decodeEntities(current.join("").replace(/\s+/gu, " ").trim());
+    const raw = current.join("").replace(/\r\n?/gu, "\n");
+    const normalized = currentKind === "poem-line"
+      ? raw.split("\n").map(line => line.replace(/[ \t]+/gu, " ").trim()).join("\n").trim()
+      : raw.replace(/\s+/gu, " ").trim();
+    const text = decodeEntities(normalized);
     if (text && currentKind) {
       const sequence = startSequence + result.length;
       const location: BookReaderLocation = {

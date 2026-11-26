@@ -502,8 +502,10 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
   const evidence = (phrase, occurrence = 0) => {
     let start = -1;
     let cursor = 0;
+    const normalizedText = text.toLocaleLowerCase("es");
+    const normalizedPhrase = phrase.toLocaleLowerCase("es");
     for (let index = 0; index <= occurrence; index++) {
-      start = text.indexOf(phrase, cursor);
+      start = normalizedText.indexOf(normalizedPhrase, cursor);
       if (start < 0) throw new Error("No se encontró evidencia: " + phrase);
       cursor = start + phrase.length;
     }
@@ -512,7 +514,7 @@ test("detecta dependencias candidatas con conectores causales explícitos y evid
       revision: 1,
       start: baseOffset + start,
       end: baseOffset + start + phrase.length,
-      excerpt: phrase
+      excerpt: text.slice(start, start + phrase.length)
     };
   };
   const result = analyzeLiteraryFragment({
@@ -666,14 +668,14 @@ test("construye trayectorias de personaje integrando atributos, acontecimientos 
     "Ana tenía 19 años. Bruno observó la torre."
   ].join("\n");
   const evidence = phrase => {
-    const start = text.indexOf(phrase);
+    const start = text.toLocaleLowerCase("es").indexOf(phrase.toLocaleLowerCase("es"));
     assert.notEqual(start, -1, "evidencia encontrada: " + phrase);
     return {
       documentId: "chapter-one",
       revision: 1,
       start,
       end: start + phrase.length,
-      excerpt: phrase
+      excerpt: text.slice(start, start + phrase.length)
     };
   };
   const result = analyzeLiteraryFragment({

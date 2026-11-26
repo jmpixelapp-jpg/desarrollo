@@ -5,6 +5,7 @@ export class LiveAuthorMonitorImePairing {
   #disposed = false;
   #counters = {
     pairedInputCount: 0,
+    pairedWithoutInputTypeCount: 0,
     unmatchedBeforeInputCount: 0,
     interruptedBeforeInputCount: 0,
     orphanInputCount: 0,
@@ -61,6 +62,7 @@ export class LiveAuthorMonitorImePairing {
       this.#counters.inputTypeMismatchCount += 1;
     } else {
       this.#counters.pairedInputCount += 1;
+      if (!hasCurrentInputType) this.#counters.pairedWithoutInputTypeCount += 1;
       entry.pairStatus = hasCurrentInputType ? "paired" : "paired-inputtype-unavailable";
       pending.entry.pairStatus = entry.pairStatus;
     }

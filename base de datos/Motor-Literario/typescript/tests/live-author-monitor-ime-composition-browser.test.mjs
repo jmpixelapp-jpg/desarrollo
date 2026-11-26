@@ -74,7 +74,9 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
 
       const errors = [];
       const deltas = [];
+      const deltaIntegrity = [];
       const events = [];
+      let replayedValue = "abc";
       const source = new LiveAuthorMonitorTextAreaSource({
         element,
         initialSnapshot: {
@@ -85,15 +87,27 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
         },
         onError: error => errors.push(error.code)
       });
-      source.subscribeChanges(change => deltas.push({
-        sequence: change.sequence,
-        baseRevision: change.baseRevision,
-        start: change.start,
-        end: change.end,
-        replacement: change.replacement,
-        activityKind: change.activityKind,
-        inputType: change.inputType ?? null
-      }));
+      source.subscribeChanges(change => {
+        // Cada delta se contrasta contra el valor real del textarea en el mismo
+        // instante de aplicación, no solo contra el snapshot final tras cancelar.
+        replayedValue = replayedValue.slice(0, change.start) +
+          change.replacement +
+          replayedValue.slice(change.end);
+        deltaIntegrity.push({
+          exact: replayedValue === element.value,
+          sequence: change.sequence,
+          baseRevision: change.baseRevision
+        });
+        deltas.push({
+          sequence: change.sequence,
+          baseRevision: change.baseRevision,
+          start: change.start,
+          end: change.end,
+          replacement: change.replacement,
+          activityKind: change.activityKind,
+          inputType: change.inputType ?? null
+        });
+      });
 
       for (const type of [
         "compositionstart", "compositionupdate", "compositionend", "beforeinput", "input"
@@ -114,7 +128,7 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
 
       element.focus();
       element.setSelectionRange(3, 3);
-      window.__imeCompositionTest = { element, source, errors, deltas, events };
+      window.__imeCompositionTest = { element, source, errors, deltas, deltaIntegrity, events };
       return { initialValue: element.value, initialState: source.getState() };
     });
 
@@ -149,7 +163,8 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
         state: test.source.getState(),
         errors: [...test.errors],
         events: test.events.map(event => ({ ...event })),
-        deltaCount: test.deltas.length
+        deltaCount: test.deltas.length,
+        deltaIntegrity: test.deltaIntegrity.map(entry => ({ ...entry }))
       };
     });
 
@@ -157,6 +172,12 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
       "cambiar de candidato no debe cerrar la composición");
     assert.equal(afterCandidateUpdates.state.needsResync, false);
     assert.deepEqual(afterCandidateUpdates.errors, []);
+    assert.ok(afterCandidateUpdates.deltaCount >= 2,
+      "cada candidato aplicado debe producir un delta observable");
+    assert.ok(afterCandidateUpdates.deltaIntegrity.length === afterCandidateUpdates.deltaCount &&
+      afterCandidateUpdates.deltaIntegrity.every((entry, index) =>
+        entry.exact && entry.sequence === index + 1 && entry.baseRevision === index),
+      "cada delta intermedio debe reconstruir exactamente el textarea y conservar secuencia/revisión");
     assert.ok(afterCandidateUpdates.events.some(event =>
       event.type === "compositionupdate" && event.isTrusted
     ), "Chromium debe exponer updates de composición confiables");
@@ -198,6 +219,7 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
           ...metadata,
           replacementLengthUtf16: replacement.length
         })),
+        deltaIntegrity: test.deltaIntegrity.map(entry => ({ ...entry })),
         state: test.source.getState(),
         errors: [...test.errors],
         events: test.events.map(event => ({ ...event }))
@@ -208,6 +230,10 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
       "cancelar la composición debe restaurar exactamente el texto anterior");
     assert.equal(afterCancel.replay, afterCancel.value,
       "la secuencia de deltas debe reconstruir el estado final del textarea");
+    assert.ok(afterCancel.deltaIntegrity.length === afterCancel.deltas.length &&
+      afterCancel.deltaIntegrity.every((entry, index) =>
+        entry.exact && entry.sequence === index + 1 && entry.baseRevision === index),
+      "todos los deltas, incluidos los candidatos intermedios, deben reconstruir el estado aplicado sin saltos");
     assert.equal(afterCancel.state.compositionActive, false);
     assert.equal(afterCancel.state.pendingInput, false);
     assert.equal(afterCancel.state.needsResync, true,

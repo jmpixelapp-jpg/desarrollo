@@ -267,7 +267,7 @@ export function extractNarrativeEntities(
   const prefixCharacter = String.raw`\b(?:personaje|protagonista|antagonista)\s+(?:el|la|a)?\s*`;
   const prefixPlace = String.raw`\b(?:ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar)\s+(?:de|del|de la|de los|de las)?\s*`;
   const prefixObject = String.raw`\b(?:objeto|espada|arma|reliquia|amuleto|anillo|libro)\s+(?:llamado|llamada)?\s*`;
-  const suffix = String.raw`(?=$|[^\p{L}\p{N}_])`;
+  const suffix = String.raw`(?=$|[^\p{L}\p{M}\p{N}_])`;
   const patterns: readonly { kind: NarrativeEntityType; expression: RegExp }[] = [
     { kind: "character", expression: new RegExp(prefixCharacter + "(" + name + ")" + suffix, "gu") },
     { kind: "place", expression: new RegExp(prefixPlace + "(" + name + ")" + suffix, "gu") },

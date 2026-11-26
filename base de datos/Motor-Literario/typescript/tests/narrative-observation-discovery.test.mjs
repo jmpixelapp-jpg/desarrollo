@@ -682,3 +682,35 @@ test("no inventa emisor cuando no hay personaje o la atribución local es ambigu
   }).find(item => item.action === "llegar");
   assert.equal(ambiguous?.epistemicSourceCandidate, undefined);
 });
+
+test("conserva todas las menciones repetidas de una entidad con offsets exactos", () => {
+  const text = "Ana miró la Espada Solar. Ana tomó la Espada Solar y Ana salió.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, other], text
+  });
+  assert.ok(found.length >= 2);
+  const occurrences = found[0].entityMentionOccurrences
+    .filter(item => item.entityId === character.id);
+  assert.equal(occurrences.length, 1);
+  const all = found.flatMap(item => item.entityMentionOccurrences)
+    .filter(item => item.entityId === character.id);
+  const unique = [...new Map(all.map(item => [item.evidence.start, item])).values()];
+  assert.equal(unique.length, 3);
+  for (const item of unique) {
+    assert.equal(text.slice(item.evidence.start, item.evidence.end), item.evidence.excerpt);
+  }
+});
+
+test("conserva colisiones de alias entre entidades como menciones ambiguas", () => {
+  const anaAlias = { ...character, id: "character:ana-alias", canonicalName: "Ana Segunda", aliases: ["Ana"] };
+  const text = "Ana corrió.";
+  const found = discoverNarrativeObservationCandidates({
+    ...context, entities: [character, anaAlias], text
+  });
+  assert.equal(found.length, 1);
+  const collisions = found[0].entityMentionOccurrences
+    .filter(item => item.evidence.excerpt === "Ana");
+  assert.equal(collisions.length, 2);
+  assert.deepEqual(collisions.map(item => item.entityId).sort(),
+    [character.id, anaAlias.id].sort());
+});

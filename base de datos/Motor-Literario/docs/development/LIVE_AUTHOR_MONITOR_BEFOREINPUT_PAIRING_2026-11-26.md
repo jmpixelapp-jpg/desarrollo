@@ -91,7 +91,7 @@ Se corrigió una atribución de métricas: una sustitución normal de selección
 
 El adaptador ahora establece siempre una categoría explícita para los eventos aceptados:
 
-- `insertText`, `insertLineBreak`, `insertParagraph` e `insertCompositionText` → `typing` (entrada de texto declarada por el navegador);
+- `insertText`, `insertLineBreak` e `insertParagraph` → `typing` (entrada de texto declarada por el navegador);\n- `insertCompositionText` → `composition` (actualización de composición IME; no se suma a escritura ordinaria);
 - `insertFromPaste` y `insertFromPasteAsQuotation` → `paste`;
 - `insertReplacementText` → `correction` (señal específica de reemplazo del navegador);
 - los tipos `delete*` → `deletion`;
@@ -202,7 +202,7 @@ La nueva métrica `compositionChanges` se propaga por:
 - `EditorChangeActivityKind` y los deltas del adaptador;
 - la sesión y los snapshots inmutables de `LiveAuthorMonitor`;
 - checkpoints v1 y restauración tras reinicio;
-- el panel local, con la métrica visible **Composición IME**.
+- el panel de capítulo y las tarjetas del workspace, con la métrica visible **Composición IME**.
 
 La propiedad del checkpoint es opcional para mantener compatibilidad con checkpoints v1 anteriores. Cuando no existe, la recuperación la inicializa en cero; no se puede reclasificar retroactivamente la actividad histórica que las versiones anteriores ya contabilizaron como escritura u otras categorías. El validador sí rechaza un contador nuevo negativo, fraccionario o no entero.
 

@@ -390,6 +390,33 @@ test("visibilitychange oculta suspende una composición abierta sin reanudar al 
   f.source.dispose();
 });
 
+test("visibilitychange oculto conserva el input de texto ya encolado", () => {
+  const f = fixture("abc", 0, 0);
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+  f.element.emitBeforeInput("insertText", false, true, "x");
+
+  const documentTarget = f.element.ownerDocument;
+  documentTarget.hidden = true;
+  documentTarget.emit("visibilitychange");
+  assert.equal(f.source.getState().needsResync, false);
+  assert.equal(f.source.getState().pendingInput, true);
+  assert.equal(f.errors.length, 0);
+
+  // La pestaña vuelve a estar visible y el input de la tarea anterior llega tarde.
+  documentTarget.hidden = false;
+  documentTarget.emit("visibilitychange");
+  f.element.value = "abcx";
+  f.element.emitInput(false, "insertText", true, "x");
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].replacement, "x");
+  assert.equal(f.source.getState().pendingInput, false);
+  assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});
+
 test("blur expone input de texto pendiente y suspende de inmediato una composición", async () => {
   const idle = fixture("abc", 0, 0);
   idle.element.emitBlur();

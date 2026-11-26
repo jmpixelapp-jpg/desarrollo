@@ -4617,7 +4617,8 @@ export class IndexedDbProjectStore implements ProjectStore {
     projectId: string,
     targetEntityId: string,
     sourceEntityId: string,
-    writerId?: string
+    writerId?: string,
+    syncOperation?: SyncOperationDraft
   ): Promise<void> {
     if (typeof projectId !== "string" || !projectId.trim() ||
         typeof targetEntityId !== "string" || !targetEntityId.trim() ||
@@ -4626,12 +4627,20 @@ export class IndexedDbProjectStore implements ProjectStore {
         (writerId !== undefined && (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256))) {
       throw new Error("Identidades de entidad inválidas para consolidación.");
     }
+    const syncDraft = syncOperation === undefined ? undefined : normalizeSyncOperationDraft(syncOperation);
+    if (syncDraft && syncDraft.projectId !== projectId) {
+      throw new Error("El proyecto de las entidades y de la operación entity-merge no coincide.");
+    }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
       // La biblioteca se incluye incluso sin writerId para detectar
       // entradas archivadas que no podríamos mantener coherentes sin identidad.
-      const stores = [ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS];
+      const stores = [
+        ENTITIES, RELATIONS, EVENTS, ASSERTIONS, IDEAS, PERSONAL_IDEAS,
+        ...(syncDraft ? [SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES] : [])
+      ];
       const transaction = db.transaction(stores, "readwrite");
+      let syncFailure: Error | undefined;
       const entityStore = transaction.objectStore(ENTITIES);
       const relationStore = transaction.objectStore(RELATIONS);
       const eventStore = transaction.objectStore(EVENTS);
@@ -4720,6 +4729,12 @@ export class IndexedDbProjectStore implements ProjectStore {
 
             const target = entities.find(item => item.id === targetEntityId);
             const source = entities.find(item => item.id === sourceEntityId);
+            // Un replay puede repetirse si el proceso cayó después de confirmar
+            // esta transacción y antes de confirmar el acuse del diario.
+            if (target && !source && target.projectId === projectId &&
+                (target.mergedFromIds ?? []).includes(sourceEntityId)) {
+              return;
+            }
             if (!target || !source || target.projectId !== projectId || source.projectId !== projectId ||
                 target.kind !== source.kind) {
               transaction.abort();
@@ -4829,6 +4844,13 @@ export class IndexedDbProjectStore implements ProjectStore {
             personalEntries.forEach((entry, index) => {
               if (entry !== originalPersonalEntries[index]) personalIdeaStore.put(entry);
             });
+            if (syncDraft) {
+              queueSyncOperationInTransaction(transaction, syncDraft, error => {
+                syncFailure = error instanceof Error
+                  ? error : new Error("No se pudo encolar la consolidación narrativa.");
+                try { transaction.abort(); } catch { /* transacción ya abortada */ }
+              });
+            }
           } catch (error) {
             try { transaction.abort(); } catch { /* transacción ya finalizada */ }
             reject(error);
@@ -4842,8 +4864,8 @@ export class IndexedDbProjectStore implements ProjectStore {
         this.publishNarrativeChange(projectId);
         resolve();
       };
-      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo consolidar la identidad narrativa."));
-      transaction.onabort = () => reject(transaction.error ?? new Error("Se canceló la consolidación de identidad."));
+      transaction.onerror = () => reject(syncFailure ?? transaction.error ?? new Error("No se pudo consolidar la identidad narrativa."));
+      transaction.onabort = () => reject(syncFailure ?? transaction.error ?? new Error("Se canceló la consolidación de identidad."));
     });
   }
 

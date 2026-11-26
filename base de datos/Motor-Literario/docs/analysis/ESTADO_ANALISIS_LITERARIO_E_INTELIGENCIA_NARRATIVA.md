@@ -637,3 +637,14 @@ La capa de resolución de evidencias se incorporó como módulo independiente, c
 
 
 La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto del documento anfitrión. `resolveNarrativeTextEvidence()` exige que esa revisión coincida con la evidencia persistida, además de comprobar que la cita coincide carácter por carácter con el rango. Rechaza snapshots sin versión, revisiones distintas, citas modificadas y evidencias marcadas como obsoletas. Esta verificación evita enlazar accidentalmente una evidencia histórica a una edición actual que contenga texto parecido.
+
+
+### Quinta tanda — enlace seguro de evidencias persistidas
+
+- La metadata de ingesta admite `revision`, que identifica el snapshot del documento anfitrión.
+- `resolveNarrativeTextEvidence()` enlaza una evidencia persistida sólo si su revisión coincide con el snapshot, el documento pertenece al libro y el excerpt coincide exactamente con el rango UTF-16.
+- Se rechazan evidencias obsoletas, snapshots sin revisión, revisiones distintas y citas que no coinciden.
+- `resolveNarrativeEvidenceCollection()` resuelve colecciones de evidencias de forma integral: si un elemento falla, no entrega un resultado parcial.
+- Se amplió la batería de pruebas de procedencia con casos de revisión, cita exacta y colección completa.
+
+Esto deja una interfaz utilizable para enlazar evidencias de personajes, relaciones, acontecimientos e ideas al libro importado. Todavía no se han modificado las entidades persistidas ni la salida de análisis para incluir automáticamente los fragmentos; esa integración debe respetar el versionado de cada documento y no mezclar revisiones.

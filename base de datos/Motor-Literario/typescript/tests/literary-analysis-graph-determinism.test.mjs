@@ -687,3 +687,25 @@ test("los estados conocidos mixtos no se ocultan por destinos adicionales fuera 
   });
   assert.equal(source.directReferenceStatusAlignment, "mixed-status");
 });
+
+test("el límite de muestras de referencias conserva totales completos y truncamiento exacto", () => {
+  const destinations = Array.from({ length: 5_001 }, (_, index) =>
+    "external-" + String(index).padStart(4, "0")
+  );
+  const graph = analyze([idea("source", destinations)], 2);
+
+  assert.equal(graph.referenceCount, 5_001);
+  assert.equal(graph.includedReferenceCount, 0);
+  assert.equal(graph.notIncludedReferenceCount, 5_001);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.equal(graph.referenceSampleCount, 5_000);
+  assert.equal(graph.omittedReferenceSampleCount, 1);
+  assert.equal(graph.referencesTruncated, true);
+  assert.equal(graph.references.length, 5_000);
+  assert.equal(graph.references[0].toIdeaId, "external-0000");
+  assert.equal(graph.references.at(-1).toIdeaId, "external-4999");
+  const source = graph.nodes.find(node => node.ideaId === "source");
+  assert.equal(source.notIncludedOutgoingReferenceCount, 5_001);
+  assert.equal(source.distinctOutgoingIdeaCount, 0);
+  assert.equal(source.directReferenceStatusCounts.notInSnapshot, 5_001);
+});

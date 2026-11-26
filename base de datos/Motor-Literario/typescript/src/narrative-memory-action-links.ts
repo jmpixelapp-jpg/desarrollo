@@ -117,16 +117,15 @@ export function linkNarrativeMemoryToActions(
       actionStart - (event.evidence.end - base) <= 500
     );
     const local = preceding.filter(event => {
-      const start = event.evidence.start - base;
       const between = input.text.slice(event.evidence.end - base, actionStart);
       const sameLine = !between.includes("\n");
       return sameLine || CAUSAL.test(between);
     });
     if (!local.length) continue;
 
-    const latestStart = Math.max(...local.map(item => item.evidence.start));
-    const nearest = local.filter(item => item.evidence.start === latestStart);
-    const chosen = nearest.length === 1 ? nearest[0] : undefined;
+    // Si hay más de un recuerdo candidato, no se elige por proximidad: la
+    // relación queda ambigua y conserva todos los antecedentes posibles.
+    const chosen = local.length === 1 ? local[0] : undefined;
     const between = chosen
       ? input.text.slice(chosen.evidence.end - base, actionStart)
       : "";
@@ -139,7 +138,7 @@ export function linkNarrativeMemoryToActions(
       : causalMatch ? "explicit-causal-link"
       : temporalMatch || sameSentence ? "temporal-cooccurrence"
       : "unresolved";
-    const memoryEvents = chosen ? [chosen] : nearest;
+    const memoryEvents = chosen ? [chosen] : local;
     const connectorMatch = causalMatch ?? temporalMatch;
     const connectorEvidence = chosen && connectorMatch
       ? evidenceSlice(

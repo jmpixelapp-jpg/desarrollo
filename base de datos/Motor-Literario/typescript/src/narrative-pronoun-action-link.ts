@@ -97,7 +97,7 @@ export function extractNarrativePronounActionCandidates(
     const nextLineBreak = text.slice(reference.end).search(/[\r\n]/u);
     const lineEnd = nextLineBreak < 0 ? text.length : reference.end + nextLineBreak;
     const suffix = text.slice(reference.end, lineEnd);
-    const expression = new RegExp("^\\s+(no\\s+)?(" + actionPattern +
+    const expression = new RegExp("^\\s+(?:(?:mismo|misma)\\s+)?(no\\s+)?(" + actionPattern +
       ")(?![\\p{L}\\p{M}\\p{N}_])", "iu");
     const match = expression.exec(suffix);
     if (!match) continue;

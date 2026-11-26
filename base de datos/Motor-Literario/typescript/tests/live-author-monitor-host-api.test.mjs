@@ -1177,6 +1177,141 @@ test("al reanudar varios documentos solo el lease expirado cambia de fencing", a
   }
 });
 
+test("coalesce visibilitychange y pageshow por documento durante renovaciones simultáneas", async () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const documentListeners = new Map();
+  const windowListeners = new Map();
+  const fakeDocument = {
+    visibilityState: "hidden",
+    addEventListener(type, listener) {
+      const listeners = documentListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      documentListeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) {
+      documentListeners.get(type)?.delete(listener);
+    }
+  };
+  const fakeWindow = {
+    addEventListener(type, listener) {
+      const listeners = windowListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      windowListeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) {
+      windowListeners.get(type)?.delete(listener);
+    }
+  };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: fakeDocument });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+
+  class DelayedMultiRenewStore extends MemoryDocumentStore {
+    delayNextRenewByDocument = new Set();
+    pendingRenewals = new Map();
+    renewalCounts = new Map();
+
+    async renewLiveAuthorMonitorLease(lease, now, durationMs) {
+      const documentId = lease.documentId;
+      this.renewalCounts.set(documentId, (this.renewalCounts.get(documentId) ?? 0) + 1);
+      const renewed = await super.renewLiveAuthorMonitorLease(lease, now, durationMs);
+      if (renewed && this.delayNextRenewByDocument.delete(documentId)) {
+        return await new Promise(resolve => {
+          this.pendingRenewals.set(documentId, () => resolve(renewed));
+        });
+      }
+      return renewed;
+    }
+  }
+
+  const store = new DelayedMultiRenewStore();
+  const api = new HostEngineApi({ store });
+  const projectId = "monitor-coalesced-resume";
+  const documents = ["chapter-a", "chapter-b"];
+  const keys = documents.map(documentId => projectId + ":" + documentId);
+
+  try {
+    api.initializeProject({ projectId, projectName: "Coalesced resume" });
+    for (const documentId of documents) {
+      await api.openDocument({
+        documentId,
+        text: documentId,
+        revision: 0,
+        sequence: 0
+      });
+    }
+    await api.flushPendingChanges();
+
+    const originalLeases = new Map(
+      documents.map((documentId, index) => [
+        documentId,
+        structuredClone(store.monitorLeases.get(keys[index]))
+      ])
+    );
+    for (const documentId of documents) {
+      assert.ok(originalLeases.get(documentId));
+      store.delayNextRenewByDocument.add(documentId);
+    }
+
+    fakeDocument.visibilityState = "visible";
+    const fire = type => {
+      const listeners = type === "visibilitychange"
+        ? documentListeners.get(type)
+        : windowListeners.get(type);
+      for (const listener of [...(listeners ?? [])]) listener();
+    };
+
+    fire("visibilitychange");
+    fire("pageshow");
+    fire("visibilitychange");
+    fire("pageshow");
+
+    for (let attempt = 0; attempt < 50 && store.pendingRenewals.size < documents.length; attempt += 1) {
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(store.pendingRenewals.size, documents.length,
+      "cada documento debe tener una única renovación inicial suspendida");
+    for (const documentId of documents) {
+      assert.equal(api.liveMonitorLeaseHeartbeatInFlight.has(documentId), true);
+      assert.equal(api.liveMonitorLeaseHeartbeatFollowups.has(documentId), true,
+        "los eventos posteriores deben compartir un único follow-up por documento");
+      assert.equal(store.renewalCounts.get(documentId), 1);
+    }
+
+    store.delayNextRenewByDocument.clear();
+    for (const release of store.pendingRenewals.values()) release();
+    store.pendingRenewals.clear();
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const settled = documents.every(documentId =>
+        !api.liveMonitorLeaseHeartbeatInFlight.has(documentId) &&
+        !api.liveMonitorLeaseHeartbeatFollowups.has(documentId)
+      );
+      if (settled) break;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+
+    for (const documentId of documents) {
+      const initial = originalLeases.get(documentId);
+      const current = store.monitorLeases.get(projectId + ":" + documentId);
+      assert.equal(store.renewalCounts.get(documentId), 2,
+        "cada documento debe ejecutar una renovación inicial y un solo follow-up");
+      assert.equal(current.ownerId, initial.ownerId);
+      assert.equal(current.fencingToken, initial.fencingToken);
+      assert.equal(api.liveMonitorLeaseHeartbeatInFlight.has(documentId), false);
+      assert.equal(api.liveMonitorLeaseHeartbeatFollowups.has(documentId), false);
+      assert.equal(api.liveMonitorLeaseHeartbeats.has(documentId), true,
+        "los eventos repetidos no deben duplicar el timer de heartbeat");
+    }
+  } finally {
+    api.dispose();
+    if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+    else delete globalThis.document;
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete globalThis.window;
+  }
+});
+
 test("configura retención de checkpoints, la ejecuta al inicializar y permite desactivarla", async () => {
   class RetentionStore extends MemoryDocumentStore {
     cleanupCalls = [];

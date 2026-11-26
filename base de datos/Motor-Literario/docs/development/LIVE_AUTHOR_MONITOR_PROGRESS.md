@@ -1615,7 +1615,7 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Regresión A — aborto antes del commit:** la prueba encola el `put` y aborta la transacción antes de que complete. La operación debe rechazar, el checkpoint durable previo debe conservarse y una escritura posterior debe funcionar en la misma instancia.
 
-**Regresión B — cierre externo:** se cierra una conexión obtenida del almacén y se despacha el evento `close` para representar el aviso anormal del navegador. El listener `IDBDatabase.onclose` debe invalidar la promesa de conexión cacheada; las lecturas posteriores deben abrir otra conexión, recuperar el checkpoint y reutilizar la nueva conexión.
+**Regresión B — cierre externo:** se cierra una conexión obtenida del almacén y se invoca el handler `onclose` que el adaptador registró; `fake-indexeddb` no permite despachar un evento sintético `close` sobre una conexión cerrada. El listener `IDBDatabase.onclose` debe invalidar la promesa de conexión cacheada; las lecturas posteriores deben abrir otra conexión, recuperar el checkpoint y reutilizar la nueva conexión.
 
 **Alcance:** ambas pruebas usan `fake-indexeddb` para controlar de forma determinista abortos/eventos. No sustituyen las pruebas de crash real de proceso o pérdida física del perfil en Chromium/OS.
 

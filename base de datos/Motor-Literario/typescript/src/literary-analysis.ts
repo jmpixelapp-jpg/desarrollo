@@ -11,6 +11,8 @@ import { validateEventLifecycle, type EventLifecycle } from "./project-data";
  * Las ocurrencias conservan offsets UTF-16 absolutos para inspección editorial.
  */
 export const MAX_LITERARY_ANALYSIS_TEXT_UNITS = 2_000_000;
+/** Límite del catálogo global de ideas admitido por el analizador de grafos. */
+export const MAX_LITERARY_ANALYSIS_PROJECT_IDEAS = 12_000;
 
 export interface LiteraryAnalysisKnownCharacter {
   readonly entityId: string;
@@ -6559,7 +6561,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
       (input.knownIdeas !== undefined &&
         (!Array.isArray(input.knownIdeas) || input.knownIdeas.length > 2_000)) ||
       (input.knownProjectIdeas !== undefined &&
-        (!Array.isArray(input.knownProjectIdeas) || input.knownProjectIdeas.length > 2_000)) ||
+        (!Array.isArray(input.knownProjectIdeas) || input.knownProjectIdeas.length > MAX_LITERARY_ANALYSIS_PROJECT_IDEAS)) ||
       (input.knownProjectIdeasOmittedCount !== undefined &&
         (!Number.isSafeInteger(input.knownProjectIdeasOmittedCount) || input.knownProjectIdeasOmittedCount < 0)) ||
       (input.knownRelationsOmittedCount !== undefined &&

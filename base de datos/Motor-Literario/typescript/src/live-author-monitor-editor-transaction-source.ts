@@ -68,6 +68,17 @@ export class LiveAuthorMonitorEditorTransactionSourceError extends Error {
   }
 }
 
+interface SeenLiveAuthorMonitorTransaction {
+  readonly sequence: number;
+  readonly kind: LiveAuthorMonitorEditorTransactionKind;
+  readonly baseRevision: number;
+  readonly start: number;
+  readonly end: number;
+  readonly replacementLength: number;
+  readonly replacementHashA: number;
+  readonly replacementHashB: number;
+}
+
 export interface LiveAuthorMonitorEditorTransactionSourceOptions {
   readonly documentId: string;
   readonly initialSnapshot: DocumentSnapshot;
@@ -108,7 +119,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
   private readonly pendingTransactions: LiveAuthorMonitorEditorTransaction[] = [];
   private dispatching = false;
   private processingTransactions = false;
-  private readonly seenTransactions = new Map<string, number>();
+  private readonly seenTransactions = new Map<string, SeenLiveAuthorMonitorTransaction>();
   private revision: number;
   private sequence: number;
   private documentLength: number;
@@ -306,12 +317,13 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
       return;
     }
 
-    const previousSequence = this.seenTransactions.get(transaction.transactionId);
-    if (previousSequence !== undefined) {
-      if (previousSequence === change.sequence) return;
+    const previousSignature = this.seenTransactions.get(transaction.transactionId);
+    if (previousSignature !== undefined) {
+      const currentSignature = this.createTransactionSignature(transaction);
+      if (this.sameTransactionSignature(previousSignature, currentSignature)) return;
       this.fail(
         "transaction-id-reused",
-        "El editor reutilizó un transactionId para otra secuencia; se requiere resincronización."
+        "El editor reutilizó un transactionId con otra secuencia o contenido; se requiere resincronización."
       );
       return;
     }
@@ -373,7 +385,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     this.revision++;
     this.documentLength = nextDocumentLength;
     this.lastTransactionKind = transaction.kind;
-    this.seenTransactions.set(transaction.transactionId, normalized.sequence);
+    this.seenTransactions.set(transaction.transactionId, this.createTransactionSignature(transaction));
     if (this.seenTransactions.size > this.duplicateWindowSize) {
       const oldest = this.seenTransactions.keys().next().value as string | undefined;
       if (oldest !== undefined) this.seenTransactions.delete(oldest);
@@ -433,6 +445,49 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     try { unsubscribe?.(); } catch (error) {
       this.report(error instanceof Error ? error : new Error(String(error)));
     }
+  }
+
+  /**
+   * Firma compacta del delta para distinguir retransmisiones idénticas de
+   * transactionId reutilizados con otro payload. No conserva el reemplazo.
+   */
+  private createTransactionSignature(
+    transaction: LiveAuthorMonitorEditorTransaction
+  ): SeenLiveAuthorMonitorTransaction {
+    const change = transaction.change;
+    let hashA = 0x811c9dc5;
+    let hashB = 0x9e3779b9;
+    const replacement = change.replacement;
+    for (let index = 0; index < replacement.length; index += 1) {
+      const codeUnit = replacement.charCodeAt(index);
+      hashA = Math.imul(hashA ^ codeUnit, 0x01000193) >>> 0;
+      hashB = Math.imul(hashB ^ (codeUnit + index), 0x85ebca6b) >>> 0;
+      hashB ^= hashB >>> 13;
+    }
+    return Object.freeze({
+      sequence: change.sequence,
+      kind: transaction.kind,
+      baseRevision: change.baseRevision,
+      start: change.start,
+      end: change.end,
+      replacementLength: replacement.length,
+      replacementHashA: hashA,
+      replacementHashB: hashB
+    });
+  }
+
+  private sameTransactionSignature(
+    left: SeenLiveAuthorMonitorTransaction,
+    right: SeenLiveAuthorMonitorTransaction
+  ): boolean {
+    return left.sequence === right.sequence &&
+      left.kind === right.kind &&
+      left.baseRevision === right.baseRevision &&
+      left.start === right.start &&
+      left.end === right.end &&
+      left.replacementLength === right.replacementLength &&
+      left.replacementHashA === right.replacementHashA &&
+      left.replacementHashB === right.replacementHashB;
   }
 
   private readEditorState(): LiveAuthorMonitorEditorDocumentState | undefined {

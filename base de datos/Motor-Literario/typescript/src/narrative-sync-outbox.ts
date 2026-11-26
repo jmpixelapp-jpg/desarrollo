@@ -18,6 +18,7 @@ export interface NarrativeSyncOutboxEntry {
   readonly projectId: string;
   readonly generation: number;
   readonly fingerprint: string;
+  /** ID estable y único de la instalación/replica; no es la cuenta del autor. */
   readonly writerId: string;
   readonly sequence: number;
   readonly operationId: string;
@@ -49,6 +50,7 @@ interface OutboxWriterCursor {
 
 export interface EnqueueNarrativeIdeaContinuityIndexInput {
   readonly index: NarrativeIdeaContinuityIndex;
+  /** ID estable y único por instalación para secuencias del diario entrante. */
   readonly writerId: string;
   readonly expectedGeneration?: number;
   readonly createdAt?: number;
@@ -198,7 +200,7 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
   if (value.operationId !==
       "continuity-index:" + encodeURIComponent(value.projectId) + ":" +
       encodeURIComponent(value.writerId) + ":" + value.generation) {
-    throw new Error("El operationId del outbox no coincide con el proyecto y la generación.");
+    throw new Error("El operationId del outbox no coincide con el proyecto, la instalación y la generación.");
   }
   validateNarrativeIdeaContinuityIndex(envelope.payload.index);
 }
@@ -966,7 +968,8 @@ export class IndexedDbNarrativeSyncOutbox {
 
 /**
  * Conecta directamente el callback de HostEngineApi con un outbox durable.
- * Configura este callback usando el ID estable de instalación/escritor.
+ * writerId debe ser estable y único por instalación/replica, no el ID de cuenta
+ * de ProjectIdentity.writerId que puede compartirse entre varios dispositivos.
  */
 export function createNarrativeIdeaContinuityOutboxCallback(
   outbox: IndexedDbNarrativeSyncOutbox,

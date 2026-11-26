@@ -259,6 +259,7 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
         value: test.element.value,
         state: test.source.getState(),
         errors: [...test.errors],
+        events: test.events.map(event => ({ ...event })),
         lastDelta: test.deltas.at(-1) && {
           sequence: test.deltas.at(-1).sequence,
           baseRevision: test.deltas.at(-1).baseRevision,
@@ -274,7 +275,7 @@ test("Chromium valida candidatos IME y suspende ante compositionend no confiable
     assert.equal(afterNextEdit.value, "abcx");
     assert.equal(afterNextEdit.state.needsResync, false);
     assert.equal(afterNextEdit.state.pendingInput, false);
-    assert.deepEqual(afterNextEdit.errors, []);
+    assert.deepEqual(afterNextEdit.errors, [], "la traza posterior a la resincronización debe ser confiable: " + JSON.stringify(afterNextEdit.events ?? []));
     assert.equal(afterNextEdit.lastDelta.activityKind, "typing");
     assert.equal(afterNextEdit.lastDelta.start, 3);
     assert.equal(afterNextEdit.lastDelta.end, 3);

@@ -35,6 +35,11 @@ export interface NarrativeObservationCandidate {
     readonly marker: "por";
     readonly evidence: TextEvidence;
   };
+  /** Objeto directo textual tras el verbo; solo entidades kind=object con mención explícita, sin inferir posesión ni cambio de estado. */
+  readonly grammaticalObjectCandidate?: {
+    readonly entityId: string;
+    readonly evidence: TextEvidence;
+  };
   /** Complemento personal explícito «a + personaje» tras el verbo; candidato sintáctico, no relación semántica. */
   readonly personalObjectCandidate?: {
     readonly entityId: string;
@@ -401,6 +406,31 @@ export function discoverNarrativeObservationCandidates(
             }
           };
         })();
+        const grammaticalObjectCandidate = (() => {
+          const afterVerb = sentence.slice(match.index + surface.length);
+          const matches = otherEntities.filter(entity => entity.kind === "object").flatMap(entity => {
+            const names = [entity.canonicalName, ...entity.aliases];
+            return names.flatMap(name => {
+              const mention = findNameMatch(afterVerb, name);
+              if (!mention || !/^\s+(?:(?:el|la|los|las|un|una|unos|unas)\s+)?$/iu.test(afterVerb.slice(0, mention.start))) return [];
+              return [{ entity, mention }];
+            });
+          });
+          const distinct = new Map(matches.map(item => [item.entity.id, item]));
+          if (distinct.size !== 1) return undefined;
+          const selected = [...distinct.values()][0]!;
+          const nameStart = match.index + surface.length + selected.mention.start;
+          return {
+            entityId: selected.entity.id,
+            evidence: {
+              documentId: input.documentId,
+              revision: input.revision,
+              start: baseOffset + segment.start + nameStart,
+              end: baseOffset + segment.start + nameStart + selected.mention.excerpt.length,
+              excerpt: selected.mention.excerpt
+            }
+          };
+        })();
         const before = sentence.slice(0, match.index).match(/(?:\bno|\bnunca|\bjamás)\s*$/iu);
         const id = `observation:${input.documentId}:${localStart}:${signal.action}`;
         results.set(id, {
@@ -415,6 +445,7 @@ export function discoverNarrativeObservationCandidates(
           ...(subjectCandidate ? { grammaticalSubjectCandidate: subjectCandidate } : {}),
           ...(passiveAgentCandidate ? { passiveAgentCandidate } : {}),
           ...(personalObjectCandidate ? { personalObjectCandidate } : {}),
+          ...(grammaticalObjectCandidate ? { grammaticalObjectCandidate } : {}),
           ...(mentionedCharacters.length === 1
             ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),

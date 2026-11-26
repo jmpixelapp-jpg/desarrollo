@@ -43,6 +43,14 @@ test("distingue duraciones de tiempo transcurrido antes y después de un ancla",
   assert.equal(result.find(item => item.surface === "Al cabo de una semana").relation, "after");
 });
 
+test("reconoce duraciones largas y referencias futuras sin fijar fechas absolutas", () => {
+  const result = discover("Desde hace veinte años vive aquí. Dentro de tres meses regresará. Al cabo de diez días terminará.");
+  assert.equal(result.find(item => item.surface === "Desde hace veinte años").relation, "duration");
+  assert.equal(result.find(item => item.surface === "Dentro de tres meses").relation, "after");
+  assert.equal(result.find(item => item.surface === "Al cabo de diez días").relation, "after");
+  assert.ok(result.every(item => item.anchorRequired && item.absoluteResolution === "unresolved-relative"));
+});
+
 test("extrae referencias de orden, franjas del día y horas sin asignar fecha absoluta", () => {
   const text = "Mientras esperaba, al amanecer miró el reloj a las 18:30.";
   const result = discover(text);

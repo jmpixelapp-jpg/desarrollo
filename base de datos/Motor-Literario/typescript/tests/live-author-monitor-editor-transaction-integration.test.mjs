@@ -46,7 +46,7 @@ class FakeTransactionalEditor {
   }
 }
 
-function fixture(text = "abc") {
+function fixture(text = "abc", maxPendingChanges) {
   const documentId = "chapter-1";
   const initial = { documentId, text, revision: 0, sequence: 0 };
   const editor = new FakeTransactionalEditor(initial);
@@ -135,6 +135,7 @@ function fixture(text = "abc") {
     documentId,
     editor,
     hostApi,
+    ...(maxPendingChanges === undefined ? {} : { maxPendingChanges }),
     onAdmission: (_change, admission) => admissions.push(admission),
     onBackpressure: state => pressureStates.push(state),
     onError: (error, change) => errors.push({ error, change })
@@ -329,4 +330,42 @@ test("rechaza montar cuando el editor nativo no coincide con HostEngineApi", () 
     hostApi
   }), /deben compartir el mismo snapshot/);
   assert.equal(editor.listeners.size, 0);
+});
+
+
+test("pausa el editor nativo al desbordarse y reanuda tras reconciliar el snapshot durable", () => {
+  const f = fixture("abc", 1);
+  f.rejectNext("queue_full");
+
+  f.editor.apply("edit", "tx-overflow-1", { start: 3, end: 3, replacement: "!" });
+  f.editor.apply("edit", "tx-overflow-2", { start: 4, end: 4, replacement: "?" });
+
+  assert.deepEqual(f.changes.map(change => change.sequence), [1],
+    "el segundo delta queda retenido y no se envía fuera de orden");
+  assert.deepEqual(f.integration.getPendingChanges().map(change => change.sequence), [1]);
+  assert.equal(f.integration.getState().needsResync, true);
+  assert.equal(f.editor.listeners.size, 0, "el proveedor nativo debe quedar pausado");
+  assert.equal(f.pressureStates.at(-1).status, "resync-required");
+  assert.equal(f.pressureStates.at(-1).overflowSequence, 2);
+
+  // Simula la convergencia durable del motor al snapshot actual del editor.
+  f.setHostSnapshot(f.editor.getSnapshot("chapter-1"));
+  const state = f.integration.resynchronize();
+  assert.equal(state.needsResync, false);
+  assert.equal(state.sequence, 2);
+  assert.equal(f.integration.getPendingChanges().length, 0);
+  assert.equal(f.editor.listeners.size, 1);
+  assert.deepEqual(f.pressureStates.at(-1), { status: "clear", pendingCount: 0 });
+
+  f.editor.apply("edit", "tx-after-overflow-recovery", {
+    start: 5, end: 5, replacement: "#"
+  });
+  assert.deepEqual(f.changes.map(change => change.sequence), [1, 3]);
+  assert.equal(f.getHostSnapshot().text, "abc!?#");
+  assert.equal(f.getHostSnapshot().sequence, 3);
+  assert.equal(f.integration.getState().sequence, 3);
+
+  f.integration.dispose();
+  assert.equal(f.editor.listeners.size, 0);
+  assert.equal(f.retryListeners.size, 0);
 });

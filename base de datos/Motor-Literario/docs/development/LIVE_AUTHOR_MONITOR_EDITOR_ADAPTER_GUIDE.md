@@ -136,3 +136,10 @@ Pendiente:
 - Validar undo/redo y transacciones agrupadas sobre ese editor concreto en navegador.
 
 La fixture HTML de Chromium prueba almacenamiento y leases entre pestañas; no es el editor de producción. No debe usarse como evidencia de que este último ya está conectado.
+
+
+## 9. Configuración del límite de contrapresión en el montaje
+
+Tanto `mountLiveAuthorMonitorEditorTransactions()` como `mountLiveAuthorMonitorTextArea()` aceptan `maxPendingChanges`. El valor se entrega al enlace FIFO común; si se omite se mantiene 4096. La misma política de pausa y reanudación por snapshot durable se aplica a ambos adaptadores.
+
+Las pruebas de integración recorren ahora el ciclo completo: primera admisión rechazada por `queue_full`, acumulación acotada del siguiente delta, desbordamiento, desuscripción del proveedor, reconciliación con un snapshot que ya incluye el texto y entrega correcta de una nueva edición después de reanudar.

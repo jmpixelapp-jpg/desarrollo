@@ -21,6 +21,8 @@ export interface LiveAuthorMonitorEditorTransactionIntegrationOptions {
   readonly hostApi: LiveAuthorMonitorEditorHostApi;
   readonly onAdmission?: (change: EditorChange, admission: ChangeAdmission) => void;
   readonly onBackpressure?: (snapshot: LiveAuthorMonitorBackpressureSnapshot) => void;
+  /** Máximo de deltas externos retenidos antes de exigir snapshot común; predeterminado: 4096. */
+  readonly maxPendingChanges?: number;
   readonly onError?: (
     error: unknown,
     change?: EditorChange
@@ -131,6 +133,7 @@ export function mountLiveAuthorMonitorEditorTransactions(
       subscribeRetrySignal: listener =>
         hostApi.subscribeLiveAuthorMonitor(() => listener()),
       ...(options.onBackpressure ? { onBackpressure: options.onBackpressure } : {}),
+      ...(options.maxPendingChanges === undefined ? {} : { maxPendingChanges: options.maxPendingChanges }),
       onAdmission: (change, admission) => {
         if (admission.status === "rejected" && admission.reason !== "queue_full") {
           source.requireResynchronization(

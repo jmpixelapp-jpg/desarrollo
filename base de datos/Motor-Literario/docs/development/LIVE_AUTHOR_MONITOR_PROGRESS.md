@@ -520,3 +520,16 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 **CI:** la consulta de checks del último commit 4ca4897e12dc2b5769a2faa57ff9b3abafddab88 todavía no devuelve resultados. No se declara validación CI aprobada para esta entrega. La última validación registrada antes de estos cambios fue 128/128 pruebas del monitor, en el commit 12a754203130e82bea7808763319143243898fc1.
 
 **Límite importante:** el evento que excede el buffer ya fue aplicado por el editor y no se conserva como delta individual; se recupera desde el snapshot común. El código no afirma que ese delta se haya admitido ni se haya persistido de forma incremental.
+
+
+## 25. Configuración pública y recuperación extremo a extremo del backlog (26 de noviembre de 2026)
+
+**Cambio de API:** `maxPendingChanges` queda expuesto en las opciones de montaje de ambos adaptadores públicos: `mountLiveAuthorMonitorEditorTransactions()` y `mountLiveAuthorMonitorTextArea()`. El valor se propaga al enlace FIFO común; el predeterminado sigue siendo 4096.
+
+**Regresión transaccional de extremo a extremo:** se fuerza `queue_full` en la primera edición y se produce un segundo delta mientras el buffer está ocupado. Al llegar el siguiente límite, el source nativo se pausa y retira el listener del editor. Después de reconciliar motor y editor desde el snapshot durable que ya contiene ambos cambios, `resynchronize()` limpia la generación anterior, vuelve a suscribir el editor y admite una edición nueva en la secuencia siguiente.
+
+**Regresión textarea:** el mismo límite se configura desde la API pública; la captura se suspende durante el desbordamiento y vuelve a funcionar después de reconciliar el texto y la revisión del motor.
+
+**Archivos:** integraciones pública transaccional y textarea, pruebas de integración respectivas y guía del adaptador; especificación sección 39.
+
+**Validación:** las regresiones se incluyen en el workflow específico del monitor. Pendiente de resultados de GitHub Actions para el commit de esta entrega.

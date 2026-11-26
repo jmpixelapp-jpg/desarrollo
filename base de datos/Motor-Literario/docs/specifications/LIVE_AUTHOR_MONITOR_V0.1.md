@@ -740,3 +740,16 @@ El anfitrión debe reconciliar el editor y el motor desde el mismo snapshot dura
 **Commits del avance:** [475dd63 — limitar el backlog FIFO](https://github.com/jmpixelapp-jpg/desarrollo/commit/475dd639231229b86666ba0b8cdf5499b37f5b3a), [1f97dce — verificar la recuperación del buffer](https://github.com/jmpixelapp-jpg/desarrollo/commit/1f97dce81838a512dfdd37b8c78debd8d5a4a5b2), [4ca4897 — cubrir emisiones síncronas durante el montaje](https://github.com/jmpixelapp-jpg/desarrollo/commit/4ca4897e12dc2b5769a2faa57ff9b3abafddab88).
 
 **CI:** la consulta de checks del último commit 4ca4897e12dc2b5769a2faa57ff9b3abafddab88 todavía no devuelve resultados. No se declara validación CI aprobada para esta entrega. La última validación registrada antes de estos cambios fue 128/128 pruebas del monitor, en el commit 12a754203130e82bea7808763319143243898fc1.
+
+
+## 39. Límite configurable desde las integraciones públicas
+
+El parámetro opcional `maxPendingChanges` se expone en las opciones de montaje de:
+- `mountLiveAuthorMonitorEditorTransactions()`, proveedor transaccional del editor nativo;
+- `mountLiveAuthorMonitorTextArea()`, adaptador de compatibilidad basado en textarea.
+
+Ambos adaptadores propagan el valor al mismo enlace FIFO, con predeterminado 4096 y rango válido de 1 a 65536. El comportamiento de overflow es uniforme: pausa de captura, estado `resync-required`, no reenvío del delta excedente y recuperación desde un snapshot durable común.
+
+**Cobertura de integración:** una prueba del proveedor transaccional comprueba retirada del listener nativo y edición posterior a la recuperación; otra prueba del textarea verifica la captura suspendida y reanudada.
+
+**Estado:** código y pruebas incluidos; CI pendiente.

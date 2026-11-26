@@ -43,6 +43,8 @@ export interface LiveAuthorMonitorTextAreaIntegrationOptions {
   readonly onAdmission?: (change: EditorChange, admission: ChangeAdmission) => void;
   /** Estado de la cola FIFO para indicadores visuales; nunca contiene texto del manuscrito. */
   readonly onBackpressure?: (snapshot: LiveAuthorMonitorBackpressureSnapshot) => void;
+  /** Máximo de deltas externos retenidos antes de exigir snapshot común; predeterminado: 4096. */
+  readonly maxPendingChanges?: number;
   readonly onError?: (error: unknown, change?: EditorChange) => void;
 }
 
@@ -124,6 +126,7 @@ export function mountLiveAuthorMonitorTextArea(
       subscribeRetrySignal: listener =>
         options.hostApi.subscribeLiveAuthorMonitor(() => listener()),
       ...(options.onBackpressure ? { onBackpressure: options.onBackpressure } : {}),
+      ...(options.maxPendingChanges === undefined ? {} : { maxPendingChanges: options.maxPendingChanges }),
       onAdmission: (change, admission) => {
         if (admission.status === "rejected" && admission.reason !== "queue_full") {
           source.requireResynchronization(

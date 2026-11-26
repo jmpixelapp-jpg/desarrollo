@@ -41,7 +41,7 @@ class FakeTextArea {
   }
 }
 
-function fixture(text = "hello") {
+function fixture(text = "hello", maxPendingChanges) {
   const element = new FakeTextArea(text);
   let snapshot = { documentId: "chapter-1", text, revision: 0, sequence: 0 };
   let sync = { sequence: 0, pendingSequence: 0, needsResync: false };
@@ -52,6 +52,7 @@ function fixture(text = "hello") {
   const admissions = [];
   const errors = [];
   const retryListeners = new Set();
+  const pressureStates = [];
 
   const hostApi = {
     getSnapshot: documentId => documentId === snapshot.documentId ? { ...snapshot } : undefined,
@@ -107,7 +108,9 @@ function fixture(text = "hello") {
     element,
     documentId: "chapter-1",
     hostApi,
+    ...(maxPendingChanges === undefined ? {} : { maxPendingChanges }),
     onAdmission: (_change, admission) => admissions.push(admission),
+    onBackpressure: state => pressureStates.push(state),
     onError: (error, change) => errors.push({ error, change })
   });
 
@@ -120,6 +123,7 @@ function fixture(text = "hello") {
     admissions,
     errors,
     retryListeners,
+    pressureStates,
     setRejectNext(value) { rejectNext = value; },
     setSnapshot(next, nextSync = {
       sequence: next.sequence,
@@ -279,4 +283,36 @@ test("rechaza montar sobre un documento inexistente", () => {
     hostApi: invalidHost
   }), /documento no está abierto/);
   assert.equal(element.listeners.size, 0);
+});
+
+
+test("limita el backlog del textarea y reanuda tras reconciliar el texto durable", () => {
+  const f = fixture("hello", 1);
+  f.setRejectNext(true);
+
+  f.element.edit(5, 5, "hello!");
+  f.element.edit(6, 6, "hello!?");
+
+  assert.equal(f.integration.getPendingChanges().length, 1);
+  assert.equal(f.integration.getState().needsResync, true);
+  assert.equal(f.pressureStates.at(-1).status, "resync-required");
+  assert.equal(f.pressureStates.at(-1).overflowSequence, 2);
+
+  // El snapshot durable incluye las dos ediciones que el buffer dejó de reenviar.
+  f.setSnapshot({
+    documentId: "chapter-1",
+    text: f.element.value,
+    revision: 2,
+    sequence: 2
+  });
+  const state = f.integration.resynchronize();
+  assert.equal(state.needsResync, false);
+  assert.equal(state.sequence, 2);
+  assert.deepEqual(f.integration.getPendingChanges(), []);
+  assert.deepEqual(f.pressureStates.at(-1), { status: "clear", pendingCount: 0 });
+
+  f.element.edit(7, 7, "hello!?*");
+  assert.equal(f.changes.at(-1).sequence, 3);
+  assert.equal(f.monitor.getSnapshot("chapter-1").durableSequence, 3);
+  f.integration.dispose();
 });

@@ -448,6 +448,9 @@ export class LiveAuthorMonitor {
     projectId: string,
     restoredAt = Date.now()
   ): LiveAuthorMonitorSnapshot {
+    if (snapshot === null || typeof snapshot !== "object") {
+      throw new TypeError("El snapshot durable del documento debe ser un objeto.");
+    }
     if (!checkpoint || checkpoint.version !== 1 ||
         typeof projectId !== "string" || !projectId.trim() ||
         checkpoint.projectId !== projectId ||

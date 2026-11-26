@@ -454,3 +454,40 @@ test("acepta el input final cuando compositionend precede al input en el navegad
   f.stop();
   f.source.dispose();
 });
+
+
+test("detecta mutación externa de igual longitud fuera del rango anunciado", () => {
+  const f = fixture("abcde", 0, 0);
+  f.element.selectionStart = 2;
+  f.element.selectionEnd = 2;
+  f.element.emitBeforeInput("insertText");
+  // Simula una mutación programática concurrente en otra posición, sin cambiar longitud.
+  f.element.value = "aZcde";
+
+  f.element.emitInput(false, "insertText");
+
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors[0].code, "inconsistent-length");
+  assert.match(f.errors[0].message, /fuera del rango/);
+  f.stop();
+  f.source.dispose();
+});
+
+test("acepta inserción legítima cuando hay caracteres repetidos alrededor del cursor", () => {
+  const f = fixture("aaaa", 0, 0);
+  f.element.edit({
+    start: 2,
+    end: 2,
+    nextValue: "aaXaa",
+    inputType: "insertText"
+  });
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].start, 2);
+  assert.equal(f.changes[0].end, 2);
+  assert.equal(f.changes[0].replacement, "X");
+  assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});

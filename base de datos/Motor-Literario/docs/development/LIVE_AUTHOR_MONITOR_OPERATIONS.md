@@ -571,3 +571,10 @@ El workspace no deja que una excepción de actualización de una tarjeta detenga
 
 
 **Validación de la reconciliación del workspace:** [Live Author Monitor — run 45757281903](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45757281903) aprobó 61/61 pruebas del núcleo, panel, workspace y diagnósticos, con type-check estricto y build aislado correctos. La prueba de etiqueta transitoriamente defectuosa mostró que el refresco conserva el aviso sólo en la tarjeta afectada y se recupera en el pulso siguiente. El benchmark midió 100.000 commits en 511,50 ms (~195.503 commits/s), heap estable de 4,26 MiB y cero pendientes. La lane completa continúa roja sólo por la auditoría y la compilación general de la persistencia concurrente.
+
+
+## 47. Scheduler de visibilidad: contrato de suspensión y limpieza
+
+El refresco visual debe existir solamente mientras el documento está visible y no suspendido por Page Lifecycle. `visibilitychange` consulta el valor autoritativo `document.hidden`; por ello `pageshow` o `resume` no reactivan polling mientras permanezca oculto. Cada intervalo tiene una generación: callbacks de intervalos cancelados o de instalaciones síncronas invalidadas no se ejecutan aunque ya estén encolados.
+
+La inicialización es transaccional respecto de los listeners: si el registro parcial o la función de cancelación falla, se invalidan callbacks y se intenta retirar todos los handlers. El desmontaje intenta todos los `removeEventListener` y cancela el intervalo aun si una limpieza aislada falla; comunica al final el primer error de limpieza. La nueva suite pura de `live-author-monitor-visibility.test.mjs` fija estos comportamientos sin iniciar Chromium.

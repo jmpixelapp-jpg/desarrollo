@@ -18,7 +18,8 @@ export interface LiveAuthorMonitorPanelOptions {
   readonly schedule?: (callback: () => void, intervalMs: number) => () => void;
 }
 export type LiveAuthorMonitorPanelMetric = "session" | "active" | "idle" | "pauses" | "wordsPerMinute" | "charactersPerMinute" |
-  "inserted" | "deleted" | "accepted" | "typing" | "composition" | "paste" | "deletion" | "correction" |
+  "inserted" | "deleted" | "typingUnits" | "compositionInserted" | "compositionDeleted" | "unitCoverage" |
+  "accepted" | "typing" | "composition" | "paste" | "deletion" | "correction" |
   "undo" | "redo" | "other" | "committed" | "pending" | "failed" |
   "revision" | "commitP95";
 type MetricKey = LiveAuthorMonitorPanelMetric;
@@ -41,10 +42,14 @@ const METRICS: readonly MetricDefinition[] = [
   { key: "active", label: "Tiempo escribiendo" },
   { key: "idle", label: "Tiempo acumulado en pausa" },
   { key: "pauses", label: "Pausas detectadas" },
-  { key: "wordsPerMinute", label: "Ritmo bruto estimado (palabras/min)" },
-  { key: "charactersPerMinute", label: "Ritmo bruto (caracteres/min)" },
-  { key: "inserted", label: "Caracteres insertados brutos (UTF-16)" },
-  { key: "deleted", label: "Caracteres eliminados brutos (UTF-16)" },
+  { key: "wordsPerMinute", label: "Ritmo estimado de escritura (palabras/min)" },
+  { key: "charactersPerMinute", label: "Ritmo de escritura (unidades/min)" },
+  { key: "inserted", label: "Inserciones brutas (UTF-16; incluye IME)" },
+  { key: "deleted", label: "Eliminaciones brutas (UTF-16; incluye IME)" },
+  { key: "typingUnits", label: "Unidades insertadas en escritura typing (UTF-16)" },
+  { key: "compositionInserted", label: "Unidades insertadas por composición IME (UTF-16)" },
+  { key: "compositionDeleted", label: "Unidades sustituidas por composición IME (UTF-16)" },
+  { key: "unitCoverage", label: "Cobertura de métricas por tipo de unidad" },
   { key: "accepted", label: "Ediciones aceptadas" },
   { key: "typing", label: "Escritura" },
   { key: "composition", label: "Composición IME" },
@@ -139,6 +144,10 @@ function formatMetric(
     case "charactersPerMinute": return integer.format(snapshot.insertedCharactersPerMinute);
     case "inserted": return integer.format(snapshot.insertedCharacters);
     case "deleted": return integer.format(snapshot.deletedCharacters);
+    case "typingUnits": return integer.format(snapshot.typingInsertedCharacters);
+    case "compositionInserted": return integer.format(snapshot.compositionInsertedCharacters);
+    case "compositionDeleted": return integer.format(snapshot.compositionDeletedCharacters);
+    case "unitCoverage": return snapshot.activityUnitMetricsComplete ? "Completa" : "Parcial (desde recuperación)";
     case "accepted": return integer.format(snapshot.acceptedChanges);
     case "typing": return integer.format(snapshot.typingChanges);
     case "composition": return integer.format(snapshot.compositionChanges);
@@ -427,7 +436,7 @@ export function mountLiveAuthorMonitorPanel(
   const progress = makeElement(document, "div", "ml-author-monitor__progress");
   progressTrack.append(progress);
   const note = makeElement(document, "p", "ml-author-monitor__note");
-  note.textContent = "Métricas locales de esta sesión. El contenido del manuscrito no se muestra ni se transmite. Los caracteres y ritmos acumulan deltas brutos; las sustituciones provisionales IME pueden contarse varias veces.";
+  note.textContent = "Métricas locales. Los totales brutos conservan cada delta aplicado, incluidos los candidatos IME provisionales; el ritmo de escritura usa solo unidades de operaciones clasificadas explícitamente como typing. La cobertura histórica se indica por separado.";
   root.append(header, grid, durability, persistence, coordination, listenerErrors, progressTrack, note);
   container.append(root);
 

@@ -737,6 +737,25 @@ test("rechaza ventanas de latencia dispersas en checkpoints", () => {
   assert.equal(second.monitor.getSnapshot("chapter-1"), undefined);
 });
 
+test("rechaza checkpoints con más pausas que admisiones registradas", () => {
+  const first = fixture();
+  first.open("chapter-1", "hello");
+  const checkpoint = first.monitor.createCheckpoint("chapter-1", 100);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.acceptedChanges, 0);
+  assert.equal(checkpoint.rejectedChanges, 0);
+  assert.equal(checkpoint.pauseCount, 0);
+
+  const second = fixture();
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    { ...checkpoint, pauseCount: 1 },
+    { documentId: "chapter-1", text: "hello", revision: 0, sequence: 0 },
+    "book-1",
+    101
+  ), /métricas o tiempos inválidos/);
+  assert.equal(second.monitor.getSnapshot("chapter-1"), undefined);
+});
+
 test("rechaza timestamps de restauración anteriores al checkpoint", () => {
   const first = fixture();
   first.open();

@@ -85,6 +85,8 @@ El lector acepta TXT y Markdown UTF-8 estricto. La decodificación conserva expl
 
 Para entidades de tipo `object`, el descubrimiento de observaciones puede proponer `grammaticalObjectCandidate` cuando una mención literal única aparece inmediatamente después del verbo con un patrón nominal explícito (por ejemplo, «Ana perdió la Espada Solar»). Se conserva el ID y la evidencia exacta del nombre con offsets absolutos. Esto identifica un candidato a objeto gramatical, no confirma posesión, transferencia, pérdida efectiva ni estado del objeto. Si falta el marcador nominal o la entidad es ambigua, no se asigna candidato.
 
+Además, cada evidencia específica (acción, objeto, actor y destinatario) debe quedar contenida en el fragmento contextual de la misma transición. Se verifica tanto el rango como la coincidencia literal del subfragmento. Esto evita aceptar una mención de participante que esté fuera de la oración/línea aportada como contexto o que no coincida con el texto fuente.
+
 ### Corroboración textual de entrega y recepción
 
 La trayectoria ahora puede emitir `continuitySignals` de tipo `transfer-reception-corroboration` cuando dos transiciones consecutivas del mismo objeto contienen: una entrega afirmada, seguida por una recepción afirmada, y ambas identifican explícitamente al mismo destinatario. El vínculo conserva las dos evidencias de destinatario y los IDs de las transiciones relacionadas.

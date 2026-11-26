@@ -311,3 +311,11 @@ El commit `0a21f341ae1787a4ae82255295e4fdc79e3182cd` pasó el workflow [Live Aut
 El benchmark de esta ejecución informó 274.897,17 commits/s para 100.000 cambios en 8 documentos; heap retenido de 0,48 MB, crecimiento de 0 MB entre mitad y final y RSS final de 73,89 MB. Valores medidos en el proceso Node del runner, no en Chromium.
 
 El workflow general [Motor Literario TypeScript — run 45747598008](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598008) permanecía en curso durante la instalación de Chromium al momento del registro. Consultar su estado antes de afirmar typecheck, suite general o benchmark general aprobados.
+
+## 21. Validación general del scheduler y guard de ticks retrasados
+
+Para el commit `0a21f341ae1787a4ae82255295e4fdc79e3182cd`, la lane específica [45747598005](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747598005) terminó en éxito con 169/169 pruebas del monitor y 10/10 regresiones aisladas.
+
+El workflow general [45747608045](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45747608045) también terminó en éxito en el commit descendiente `c90fa1ad3b3174b205564cd71a60f91ace30c4b7`, que contiene íntegro `0a21f34`: typecheck correcto, 775/775 tests aprobados, build y benchmarks completados.
+
+Benchmark de monitor en ese runner general: 100.000 commits, 200.274 commits/s, 0,48 MB retenidos por sesiones, 0 MB de crecimiento de heap entre mitad y final, RSS 75,32 MB y cero pendientes en los ocho documentos.

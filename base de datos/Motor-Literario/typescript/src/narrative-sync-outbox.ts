@@ -6,6 +6,7 @@ import {
   type NarrativeIdeaContinuityIndexSyncPayload
 } from "./narrative-idea-continuity-index";
 import {
+  canonicalizeNarrativeSyncPayload,
   verifyNarrativeSyncOperationEnvelope,
   type NarrativeSyncCanonicalizationLimits,
   type NarrativeSyncOperationEnvelope
@@ -158,6 +159,13 @@ export class IndexedDbNarrativeSyncOutbox {
     this.canonicalizationLimits = Object.freeze({
       ...(options.canonicalizationLimits ?? NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS)
     });
+    canonicalizeNarrativeSyncPayload(null, this.canonicalizationLimits);
+  }
+
+  verifyEnvelope(
+    envelope: NarrativeSyncOperationEnvelope<NarrativeIdeaContinuityIndexSyncPayload>
+  ): Promise<boolean> {
+    return verifyNarrativeSyncOperationEnvelope(envelope, this.canonicalizationLimits);
   }
 
   close(): void {
@@ -408,7 +416,23 @@ export class IndexedDbNarrativeSyncOutbox {
     const lastError = typeof input.error === "string"
       ? input.error.slice(0, MAX_ERROR_UNITS)
       : undefined;
-    await this.updateEntry(databasePlaceholder(this.databaseName), projectId, generation, current => current);
+    const database = await this.open();
+    await this.updateEntry(database, projectId, generation, current => {
+      if (current.envelope.digest !== expectedDigest) {
+        throw new Error("El digest no coincide con la entrada del outbox.");
+      }
+      if (current.status !== "leased" || current.leaseOwner !== workerId) {
+        throw new Error("El trabajador perdió el lease antes de devolver la operación al outbox.");
+      }
+      return {
+        ...current,
+        status: "pending",
+        nextAttemptAt: now + input.retryAfterMs,
+        leaseOwner: undefined,
+        leaseExpiresAt: undefined,
+        lastError
+      };
+    });
   }
 
   private async readEnqueueSnapshot(
@@ -687,10 +711,7 @@ export async function deliverNarrativeSyncOutboxBatch(
   const failedGenerations: number[] = [];
   for (const entry of claimed) {
     try {
-      if (!(await verifyNarrativeSyncOperationEnvelope(
-        entry.envelope,
-        NARRATIVE_IDEA_CONTINUITY_SYNC_LIMITS
-      ))) {
+      if (!(await outbox.verifyEnvelope(entry.envelope))) {
         throw new Error("La envoltura durable no supera la verificación SHA-256.");
       }
       await input.send(entry.envelope);

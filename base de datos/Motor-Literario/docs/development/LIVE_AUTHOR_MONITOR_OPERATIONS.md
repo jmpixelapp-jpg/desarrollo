@@ -515,3 +515,8 @@ La instalación de Chromium se ejecuta después del bundle runtime y únicamente
 La ejecución del 26 de noviembre de 2026 aprobó 37/37 pruebas combinadas del núcleo y diagnósticos, incluidas las tres regresiones de notificación FIFO. El benchmark de memoria procesó 100.000 commits en ocho documentos grandes en 507,42 ms (~197.074 commits/s). Después de GC, el heap observado fue 4,26 MiB tanto a mitad como al final de la carga; las sesiones abiertas retuvieron 0,49 MiB y no quedó ningún ticket pendiente.
 
 Estos datos son una medición de CI en Node.js 22.23.5, no una garantía universal de latencia en todos los navegadores o equipos. La misma ejecución dejó constancia de que la auditoría MLDB y el bundle completo fallaron por cambios compartidos en persistencia, por lo que no se considera validada todavía la integración completa del motor.
+
+
+## 39. Ráfaga síncrona de notificaciones reentrantes
+
+La suite incluye un caso de carga que hace que el primer suscriptor produzca 999 admisiones adicionales durante la entrega del snapshot inicial. Un segundo suscriptor debe recibir exactamente 1.000 snapshots con secuencias consecutivas, sin invertir el orden ni desbordar la pila. Esta regresión valida que el drenaje FIFO es iterativo y no se implementa mediante llamadas recursivas anidadas.

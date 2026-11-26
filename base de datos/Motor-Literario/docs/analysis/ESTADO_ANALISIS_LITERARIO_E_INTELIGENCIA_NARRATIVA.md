@@ -454,3 +454,14 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - Pruebas nuevas verifican evidencia exacta para personaje y objeto, alias de entidad y offsets de la primera coincidencia.
 - Commits de la nueva fase de evidencia de menciones: `4729747a` (implementación), `eb06bf9` (pruebas), `9429f62` (documentación).
 - Las ejecuciones 2828, 2829 y 2830 se encontraban en curso/cola al registrar este avance. La evidencia de menciones todavía no se declara validada por CI.
+
+
+### Agente explícito en voz pasiva — 26-11-2026
+
+- La nueva prueba de evidencia de menciones reveló una regresión ya presente en el bloque de análisis de voz pasiva: en «Ana fue encontrada por Bruno», el sujeto paciente se reconocía, pero el complemento agente no.
+- Las ejecuciones 2829 y 2831 fallaron con 1011/1012 pruebas aprobadas. El Type-check fue correcto; el único fallo fue `passiveAgentCandidate` indefinido en la prueba «identifica un agente explícito en pasiva sin confundirlo con el sujeto paciente».
+- Causa raíz: la expresión regular del complemento agente tenía escapados duplicados (`\\\\b`, `\\\\s`, `\\\\p`) en un literal regex, por lo que buscaba barras invertidas literales en vez de límites de palabra y clases Unicode.
+- Corregido en `65ec76b`: el patrón ahora usa límites y clases Unicode efectivos y reconoce el nombre propio conocido tras «por».
+- La documentación funcional se amplió en `5e8fa37`.
+- Ejecuciones 2834–2837 estaban en curso o cola en la última consulta. La corrección no se considera validada hasta que una ejecución posterior apruebe toda la suite.
+- La prueba negativa «por un desconocido» se conserva: no se debe inventar agente si el complemento no coincide con una entidad registrada.

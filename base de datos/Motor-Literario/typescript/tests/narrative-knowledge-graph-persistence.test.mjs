@@ -11,6 +11,7 @@ import {
   reconcileNarrativeDocumentProjections,
   repairNarrativeDocumentProjectionManifest,
   proposeNarrativeReferenceRepairs,
+  applyNarrativeReferenceRepair,
   validateNarrativeDocumentProjectionManifest
 } from "../dist/motor-literario.js";
 
@@ -423,4 +424,56 @@ test("propone reparación sólo ante una correspondencia de merge explícita y �
   assert.equal(proposals[1].resolution, "manual-review");
   assert.equal(proposals[1].candidateEntityId, undefined);
   assert.equal(tables.entities.size, 1, "la generación de propuestas no escribe");
+});
+
+
+test("aplica reparación aprobada de relación mediante CAS y devuelve auditoría", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-apply", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: ["entity:legacy"], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  tables.relations.set("relation:1", {
+    projectId: "novel-apply", id: "relation:1",
+    fromEntityId: "entity:legacy", toEntityId: "entity:canonical",
+    relationType: "knows", evidence: []
+  });
+  const proposal = {
+    projectId: "novel-apply", issueCode: "missing-relation-entity",
+    recordType: "relation", recordId: "relation:1",
+    missingReferenceId: "entity:legacy", candidateEntityId: "entity:canonical",
+    resolution: "explicit-merge-match"
+  };
+  await assert.rejects(
+    applyNarrativeReferenceRepair(store, proposal, false, 10),
+    /aprobación explícita/
+  );
+  const result = await applyNarrativeReferenceRepair(store, proposal, true, 11);
+  assert.equal(result.changed, true);
+  assert.equal(result.replayed, false);
+  assert.equal(result.audit.before, "entity:legacy");
+  assert.equal(result.audit.after, "entity:canonical");
+  assert.equal(result.audit.appliedAt, 11);
+  assert.equal(tables.relations.get("relation:1").fromEntityId, "entity:canonical");
+  const replay = await applyNarrativeReferenceRepair(store, proposal, true, 12);
+  assert.equal(replay.changed, false);
+  assert.equal(replay.replayed, true);
+});
+
+test("rechaza aplicar propuesta si la procedencia de fusión ya no la respalda", async () => {
+  const { store, tables } = createMemoryStore();
+  tables.entities.set("entity:canonical", {
+    projectId: "novel-stale", id: "entity:canonical", kind: "character",
+    canonicalName: "Mara", normalizedName: "mara", aliases: [],
+    mergedFromIds: [], evidence: [],
+    firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  });
+  await assert.rejects(applyNarrativeReferenceRepair(store, {
+    projectId: "novel-stale", issueCode: "missing-assertion-entity",
+    recordType: "assertion", recordId: "assertion:1",
+    missingReferenceId: "entity:legacy", candidateEntityId: "entity:canonical",
+    resolution: "explicit-merge-match"
+  }, true, 13), /correspondencia de fusión cambió/);
 });

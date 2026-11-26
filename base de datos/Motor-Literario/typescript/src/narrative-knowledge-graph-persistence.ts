@@ -62,7 +62,8 @@ export function createNarrativeDocumentProjectionManifest(
       .filter((item: EvidenceBackedRecord) =>
         item.evidence.some((evidence: TextEvidence) => evidence.documentId === documentId))
       .map((item: EvidenceBackedRecord) => item.id))].sort();
-  const assertions = contribution.graph.assertions.map(item => item.id).sort();
+  const assertions: readonly NarrativeAssertion[] = contribution.graph.assertions;
+  const assertionIds = assertions.map((item: NarrativeAssertion) => item.id).sort();
   return {
     projectId: snapshot.projectId,
     documentId,
@@ -73,7 +74,7 @@ export function createNarrativeDocumentProjectionManifest(
     relationIds: ids(contribution.graph.relations),
     eventIds: ids(contribution.graph.events),
     ideaIds: ids(contribution.graph.ideas),
-    assertionIds: assertions,
+    assertionIds,
     updatedAt
   };
 }

@@ -362,3 +362,39 @@ test("rechaza mensajes de conflicto que exceden 2.048 caracteres", async () => {
   assert.equal(outbox.attempts.length, 1);
   assert.match(outbox.attempts[0].error, /mensaje del conflicto supera el límite/);
 });
+
+
+test("dos coordinadores comparten exclusión mutua por proyecto mediante el lock del anfitrión", async () => {
+  const outbox = createOutbox([operation("op-cross-instance", 1)]);
+  const tails = new Map();
+  const lock = {
+    async runExclusive(key, task) {
+      const previous = tails.get(key) ?? Promise.resolve();
+      let release;
+      const gate = new Promise(resolve => { release = resolve; });
+      const tail = previous.then(() => gate);
+      tails.set(key, tail);
+      await previous;
+      try { return await task(); }
+      finally {
+        release();
+        if (tails.get(key) === tail) tails.delete(key);
+      }
+    }
+  };
+  let pushes = 0;
+  const transport = {
+    async push(_projectId, operations) {
+      pushes++;
+      assert.deepEqual(operations.map(item => item.operationId), ["op-cross-instance"]);
+      await new Promise(resolve => setImmediate(resolve));
+      return { acknowledgedOperationIds: ["op-cross-instance"], conflicts: [], retryableOperationIds: [] };
+    }
+  };
+  const first = new NarrativeSyncCoordinator(outbox, transport, { executionLock: lock, now: () => 100 });
+  const second = new NarrativeSyncCoordinator(outbox, transport, { executionLock: lock, now: () => 100 });
+  const results = await Promise.all([first.syncOnce("project-a"), second.syncOnce("project-a")]);
+  assert.equal(pushes, 1);
+  assert.equal(results.reduce((sum, result) => sum + result.acknowledged, 0), 1);
+  assert.equal(outbox.pending.length, 0);
+});

@@ -744,7 +744,10 @@ test("dispose repetido vuelve a intentar liberar el listener del proveedor", () 
   });
   source.subscribeChanges(() => {});
 
-  source.dispose();
+  assert.throws(
+    () => source.dispose(),
+    /No se pudo retirar el listener del proveedor/
+  );
   assert.equal(unsubscribeAttempts, 1);
   assert.equal(editor.listeners.size, 1, "el primer fallo no puede ocultarse borrando el disposer");
   source.dispose();

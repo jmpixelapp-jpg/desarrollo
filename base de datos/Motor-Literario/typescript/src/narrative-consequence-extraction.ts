@@ -20,7 +20,9 @@ export interface NarrativeConsequenceCandidate {
   readonly projectId: string;
   readonly sourceEventId: string;
   readonly consequenceEventId: string;
-  readonly relationType: "explicit-consequence-marker";
+  readonly relationType: "explicit-consequence-marker" | "temporal-association-hypothesis";
+  /** No es causalidad demostrada; indica solo proximidad temporal y participantes compartidos. */
+  readonly causalStatus: "explicitly-signaled-candidate" | "unproven-hypothesis";
   readonly marker: string;
   readonly reviewStatus: "candidate";
   readonly evidence: {
@@ -130,6 +132,7 @@ export function extractNarrativeConsequenceCandidates(
       sourceEventId: source.id,
       consequenceEventId: consequence.id,
       relationType: "explicit-consequence-marker",
+      causalStatus: "explicitly-signaled-candidate",
       marker: excerpt,
       reviewStatus: "candidate",
       evidence: {
@@ -141,5 +144,48 @@ export function extractNarrativeConsequenceCandidates(
       }
     });
   }
-  return results;
+  // Hipótesis débiles: una marca temporal + participantes compartidos puede
+  // sugerir una conexión que merece revisión, pero jamás demuestra causalidad.
+  // No se generan si ya existe un enlace explícito para el mismo par.
+  const explicitPairs = new Set(results.map(item => item.sourceEventId + "=>" + item.consequenceEventId));
+  const temporalPattern = /^\\s*(?:[«(]+\\s*)?(poco\\s+después|inmediatamente\\s+después|al\\s+instante|acto\\s+seguido|a\\s+continuación|después|entonces)(?=\\s|[,;:.!?—–-]|$)/iu;
+  for (let index = 1; index < events.length && results.length < MAX_NARRATIVE_CONSEQUENCES; index++) {
+    const source = events[index - 1];
+    const consequence = events[index];
+    if (source.evidence.end > consequence.evidence.start ||
+        explicitPairs.has(source.id + "=>" + consequence.id)) continue;
+    const shared = source.participantEntityIds.filter(id =>
+      consequence.participantEntityIds.includes(id)
+    );
+    if (shared.length === 0) continue;
+    const gap = input.text.slice(
+      source.evidence.end - (input.baseOffset ?? 0),
+      consequence.evidence.start - (input.baseOffset ?? 0)
+    );
+    if (/\\r?\\n[\\t ]*\\r?\\n/u.test(gap)) continue;
+    const match = temporalPattern.exec(consequence.evidence.excerpt);
+    if (!match) continue;
+    const excerpt = match[1];
+    const local = consequence.evidence.excerpt.indexOf(excerpt);
+    const start = consequence.evidence.start + local;
+    const end = start + excerpt.length;
+    results.push({
+      id: "causal-hypothesis:" + input.documentId + ":" + start + ":" + source.id + ":" + consequence.id,
+      projectId: input.projectId,
+      sourceEventId: source.id,
+      consequenceEventId: consequence.id,
+      relationType: "temporal-association-hypothesis",
+      causalStatus: "unproven-hypothesis",
+      marker: excerpt,
+      reviewStatus: "candidate",
+      evidence: {
+        documentId: input.documentId,
+        revision: input.revision,
+        start,
+        end,
+        excerpt
+      }
+    });
+  }
+  return results.sort((a, b) => a.evidence.start - b.evidence.start);
 }

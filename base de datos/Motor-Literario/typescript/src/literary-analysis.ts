@@ -4181,9 +4181,16 @@ function buildLiteraryIdeaGraph(
           sourceTruncated = true;
           break;
         }
-        // Los retornos a la fuente no son destinos de convergencia de dos saltos.
-        // El ciclo completo permanece registrado en Tarjan y en las referencias.
-        if (destinationIndex === sourceIndex) continue;
+        // Un retorno a la fuente puede ser una rama exclusiva del ciclo,
+        // pero nunca se considera convergencia compartida: evita contar el
+        // mismo ciclo como si dos ramas hubieran descubierto un destino nuevo.
+        if (destinationIndex === sourceIndex) {
+          if (!firstIntermediaryByDestination.has(destinationIndex)) {
+            destinationCounts.set(destinationIndex, 1);
+            firstIntermediaryByDestination.set(destinationIndex, intermediaryIndex);
+          }
+          continue;
+        }
         destinationCounts.set(destinationIndex, (destinationCounts.get(destinationIndex) ?? 0) + 1);
         if (!firstIntermediaryByDestination.has(destinationIndex)) {
           firstIntermediaryByDestination.set(destinationIndex, intermediaryIndex);

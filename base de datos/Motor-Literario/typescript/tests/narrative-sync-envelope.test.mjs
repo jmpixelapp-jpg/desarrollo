@@ -157,7 +157,10 @@ test("rechaza lotes con huecos, propiedades adicionales y tamaños excesivos", a
     validateNarrativeSyncEnvelopeBatch([first, first], { maxBatchSize: 1 }),
     /máximo permitido/u
   );
-  assert.throws(() => validateNarrativeSyncEnvelopeBatch([], { maxBatchSize: 501 }), /maxBatchSize/u);
+  await assert.rejects(
+    validateNarrativeSyncEnvelopeBatch([], { maxBatchSize: 501 }),
+    /maxBatchSize/u
+  );
 });
 
 test("aplica límites de canonicalización al sobre completo", async () => {

@@ -760,7 +760,7 @@ Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace
 
 ## 40. Nueva entrega — benchmark de heap reproducible para sesiones de monitor (25 de noviembre de 2026)
 
-- Se añade `bench/live-author-monitor-memory-benchmark.mjs`, con ocho sesiones predeterminadas, documentos iniciales de 1 MiB y 12.500 commits por documento (100.000 en total).
+- Se añade `bench/live-author-monitor-memory-benchmark.mjs`, con ocho sesiones predeterminadas, documentos iniciales de 1.048.576 unidades UTF-16 y 12.500 commits por documento (100.000 en total).
 - El script fuerza GC antes de sus lecturas y captura heap inicial, después de abrir sesiones, a mitad de carga y al finalizar. Reporta heap retenido por sesiones, crecimiento de mitad a carga completa, RSS y throughput del runner.
 - Verifica por documento que los 12.500 commits se confirmaron, no quedan pendientes/fallos y la ventana de latencias se mantiene en 64 muestras.
 - Se añade `npm run bench:monitor`; el benchmark general `npm run bench` lo ejecuta después del benchmark de edición y el workflow específico lo ejecuta tras los tests.
@@ -788,3 +788,12 @@ La ejecución del commit `b2ef1ecc48b9d30e02634755c125e3adbf7eb810` confirma:
 - [Motor Literario TypeScript — run 45743414450](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743414450): `Type-check` bloqueado por `src/narrative-history.ts(7,41): TS1002`.
 
 Por este motivo no existe todavía una cifra medida por `live-author-monitor-memory-benchmark.mjs`. El benchmark quedó enlazado al workflow específico y al comando `npm run bench`, pero debe ejecutarse una vez que el build previo pueda completarse. El archivo externo que bloquea la compilación no se modifica para no intervenir en el módulo narrativo paralelo.
+
+## 43. Resultado de la CI posterior a la consolidación documental (25 de noviembre de 2026)
+
+Las ejecuciones más recientes completadas verificadas:
+
+- [Motor Literario TypeScript — run 45743597639](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743597639), commit `8112df6fcf6976817520253d0e75496e3470394b`: falló el paso `Type-check` por `src/narrative-history.ts(7,41): TS1002 — Unterminated string literal`.
+- [Live Author Monitor — run 45743497335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743497335), commit `ab624b7a6b5e9bd393aaf42624335ee66b02ed6d`: completó setup, instalación de Chromium y validación del esquema físico; falló en `Build runtime bundle` por `src/narrative-history.ts:7:40 — Unterminated string literal`.
+
+El monitor y los tests del panel, workspace y benchmark siguen sin una ejecución completa posterior a estas entregas. El bloqueo es anterior a esos pasos y pertenece al archivo narrativo externo; no se modificó para no interferir con el trabajo paralelo.

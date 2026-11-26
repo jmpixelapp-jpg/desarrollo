@@ -174,12 +174,12 @@ La última validación integral verde anterior a la fase 3 corresponde al baseli
 - [Live Author Monitor — run 45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764): 141 pruebas aprobadas, 0 fallidas, 0 omitidas.
 - [Motor Literario TypeScript — run 45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738): 718 pruebas aprobadas, 0 fallidas, 0 omitidas.
 
-Las nuevas entregas siguen sin validación verde. La última pareja completada consultada corresponde al commit `b2ef1ecc`:
+Las nuevas entregas siguen sin validación verde. Los resultados más recientes completados consultados son:
 
-- [Live Author Monitor — run 45743414420](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743414420): terminó en `Build runtime bundle`; esquema físico e instalación de Chromium terminaron correctamente, pero el build se detuvo antes de ejecutar tests y benchmark.
-- [Motor Literario TypeScript — run 45743414450](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743414450): terminó en `Type-check`.
+- [Motor Literario TypeScript — run 45743597639](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743597639), commit `8112df6f`: terminó en `Type-check`.
+- [Live Author Monitor — run 45743497335](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45743497335), commit `ab624b7a`: terminó en `Build runtime bundle`; los pasos previos de setup, Chromium y auditoría de esquema físico finalizaron correctamente.
 
-El error de ambas ejecuciones es `src/narrative-history.ts(7,41): TS1002 — Unterminated string literal`. Se origina en un archivo de otro módulo y no se modifica desde este trabajo. No demuestra ni aprobación ni fallo de las pruebas del monitor ni del benchmark de heap: ambos quedan sin ejecutar tras el bloqueo de compilación.
+Los dos fallos presentan `src/narrative-history.ts(7,41): TS1002 — Unterminated string literal` (en Vite, `src/narrative-history.ts:7:40`). El error se origina en un archivo de otro módulo y no se modifica desde este trabajo. No demuestra ni aprobación ni fallo de las pruebas del monitor ni del benchmark de heap: ambos quedan sin ejecutar tras el bloqueo de compilación.
 
 El workflow específico incluye ahora `tests/browser/**`, `bench/**` y `package.json` en sus filtros de `push` y `pull_request`. Así los tests del harness, el benchmark y los comandos de validación disparan la suite dedicada cuando cambian.
 

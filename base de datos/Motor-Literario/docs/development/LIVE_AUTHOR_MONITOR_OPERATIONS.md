@@ -546,3 +546,10 @@ La lane completa mantiene fallo porque la auditoría de esquema y la compilació
 ## 42. Type-check aislado del núcleo y de las vistas
 
 El archivo `tsconfig.live-author-monitor.json` extiende la configuración estricta del proyecto, pero incluye solo el entrypoint reducido `src/live-author-monitor-test-entry.ts`. TypeScript sigue resolviendo y comprobando sus dependencias transitivas (monitor, panel, workspace y contratos utilizados) sin cargar módulos de persistencia que no forman parte de esta lane. La comprobación se ejecuta antes del bundle Vite y de las regresiones; no sustituye el type-check global, que permanece como control separado del proyecto completo.
+
+
+## 43. Evidencia del type-check aislado (run 45756749489)
+
+La lane específica ejecutó `npx tsc --noEmit --project tsconfig.live-author-monitor.json` y aprobó el chequeo estricto de los módulos transitivos del monitor, panel y workspace. El build aislado Vite, 17 pruebas diagnósticas y 59 pruebas combinadas también pasaron. El benchmark procesó 100.000 commits en 580,44 ms (~172.282 commits/s), manteniendo 4,26 MiB de heap tras GC tanto a mitad como al final de la carga y cero pendientes.
+
+La conclusión global de la lane sigue siendo fallo por la auditoría IndexedDB y un error de sintaxis en `indexeddb-store.ts:2560`, fuera del alcance del monitor. La nueva comprobación no sustituye el type-check global ni la integración real con el runtime/editor.

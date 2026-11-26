@@ -311,8 +311,7 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
 }
 
 /** Reglas estrictas para ideas nuevas: el histórico leído se conserva, pero no se crean anomalías nuevas. */
-function validateNarrativeIdeaWriteRecord(idea: NarrativeIdea, label: string): void {
-  validateNarrativeIdeaRecord(idea, label);
+function validateNarrativeIdeaLinksForWrite(idea: NarrativeIdea, label: string): void {
   for (const links of [idea.relatedEntityIds ?? [], idea.relatedIdeaIds ?? []]) {
     if (new Set(links).size !== links.length) {
       throw new Error(`Registro de ${label} malformado: referencias duplicadas.`);
@@ -321,9 +320,14 @@ function validateNarrativeIdeaWriteRecord(idea: NarrativeIdea, label: string): v
   if (idea.relatedIdeaIds?.includes(idea.id)) {
     throw new Error(`Registro de ${label} malformado: una idea no puede relacionarse consigo misma.`);
   }
-  validateStrictNarrativeIdeaStatusHistory(idea, label);
 }
 
+/** Reglas estrictas para ideas nuevas: el histórico leído se conserva, pero no se crean anomalías nuevas. */
+function validateNarrativeIdeaWriteRecord(idea: NarrativeIdea, label: string): void {
+  validateNarrativeIdeaRecord(idea, label);
+  validateNarrativeIdeaLinksForWrite(idea, label);
+  validateStrictNarrativeIdeaStatusHistory(idea, label);
+}
 function validateStrictNarrativeIdeaStatusHistory(idea: NarrativeIdea, label: string): void {
   const history = idea.statusHistory;
   if (history === undefined) return;
@@ -366,10 +370,7 @@ function validateNarrativeIdeaUpdateRecord(
     first.length === second.length && first.every((value, index) => value === second[index]);
   if (!sameArray(idea.relatedEntityIds, expectedCurrent.relatedEntityIds) ||
       !sameArray(idea.relatedIdeaIds, expectedCurrent.relatedIdeaIds)) {
-    validateNarrativeIdeaWriteRecord({
-      ...idea,
-      statusHistory: expectedCurrent.statusHistory
-    }, label + " con vínculos modificados");
+    validateNarrativeIdeaLinksForWrite(idea, label + " con vínculos modificados");
   }
 
   const previousHistory = expectedCurrent.statusHistory ?? [];

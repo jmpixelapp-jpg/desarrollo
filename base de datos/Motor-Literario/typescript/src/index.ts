@@ -46,3 +46,5 @@ export * from "./narrative-action-extraction";
 export * from "./narrative-event-extraction";
 
 export * from "./narrative-consequence-extraction";
+
+export * from "./narrative-character-intent-extraction";

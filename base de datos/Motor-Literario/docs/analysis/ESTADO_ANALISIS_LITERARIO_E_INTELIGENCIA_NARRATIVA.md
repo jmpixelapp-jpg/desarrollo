@@ -782,7 +782,7 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Pruebas añadidas:** continuidad después de sujeto activo explícito, no propagación desde hipótesis, abstención ante personaje intermedio, salto de párrafo, límite de distancia, offsets con emoji, revisión/documento incorrectos y límites de coincidencia de nombres completos.
 
-**Validación CI:** pendiente de la ejecución del módulo, sus pruebas y exportación. No declarar aprobada hasta que finalicen type-check, compilación, pruebas automatizadas y benchmark.
+**Validación CI:** aprobada en GitHub Actions, ejecución `45789179406`, commit `8d45f091`: type-check, compilación, suite completa de 1.179 pruebas (1.179 aprobadas, 0 fallidas) y benchmark finalizaron correctamente. La ejecución también incluyó el módulo de referencias descriptivas y su exportación.
 
 
 ## Descubrimiento de referencias descriptivas de personajes

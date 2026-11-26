@@ -680,14 +680,13 @@ La prueba asociada altera el contador de un checkpoint real sin actividad y exig
 
 ## 59. Balance de caracteres recuperado
 
-El checkpoint conserva los totales acumulados insertados, borrados y la longitud actual, pero no copia el texto inicial. Por ello, al recuperar se puede reconstruir la longitud inicial implícita:
+El checkpoint conserva los totales acumulados insertados, borrados y la longitud actual, pero no copia el texto inicial. La longitud inicial implícita se reconstruye así:
 
 `initialLength = currentDocumentLength + deletedCharacters - insertedCharacters`
 
-Esta longitud no puede ser negativa. El validador aplica la forma equivalente `deletedCharacters <= currentDocumentLength + insertedCharacters`, después de exigir que cada contador sea un entero seguro no negativo. La regla permite reemplazos, borrados seguidos de inserciones y cualquier secuencia válida de deltas; solo rechaza balances imposibles.
+La longitud inicial no puede ser negativa. La condición equivalente es `insertedCharacters <= currentDocumentLength + deletedCharacters`. La primera versión de esta comprobación invirtió la desigualdad; la corrección quedó aplicada en `restoreCheckpoint()` y en el validador IndexedDB el 26 de noviembre de 2026. La prueba ahora usa seis caracteres insertados sobre una longitud actual de cinco, sin borrados, lo que implicaría una longitud inicial de −1.
 
-La regresión parte de un documento de cinco caracteres sin ediciones y manipula el total borrado a seis. La restauración debe fallar antes de registrar la sesión. No se almacena ni vuelve a leer el manuscrito para realizar esta comprobación y no se requiere migración del checkpoint v1.
-
+Este balance no requiere leer el manuscrito original y permite borrados completos, reemplazos y cualquier secuencia válida de deltas. No cambia el formato v1 ni requiere migración.
 
 ## 60. Generaciones para renovaciones y adquisiciones asíncronas
 
@@ -712,3 +711,15 @@ La capa IndexedDB valida los checkpoints antes de iniciar una transacción. Las 
 Dentro de la misma `sessionId`, los contadores de tipo de actividad no pueden retroceder aunque `acceptedChanges` permanezca igual. Se comparan tecleo, pegado, borrado, corrección, deshacer, rehacer y otros cambios. Para un checkpoint v1 histórico que no tenga ninguno de esos campos, el total aceptado anterior se interpreta como `otherChanges`; la comparación usa esa cantidad derivada. Esto evita falsos rechazos al guardar la primera versión nueva de una sesión antigua y, al mismo tiempo, impide reclasificar actividad histórica.
 
 Las pruebas trabajan sobre IndexedDB y verifican que una escritura inválida no deje checkpoint persistido, que una reclasificación se rechace preservando el registro anterior y que la evolución desde un checkpoint histórico siga permitida. No se modifica el esquema ni la versión v1.
+
+
+## 63. Validación integral de métricas antes de guardar un checkpoint
+
+Antes de abrir la transacción IndexedDB, el validador comprueba que las métricas describan una sesión completa y alcanzable:
+
+- `pauseCount <= acceptedChanges + rejectedChanges`.
+- `committedChanges + failedChanges === acceptedChanges`, porque no se guarda un checkpoint con tickets pendientes.
+- `insertedCharacters <= currentDocumentLength + deletedCharacters`, para que la longitud inicial implícita no sea negativa.
+- La ventana de latencias no supera el número de outcomes, contiene una muestra si existen outcomes, termina exactamente en `lastCommitLatencyMs` y tiene suma no superior a la latencia histórica acumulada.
+
+Los arrays de muestras también deben ser densos. La validación con `Array.from()` convierte los huecos en valores inválidos antes de persistir. Cualquier incumplimiento aborta la entrada antes de la escritura del checkpoint; no se modifica el lease ni se deja un registro durable parcial.

@@ -1370,3 +1370,14 @@ La conclusión global de la lane sigue siendo `failure` por controles compartido
 **Regresión:** el test de checkpoint instala un suscriptor que falla durante una admisión y un commit; comprueba que la sesión informa dos errores, que el checkpoint no contiene la propiedad `listenerErrors` y que `restoreCheckpoint()` comienza en cero. Las métricas de escritura y durabilidad se restauran sin contaminar la sesión nueva con fallos antiguos de UI.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+## 86. Aislamiento visible de fallos de reconciliación del workspace (26 de noviembre de 2026)
+
+**Hallazgo:** el workspace protegía el conjunto de tarjetas con un `catch` general durante la reconciliación. Si un callback de presentación como `getDocumentLabel()` lanzaba una excepción, el refresco conservaba la última vista pero no indicaba qué capítulo había fallado. El fallo quedaba oculto y podía repetirse en cada pulso.
+
+**Corrección:** cada `upsert` del workspace se ejecuta mediante `upsertSafely`; las excepciones se cuentan en un mapa efímero por documento y se muestran en el nodo de diagnóstico de la tarjeta afectada. La reconciliación continúa con los demás documentos, conserva la alerta después de que el callback se recupere y elimina el contador cuando se cierra la tarjeta o se desmonta el workspace. No se conserva el mensaje de excepción ni se incrementa el contador de errores de listeners del motor, porque se trata de un fallo local del renderer.
+
+**Regresión:** dos documentos están abiertos; el callback de etiqueta lanza una vez para el primero y funciona para el segundo. El test comprueba aviso sólo en la tarjeta afectada, ausencia del mensaje privado, recuperación de la etiqueta en el siguiente pulso y persistencia de la alerta local sin contaminar `snapshot.listenerErrors`.
+
+**Validación:** pendiente de GitHub Actions.

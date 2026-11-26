@@ -25,6 +25,7 @@ import {
   type NarrativePronounResolutionOptions
 } from "./narrative-pronoun-resolution";
 import { extractNarrativePronounActionCandidates } from "./narrative-pronoun-action-link";
+import { linkNarrativePronounActionTargets } from "./narrative-pronoun-target-link";
 import {
   detectNarrativePronounInputs,
   type NarrativeCharacterPronounProfile
@@ -60,6 +61,7 @@ export interface NarrativeUnderstandingResult {
   readonly interactionShifts: ReturnType<typeof detectNarrativeInteractionShifts>;
   readonly pronounResolutions: ReturnType<typeof resolveNarrativePronounReferences>;
   readonly pronounActions: ReturnType<typeof extractNarrativePronounActionCandidates>;
+  readonly pronounTargetActions: ReturnType<typeof linkNarrativePronounActionTargets>;
   readonly skippedAmbiguousCharacterNames: readonly string[];
   readonly sceneAssignments: {
     readonly ideaCandidates: readonly {
@@ -164,9 +166,7 @@ export function understandNarrativeFragment(
     projectId: input.projectId, documentId: input.documentId,
     revision: input.revision, text: input.text, baseOffset
   });
-  const interactions = extractNarrativeCharacterInteractions(
-    actions, input.entities, input.projectId
-  );
+
   const detectedPronouns = detectNarrativePronounInputs(
     input.text, input.entities, input.documentId, input.revision,
     baseOffset, input.characterProfiles ?? []
@@ -195,6 +195,12 @@ export function understandNarrativeFragment(
           }
         }))
     : [];
+  const pronounTargetActions = linkNarrativePronounActionTargets(
+    input.text, pronounActions, input.entities, input.projectId, baseOffset
+  );
+  const interactions = extractNarrativeCharacterInteractions(
+    [...actions, ...pronounTargetActions], input.entities, input.projectId
+  );
   const interactionShifts = detectNarrativeInteractionShifts(interactions);
 
   const assign = <T extends { readonly id: string; readonly evidence: {
@@ -213,7 +219,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions,
+    ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     sceneAssignments: {
       ideaCandidates: assign(ideas),

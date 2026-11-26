@@ -91,8 +91,19 @@ function recordEvent(event) {
   else if (event.type === "compositionupdate") eventCounters.compositionUpdateCount += 1;
   else if (event.type === "compositionend") eventCounters.compositionEndCount += 1;
 
-  if (entry.type === "beforeinput") inputPairing.recordBeforeInput(entry, event);
-  else if (entry.type === "input") inputPairing.recordInput(entry, event);
+  if (entry.type === "beforeinput") {
+    eventCounters.beforeInputCount += 1;
+    if (entry.inputType === "insertCompositionText") {
+      eventCounters.compositionBeforeInputCount += 1;
+    }
+    inputPairing.recordBeforeInput(entry, event);
+  } else if (entry.type === "input") {
+    eventCounters.inputCount += 1;
+    if (entry.inputType === "insertCompositionText") {
+      eventCounters.compositionInputCount += 1;
+    }
+    inputPairing.recordInput(entry, event);
+  }
   if (monitorErrorBeforeNextObservedEvent) {
     // onError can run inside the source listener before this recorder sees
     // the same beforeinput/input event. Interrupt the pair created above.

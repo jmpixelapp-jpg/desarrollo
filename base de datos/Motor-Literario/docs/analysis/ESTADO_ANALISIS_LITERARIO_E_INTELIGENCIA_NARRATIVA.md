@@ -3,7 +3,7 @@
 **Implementación:** `base de datos/Motor-Literario/typescript/`  
 **Módulo central:** `src/literary-analysis.ts`  
 **Rama de trabajo:** `main`  
-**Última actualización documentada:** 25 de noviembre de 2026
+**Última actualización documentada:** 26 de noviembre de 2026
 
 Este documento es el registro técnico vivo del alcance, las garantías, los límites y las tandas de trabajo del análisis literario y la inteligencia narrativa de ideas. Debe actualizarse en cada tanda que cambie contratos, comportamiento, pruebas o límites. No sustituye los contratos TypeScript ni los tests: explica qué existe, qué significa y qué falta verificar.
 
@@ -235,6 +235,16 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `d7e789d`: invierte el orden de las afirmaciones en la regresión de 1.200 escenas y comprueba que los snapshots continúan ordenados documentalmente.
 - `eb3b2e3`: añade auditoría estática para proteger la materialización dispersa y el orden de escenas.
 - `6217c45`: corrige el delimitador de la auditoría de snapshots dispersos.
+- `704c6fb`: añade cobertura de offsets UTF-16 en afirmaciones narrativas con nombres Unicode suplementarios y emoji.
+- `eee3423`: comprueba los offsets de afirmaciones vinculadas a ideas y acontecimientos.
+- `5956655`: verifica explícitamente que los offsets de afirmaciones usan unidades UTF-16, coherentes con los índices de JavaScript.
+- `b3a8302`: corrige el fixture para usar saltos CRLF reales y comprobar el cálculo de rangos de evidencia.
+- `87c57d4`: refuerza los límites Unicode al reconocer nombres narrativos, evitando coincidencias parciales dentro de palabras.
+- `4461a68`: corrige el escape de expresiones regulares y los límites Unicode de los nombres.
+- `ee0464d`: añade regresiones para evitar coincidencias parciales con marcas combinantes.
+- `df1a10a`: corrige el fixture para incluir una marca combinante Unicode real, no una secuencia literal escapada.
+
+Esta tanda se concentra en la integridad de la evidencia textual: los rangos deben permanecer en unidades UTF-16, respetar saltos LF/CRLF y no aceptar prefijos de nombres cuando el carácter siguiente sea una marca combinante. Los commits están publicados en `main`; no se atribuyen a esta tanda cambios de otras ramas ni se consideran validados por CI sin checks observables.
 ## 7. Pendientes y siguiente secuencia de trabajo
 
 1. Ejecutar la prueba de estrés que fuerza el límite de un millón de expansiones de dos saltos y confirma `truncated-by-work-budget`; el fixture autocontenido comprueba que cuatro fuentes completan un millón de expansiones y que la quinta se interrumpe, conservando contadores parciales explícitos.
@@ -242,13 +252,15 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 3. Auditar los presupuestos de memoria y tiempo de cada fase del análisis, no solo del grafo y del texto léxico; la reserva del presupuesto para ideas enlazadas ya tiene auditoría estática conjunta y una prueba de integración con 21 textos de 100.000 unidades UTF-16. La cronología y los vínculos de acontecimientos limitan sus muestras intermedias; la evolución de atributos localiza escenas en tiempo logarítmico por afirmación y materializa snapshots solo para escenas con evidencia; la continuidad entre documentos cuenta evidencias sin materializar colecciones y resuelve acontecimientos mediante un índice por ID. Falta ejecutar y medir las pruebas en el entorno del proyecto y continuar la auditoría de las demás colecciones públicas.
 4. Revisar el comportamiento de muestras y truncamiento en cada colección pública: el grafo tiene regresión para 5.001 referencias y muestras exactas de componentes y ciclos; la cronología verifica 202 puntos y 201 transiciones con muestras de 200, 55 identificadores de eventos con muestra de 50 y 35 rangos de evidencia por vínculo con muestra de 20; las resonancias léxicas verifican 102 candidatos con muestras de 100 y 15 términos compartidos con muestras de 12; falta extender la auditoría sistemática a las demás colecciones públicas.
 5. Ampliar las pruebas de sincronización concurrente de ideas: el agotamiento de tres intentos CAS y la eliminación de destinos durante un reintento ya tienen regresión; quedan intercalado de eliminaciones y escrituras de varios registros, y revalidación de catálogos cuando cambian repetidamente durante una operación.
-6. Ampliar las pruebas de regresión para offsets UTF-16 por escena y por evento en cambios de revisión, rangos parciales y límites de fragmento; recurrencias y anclajes de eventos con caracteres suplementarios ya tienen cobertura.
+6. Ampliar las pruebas de regresión de offsets UTF-16 por escena, evento y afirmación en cambios de revisión, rangos parciales y límites de fragmento. La extracción de afirmaciones ya tiene casos para emoji, nombres Unicode, marcas combinantes y CRLF; falta extender los casos a fragmentos concatenados y a cambios de revisión con evidencia parcialmente obsoleta.
 7. Ejecutar y registrar `npm run typecheck`, `npm test` y `npm run bench` en un entorno de proyecto; no declarar verde una verificación sin resultados observables.
-8. Validar la experiencia desde el programa anfitrión con manuscritos reales de prueba, manteniendo datos sintéticos o autorizados y confirmando que el motor nunca edita el texto por sí solo.
+8. Validar la experiencia desde el programa anfitrión con manuscritos reales de prueba, manteniendo datos sintéticos o autorizados y confirmando que el motor nunca edita el texto por sí solo. Esta validación externa no se sustituye por las pruebas unitarias del motor.
 9. Ejecutar la nueva prueba de IndexedDB nativo en Node 22.13 o superior y ampliar la integración a transacciones solapadas, orden de escrituras y carreras entre altas/bajas de entidades y guardados CAS; las pruebas añadidas cubren rollback, CAS obsoleto, CAS concurrente entre dos instancias y validación transaccional de destinos idea, pero no agotan los escenarios de altas/bajas concurrentes de entidades.
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo es `main`. Las consultas de estado y workflows para las últimas tandas (`00196e6`, `424f3d6` y sus actualizaciones documentales) no devolvieron checks ni ejecuciones asociadas. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para estas tandas**. La cobertura combina auditorías estáticas con una nueva prueba de integración que usa IndexedDB nativo cuando está disponible; no hay evidencia de que esta prueba se haya ejecutado en CI ni localmente. No se afirma aquí que las pruebas se hayan ejecutado.
+La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualización es `df1a10ab423f222d652349453d2a496cb1a206f3` (26 de noviembre de 2026). La consulta de checks y de ejecuciones de workflow para ese SHA devolvió colecciones vacías. Por tanto, **los commits de esta tanda están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para el HEAD observado**. Las pruebas de Unicode, límites de nombres y offsets UTF-16 están escritas en el repositorio; su presencia no demuestra que se hayan ejecutado.
+
+El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.

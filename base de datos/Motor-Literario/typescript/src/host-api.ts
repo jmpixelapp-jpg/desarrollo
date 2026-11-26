@@ -8,7 +8,7 @@ import type {
   StoredLiveAuthorMonitorLease, Diagnostic
 } from "./contracts";
 import { LiteraryEngine } from "./engine";
-import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener } from "./live-author-monitor";
+import { LiveAuthorMonitor, type LiveAuthorMonitorOptions, type LiveAuthorMonitorSnapshot, type LiveAuthorMonitorListener, type LiveAuthorMonitorPersistenceDiagnostics } from "./live-author-monitor";
 import type { ProjectDictionary, ProjectDictionaryInput, DictionaryEntry, DictionaryEntryInput, DictionaryEntryEntityLink } from "./dictionaries";
 import { normalizeDictionaryName, normalizeDictionarySurface, validateProjectDictionary, validateDictionaryEntry, validateDictionaryEntryEntityLink } from "./dictionaries";
 import type {
@@ -620,7 +620,10 @@ export class HostEngineApi {
   private readonly liveSubmissionTimes = new Map<string, number>();
   private readonly liveMonitorCheckpointTails = new Map<string, Promise<void>>();
   private readonly liveMonitorCheckpointErrors = new Map<string, unknown>();
+  private readonly liveMonitorCheckpointSavedAt = new Map<string, number>();
   private readonly liveMonitorLeases = new Map<string, StoredLiveAuthorMonitorLease>();
+  private readonly liveMonitorLeaseLost = new Set<string>();
+  private readonly liveMonitorLeaseErrors = new Map<string, unknown>();
   private readonly liveMonitorLeaseHeartbeats = new Map<string, ReturnType<typeof setInterval>>();
   private readonly liveMonitorLeaseGenerations = new Map<string, object>();
   private readonly liveMonitorLeaseReleasing = new Set<string>();
@@ -3890,6 +3893,9 @@ export class HostEngineApi {
     this.liveMonitorLeaseGenerations.clear();
     this.liveMonitorLeaseReleasing.clear();
     this.liveMonitorLeaseHeartbeatInFlight.clear();
+    this.liveMonitorLeaseLost.clear();
+    this.liveMonitorLeaseErrors.clear();
+    this.liveMonitorCheckpointSavedAt.clear();
     this.liveAuthorMonitor.dispose();
   }
 
@@ -3951,6 +3957,7 @@ export class HostEngineApi {
         if (checkpoint) {
           try {
             this.liveAuthorMonitor.restoreCheckpoint(checkpoint, recoveredSnapshot, projectId);
+            this.liveMonitorCheckpointSavedAt.set(documentId, checkpoint.savedAt);
             restored = true;
           } catch (error) {
             // Un checkpoint corrupto/obsoleto no bloquea la recuperación del manuscrito.
@@ -4051,6 +4058,73 @@ export class HostEngineApi {
     return this.liveAuthorMonitor.getSnapshots();
   }
 
+  /**
+   * Diagnóstico seguro para las vistas. Los errores se reducen a su nombre de
+   * clase: no se exponen mensajes que pudieran incluir datos del usuario.
+   */
+  getLiveAuthorMonitorPersistenceDiagnostics(
+    documentId: string
+  ): LiveAuthorMonitorPersistenceDiagnostics | undefined {
+    if (typeof documentId !== "string" || !documentId.trim()) {
+      throw new TypeError("documentId es obligatorio para consultar el diagnóstico del monitor.");
+    }
+    const snapshot = this.liveAuthorMonitor.getSnapshot(documentId);
+    if (!snapshot) return undefined;
+
+    const checkpointError = this.liveMonitorCheckpointErrors.get(documentId);
+    let checkpointState: LiveAuthorMonitorPersistenceDiagnostics["checkpointState"];
+    if (typeof this.store.saveLiveAuthorMonitorCheckpoint !== "function") {
+      checkpointState = "unavailable";
+    } else if (checkpointError !== undefined) {
+      checkpointState = "error";
+    } else if (snapshot.needsResync || snapshot.pendingChanges > 0) {
+      checkpointState = "waiting-for-durability";
+    } else if (this.liveMonitorCheckpointTails.has(documentId)) {
+      checkpointState = "saving";
+    } else if (this.liveMonitorCheckpointSavedAt.has(documentId)) {
+      checkpointState = "saved";
+    } else {
+      checkpointState = "not-saved";
+    }
+
+    const leaseError = this.liveMonitorLeaseErrors.get(documentId);
+    let leaseState: LiveAuthorMonitorPersistenceDiagnostics["leaseState"];
+    const lease = this.liveMonitorLeases.get(documentId);
+    if (!this.supportsLiveAuthorMonitorLeases()) {
+      leaseState = "unsupported";
+    } else if (leaseError !== undefined) {
+      leaseState = "error";
+    } else if (this.liveMonitorLeaseReleasing.has(documentId)) {
+      leaseState = "releasing";
+    } else if (lease) {
+      leaseState = lease.expiresAt > Date.now() ? "owner" : "expired";
+    } else if (this.liveMonitorLeaseLost.has(documentId)) {
+      leaseState = "lost";
+    } else if (this.liveMonitorLeaseHeartbeats.has(documentId)) {
+      leaseState = "observer";
+    } else {
+      leaseState = "uninitialized";
+    }
+
+    const errorCode = (error: unknown): string => {
+      if (error instanceof Error && typeof error.name === "string" && error.name.trim()) {
+        return error.name.slice(0, 64);
+      }
+      return "UnknownError";
+    };
+    return Object.freeze({
+      documentId,
+      checkpointState,
+      ...(this.liveMonitorCheckpointSavedAt.has(documentId)
+        ? { lastCheckpointAt: this.liveMonitorCheckpointSavedAt.get(documentId)! }
+        : {}),
+      ...(checkpointError === undefined ? {} : { checkpointErrorCode: errorCode(checkpointError) }),
+      leaseState,
+      ...(lease === undefined ? {} : { fencingToken: lease.fencingToken, leaseExpiresAt: lease.expiresAt }),
+      ...(leaseError === undefined ? {} : { leaseErrorCode: errorCode(leaseError) })
+    });
+  }
+
   /** Suscripción global o limitada a un documento. */
   subscribeLiveAuthorMonitor(listener: LiveAuthorMonitorListener, documentId?: string): () => void {
     return this.liveAuthorMonitor.subscribe(listener, documentId);
@@ -4138,6 +4212,7 @@ export class HostEngineApi {
         this.liveMonitorLeaseReleasing.has(documentId)) return;
     const timer = setInterval(() => {
       void this.renewLiveAuthorMonitorLeaseFromHeartbeat(documentId).catch(error => {
+        this.liveMonitorLeaseErrors.set(documentId, error);
         this.reportKnowledgeError(error);
       });
     }, Math.floor(HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS / 3));
@@ -4162,7 +4237,7 @@ export class HostEngineApi {
         if (acquired && !this.disposed) this.scheduleLiveAuthorMonitorCheckpoint(documentId);
         return;
       }
-      const generation = this.liveMonitorLeaseGenerations.get(documentId) ?? 0;
+      const generation = this.liveMonitorLeaseGenerations.get(documentId);
       const renew = this.store.renewLiveAuthorMonitorLease;
       if (!renew) return;
       const renewed = await renew.call(
@@ -4182,6 +4257,8 @@ export class HostEngineApi {
 
       if (!renewed) {
         this.liveMonitorLeases.delete(documentId);
+        this.liveMonitorLeaseLost.add(documentId);
+        this.liveMonitorLeaseErrors.delete(documentId);
         const invalidatedGeneration = this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
         if (this.liveMonitorLeaseGenerations.get(documentId) === invalidatedGeneration) {
           this.liveMonitorLeaseGenerations.delete(documentId);
@@ -4195,6 +4272,8 @@ export class HostEngineApi {
         expiresAt: Math.max(renewed.expiresAt, latest.expiresAt),
         updatedAt: Math.max(renewed.updatedAt, latest.updatedAt)
       });
+      this.liveMonitorLeaseLost.delete(documentId);
+      this.liveMonitorLeaseErrors.delete(documentId);
     } finally {
       this.liveMonitorLeaseHeartbeatInFlight.delete(documentId);
     }
@@ -4210,23 +4289,28 @@ export class HostEngineApi {
     const renew = this.store.renewLiveAuthorMonitorLease;
     const acquire = this.store.acquireLiveAuthorMonitorLease;
     let lease: StoredLiveAuthorMonitorLease | undefined;
-    if (current && renew) {
-      lease = await renew.call(
-        this.store,
-        current,
-        now,
-        HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
-      );
-    }
-    if (!lease && acquire && !this.disposed) {
-      lease = await acquire.call(
-        this.store,
-        this.requireProject().projectId,
-        documentId,
-        this.liveMonitorOwnerId,
-        now,
-        HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
-      );
+    try {
+      if (current && renew) {
+        lease = await renew.call(
+          this.store,
+          current,
+          now,
+          HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
+        );
+      }
+      if (!lease && acquire && !this.disposed) {
+        lease = await acquire.call(
+          this.store,
+          this.requireProject().projectId,
+          documentId,
+          this.liveMonitorOwnerId,
+          now,
+          HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
+        );
+      }
+    } catch (error) {
+      this.liveMonitorLeaseErrors.set(documentId, error);
+      throw error;
     }
     if (this.disposed) {
       // La adquisición pudo confirmarse después de dispose(); no dejar una
@@ -4242,12 +4326,15 @@ export class HostEngineApi {
     }
     if (!lease) {
       this.liveMonitorLeases.delete(documentId);
+      if (current) this.liveMonitorLeaseLost.add(documentId);
       // Una instancia sin titularidad mantiene un heartbeat ligero para poder
       // tomar el control si el lease actual expira sin una liberación explícita.
       this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
       return undefined;
     }
     this.liveMonitorLeases.set(documentId, lease);
+    this.liveMonitorLeaseLost.delete(documentId);
+    this.liveMonitorLeaseErrors.delete(documentId);
     this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
     return lease;
   }
@@ -4273,7 +4360,10 @@ export class HostEngineApi {
         this.liveMonitorLeaseGenerations.delete(documentId);
       }
       this.liveMonitorLeaseReleasing.delete(documentId);
+      this.liveMonitorLeaseLost.delete(documentId);
+      this.liveMonitorLeaseErrors.delete(documentId);
     } catch (error) {
+      this.liveMonitorLeaseErrors.set(documentId, error);
       // Si el almacén no confirmó la liberación, conservamos la titularidad local
       // y reanudamos el heartbeat para evitar una expiración accidental.
       this.liveMonitorLeaseReleasing.delete(documentId);
@@ -4300,6 +4390,7 @@ export class HostEngineApi {
     // El guardado en segundo plano informa el fallo, pero conserva el rechazo
     // original para que closeSafely/disposeSafely no anuncien persistencia falsa.
     void queued.catch(error => {
+      this.liveMonitorCheckpointErrors.set(documentId, error);
       try { this.reportKnowledgeError(error); } catch { /* El diagnóstico no altera la cola. */ }
     });
     const cleanup = (): void => {
@@ -4327,6 +4418,7 @@ export class HostEngineApi {
         await save.call(this.store, checkpoint);
       }
       this.liveMonitorCheckpointErrors.delete(checkpoint.documentId);
+      this.liveMonitorCheckpointSavedAt.set(checkpoint.documentId, checkpoint.savedAt);
     } catch (error) {
       this.liveMonitorCheckpointErrors.set(checkpoint.documentId, error);
       throw error;

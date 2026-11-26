@@ -88,3 +88,9 @@ El archivo `storage_mapping_v0.4.2.json` es la fuente verificable del mapeo: con
 La versión IndexedDB 22 añade el historial append-only de acontecimientos (`event-lifecycles`) con aislamiento por proyecto y revisión única, además de mantener las fichas genéricas, nombres, relaciones, evidencias, ocurrencias cronológicas y vínculos de diccionario en almacenes independientes (`project-records`, `record-names`, `project-relations`, `project-evidences` y `timeline-occurrences`), sin sustituir los almacenes especializados de extracción narrativa. `projects` permanece correctamente bajo propiedad del anfitrión y no se duplica en el contenido del libro. El historial de migraciones registra upgrades desde la versión 18; las versiones anteriores no se reconstruyen retroactivamente.
 
 La implementación conserva la privacidad local y el aislamiento por libro/escritor. No mueve ni comparte contenido entre proyectos por semejanza; una importación entre libros necesita autorización explícita del escritor.
+
+## DB27 como base de migración de DB28
+
+DB27 fue la versión que incorporó inicialmente `narrative-reference-repair-audits` y `narrative-reference-repair-pending`, ambos con clave compuesta `[projectId, operationId]` e índice `by-project`. DB28 conserva esos almacenes y sus índices; no los reemplaza ni elimina sus registros.
+
+La actualización DB27→DB28 agrega únicamente `sync-outbox` y `sync-device-sequences` al inventario. La migración asegura los índices de reparación también cuando los almacenes ya existían, y la auditoría física verifica clave, nombre de índice y unicidad frente al manifiesto versionado 17.

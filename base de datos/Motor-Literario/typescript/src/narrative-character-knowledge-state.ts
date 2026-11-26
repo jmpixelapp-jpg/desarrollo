@@ -128,12 +128,15 @@ export function buildNarrativeCharacterKnowledgeStates(
       const eventDocuments = new Set(assessmentEvents.map(event => event.evidence.documentId));
       const eventVersions = new Set(assessmentEvents.map(event =>
         `${event.evidence.documentId}\\u0000${event.evidence.revision}`));
+      const revisionsByDocument = new Map<string, Set<number>>();
+      for (const event of assessmentEvents) {
+        const revisions = revisionsByDocument.get(event.evidence.documentId) ?? new Set<number>();
+        revisions.add(event.evidence.revision);
+        revisionsByDocument.set(event.evidence.documentId, revisions);
+      }
       const comparable = eventVersions.size === 1 ||
         [...eventDocuments].every(documentId => order.has(documentId)) &&
-          [...eventVersions].every(version => {
-            const documentId = version.split("\\u0000")[0]!;
-            return order.has(documentId);
-          });
+          [...revisionsByDocument.values()].every(revisions => revisions.size === 1);
       const orderedEvaluations = comparable ? [...evaluations].sort((a, b) => {
         const aOrder = order.get(a.evidence.documentId) ?? 0;
         const bOrder = order.get(b.evidence.documentId) ?? 0;

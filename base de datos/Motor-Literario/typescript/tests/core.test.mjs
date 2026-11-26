@@ -2217,7 +2217,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 24);
+      assert.equal(version, 25);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2247,6 +2247,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "personal-idea-library", keyPath: ["writerId", "sourceProjectId", "idea.id"] },
       { name: "writer-library-finalization-receipts", keyPath: ["writerId", "sourceProjectId", "receiptId"] },
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
+      { name: "narrative-document-projection-manifests", keyPath: ["projectId", "documentId"] },
       { name: "document-diagnostics", keyPath: ["projectId", "documentId"] },
       { name: "live-author-monitor-checkpoints", keyPath: ["projectId", "documentId"] },
       { name: "live-author-monitor-leases", keyPath: ["projectId", "documentId"] },
@@ -2299,6 +2300,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["writer-library-finalization-receipts", "by-writer-source"],
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
+      ["narrative-document-projection-manifests", "by-project"],
       ["document-diagnostics", "by-project"],
       ["live-author-monitor-checkpoints", "by-project"],
       ["live-author-monitor-leases", "by-project"],
@@ -2497,6 +2499,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
       ["writer-library-finalization-receipts", "by-writer-source"],
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
+      ["narrative-document-projection-manifests", "by-project"],
       ["document-diagnostics", "by-project"],
       ["live-author-monitor-checkpoints", "by-project"],
       ["live-author-monitor-leases", "by-project"],

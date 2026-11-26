@@ -9,7 +9,7 @@ import type { NarrativeCharacterStateCandidate } from "./narrative-character-sta
 import type { TextEvidence } from "./narrative-knowledge";
 
 export type NarrativeActionStateLinkPosition = "action-before-state" | "state-before-action";
-export type NarrativeActionStateLinkBasis = "shared-character-mention" | "directed-interaction-target";
+export type NarrativeActionStateLinkBasis = "grammatical-subject" | "directed-interaction-target";
 
 export interface NarrativeActionStateLinkCandidate {
   readonly id: string;
@@ -115,10 +115,11 @@ export function discoverNarrativeActionStateLinks(
 
   for (const action of actions) {
     for (const state of states) {
-      const actionEntityIds = new Set(action.mentionedCharacterIds);
-      const shared = actionEntityIds.has(state.entityId);
+      // La mención en la misma oración no basta: debe existir un rol local
+      // explícito del personaje en la acción (sujeto candidato o destinatario).
+      const subjectMatch = action.grammaticalSubjectCandidate?.entityId === state.entityId;
       const directedTarget = action.directedInteractionCandidate?.toEntityId === state.entityId;
-      if (!shared && !directedTarget) continue;
+      if (!subjectMatch && !directedTarget) continue;
 
       const actionStart = action.actionEvidence.start;
       const actionEnd = action.actionEvidence.end;
@@ -151,7 +152,7 @@ export function discoverNarrativeActionStateLinks(
       seen.add(identity);
       const basis: NarrativeActionStateLinkBasis = directedTarget
         ? "directed-interaction-target"
-        : "shared-character-mention";
+        : "grammatical-subject";
 
       result.push({
         id: "action-state-link:" + input.documentId + ":" + input.revision + ":" + identity,

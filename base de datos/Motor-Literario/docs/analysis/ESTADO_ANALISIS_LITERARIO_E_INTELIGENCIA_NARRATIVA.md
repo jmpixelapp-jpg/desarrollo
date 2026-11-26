@@ -288,3 +288,12 @@ La tanda incluye:
 ### Ajuste de regresión del workspace tras cambios de accesibilidad
 
 La ejecución de CI sobre el merge commit confirmó que los dos tests de fencing ya no fallan. El job del monitor encontró, en cambio, que el helper `findCards` de `live-author-monitor-workspace.test.mjs` contaba todos los nodos `role=listitem`, incluidos los elementos de la lista accesible de métricas. El test ahora identifica tarjetas de documento por la presencia de `data-document-id`, manteniendo la semántica accesible de las métricas y verificando el número real de capítulos. Corrección añadida en `4682e21`; requiere nueva ejecución CI.
+
+
+### Validación CI confirmada de la corrección integrada
+
+La ejecución de CI del commit de código/pruebas `4682e21c9f29a61f803c0877f4cf1952b8e48422` terminó correctamente en ambos workflows:
+- **Motor Literario TypeScript:** typecheck, build y suite automatizada aprobados; benchmark de edición aprobado.
+- **Live Author Monitor:** validación de esquema/almacenamiento, build, pruebas específicas del monitor y benchmark de heap aprobados.
+
+La suite completa ya no reproduce los fallos de fencing ni el recuento erróneo de tarjetas del workspace. Después de ese commit se añadió únicamente documentación de seguimiento (`054e1b5`); no se modificó código ni pruebas. El PR #56 permanece abierto como borrador y no se ha fusionado.

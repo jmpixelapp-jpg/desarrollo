@@ -1604,8 +1604,8 @@ function normalizeSyncOperation(operation: StoredSyncOperation): StoredSyncOpera
       (!Number.isFinite(operation.lastAttemptAt) || operation.lastAttemptAt < 0)) {
     throw new TypeError("La fecha del último intento no es válida.");
   }
-  if (operation.lastError !== undefined &&
-      (typeof operation.lastError !== "string" || operation.lastError.length > 2_000)) {
+  if (operation.lastErrorCode !== undefined &&
+      (typeof operation.lastErrorCode !== "string" || operation.lastErrorCode.length > 160)) {
     throw new TypeError("El último error de sincronización no es válido.");
   }
   let payload: unknown;
@@ -1619,7 +1619,7 @@ function normalizeSyncOperation(operation: StoredSyncOperation): StoredSyncOpera
     deviceId: operation.deviceId, sequence: operation.sequence, kind: operation.kind,
     payload: operation.payload, createdAt: operation.createdAt, attemptCount: operation.attemptCount,
     ...(operation.lastAttemptAt === undefined ? {} : { lastAttemptAt: operation.lastAttemptAt }),
-    ...(operation.lastError === undefined ? {} : { lastError: operation.lastError })
+    ...(operation.lastErrorCode === undefined ? {} : { lastErrorCode: operation.lastErrorCode })
   };
 }
 
@@ -6020,10 +6020,10 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   /** Registra un intento sin eliminar ni alterar la identidad del cambio pendiente. */
-  async recordSyncOperationAttempt(operationId: string, attemptedAt: number, error?: string): Promise<boolean> {
+  async recordSyncOperationAttempt(operationId: string, attemptedAt: number, errorCode?: string): Promise<boolean> {
     if (typeof operationId !== "string" || !operationId.trim() ||
         !Number.isFinite(attemptedAt) || attemptedAt < 0 ||
-        (error !== undefined && (typeof error !== "string" || error.length > 2_000))) {
+        (errorCode !== undefined && (typeof errorCode !== "string" || errorCode.length > 160))) {
       throw new TypeError("Metadatos de intento de sincronización inválidos.");
     }
     const db = await this.open();
@@ -6045,7 +6045,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         found = true;
         const updated: StoredSyncOperation = {
           ...existing, attemptCount: existing.attemptCount + 1, lastAttemptAt: attemptedAt,
-          ...(error === undefined ? {} : { lastError: error })
+          ...(errorCode === undefined ? {} : { lastErrorCode: errorCode })
         };
         try { store.put(updated); }
         catch (caught) {

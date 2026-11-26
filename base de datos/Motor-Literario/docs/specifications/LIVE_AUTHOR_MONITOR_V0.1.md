@@ -671,3 +671,21 @@ Además de evitar adquisiciones tardías, la recuperación vuelve a comprobar el
 La regresión usa un almacén de prueba que retiene la promesa de loadLiveAuthorMonitorCheckpoint: el HostEngineApi inicia recoverDocument, la prueba llama dispose() mientras la lectura está pendiente y luego libera la promesa. Al finalizar la recuperación no debe existir snapshot de métricas ni heartbeat local.
 
 **Validación CI:** ejecución [45727834409](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45727834409), commit `351f2232822a8a7005ff5df7675f044537db7cab`: build Vite, MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes) y **113 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+
+
+## 35. Puente reusable y validación ligera del proveedor transaccional
+
+Se implementa `LiveAuthorMonitorEditorTransactionBridge`, un proveedor reusable que separa la API nativa del editor del source de monitoreo. El anfitrión entrega lectores `getSnapshot` y `getDocumentState`, suscribe sus callbacks a las transacciones ya aplicadas y publica cada delta mediante `publishAppliedTransaction(documentId, transaction)`.
+
+`getSnapshot` se reserva para montaje y resincronización. En el camino por transacción, el source usa `getDocumentState` para validar únicamente identidad, revisión, secuencia y longitud UTF-16; así evita volver a materializar o copiar el manuscrito por cada pulsación. El método es opcional en el contrato para mantener compatibilidad con proveedores antiguos, pero los nuevos adaptadores deben implementarlo.
+
+El puente distribuye eventos sincrónicamente, conserva un FIFO global ante publicaciones reentrantes y aísla errores de listeners. Cada publicación captura el conjunto de listeners al encolarse y los eventos se entregan en orden a los listeners que sigan activos. El retorno de `publishAppliedTransaction` representa el número de listeners seleccionados, no el número de callbacks que completaron sin error.
+
+Se añade la guía `docs/development/LIVE_AUTHOR_MONITOR_EDITOR_ADAPTER_GUIDE.md` con reglas para deltas UTF-16, revisiones/secuencias, undo/redo, transacciones con varios pasos, backpressure, resincronización y ciclo de vida. Esta guía describe el contrato; no acredita que un editor concreto ya esté conectado.
+
+**Regresiones añadidas:** validación con metadatos sin leer texto completo después del montaje; rechazo de metadatos inválidos; flujo edit/undo/redo por el bridge; aislamiento de documentos; manejo de listeners defectuosos; dispose y FIFO ante publicaciones reentrantes.
+
+**Validación CI verificada:** ejecución específica [45728632431](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45728632431), commit `608f8e2a45a7bdff95db2e829dfa4eedb6a2050b`: build Vite, MLDB 0.4.2 válido, auditoría física correcta (25 tablas/34 almacenes) y **120 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+
+**Límite de integración:** todavía no hay un editor de producción en el árbol del repositorio. El bridge hace reusable la conexión, pero queda pendiente enlazar los callbacks reales del editor anfitrión y ejecutar undo/redo sobre ese editor en navegador.

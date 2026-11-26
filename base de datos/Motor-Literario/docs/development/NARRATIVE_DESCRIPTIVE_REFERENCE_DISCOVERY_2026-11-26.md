@@ -42,3 +42,12 @@ Se añaden pruebas para «Ana, la heredera del reino», offsets absolutos con ca
 ### Próximo paso
 
 Ampliar la extracción a aposiciones con incisos y complementos relativos, manteniendo separadas la extracción de frase, la atribución candidata y la confirmación editorial. También será necesario evaluar falsos positivos sobre prosa literaria real antes de ampliar la gramática.
+
+ 
+## Endurecimiento de validación y exhaustividad — 26 de noviembre de 2026
+
+La extracción de aposiciones ahora rechaza IDs duplicados, alias vacíos, alias equivalentes tras normalización y alias que exceden 256 unidades UTF-16. Se limita a 100 alias por entidad. Los nombres canónicos también deben respetar ese máximo de longitud. Antes, los alias inválidos se filtraban silenciosamente, lo que podía ocultar datos defectuosos del perfil.
+
+Se elimina el truncamiento silencioso por `maxCandidates`: si aparece una propuesta adicional al límite, la función lanza un error explícito y no devuelve una muestra que pudiera confundirse con el conjunto completo. La ordenación final es textual (inicio, fin y luego ID de entidad), independiente del orden de entrada de las entidades.
+
+Se añaden regresiones para IDs duplicados, alias inválidos/equivalentes, exceso de resultados y orden cronológico determinista. Estas pruebas quedan incorporadas al archivo de test; su ejecución debe verificarse en CI.

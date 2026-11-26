@@ -93,12 +93,15 @@ export class LiteraryEngine {
   initializeProject(identity: ProjectIdentity): void {
     if (!identity || typeof identity.projectId !== "string" ||
         typeof identity.projectName !== "string" ||
-        !identity.projectId.trim() || !identity.projectName.trim()) {
+        !identity.projectId.trim() || !identity.projectName.trim() ||
+        (identity.deviceId !== undefined &&
+          (typeof identity.deviceId !== "string" || !identity.deviceId.trim() || identity.deviceId.length > 256))) {
       throw new Error("El anfitrión debe proporcionar projectId y projectName.");
     }
     if (this.project && (this.project.projectId !== identity.projectId ||
         this.project.projectName !== identity.projectName ||
-        this.project.writerId !== identity.writerId)) {
+        this.project.writerId !== identity.writerId ||
+        this.project.deviceId !== identity.deviceId)) {
       throw new Error("La identidad de esta instancia es inmutable; cree otra instancia para otro proyecto o escritor.");
     }
     this.project = Object.freeze({ ...identity });
@@ -502,7 +505,34 @@ export class LiteraryEngine {
     nextBuffer.replace(change.start, change.end, change.replacement);
     const nextRevision = document.revision + 1;
     try {
-      if (this.options.store.appendChange) {
+      if (project.deviceId) {
+        const appendAndEnqueue = this.options.store.appendChangeAndEnqueueSyncOperation;
+        if (!appendAndEnqueue) {
+          throw new Error(
+            "La sincronización está habilitada para este dispositivo, pero el almacén no ofrece persistencia atómica de journal y outbox."
+          );
+        }
+        const operationId = globalThis.crypto?.randomUUID?.();
+        if (!operationId) {
+          throw new Error("No hay un generador criptográfico UUID disponible para identificar la operación de sincronización.");
+        }
+        const journalEntry: StoredChange = {
+          ...change,
+          projectId: project.projectId,
+          committedRevision: nextRevision,
+          committedAt: Date.now()
+        };
+        // El cambio de texto y su operación replicable se confirman en la
+        // misma transacción. El almacén asigna la secuencia global del dispositivo.
+        await appendAndEnqueue.call(this.options.store, journalEntry, {
+          operationId,
+          projectId: project.projectId,
+          deviceId: project.deviceId,
+          kind: "document.change",
+          payload: JSON.stringify({ version: 1, change: journalEntry }),
+          createdAt: journalEntry.committedAt
+        });
+      } else if (this.options.store.appendChange) {
         const journalEntry: StoredChange = {
           ...change,
           projectId: project.projectId,

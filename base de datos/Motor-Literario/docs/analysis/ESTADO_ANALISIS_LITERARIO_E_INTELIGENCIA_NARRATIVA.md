@@ -752,3 +752,18 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 **Validación CI:** la ejecución de integración de este módulo queda pendiente de resultado. No debe contabilizarse como aprobada hasta completar comprobación de tipos, pruebas y compilación.
 
 
+
+## Descubrimiento de hablantes en discurso directo
+
+**Nuevo módulo:** `typescript/src/narrative-dialogue-speaker-discovery.ts`. Añade una capa específica para localizar intervenciones de discurso directo y recuperar atribuciones explícitas de hablante desde el propio texto. Reconoce citas con comillas angulares (`« »`), comillas curvas (`“ ”`), comillas rectas (`" "`), y líneas iniciadas con raya de diálogo (`—`).
+
+**Criterio de atribución:** una intervención solo recibe candidatos de hablante cuando la etiqueta contigua contiene simultáneamente un verbo de habla reconocido y una mención explícita de una entidad conocida. Se contemplan etiquetas antes y después de la cita y atribuciones de cierre en líneas con raya. Si aparecen varios personajes en la etiqueta, el resultado es `ambiguous`; si no hay verbo de habla y nombre vinculados, es `unattributed`. Nunca se asigna automáticamente el turno por alternancia, proximidad de párrafos, presencia en escena ni por aparecer el personaje dentro de sus propias palabras.
+
+**Evidencia:** cada segmento conserva texto literal de la intervención, delimitadores, mención nominal del posible hablante, forma verbal de habla y fragmento de atribución. Los offsets son absolutos UTF-16 y admiten `baseOffset`. La capa devuelve candidatos revisables, no hechos de diálogo confirmados.
+
+**Límites deliberados:** esta primera versión reconoce discurso directo delimitado y etiquetas locales. No resuelve narración indirecta, estilo indirecto libre, voces sin nombre, alias no registrados, intervenciones sin delimitadores, identificación por contexto conversacional, destinatarios implícitos, ironía ni cambios de hablante deducidos por turnos. La lista de verbos de habla es léxica y ampliable; no sustituye un análisis sintáctico completo. Las citas anidadas y convenciones tipográficas no contempladas requieren revisión.
+
+**Pruebas añadidas:** atribución anterior y posterior a citas, etiqueta con varios personajes, abstención sin etiqueta, intervención con raya, offsets UTF-16 con emoji, límites y validación de entidades, y exclusión de verbos que aparecen dentro del contenido citado para impedir atribuciones falsas.
+
+**Validación CI:** pendiente de la ejecución disparada por los commits del módulo, pruebas y exportación. No marcar como aprobada hasta que TypeScript, compilación y conjunto automatizado finalicen correctamente.
+

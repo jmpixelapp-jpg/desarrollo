@@ -940,3 +940,27 @@ Los tres fallos se concentran en `restoreCheckpoint()` y devuelven `ReferenceErr
 En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45746447994), el typecheck pasó, pero la suite general terminó con 748/754 aprobadas y 6 fallidas: las cuatro anteriores, el archivo de regresiones de diagnóstico por la ruta del bundle y una regresión del módulo de integridad narrativa.
 
 **Coordinación:** después de esa ejecución, `main` recibió `df9750c` (revalidación de fencing y leases) y `daeb8bd` (conteo correcto de tarjetas frente a elementos de métricas). No se modifican esos archivos desde esta entrega. Esta corrección restaura compatibilidad de la misma suite de diagnóstico con `npm test`.
+
+## 53. Endurecimiento de diagnósticos y validación integral verde (25 de noviembre de 2026)
+
+**Entrega de código:** `cea6c545c4771d31dc07b17fffe1c3ec192973d0` (normalización defensiva de diagnósticos); `1edb3e8277462ded6793f505bfcc852d19538b23` (corrección de fixture de regresión); `71d6144c820512ce5989be17d03e6cdc88d6ccdb` (fallback de importación para compatibilidad entre las lanes).
+
+**Cambios funcionales verificados:**
+- El lector del panel copia y congela los diagnósticos recibidos del anfitrión; no conserva proxies ni objetos mutables externos.
+- Estados de checkpoint/lease, timestamps, fencing token y códigos de error se validan antes de presentar la información.
+- Getters/proxies que fallan se reducen a diagnóstico no disponible y no interrumpen las métricas.
+- La suite de regresiones usa `dist-monitor` en la lane focalizada y recurre a `dist` durante `npm test`, evitando duplicar archivos o cambiar scripts generales.
+
+**CI específica del monitor:** [run 45746701123](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45746701123), commit `71d6144`: terminó en éxito. Bundle aislado y sus 8 pruebas aprobados; instalación de Chromium y auditoría de esquema aprobadas; build general aprobado; suite del monitor **167/167**, 0 fallidas; benchmark de heap aprobado.
+
+**CI general TypeScript:** [run 45746700879](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45746700879), el mismo commit `71d6144`: terminó en éxito. Typecheck aprobado; suite completa **761/761**, 0 fallidas; benchmark general y benchmark del monitor aprobados.
+
+**Medición del benchmark del monitor (Node.js v22.23.5, runner CI):**
+- 8 documentos; 1.048.576 unidades UTF-16 iniciales por documento.
+- 12.500 cambios confirmados por documento; 100.000 commits en total.
+- 167.437,39 commits/s; tiempo total 597,24 ms.
+- Heap: 5,21 MB antes; 5,58 MB tras abrir sesiones; 5,69 MB a mitad y al final de la carga.
+- Heap retenido por sesiones abiertas: 0,48 MB; crecimiento de mitad a carga completa: 0 MB.
+- RSS al final: 75,33 MB; los ocho documentos terminaron con 12.500 commits y 0 pendientes.
+
+**Límite:** las cifras de heap/RSS son del proceso Node del runner, no medición física de Chromium ni del editor en producción. El resultado confirma que el estado del monitor permanece acotado en el escenario de carga medido; no sustituye un soak físico de navegador durante horas.

@@ -285,3 +285,11 @@ La regresión aislada valida copia inmutable frente a mutación del origen, gett
 `tests/live-author-monitor-diagnostics-isolation.test.mjs` intenta importar primero `dist-monitor/live-author-monitor.js`, creado por la lane focalizada. Si ese bundle no está presente (por ejemplo, durante `npm test`, que solo construye `dist/`), la suite cae al bundle general `dist/motor-literario.js`.
 
 Así se conserva una única fuente de regresiones sin exigir a `npm test` que altere sus artefactos o scripts. En CI focalizada, el primer import debe funcionar; en CI general se usa la salida principal.
+
+## 18. Última validación verde y línea base de heap
+
+Las ejecuciones [Live Author Monitor — run 45746701123](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45746701123) y [Motor Literario TypeScript — run 45746700879](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45746700879) terminaron en éxito sobre `71d6144`. La suite específica pasó 167/167; la suite general pasó 761/761. Ambos workflows completaron sus pasos de compilación/typecheck y benchmarks.
+
+El benchmark específico informó, en Node.js v22.23.5: 8 documentos de 1.048.576 unidades UTF-16, 100.000 commits, 167.437,39 commits/s, 0,48 MB retenidos por sesiones abiertas, 0 MB de crecimiento de heap entre mitad y carga completa y 75,33 MB de RSS final. Todos los documentos quedaron con 12.500 commits y 0 pendientes.
+
+Estos valores describen el runner Node y deben usarse como línea base comparativa del mismo entorno. No equivalen al heap ni al RSS del navegador Chromium/host de producción.

@@ -207,7 +207,12 @@ export function mountLiveAuthorMonitorEditorTransactions(
     },
 
     dispose: (): void => {
-      if (disposed) return;
+      if (disposed) {
+        // La primera limpieza puede haber encontrado un disposer del proveedor
+        // temporalmente fallido; permitir llamadas repetidas para reintentarla.
+        try { binding(); } finally { source.dispose(); }
+        return;
+      }
       if (binding.getPendingChanges().length > 0) {
         throw new Error(
           "No se puede desmontar el monitor mientras existan cambios sin admitir; reintente la cola o resincronice antes de disponer la integración."

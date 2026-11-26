@@ -19,7 +19,7 @@ if (!(editor instanceof HTMLTextAreaElement) ||
 const MAX_TRACE_ITEMS = 2_000;
 const events = [];
 const deltas = [];
-let eventCountTotal = 0;
+let traceEntryCount = 0;
 let droppedEventCount = 0;
 let droppedDeltaCount = 0;
 let source;
@@ -59,7 +59,11 @@ const pairingCounters = {
   unmatchedBeforeInputCount: 0,
   orphanInputCount: 0,
   inputTypeMismatchCount: 0,
-  defaultPreventedBeforeInputCount: 0
+  defaultPreventedBeforeInputCount: 0,
+  inputDataMatchCount: 0,
+  inputDataMismatchCount: 0,
+  inputDataOneSidedCount: 0,
+  inputDataUnavailableCount: 0
 };
 
 function safeDataLength(event) {
@@ -83,12 +87,14 @@ function correlateInputEvent(entry, event) {
     if (pendingBeforeInput) {
       pairingCounters.unmatchedBeforeInputCount += 1;
       pendingBeforeInput.entry.pairStatus = "superseded-by-next-beforeinput";
+      pendingBeforeInput.inputData = null;
     }
 
     const pairId = ++beforeInputSequence;
     entry.pairId = pairId;
     if (entry.defaultPrevented === true) {
       entry.pairStatus = "default-prevented";
+      entry.dataComparison = "not-applicable";
       pairingCounters.defaultPreventedBeforeInputCount += 1;
       pendingBeforeInput = undefined;
     } else {
@@ -96,6 +102,7 @@ function correlateInputEvent(entry, event) {
       pendingBeforeInput = {
         pairId,
         inputType: entry.inputType,
+        inputData: typeof event.data === "string" ? event.data : null,
         entry
       };
     }
@@ -133,17 +140,37 @@ function correlateInputEvent(entry, event) {
       pending.entry.pairStatus = "paired";
     }
   }
+
+  // Se comparan los valores exactos en memoria, pero solo se exporta el
+  // resultado de la comparación. Los strings se liberan al cerrar el par.
+  const inputData = typeof event.data === "string" ? event.data : null;
+  if (pending.inputData !== null && inputData !== null) {
+    const matches = pending.inputData === inputData;
+    entry.dataComparison = matches ? "match" : "mismatch";
+    pending.entry.dataComparison = entry.dataComparison;
+    if (matches) pairingCounters.inputDataMatchCount += 1;
+    else pairingCounters.inputDataMismatchCount += 1;
+  } else if (pending.inputData !== null || inputData !== null) {
+    entry.dataComparison = "one-sided";
+    pending.entry.dataComparison = "one-sided";
+    pairingCounters.inputDataOneSidedCount += 1;
+  } else {
+    entry.dataComparison = "unavailable";
+    pending.entry.dataComparison = "unavailable";
+    pairingCounters.inputDataUnavailableCount += 1;
+  }
+  pending.inputData = null;
   pendingBeforeInput = undefined;
 }
 
 function recordEvent(event) {
-  eventCountTotal += 1;
+  traceEntryCount += 1;
   if (event.isTrusted === true) eventCounters.trustedEventCount += 1;
   else eventCounters.untrustedEventCount += 1;
 
   const target = event.currentTarget;
   const entry = {
-    index: eventCountTotal,
+    index: traceEntryCount,
     atMs: Number(performance.now().toFixed(3)),
     type: event.type,
     inputType: typeof event.inputType === "string" ? event.inputType : null,
@@ -167,11 +194,11 @@ function recordEvent(event) {
 }
 
 function recordError(error) {
-  eventCountTotal += 1;
+  traceEntryCount += 1;
   eventCounters.monitorErrorCount += 1;
   errorCodeCounts[error.code] = (errorCodeCounts[error.code] ?? 0) + 1;
   appendTraceEntry({
-    index: eventCountTotal,
+    index: traceEntryCount,
     atMs: Number(performance.now().toFixed(3)),
     type: "monitor-error",
     code: error.code
@@ -193,7 +220,7 @@ function render() {
     elapsedMs: startedAt === undefined ? 0 : Math.round(performance.now() - startedAt),
     baselineLengthUtf16,
     currentLengthUtf16: editor.value.length,
-    totalEventCount: eventCountTotal,
+    traceEntryCount,
     retainedEventCount: events.length,
     droppedOldestEvents: droppedEventCount,
     droppedOldestDeltas: droppedDeltaCount,
@@ -285,7 +312,7 @@ exportButton.addEventListener("click", () => {
     },
     baselineLengthUtf16,
     finalLengthUtf16: editor.value.length,
-    eventCountTotal,
+    traceEntryCount,
     retainedEventCount: events.length,
     droppedEventCount,
     totalDeltaCount: deltaCounters.total,
@@ -311,6 +338,10 @@ window.addEventListener("pagehide", () => {
   if (source && !disposed) {
     disposed = true;
     source.dispose();
+  }
+  if (pendingBeforeInput) {
+    pendingBeforeInput.inputData = null;
+    pendingBeforeInput = undefined;
   }
 });
 

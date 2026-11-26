@@ -5769,7 +5769,14 @@ export class IndexedDbProjectStore implements ProjectStore {
             }
           }
           try {
-            checkpointStore.put(structuredClone(checkpoint));
+            const checkpointWrite = checkpointStore.put(structuredClone(checkpoint));
+            checkpointWrite.onerror = () => {
+              // Preservamos el error original del request (por ejemplo,
+              // QuotaExceededError o DataCloneError) para el diagnóstico del host.
+              failure = checkpointWrite.error ??
+                new Error("No se pudo persistir el checkpoint del monitor.");
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            };
           } catch (error) {
             failure = error instanceof Error ? error : new Error("No se pudo clonar el checkpoint.");
             try { transaction.abort(); } catch { /* transacción ya abortada */ }

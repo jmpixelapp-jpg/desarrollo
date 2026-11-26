@@ -236,3 +236,25 @@ La siguiente auditoría debe recorrer `narrative-book-ingestion.ts` desde sus en
 ---
 
 **Nota de rigor:** este documento registra hallazgos verificables del árbol, fuentes y documentación inspeccionados. Donde no se ejecutó código o no se rastreó un flujo completo, se indica como pendiente de validación; no convierte planes o comentarios de README en capacidades operativas.
+
+
+## 13. Incidencia de compilación detectada durante la auditoría
+
+Al consultar los logs del workflow **Motor Literario TypeScript** para el commit anterior `12c3f700e6b33676fff9b0bea93eac2a38ee7bdc`, la ejecución `45818042422` terminó con fallo en `npm run typecheck`. Las pruebas automatizadas y el benchmark quedaron omitidos porque el typecheck falló primero.
+
+El log identifica estos errores concretos:
+
+1. `narrative-action-claim-comparison.ts` (líneas 190–191): se accede a `polarityEvidence`, propiedad que no existe en el tipo `NarrativeObservationCandidate`.
+2. `narrative-character-knowledge-discovery.ts` (línea 92): parámetro `alias` con tipo implícito `any`.
+3. `narrative-evidence-context-expansion.ts` (línea 65): parámetro `x` con tipo implícito `any`.
+4. `narrative-information-concealment-discovery.ts` (línea 97): parámetro `alias` con tipo implícito `any`.
+5. `narrative-information-exposure-discovery.ts` (línea 80): parámetro `alias` con tipo implícito `any`.
+6. `narrative-information-reception-discovery.ts` (línea 118): parámetro `alias` con tipo implícito `any`.
+7. `narrative-knowledge-dialogue-link.ts` (línea 144): incompatibilidad con `exactOptionalPropertyTypes`; `sourceEntityId` puede ser `undefined` aunque el contrato del objeto exige `string`.
+8. `narrative-relationship-transition-discovery.ts` (línea 118): parámetro `alias` con tipo implícito `any`.
+
+Esto cambia la lectura del estado de validación: aunque existe una ejecución histórica verde de 718 pruebas en otro commit, **el HEAD `12c3f700...` no supera actualmente el chequeo de tipos**. No es correcto declarar validada la versión actual por referencia a aquella ejecución histórica.
+
+La ejecución disparada por la auditoría sobre `79a630c95e431943fe4e1aca39bc09b3d4fcbc56` seguía en curso al actualizar esta sección; debe consultarse antes de afirmar el resultado de ese commit. La siguiente tarea de código debe corregir los errores de tipos en su origen, ejecutar typecheck, pruebas y benchmark, y revisar que las correcciones no debiliten los contratos de evidencia ni los límites de validación.
+
+Ejecución fallida y logs: https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45818042422

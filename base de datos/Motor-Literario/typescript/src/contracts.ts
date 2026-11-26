@@ -83,6 +83,23 @@ export interface CommitResult {
   readonly reason?: string;
 }
 
+/**
+ * Operación durable pendiente de transporte. El payload es JSON serializado
+ * para mantener el contrato independiente de proveedores de red.
+ */
+export interface StoredSyncOperation {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  readonly sequence: number;
+  readonly kind: string;
+  readonly payload: string;
+  readonly createdAt: number;
+  readonly attemptCount: number;
+  readonly lastAttemptAt?: number;
+  readonly lastErrorCode?: string;
+}
+
 export interface StoredDocument extends DocumentSnapshot {
   readonly projectId: string;
   readonly updatedAt: number;
@@ -255,6 +272,17 @@ export interface ProjectStore {
     link: DictionaryEntryEntityLink,
     linked: boolean
   ): Promise<void>;
+
+  /** Última secuencia durable aceptada para un proyecto/dispositivo; cero si aún no hay operaciones. */
+  loadLastSyncOperationSequence?(projectId: string, deviceId: string): Promise<number>;
+  /** Encola una operación idempotente para sincronización posterior. */
+  enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
+  /** Lee pendientes sin eliminarlos; el acuse remoto es quien autoriza retirarlos. */
+  loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
+  /** Registra un intento de transporte fallido o no confirmado. */
+  recordSyncOperationAttempt?(operationId: string, attemptedAt: number, error?: string): Promise<boolean>;
+  /** Retira una operación solo después de un acuse remoto durable. */
+  acknowledgeSyncOperation?(operationId: string): Promise<boolean>;
 
   saveDocument(document: StoredDocument): Promise<void>;
   loadDocument(projectId: string, documentId: string): Promise<StoredDocument | undefined>;

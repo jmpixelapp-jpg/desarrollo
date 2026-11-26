@@ -47,12 +47,6 @@ const HOSTILE = new Set([
   "atacó", "ataca", "atacaba", "mató", "mata", "mataba"
 ]);
 
-function invert(valence: NarrativeInteractionValence): NarrativeInteractionValence {
-  if (valence === "supportive") return "hostile";
-  if (valence === "hostile") return "supportive";
-  return valence;
-}
-
 /** Extrae señales de interacción únicamente de acciones personaje → personaje. */
 export function extractNarrativeCharacterInteractions(
   actions: readonly NarrativeActionCandidate[],
@@ -106,7 +100,7 @@ export function extractNarrativeCharacterInteractions(
       action: action.action,
       valence: baseValence,
       polarity: action.polarity,
-      effectiveSignal: action.polarity === "negated" ? invert(baseValence) : baseValence,
+      effectiveSignal: action.polarity === "negated" ? "neutral-or-unknown" : baseValence,
       reviewStatus: "candidate",
       evidence: action.evidence
     });

@@ -1779,3 +1779,9 @@ Se hizo idempotente el método central de fallo del adaptador: si binding y call
 **Documentación operativa:** LIVE_AUTHOR_MONITOR_OPERATIONS.md, sección 25, define el orden obligatorio y la prohibición de reactivar la captura antes de que resynchronize() termine correctamente.
 
 **Validación:** los cambios de implementación, pruebas y documentación están publicados en main. No hay confirmación de CI para estos commits y no se declara una nueva suite aprobada.
+
+## Cierre terminal separado de la pausa recuperable — 26 de noviembre de 2026
+
+Se corrigió el desmontaje de la integración TextArea: primero se dispone la fuente nativa y después se cierra el binding. Esto evita que una cancelación intencional seguida de destrucción de la fuente se registre como un incidente resync-required. La regresión de la integración verifica que dispose() no añada errores de captura tras una sesión correcta y que se limpien listeners y suscripciones de reintento.
+
+La pausa temporal sigue invalidando continuidad y exige snapshot; el cierre definitivo no intenta recuperación. Se documentó la distinción en LIVE_AUTHOR_MONITOR_OPERATIONS.md, sección 26.

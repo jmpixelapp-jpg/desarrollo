@@ -337,3 +337,10 @@ Se amplió `reconcileNarrativeDocumentProjections` para detectar relaciones cuyo
 Se añadieron pruebas con datos deliberadamente inconsistentes y una comprobación de que el diagnóstico no modifica ninguna tabla. Estas referencias no se reparan automáticamente porque no existe una identidad fuente fiable para decidir cómo resolverlas.
 
 **Pendiente:** ejecutar typecheck y suite completa en Node 22+.
+
+
+## Propuestas conservadoras de reparación
+
+Se añadió `proposeNarrativeReferenceRepairs(store, report)`. La función sólo propone redirigir referencias a entidades cuando el ID perdido aparece como origen de fusión en exactamente una entidad del mismo proyecto (`mergedFromIds`). Sin coincidencia o con coincidencias ambiguas, exige revisión manual. No modifica el grafo y no aplica heurísticas para resolver vínculos entre ideas.
+
+Se añadieron pruebas para correspondencia explícita, ausencia de correspondencia y ausencia de mutaciones. **Pendiente:** ejecutar typecheck y suite completa en Node 22+; todavía no se dispone de resultado de CI.

@@ -74,3 +74,14 @@ test("no asigna fechas inválidas ni elige entre referencias temporales múltipl
   });
   assert.equal(ambiguous[0].timeReference, undefined);
 });
+
+
+test("acepta formato de fecha numérica español cuando el calendario es válido", () => {
+  const events = extractNarrativeEventCandidates({
+    ...context, text: "El 29/02/2024 Mara encontró la Espada Solar."
+  });
+  assert.deepEqual(events[0].timeReference, {
+    basis: "calendar", precision: "date", raw: "29/02/2024",
+    orderValue: Math.floor(Date.UTC(2024, 1, 29) / 86400000)
+  });
+});

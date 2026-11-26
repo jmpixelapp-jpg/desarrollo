@@ -61,3 +61,10 @@ test("rechaza duplicados y proyectos ajenos",()=>{
  assert.throws(()=>link({projectId:"book",knowledgeCandidates:[t,t],dialogueSegments:[]}));
  assert.throws(()=>link({projectId:"book",knowledgeCandidates:[t],dialogueSegments:[{...dialogue("d1"),projectId:"other"}]}));
 });
+
+test("no considera coincidencia que la proposición sea solo un fragmento del turno",()=>{
+ const r=link({projectId:"book",knowledgeCandidates:[transfer()],dialogueSegments:[
+  dialogue("d1","explicit-single","bruno","La llave está")
+ ]});
+ assert.equal(r[0].status,"utterance-does-not-repeat-proposition");
+});

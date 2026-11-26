@@ -416,3 +416,20 @@ El pipeline acepta `priorMemoryEvents` y devuelve `characterMemoryTimelines`; el
 **Límites:** la línea temporal solo proyecta expresiones léxicas detectadas; no diagnostica pérdida de memoria, no demuestra la veracidad del recuerdo, no infiere qué información quedó borrada ni interpreta el silencio como olvido. El historial original permanece intacto aunque la proyección actual cambie.
 
 **Validación:** los cambios y pruebas están publicados; no se afirma que build, TypeScript o suite hayan pasado sin ejecución real en el head.
+
+## Fase Y: vínculos explícitos entre memoria y acción
+
+Se incorpora `typescript/src/narrative-memory-action-links.ts` con `linkNarrativeMemoryToActions(input)`. El módulo relaciona un evento de memoria con una acción posterior únicamente cuando ambos pertenecen al mismo personaje, proyecto, documento y revisión, y están dentro de una ventana textual acotada.
+
+La salida distingue:
+- `explicit-causal-link`: existe un conector causal literal entre el recuerdo y la acción (por ejemplo, «por eso», «por ello», «debido a que» o «porque»).
+- `temporal-cooccurrence`: existe una marca de secuencia temporal («después», «entonces», «luego», «más tarde») o ambos hechos aparecen en la misma oración sin un conector causal reconocido.
+- `unresolved`: la proximidad no permite establecer una relación más precisa.
+
+Se conservan por separado la evidencia del recuerdo, la acción y el conector. Solo se enlazan acciones afirmadas y recuerdos/recuperaciones explícitos del mismo actor; los eventos de olvido no se reinterpretan como recuerdos. El pipeline publica el resultado como `memoryActionLinks`, valida el tamaño de `priorMemoryEvents` y el módulo se exporta desde el índice público.
+
+Se añaden pruebas de integración para causalidad explícita, secuencia temporal, actor distinto, recuerdo negado, offsets absolutos y proximidad entre oraciones sin conector causal.
+
+**Límites:** no se deduce causalidad a partir de la mera sucesión. Una relación temporal o una coincidencia en la misma oración no prueba que el recuerdo haya motivado la acción. La detección depende de conectores españoles explícitos y del extractor actual de acciones actor → verbo → objetivo; no cubre acciones intransitivas ni sujetos omitidos. La salida sigue siendo candidata y revisable.
+
+**Validación:** los cambios y pruebas están publicados en la rama. No se afirma que TypeScript, build o suite hayan pasado sin ejecutar comprobaciones reales sobre el head actualizado.

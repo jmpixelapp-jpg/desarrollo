@@ -622,3 +622,385 @@ Estas capacidades no se considerarán terminadas solo por mostrar ejemplos o pro
 10. Documentación de límites, falsos positivos, falsos negativos y dependencias externas.
 
 **Nota de estado:** esta ampliación registra requisitos funcionales y reglas de interacción solicitadas. No significa que la revisión editorial avanzada, la detección fiable de cabos sueltos ni el verificador semántico de retos estén implementados. Deben diseñarse, implementarse y validarse como capacidades separadas e invocables por el usuario.
+
+
+---
+
+# Alcance global aprobado para diseño: plataforma integral de inteligencia literaria, narrativa, lingüística, editorial y visual
+**Estado: alcance funcional aprobado por el usuario para su incorporación al plan del producto. Las capacidades nuevas aquí enumeradas son requisitos por diseñar e implementar; no se declaran existentes ni verificadas por el hecho de documentarlas.**
+
+## 1. Visión del producto
+
+El objetivo es evolucionar el motor hacia una plataforma modular capaz de leer y preparar libros, recuperar información explícita e implícita con evidencias, analizar obras y proyectos, asistir al escritor, verificar consignas, traducir y producir recursos editoriales y visuales cuando el usuario lo solicite.
+
+No será un agente autónomo que decide qué tarea realizar. Será un conjunto de capacidades invocables desde la aplicación anfitriona mediante botones, comandos o solicitudes expresas. El usuario conserva el control de la operación, su alcance y la aceptación de cualquier cambio.
+
+La lectura, ingesta y preparación interna del libro constituyen el flujo inicial para que el contenido esté disponible. No autorizan por sí mismas la ejecución de traducciones, correcciones, reescrituras, generación de imágenes, mapas, ampliaciones creativas, publicaciones ni otras operaciones.
+
+## 2. Principios transversales obligatorios
+
+1. **Ejecución bajo demanda:** ninguna tarea especializada se inicia sin una acción explícita del usuario. La disponibilidad de una capacidad no implica su ejecución automática.
+2. **No destructividad:** conservar el original; generar resultados derivados y aplicar modificaciones solo tras autorización expresa.
+3. **Alcance controlable:** permitir operar sobre una selección, párrafo, escena, capítulo, libro, saga o proyecto completo, según el contrato de cada función.
+4. **Procedencia:** cada dato, hallazgo, sugerencia e inferencia debe enlazarse con las evidencias y versiones de origen cuando sea posible.
+5. **Separación epistemológica:** distinguir hechos explícitos, inferencias, hipótesis, propuestas creativas aprobadas y datos externos.
+6. **Incertidumbre honesta:** no presentar una conjetura como certeza; permitir «no concluyente» o «no verificable».
+7. **Explicabilidad:** mostrar por qué se generó un resultado, qué fragmentos lo respaldan y cuáles son sus límites.
+8. **Control editorial:** el autor puede aceptar, rechazar, corregir, aplazar o versionar propuestas.
+9. **Coherencia compartida:** los módulos consultan un modelo común de personajes, lugares, acontecimientos, objetos, conceptos, idiomas, cronología y relaciones.
+10. **Aislamiento y seguridad de proyectos:** los datos de una obra no deben contaminar otra; respetar permisos, límites y separación por proyecto.
+11. **Trazabilidad de operaciones:** registrar solicitud, parámetros, alcance, versión de entrada, dependencias, resultado y decisión del usuario.
+12. **Dependencias explícitas:** identificar proveedores externos necesarios para OCR, modelos lingüísticos, traducción, generación visual, renderizado, audio o investigación.
+13. **Calidad medible:** cada módulo necesita pruebas, corpus, métricas, límites conocidos y criterios de aceptación propios.
+14. **Sin promesas absolutas:** las evaluaciones literarias y semánticas son interpretativas; deben expresar evidencias y confianza calibrada, no garantías infundadas.
+
+## 3. Módulos principales del producto
+
+### 3.1. Ingesta, lectura y reconstrucción documental
+
+Soportar, por etapas y con matriz explícita de compatibilidad: EPUB, PDF digital, PDF escaneado, DOCX, TXT, HTML y Markdown. Evaluar formatos adicionales sin prometerlos antes de implementar adaptadores.
+
+Funciones requeridas:
+
+- Detectar formato, codificación, idioma, estructura y metadatos.
+- Extraer texto y estructura de capítulos, partes, secciones, títulos, subtítulos, párrafos, listas, tablas, notas, citas, encabezados y pies.
+- Procesar PDF escaneados mediante OCR, orden de lectura, detección de columnas y reconstrucción de bloques.
+- Reconocer texto en imágenes cuando se solicite o sea necesario para la lectura.
+- Reconstruir párrafos cortados entre páginas y detectar palabras partidas por guiones de final de línea.
+- Distinguir contenido literario de índice, bibliografía, créditos, publicidad y elementos editoriales.
+- Reconocer diálogos, cartas, diarios, mensajes, documentos insertados, poemas, versos y formatos mixtos.
+- Detectar páginas, capítulos o bloques ausentes, duplicados, corruptos o desordenados.
+- Preservar coordenadas de origen: archivo, página, capítulo, bloque, rango y versión.
+- Registrar confianza del OCR y permitir corregir errores de reconocimiento.
+- Mantener texto original y representación normalizada sin perder correspondencia.
+- Admitir libros con estructura irregular, fragmentaria, no lineal o sin capítulos convencionales.
+
+**Criterio clave:** la extracción debe ser verificable y recuperable; no basta con obtener una cadena de texto. Se debe conservar la relación entre texto extraído y ubicación en la fuente.
+
+### 3.2. Comprensión lingüística y semántica
+
+- Detección de idioma y cambios de idioma dentro de una obra.
+- Análisis morfológico, gramatical, sintáctico y semántico.
+- Identificación de entidades, sujetos, acciones, objetos, atributos y relaciones.
+- Resolución de pronombres, elipsis, referencias indirectas, alias, apodos y títulos.
+- Desambiguación contextual de palabras y expresiones.
+- Interpretación de negación, modalidad, condición, hipótesis, ironía, sarcasmo, metáfora y doble sentido.
+- Reconocimiento de modismos, regionalismos, arcaísmos y terminología especializada.
+- Detección de términos inventados, nombres propios y vocabulario de universos ficticios.
+- Análisis de referencias temporales, espaciales y causales.
+- Distinción entre afirmaciones explícitas, implicaciones plausibles y lecturas alternativas.
+- Soporte multilingüe incremental, con perfiles de calidad por idioma y variante.
+
+No se prometerá comprensión perfecta de todos los idiomas. Para cada idioma se documentarán recursos, cobertura, limitaciones y resultados de evaluación.
+
+### 3.3. Extracción y recuperación profunda de conocimiento
+
+Extraer y relacionar, con evidencia:
+
+- Personajes, protagonistas, antagonistas, secundarios y menciones incidentales.
+- Animales, mascotas, criaturas y especies.
+- Lugares, edificios, regiones, países y elementos geográficos.
+- Objetos, armas, herramientas, artefactos, vehículos y máquinas.
+- Acontecimientos, acciones, decisiones, consecuencias y estados.
+- Relaciones familiares, sociales, sentimentales, políticas, económicas y de conflicto.
+- Ideas, conceptos, argumentos, temas, símbolos y afirmaciones.
+- Objetivos, motivaciones, temores, secretos, promesas y conocimientos.
+- Fechas, edades, cantidades, medidas, distancias y duraciones.
+- Culturas, costumbres, instituciones, organizaciones, religiones y sistemas políticos.
+- Reglas físicas, mágicas, tecnológicas y sociales del mundo narrativo.
+
+La recuperación debe operar desde la mención puntual hasta el contexto global del libro o saga. Debe localizar información distribuida en capítulos distintos, resolver referencias candidatas sin fusionar identidades ambiguas de manera irreversible y permitir consultas que devuelvan evidencia, contexto y grado de confianza.
+
+### 3.4. Inteligencia de personajes
+
+Fichas persistentes y versionadas para identidad, nombres, alias, apariencia, edad, voz, vocabulario, personalidad, historia, relaciones, objetivos, motivaciones, temores, creencias, secretos, conocimientos, habilidades, defectos, virtudes, contradicciones y evolución.
+
+Análisis de:
+
+- Coherencia de conducta con rasgos establecidos.
+- Evolución psicológica y emocional.
+- Cambios de motivación y decisiones.
+- Voz individual y diferenciación de diálogos.
+- Conocimiento disponible en cada punto de la cronología.
+- Presencia, ausencia, desaparición y función narrativa.
+- Relaciones y cambios de vínculo.
+- Desarrollo y resolución de arcos personales.
+
+Las inferencias psicológicas se presentarán como interpretaciones basadas en texto, no como diagnósticos clínicos.
+
+### 3.5. Inteligencia de tramas e historias
+
+- Reconstrucción de trama principal, subtramas, historias paralelas y arcos.
+- Detección de conflictos internos y externos, objetivos, obstáculos y apuestas.
+- Seguimiento de misterios, preguntas, pistas, anticipaciones, secretos y promesas narrativas.
+- Identificación de revelaciones, giros, escalamiento, consecuencias y resoluciones.
+- Detección de tramas abandonadas, contradictorias o aparentemente incompletas.
+- Identificación de finales abiertos, ambiguos, cerrados y alternativos.
+- Reconstrucción de historias no lineales a partir del orden de exposición y del orden cronológico.
+- Registro de preguntas narrativas y estado de cada una: resuelta, parcialmente resuelta, abierta intencionalmente, aparentemente olvidada o no concluyente.
+
+No se asumirá que todo misterio o personaje requiere cierre. Cada posible cabo suelto debe justificarse con evidencias de su presentación y seguimiento.
+
+### 3.6. Cronología, causalidad y continuidad
+
+- Cronologías globales y por personaje.
+- Fechas, edades, intervalos, duración de viajes y secuencia de escenas.
+- Relaciones causa-efecto y consecuencias.
+- Ubicación, desplazamientos, distancias y tiempos de recorrido.
+- Continuidad de heridas, vestuario, posesiones, objetos, estados y transformaciones.
+- Continuidad del conocimiento de cada personaje.
+- Consistencia de motivaciones, alianzas, parentescos y objetivos.
+- Consistencia de geografía, culturas, tecnología, magia e idiomas ficticios.
+- Detección de contradicciones temporales, espaciales, lógicas y de estado.
+- Tratamiento de narradores no fiables, recuerdos, sueños, flashbacks y versiones contradictorias.
+
+### 3.7. Revisión ortográfica, gramatical y editorial
+
+Revisión bajo demanda de ortografía, tildes, puntuación, gramática, concordancia, sintaxis, frases incompletas, ambigüedad, redundancia, repeticiones, muletillas, cacofonía, fluidez, diálogos, cambios de persona o tiempo verbal, consistencia de nombres y convenciones.
+
+Cada hallazgo deberá incluir ubicación, fragmento, categoría, explicación, prioridad, propuesta opcional y distinción entre error objetivo y preferencia estilística. No se aplicarán correcciones sin autorización.
+
+### 3.8. Evaluación de calidad literaria
+
+Evaluar, cuando se solicite, capacidad de atracción, originalidad, ritmo, tensión, suspenso, escenas, personajes, diálogos, descripciones, mundo, emociones, conflictos, coherencia, estructura, desarrollo temático y desenlace.
+
+Los informes deberán justificar observaciones con fragmentos y capítulos. Las puntuaciones, si se incorporan, tendrán escalas documentadas y no se presentarán como medidas objetivas universales. Incluir fortalezas, debilidades, riesgos y recomendaciones separadas de los hechos observados.
+
+### 3.9. Predicción narrativa
+
+- Hipótesis de posibles desenlaces.
+- Anticipación de conflictos, revelaciones y giros.
+- Identificación de pistas y anticipaciones.
+- Posibles evoluciones de personajes.
+- Comparación de finales alternativos y sus consecuencias.
+- Explicación de evidencias a favor y en contra de cada hipótesis.
+
+Las probabilidades solo se mostrarán cuando exista calibración empírica con corpus adecuados. De lo contrario se usarán categorías cualitativas o confianza no calibrada claramente etiquetada.
+
+### 3.10. Asistencia creativa y desbloqueo
+
+A petición expresa: lluvia de ideas, alternativas de escenas, conflictos, personajes, diálogos, giros, desenlaces, soluciones a contradicciones, expansión de conceptos y exploración de consecuencias narrativas.
+
+Las propuestas deberán respetar las restricciones seleccionadas por el autor, señalar qué elementos son nuevos y no incorporarse al canon ni al manuscrito sin aprobación.
+
+### 3.11. Verificación de retos y consignas
+
+Validar extensión, palabras, líneas, frases, párrafos, intervenciones, personajes hablantes, términos obligatorios/prohibidos, idioma, persona, tiempo verbal, formato, tema y estructura.
+
+La validación distinguirá:
+- Requisitos cuantitativos con política de conteo documentada por idioma.
+- Requisitos formales verificables.
+- Requisitos semánticos o narrativos evaluados con evidencia y confianza.
+- Condiciones ambiguas o no verificables.
+
+Debe resistir texto aleatorio, relleno, repetición mecánica y manipulación de contadores. No aprobará una consigna narrativa solo por cumplir el número de palabras. Tampoco invalidará automáticamente poesía, absurdo deliberado o experimentación si la consigna los admite.
+
+Estados posibles: cumple, no cumple y no verificable/no concluyente. Mostrar requisito, valor exigido, valor observado, método y motivo. La generación o corrección para superar un reto será una operación separada que requiere solicitud.
+
+### 3.12. Traducción literaria y producción editorial multilingüe
+
+- Traducción literal, literaria o adaptativa seleccionable.
+- Contexto global y local, voz narrativa y voz de personajes.
+- Tratamiento de modismos, humor, metáforas, juegos de palabras y referencias culturales.
+- Glosarios y memoria terminológica por obra o saga.
+- Reglas para nombres, topónimos, tratamientos y términos inventados.
+- Correspondencia bilingüe por segmento.
+- Detección de omisiones, duplicados, orden incorrecto y fragmentos sin traducir.
+- Revisión humana y regeneración selectiva.
+- Conservación/reconstrucción de estructura, estilos, márgenes, notas, imágenes, tablas, encabezados, pies e índice.
+- Exportación a EPUB, DOCX y PDF según soporte verificado.
+- Recalcular paginación y referencias cuando cambie la longitud del texto.
+
+### 3.13. Inteligencia lingüística y construcción de idiomas ficticios
+
+Comprensión multilingüe progresiva y herramientas para diseñar lenguas construidas: fonología, fonética, pronunciación, morfología, gramática, sintaxis, vocabulario, semántica, escritura, alfabetos, dialectos, registros, evolución histórica y traducción entre lenguas.
+
+Cada idioma ficticio tendrá reglas consistentes y versionadas, vocabulario, excepciones, procedencia cultural y relación con pueblos, épocas y personajes. No se considerará terminado por generar una lista de palabras.
+
+### 3.14. Cartografía y construcción de mundos
+
+Representar planetas, continentes, países, reinos, regiones, islas, fronteras, montañas, ríos, mares, biomas, climas, recursos, asentamientos, rutas y zonas históricas o militares.
+
+Tipos de mapas: físicos, políticos, históricos, climáticos, regionales, urbanos, comerciales, militares, subterráneos y temáticos. Gestionar escalas, coordenadas, orientación, distancias y relaciones espaciales cuando existan datos suficientes. Distinguir ubicaciones textuales, inferidas y creativas aprobadas.
+
+### 3.15. Ilustración y diseño visual
+
+Generación bajo demanda de retratos, cuerpos, expresiones, vestuario, animales, mascotas, criaturas, especies, objetos, armas, artefactos, herramientas, vehículos, máquinas, edificios, interiores, paisajes y escenarios.
+
+Cada entidad visual deberá disponer de identidad estable, rasgos canónicos, referencias aprobadas, vistas, versiones, estilo, contexto temporal y evidencias de origen. Debe gestionar continuidad visual y advertir contradicciones entre nuevas descripciones y referencias existentes. Requiere proveedor gráfico o motor de renderizado integrado; el núcleo TypeScript/JavaScript coordina y valida, no sustituye por sí mismo al generador.
+
+### 3.16. Atlas y enciclopedia de obra
+
+Crear a petición catálogos navegables de personajes, árboles familiares, animales, bestiarios, objetos, armas, mapas, ciudades, arquitectura, vehículos, culturas, religiones, idiomas, cronologías, acontecimientos y relaciones. Cada entrada deberá enlazar con las apariciones y evidencias del libro y con sus versiones aprobadas.
+
+### 3.17. Gestión de proyectos, versiones y sincronización
+
+- Varias obras, sagas y universos aislados.
+- Versiones de manuscritos y comparación de cambios.
+- Historial de decisiones y propuestas aceptadas/rechazadas.
+- Relaciones entre libros y continuidad de saga.
+- Identidades persistentes y referencias estables.
+- Sincronización, persistencia, recuperación y resolución de conflictos.
+- Reejecución selectiva de análisis afectados por cambios, solo cuando corresponda al flujo solicitado o a una política expresamente autorizada.
+- Trazabilidad de qué versión originó cada resultado.
+
+### 3.18. Producción y publicación editorial
+
+Bajo solicitud: portadas, contraportadas, sinopsis, índices, interiores, maquetación, EPUB, DOCX, PDF, archivos para impresión, ediciones digitales, fichas editoriales, material promocional y dossiers de presentación. Cada salida debe validarse en el formato correspondiente y conservar el vínculo con la edición fuente.
+
+## 4. Capacidades avanzadas adicionales
+
+El catálogo también contempla módulos especializados, sujetos a diseño y evaluación independientes:
+
+- **Análisis emocional:** emociones, tensión y evolución afectiva.
+- **Análisis psicológico literario:** motivaciones, conflictos internos y comportamiento ficticio; sin diagnósticos clínicos.
+- **Análisis de diálogos:** naturalidad, subtexto, intención, ritmo y voz individual.
+- **Análisis de simbolismo:** símbolos, metáforas recurrentes y posibles interpretaciones.
+- **Análisis temático:** temas principales/secundarios y su evolución.
+- **Análisis filosófico:** argumentos, dilemas, premisas y contradicciones.
+- **Análisis histórico:** coherencia con periodos y acontecimientos, diferenciando ficción deliberada.
+- **Análisis científico:** plausibilidad y consistencia interna según disciplinas pertinentes.
+- **Análisis cultural:** costumbres, instituciones, referencias y posibles anacronismos.
+- **Análisis de escenarios:** legibilidad espacial, continuidad y función dramática.
+- **Análisis orientado al lector:** claridad, accesibilidad, ritmo y dificultad de comprensión.
+- **Análisis de género literario:** convenciones y expectativas de misterio, terror, fantasía, romance, ciencia ficción, etc., sin imponer fórmulas.
+- **Accesibilidad:** estructura semántica, navegación y preparación para tecnologías de asistencia.
+- **Adaptación audiovisual:** descomposición en escenas, secuencias y guion para cine/televisión.
+- **Narrativa interactiva:** ramificaciones, decisiones, estados y finales múltiples.
+- **Diseño de videojuegos:** misiones, personajes, escenarios, objetos, reglas y progresión.
+- **Audio y narración:** preparación de audiolibros, pronunciaciones, guiones y recursos de voz.
+- **Protección de continuidad:** análisis de impacto antes de aceptar cambios que afecten otras partes.
+- **Investigación documental:** contraste con fuentes externas solo cuando se solicite, con citas, fecha y procedencia.
+- **Análisis de similitudes:** localizar coincidencias y patrones textuales con fuentes disponibles; no declarar plagio automáticamente ni emitir conclusiones legales.
+
+## 5. Arquitectura conceptual compartida
+
+La arquitectura lógica objetivo se organiza en capas:
+
+1. **Aplicación anfitriona e interfaz:** botones, comandos, selección de obra y alcance.
+2. **Coordinador de solicitudes:** valida autorización, parámetros, permisos, dependencias y alcance; despacha solo la operación solicitada.
+3. **Ingesta y preparación:** lectores de formatos, OCR, reconstrucción, segmentación, normalización y referencias de origen.
+4. **Extracción y recuperación:** análisis lingüístico, detección de entidades, resolución de referencias, extracción de relaciones y evidencias.
+5. **Motores especializados:** literario, narrativo, personajes, cronología, continuidad, editorial, retos, traducción, lingüístico, creativo, cartográfico, visual y demás módulos.
+6. **Modelo de conocimiento compartido:** entidades, relaciones, eventos, conceptos, cronologías, glosarios, coordenadas, evidencias, confianza y versiones.
+7. **Adaptadores externos:** OCR, modelos lingüísticos, traducción, generación de imágenes, renderizado, audio e investigación, cada uno detrás de contratos reemplazables.
+8. **Resultados y control del autor:** informes, propuestas, previsualizaciones, aceptación/rechazo, historial y exportaciones.
+
+Los motores no deben mantener versiones contradictorias e independientes del canon. Deben consultar y actualizar el modelo compartido mediante operaciones explícitas, validadas y versionadas. La arquitectura es una dirección de diseño, no una afirmación de que todas estas capas estén implementadas.
+
+## 6. Contrato común de resultados
+
+Siempre que corresponda, los resultados de los módulos deberán compartir campos conceptuales:
+
+- Identificador de operación y módulo.
+- Proyecto, documento y versión de entrada.
+- Alcance analizado.
+- Tipo de resultado: hecho extraído, hallazgo, inferencia, hipótesis, propuesta o artefacto generado.
+- Contenido y explicación.
+- Evidencias y rangos de origen.
+- Confianza y limitaciones.
+- Advertencias y conflictos.
+- Dependencias/proveedor y versión, si aplica.
+- Estado de revisión del usuario.
+- Historial de aceptación, rechazo o modificación.
+
+Los contratos concretos deben tiparse en TypeScript, versionarse y validarse en tiempo de ejecución en los límites de entrada/salida.
+
+## 7. Política de ejecución bajo demanda en la aplicación
+
+La aplicación debe presentar acciones explícitas y comprensibles, por ejemplo:
+
+- «Leer y preparar libro» (flujo de ingesta).
+- «Revisar ortografía».
+- «Analizar redacción».
+- «Buscar cabos sueltos».
+- «Comprobar continuidad».
+- «Evaluar calidad literaria».
+- «Predecir posibles finales».
+- «Ayudarme con esta escena».
+- «Verificar reto».
+- «Traducir libro».
+- «Crear retrato».
+- «Generar mapa».
+- «Crear atlas».
+- «Preparar edición para publicación».
+
+El botón/orden debe determinar el módulo, el documento y el alcance. No se debe inferir autorización para ejecutar otras tareas relacionadas. Por ejemplo, traducir no autoriza a ilustrar; evaluar no autoriza a reescribir; analizar no autoriza a aplicar correcciones. Si una operación necesita otra, debe declararlo y solicitar la autorización correspondiente.
+
+Las operaciones largas deberán poder mostrar estado, cancelación segura, progreso, errores y recuperación sin duplicar efectos. Los resultados deben quedar separados del manuscrito hasta que el usuario decida incorporarlos.
+
+## 8. Priorización y dependencias propuestas
+
+La implementación debe organizarse por dependencias técnicas y valor:
+
+**Fundación de datos**
+- Ingesta robusta y extracción con procedencia.
+- Segmentación y referencias estables.
+- Recuperación semántica y resolución de entidades.
+- Modelo de conocimiento compartido.
+- Contratos, versionado, permisos y coordinador bajo demanda.
+
+**Comprensión y análisis**
+- Continuidad, cronología y causalidad.
+- Personajes, acontecimientos y tramas.
+- Revisión editorial y detección de cabos sueltos.
+- Evaluación literaria y análisis avanzados.
+- Verificación de retos.
+
+**Capacidades de producción**
+- Traducción y maquetación.
+- Idiomas ficticios.
+- Creatividad asistida.
+- Cartografía e ilustración.
+- Atlas y enciclopedia.
+- Adaptaciones, audio y publicación.
+
+Esta secuencia es orientativa. Se podrán trabajar frentes en paralelo cuando las interfaces y dependencias estén definidas; no se debe iniciar una integración que dependa de contratos aún inestables.
+
+## 9. Verificación y criterios de aceptación por módulo
+
+Ningún módulo se declarará terminado por existir una función, una demostración o una imagen de ejemplo. Cada uno deberá contar con:
+
+1. Especificación funcional y límites.
+2. Contratos TypeScript documentados y validados.
+3. Implementación integrada en el repositorio y en la aplicación anfitriona.
+4. Pruebas unitarias, de integración, regresión y casos adversariales.
+5. Corpus representativo por idioma, género, formato y complejidad.
+6. Métricas de precisión, cobertura, falsos positivos y falsos negativos cuando proceda.
+7. Pruebas de rendimiento, memoria, cancelación y recuperación.
+8. Pruebas de no ejecución sin autorización y de no modificación del original.
+9. Evidencias de CI asociadas al commit exacto.
+10. Documentación de dependencias, límites y resultados no concluyentes.
+11. Revisión humana en tareas interpretativas y editoriales.
+12. Pruebas de interoperabilidad con el modelo de conocimiento y la sincronización.
+
+## 10. Riesgos y controles
+
+- **Extracción incompleta:** medir cobertura, usar OCR cuando proceda, conservar confianza y permitir inspección de fuente.
+- **Falsas identidades:** mantener candidatos separados y exigir evidencia suficiente para fusionar.
+- **Falsos cabos sueltos:** distinguir misterio intencional, ambigüedad y olvido probable.
+- **Evaluación subjetiva:** justificar observaciones y no vender puntuaciones como verdades universales.
+- **Traducción con omisiones:** verificar cobertura y correspondencia de segmentos.
+- **Deriva visual:** reutilizar referencias aprobadas y registrar versiones.
+- **Contaminación del canon:** separar propuestas creativas de hechos aprobados.
+- **Acciones no solicitadas:** pruebas explícitas del coordinador y permisos por operación.
+- **Dependencia de proveedores:** adaptadores reemplazables, límites documentados y manejo de indisponibilidad.
+- **Exceso de alcance:** entregar por módulos, con criterios de cierre y estados verificables.
+
+## 11. Registro de estado y regla de honestidad
+
+Este documento registra el alcance que el usuario ha aprobado para el diseño del producto. No transforma requisitos en código ni amplía retroactivamente el significado de pruebas ya existentes.
+
+El estado de cada capacidad deberá clasificarse por separado, al menos como:
+- Propuesta pendiente de definición.
+- Especificada.
+- En implementación.
+- Implementada, pendiente de pruebas.
+- Probada en entorno local.
+- Validada en CI en un commit identificado.
+- Integrada en la aplicación anfitriona.
+- Aceptada funcionalmente con corpus y revisión correspondientes.
+
+No se utilizará «completo» para un módulo que solo tenga contratos, documentación, pruebas aisladas o un prototipo. La validación del núcleo existente (incluida la ejecución histórica de 718 pruebas) no acredita las capacidades futuras enumeradas en esta ampliación.
+
+**Resultado de esta actualización:** el catálogo integral queda incorporado como alcance objetivo del producto. El siguiente trabajo de ingeniería debe convertirlo en inventario trazable de módulos, contratos, dependencias, prioridades, archivos responsables y pruebas, y después implementar cada frente sin confundir documentación con funcionalidad.

@@ -628,7 +628,8 @@ test("recalcula cronología cuando cambia el orden editorial sin modificar los c
     assert.ok(first);
     assert.equal(first.events.length, 1);
     assert.equal(first.events[0].chronology, "ordered");
-    assert.equal(first.events[0].earlierOccurrenceId, first.events[0].firstOccurrenceId);
+    const firstOccurrences = new Map(first.occurrences.map(item => [item.ideaCandidateId, item]));
+    assert.equal(firstOccurrences.get(first.events[0].earlierOccurrenceId).documentId, "chapter-1");
 
     editorialOrder = ["chapter-2", "chapter-1"];
     await api.refreshNarrativeKnowledge();
@@ -636,7 +637,8 @@ test("recalcula cronología cuando cambia el orden editorial sin modificar los c
     assert.ok(second);
     assert.ok(second.generation > first.generation);
     assert.equal(second.events[0].chronology, "ordered");
-    assert.equal(second.events[0].earlierOccurrenceId, second.events[0].secondOccurrenceId);
+    const secondOccurrences = new Map(second.occurrences.map(item => [item.ideaCandidateId, item]));
+    assert.equal(secondOccurrences.get(second.events[0].earlierOccurrenceId).documentId, "chapter-2");
     assert.equal(second.occurrences[0].revision, 1);
     assert.equal(second.occurrences[1].revision, 1);
   } finally {

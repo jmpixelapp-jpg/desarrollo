@@ -71,3 +71,64 @@ test("solicitar almacenamiento persistente devuelve una decisión booleana", asy
     await deleteDatabase();
   }
 });
+
+test("la migración desde IndexedDB v24 conserva documentos existentes y crea la bandeja v25", async () => {
+  await deleteDatabase();
+  const legacy = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(DATABASE_NAME, 24);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      const documents = db.createObjectStore("documents", { keyPath: ["projectId", "documentId"] });
+      documents.createIndex("by-project", "projectId", { unique: false });
+      const changes = db.createObjectStore("changes", { keyPath: ["projectId", "documentId", "sequence"] });
+      changes.createIndex("by-document-sequence", ["projectId", "documentId", "sequence"], { unique: true });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("No se pudo crear la base heredada."));
+  });
+  const original = {
+    projectId: "migration-project",
+    documentId: "chapter-before-upgrade",
+    text: "Este manuscrito debe sobrevivir a la migración.",
+    revision: 7,
+    sequence: 12,
+    updatedAt: 700
+  };
+  await new Promise((resolve, reject) => {
+    const tx = legacy.transaction("documents", "readwrite");
+    tx.objectStore("documents").put(original);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error ?? new Error("No se pudo preparar el documento heredado."));
+    tx.onabort = () => reject(tx.error ?? new Error("Se canceló la preparación del documento heredado."));
+  });
+  legacy.close();
+
+  const store = new IndexedDbProjectStore();
+  try {
+    const migrated = await store.loadDocument("migration-project", "chapter-before-upgrade");
+    assert.deepEqual(migrated, original);
+    const report = await store.inspectStorageHealth();
+    assert.equal(report.databaseVersion, 25);
+    assert.equal(report.recordCounts.documents, 1);
+    assert.equal(report.recordCounts["sync-outbox"], 0);
+    const pending = operationForMigration();
+    await store.enqueueSyncOperation(pending);
+    assert.equal((await store.loadPendingSyncOperations("migration-project")).length, 1);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+function operationForMigration() {
+  return {
+    operationId: "migration-device-op-1",
+    projectId: "migration-project",
+    deviceId: "migration-device",
+    sequence: 1,
+    kind: "document-snapshot",
+    payload: JSON.stringify({ documentId: "chapter-before-upgrade", revision: 7 }),
+    createdAt: 701,
+    attemptCount: 0
+  };
+}

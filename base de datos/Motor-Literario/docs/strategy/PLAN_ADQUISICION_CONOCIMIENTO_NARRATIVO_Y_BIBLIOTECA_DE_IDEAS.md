@@ -202,6 +202,12 @@ La propiedad `polarity` describe la forma lingüística detectada; no certifica 
 
 Se añadieron pruebas para objetivos, motivaciones, dilemas, negación y modalidad hipotética. La suite anterior detectó un defecto real en el extractor de entidades: el pre-filtro de marcadores era sensible a mayúsculas y rechazaba encabezados como “Personaje Aná”; además, el prefijo opcional podía consumir la primera letra del nombre cuando se hacía insensible a mayúsculas. Se corrigieron ambos problemas manteniendo los límites de nombre sensibles a mayúsculas y aceptando variantes de capitalización únicamente en los marcadores. La prueba Unicode existente cubre el caso afectado. La validación completa de esta corrección y de los nuevos detectores sigue pendiente de una ejecución CI verde.
 
+### Protección de recursos del descubridor
+
+El análisis detiene la exploración al alcanzar el máximo de 100 candidatos, en lugar de recorrer todo el documento y limitar únicamente el resultado final. Así, el límite también controla el trabajo y la memoria dedicados a señales repetidas. La salida conserva el orden de aparición para el mismo contenido y versión del analizador.
+
+Se añadieron pruebas para objetivos dentro de condiciones y para el límite de candidatos. La suite completa todavía debe ejecutarse en CI antes de considerar validada esta mejora.
+
 ## 9. Cómo informar el progreso
 
 Cada entrega debe indicar claramente:

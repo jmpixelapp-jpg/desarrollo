@@ -85,3 +85,34 @@ test("rechaza extensiones no admitidas, MIME incompatibles y UTF-8 inválido", a
     name: "novela.txt", arrayBuffer: async () => invalid.buffer
   }));
 });
+
+test("enriquece la ingesta con acciones vinculadas a personajes ya identificados", () => {
+  const character = {
+    projectId: "p", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const text = "Ana cruzó el puente.";
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "chapter-1", revision: 4,
+    text, baseOffset: 80, entities: [character]
+  });
+  assert.equal(result.observationStatus, "extracted");
+  assert.equal(result.observations.length, 1);
+  assert.equal(result.observations[0].action, "cruzar");
+  assert.equal(result.observations[0].singleMentionedCharacterId, character.id);
+  assert.equal(result.observations[0].actionEvidence.start, 84);
+  assert.equal(result.observations[0].actionEvidence.excerpt, "cruzó");
+});
+
+test("la ingesta no mezcla entidades de otro libro ni oculta el límite del análisis de observaciones", () => {
+  const foreign = {
+    projectId: "other", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  assert.throws(() => ingestNarrativeBookText({
+    projectId: "p", documentId: "d", revision: 1, text: "Ana corrió.",
+    entities: [foreign]
+  }));
+});

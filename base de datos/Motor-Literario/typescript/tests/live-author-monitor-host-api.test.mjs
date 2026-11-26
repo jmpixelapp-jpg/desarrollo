@@ -1119,8 +1119,8 @@ test("al reanudar varios documentos solo el lease expirado cambia de fencing", a
     assert.ok(leaseB);
     assert.equal(documentListeners.get("visibilitychange")?.size, 1);
 
-    // Simula que durante la suspensión expiró únicamente A. B aún conserva
-    // una titularidad válida y debe renovarse sin cambiar de token.
+    // Simula que durante la suspensión expiró A y B quedó válido pero cerca
+    // del vencimiento para que la renovación tenga que extender expiresAt.
     const expiredAt = Date.now() - 1;
     store.monitorLeases.set(keyA, {
       ...leaseA,
@@ -1128,6 +1128,13 @@ test("al reanudar varios documentos solo el lease expirado cambia de fencing", a
       expiresAt: expiredAt,
       updatedAt: expiredAt
     });
+    const nearExpiry = Date.now() + 1_000;
+    const nearExpiryLeaseB = {
+      ...leaseB,
+      expiresAt: nearExpiry,
+      updatedAt: Math.min(leaseB.updatedAt, nearExpiry)
+    };
+    store.monitorLeases.set(keyB, nearExpiryLeaseB);
 
     fakeDocument.visibilityState = "visible";
     for (const listener of [...(documentListeners.get("visibilitychange") ?? [])]) listener();
@@ -1152,7 +1159,8 @@ test("al reanudar varios documentos solo el lease expirado cambia de fencing", a
     assert.equal(resumedB.ownerId, leaseB.ownerId);
     assert.equal(resumedB.fencingToken, leaseB.fencingToken,
       "el documento que conservaba lease no debe sufrir un takeover");
-    assert.ok(resumedB.expiresAt > leaseB.expiresAt);
+    assert.ok(resumedB.expiresAt > nearExpiryLeaseB.expiresAt,
+      "el lease B vigente debe extenderse al reanudarse");
 
     assert.equal(api.getLiveAuthorMonitorSnapshot(documentA).sessionId, sessionA);
     assert.equal(api.getLiveAuthorMonitorSnapshot(documentB).sessionId, sessionB);

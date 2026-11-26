@@ -246,6 +246,31 @@ test("una operación retrasada bloquea la cola para conservar el orden de secuen
 });
 
 
+test("el backoff de un dispositivo no bloquea escritores independientes", async () => {
+  const outbox = createOutbox([
+    operation("op-a-1", 1, { deviceId: "device-a", nextAttemptAt: 2_000 }),
+    operation("op-a-2", 2, { deviceId: "device-a" }),
+    operation("op-b-1", 1, { deviceId: "device-b" }),
+    operation("op-b-2", 2, { deviceId: "device-b" })
+  ]);
+  let sentIds = [];
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push(_projectId, operations) {
+      sentIds = operations.map(item => item.operationId);
+      return {
+        acknowledgedOperationIds: sentIds,
+        conflicts: [], retryableOperationIds: []
+      };
+    }
+  }, { now: () => 1_000 });
+
+  const result = await coordinator.syncOnce("project-a");
+  assert.deepEqual(sentIds, ["op-b-1", "op-b-2"]);
+  assert.equal(result.sent, 2);
+  assert.equal(result.acknowledged, 2);
+  assert.deepEqual(outbox.pending.map(item => item.operationId), ["op-a-1", "op-a-2"]);
+});
+
 test("rechaza códigos de conflicto excesivos y conserva la operación", async () => {
   const outbox = createOutbox([operation("op-oversized-code", 1)]);
   const coordinator = new NarrativeSyncCoordinator(outbox, {

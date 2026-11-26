@@ -12,7 +12,7 @@ import { validateEventLifecycle, type EventLifecycle } from "./project-data";
  */
 export const MAX_LITERARY_ANALYSIS_TEXT_UNITS = 2_000_000;
 /** Límite del catálogo global de ideas admitido por el analizador de grafos. */
-export const MAX_LITERARY_ANALYSIS_PROJECT_IDEAS = 12_000;
+export const MAX_LITERARY_ANALYSIS_PROJECT_IDEAS = 20_000;
 
 export interface LiteraryAnalysisKnownCharacter {
   readonly entityId: string;
@@ -6530,12 +6530,12 @@ function collectSensorySignals(
 function isValidNarrativeIdeaStatusHistory(
   value: unknown,
   _currentStatus: NarrativeIdea["status"],
-  _writerDecisionCount: number,
-  _omittedStatusHistoryCount: number
+  writerDecisionCount: number,
+  omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
-  // El análisis lee archivos importados y registros históricos, no aplica las
-  // reglas de escritura a posteriori. Vacíos, retrocesos y divergencias se
-  // conservan para que summarizeStatusHistory los clasifique explícitamente.
+  // Los historiales importados pueden estar vacíos, repetidos o divergentes.
+  // Se valida la estructura y que el contador pueda explicarse por entradas
+  // omitidas, sin reconstruir ni imponer una secuencia editorial.
   if (!Array.isArray(value) || value.length > 100) return false;
   for (const item of value) {
     const change = item as NarrativeIdeaStatusChange | null | undefined;
@@ -6548,7 +6548,12 @@ function isValidNarrativeIdeaStatusHistory(
       return false;
     }
   }
-  return true;
+  const visibleWriterDecisionCount = value.filter(
+    (change: NarrativeIdeaStatusChange) => change.reason === "writer"
+  ).length;
+  return Number.isSafeInteger(writerDecisionCount) &&
+    writerDecisionCount >= visibleWriterDecisionCount &&
+    writerDecisionCount - visibleWriterDecisionCount <= omittedStatusHistoryCount;
 }
 function validateInput(input: LiteraryAnalysisInput): number {
   const baseOffset = input?.baseOffset ?? 0;
@@ -6645,7 +6650,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
             !["calendar","story-day"].includes(event.timeReference.basis) ||
             !["date","year","day-index"].includes(event.timeReference.precision) ||
             typeof event.timeReference.raw !== "string" || !event.timeReference.raw.trim() ||
-            !Number.isFinite(event.timeReference.orderValue)))) {
+            typeof event.timeReference.orderValue !== "number"))) {
       throw new Error("El catálogo global de acontecimientos del análisis literario es inválido.");
     }
     for (const evidence of event.evidence) {
@@ -6696,7 +6701,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (idea.textOmitted !== undefined && idea.textOmitted !== "budget") ||
         (idea.textOmitted === "budget" && idea.text !== undefined) ||
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
-        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
+        !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 20_000 ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||

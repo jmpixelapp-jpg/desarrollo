@@ -1630,12 +1630,7 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
       ...input,
       knownProjectIdeas: [{
         ...idea,
-        status: "discarded",
-        statusHistory: [
-          { status: "incorporated", reason: "initial", changedAt: 1 },
-          { status: "discarded", reason: "text-revised", changedAt: 2 }
-        ],
-        writerDecisionCount: 0
+        statusHistory: [{ status: "IDEA", reason: "initial", changedAt: Number.NaN }]
       }]
     }),
     /historial de decisiones del catálogo global/

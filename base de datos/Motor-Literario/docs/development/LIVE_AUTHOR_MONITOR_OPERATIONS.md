@@ -821,3 +821,9 @@ La prueba demora las renovaciones iniciales de dos documentos, dispara ambos tip
 
 
 **Validación CI:** [run 45767262316](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45767262316) aprobó el test 114 (un follow-up por documento), suites 183/183, Chromium Page Lifecycle 1/1 y benchmark de 100.000 commits.
+
+## 73. Disposición segura multi-documento
+
+`disposeSafely()` espera el motor y las colas existentes, persiste el último checkpoint de cada documento que conserva un lease, vuelve a esperar las escrituras y después libera cada lease antes de disponer el host. Una falla de persistencia debe impedir declarar un cierre seguro.
+
+La regresión abre cuatro capítulos, admite una edición en cada uno y llama a `disposeSafely()`. Debe comprobar cuatro checkpoints finales con las nuevas revisiones, cuatro leases liberados con sus owner/fencing tokens, cero heartbeats activos, cero leases locales y cero errores.

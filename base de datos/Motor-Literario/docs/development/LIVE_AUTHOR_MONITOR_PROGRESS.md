@@ -1676,8 +1676,8 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Objetivo:** garantizar que la reanudación de la página revalide todos los documentos en paralelo sin mezclar sus ciclos de lease.
 
-**Regresión:** dos documentos permanecen abiertos durante una suspensión simulada. Solo expira el lease de A; el de B continúa válido. Al dispararse `visibilitychange` a `visible`, A debe adquirir el siguiente fencing token mientras B renueva con el mismo owner/token. Ambos deben seguir con la misma `sessionId`, conservar su heartbeat y terminar con diagnóstico de titularidad.
+**Regresión:** dos documentos permanecen abiertos durante una suspensión simulada. Solo expira el lease de A; el de B continúa válido pero se prepara cerca de su vencimiento para comprobar que la reanudación realmente extiende su expiración. Al dispararse `visibilitychange` a `visible`, A debe adquirir el siguiente fencing token mientras B renueva con el mismo owner/token. Ambos deben seguir con la misma `sessionId`, conservar su heartbeat y terminar con diagnóstico de titularidad.
 
 **Invariante:** la revalidación del conjunto de documentos no convierte un lease todavía válido en takeover ni hace que un documento herede la generación de otro.
 
-**Validación:** pendiente de GitHub Actions.
+**Ajuste del fixture:** la primera ejecución mostró que un lease B con casi 30 segundos aún disponibles puede renovarse sin que `expiresAt` aumente, por el guard monótono `Math.max`. El escenario se ajustó para que B siga vigente pero venza en un segundo, de modo que la renovación debe extender la fecha sin cambiar owner/token. **Validación:** pendiente de CI para el commit `abc5b5d1`.

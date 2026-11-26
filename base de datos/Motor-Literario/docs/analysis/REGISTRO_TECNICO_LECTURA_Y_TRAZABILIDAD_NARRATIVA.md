@@ -298,3 +298,9 @@ La línea de lectura y trazabilidad no debe considerarse cerrada hasta que:
 | Registro actual | Arquitectura, inventario, límites, validación y plan de cierre |
 
 ---
+
+### Nota de auditoría de integración de evidencia
+
+El contrato de `TextEvidence` del conocimiento narrativo guarda `start/end` como rango de la ocurrencia y `excerpt` como línea contextual completa. Por ello, la verificación de evidencia debe comparar el excerpt con la línea que contiene el rango, no exigir que el excerpt sea idéntico al fragmento señalado. El resolver se ha ajustado a esta semántica.
+
+Sigue pendiente resolver una diferencia de identidad documental antes de activar la integración de extremo a extremo: la ingesta asigna IDs sintéticos `chapter:<id>` a los capítulos, mientras que `TextEvidence.documentId` identifica documentos del anfitrión. No se debe hacer coincidir ambos por suposición. La siguiente fase debe introducir un mapeo explícito entre documento anfitrión, capítulo importado y base de offsets, con pruebas de capítulos múltiples y offsets absolutos.

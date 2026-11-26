@@ -260,7 +260,7 @@ export function extractNarrativeEntities(
 ): readonly NarrativeEntity[] {
   validateNarrativeExtractionContext(projectId, documentId, revision, text, baseOffset, undefined, now);
 
-  if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/u.test(text)) {
+  if (!/\b(?:personaje|protagonista|antagonista|ciudad|pueblo|aldea|reino|castillo|bosque|montaña|lugar|objeto|espada|arma|reliquia|amuleto|anillo|libro)\b/iu.test(text)) {
     return [];
   }
   const name = "[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[A-ZÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3}";

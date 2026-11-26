@@ -16,6 +16,8 @@ export interface NarrativeCharacterIntentCandidate {
   readonly kind: "goal" | "motivation";
   readonly text: string;
   readonly polarity: "affirmed" | "negated" | "conditional";
+  /** Señal lingüística literal; no confirma una motivación psicológica. */
+  readonly evidenceBasis?: "explicit-goal-verb" | "explicit-causal-motive" | "explicit-purpose";
   readonly reviewStatus: "candidate";
   readonly evidence: {
     readonly documentId: string;
@@ -60,7 +62,17 @@ export function extractNarrativeCharacterIntentCandidates(
   const goal = /\b(?:quiere|desea|pretende|intenta|busca|necesita|sueña\s+con)\s+(.+?)\s*$/iu;
   const motive = /\b(?:actúa|actua|lo\s+hace|decide\s+hacerlo)\s+porque\s+(.+?)\s*$/iu;
   const because = /\bporque\s+(?:quiere|desea|teme|necesita)\s+(.+?)\s*$/iu;
-  const patterns = [{kind:"goal" as const, expression:goal},{kind:"motivation" as const, expression:motive},{kind:"motivation" as const, expression:because}];
+  // Motivos indirectos: solo se extraen cuando el texto nombra la causa
+  // mediante una construcción explícita; nunca se deducen por la acción sola.
+  const causalMotive = /\\b(?:por\\s+(?:miedo|temor|amor|lealtad|venganza|deber|culpa|compasión|compasion)\\s+(?:a|de|hacia|contra)|porque\\s+(?:teme|ama|odia|siente\\s+culpa\\s+por))\\s+(.+?)\\s*$/iu;
+  const purpose = /\\b(?:para|a\\s+fin\\s+de|con\\s+el\\s+fin\\s+de)\\s+(.+?)\\s*$/iu;
+  const patterns = [
+    {kind:"goal" as const, evidenceBasis:"explicit-goal-verb" as const, expression:goal},
+    {kind:"motivation" as const, evidenceBasis:"explicit-causal-motive" as const, expression:motive},
+    {kind:"motivation" as const, evidenceBasis:"explicit-causal-motive" as const, expression:because},
+    {kind:"motivation" as const, evidenceBasis:"explicit-causal-motive" as const, expression:causalMotive},
+    {kind:"goal" as const, evidenceBasis:"explicit-purpose" as const, expression:purpose}
+  ];
 
   for (const line of input.text.matchAll(/[^\n]+/gu)) {
     const lineStart = line.index;
@@ -107,7 +119,7 @@ export function extractNarrativeCharacterIntentCandidates(
         const id = "character-intent:" + input.documentId + ":" + actor.entity.id + ":" + pattern.kind + ":" + start;
         results.set(id, {
           id, projectId: input.projectId, characterEntityId: actor.entity.id,
-          kind: pattern.kind, text: clean, polarity, reviewStatus: "candidate",
+          kind: pattern.kind, text: clean, polarity, evidenceBasis: pattern.evidenceBasis, reviewStatus: "candidate",
           evidence: {documentId:input.documentId,revision:input.revision,start,end,excerpt}
         });
         break;

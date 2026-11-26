@@ -224,7 +224,7 @@ class EpubArchive {
   paths(): string[] { return [...this.entries.keys()]; }
 }
 
-function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startSequence: number): BookReaderBlock[] {
+function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startSequence: number, fallbackChapterId?: string): BookReaderBlock[] {
   const result: BookReaderBlock[] = [];
   const stack: string[] = [];
   let current: string[] = [];
@@ -243,6 +243,7 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
         sequence,
         kind: currentKind,
         text,
+        ...(fallbackChapterId ? { chapterId: fallbackChapterId } : {}),
         location
       });
     }
@@ -361,7 +362,9 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
       const path = data.spine[index];
       if (!data.zip.has(path)) fail("falta un documento del spine: " + path);
       const xhtml = await data.zip.text(path);
-      for (const block of blocksFromXhtml(xhtml, path, index, sequence)) {
+      const hasChapterHeading = /<h1\\b/iu.test(xhtml);
+      const fallbackChapterId = hasChapterHeading ? undefined : "spine:" + path;
+      for (const block of blocksFromXhtml(xhtml, path, index, sequence, fallbackChapterId)) {
         yield block;
         sequence = block.sequence + 1;
       }

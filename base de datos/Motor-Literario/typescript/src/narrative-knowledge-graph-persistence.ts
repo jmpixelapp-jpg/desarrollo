@@ -62,8 +62,7 @@ export function createNarrativeDocumentProjectionManifest(
       .filter((item: EvidenceBackedRecord) =>
         item.evidence.some((evidence: TextEvidence) => evidence.documentId === documentId))
       .map((item: EvidenceBackedRecord) => item.id))].sort();
-  const assertions: readonly NarrativeAssertion[] = contribution.graph.assertions;
-  const assertionIds = assertions.map((item: NarrativeAssertion) => item.id).sort();
+  const assertions = contribution.graph.assertions.map((item: NarrativeAssertion) => item.id).sort();
   return {
     projectId: snapshot.projectId,
     documentId,
@@ -74,7 +73,7 @@ export function createNarrativeDocumentProjectionManifest(
     relationIds: ids(contribution.graph.relations),
     eventIds: ids(contribution.graph.events),
     ideaIds: ids(contribution.graph.ideas),
-    assertionIds,
+    assertionIds: assertions,
     updatedAt
   };
 }
@@ -98,6 +97,52 @@ export function createNarrativeDocumentProjectionTombstone(
     projectId, documentId, revision, generation, status: "deleted",
     entityIds: [], relationIds: [], eventIds: [], ideaIds: [], assertionIds: [], updatedAt
   };
+}
+
+/**
+ * Confirma el manifiesto de un documento usando generación CAS.
+ * La misma revisión y el mismo contenido son idempotentes; revisiones antiguas
+ * o divergentes se rechazan para impedir que una pestaña obsoleta restaure estado.
+ */
+export async function commitNarrativeDocumentProjectionManifest(
+  store: ProjectStore,
+  candidate: NarrativeDocumentProjectionManifest
+): Promise<{ readonly manifest: NarrativeDocumentProjectionManifest; readonly reused: boolean }> {
+  if (!store || typeof store.loadNarrativeDocumentProjectionManifest !== "function" ||
+      typeof store.saveNarrativeDocumentProjectionManifestIfUnchanged !== "function") {
+    throw new Error("El almacenamiento no implementa manifiestos documentales CAS.");
+  }
+  if (!candidate || typeof candidate.projectId !== "string" || !candidate.projectId.trim() ||
+      typeof candidate.documentId !== "string" || !candidate.documentId.trim() ||
+      !Number.isSafeInteger(candidate.revision) || candidate.revision < 0 ||
+      (candidate.status !== "active" && candidate.status !== "deleted")) {
+    throw new Error("Candidato de manifiesto documental inválido.");
+  }
+  const current = await store.loadNarrativeDocumentProjectionManifest(
+    candidate.projectId, candidate.documentId
+  );
+  if (current && candidate.revision < current.revision) {
+    throw new Error("Revisión documental obsoleta: no se puede retroceder el manifiesto.");
+  }
+  const comparable = (value: NarrativeDocumentProjectionManifest) => JSON.stringify({
+    projectId: value.projectId, documentId: value.documentId, revision: value.revision,
+    status: value.status, entityIds: [...value.entityIds].sort(),
+    relationIds: [...value.relationIds].sort(), eventIds: [...value.eventIds].sort(),
+    ideaIds: [...value.ideaIds].sort(), assertionIds: [...value.assertionIds].sort()
+  });
+  if (current && candidate.revision === current.revision) {
+    if (comparable(current) === comparable(candidate)) return { manifest: current, reused: true };
+    throw new Error("La misma revisión documental no puede producir manifiestos divergentes.");
+  }
+  const generation = (current?.generation ?? 0) + 1;
+  const manifest: NarrativeDocumentProjectionManifest = {
+    ...candidate, generation,
+    entityIds: [...candidate.entityIds], relationIds: [...candidate.relationIds],
+    eventIds: [...candidate.eventIds], ideaIds: [...candidate.ideaIds],
+    assertionIds: [...candidate.assertionIds]
+  };
+  await store.saveNarrativeDocumentProjectionManifestIfUnchanged(manifest, current?.generation);
+  return { manifest, reused: false };
 }
 
 export interface NarrativeKnowledgeGraphPersistenceResult {

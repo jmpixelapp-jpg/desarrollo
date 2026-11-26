@@ -81,7 +81,7 @@ function classifyTransitionContext(
  let source:{entityId:string;start:number;end:number;excerpt:string}|undefined;
  if(selected?.frame==="reported-speech"){
   const possible=characters.flatMap(entity=>[entity.canonicalName,...entity.aliases].flatMap(name=>{
-   const escaped=name.replace(/[.*+?^$()|[\]{}\\]/gu,"\\function makeEvidence(documentId:string,revision:number,base:number,start:number,end:number,excerpt:string):TextEvidence {
+   const escaped=escapeRegExp(name);
  return {documentId,revision,start:base+start,end:base+end,excerpt};
 }
 ");

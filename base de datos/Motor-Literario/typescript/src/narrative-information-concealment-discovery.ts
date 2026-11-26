@@ -172,7 +172,7 @@ export function discoverNarrativeInformationConcealmentCandidates(
           evidence:evidence(input,span.start,span.end),
           ...(recipientId&&recipientStart!==undefined?{recipientEvidence:evidence(input,recipientStart,recipientStart+recipientRaw!.length)}:{}),
           assertionStatus:"textually-asserted",
-          polarity:/\\b(?:no|nunca|jam[aá]s)\\s+[^.!?;]*$/iu.test(sentence.slice(0,triggerStart-span.start))?"negated":"affirmed",
+          polarity:/\b(?:no|nunca|jam[aá]s)\s+[^.!?;]*$/iu.test(sentence.slice(0,triggerStart-span.start))?"negated":"affirmed",
           deceptionEstablished:false,intentEstablished:false,
           reviewStatus:"candidate"
         });

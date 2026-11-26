@@ -2,8 +2,7 @@ import { entityMatchesName } from "./narrative-knowledge";
 import type { NarrativeTimeReference, TextEvidence, NarrativeEntity } from "./narrative-knowledge";
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\import type { NarrativeTimeReference, TextEvidence, NarrativeEntity } from "./narrative-knowledge";
-");
+  return value.replace(/[.*+?^\x24\x7b}()|[\]\\]/g, "\\$&");
 }
 
 export interface NarrativeAssertion {

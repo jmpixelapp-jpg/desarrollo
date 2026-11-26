@@ -911,7 +911,7 @@ export function recoverNarrativeReferenceRepairs(
   const active = activeNarrativeReferenceRepairRecoveries.get(projectId);
   if (active) return active;
 
-  const recovery = recoverNarrativeReferenceRepairsUnlocked(store, projectId);
+  const recovery = runNarrativeReferenceRepairRecovery(store, projectId);
   activeNarrativeReferenceRepairRecoveries.set(projectId, recovery);
   void recovery.finally(() => {
     if (activeNarrativeReferenceRepairRecoveries.get(projectId) === recovery) {
@@ -919,6 +919,25 @@ export function recoverNarrativeReferenceRepairs(
     }
   }).catch(() => { /* La promesa original conserva el error para quien la espera. */ });
   return recovery;
+}
+
+/**
+ * Coordina recuperaciones entre pestañas cuando el runtime ofrece Web Locks.
+ * Si la API no existe, mantiene la garantía CAS y la serialización local,
+ * pero no promete exclusión mutua entre contextos independientes.
+ */
+async function runNarrativeReferenceRepairRecovery(
+  store: ProjectStore,
+  projectId: string
+): Promise<NarrativeReferenceRepairRecoveryResult> {
+  const lockManager = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (!lockManager || typeof lockManager.request !== "function") {
+    return recoverNarrativeReferenceRepairsUnlocked(store, projectId);
+  }
+  const lockName = "motor-literario:narrative-reference-repair:" + projectId;
+  return lockManager.request(lockName, { mode: "exclusive" }, async () =>
+    recoverNarrativeReferenceRepairsUnlocked(store, projectId)
+  );
 }
 
 async function recoverNarrativeReferenceRepairsUnlocked(

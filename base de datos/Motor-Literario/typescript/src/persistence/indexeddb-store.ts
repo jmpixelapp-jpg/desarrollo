@@ -1458,41 +1458,52 @@ function validateLiveAuthorMonitorCheckpoint(
 ): void {
   const finiteNonNegative = (value: number): boolean => Number.isFinite(value) && value >= 0;
   const integerNonNegative = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
-  if (!checkpoint || checkpoint.version !== 1 ||
-      typeof checkpoint.projectId !== "string" || !checkpoint.projectId.trim() ||
-      (projectId !== undefined && checkpoint.projectId !== projectId) ||
-      typeof checkpoint.documentId !== "string" || !checkpoint.documentId.trim() ||
-      (documentId !== undefined && checkpoint.documentId !== documentId) ||
-      typeof checkpoint.sessionId !== "string" || !checkpoint.sessionId.trim() ||
-      !finiteNonNegative(checkpoint.savedAt) ||
-      !finiteNonNegative(checkpoint.sessionDurationMs) ||
-      !finiteNonNegative(checkpoint.activeDurationMs) ||
-      !finiteNonNegative(checkpoint.idleDurationMs) ||
-      Math.abs(checkpoint.sessionDurationMs -
-        checkpoint.activeDurationMs - checkpoint.idleDurationMs) > 1 ||
-      !(checkpoint.lastActivityAgeMs === null ||
-        (finiteNonNegative(checkpoint.lastActivityAgeMs) &&
-          checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1)) ||
-      !integerNonNegative(checkpoint.pauseCount) ||
-      !integerNonNegative(checkpoint.acceptedChanges) ||
-      !integerNonNegative(checkpoint.rejectedChanges) ||
-      !integerNonNegative(checkpoint.committedChanges) ||
-      !integerNonNegative(checkpoint.failedChanges) ||
-      checkpoint.committedChanges + checkpoint.failedChanges > checkpoint.acceptedChanges ||
-      !integerNonNegative(checkpoint.insertedCharacters) ||
-      !integerNonNegative(checkpoint.deletedCharacters) ||
-      !integerNonNegative(checkpoint.currentDocumentLength) ||
-      !integerNonNegative(checkpoint.revision) ||
-      !integerNonNegative(checkpoint.sequence) ||
-      !integerNonNegative(checkpoint.resynchronizations) ||
-      !finiteNonNegative(checkpoint.lastCommitLatencyMs) ||
-      !finiteNonNegative(checkpoint.totalCommitLatencyMs) ||
-      !Array.isArray(checkpoint.commitLatencies) ||
-      checkpoint.commitLatencies.length > 4096 ||
-      checkpoint.commitLatencies.some(value => !finiteNonNegative(value)) ||
-      checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) >
-        checkpoint.totalCommitLatencyMs + 1) {
-    throw new Error("Checkpoint de monitoreo malformado o perteneciente a otra identidad.");
+  const invalid: string[] = [];
+  const check = (valid: boolean, field: string): void => {
+    if (!valid) invalid.push(field);
+  };
+  check(!!checkpoint && checkpoint.version === 1, "version");
+  check(typeof checkpoint?.projectId === "string" && !!checkpoint.projectId.trim() &&
+    (projectId === undefined || checkpoint.projectId === projectId), "projectId");
+  check(typeof checkpoint?.documentId === "string" && !!checkpoint.documentId.trim() &&
+    (documentId === undefined || checkpoint.documentId === documentId), "documentId");
+  check(typeof checkpoint?.sessionId === "string" && !!checkpoint.sessionId.trim(), "sessionId");
+  check(finiteNonNegative(checkpoint.savedAt), "savedAt");
+  check(finiteNonNegative(checkpoint.sessionDurationMs), "sessionDurationMs");
+  check(finiteNonNegative(checkpoint.activeDurationMs), "activeDurationMs");
+  check(finiteNonNegative(checkpoint.idleDurationMs), "idleDurationMs");
+  check(Math.abs(checkpoint.sessionDurationMs -
+    checkpoint.activeDurationMs - checkpoint.idleDurationMs) <= 1, "activityDurations");
+  check(checkpoint.lastActivityAgeMs === null ||
+    (finiteNonNegative(checkpoint.lastActivityAgeMs) &&
+      checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1), "lastActivityAgeMs");
+  check(integerNonNegative(checkpoint.pauseCount), "pauseCount");
+  check(integerNonNegative(checkpoint.acceptedChanges), "acceptedChanges");
+  check(integerNonNegative(checkpoint.rejectedChanges), "rejectedChanges");
+  check(integerNonNegative(checkpoint.committedChanges), "committedChanges");
+  check(integerNonNegative(checkpoint.failedChanges), "failedChanges");
+  check(checkpoint.committedChanges + checkpoint.failedChanges <= checkpoint.acceptedChanges,
+    "changeCounters");
+  check(integerNonNegative(checkpoint.insertedCharacters), "insertedCharacters");
+  check(integerNonNegative(checkpoint.deletedCharacters), "deletedCharacters");
+  check(integerNonNegative(checkpoint.currentDocumentLength), "currentDocumentLength");
+  check(integerNonNegative(checkpoint.revision), "revision");
+  check(integerNonNegative(checkpoint.sequence), "sequence");
+  check(integerNonNegative(checkpoint.resynchronizations), "resynchronizations");
+  check(finiteNonNegative(checkpoint.lastCommitLatencyMs), "lastCommitLatencyMs");
+  check(finiteNonNegative(checkpoint.totalCommitLatencyMs), "totalCommitLatencyMs");
+  check(Array.isArray(checkpoint.commitLatencies), "commitLatencies");
+  if (Array.isArray(checkpoint.commitLatencies)) {
+    check(checkpoint.commitLatencies.length <= 4096, "commitLatencies.length");
+    check(checkpoint.commitLatencies.every(value => finiteNonNegative(value)), "commitLatencies.values");
+    check(checkpoint.commitLatencies.reduce((sum, value) => sum + value, 0) <=
+      checkpoint.totalCommitLatencyMs + 1, "commitLatencies.total");
+  }
+  if (invalid.length > 0) {
+    throw new Error(
+      "Checkpoint de monitoreo malformado o perteneciente a otra identidad: " +
+      invalid.join(", ") + "."
+    );
   }
 }
 

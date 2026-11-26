@@ -963,15 +963,47 @@ export class HostEngineApi {
         (sum, candidates) => sum + candidates.length, 0
       );
       const selectedCandidates: NarrativeIdeaCandidate[] = [];
-      for (let offset = 0;
+      const nextCandidateOffset = new Array<number>(documentCandidateLists.length).fill(0);
+      const sampledDocumentIndexes = new Set<number>();
+      const sampleCount = Math.min(
+        documentCandidateLists.length,
+        MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES
+      );
+      // Cuando hay más documentos que el presupuesto, el muestreo cubre todo
+      // el inventario en vez de favorecer solo los primeros IDs alfabéticos.
+      for (let slot = 0; slot < sampleCount; slot++) {
+        const documentIndex = Math.floor(
+          slot * documentCandidateLists.length / sampleCount
+        );
+        sampledDocumentIndexes.add(documentIndex);
+        const candidate = documentCandidateLists[documentIndex]?.[0];
+        if (!candidate) continue;
+        selectedCandidates.push(candidate);
+        nextCandidateOffset[documentIndex] = 1;
+      }
+      // Si algunas muestras no tienen candidatos, completa el presupuesto
+      // con documentos no muestreados antes de tomar una segunda señal de otro.
+      for (let index = 0;
+           index < documentCandidateLists.length &&
            selectedCandidates.length < MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES;
-           offset++) {
+           index++) {
+        if (sampledDocumentIndexes.has(index)) continue;
+        const candidate = documentCandidateLists[index]?.[0];
+        if (!candidate) continue;
+        selectedCandidates.push(candidate);
+        nextCandidateOffset[index] = 1;
+      }
+      // Con menos de 200 documentos se admiten señales adicionales por rondas,
+      // manteniendo la distribución entre capítulos.
+      while (selectedCandidates.length < MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES) {
         let foundAtOffset = false;
-        for (const candidates of documentCandidateLists) {
-          const candidate = candidates[offset];
+        for (let index = 0; index < documentCandidateLists.length; index++) {
+          const offset = nextCandidateOffset[index] ?? 0;
+          const candidate = documentCandidateLists[index]?.[offset];
           if (!candidate) continue;
           foundAtOffset = true;
           selectedCandidates.push(candidate);
+          nextCandidateOffset[index] = offset + 1;
           if (selectedCandidates.length >= MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES) break;
         }
         if (!foundAtOffset) break;

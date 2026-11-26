@@ -110,3 +110,17 @@ La misma protección se aplica ahora a cualquier adaptador, no solo al textarea:
 Los adaptadores que sí conocen el evento deben proporcionar `activityKind` explícitamente. El adaptador nativo del textarea lo hace usando el `inputType` observado. Esta decisión es deliberadamente conservadora: puede dejar parte de la actividad en `other`, pero evita presentar como hecho una categoría que el motor no observó.
 
 Se añadió una prueba para tres deltas sin procedencia (inserción, sustitución y eliminación); los tres deben incrementar solo `otherChanges`. Los casos de takeover que esperan métricas de escritura ahora declaran `activityKind: "typing"` expresamente.
+
+## Resultado de validación CI de esta iteración
+
+En la ejecución `45780942285` asociada al commit `49007e0716b551683da87ed7026d11c3dc9ed88a`, se verificó que terminaron correctamente:
+
+- type-check aislado del monitor y su UI;
+- bundle aislado de pruebas del monitor;
+- regresiones aisladas de recuperación de diagnósticos;
+- validación de esquema MLDB y mapeo físico;
+- suite aislada de pruebas unitarias y diagnósticas del monitor.
+
+La construcción del bundle general falló antes de la integración host/editor, en `src/narrative-action-link-discovery.ts:46`, un archivo ajeno al cambio de captura. El workflow de monitor continuaba instalando Chromium en la última consulta; por ello, el resultado final de ciclo de vida, integración navegador y benchmark de esta ejecución queda **pendiente**. No se declara aprobada la integración completa ni el pipeline global a partir de los pasos aislados que sí terminaron correctamente.
+
+Las fallas iniciales de expectativas que aparecieron en ejecuciones anteriores se corrigieron en los tests del adaptador nativo, la integración HostEngineApi y Chromium. La ejecución `45780942285` confirmó la suite aislada corregida en verde.

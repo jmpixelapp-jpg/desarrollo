@@ -197,7 +197,7 @@ La primera implementación ya no se limita a tema/premisa/conflicto declarados. 
 
 La propiedad `polarity` describe la forma lingüística detectada; no certifica que el contenido sea verdad ni que sea canon. En particular, una negación no debe convertirse en un deseo afirmado y una hipótesis no debe convertirse en hecho. Los detectores siguen siendo conservadores y no resuelven por sí solos quién es el sujeto de cada intención ni si el deseo pertenece al autor o a un personaje. Esa atribución contextual corresponde a la Fase B.
 
-Se añadieron pruebas para objetivos, motivaciones, dilemas, negación y modalidad hipotética. Las pruebas deben ejecutarse junto con toda la suite; no se considera validada esta ampliación hasta que CI termine sin fallos.
+Se añadieron pruebas para objetivos, motivaciones, dilemas, negación y modalidad hipotética. La suite anterior detectó un defecto real en el extractor de entidades: el pre-filtro de marcadores era sensible a mayúsculas y rechazaba encabezados como “Personaje Aná”; además, el prefijo opcional podía consumir la primera letra del nombre cuando se hacía insensible a mayúsculas. Se corrigieron ambos problemas manteniendo los límites de nombre sensibles a mayúsculas y aceptando variantes de capitalización únicamente en los marcadores. La prueba Unicode existente cubre el caso afectado. La validación completa de esta corrección y de los nuevos detectores sigue pendiente de una ejecución CI verde.
 
 ## 9. Cómo informar el progreso
 

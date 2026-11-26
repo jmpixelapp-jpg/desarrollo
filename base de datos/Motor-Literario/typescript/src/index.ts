@@ -53,3 +53,4 @@ export * from "./narrative-scene-context";
 
 export * from "./narrative-pronoun-resolution";
 export * from "./narrative-pronoun-action-link";
+export * from "./narrative-character-interaction-evolution";

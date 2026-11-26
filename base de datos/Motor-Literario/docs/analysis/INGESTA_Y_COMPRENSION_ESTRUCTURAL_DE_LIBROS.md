@@ -45,6 +45,8 @@ const book = ingestNarrativeBookText({
 
 La búsqueda de menciones de entidades usa límites de palabra basados en propiedades Unicode reales; no debe reconocer un nombre como subcadena de otra palabra (por ejemplo, «Ana» dentro de «ventana»). Las referencias pronominales permanecen sin resolver y solo proponen antecedentes locales con evidencia.
 
+Las observaciones de acción ligadas a personajes distinguen ahora el futuro gramatical en formas seleccionadas (por ejemplo, «cruzará», «llegará», «caminará» y «entrará»). Esta clasificación describe la forma verbal; no convierte por sí sola una promesa, predicción o intención en un acontecimiento sucedido ni establece la cronología global de la obra.
+
 ## Garantías y límites
 
 1. La ingesta no modifica el manuscrito.

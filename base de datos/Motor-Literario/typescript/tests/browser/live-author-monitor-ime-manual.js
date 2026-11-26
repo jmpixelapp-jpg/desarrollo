@@ -198,7 +198,8 @@ startButton.addEventListener("click", () => {
       start: change.start,
       end: change.end,
       replacementLengthUtf16: change.replacement.length,
-      activityKind: kind
+      activityKind: kind,
+      inputType: change.inputType ?? null
     });
     render();
   });

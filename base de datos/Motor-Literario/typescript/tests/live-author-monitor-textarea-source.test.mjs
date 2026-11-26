@@ -824,19 +824,19 @@ test("clasifica y conserva saltos de línea, párrafos y pegado como cita", () =
   f.element.edit({
     start: 3,
     end: 3,
-    nextValue: "abc\\n",
+    nextValue: "abc\n",
     inputType: "insertLineBreak"
   });
   f.element.edit({
     start: 4,
     end: 4,
-    nextValue: "abc\\n\\n",
+    nextValue: "abc\n\n",
     inputType: "insertParagraph"
   });
   f.element.edit({
     start: 5,
     end: 5,
-    nextValue: "abc\\n\\n> quote",
+    nextValue: "abc\n\n> quote",
     inputType: "insertFromPasteAsQuotation"
   });
 
@@ -845,7 +845,7 @@ test("clasifica y conserva saltos de línea, párrafos y pegado como cita", () =
     inputType: change.inputType,
     replacement: change.replacement
   })), [
-    { activityKind: "typing", inputType: "insertLineBreak", replacement: "\\n" },
+    { activityKind: "typing", inputType: "insertLineBreak", replacement: "\n" },
     { activityKind: "typing", inputType: "insertParagraph", replacement: "\\n" },
     { activityKind: "paste", inputType: "insertFromPasteAsQuotation", replacement: "> quote" }
   ]);

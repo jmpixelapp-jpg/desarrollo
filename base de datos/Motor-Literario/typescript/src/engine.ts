@@ -511,7 +511,38 @@ export class LiteraryEngine {
         };
         // El delta es el registro durable primario: una edición normal no
         // obliga a serializar y reescribir el manuscrito completo.
-        await this.options.store.appendChange(journalEntry);
+        const deviceId = this.options.syncDeviceId;
+        if (deviceId !== undefined) {
+          if (typeof deviceId !== "string" || !deviceId.trim() || deviceId.length > 256) {
+            throw new Error("syncDeviceId debe ser un identificador estable válido.");
+          }
+          const operationId = "narrative-change:" +
+            encodeURIComponent(project.projectId) + ":" +
+            encodeURIComponent(change.documentId) + ":" + change.sequence;
+          if (operationId.length > 256) {
+            throw new Error("La identidad del cambio excede el límite admitido para sincronización.");
+          }
+          await this.options.store.appendChange(journalEntry, {
+            operationId,
+            projectId: project.projectId,
+            deviceId,
+            kind: "narrative-document-change.v1",
+            payload: JSON.stringify({
+              schemaVersion: 1,
+              documentId: change.documentId,
+              sequence: change.sequence,
+              baseRevision: change.baseRevision,
+              committedRevision: nextRevision,
+              start: change.start,
+              end: change.end,
+              replacement: change.replacement
+            }),
+            createdAt: journalEntry.committedAt,
+            attemptCount: 0
+          });
+        } else {
+          await this.options.store.appendChange(journalEntry);
+        }
       } else {
         // Compatibilidad con adaptadores antiguos que solo guardan snapshots.
         await this.options.store.saveDocument({

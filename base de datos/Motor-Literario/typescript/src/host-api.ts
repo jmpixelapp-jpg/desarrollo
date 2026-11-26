@@ -4440,6 +4440,18 @@ export class HostEngineApi {
       this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
       return undefined;
     }
+    const latest = this.liveMonitorLeases.get(documentId);
+    if (latest && latest.fencingToken > lease.fencingToken) {
+      return undefined;
+    }
+    if (latest && latest.fencingToken === lease.fencingToken) {
+      if (latest.ownerId !== lease.ownerId) return undefined;
+      lease = {
+        ...lease,
+        expiresAt: Math.max(lease.expiresAt, latest.expiresAt),
+        updatedAt: Math.max(lease.updatedAt, latest.updatedAt)
+      };
+    }
     this.liveMonitorLeases.set(documentId, lease);
     this.liveMonitorLeaseLost.delete(documentId);
     this.liveMonitorLeaseErrors.delete(documentId);

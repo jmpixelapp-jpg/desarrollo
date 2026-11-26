@@ -5,6 +5,8 @@
 **Rama de integración:** `main`.  
 **Última actualización:** 26 de noviembre de 2026.
 
+**Nota de lectura:** las anotaciones `Validación pendiente` de las secciones históricas describen el estado en la fecha de cada entrega; la evidencia vigente y acumulada de CI se registra al final de este documento.
+
 ## 1. Entregas de esta tanda
 
 ### Integridad de sincronización
@@ -595,4 +597,4 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - La creación/reconciliación de esos índices usa `ensureIndex`, de modo que el auditor físico comprueba también los dos almacenes nuevos.
 - La prueba de migración parte de DB22, exige que DB27 cree los almacenes de reparación y verifica sus claves e índices, además de preservar el documento previo.
 
-**Evidencia de CI observada:** el workflow Live Author Monitor terminó con éxito en `d92f092`: type-check aislado, bundle, regresiones de recuperación, auditoría física DB27, pruebas aisladas, Page Lifecycle en Chromium, integración host/editor/browser y benchmark. La validación general de TypeScript terminó con éxito en `dfdfab9`: `npm run typecheck`, build, 924 pruebas automatizadas (924 pasaron, 0 fallaron) y benchmark de edición en vivo. La medición de monitor procesó 100.000 commits en 494,79 ms (202.107 commits/s), retuvo 0,50 MiB por sesiones abiertas y mantuvo el heap en 4,39 MiB desde media carga hasta carga completa; los ocho documentos terminaron con 12.500 commits confirmados y cero pendientes. El manifiesto DB27 y sus 37 almacenes se validaron en los workflows del monitor. El HEAD actual añade únicamente documentación de estos resultados respecto al commit validado.
+**Evidencia de CI observada:** el workflow Live Author Monitor terminó con éxito en `d92f092`: type-check aislado, bundle, regresiones de recuperación, auditoría física DB27, pruebas aisladas, Page Lifecycle en Chromium, integración host/editor/browser y benchmark. La validación general de TypeScript terminó con éxito en `060c9f1`: `npm run typecheck`, build y 925 pruebas automatizadas (925 pasaron, 0 fallaron). El benchmark procesó 100.000 commits en 661,62 ms (151.144 commits/s), retuvo 0,50 MiB por sesiones abiertas y mantuvo el heap en 4,39 MiB desde media carga hasta carga completa; los ocho documentos terminaron con 12.500 commits confirmados y cero pendientes. El manifiesto DB27 y sus 37 almacenes se validaron en los workflows del monitor. La prueba añadida de CAS entre dos instancias verificó una sola ganadora en una carrera de actualización y otra de creación, además de un reintento estable del ganador. El HEAD actual añade documentación de la evidencia y de las garantías CAS respecto al commit validado.

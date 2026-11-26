@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 15,
+  "mapping_version": 17,
   "schema_version": "0.4.2",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 27,
+    "database_version": 28,
     "object_stores": [
       {
         "name": "project-settings",
@@ -871,6 +871,37 @@
             false
           ]
         ]
+      },
+      {
+        "name": "sync-outbox",
+        "keyPath": "operationId",
+        "indexes": [
+          [
+            "by-project-created-at",
+            [
+              "projectId",
+              "createdAt"
+            ],
+            false
+          ],
+          [
+            "by-project-device-sequence",
+            [
+              "projectId",
+              "deviceId",
+              "sequence"
+            ],
+            true
+          ]
+        ]
+      },
+      {
+        "name": "sync-device-sequences",
+        "keyPath": [
+          "projectId",
+          "deviceId"
+        ],
+        "indexes": []
       },
       {
         "name": "narrative-reference-repair-audits",

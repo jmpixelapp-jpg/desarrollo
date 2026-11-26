@@ -25,7 +25,7 @@ export interface NarrativeIdeaEntityAttributionInput {
 const MAX_IDEAS = 100;
 const MAX_ENTITIES = 500;
 const MAX_NAME_UNITS = 120;
-const MAX_EVIDENCE_UNITS = 2_000;
+const MAX_EVIDENCE_UNITS = 2_000_000;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -43,7 +43,7 @@ function validate(input: NarrativeIdeaEntityAttributionInput): void {
     if (!entity || entity.projectId !== input.projectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
         entityIds.has(entity.id) || typeof entity.canonicalName !== "string" ||
-        !Array.isArray(entity.aliases)) {
+        !Array.isArray(entity.aliases) || entity.aliases.length > 100) {
       throw new Error("El catálogo contiene entidades inválidas o duplicadas.");
     }
     entityIds.add(entity.id);

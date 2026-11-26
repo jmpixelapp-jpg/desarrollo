@@ -25,6 +25,8 @@ export interface NarrativeBookIngestionInput {
   readonly title?: string;
   readonly language?: string;
   readonly baseOffset?: number;
+  /** Fichas ya identificadas del mismo libro para enriquecer acciones con menciones verificables. */
+  readonly entities?: readonly NarrativeEntity[];
 }
 
 export interface NarrativeBookEvidence {
@@ -81,6 +83,9 @@ export interface NarrativeBookIngestionResult {
   readonly chapters: readonly NarrativeBookChapter[];
   readonly paragraphs: readonly NarrativeBookParagraph[];
   readonly signals: readonly NarrativeBookSignal[];
+  /** Acciones vinculadas a entidades conocidas; siguen siendo candidatos revisables. */
+  readonly observations: readonly NarrativeObservationCandidate[];
+  readonly observationStatus: "extracted" | "no-entities" | "omitted-text-budget";
   readonly coverage: {
     readonly chapterCount: number;
     readonly paragraphCount: number;
@@ -128,8 +133,18 @@ function validate(input: NarrativeBookIngestionInput): void {
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
          input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) ||
       (input.title !== undefined && typeof input.title !== "string") ||
-      (input.language !== undefined && typeof input.language !== "string") ||\n      (input.entities !== undefined && !Array.isArray(input.entities))) {
+      (input.language !== undefined && typeof input.language !== "string") ||
+      (input.entities !== undefined && !Array.isArray(input.entities))) {
     throw new Error("Entrada inválida para la ingesta del libro.");
+  }
+  for (const entity of input.entities ?? []) {
+    if (!entity || entity.projectId !== input.projectId ||
+        typeof entity.id !== "string" || !entity.id.trim() ||
+        typeof entity.kind !== "string" ||
+        typeof entity.canonicalName !== "string" || !entity.canonicalName.trim() ||
+        !Array.isArray(entity.aliases)) {
+      throw new Error("La ingesta recibió entidades inválidas o pertenecientes a otro libro.");
+    }
   }
 }
 
@@ -345,6 +360,20 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
   }
 
   const totalWords = countWords(input.text);
+  const hasEntities = (input.entities?.length ?? 0) > 0;
+  const observationStatus = !hasEntities ? "no-entities" as const
+    : input.text.length > MAX_NARRATIVE_OBSERVATION_TEXT_UNITS ? "omitted-text-budget" as const
+    : "extracted" as const;
+  const observations = observationStatus === "extracted"
+    ? discoverNarrativeObservationCandidates({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        revision: input.revision,
+        text: input.text,
+        entities: input.entities ?? [],
+        baseOffset: input.baseOffset ?? 0
+      })
+    : [];
   return {
     version: 1,
     projectId: input.projectId,
@@ -356,6 +385,8 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     chapters,
     paragraphs,
     signals,
+    observations,
+    observationStatus,
     coverage: {
       chapterCount: chapters.length,
       paragraphCount: paragraphs.length,

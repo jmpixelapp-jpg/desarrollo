@@ -402,7 +402,7 @@ function isPersonalIdeaArchivePayload(value: unknown): value is PersonalIdeaArch
     Array.isArray(item.archivedIdeaIds) && item.archivedIdeaIds.length <= 100_000 &&
     item.archivedIdeaIds.every(id => typeof id === "string" && !!id.trim() && id.length <= 512) &&
     new Set(item.archivedIdeaIds).size === item.archivedIdeaIds.length &&
-    item.archivedIdeaIds.every((id, index, ids) => index === 0 || ids[index - 1]!.localeCompare(id) < 0) &&
+    item.archivedIdeaIds.every((id, index, ids) => index === 0 || ids[index - 1]! < id) &&
     typeof item.archiveChecksum === "string" && !!item.archiveChecksum.trim() && item.archiveChecksum.length <= 160;
 }
 

@@ -974,6 +974,30 @@ export class HostEngineApi {
         }
       }
 
+      // Evita publicar una mezcla de revisiones si otro escritor editó un
+      // documento mientras se leían los cuerpos del proyecto.
+      const latestMetadata = await store.loadDocumentMetadata(project.projectId);
+      const latestById = new Map<string, { revision: number; sequence: number }>();
+      if (!Array.isArray(latestMetadata) || latestMetadata.length !== metadata.length) {
+        throw new Error("El conjunto documental cambió durante la reconciliación de continuidad; se reintentará.");
+      }
+      for (const item of latestMetadata) {
+        if (!item || item.projectId !== project.projectId ||
+            typeof item.documentId !== "string" || !item.documentId.trim() ||
+            !Number.isSafeInteger(item.revision) || item.revision < 0 ||
+            !Number.isSafeInteger(item.sequence) || item.sequence < 0 ||
+            latestById.has(item.documentId)) {
+          throw new Error("El segundo inventario documental no superó su validación.");
+        }
+        latestById.set(item.documentId, { revision: item.revision, sequence: item.sequence });
+      }
+      for (const item of metadata) {
+        const latest = latestById.get(item.documentId);
+        if (!latest || latest.revision !== item.revision || latest.sequence !== item.sequence) {
+          throw new Error("Una revisión avanzó durante la reconciliación de continuidad; se conserva el índice anterior.");
+        }
+      }
+
       const rawAnalysis = analyzeNarrativeIdeaCrossDocumentRelations({
         projectId: project.projectId,
         ideaCandidates: selectedCandidates,
@@ -3274,6 +3298,7 @@ export class HostEngineApi {
     await this.enqueueKnowledgeOperation(async () => {
       this.invalidateNarrativeKnowledgeCaches();
     });
+    await this.refreshNarrativeIdeaContinuityIndex();
   }
 
   async getNarrativeIdeas(): Promise<readonly NarrativeIdea[]> {
@@ -4020,6 +4045,7 @@ export class HostEngineApi {
     this.eventLineIndex = undefined;
     this.ideaLineIndex = undefined;
     this.entityNameIndex = undefined;
+    this.continuityCandidatesByDocument.clear();
   }
 
   private requireRelationStore(): Required<Pick<
@@ -4076,6 +4102,12 @@ export class HostEngineApi {
       explicitIdeaEntityLinks: Boolean(this.store.saveIdea && this.store.loadIdeas && this.store.saveEntity && this.store.loadEntities),
       explicitIdeaLinks: Boolean(this.store.saveIdea && this.store.loadIdeas),
       projectWideNarrativeIdeaGraph: Boolean(this.store.loadIdeas && this.store.loadEntities),
+      automaticNarrativeIdeaContinuityIndex: Boolean(
+        this.store.loadDocumentMetadata && this.store.loadDocument &&
+        this.store.loadNarrativeIdeaContinuityIndex &&
+        this.store.saveNarrativeIdeaContinuityIndexIfUnchanged
+      ),
+      narrativeIdeaContinuityTransportNotification: Boolean(this.onNarrativeIdeaContinuityIndexUpdated),
       personalIdeaLibrary: Boolean(this.store.archiveUnincorporatedIdeas && this.store.loadPersonalIdeas),
       personalIdeaLibraryFinalizationReceipts: Boolean(
         this.store.archiveUnincorporatedIdeas && this.store.loadProjectFinalizationReceipt
@@ -4124,6 +4156,7 @@ export class HostEngineApi {
     }
     this.engine.initializeProject(identity);
     this.unsubscribeNarrativeChanges?.();
+    this.continuityCandidatesByDocument.clear();
     this.project = Object.freeze({ ...identity });
     const subscribe = this.store.subscribeNarrativeChanges;
     this.unsubscribeNarrativeChanges = subscribe?.call(this.store, projectId => {
@@ -4137,6 +4170,7 @@ export class HostEngineApi {
     if (this.liveMonitorCheckpointRetentionMs > 0) {
       void this.cleanupLiveAuthorMonitorCheckpoints().catch(error => this.reportKnowledgeError(error));
     }
+    void this.refreshNarrativeIdeaContinuityIndex().catch(error => this.reportKnowledgeError(error));
   }
 
   /** Libera el suscriptor opcional de sincronización entre pestañas. */
@@ -4237,6 +4271,7 @@ export class HostEngineApi {
       this.scheduleLiveAuthorMonitorCheckpoint(documentId);
       const initialCheckpoint = this.liveMonitorCheckpointTails.get(documentId);
       if (initialCheckpoint) await initialCheckpoint.catch(() => undefined);
+      await this.refreshNarrativeIdeaContinuityIndex().catch(error => this.reportKnowledgeError(error));
       const recovery = this.diagnosticsPersistenceTail.then(async () => {
         await this.restoreDocumentDiagnostics(recoveredSnapshot);
       });
@@ -4776,6 +4811,7 @@ export class HostEngineApi {
     await this.diagnosticsRecoveryTail;
     await this.diagnosticsPersistenceTail;
     await this.knowledgeTail;
+    await this.continuityIndexTail;
   }
 
   pollCommit(ticketId: string): CommitResult | undefined {

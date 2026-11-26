@@ -77,6 +77,10 @@ En construcciones pasivas, el extractor puede conservar por separado el sujeto p
 - Señales: 20.000; el resultado informa cuántas se omitieron.
 - No se trunca silenciosamente: `coverage.truncated` y `coverage.omittedSignals` exponen la cobertura limitada.
 
+### Complemento personal explícito
+
+El descubrimiento de observaciones puede conservar un candidato sintáctico para el patrón local «verbo + a + nombre de personaje conocido». Se guarda el ID de la entidad y la evidencia literal del nombre con offsets del documento. Esto no afirma por sí solo una relación semántica de víctima, destinatario, receptor o paciente. La coincidencia exige una entidad única registrada; una mención anterior al verbo no se reutiliza como objeto. Las pruebas cubren «Ana encontró a Bruno» y «Bruno encontró a Ana» para evitar invertir los participantes.
+
 ## Próximas etapas técnicas
 
 1. Adaptadores de lectura para EPUB, PDF y DOCX, preservando el mapa entre texto extraído y ubicación original; TXT/Markdown ya dispone de lector estándar.

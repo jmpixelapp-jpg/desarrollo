@@ -621,6 +621,14 @@ test("rechaza checkpoints que no coinciden con el snapshot durable o contienen m
   const second = fixture();
   assert.throws(() => second.monitor.restoreCheckpoint(
     checkpoint,
+    null,
+    "book-1",
+    101
+  ), /snapshot durable del documento debe ser un objeto/);
+  assert.equal(second.monitor.getSnapshot("chapter-1"), undefined);
+
+  assert.throws(() => second.monitor.restoreCheckpoint(
+    checkpoint,
     { documentId: "chapter-1", text: "changed", revision: 0, sequence: 0 },
     "book-1",
     101

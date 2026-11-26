@@ -22,8 +22,8 @@ class FakeTextArea {
     this.listeners.get(type)?.delete(listener);
   }
 
-  emitBeforeInput(inputType, isComposing = false, isTrusted = true) {
-    const event = { defaultPrevented: false, inputType, isComposing, isTrusted };
+  emitBeforeInput(inputType, isComposing = false, isTrusted = true, data = null) {
+    const event = { defaultPrevented: false, inputType, isComposing, isTrusted, data };
     for (const listener of [...(this.listeners.get("beforeinput") ?? [])]) listener(event);
   }
 
@@ -40,10 +40,10 @@ class FakeTextArea {
     for (const listener of [...(this.listeners.get("compositionend") ?? [])]) listener({ isTrusted: true });
   }
 
-  edit({ start, end, nextValue, inputType = "insertText", isComposing = false }) {
+  edit({ start, end, nextValue, inputType = "insertText", isComposing = false, data = null }) {
     this.selectionStart = start;
     this.selectionEnd = end;
-    this.emitBeforeInput(inputType, isComposing);
+    this.emitBeforeInput(inputType, isComposing, true, data);
     this.value = nextValue;
     this.emitInput(isComposing);
   }
@@ -345,7 +345,7 @@ test("detecta una composición incompleta cuando llega otra operación antes del
   f.element.emitCompositionStart();
   f.element.selectionStart = 3;
   f.element.selectionEnd = 3;
-  f.element.emitBeforeInput("insertCompositionText", true);
+  f.element.emitBeforeInput("insertCompositionText", true, true, "日本");
   f.element.emitCompositionEnd();
 
   // compositionend no invalida por sí solo el beforeinput: el input final aún puede llegar.
@@ -536,6 +536,39 @@ test("no clasifica como corrección una sustitución de selección mediante inse
   assert.equal(f.source.getState().needsResync, false);
   f.stop();
   f.source.dispose();
+});
+
+
+test("contrasta beforeinput.data con el reemplazo real y detecta mutaciones dentro de la selección", () => {
+  const accepted = fixture("abcd", 0, 0);
+  accepted.element.edit({
+    start: 1,
+    end: 3,
+    nextValue: "aXYd",
+    inputType: "insertText",
+    data: "XY"
+  });
+  assert.equal(accepted.changes.length, 1);
+  assert.equal(accepted.changes[0].replacement, "XY");
+  assert.equal(accepted.source.getState().needsResync, false);
+  accepted.stop();
+  accepted.source.dispose();
+
+  const rejected = fixture("abcd", 0, 0);
+  rejected.element.selectionStart = 1;
+  rejected.element.selectionEnd = 3;
+  rejected.element.emitBeforeInput("insertText", false, true, "XY");
+  // Mutación externa dentro del rango seleccionado: misma longitud, prefijo y
+  // sufijo intactos, por lo que solo la comparación con beforeinput.data la detecta.
+  rejected.element.value = "aZZd";
+  rejected.element.emitInput(false, "insertText");
+
+  assert.equal(rejected.changes.length, 0);
+  assert.equal(rejected.source.getState().needsResync, true);
+  assert.equal(rejected.errors[0].code, "input-data-mismatch");
+  assert.match(rejected.errors[0].message, /no coincide con el dato declarado/);
+  rejected.stop();
+  rejected.source.dispose();
 });
 
 test("rechaza eventos de edición sintéticos aunque imiten inputType y cambien el valor", () => {

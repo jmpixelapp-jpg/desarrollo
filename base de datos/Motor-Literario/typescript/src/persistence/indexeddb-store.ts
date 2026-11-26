@@ -1893,14 +1893,16 @@ export class IndexedDbProjectStore implements ProjectStore {
         }
         const db = request.result;
         if (!db.objectStoreNames.contains(NARRATIVE_REFERENCE_REPAIR_AUDITS)) {
-          db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_AUDITS, {
+          const audits = db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_AUDITS, {
             keyPath: ["projectId", "operationId"]
           });
+          audits.createIndex("by-project", "projectId", { unique: false });
         }
         if (!db.objectStoreNames.contains(NARRATIVE_REFERENCE_REPAIR_PENDING)) {
-          db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_PENDING, {
+          const pending = db.createObjectStore(NARRATIVE_REFERENCE_REPAIR_PENDING, {
             keyPath: ["projectId", "operationId"]
           });
+          pending.createIndex("by-project", "projectId", { unique: false });
         }
         if (!db.objectStoreNames.contains(PROJECT_SETTINGS)) {
           const settings = db.createObjectStore(PROJECT_SETTINGS, {

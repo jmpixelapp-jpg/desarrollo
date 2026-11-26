@@ -68,6 +68,17 @@ test("distingue salida, entrada, tránsito y regreso", () => {
   }
 });
 
+test("reconoce contracciones y complementos directos de lugares atravesados", () => {
+  const departure = "Ana salió del castillo.";
+  assert.equal(discover(observation({
+    text: departure, action: "salir", actionSurface: "salió", location: "castillo"
+  }))[0]?.transition, "departed");
+  const crossing = "Ana cruzó el bosque.";
+  assert.equal(discover(observation({
+    text: crossing, action: "cruzar", actionSurface: "cruzó", location: "bosque"
+  }))[0]?.transition, "passed-through");
+});
+
 test("no confirma movimientos negados ni futuros", () => {
   const negatedText = "Ana no llegó al puerto.";
   const negated = discover(observation({

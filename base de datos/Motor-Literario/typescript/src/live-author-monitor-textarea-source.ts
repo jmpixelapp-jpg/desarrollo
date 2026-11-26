@@ -7,6 +7,7 @@ export type LiveAuthorMonitorTextAreaErrorCode =
   | "missing-beforeinput"
   | "missing-input"
   | "invalid-selection"
+  | "untrusted-event"
   | "unsupported-input-type"
   | "composition-state-mismatch"
   | "input-type-mismatch"
@@ -51,6 +52,8 @@ interface BeforeInputState {
  * Convierte eventos nativos beforeinput/input de un textarea en deltas del motor.
  * Mantiene una copia sombra efímera en memoria para comprobar el contexto
  * anterior y posterior a cada edición. No la persiste ni la incluye en diagnósticos.
+ * Solo acepta eventos DOM confiables (isTrusted=true); los eventos sintéticos
+ * requieren un adaptador transaccional explícito del editor.
  * Todos los offsets siguen la convención UTF-16 del navegador.
  *
  * historyUndo/historyRedo requieren el adaptador de historial del editor:
@@ -73,6 +76,14 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
   private readonly handleBeforeInput = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
+    const input = event as InputEvent;
+    if (input.isTrusted !== true) {
+      this.fail(
+        "untrusted-event",
+        "Se rechazó un beforeinput sintético o no confiable; la captura nativa solo acepta eventos originados por el navegador."
+      );
+      return;
+    }
     if (this.pendingInput) {
       this.fail(
         "missing-input",
@@ -80,7 +91,6 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       );
       return;
     }
-    const input = event as InputEvent;
     if (input.defaultPrevented) {
       this.pendingInput = undefined;
       return;
@@ -118,8 +128,15 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     };
   };
 
-  private readonly handleCompositionStart = (): void => {
+  private readonly handleCompositionStart = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
+    if (event.isTrusted !== true) {
+      this.fail(
+        "untrusted-event",
+        "Se rechazó un compositionstart sintético o no confiable."
+      );
+      return;
+    }
     if (this.pendingInput) {
       this.fail(
         "composition-state-mismatch",
@@ -130,8 +147,15 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.compositionActive = true;
   };
 
-  private readonly handleCompositionEnd = (): void => {
+  private readonly handleCompositionEnd = (event: Event): void => {
     if (this.disposed) return;
+    if (event.isTrusted !== true) {
+      this.fail(
+        "untrusted-event",
+        "Se rechazó un compositionend sintético o no confiable."
+      );
+      return;
+    }
     // Algunos navegadores despachan compositionend antes del input final.
     // No invalidamos el beforeinput pendiente: el input que lo completa sigue
     // siendo la evidencia necesaria para publicar el delta.
@@ -140,6 +164,14 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
   private readonly handleInput = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
+    const input = event as InputEvent;
+    if (input.isTrusted !== true) {
+      this.fail(
+        "untrusted-event",
+        "Se rechazó un input sintético o no confiable; la edición debe confirmarse con eventos nativos."
+      );
+      return;
+    }
     const before = this.pendingInput;
     this.pendingInput = undefined;
     if (!before) {
@@ -150,7 +182,6 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       return;
     }
 
-    const input = event as InputEvent;
     if (typeof input.inputType === "string" && input.inputType &&
         input.inputType !== before.inputType) {
       this.fail(

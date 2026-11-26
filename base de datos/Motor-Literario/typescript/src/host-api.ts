@@ -168,7 +168,7 @@ function requireNarrativeRecordShape(
     const allowLegacyIdeaGraph = options.allowLegacyIdeaGraph === true;
     for (const links of [item.relatedEntityIds, item.relatedIdeaIds]) {
       if (links !== undefined && (!Array.isArray(links) ||
-          links.length > (allowLegacyIdeaGraph ? 20_000 : MAX_NARRATIVE_IDEA_REFERENCES) ||
+          links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
           links.some((value: unknown) => typeof value !== "string" || !value.trim()) ||
           (!allowLegacyIdeaGraph && new Set(links).size !== links.length))) invalid();
     }

@@ -388,3 +388,10 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 - CI 2784: Type-check correcto; 996 pruebas aprobadas y 2 fallidas, ambas de pronombres, lo que permitió aislar esta causa. La suite del commit correctivo y la nueva prueba anti-subcadena están pendientes de CI.
 
 **Implicación de calidad:** el reconocimiento de entidades debe ser por token Unicode, nunca por subcadena; los pronombres deben permanecer referencias sin resolver hasta que un componente contextual aporte evidencia suficiente. Esta regla es prioritaria para evitar contaminación del grafo narrativo.
+
+
+### Verificación incremental de la corrección de menciones — ejecución 2795
+
+- La ejecución 2795, correspondiente al commit `1edc636`, superó Type-check.
+- En la última consulta, el paso «Build and run automated tests» seguía en ejecución; por tanto, todavía no hay conclusión sobre las pruebas completas ni sobre el benchmark.
+- La ejecución 2794 corresponde al commit intermedio `db82b9e`, que falló Type-check por un literal de plantilla mal formado. Ese commit fue corregido inmediatamente en `1edc636`; no es la versión vigente.

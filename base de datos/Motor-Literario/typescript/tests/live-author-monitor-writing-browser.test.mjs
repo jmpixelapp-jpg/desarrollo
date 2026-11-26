@@ -29,12 +29,12 @@ async function waitForVite(url, child) {
   let lastError;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
-      throw new Error(\`Vite terminó antes de estar listo (código \${child.exitCode}).\`);
+      throw new Error(Vite terminó antes de estar listo (código ${child.exitCode}).);
     }
     try {
       const response = await fetch(url);
       if (response.ok) return;
-      lastError = new Error(\`Vite respondió HTTP \${response.status}.\`);
+      lastError = new Error(Vite respondió HTTP ${response.status}.);
     } catch (error) {
       lastError = error;
     }
@@ -73,7 +73,7 @@ test("dos capítulos conservan métricas independientes al cambiar, guardar y re
   const projectId = "live-author-multidoc-" + randomUUID();
   const documentId = "chapter-" + randomUUID();
   const secondDocumentId = documentId + "-chapter-2";
-  const url = \`http://127.0.0.1:\${port}/examples/live-author-monitor/index.html?project=\${encodeURIComponent(projectId)}&document=\${encodeURIComponent(documentId)}\`;
+  const url = http://127.0.0.1:${port}/examples/live-author-monitor/index.html?project=${encodeURIComponent(projectId)}&document=${encodeURIComponent(documentId)};
   const viteCli = resolve(process.cwd(), "node_modules/vite/bin/vite.js");
   const server = spawn(
     process.execPath,

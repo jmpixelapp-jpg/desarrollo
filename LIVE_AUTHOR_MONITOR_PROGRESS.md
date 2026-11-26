@@ -1931,3 +1931,26 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Typecheck global externo:** [Motor Literario TypeScript — run 45815610213](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45815610213) continúa fallando en `tsc --noEmit` con 11 diagnósticos en ocho módulos narrativos no pertenecientes al monitor: `narrative-action-claim-comparison.ts` (4 referencias a `polarityEvidence` inexistente), `narrative-character-knowledge-discovery.ts`, `narrative-evidence-context-expansion.ts`, `narrative-information-concealment-discovery.ts`, `narrative-information-exposure-discovery.ts`, `narrative-information-reception-discovery.ts`, `narrative-knowledge-dialogue-link.ts` (`exactOptionalPropertyTypes`) y `narrative-relationship-transition-discovery.ts`. El workflow propio del Live Author Monitor sí superó su typecheck aislado, bundle runtime y las 230 pruebas integradas.
 
 **Pendiente:** ampliar la matriz de `inputType` menos comunes por navegador y ejecutar la página manual con IME físico en Windows, macOS y Linux. El identificador nativo describe la señal del navegador; no demuestra por sí solo dispositivo físico, intención humana ni texto final confirmado.
+## 124. Matriz adicional de InputEvent.inputType y borrado direccional (26 de noviembre de 2026)
+
+**Matriz completada en la fuente textarea:**
+- `insertLineBreak` y `insertParagraph` se clasifican como `typing` y conservan el salto de línea real como reemplazo UTF-16.
+- `insertFromPasteAsQuotation` se clasifica como `paste`, separado de `insertFromPaste` pero conservando el token exacto.
+- `insertFromDrop` y `insertFromYank` siguen siendo `other`; no se confunden con pegado ni teclado.
+- `insertReplacementText` sigue siendo `correction`; `insertFromDictation` es `other` salvo que el editor anfitrión proporcione evidencia más fuerte.
+- `deleteContentBackward` y `deleteContentForward` siguen compartiendo `activityKind: deletion`, pero los deltas conservan la dirección nativa exacta en `inputType`.
+
+**Pruebas:** se añadieron/extendieron aserciones para saltos, párrafos, pegado como cita, drop/yank/autocorrección y los dos sentidos de borrado. Se valida tanto la categoría como el token nativo y el texto/reemplazo exacto. No se extrae `InputEvent.data` al metadato.
+
+**CI integral final:** [Live Author Monitor — run 45816248135](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45816248135), commit `566f580a5df107be8e7b3a8ae2e679fd3680c28d`, resultado `success`.
+- Diagnósticos de recuperación: **17/17**.
+- Suite aislada monitor/UI: **203/203**, 0 fallos.
+- Page Lifecycle Chromium: **1/1**.
+- `beforeinput` cancellation: **1/1**.
+- Composición IME CDP: **1/1**.
+- Integración host/editor/browser: **231/231**, 0 fallos.
+- Benchmark: 100.000 commits en 403,20 ms (~248.017 commits/s); ocho documentos de 1 MiB, heap 4,42 MiB a media y carga completa (0 MiB de crecimiento), 0,5 MiB retenidos por sesiones abiertas, RSS final 71,51 MiB y cero pendientes.
+
+**Typecheck global separado:** [Motor Literario TypeScript — run 45816248125](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45816248125) termina en `failure` por 11 errores TypeScript en ocho archivos narrativos no pertenecientes al monitor: cuatro referencias a `polarityEvidence` inexistente en `narrative-action-claim-comparison.ts`, parámetros implícitos `any` en `narrative-character-knowledge-discovery.ts`, `narrative-evidence-context-expansion.ts`, `narrative-information-concealment-discovery.ts`, `narrative-information-exposure-discovery.ts`, `narrative-information-reception-discovery.ts` y `narrative-relationship-transition-discovery.ts`, y un conflicto `exactOptionalPropertyTypes` en `narrative-knowledge-dialogue-link.ts`. El workflow aislado del monitor sí aprobó su typecheck, runtime build, 203 pruebas y 231 integraciones.
+
+**Pendiente de compatibilidad real:** la matriz usa el simulador de DOM y Chromium automatizado; todavía faltan trazas de IME/teclados físicos por sistema operativo, navegador e idioma. El editor enriquecido definitivo tampoco está incluido en el paquete y sigue pendiente conectarlo a sus transacciones reales de undo/redo.

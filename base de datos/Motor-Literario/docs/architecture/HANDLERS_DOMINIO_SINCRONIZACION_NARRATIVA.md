@@ -182,3 +182,10 @@ Una intención que conserva su auditoría indica que el proceso pudo interrumpir
 `inspectNarrativeSyncJournalIntegrity(journal, projectId)` audita el diario sin alterar operaciones ni cursores. Verifica el digest SHA-256 de cada envoltura, los metadatos locales de recepción/aplicación, las identidades repetidas y la continuidad de secuencias por escritor. El informe enumera incidencias con códigos estables (`invalid-envelope`, `invalid-received-at`, `invalid-applied-at`, `duplicate-operation`, `duplicate-writer-sequence`, `sequence-gap`) y declara `intact` únicamente cuando no hay incidencias.
 
 El diagnóstico asume que el diario conserva el historial completo de operaciones de cada escritor desde la secuencia 1. No autentica al escritor: la huella SHA-256 detecta alteraciones del contenido, pero la autorización debe resolverse en el límite servidor/anfitrión.
+
+
+### Barrera de integridad antes del replay entrante
+
+`createRecoveryFirstNarrativeSyncConsumer` ahora inspecciona la integridad del diario después de recuperar reparaciones y antes de despachar operaciones. Si quedan reparaciones en conflicto, el replay sigue bloqueado por esa causa. Si no quedan reparaciones, pero el historial del diario presenta digest inválido, metadatos locales inconsistentes o secuencias repetidas/incompletas, devuelve `blockedByJournalIntegrity: true`, el informe `journalIntegrity` y no ejecuta handlers. La operación corrupta permanece durable y pendiente para investigación; no se elimina ni se confirma automáticamente.
+
+La inspección cubre el historial del proyecto completo, no solo el escritor solicitado para replay, porque una inconsistencia en cualquier escritor es relevante para la integridad del diario compartido del proyecto.

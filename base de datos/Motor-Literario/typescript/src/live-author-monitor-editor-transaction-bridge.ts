@@ -37,6 +37,12 @@ implements LiveAuthorMonitorEditorTransactionProvider {
     string,
     Set<(transaction: LiveAuthorMonitorEditorTransaction) => void>
   >();
+  private readonly pendingPublications: Array<{
+    readonly documentId: string;
+    readonly transaction: LiveAuthorMonitorEditorTransaction;
+    readonly listeners: readonly ((transaction: LiveAuthorMonitorEditorTransaction) => void)[];
+  }> = [];
+  private dispatching = false;
   private disposed = false;
 
   constructor(options: LiveAuthorMonitorEditorTransactionBridgeOptions) {
@@ -111,19 +117,43 @@ implements LiveAuthorMonitorEditorTransactionProvider {
       kind: transaction.kind,
       change: Object.freeze({ ...transaction.change })
     });
-    let notified = 0;
-    for (const listener of [...subscribers]) {
-      if (!subscribers.has(listener)) continue;
-      try {
-        listener(immutableTransaction);
-        notified += 1;
-      } catch (error) {
-        try { this.onListenerError?.(error, documentId); } catch {
-          // Los diagnósticos nunca deben interferir con la edición ni con otros listeners.
+    const targets = [...subscribers];
+    this.pendingPublications.push({
+      documentId,
+      transaction: immutableTransaction,
+      listeners: targets
+    });
+    this.drainPublications();
+    // Cuenta los listeners registrados al encolar; una publicación reentrante
+    // queda en cola y conserva el orden de la publicación exterior.
+    return targets.length;
+  }
+
+  private drainPublications(): void {
+    if (this.dispatching || this.disposed) return;
+    this.dispatching = true;
+    try {
+      while (this.pendingPublications.length > 0 && !this.disposed) {
+        const publication = this.pendingPublications.shift();
+        if (!publication) continue;
+        const active = this.listeners.get(publication.documentId);
+        if (!active) continue;
+        for (const listener of publication.listeners) {
+          if (this.disposed) break;
+          if (!active.has(listener)) continue;
+          try {
+            listener(publication.transaction);
+          } catch (error) {
+            try { this.onListenerError?.(error, publication.documentId); } catch {
+              // Los diagnósticos nunca deben interferir con la edición ni con otros listeners.
+            }
+          }
         }
       }
+    } finally {
+      this.dispatching = false;
+      if (this.disposed) this.pendingPublications.length = 0;
     }
-    return notified;
   }
 
   getSubscriberCount(documentId?: string): number {
@@ -137,6 +167,7 @@ implements LiveAuthorMonitorEditorTransactionProvider {
     if (this.disposed) return;
     this.disposed = true;
     this.listeners.clear();
+    this.pendingPublications.length = 0;
   }
 
   private assertActive(): void {

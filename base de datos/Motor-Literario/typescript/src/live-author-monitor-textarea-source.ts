@@ -5,6 +5,7 @@ export type LiveAuthorMonitorTextAreaErrorCode =
   | "invalid-initial-snapshot"
   | "document-mismatch"
   | "missing-beforeinput"
+  | "missing-input"
   | "invalid-selection"
   | "unsupported-input-type"
   | "composition-state-mismatch"
@@ -69,6 +70,13 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
   private readonly handleBeforeInput = (event: Event): void => {
     if (this.disposed || this.needsResync) return;
+    if (this.pendingInput) {
+      this.fail(
+        "missing-input",
+        "Se recibió un nuevo beforeinput antes de completar el input anterior; no se puede asociar con seguridad el cambio al rango capturado."
+      );
+      return;
+    }
     const input = event as InputEvent;
     if (input.defaultPrevented) {
       this.pendingInput = undefined;

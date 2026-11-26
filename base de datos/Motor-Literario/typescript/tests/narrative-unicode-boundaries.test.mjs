@@ -148,3 +148,15 @@ test("el extractor de relaciones no acepta un nombre base como prefijo antes de 
 
   assert.deepEqual(relations, []);
 });
+
+test("extrae entidades cuando la etiqueta está capitalizada y el nombre termina el fragmento", () => {
+  const trailing = extractNarrativeEntities(
+    "unicode-event-boundaries", "chapter-final-name", 1, "Personaje Ana", 100, 0
+  );
+  assert.equal(trailing.length, 1);
+  assert.equal(trailing[0].canonicalName, "Ana");
+  assert.equal(
+    "Personaje Ana".slice(trailing[0].evidence[0].start, trailing[0].evidence[0].end),
+    "Ana"
+  );
+});

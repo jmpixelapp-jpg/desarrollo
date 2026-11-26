@@ -84,8 +84,10 @@ test("reconoce encabezados tras BOM UTF-8 y conserva offsets del texto original"
   assert.equal(result.chapters[0].heading, "Capítulo I");
   const arrival = result.signals.find(signal => signal.surface === "llegó");
   assert.ok(arrival);
-  assert.equal(arrival.evidence.start, text.indexOf("llegó"));
-  assert.equal(text.slice(arrival.evidence.start, arrival.evidence.end), "llegó");
+  const verbOffset = arrival.evidence.excerpt.indexOf("llegó");
+  assert.ok(verbOffset >= 0);
+  assert.equal(arrival.evidence.start + verbOffset, text.indexOf("llegó"));
+  assert.equal(arrival.evidence.excerpt.slice(verbOffset, verbOffset + "llegó".length), "llegó");
 });
 
 test("rechaza extensiones no admitidas, MIME incompatibles y UTF-8 inválido", async () => {

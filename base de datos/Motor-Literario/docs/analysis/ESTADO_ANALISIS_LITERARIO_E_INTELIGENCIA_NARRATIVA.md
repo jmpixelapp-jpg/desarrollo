@@ -492,3 +492,12 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Añadida regresión con dos instancias IndexedDB concurrentes, una operación legacy previa, secuencias consecutivas, reintento idempotente y colisión de payload.
 - **Alcance:** la asignación es compartida entre conexiones IndexedDB del mismo origen; no coordina dispositivos físicos distintos ni reemplaza un orden global asignado por servidor.
 - **Validación:** cambios y prueba publicados. Falta ejecutar build/typecheck y suite; CI aún no confirmado.
+
+
+### Continuación — integración del asignador en el contrato de sincronización
+
+- `SyncOutboxPort` expone ahora `enqueueNextSyncOperation(draft)` como capacidad opcional, con la misma forma de operación que el almacén IndexedDB. Esto hace visible la asignación atómica en el puerto de salida, sin forzar a adaptadores externos antiguos a implementarla.
+- README actualizado: los nuevos escritores deben preferir `enqueueNextSyncOperation`; `enqueueSyncOperation` queda para compatibilidad con productores que ya suministran secuencia.
+- Nueva prueba entre dos instancias que solicitan simultáneamente el mismo `operationId`, con payloads JSON equivalentes pero distinto orden de claves. Ambas recuperan la misma secuencia y solo queda una operación.
+- La búsqueda de llamadas en el repositorio no permitió identificar un productor de dominio que genere actualmente operaciones para la outbox; el coordinador consume la interfaz, pero no crea operaciones. Por ello no se ha conectado artificialmente un flujo de escritura que no existe. El nuevo método queda expuesto en los contratos `ProjectStore` y `SyncOutboxPort`, listo para el próximo productor real.
+- **Validación pendiente:** no se ha ejecutado `npm test` ni `npm run typecheck` en este entorno. No hay checks/workflows reportados para los commits recientes.

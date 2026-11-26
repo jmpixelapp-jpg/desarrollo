@@ -68,6 +68,7 @@ export interface NarrativeIdeaContinuityLinesInput {
 const MAX_EVENTS = 10_000;
 const MAX_OCCURRENCES = 200;
 const MAX_TEXT_UNITS = 500;
+const MAX_ID_UNITS = 256;
 const MAX_EVIDENCE_UNITS = 2_000_000;
 const MAX_TOTAL_EVIDENCE_UNITS = 25_000_000;
 
@@ -116,7 +117,9 @@ function containsTextWithWhitespace(excerpt: string, text: string): boolean {
 function validateOccurrence(occurrence: NarrativeIdeaOccurrenceReference): void {
   if (!occurrence || typeof occurrence !== "object" ||
       typeof occurrence.ideaCandidateId !== "string" || !occurrence.ideaCandidateId.trim() ||
+      occurrence.ideaCandidateId.length > MAX_ID_UNITS ||
       typeof occurrence.documentId !== "string" || !occurrence.documentId.trim() ||
+      occurrence.documentId.length > MAX_ID_UNITS ||
       !Number.isSafeInteger(occurrence.revision) || occurrence.revision < 0 ||
       typeof occurrence.text !== "string" || !occurrence.text.trim() ||
       occurrence.text.length > MAX_TEXT_UNITS ||
@@ -150,13 +153,14 @@ function sameOccurrence(
 function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): void {
   if (!event || typeof event !== "object" ||
       event.projectId !== projectId ||
-      typeof event.id !== "string" || !event.id.trim() ||
+      typeof event.id !== "string" || !event.id.trim() || event.id.length > 1024 ||
       event.reviewStatus !== "candidate" ||
+      !event.firstOccurrence || !event.secondOccurrence ||
       !["reappeared", "echoed", "observed-without-order"].includes(event.eventKind) ||
       !["ordered", "unknown"].includes(event.chronology) ||
       !event.supportingRelation ||
       typeof event.supportingRelation.relationId !== "string" ||
-      !event.supportingRelation.relationId.trim() ||
+      !event.supportingRelation.relationId.trim() || event.supportingRelation.relationId.length > 1024 ||
       !["exact-recurrence", "lexical-resonance"].includes(event.supportingRelation.relationType) ||
       !Array.isArray(event.supportingRelation.sharedTerms) ||
       event.supportingRelation.sharedTerms.length > 500 ||
@@ -200,6 +204,7 @@ function validateEvent(event: NarrativeIdeaEvolutionEvent, projectId: string): v
 
   if (event.chronology === "ordered") {
     if (!event.earlierOccurrence || !event.laterOccurrence ||
+        !event.earlierOccurrence.evidence || !event.laterOccurrence.evidence ||
         event.earlierOccurrence.ideaCandidateId === event.laterOccurrence.ideaCandidateId ||
         event.earlierOccurrence.documentId === event.laterOccurrence.documentId) {
       throw new Error("El evento ordenado no conserva ambos extremos cronológicos.");

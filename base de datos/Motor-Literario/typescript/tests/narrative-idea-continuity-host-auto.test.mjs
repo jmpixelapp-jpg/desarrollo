@@ -649,7 +649,7 @@ test("recalcula cronología cuando cambia el orden editorial sin modificar los c
 });
 
 
-test("HostEngineApi encola automáticamente cada generación en el outbox usando el writerId del proyecto", async () => {
+test("HostEngineApi encola automáticamente cada generación con un ID único de instalación", async () => {
   const store = new IndexedDbProjectStore();
   const outbox = new IndexedDbNarrativeSyncOutbox({
     databaseName: "host-continuity-outbox-" + projectId()

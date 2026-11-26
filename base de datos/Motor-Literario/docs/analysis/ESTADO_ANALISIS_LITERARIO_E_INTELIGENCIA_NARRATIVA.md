@@ -223,6 +223,8 @@ Los hashes anteriores son referencias abreviadas; cada cambio debe revisarse en 
 - `95daff5`: añade una prueba de estrés autocontenida con cinco fuentes, quinientos intermediarios y quinientos destinos; cuatro fuentes completan un millón de expansiones y la quinta activa el truncamiento.
 - `f9af2b0`: añade auditoría estática del recorrido acotado de continuidad entre documentos.
 - `98f31e0`: corrige el delimitador de la auditoría de continuidad.
+- `d79b5aa`: simplifica las aserciones estáticas de continuidad para comparar fragmentos literales del código.
+- `2e4e5c1`: corrige los escapes de salto de línea en la auditoría estática.
 ## 7. Pendientes y siguiente secuencia de trabajo
 
 1. Ejecutar la prueba de estrés que fuerza el límite de un millón de expansiones de dos saltos y confirma `truncated-by-work-budget`; el fixture autocontenido comprueba que cuatro fuentes completan un millón de expansiones y que la quinta se interrumpe, conservando contadores parciales explícitos.

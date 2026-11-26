@@ -376,6 +376,7 @@ El análisis acepta hasta 2.000.000 de unidades UTF-16 por operación. Los docum
 La bandeja `sync-outbox` conserva operaciones salientes hasta que el transporte remoto confirma su recepción:
 
 - `enqueueSyncOperation(operation)`: inserta una operación idempotente. Repetir el mismo `operationId` con el mismo contenido no duplica el registro; reutilizarlo con contenido distinto se rechaza. La secuencia es única por proyecto y dispositivo.
+- `enqueueNextSyncOperation(draft)`: asigna y persiste la siguiente secuencia del proyecto/dispositivo en una sola transacción IndexedDB. Es el método recomendado para nuevos escritores; los reintentos con el mismo `operationId` recuperan la operación ya asignada. La asignación coordina pestañas del mismo origen, no dispositivos físicos independientes.
 - `loadPendingSyncOperations(projectId, limit)`: lee pendientes sin eliminarlos.
 - `recordSyncOperationAttempt(operationId, attemptedAt, error?, nextAttemptAt?)`: registra el intento y la próxima fecha; omitir nextAttemptAt limpia el backoff anterior.
 - `countPendingSyncOperations(projectId)`: cuenta todas las operaciones, incluso las que esperan.

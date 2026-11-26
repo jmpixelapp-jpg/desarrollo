@@ -49,7 +49,7 @@ Reglas de prudencia:
 - Si aparecen varios personajes, conserva todos como mencionados y deja el actor sin resolver.
 - La presencia de una entidad en una frase no demuestra que sea objeto directo o destinatario.
 - La negación explícita se conserva; "no abrió" nunca se transforma en una acción afirmada.
-- Los pronombres iniciales explícitos (él/ella/ellos/ellas) se registran como referencias pendientes; se conserva la frase anterior como evidencia y los posibles antecedentes como candidatos, sin resolver identidad automáticamente.
+- Los pronombres iniciales explícitos (él/ella/ellos/ellas) se registran como referencias pendientes; se conserva el tramo literal del pronombre con offsets exactos, la frase anterior como evidencia y los posibles antecedentes como candidatos, sin resolver identidad automáticamente.
 - No se infieren emociones, motivaciones, causalidad ni cronología.
 
 Callback: `onNarrativeObservationCandidates(analysis, candidates)`.

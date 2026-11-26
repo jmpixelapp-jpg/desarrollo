@@ -134,7 +134,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       return;
     }
 
-    this.pendingInput = {
+    const pending: BeforeInputState = {
       start,
       end,
       previousLength,
@@ -142,6 +142,16 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       inputData: typeof input.data === "string" ? input.data : null,
       isComposing
     };
+    this.pendingInput = pending;
+
+    // Este listener puede ejecutarse antes que otros listeners del editor.
+    // Si uno posterior cancela el beforeinput, la acción por defecto no se
+    // aplicará y no debe quedar una pareja pendiente ficticia. La microtarea
+    // observa defaultPrevented al terminar toda la propagación síncrona.
+    queueMicrotask(() => {
+      if (this.disposed || this.needsResync || this.pendingInput !== pending) return;
+      if (input.defaultPrevented) this.pendingInput = undefined;
+    });
   };
 
   // Perder el foco durante una composición o entre beforeinput/input puede

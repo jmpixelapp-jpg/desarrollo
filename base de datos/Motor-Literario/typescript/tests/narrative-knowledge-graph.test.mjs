@@ -51,6 +51,10 @@ test("rechaza revisiones duplicadas y documentos inválidos", () => {
     { documentId: "a", revision: 1, text: "dos" }
   ]));
   assert.throws(() => buildNarrativeKnowledgeGraph("novel-a", [
+    { documentId: "a", revision: 1, text: "versión anterior" },
+    { documentId: "a", revision: 2, text: "versión actual" }
+  ]), /única revisión seleccionada/u);
+  assert.throws(() => buildNarrativeKnowledgeGraph("novel-a", [
     { documentId: "a", revision: -1, text: "uno" }
   ]));
   assert.throws(() => buildNarrativeKnowledgeGraph("", []));

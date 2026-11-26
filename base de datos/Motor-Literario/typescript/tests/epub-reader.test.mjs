@@ -103,5 +103,7 @@ test("detecta corrupción de contenido mediante CRC32", async () => {
   }
   assert.notEqual(found, -1);
   bytes[found] ^= 1;
-  await assert.rejects(new EpubBookReader().inspect(bytes), /CRC32 incorrecto/);
+  await assert.rejects(async () => {
+    for await (const _block of new EpubBookReader().read(bytes)) { /* consume full spine */ }
+  }, /CRC32 incorrecto/);
 });

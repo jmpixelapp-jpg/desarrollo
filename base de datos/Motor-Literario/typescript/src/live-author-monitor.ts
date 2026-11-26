@@ -449,7 +449,8 @@ export class LiveAuthorMonitor {
     const validClassifiedCounts = classifiedActivityCounts.every(
       value => value !== undefined && integerNonNegative(value)
     );
-    const classifiedCountTotal = classifiedActivityCounts.reduce((sum, value) => sum + (value ?? 0), 0);
+    let classifiedCountTotal = 0;
+    for (const value of classifiedActivityCounts) classifiedCountTotal += value ?? 0;
     const validActivityCounts = !hasActivityCounts || (validClassifiedCounts &&
       (checkpoint.otherChanges === undefined || integerNonNegative(checkpoint.otherChanges)) &&
       classifiedCountTotal <= checkpoint.acceptedChanges &&
@@ -467,7 +468,7 @@ export class LiveAuthorMonitor {
             checkpoint.lastActivityAgeMs <= checkpoint.sessionDurationMs + 1)) ||
         !integerNonNegative(checkpoint.pauseCount) ||
         !integerNonNegative(checkpoint.acceptedChanges) ||
-        (hasActivityCounts && (!validActivityCounts || activityCountTotal !== checkpoint.acceptedChanges)) ||
+        (hasActivityCounts && !validActivityCounts) ||
         !integerNonNegative(checkpoint.rejectedChanges) ||
         !integerNonNegative(checkpoint.committedChanges) ||
         !integerNonNegative(checkpoint.failedChanges) ||

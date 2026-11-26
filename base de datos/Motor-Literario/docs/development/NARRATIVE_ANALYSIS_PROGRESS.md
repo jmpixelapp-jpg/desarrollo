@@ -156,3 +156,5 @@ La canonicalización y las pruebas locales de bandeja no equivalen a sincronizac
 - Ampliado el diario con recuperación explícita (`loadOperations` y `loadOperation`), ordenación de operaciones por escritor/secuencia y pruebas de lectura tras reapertura. Añadida además una prueba de admisión concurrente para confirmar que dos operaciones distintas no pueden ocupar la misma secuencia del mismo escritor.
 
 - Añadido replay recuperable del diario: `loadPendingOperations`, confirmación `markApplied` ligada al digest y `replayPendingNarrativeSyncOperations`. El consumidor procesa operaciones secuencialmente, confirma tras éxito y deja pendiente la operación fallida para reintento. Se documenta explícitamente entrega al menos una vez y el requisito de callback idempotente ante caídas entre la mutación y la confirmación.
+
+- Añadida prueba de ventana de caída: el callback puede ejecutar un efecto externo y fallar antes del acuse; el diario conserva la operación pendiente y la vuelve a entregar. La prueba demuestra por qué el consumidor debe deduplicar efectos mediante `operationId` y no asumir exactamente-una-vez.

@@ -81,7 +81,7 @@ function validate(input: NarrativeRelationshipDiscoveryInput): void {
         typeof entity.id !== "string" || !entity.id.trim() ||
         ids.has(entity.id) || typeof entity.canonicalName !== "string" ||
         !entity.canonicalName.trim() || !Array.isArray(entity.aliases) ||
-        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim())) {
+        entity.aliases.some((alias: unknown) => typeof alias !== "string" || !alias.trim())) {
       throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
     }
     ids.add(entity.id);

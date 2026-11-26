@@ -89,9 +89,12 @@ function validate(input: NarrativeCharacterStateTransitionDiscoveryInput): void 
            !candidate.epistemicSourceCandidate.entityId.trim() ||
            !validEvidence(candidate.epistemicSourceCandidate.evidence) ||
            candidate.epistemicSourceCandidate.evidence.documentId !== candidate.documentId ||
-           candidate.epistemicSourceCandidate.evidence.revision !== candidate.revision)) ||
+           candidate.epistemicSourceCandidate.evidence.revision !== candidate.revision ||
+           candidate.epistemicSourceCandidate.evidence.start < candidate.evidence.start ||
+           candidate.epistemicSourceCandidate.evidence.end > candidate.evidence.end)) ||
         candidate.stateEvidence.documentId !== candidate.documentId ||
-        candidate.stateEvidence.revision !== candidate.revision) {
+        candidate.stateEvidence.revision !== candidate.revision ||
+        !["narrator-asserted", "character-belief", "character-memory", "character-desire", "reported-speech", "hypothetical"].includes(candidate.epistemicFrame)) {
       throw new Error("La trayectoria contiene candidatos duplicados, ajenos o sin evidencia válida.");
     }
     const identity = [candidate.documentId, candidate.revision, candidate.id].join(":");

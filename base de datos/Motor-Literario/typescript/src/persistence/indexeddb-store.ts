@@ -2172,7 +2172,8 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(PROJECT_EVIDENCES, "by-fragment", ["projectId", "fragmentId"]);
         ensureIndex(TIMELINE_OCCURRENCES, "by-project", "projectId");
         ensureIndex(TIMELINE_OCCURRENCES, "by-event-record", ["projectId", "eventRecordId"]);
-        ensureIndex(TIMELINE_OCCURRENCES, "by-track-order", ["projectId", "trackId", "narrativeOrder"]);        // DB26: bandeja de operaciones pendiente y cursor persistente por dispositivo.
+        ensureIndex(TIMELINE_OCCURRENCES, "by-track-order", ["projectId", "trackId", "narrativeOrder"]);
+        // DB26: bandeja de operaciones pendiente y cursor persistente por dispositivo.
         // La creación es idempotente y conserva íntegros los almacenes de DB25.
         if (!db.objectStoreNames.contains(SYNC_OUTBOX)) {
           db.createObjectStore(SYNC_OUTBOX, { keyPath: "operationId" });

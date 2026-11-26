@@ -94,3 +94,10 @@ Cuando el registro no tiene evidencia documental, el diagnóstico usa `documentI
 ### Propuestas conservadoras de reparación de referencias
 
 `proposeNarrativeReferenceRepairs(store, report)` transforma incidencias de referencias a entidades en propuestas no mutantes. Sólo propone un destino automático cuando exactamente una entidad del mismo proyecto declara el ID perdido dentro de `mergedFromIds`, evidencia explícita de una fusión anterior. Cero o varias coincidencias producen `manual-review`. Los enlaces a ideas no se resuelven por heurística. La función no guarda cambios ni sustituye la confirmación editorial.
+
+
+### Aplicación aprobada de reparaciones
+
+`applyNarrativeReferenceRepair(store, proposal, approved, appliedAt)` aplica una propuesta de entidad sólo tras aprobación explícita. Revalida que el ID perdido siga documentado en `mergedFromIds` de una única identidad destino, vuelve a leer el registro y usa el método CAS específico de relaciones, acontecimientos, afirmaciones o ideas. Una repetición reconocible es idempotente; una referencia que cambió de forma incompatible se rechaza.
+
+La operación devuelve un registro de auditoría con campo, valor anterior, valor nuevo, identidad sustituida y marca temporal. Este registro queda en manos del llamador para persistencia durable: esta función no presupone un almacén de auditoría que el contrato actual de `ProjectStore` todavía no define.

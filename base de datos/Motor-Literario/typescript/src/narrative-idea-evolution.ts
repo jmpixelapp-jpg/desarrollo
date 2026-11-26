@@ -80,7 +80,7 @@ function validateOccurrence(
       occurrence.evidence.documentId !== occurrence.documentId ||
       occurrence.evidence.revision !== occurrence.revision ||
       typeof occurrence.evidence.excerpt !== "string" ||
-      !occurrence.evidence.excerpt.includes(occurrence.text) ||
+      !containsTextWithWhitespace(occurrence.evidence.excerpt, occurrence.text) ||
       !Number.isSafeInteger(occurrence.evidence.start) ||
       !Number.isSafeInteger(occurrence.evidence.end) ||
       occurrence.evidence.start < 0 ||
@@ -88,6 +88,13 @@ function validateOccurrence(
       occurrence.evidence.excerpt.length > MAX_EVIDENCE_UNITS) {
     throw new Error("La evolución contiene una aparición de idea inválida.");
   }
+}
+
+
+function containsTextWithWhitespace(excerpt: string, text: string): boolean {
+  const normalizedExcerpt = excerpt.replace(/\s+/gu, " ").trim();
+  const normalizedText = text.replace(/\s+/gu, " ").trim();
+  return normalizedText.length > 0 && normalizedExcerpt.includes(normalizedText);
 }
 
 function normalizeExactPhrase(value: string): string {

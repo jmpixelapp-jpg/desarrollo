@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, StoredSyncOperation, Diagnostic, NarrativeDocumentProjectionManifest } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, StoredSyncOperation, SyncOperationDraft, Diagnostic, NarrativeDocumentProjectionManifest } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -1645,6 +1645,22 @@ function normalizeSyncOperation(operation: StoredSyncOperation): StoredSyncOpera
   };
 }
 
+function normalizeSyncOperationDraft(operation: SyncOperationDraft): SyncOperationDraft {
+  if (!operation || typeof operation !== "object") {
+    throw new TypeError("La operación de sincronización no es válida.");
+  }
+  const normalized = normalizeSyncOperation({
+    ...operation, sequence: 1, attemptCount: 0
+  });
+  return {
+    operationId: normalized.operationId,
+    projectId: normalized.projectId,
+    deviceId: normalized.deviceId,
+    kind: normalized.kind,
+    payload: normalized.payload,
+    createdAt: normalized.createdAt
+  };
+}
 function syncOperationFingerprint(operation: StoredSyncOperation): string {
   // Los metadatos de transporte cambian durante los reintentos y no forman parte
   // de la identidad del cambio narrativo.
@@ -4995,6 +5011,25 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   async appendChange(change: StoredChange): Promise<void> {
+    return this.persistChange(change);
+  }
+
+  /** Persiste journal y outbox juntos; evita deltas locales sin operación replicable. */
+  async appendChangeAndEnqueueSyncOperation(
+    change: StoredChange,
+    operation: SyncOperationDraft
+  ): Promise<void> {
+    const normalized = normalizeSyncOperationDraft(operation);
+    if (normalized.projectId !== change.projectId) {
+      throw new Error("El proyecto del delta y de la operación de sincronización no coincide.");
+    }
+    return this.persistChange(change, normalized);
+  }
+
+  private async persistChange(
+    change: StoredChange,
+    syncOperation?: SyncOperationDraft
+  ): Promise<void> {
     if (!change || typeof change.projectId !== "string" || !change.projectId.trim() ||
         typeof change.documentId !== "string" || !change.documentId.trim() ||
         !Number.isSafeInteger(change.sequence) || change.sequence < 1 ||
@@ -5009,12 +5044,14 @@ export class IndexedDbProjectStore implements ProjectStore {
     }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
-      // El snapshot y el último delta se comprueban en la misma transacción
-      // que inserta el nuevo registro. Así dos instancias no pueden crear
-      // ramas divergentes con secuencias distintas.
-      const transaction = db.transaction([DOCUMENTS, CHANGES], "readwrite");
+      const storeNames = syncOperation
+        ? [DOCUMENTS, CHANGES, SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES]
+        : [DOCUMENTS, CHANGES];
+      const transaction = db.transaction(storeNames, "readwrite");
       const documents = transaction.objectStore(DOCUMENTS);
       const changes = transaction.objectStore(CHANGES);
+      const outbox = syncOperation ? transaction.objectStore(SYNC_OUTBOX) : undefined;
+      const sequences = syncOperation ? transaction.objectStore(SYNC_DEVICE_SEQUENCES) : undefined;
       let snapshotReady = false;
       let journalReady = false;
       let snapshot: StoredDocument | undefined;
@@ -5022,8 +5059,63 @@ export class IndexedDbProjectStore implements ProjectStore {
       let expectedRevision = 0;
       let expectedTextLength = 0;
       let conflict = false;
+      let persistenceError: Error | undefined;
       const abort = () => {
         try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      const appendDurableChange = () => {
+        if (!syncOperation) {
+          try { changes.add(change); }
+          catch (error) {
+            persistenceError = error instanceof Error ? error : new Error("No se pudo añadir el delta al journal.");
+            abort();
+          }
+          return;
+        }
+        const sequenceRequest = sequences!.get([syncOperation.projectId, syncOperation.deviceId]);
+        sequenceRequest.onsuccess = () => {
+          const stored = sequenceRequest.result as { readonly lastSequence?: unknown } | undefined;
+          const lastSequence = stored?.lastSequence ?? 0;
+          if (!Number.isSafeInteger(lastSequence) || (lastSequence as number) < 0 ||
+              (lastSequence as number) >= Number.MAX_SAFE_INTEGER) {
+            persistenceError = new Error("El cursor de secuencia del dispositivo está corrupto o agotado.");
+            abort();
+            return;
+          }
+          const operationRecord = normalizeSyncOperation({
+            ...syncOperation,
+            sequence: (lastSequence as number) + 1,
+            attemptCount: 0
+          });
+          try {
+            const operationRequest = outbox!.add(operationRecord);
+            operationRequest.onerror = () => {
+              persistenceError = operationRequest.error ?? new Error("No se pudo encolar la operación de sincronización.");
+              abort();
+            };
+            const sequenceWrite = sequences!.put({
+              projectId: syncOperation.projectId,
+              deviceId: syncOperation.deviceId,
+              lastSequence: operationRecord.sequence
+            });
+            sequenceWrite.onerror = () => {
+              persistenceError = sequenceWrite.error ?? new Error("No se pudo avanzar la secuencia del dispositivo.");
+              abort();
+            };
+            const changeWrite = changes.add(change);
+            changeWrite.onerror = () => {
+              persistenceError = changeWrite.error ?? new Error("No se pudo añadir el delta al journal.");
+              abort();
+            };
+          } catch (error) {
+            persistenceError = error instanceof Error ? error : new Error("No se pudo persistir el cambio sincronizable.");
+            abort();
+          }
+        };
+        sequenceRequest.onerror = () => {
+          persistenceError = sequenceRequest.error ?? new Error("No se pudo leer el cursor del dispositivo.");
+          abort();
+        };
       };
       const validateAndAppend = () => {
         if (!snapshotReady || !journalReady) return;
@@ -5035,20 +5127,16 @@ export class IndexedDbProjectStore implements ProjectStore {
           abort();
           return;
         }
-        try {
-          changes.add(change);
-        } catch {
-          abort();
-        }
+        appendDurableChange();
       };
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(
-        transaction.error ?? new Error("No se pudo registrar el cambio.")
+        persistenceError ?? transaction.error ?? new Error("No se pudo registrar el cambio.")
       );
       transaction.onabort = () => reject(
-        conflict
+        persistenceError ?? (conflict
           ? new Error("Conflicto de secuencia o revisión: el documento cambió en otra instancia y requiere resincronización.")
-          : transaction.error ?? new Error("Se canceló el registro del cambio.")
+          : transaction.error ?? new Error("Se canceló el registro del cambio."))
       );
       const snapshotRequest = documents.get([change.projectId, change.documentId]);
       snapshotRequest.onsuccess = () => {
@@ -5109,7 +5197,6 @@ export class IndexedDbProjectStore implements ProjectStore {
       journalRequest.onerror = abort;
     });
   }
-
 
   async loadChanges(projectId: string, documentId: string, afterSequence: number): Promise<readonly StoredChange[]> {
     if (typeof projectId !== "string" || !projectId.trim() ||

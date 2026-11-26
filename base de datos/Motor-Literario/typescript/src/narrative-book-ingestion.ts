@@ -204,6 +204,64 @@ function collectSignals(
   return omitted;
 }
 
+export const MAX_NARRATIVE_BOOK_FILE_BYTES = 20_000_000;
+
+export interface NarrativeBookFileInput {
+  readonly name: string;
+  readonly type?: string;
+  readonly size?: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+export interface NarrativeBookTextSource {
+  readonly fileName: string;
+  readonly mediaType: "text/plain" | "text/markdown";
+  readonly byteLength: number;
+  readonly text: string;
+}
+
+/**
+ * Lee archivos TXT/Markdown reales usando APIs estándar del entorno.
+ * No intenta interpretar formatos binarios ni sustituye adaptadores EPUB/PDF/DOCX.
+ */
+export async function readNarrativeBookFile(file: NarrativeBookFileInput): Promise<NarrativeBookTextSource> {
+  if (!file || typeof file !== "object" ||
+      typeof file.name !== "string" || !file.name.trim() ||
+      typeof file.arrayBuffer !== "function" ||
+      (file.size !== undefined && (!Number.isSafeInteger(file.size) || file.size < 0))) {
+    throw new Error("Archivo de libro inválido.");
+  }
+  const normalizedName = file.name.trim().toLowerCase();
+  const markdown = /\.(?:md|markdown)$/u.test(normalizedName);
+  const plainText = /\.txt$/u.test(normalizedName);
+  if (!markdown && !plainText) {
+    throw new Error("Formato no admitido: esta etapa acepta archivos TXT y Markdown.");
+  }
+  const mediaType = markdown ? "text/markdown" : "text/plain";
+  const declaredType = (file.type ?? "").split(";")[0]!.trim().toLowerCase();
+  const acceptedTypes = new Set(["", "text/plain", "text/markdown", "text/x-markdown", "application/octet-stream"]);
+  if (!acceptedTypes.has(declaredType)) {
+    throw new Error("El tipo MIME del archivo no coincide con un documento de texto admitido.");
+  }
+  if (file.size !== undefined && file.size > MAX_NARRATIVE_BOOK_FILE_BYTES) {
+    throw new Error("El archivo supera el límite de tamaño de la ingesta.");
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength > MAX_NARRATIVE_BOOK_FILE_BYTES) {
+    throw new Error("El archivo supera el límite de tamaño de la ingesta.");
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error("El archivo no contiene texto UTF-8 válido.");
+  }
+  if (text.includes("\\u0000")) {
+    throw new Error("El archivo contiene bytes nulos y no parece ser texto.");
+  }
+  return { fileName: file.name, mediaType, byteLength: bytes.byteLength, text };
+}
+
 /**
  * Convierte texto de libro en unidades estructurales y señales revisables.
  * No afirma quién ejecutó una acción ni transforma marcadores causales en

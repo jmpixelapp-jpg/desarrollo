@@ -2240,6 +2240,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "event-lifecycles", keyPath: ["projectId", "id"] },
       { name: "documents", keyPath: ["projectId", "documentId"] },
       { name: "changes", keyPath: ["projectId", "documentId", "sequence"] },
+      // La bandeja de salida se crea en la misma migración v25 sin tocar datos anteriores.
       { name: "sync-outbox", keyPath: "operationId" },
       { name: "narrative-entities", keyPath: ["projectId", "id"] },
       { name: "narrative-relations", keyPath: ["projectId", "id"] },

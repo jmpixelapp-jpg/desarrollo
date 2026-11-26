@@ -150,3 +150,22 @@ La suite detectó que el conector `Aun así` no era encontrado: los límites `\b
 ## Filtro de infinitivos en transiciones de estado
 
 La suite global reveló que `Ana no pudo activar la Espada Solar` generaba una transición `activated` aunque estuviera marcada como `effectStatus: not-applied`. La causa era que `discoverNarrativeObjectTransitionCandidates` publicaba el candidato antes de excluir la forma infinitiva subordinada. Ahora los infinitivos no generan transiciones de estado; permanecen en el flujo de observaciones como evidencia textual. Se conservan candidatos para formas finitas negadas (`not-applied`) y futuras (`prospective`), sin aplicarlos al estado actual.
+
+## Validación integrada del monitor — ejecución 45782184179
+
+La ejecución GitHub Actions **45782184179** terminó con conclusión `success` en el commit `3e84390ac3ca3d3ec6426878c42414b84208aae5`, que ya incluía la validación `isTrusted`, sus pruebas y la captura de teclado en Chromium.
+
+Pasaron todos los pasos del workflow específico:
+- type-check aislado del monitor y UI;
+- bundle aislado de pruebas;
+- regresiones de recuperación de diagnósticos;
+- validación del esquema MLDB y mapeo físico;
+- build runtime;
+- suite unitaria y diagnóstica;
+- instalación Chromium y prueba de Page Lifecycle;
+- integración host/editor/navegador, incluida captura confiable de teclado y rechazo de `dispatchEvent()`;
+- benchmark de memoria.
+
+La suite combinada de integración informó **196 pruebas aprobadas y 0 fallidas**. El benchmark informado por el runner (Node v22.23.5) ejecutó 100.000 commits: 8 documentos, 1.048.576 unidades UTF-16 iniciales por documento y 12.500 cambios por documento. Midió 642,39 ms (155.669,68 commits/s), 0 MB de crecimiento adicional del heap entre media y carga completa, 0,5 MB retenidos por las sesiones abiertas y 70,43 MB de RSS. Son medidas de ese runner y de ese escenario, no una garantía de rendimiento idéntica en todos los equipos.
+
+**Estado:** el workflow específico de monitoreo está validado de extremo a extremo en esa revisión. La suite general del repositorio es independiente y sigue verificándose tras los cambios recientes del módulo narrativo; no se infiere que esté aprobada a partir de este workflow.

@@ -259,7 +259,7 @@ Esta tanda se concentra en la integridad de la evidencia textual: los rangos deb
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualización es `df1a10ab423f222d652349453d2a496cb1a206f3` (26 de noviembre de 2026). La consulta de checks y de ejecuciones de workflow para ese SHA devolvió colecciones vacías. Por tanto, **los commits de esta tanda están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para el HEAD observado**. Las pruebas de Unicode, límites de nombres y offsets UTF-16 están escritas en el repositorio; su presencia no demuestra que se hayan ejecutado.
+La rama de trabajo sigue siendo `main`. `df1a10ab423f222d652349453d2a496cb1a206f3` es el HEAD histórico registrado antes de la tanda de idempotencia del 26 de noviembre. El HEAD resultante de esa tanda es `57e3d56efd6a6dc210d38990ef1f4643ad7d3dd4`. Las consultas de checks y de ejecuciones de workflow para los commits de implementación, prueba y documentación devolvieron colecciones vacías. Por tanto, **los cambios están publicados, pero no hay evidencia de CI ni de ejecución local de la suite para el HEAD actual**. La presencia de pruebas en el repositorio no demuestra que se hayan ejecutado.
 
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 

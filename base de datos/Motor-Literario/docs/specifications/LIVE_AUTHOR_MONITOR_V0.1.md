@@ -625,3 +625,9 @@ Esta E2E valida el comportamiento de la capa IndexedDB y el fencing entre pesta�
 **Validación CI verificada:** ejecución [45726598052](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726598052), commit `0d1448e8aa1d635cdd4cee8568c4b19e74738729`: MLDB 0.4.2 válido, auditoría física correcta (25 tablas, 34 almacenes), build Vite y **108 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye la ejecución de la prueba en Chromium.
 
 **Límite pendiente de integración:** el árbol actual del repositorio no contiene páginas HTML de la aplicación, componentes de edición, ni dependencias de un editor como Monaco, CodeMirror, ProseMirror o Lexical. Por tanto, `LiveAuthorMonitorEditorTransactionProvider` sigue siendo el contrato correcto para el anfitrión, pero todavía no existe una API de transacciones de producción a la que conectar el adaptador. No se debe reconstruir undo/redo a partir de `input`/DOM ni presentar el harness como editor real.
+
+
+
+**Extensión de ciclo de vida:** después de que la segunda página guarda el checkpoint y la primera puede leerlo, la prueba recarga la segunda página. La recarga destruye el contexto JavaScript y crea una instancia nueva de IndexedDbProjectStore; se vuelve a leer la misma clave y se comprueba que el checkpoint permanece. Esto valida persistencia ante una recarga de página dentro del perfil Chromium de prueba, no un reinicio del navegador/proceso ni almacenamiento de perfil persistente.
+
+**CI de la recarga:** la ejecución [45726777208](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45726777208) incluye esta ampliación; el resultado se actualizará tras finalizar el job.

@@ -477,6 +477,8 @@ test("aplica reparación aprobada de relación mediante CAS y devuelve auditorí
   const replay = await applyNarrativeReferenceRepair(store, proposal, true, 12);
   assert.equal(replay.changed, false);
   assert.equal(replay.replayed, true);
+  assert.equal((await store.loadNarrativeReferenceRepairAudits("novel-apply")).length, 1,
+    "un reintento no debe duplicar la auditoría");
 });
 
 test("rechaza aplicar propuesta si la procedencia de fusión ya no la respalda", async () => {

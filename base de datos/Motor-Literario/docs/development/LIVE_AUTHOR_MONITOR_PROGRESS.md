@@ -554,5 +554,12 @@ Se valida que replacement sea una cadena antes de firmarlo. Un duplicado malform
 
 **Límite explícito:** esta página es una aplicación real de referencia sobre textarea, no la aplicación final de producción ni un editor enriquecido. Los editores con historial propio deben conectar sus callbacks nativos mediante el adaptador transaccional. La conexión de un editor anfitrión ausente no se declara completada.
 
+**Validación CI final de la aplicación de referencia — commit `ce2413194e1f02ce21fcc232c3f43a1ee036452a`:** workflow [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285) completado con éxito. Vite build correcto; esquema MLDB 0.4.2 válido (26 tablas); auditoría física correcta (25 tablas del motor y 34 almacenes IndexedDB); Chromium instalado y ejecutado; **139/139 pruebas aprobadas, 0 fallidas y 0 omitidas**. La prueba nueva verificó escritura real con teclado, métricas visibles y confirmadas, cierre seguro mediante `HostEngineApi.disposeSafely()`, recarga, restauración del texto y checkpoint y una segunda edición después de recuperar la sesión.
+
+**Concordancia con main:** al registrar este resultado, los hashes de la página de referencia, su prueba Chromium, el adaptador textarea, el enlace de contrapresión y el workflow en `main` coinciden exactamente con los archivos del commit validado `ce241319...`.
+
+**CI general del mismo commit:** workflow [45734476273](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476273): `Type-check` correcto; suite general con 713 pruebas, 702 aprobadas, 2 fallidas y 9 omitidas. Los dos fallos están fuera del monitoreo: `tests/idea-synchronization.test.mjs` (conteo esperado 4, obtenido 6 en reconciliación de ideas entre anfitriones) y `tests/literary-analysis.test.mjs` (una validación esperaba una excepción que no se produjo). Se dejan intactos para no interferir con la línea de análisis literario.
+
+
 
 **CI de la aplicación de referencia:** el filtro del workflow específico contempla las rutas de `examples/live-author-monitor/**` tanto en `push` como en `pull_request`; el test de escritura se ejecuta junto con los demás archivos `live-author-monitor*.test.mjs`.

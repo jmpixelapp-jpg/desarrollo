@@ -35,3 +35,8 @@ La aplicación anfitriona final del proyecto no está presente en este repositor
 ## Prueba automatizada
 
 `tests/live-author-monitor-writing-browser.test.mjs` arranca Vite y Chromium, escribe texto en la página, verifica métricas y durabilidad, cierra de forma segura, recarga el documento y comprueba que tanto el manuscrito como las métricas se restauran.
+
+
+## Resultado de CI verificado
+
+El workflow específico [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285) aprobó **139/139 pruebas**, sin fallos ni omisiones, incluyendo la escritura real y recuperación después de una recarga Chromium. Se validaron MLDB 0.4.2, la auditoría física de almacenamiento y el build Vite.

@@ -777,3 +777,14 @@ La prueba Chromium automatizada escribe con teclado real, comprueba cambios admi
 
 
 **Ejecución automática:** las modificaciones de la aplicación de referencia están incluidas en los filtros del workflow específico para `push` y `pull_request`; la prueba Chromium se ejecuta dentro de `tests/live-author-monitor*.test.mjs`.
+
+
+## 41. Resultado de validación final del módulo y límites de entrega
+
+**Workflow específico:** [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285), commit `ce2413194e1f02ce21fcc232c3f43a1ee036452a`: build Vite correcto, MLDB 0.4.2 válido, auditoría física de 25 tablas del motor y 34 almacenes IndexedDB, Chromium y **139/139 pruebas aprobadas, 0 fallidas y 0 omitidas**. Incluye el test de escritura, confirmación, cierre durable, recarga, recuperación y nueva edición.
+
+**Workflow general:** [45734476273](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476273) aprobó TypeScript `typecheck`, pero la suite general registró 713 pruebas: 702 aprobadas, 2 fallidas y 9 omitidas. Los dos fallos se localizaron en `tests/idea-synchronization.test.mjs` y `tests/literary-analysis.test.mjs`, fuera del módulo Live Author Monitor.
+
+**Alcance completado en este repositorio:** motor de métricas, integración textarea ejecutable, enlace transaccional reusable para editores con historial nativo, contrapresión FIFO acotada, persistencia/recuperación IndexedDB, coordinación de pestañas, panel, workspace, guía de integración y prueba Chromium extremo a extremo.
+
+**Dependencia externa que permanece:** el repositorio no contiene la aplicación anfitriona final ni un editor enriquecido. Por ello, la conexión del callback nativo de ese editor y la validación de su undo/redo concreto requieren el repositorio/aplicación que lo aloja. La aplicación de referencia con textarea no se presenta como sustituto de esa integración.

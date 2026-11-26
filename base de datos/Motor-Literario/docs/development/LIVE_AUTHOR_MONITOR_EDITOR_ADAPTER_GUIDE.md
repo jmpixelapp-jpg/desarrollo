@@ -158,3 +158,10 @@ Esta referencia proporciona una integración de navegador reproducible. No susti
 
 
 **Nota de operación:** el workflow específico incluye la ruta `examples/live-author-monitor/**` en los filtros de push y pull request. Así cualquier modificación de la página de referencia vuelve a ejecutar la suite Chromium del monitor.
+
+
+## 11. Resultado de validación de la aplicación de referencia
+
+El workflow específico del monitor [45734476285](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45734476285), ejecutado sobre el commit `ce2413194e1f02ce21fcc232c3f43a1ee036452a`, aprobó build, esquema MLDB 0.4.2, auditoría física de 25 tablas y 34 almacenes IndexedDB y **139/139 pruebas (0 fallidas, 0 omitidas)**. La prueba Chromium escribió texto real, confirmó métricas y durabilidad, cerró mediante `disposeSafely()`, recargó la página, restauró texto/checkpoint y volvió a editar.
+
+El chequeo de tipos de la suite general también pasó. Esa suite completa todavía presenta dos fallos en módulos fuera del monitor: reconciliación de ideas entre anfitriones y validación de catálogo del análisis literario. No se atribuyen al adaptador de escritura.

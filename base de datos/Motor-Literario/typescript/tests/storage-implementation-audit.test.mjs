@@ -196,6 +196,23 @@ test("la cronología conserva solo una muestra acotada de evidencia durante la a
 });
 
 
+test("los vínculos de escena limitan la evidencia intermedia a veinte muestras", () => {
+  const start = literaryAnalysisSource.indexOf("function findSceneEventLinks(");
+  const end = literaryAnalysisSource.indexOf("\\nfunction summarizeSceneDialogueFlow", start + 10);
+  assert.notEqual(start, -1, "debe existir el constructor de vínculos de escena");
+  assert.ok(end > start, "el constructor debe delimitarse para auditar sus muestras");
+  const builder = literaryAnalysisSource.slice(start, end);
+
+  assert.match(builder, /let matchingEvidenceCount = 0;/);
+  assert.match(builder, /const matchingEvidence: LiteraryAnalysisOccurrence\[\] = \[\];/);
+  assert.match(builder, /matchingEvidenceCount\+\+;/);
+  assert.match(builder, /if \(matchingEvidence\.length < 20\) matchingEvidence\.push\(sample\);/);
+  assert.match(builder, /matchingEvidence\.splice\(insertionIndex,0,sample\);\s*if \(matchingEvidence\.length > 20\) matchingEvidence\.pop\(\);/);
+  assert.match(builder, /matchingEvidenceTruncated:matchingEvidenceCount>matchingEvidence\.length/);
+  assert.doesNotMatch(builder, /\.filter\(evidence =>/);
+});
+
+
 test("la auditoría de atomicidad detecta perder el almacén de entidades del alcance transaccional", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
   const weakenedWriter = writer.replace(

@@ -259,7 +259,7 @@ Esta tanda se concentra en la integridad de la evidencia textual: los rangos deb
 
 ## 8. Estado de validación al actualizar este documento
 
-La rama de trabajo sigue siendo `main`. `57e3d56efd6a6dc210d38990ef1f4643ad7d3dd4` es el HEAD de la tanda anterior. En los avances siguientes se publicaron `2f9a941` (comparación canónica durante recuperación del cursor), `e650d12` (regresión con propiedades reordenadas), `ff73710` (límites Unicode con marcas combinantes), `16c2312` (pruebas Unicode de participantes y contradicciones vitales) y `87cc45e` (documentación de ambos frentes). Las consultas de checks para los commits anteriores devolvieron colecciones vacías; por tanto, **los cambios y pruebas están publicados, pero no se declaran verificados**.
+La rama de trabajo sigue siendo `main`. `57e3d56efd6a6dc210d38990ef1f4643ad7d3dd4` es el HEAD de la tanda anterior. En los avances siguientes se publicaron `2f9a941` y `e650d12` (recuperación canónica del cursor y regresión IndexedDB), `ff73710` y `16c2312` (límites Unicode y pruebas de eventos), `56ae149` y `159351a` (captura Unicode de entidades/relaciones y límites de prefijo), `ee069fa` (tres regresiones adicionales) y `768fbc9` (documentación y estado). Las consultas de checks para los commits anteriores devolvieron colecciones vacías; por tanto, **los cambios y pruebas están publicados, pero no se declaran verificados**.
 
 La PR #59 propone integrar la outbox saliente con mutaciones CAS y migrar IndexedDB DB27→DB28. Sigue en revisión y no equivale a sincronización multidispositivo completa: la descarga remota incremental, el cursor del servidor, la resolución de conflictos y el transporte autenticado siguen siendo responsabilidades pendientes.
 
@@ -284,10 +284,13 @@ La documentación debe seguir separando tres estados: implementación presente, 
 
 **Frente B — análisis de acontecimientos y continuidad de personajes**
 - Los límites de nombre de `unicodeNamePattern` incluyen ahora `\\p{M}` además de letras, números y guion bajo. Una marca combinante ya no permite que el nombre base coincida falsamente como prefijo.
-- Se incorporaron cuatro regresiones: falso prefijo en participantes, nombre descompuesto completo, falso positivo en contradicciones vitales y contradicción válida para el nombre completo.
-- La corrección conserva el texto original y los offsets UTF-16; no normaliza ni modifica el manuscrito.
+- Se incorporaron siete regresiones: límites de participantes, contradicciones vitales, extracción de entidades, extracción de relaciones, aceptación de nombres descompuestos y rechazo de prefijos falsos.
+- La corrección conserva el texto original y los offsets UTF-16; la normalización se limita a comparar identidades, nunca modifica el manuscrito.
 
 **Frentes en curso**
 - La PR #59 trabaja en la integración de la outbox saliente con mutaciones CAS y migración IndexedDB DB27→DB28; sigue separada de la descarga remota y de la resolución de conflictos.
 - Continúan pendientes la reconciliación de escrituras concurrentes entre dispositivos, el transporte autenticado proporcionado por el anfitrión y las pruebas de integración extremo a extremo.
 - La suite completa, typecheck, build y benchmarks deben ejecutarse y observarse antes de marcar estos avances como verificados.
+
+
+**Extensión del frente Unicode:** los extractores de entidades y relaciones también incluyen marcas combinantes dentro de los nombres y las tratan como parte de los límites. Así se evita que `Ana` se asocie falsamente a `Ana` seguido de una marca combinante y se permite reconocer el nombre descompuesto completo.

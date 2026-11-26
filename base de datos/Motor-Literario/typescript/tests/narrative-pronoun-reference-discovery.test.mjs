@@ -192,3 +192,17 @@ test("mantiene alternativas y mide sus contextos por separado", () => {
   assert.equal(reference.antecedentCandidates[0].paragraphDistance, 0);
   assert.equal(reference.antecedentCandidates[1].paragraphDistance, 1);
 });
+
+test("rechaza cargas combinadas de entidades, alias y ventana antes de explorar sin límite", () => {
+  const entities = Array.from({ length: 100 }, (_, index) => ({
+    ...ana,
+    id: "character:" + index,
+    canonicalName: "Nombre" + index,
+    aliases: Array.from({ length: 100 }, (_, aliasIndex) =>
+      "Alias" + index + " " + aliasIndex)
+  }));
+  assert.throws(() => discover("Ella corrió.", {
+    entities,
+    maxAntecedentDistance: 50_000
+  }), /presupuesto operativo de exploración/);
+});

@@ -42,7 +42,7 @@ test("extrae estados explícitos de personajes y conserva evidencias exactas", (
     }
     assert.equal(candidate.reviewStatus, "candidate");
   }
-  assert.equal(candidates[0].evidence.excerpt, "Ana está herida");
+  assert.equal(candidates[0].evidence.excerpt, "Ana está herida.");
   assert.equal(candidates[0].stateEvidence.excerpt, "herida");
   assert.equal(candidates[0].predicateEvidence.excerpt, "está herida");
 });

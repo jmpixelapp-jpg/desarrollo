@@ -41,3 +41,16 @@ npm run bench
 ## Coordinación
 
 Los cambios de esta etapa se limitaron a un archivo de prueba nuevo en `main`. No se modificaron las ramas ni los archivos de las revisiones abiertas #42 y #43. Esas revisiones siguen siendo trabajo separado y sus resultados de CI deben comprobarse antes de considerar completo el estado global del proyecto.
+
+### Presupuestos de muestras frente a métricas completas
+
+Se amplió la prueba de grafos profundos con un catálogo de 6.002 ideas en cadena. La regresión comprueba que los límites de exposición de muestras no recortan las métricas globales:
+
+- 6.001 referencias contabilizadas aunque solo se expongan 5.000 muestras.
+- Conteo completo de puntos de articulación (6.000), aunque solo se devuelvan 100 identificadores de muestra.
+- Conteo de nodos con terminal alcanzable y conectividad débil del catálogo completo.
+- Contadores explícitos de referencias y puntos de articulación omitidos por presupuesto.
+
+Commit de ampliación: `32e493d2bcc7c70f350b9a427b4f5d667b188c2f`.
+
+La regresión sigue pendiente de ejecución mediante `npm test` en el entorno del paquete/CI; el commit no se considera validación de ejecución.

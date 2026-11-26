@@ -216,7 +216,7 @@ startButton.addEventListener("click", () => {
 exportButton.addEventListener("click", () => {
   if (!source || disposed) return;
   const report = {
-    format: "live-author-monitor-ime-trace-v2",
+    format: "live-author-monitor-ime-trace-v3",
     exportedAt: new Date().toISOString(),
     durationMs: Math.round(performance.now() - startedAt),
     environment: {

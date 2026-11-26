@@ -41,6 +41,10 @@ El análisis de acciones usa el snapshot del documento abierto cuando su revisi�
 
 Cuando el anfitrión todavía no aporta fichas de entidades, la ingesta reconoce únicamente nombres precedidos por etiquetas explícitas del manuscrito, como «Personaje Ana», «Ciudad de Liria» u «Objeto Espada». Los resultados se devuelven en `entityCandidates` y se usan como contexto local para descubrir acciones en el mismo texto. No se persisten ni se consideran identidades confirmadas. Un nombre propio aislado como «Ana» no basta para crear una entidad. Si el anfitrión ya entrega entidades conocidas, estas conservan prioridad y no se generan duplicados automáticos.
 
+### Roles gramaticales y agente explícito en voz pasiva
+
+Las observaciones pueden conservar un sujeto gramatical candidato cuando el patrón local es inequívoco. En una pasiva como «Ana fue encontrada por Bruno», Ana es el sujeto gramatical paciente; no se etiqueta como quien ejecutó la acción. Si Bruno figura entre las entidades conocidas y coincide exactamente con el complemento «por Bruno», se expone `passiveAgentCandidate` con evidencia del nombre y el marcador `por`. La propuesta no se convierte en hecho confirmado. Si el agente no coincide con una entidad registrada, queda sin resolver. La construcción «por» no se interpreta fuera de este patrón pasivo.
+
 ### Acontecimientos declarados explícitamente
 
 La ingesta expone `eventCandidates` usando `extractNarrativeEvents`. Solo reconoce líneas etiquetadas `ACONTECIMIENTO:` o `EVENTO:`; no transforma automáticamente una secuencia de acciones en un acontecimiento. Los participantes se sugieren por coincidencia textual con entidades conocidas o entidades etiquetadas en el mismo texto. La coincidencia no determina quién actuó, quién sufrió la acción ni quién presenció el hecho. Cada acontecimiento conserva su evidencia y sus offsets absolutos. La etiqueta y los participantes siguen sujetos a revisión.

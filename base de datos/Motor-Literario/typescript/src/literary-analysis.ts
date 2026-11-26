@@ -5621,6 +5621,22 @@ function buildCharacterAttributeEvolution(
   let currentRevisionAssertionCount = 0;
   let unmappedCurrentAssertionCount = 0;
 
+  // Las escenas explícitas se producen en orden documental y no se solapan.
+  // Buscar por el final del rango evita recorrer todas las escenas por afirmación.
+  const findSceneForEvidence = (start: number, end: number): LiteraryExplicitSceneSegment | undefined => {
+    let low = 0;
+    let high = scenes.length;
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2);
+      if (scenes[middle]!.contentRange.end <= start) low = middle + 1;
+      else high = middle;
+    }
+    const candidate = scenes[low];
+    return candidate && end > candidate.contentRange.start && start < candidate.contentRange.end
+      ? candidate
+      : undefined;
+  };
+
   for (const assertion of assertions) {
     if (assertion.evidence.status === "stale") {
       staleAssertionCount++;
@@ -5632,10 +5648,7 @@ function buildCharacterAttributeEvolution(
     else currentRevisionAssertionCount++;
 
     const scene = inCurrentRevision
-      ? scenes.find(item =>
-          assertion.evidence.end > item.contentRange.start &&
-          assertion.evidence.start < item.contentRange.end
-        )
+      ? findSceneForEvidence(assertion.evidence.start,assertion.evidence.end)
       : undefined;
     if (inCurrentRevision && !scene) unmappedCurrentAssertionCount++;
     // Las afirmaciones de otros capítulos solo se conservan si incluyen una referencia temporal explícita.

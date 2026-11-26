@@ -3344,6 +3344,17 @@ function buildCharacterProjectEventTimeline(
   entityId: string,
   projectEvents: readonly LiteraryAnalysisKnownProjectEvent[]
 ): LiteraryCharacterProjectEventTimeline {
+  const MAX_TIMELINE_EVIDENCE_SAMPLES = 20;
+  const compareEvidenceSamples = (
+    left: LiteraryCharacterProjectEventTimelineEvidence,
+    right: LiteraryCharacterProjectEventTimelineEvidence
+  ): number =>
+    left.documentId.localeCompare(right.documentId,"en") ||
+    left.revision-right.revision ||
+    left.occurrence.start-right.occurrence.start ||
+    left.eventId.localeCompare(right.eventId,"en") ||
+    left.occurrence.end-right.occurrence.end ||
+    left.excerpt.localeCompare(right.excerpt,"en");
   const groups = new Map<string,{
     readonly timelineTrackId: string | null;
     readonly basis: NarrativeTimeReference["basis"];
@@ -3438,26 +3449,36 @@ function buildCharacterProjectEventTimeline(
     group.rawReferences.add(reference.raw);
     for (const evidence of currentEvidence) {
       group.documents.add(evidence.documentId);
-      group.evidence.push({
+      const sample: LiteraryCharacterProjectEventTimelineEvidence = {
         eventId:event.eventId,
         eventLabel:event.label,
         documentId:evidence.documentId,
         revision:evidence.revision,
         occurrence:{start:evidence.start,end:evidence.end},
         excerpt:evidence.excerpt
-      });
+      };
+      // Mantiene únicamente las veinte mejores muestras ordenadas; los
+      // contadores completos se acumulan por separado en evidenceCount.
+      const insertionIndex = group.evidence.findIndex(existing =>
+        compareEvidenceSamples(sample,existing) < 0
+      );
+      if (insertionIndex < 0) {
+        if (group.evidence.length < MAX_TIMELINE_EVIDENCE_SAMPLES) {
+          group.evidence.push(sample);
+        }
+      } else {
+        group.evidence.splice(insertionIndex,0,sample);
+        if (group.evidence.length > MAX_TIMELINE_EVIDENCE_SAMPLES) {
+          group.evidence.pop();
+        }
+      }
     }
     groups.set(key,group);
   }
 
   const allPoints = [...groups.values()].map(group => {
     const orderedEvents = [...group.events.keys()].sort((a,b) => a.localeCompare(b,"en"));
-    const orderedEvidence = [...group.evidence].sort((a,b) =>
-      a.documentId.localeCompare(b.documentId,"en") ||
-      a.revision-b.revision ||
-      a.occurrence.start-b.occurrence.start ||
-      a.eventId.localeCompare(b.eventId,"en")
-    );
+    const orderedEvidence = group.evidence;
     return {
       timelineTrackId:group.timelineTrackId,
       basis:group.basis,
@@ -3469,9 +3490,9 @@ function buildCharacterProjectEventTimeline(
       omittedEventIdCount:Math.max(0,orderedEvents.length-50),
       documentIds:[...group.documents].sort((a,b) => a.localeCompare(b,"en")),
       evidenceCount:group.evidenceCount,
-      omittedEvidenceCount:Math.max(0,group.evidenceCount-Math.min(20,orderedEvidence.length)),
+      omittedEvidenceCount:Math.max(0,group.evidenceCount-orderedEvidence.length),
       evidenceSamples:orderedEvidence.slice(0,20),
-      evidenceTruncated:group.evidenceCount>Math.min(20,orderedEvidence.length)
+      evidenceTruncated:group.evidenceCount>orderedEvidence.length
     };
   }).sort((a,b) =>
     (a.timelineTrackId ?? "").localeCompare(b.timelineTrackId ?? "","en") ||

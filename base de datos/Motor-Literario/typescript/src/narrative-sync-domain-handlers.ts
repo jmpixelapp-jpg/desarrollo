@@ -287,6 +287,10 @@ function isNarrativeEntity(value: unknown): value is NarrativeEntity {
     Array.isArray(names) && names.length <= 2_000 &&
     names.every(name => typeof name === "string" && !!name.trim() && name.length <= 512) &&
     new Set(names.map(name => normalizeEntityName(name))).size === names.length;
+  const validMergedIds = (ids: unknown): ids is readonly string[] =>
+    Array.isArray(ids) && ids.length <= 2_000 &&
+    ids.every(id => typeof id === "string" && !!id.trim() && id.length <= 512) &&
+    new Set(ids).size === ids.length;
   const validEvidence = Array.isArray(item.evidence) && item.evidence.length <= 10_000 &&
     item.evidence.every(isTextEvidence);
   return typeof item.projectId === "string" && !!item.projectId.trim() && item.projectId.length <= 256 &&
@@ -297,7 +301,7 @@ function isNarrativeEntity(value: unknown): value is NarrativeEntity {
     item.normalizedName === normalizeEntityName(item.canonicalName) &&
     validNames(item.aliases) &&
     !item.aliases.some(alias => normalizeEntityName(alias) === item.normalizedName) &&
-    (item.mergedFromIds === undefined || isBoundedIdentifierList(item.mergedFromIds)) &&
+    (item.mergedFromIds === undefined || validMergedIds(item.mergedFromIds)) &&
     validEvidence &&
     typeof item.firstSeenAt === "number" && Number.isFinite(item.firstSeenAt) && item.firstSeenAt >= 0 &&
     typeof item.lastSeenAt === "number" && Number.isFinite(item.lastSeenAt) &&

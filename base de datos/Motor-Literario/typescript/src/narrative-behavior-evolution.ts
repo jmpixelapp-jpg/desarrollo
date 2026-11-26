@@ -130,6 +130,7 @@ function validate(input: NarrativeBehaviorEvolutionInput): void {
     entities.set(entity.id, entity);
   }
   const actionIds = new Set<string>();
+  const actionById = new Map<string, NarrativeActionCandidate>();
   for (const action of [...(input.priorActions ?? []), ...input.currentActions]) {
     if (!action || action.projectId !== input.projectId ||
         typeof action.id !== "string" || !action.id.trim() || actionIds.has(action.id) ||
@@ -141,44 +142,65 @@ function validate(input: NarrativeBehaviorEvolutionInput): void {
       throw new Error("Las acciones deben tener IDs únicos, actores/personajes, objetivos y evidencia válidos.");
     }
     actionIds.add(action.id);
+    actionById.set(action.id, action);
   }
+  const knowledgeIds = new Set<string>();
   for (const link of input.knowledgeActionLinks ?? []) {
     if (!link || link.projectId !== input.projectId ||
+        typeof link.id !== "string" || !link.id.trim() || knowledgeIds.has(link.id) ||
         !actionIds.has(link.actionId) || !entities.has(link.characterEntityId) ||
-        !validEvidence(link.actionEvidence)) {
+        !validEvidence(link.knowledgeEvidence) || !validEvidence(link.actionEvidence)) {
       throw new Error("Los enlaces de conocimiento deben referir acciones válidas del proyecto.");
     }
-    const action = [...(input.priorActions ?? []), ...input.currentActions].find(item => item.id === link.actionId)!;
+    knowledgeIds.add(link.id);
+    const action = actionById.get(link.actionId)!;
     if (action.actorEntityId !== link.characterEntityId || !sameEvidence(action.evidence, link.actionEvidence)) {
       throw new Error("El enlace de conocimiento no coincide con la evidencia de su acción.");
     }
   }
+  const contextIds = new Set<string>();
   for (const context of input.decisionContexts ?? []) {
     if (!context || context.projectId !== input.projectId ||
-        !actionIds.has(context.actionId) || !validEvidence(context.actionEvidence)) {
+        typeof context.id !== "string" || !context.id.trim() || contextIds.has(context.id) ||
+        !actionIds.has(context.actionId) || !validEvidence(context.knowledgeEvidence) ||
+        !validEvidence(context.intentEvidence) || !validEvidence(context.actionEvidence)) {
       throw new Error("El contexto de decisión debe referir una acción válida del proyecto.");
     }
-    const action = [...(input.priorActions ?? []), ...input.currentActions].find(item => item.id === context.actionId)!;
+    contextIds.add(context.id);
+    const action = actionById.get(context.actionId)!;
     if (action.actorEntityId !== context.characterEntityId || !sameEvidence(action.evidence, context.actionEvidence)) {
       throw new Error("El contexto de decisión no coincide con la evidencia de su acción.");
     }
   }
+  const memoryLinkIds = new Set<string>();
   for (const link of input.memoryActionLinks ?? []) {
-    if (!link || link.projectId !== input.projectId || !link.actionId ||
-        !actionIds.has(link.actionId) || !validEvidence(link.actionEvidence!)) {
+    if (!link || link.projectId !== input.projectId ||
+        typeof link.id !== "string" || !link.id.trim() || memoryLinkIds.has(link.id) ||
+        !link.actionId || !actionIds.has(link.actionId) ||
+        !entities.has(link.characterEntityId) || !Array.isArray(link.memoryEventIds) ||
+        !Array.isArray(link.memoryEvidence) || !link.memoryEvidence.every(validEvidence) ||
+        !validEvidence(link.actionEvidence!) ||
+        !["explicit-causal-link", "temporal-cooccurrence", "unresolved"].includes(link.relation) ||
+        (link.connectorEvidence !== undefined && !validEvidence(link.connectorEvidence))) {
       throw new Error("El enlace de memoria debe referir una acción válida y evidencia.");
     }
-    const action = [...(input.priorActions ?? []), ...input.currentActions].find(item => item.id === link.actionId)!;
+    memoryLinkIds.add(link.id);
+    const action = actionById.get(link.actionId)!;
     if (action.actorEntityId !== link.characterEntityId || !sameEvidence(action.evidence, link.actionEvidence!)) {
       throw new Error("El enlace de memoria no coincide con la evidencia de su acción.");
     }
   }
+  const evolutionIds = new Set<string>();
   for (const evolution of input.intentEvolution ?? []) {
     if (!evolution || evolution.projectId !== input.projectId ||
-        typeof evolution.id !== "string" || !evolution.id.trim() ||
-        !entities.has(evolution.characterEntityId)) {
-      throw new Error("La evolución de intenciones debe pertenecer al proyecto.");
+        typeof evolution.id !== "string" || !evolution.id.trim() || evolutionIds.has(evolution.id) ||
+        typeof evolution.currentIntentId !== "string" || !evolution.currentIntentId.trim() ||
+        !entities.has(evolution.characterEntityId) ||
+        !["maintained", "withdrawn", "replaced", "conditional", "coexisting",
+          "ambiguous-predecessor", "chronology-unresolved"].includes(evolution.transition)) {
+      throw new Error("La evolución de intenciones debe pertenecer al proyecto y tener IDs únicos.");
     }
+    evolutionIds.add(evolution.id);
   }
 }
 

@@ -630,3 +630,18 @@ El módulo `src/narrative-action-link-discovery.ts` amplía el inventario de mar
 ### Corrección de límites Unicode en el reconocimiento verbal
 
 Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, `pasar` y `recorrer`) que tenían escapado incorrectamente el límite Unicode dentro de literales de expresión regular. La corrección evita que una forma verbal se extraiga como subcadena pegada a letras de otra palabra, incluidas letras acentuadas o caracteres como «ñ». Se añadieron pruebas positivas para formas verbales completas y negativas para coincidencias incrustadas en palabras. Esta mejora afecta directamente a la precisión de la adquisición de acciones; no amplía ni confirma roles semánticos.
+
+## Ampliación de morfología verbal irregular y separación de auxiliares
+
+**Cambio incorporado:** se amplió `narrative-observation-discovery.ts` con patrones explícitos para formas irregulares de `hacer`, `venir`, `ver` y `poner`. Se reconocen formas de pretérito como `hizo`, `vino`, `vio` y `puso`, además de imperfectos, presentes, infinitivos, gerundios y participios incluidos en el inventario.
+
+**Criterio de extracción:** el inventario se limita a verbos léxicos de acontecimiento o percepción. No se añadieron `ser`, `estar` ni `haber` como acciones, ni verbos modales como `poder` y `querer` como acontecimientos independientes. En construcciones como «Ana había llegado», se conserva «llegado» como verbo léxico y no se genera una acción adicional para «había».
+
+**Clasificación temporal:** las formas irregulares de pretérito añadidas reciben la etiqueta gramatical `past-preterite`; los participios mantienen `participle`. Esta etiqueta describe morfología verbal y no establece por sí sola la fecha ni el orden de los acontecimientos.
+
+**Regresión añadida:** pruebas para las cuatro familias irregulares, evidencia literal y offsets de la forma detectada, clasificación de pretérito, exclusión de auxiliares/modales y conservación del verbo léxico en una perífrasis con `haber`.
+
+**Límite conocido:** el extractor continúa siendo léxico y basado en patrones. No equivale a un analizador morfosintáctico completo; homografía, elipsis, coordinación compleja, perífrasis aspectuales y variantes dialectales requieren etapas adicionales y revisión basada en evidencia. Los candidatos siguen marcados para revisión y no se promueven a hechos narrativos confirmados.
+
+**Validación CI:** las ejecuciones recientes del workflow de TypeScript terminan en `failure`. La información accesible confirma el fallo del paso «Build and run automated tests», pero todavía no expone el detalle de la salida que permita atribuirlo a estos cambios. Por tanto, esta ampliación está registrada y cubierta por pruebas añadidas, pero no se declara validada por CI hasta obtener una ejecución satisfactoria.
+

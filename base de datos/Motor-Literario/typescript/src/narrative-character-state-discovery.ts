@@ -217,7 +217,7 @@ export function discoverNarrativeCharacterStateCandidates(
         const predicateEnd = span.start + match.end + leadingWhitespace + adjectiveOffset + adjective.length;
         const nameStart = span.start + match.index;
         const nameEnd = span.start + match.end;
-        const assertionEnd = predicateEnd;
+        const assertionEnd = span.end;
         const predicateText = sentence.slice(
           match.end + leadingWhitespace + predicate.index,
           match.end + leadingWhitespace + adjectiveOffset + adjective.length

@@ -1,6 +1,8 @@
 import type { ProjectStore } from "./contracts";
 import {
   MAX_NARRATIVE_IDEA_REFERENCES,
+  normalizeEntityName,
+  type NarrativeEntity,
   type NarrativeIdea,
   type NarrativeRelation,
   type NarrativeEvent,
@@ -269,6 +271,67 @@ export function createNarrativeEventUpsertHandler(
         .find(item => item.id === event.id);
       if (existing && JSON.stringify(existing) === JSON.stringify(event)) return;
       await store.saveEventIfUnchanged!(event, existing);
+    }
+  };
+}
+
+
+export interface NarrativeEntityUpsertPayload {
+  readonly entity: NarrativeEntity;
+}
+
+function isNarrativeEntity(value: unknown): value is NarrativeEntity {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Partial<NarrativeEntity>;
+  const validNames = (names: unknown): names is readonly string[] =>
+    Array.isArray(names) && names.length <= 2_000 &&
+    names.every(name => typeof name === "string" && !!name.trim() && name.length <= 512) &&
+    new Set(names.map(name => normalizeEntityName(name))).size === names.length;
+  const validEvidence = Array.isArray(item.evidence) && item.evidence.length <= 10_000 &&
+    item.evidence.every(isTextEvidence);
+  return typeof item.projectId === "string" && !!item.projectId.trim() && item.projectId.length <= 256 &&
+    typeof item.id === "string" && !!item.id.trim() && item.id.length <= 512 &&
+    typeof item.kind === "string" && !!item.kind.trim() && item.kind.length <= 128 &&
+    typeof item.canonicalName === "string" && !!item.canonicalName.trim() && item.canonicalName.length <= 512 &&
+    typeof item.normalizedName === "string" && item.normalizedName.length <= 512 &&
+    item.normalizedName === normalizeEntityName(item.canonicalName) &&
+    validNames(item.aliases) &&
+    !item.aliases.some(alias => normalizeEntityName(alias) === item.normalizedName) &&
+    (item.mergedFromIds === undefined || validNames(item.mergedFromIds)) &&
+    validEvidence &&
+    typeof item.firstSeenAt === "number" && Number.isFinite(item.firstSeenAt) && item.firstSeenAt >= 0 &&
+    typeof item.lastSeenAt === "number" && Number.isFinite(item.lastSeenAt) &&
+    item.lastSeenAt >= item.firstSeenAt &&
+    item.extractionVersion === 1;
+}
+
+/**
+ * Persiste una ficha de identidad narrativa sin fusionar identidades por heurística.
+ * Los alias son explícitos y la fusión de duplicados debe pasar por el flujo atómico
+ * de consolidación de identidad del store, nunca por este upsert.
+ */
+export function createNarrativeEntityUpsertHandler(
+  store: ProjectStore
+): NarrativeSyncOperationHandler<NarrativeEntityUpsertPayload> {
+  if (!store || typeof store.loadEntities !== "function" ||
+      typeof store.saveEntityIfUnchanged !== "function") {
+    throw new TypeError("El store debe implementar loadEntities y saveEntityIfUnchanged.");
+  }
+  return {
+    kind: "entity-upsert",
+    validate(payload: unknown): payload is NarrativeEntityUpsertPayload {
+      return Boolean(payload && typeof payload === "object" && !Array.isArray(payload) &&
+        isNarrativeEntity((payload as { entity?: unknown }).entity));
+    },
+    async apply(operation): Promise<void> {
+      const entity = operation.payload.entity;
+      if (entity.projectId !== operation.projectId) {
+        throw new Error("La entidad de la operación pertenece a otro proyecto.");
+      }
+      const existing = (await store.loadEntities!(operation.projectId))
+        .find(item => item.id === entity.id);
+      if (existing && JSON.stringify(existing) === JSON.stringify(entity)) return;
+      await store.saveEntityIfUnchanged!(entity, existing);
     }
   };
 }

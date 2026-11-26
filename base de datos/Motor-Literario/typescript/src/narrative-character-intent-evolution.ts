@@ -156,8 +156,14 @@ export function evolveNarrativeCharacterIntents(
     } else if (exact.length === 1 && current.polarity === "affirmed") {
       transition = "maintained";
       candidates = exact;
-    } else if (orderedPrior.length === 0 && sameCharacter.length > 0 &&
-      !input.orderedDocumentIds?.includes(current.evidence.documentId)) {
+    } else if (orderedPrior.length === 0 && sameCharacter.some(item => {
+      if (item.evidence.documentId === current.evidence.documentId) {
+        return item.evidence.revision !== current.evidence.revision;
+      }
+      const before = orderOf(item, input.orderedDocumentIds);
+      const now = orderOf(current, input.orderedDocumentIds);
+      return before === undefined || now === undefined || before === now;
+    })) {
       transition = "chronology-unresolved";
       candidates = sameCharacter;
     } else {

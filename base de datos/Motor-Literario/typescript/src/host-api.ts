@@ -870,13 +870,15 @@ export class HostEngineApi {
     const project = this.requireProject();
     const work = this.continuityIndexTail.then(async () => {
       const store = this.store;
-      if (!store.loadDocumentMetadata || !store.loadDocument ||
+      const loadDocumentMetadata = store.loadDocumentMetadata?.bind(store);
+      const loadDocument = store.loadDocument?.bind(store);
+      if (!loadDocumentMetadata || !loadDocument ||
           !store.loadNarrativeIdeaContinuityIndex ||
           !store.saveNarrativeIdeaContinuityIndexIfUnchanged) {
         return;
       }
 
-      const metadata = await store.loadDocumentMetadata(project.projectId);
+      const metadata = await loadDocumentMetadata(project.projectId);
       if (!Array.isArray(metadata) || metadata.length > 10_000) {
         throw new Error("El proyecto supera el límite de 10.000 documentos para reconciliar continuidad.");
       }
@@ -945,7 +947,7 @@ export class HostEngineApi {
           batchStart, batchStart + DOCUMENT_READ_BATCH_SIZE
         );
         const discoveredBatch = await Promise.all(batch.map(async item => {
-          const document = await store.loadDocument(project.projectId, item.documentId);
+          const document = await loadDocument(project.projectId, item.documentId);
           if (!document || document.projectId !== project.projectId ||
               document.documentId !== item.documentId ||
               document.revision !== item.revision ||
@@ -1088,7 +1090,7 @@ export class HostEngineApi {
 
       // Evita publicar una mezcla de revisiones si otro escritor editó un
       // documento mientras se leían los cuerpos del proyecto.
-      const latestMetadata = await store.loadDocumentMetadata(project.projectId);
+      const latestMetadata = await loadDocumentMetadata(project.projectId);
       const latestById = new Map<string, { revision: number; sequence: number; updatedAt: number }>();
       if (!Array.isArray(latestMetadata) || latestMetadata.length !== metadata.length) {
         throw new Error("El conjunto documental cambió durante la reconciliación de continuidad; se reintentará.");

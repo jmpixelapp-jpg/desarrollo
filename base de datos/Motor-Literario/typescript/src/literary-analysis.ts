@@ -6558,8 +6558,10 @@ function validateInput(input: LiteraryAnalysisInput): number {
         (!Array.isArray(input.knownRelations) || input.knownRelations.length > 2_000)) ||
       (input.knownIdeas !== undefined &&
         (!Array.isArray(input.knownIdeas) || input.knownIdeas.length > 2_000)) ||
+      // El grafo global admite catálogos grandes; el límite coincide con
+      // la capacidad de referencias históricas que puede preservar la biblioteca.
       (input.knownProjectIdeas !== undefined &&
-        (!Array.isArray(input.knownProjectIdeas) || input.knownProjectIdeas.length > 2_000)) ||
+        (!Array.isArray(input.knownProjectIdeas) || input.knownProjectIdeas.length > 20_000)) ||
       (input.knownProjectIdeasOmittedCount !== undefined &&
         (!Number.isSafeInteger(input.knownProjectIdeasOmittedCount) || input.knownProjectIdeasOmittedCount < 0)) ||
       (input.knownRelationsOmittedCount !== undefined &&

@@ -5749,6 +5749,100 @@ export class IndexedDbProjectStore implements ProjectStore {
       );
     });
   }
+  /**
+   * Asigna la siguiente secuencia del dispositivo y encola la operación
+   * dentro de una única transacción readwrite. IndexedDB serializa las
+   * transacciones readwrite que abarcan este object store entre conexiones.
+   */
+  async enqueueNextSyncOperation(
+    draft: Omit<StoredSyncOperation, "sequence">
+  ): Promise<StoredSyncOperation> {
+    if (!draft || typeof draft.operationId !== "string" || !draft.operationId.trim() ||
+        draft.operationId.length > 256 ||
+        typeof draft.projectId !== "string" || !draft.projectId.trim() ||
+        typeof draft.deviceId !== "string" || !draft.deviceId.trim() ||
+        draft.deviceId.length > 256 ||
+        typeof draft.kind !== "string" || !draft.kind.trim() || draft.kind.length > 128 ||
+        typeof draft.payload !== "string" || draft.payload.length > 2_000_000 ||
+        !Number.isFinite(draft.createdAt) || draft.createdAt < 0 ||
+        draft.attemptCount !== 0 || draft.lastAttemptAt !== undefined ||
+        draft.lastError !== undefined || draft.nextAttemptAt !== undefined) {
+      throw new Error("Borrador inválido para asignación de secuencia.");
+    }
+    let payload: unknown;
+    try { payload = JSON.parse(draft.payload); }
+    catch { throw new Error("El payload de sincronización debe contener JSON válido."); }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("El payload de sincronización debe ser un objeto JSON.");
+    }
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
+      const store = transaction.objectStore(SYNC_OUTBOX);
+      const index = store.index("by-project-device-sequence");
+      let result: StoredSyncOperation | undefined;
+      let failure: Error | undefined;
+      const existingRequest = store.get(draft.operationId);
+      existingRequest.onsuccess = () => {
+        const existing = existingRequest.result as StoredSyncOperation | undefined;
+        if (existing) {
+          const same = existing.projectId === draft.projectId &&
+            existing.deviceId === draft.deviceId &&
+            existing.kind === draft.kind &&
+            existing.createdAt === draft.createdAt &&
+            JSON.stringify(JSON.parse(existing.payload)) === JSON.stringify(payload);
+          if (!same) {
+            failure = new Error("Colisión de idempotencia: el operationId ya existe con otro contenido.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            return;
+          }
+          result = structuredClone(existing);
+          return;
+        }
+        const range = IDBKeyRange.bound(
+          [draft.projectId, draft.deviceId, 0],
+          [draft.projectId, draft.deviceId, Number.MAX_SAFE_INTEGER]
+        );
+        const cursorRequest = index.openCursor(range, "prev");
+        cursorRequest.onsuccess = () => {
+          const last = cursorRequest.result?.value as StoredSyncOperation | undefined;
+          const sequence = last ? last.sequence + 1 : 1;
+          if (!Number.isSafeInteger(sequence) || sequence < 1) {
+            failure = new Error("Se agotó el espacio de secuencias del dispositivo.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            return;
+          }
+          const operation: StoredSyncOperation = { ...draft, sequence };
+          try {
+            const addRequest = store.add(operation);
+            addRequest.onsuccess = () => { result = structuredClone(operation); };
+            addRequest.onerror = () => {
+              failure = addRequest.error ?? new Error("No se pudo encolar la operación secuenciada.");
+              try { transaction.abort(); } catch { /* transacción ya abortada */ }
+            };
+          } catch (error) {
+            failure = error instanceof Error ? error : new Error("No se pudo encolar la operación secuenciada.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          }
+        };
+        cursorRequest.onerror = () => {
+          failure = cursorRequest.error ?? new Error("No se pudo determinar la última secuencia del dispositivo.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        };
+      };
+      existingRequest.onerror = () => {
+        failure = existingRequest.error ?? new Error("No se pudo comprobar la idempotencia de la operación.");
+        try { transaction.abort(); } catch { /* transacción ya abortada */ }
+      };
+      transaction.oncomplete = () => {
+        if (result) resolve(result);
+        else reject(failure ?? new Error("La asignación terminó sin producir una operación."));
+      };
+      transaction.onerror = () => reject(failure ?? transaction.error ?? new Error("Falló la asignación de secuencia."));
+      transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Se canceló la asignación de secuencia."));
+    });
+  }
+
   async enqueueSyncOperation(operation: StoredSyncOperation): Promise<void> {
     if (!operation || typeof operation.operationId !== "string" || !operation.operationId.trim() ||
         operation.operationId.length > 256 ||

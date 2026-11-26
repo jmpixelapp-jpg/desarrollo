@@ -117,7 +117,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     }
 
     const inputType = typeof input.inputType === "string" ? input.inputType : "";
-    if (inputType.length > 128 || /[\\u0000-\\u001f\\u007f]/.test(inputType)) {
+    if (inputType.length > 128 || /[\u0000-\u001f\u007f]/.test(inputType)) {
       this.fail(
         "unsupported-input-type",
         "El inputType nativo excede el formato de metadatos admitido."

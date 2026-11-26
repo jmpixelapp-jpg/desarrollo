@@ -324,6 +324,92 @@ test("solo una pestaña publica métricas compartidas y la siguiente toma el lea
 });
 
 
+test("cerrar un documento no detiene el lease ni el checkpoint de otros documentos abiertos", async () => {
+  const store = new MemoryDocumentStore();
+  const api = new HostEngineApi({ store });
+  const projectId = "monitor-independent-open-documents";
+  const documentA = "chapter-a";
+  const documentB = "chapter-b";
+  const keyA = projectId + ":" + documentA;
+  const keyB = projectId + ":" + documentB;
+
+  api.initializeProject({ projectId, projectName: "Independent open documents" });
+
+  try {
+    await api.openDocument({
+      documentId: documentA,
+      text: "A",
+      revision: 0,
+      sequence: 0
+    });
+    await api.openDocument({
+      documentId: documentB,
+      text: "B",
+      revision: 0,
+      sequence: 0
+    });
+    await api.flushPendingChanges();
+
+    const initialA = store.monitorCheckpoints.get(keyA);
+    const initialB = store.monitorCheckpoints.get(keyB);
+    const leaseA = store.monitorLeases.get(keyA);
+    const leaseB = store.monitorLeases.get(keyB);
+    assert.ok(initialA);
+    assert.ok(initialB);
+    assert.ok(leaseA);
+    assert.ok(leaseB);
+    assert.equal(api.liveMonitorLeases.has(documentA), true);
+    assert.equal(api.liveMonitorLeases.has(documentB), true);
+    assert.equal(api.liveMonitorLeaseHeartbeats.has(documentA), true);
+    assert.equal(api.liveMonitorLeaseHeartbeats.has(documentB), true);
+
+    await api.closeLiveAuthorMonitorDocumentSafely(documentA);
+
+    assert.equal(api.getLiveAuthorMonitorSnapshot(documentA), undefined);
+    assert.equal(api.liveMonitorLeases.has(documentA), false);
+    assert.equal(api.liveMonitorLeaseHeartbeats.has(documentA), false);
+    assert.equal(store.monitorLeases.get(keyA).expiresAt <= Date.now(), true);
+
+    assert.ok(api.getLiveAuthorMonitorSnapshot(documentB));
+    assert.equal(api.liveMonitorLeases.has(documentB), true,
+      "cerrar A no debe eliminar la titularidad local de B");
+    assert.equal(api.liveMonitorLeaseHeartbeats.has(documentB), true,
+      "el heartbeat de B debe continuar activo");
+    assert.equal(store.monitorLeases.get(keyB).ownerId, leaseB.ownerId);
+    assert.equal(store.monitorLeases.get(keyB).fencingToken, leaseB.fencingToken);
+    assert.ok(store.monitorLeases.get(keyB).expiresAt > Date.now());
+
+    const editB = api.onEditorChange({
+      documentId: documentB,
+      sequence: 1,
+      baseRevision: 0,
+      start: 1,
+      end: 1,
+      replacement: "2"
+    });
+    assert.equal(editB.status, "queued");
+    await api.flushPendingChanges();
+    const pendingCheckpointB = api.liveMonitorCheckpointTails.get(documentB);
+    if (pendingCheckpointB) await pendingCheckpointB;
+
+    const savedA = store.monitorCheckpoints.get(keyA);
+    const savedB = store.monitorCheckpoints.get(keyB);
+    assert.equal(savedA.sessionId, initialA.sessionId,
+      "el cierre de A conserva su último checkpoint");
+    assert.equal(savedB.sessionId, initialB.sessionId,
+      "la sesión de B no debe reiniciarse al cerrar A");
+    assert.equal(savedB.revision, 1);
+    assert.equal(savedB.sequence, 1);
+    assert.equal(savedB.currentDocumentLength, 2);
+    assert.equal(api.getLiveAuthorMonitorPersistenceDiagnostics(documentB).checkpointState, "saved");
+
+    await api.closeLiveAuthorMonitorDocumentSafely(documentB);
+    assert.equal(store.monitorLeases.get(keyB).expiresAt <= Date.now(), true);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("conserva la titularidad local y permite reintentar si falla la liberación del lease", async () => {
   class FailingReleaseStore extends MemoryDocumentStore {
     failRelease = true;

@@ -103,3 +103,17 @@ test("reconoce una forma frecuente adicional de verbo de habla", () => {
   assert.equal(segment.speakerCandidates[0].entityId, ana.id);
   assert.equal(segment.speakerCandidates[0].speechVerbEvidence.excerpt, "habló");
 });
+
+test("no confunde al destinatario introducido por preposición con el hablante", () => {
+  const text = "«¿Vienes?» preguntó a Bruno.";
+  const [segment] = discover(text, [bruno]);
+  assert.equal(segment.speakerStatus, "unattributed");
+  assert.deepEqual(segment.speakerCandidates, []);
+});
+
+test("prefiere el sujeto explícito frente al destinatario de una pregunta", () => {
+  const text = "Ana preguntó a Bruno: «¿Vienes?»";
+  const [segment] = discover(text, [ana, bruno]);
+  assert.equal(segment.speakerStatus, "explicit-single");
+  assert.equal(segment.speakerCandidates[0].entityId, ana.id);
+});

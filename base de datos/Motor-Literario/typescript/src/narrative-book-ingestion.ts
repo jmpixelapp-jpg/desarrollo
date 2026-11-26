@@ -17,6 +17,10 @@ import {
   discoverNarrativeObjectTransitionCandidates,
   type NarrativeObjectTransitionCandidate
 } from "./narrative-object-state-discovery";
+import {
+  discoverNarrativeCharacterStateCandidates,
+  type NarrativeCharacterStateCandidate
+} from "./narrative-character-state-discovery";
 import { auditNarrativeExtractionCoverage, type NarrativeExtractionAudit } from "./narrative-extraction-audit";
 
 /**
@@ -107,6 +111,8 @@ export interface NarrativeBookIngestionResult {
   readonly actionLinks: readonly NarrativeActionLinkCandidate[];
   /** Cambios candidatos de objetos derivados de acciones y participantes explícitos. */
   readonly objectTransitionCandidates: readonly NarrativeObjectTransitionCandidate[];
+  /** Afirmaciones explícitas de condición de personajes; no son estados consolidados. */
+  readonly characterStateCandidates: readonly NarrativeCharacterStateCandidate[];
   /** Pasajes no cubiertos por las extracciones actuales, expuestos para revisión humana. */
   readonly extractionAudit: NarrativeExtractionAudit;
   readonly observationStatus: "extracted" | "no-entities" | "omitted-text-budget";
@@ -450,6 +456,17 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
         observations
       })
     : [];
+  const characterStateCandidates = entitiesForObservation.length > 0 &&
+      input.text.length <= MAX_NARRATIVE_OBSERVATION_TEXT_UNITS
+    ? discoverNarrativeCharacterStateCandidates({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        revision: input.revision,
+        text: input.text,
+        entities: entitiesForObservation,
+        baseOffset: input.baseOffset ?? 0
+      })
+    : [];
   // Los acontecimientos se extraen solo cuando el escritor usa una etiqueta explícita.
   // Las entidades locales sirven para sugerir participantes, nunca para confirmar roles.
   const eventCandidates = input.text.length <= MAX_NARRATIVE_BOOK_TEXT_UNITS
@@ -493,6 +510,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     observations,
     actionLinks,
     objectTransitionCandidates,
+    characterStateCandidates,
     eventCandidates,
     extractionAudit,
     observationStatus,

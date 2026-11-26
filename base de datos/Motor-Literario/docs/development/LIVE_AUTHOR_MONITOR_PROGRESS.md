@@ -686,7 +686,9 @@ La lane completa permanece en `failure` por la auditoría de persistencia y el b
 
 **Privacidad:** el job de retención opera sobre IDs, timestamps y metadatos de lease/checkpoint; no materializa ni inspecciona el contenido del manuscrito.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación en [Live Author Monitor — run 45756913002](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756913002), checkout `df627586`:** aprobada para la lane aislada. `tsc --noEmit --project tsconfig.live-author-monitor.json` pasó; también el build Vite reducido, 17/17 pruebas diagnósticas y 59/59 pruebas de núcleo, panel y workspace. El test existente de checkpoint confirmó que dos errores del suscriptor permanecen en la sesión actual, no aparecen en el registro durable y vuelven a cero tras `restoreCheckpoint()`. El benchmark procesó 100.000 commits en 589,71 ms (~169.576 commits/s), con heap de 4,26 MiB al 50 % y al 100 % de carga, crecimiento medido de 0 MiB, 0,50 MiB retenidos y cero tickets pendientes.
+
+La lane completa permanece en `failure` por la auditoría MLDB (desajuste de versión IndexedDB y almacenes de reparación sin mapear) y el bundle runtime general, que sigue fallando en `indexeddb-store.ts:2560`. Las integraciones que dependen de ese bundle se omitieron; la validación estricta del núcleo/panel/workspace queda aprobada.
 
 - Se amplía la cobertura de retención en HostEngineApi: valor configurable, limpieza automática al iniciar, llamada manual, desactivación con `0` y rechazo de límites inválidos. La fixture de lease vencido conserva fechas internamente válidas para probar expiración real y no corrupción.
 
@@ -1358,7 +1360,7 @@ La conclusión global de la lane sigue siendo `failure` por controles compartido
 
 **Cambio:** se añade `tsconfig.live-author-monitor.json`, que extiende las opciones estrictas del proyecto y limita `include` al entrypoint `live-author-monitor-test-entry.ts`. Sus importaciones transitivas incluyen el núcleo, el panel y el workspace. La lane de Live Author Monitor ejecuta `npx tsc --noEmit --project tsconfig.live-author-monitor.json` antes del build Vite.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación en [Live Author Monitor — run 45756913002](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756913002):** aprobada. En el test `crea y restaura checkpoint durable conservando métricas y contando la interrupción como inactividad`, el monitor acumuló dos fallos de suscriptor en la sesión, confirmó que `createCheckpoint()` no escribe `listenerErrors` y restauró una sesión nueva con el contador en cero. La ejecución completó 59/59 pruebas aisladas; type-check estricto independiente aprobado. La lane completa conserva los bloqueos externos de auditoría/compilación descritos en la sección 84.
 
 
 ## 85. Los errores de suscriptores no forman parte del checkpoint durable (26 de noviembre de 2026)

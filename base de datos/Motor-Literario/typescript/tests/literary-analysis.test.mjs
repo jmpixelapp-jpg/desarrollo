@@ -199,6 +199,39 @@ test("marca como desconocida la participación en escenas con vínculos de event
   assert.equal(profile.incompleteSceneCount, 1);
 });
 
+test("los vínculos de escena acotan muestras de evidencia sin perder el total", () => {
+  const lines = Array.from({ length: 35 }, () => "La puerta se cerró.");
+  const text = ["Escena 1", ...lines].join("\\n");
+  const evidence = lines.map((line, index) => {
+    const start = text.indexOf(line, text.indexOf("Escena 1") + "Escena 1".length + 1 +
+      lines.slice(0,index).reduce((sum,item) => sum + item.length + 1,0));
+    return {
+      documentId:"chapter-one",
+      revision:1,
+      start,
+      end:start+line.length,
+      excerpt:line
+    };
+  }).reverse();
+  const result = LiteraryAnalysisForEvidence(text, [{
+    eventId:"door-closes",
+    label:"La puerta se cierra",
+    participants:["ana-id"],
+    evidence
+  }]);
+  const link = result.explicitScenes[0].eventLinks[0];
+
+  assert.ok(link);
+  assert.equal(link.matchingEvidenceCount,35);
+  assert.equal(link.matchingEvidenceTruncated,true);
+  assert.equal(link.matchingEvidence.length,20);
+  assert.deepEqual(
+    link.matchingEvidence.map(item => item.start),
+    evidence.map(item => item.start).sort((a,b) => a-b).slice(0,20)
+  );
+});
+
+
 function LiteraryAnalysisForEvidence(text, knownEvents) {
   return analyzeLiteraryFragment({
     projectId: "literary-analysis-test",

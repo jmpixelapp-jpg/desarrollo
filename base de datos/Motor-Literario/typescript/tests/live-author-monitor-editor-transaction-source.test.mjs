@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  LiveAuthorMonitorEditorTransactionSource
-} from "../dist/motor-literario.js";
+const monitorModule = await import("../dist-monitor/live-author-monitor.js")
+  .catch(() => import("../dist/motor-literario.js"));
+const { LiveAuthorMonitorEditorTransactionSource } = monitorModule;
 
 class FakeTransactionalEditor {
   snapshot;

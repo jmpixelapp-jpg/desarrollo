@@ -462,3 +462,8 @@ El handle de cancelación del proveedor se conserva hasta que `unsubscribe()` te
 ## 30. Diferenciar listener activo de cancelación pendiente
 
 Un disposer presente no implica por sí solo que haya fallado: normalmente representa el listener activo del proveedor. `attachProvider()` no lo cancela ni crea otro. Solo cuando el último intento a `unsubscribe()` lanzó una excepción se activa `providerDetachFailed`, y en la siguiente reanudación se reintenta ese mismo handle antes de abrir una suscripción nueva. Un cierre correcto borra el handle y el flag; un fallo conserva ambos.
+
+
+## 31. Errores de `dispose()` visibles y reintentables
+
+Si la cancelación del listener del proveedor lanza una excepción, `dispose()` no devuelve éxito silencioso: lanza `No se pudo retirar el listener del proveedor; repita dispose() para reintentar.`. La instancia permanece marcada como dispuesta, sus colas y suscriptores internos se limpian, y el handle fallido se conserva. Una llamada posterior a `dispose()` intenta cerrar ese handle; al completarse, las siguientes llamadas son idempotentes. La integración de editor conserva esta misma semántica para que el anfitrión pueda detectar y reintentar la limpieza pendiente.

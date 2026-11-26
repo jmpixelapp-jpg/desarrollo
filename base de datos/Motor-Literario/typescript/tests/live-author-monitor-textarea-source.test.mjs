@@ -565,3 +565,24 @@ test("rechaza eventos de edición sintéticos aunque imiten inputType y cambien 
   inputSynthetic.stop();
   inputSynthetic.source.dispose();
 });
+
+test("libera la copia temporal del manuscrito al suspender y al disponer la captura", () => {
+  const f = fixture("PRIVATE_MANUSCRIPT_SENTINEL");
+  f.source.requireResynchronization("test privacy release");
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.source.previousText, "");
+
+  // Solo un snapshot autoritativo válido vuelve a introducir el texto efímero.
+  const recovered = f.source.resynchronize({
+    documentId: "chapter-1",
+    text: "PRIVATE_MANUSCRIPT_SENTINEL",
+    revision: 5,
+    sequence: 10
+  });
+  assert.equal(recovered.needsResync, false);
+  assert.equal(f.source.previousText, "PRIVATE_MANUSCRIPT_SENTINEL");
+
+  f.source.dispose();
+  assert.equal(f.source.previousText, "");
+  f.stop();
+});

@@ -9,11 +9,13 @@ const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const MAPPING_PATH = resolve(TEST_DIR, "../../MLDB/storage_mapping_v0.4.2.json");
 const RUNTIME_PATH = resolve(TEST_DIR, "../src/persistence/indexeddb-store.ts");
 const HOST_API_PATH = resolve(TEST_DIR, "../src/host-api.ts");
+const LITERARY_ANALYSIS_PATH = resolve(TEST_DIR, "../src/literary-analysis.ts");
 
-const [mappingText, runtimeSource, hostApiSource] = await Promise.all([
+const [mappingText, runtimeSource, hostApiSource, literaryAnalysisSource] = await Promise.all([
   readFile(MAPPING_PATH, "utf8"),
   readFile(RUNTIME_PATH, "utf8"),
-  readFile(HOST_API_PATH, "utf8")
+  readFile(HOST_API_PATH, "utf8"),
+  readFile(LITERARY_ANALYSIS_PATH, "utf8")
 ]);
 const mapping = JSON.parse(mappingText);
 
@@ -150,7 +152,7 @@ test("un destino inválido aborta la transacción y no confirma la escritura", (
   assert.match(writer, /transaction\.oncomplete = \(\) => resolve\(\)/);
 });
 
-test("el presupuesto léxico solo descuenta texto copiado al catálogo global", () => {
+test("el presupuesto léxico reserva también el texto enlazado que se incorpora al grafo", () => {
   const start = hostApiSource.indexOf("const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] | undefined");
   const end = hostApiSource.indexOf("const knownIdeas=linkedIdeas.slice", start);
   assert.notEqual(start, -1, "debe existir la proyección del catálogo global");
@@ -159,10 +161,22 @@ test("el presupuesto léxico solo descuenta texto copiado al catálogo global", 
 
   assert.match(
     projection,
-    /const includeLexicalText = !knownLinkedIdeaIds\.has\(idea\.id\) &&\s*lexicalTextUnitCount \+ idea\.text\.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;/
+    /const textFitsBudget = lexicalTextUnitCount \+ idea\.text\.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;/
   );
-  assert.match(projection, /if \(includeLexicalText\) lexicalTextUnitCount \+= idea\.text\.length;/);
-  assert.doesNotMatch(projection, /const textFitsBudget =/);
+  assert.match(projection, /if \(textFitsBudget\) lexicalTextUnitCount \+= idea\.text\.length;/);
+  assert.match(
+    projection,
+    /const includeLexicalText = !knownLinkedIdeaIds\.has\(idea\.id\) && textFitsBudget;/
+  );
+  assert.match(projection, /!knownLinkedIdeaIds\.has\(idea\.id\) && !includeLexicalText/);
+
+  const graphMerge = literaryAnalysisSource.slice(
+    literaryAnalysisSource.indexOf("const knownIdeaTextById"),
+    literaryAnalysisSource.indexOf("const usesProjectIdeaCatalog")
+  );
+  assert.match(graphMerge, /\(input\.knownIdeas \?\? \[\]\)\.map\(idea => \[idea\.ideaId, idea\.text\]/);
+  assert.match(graphMerge, /const knownText = knownIdeaTextById\.get\(idea\.ideaId\);/);
+  assert.match(graphMerge, /return \{ \.\.\.idea, text: knownText \};/);
 });
 
 

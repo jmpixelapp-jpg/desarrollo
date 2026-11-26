@@ -148,3 +148,38 @@ test("no propone aposiciones sin una entidad explícita inmediatamente anterior"
   });
   assert.deepEqual(candidates, []);
 });
+
+ 
+test("rechaza IDs de entidad duplicados y alias malformados en la extracción", async () => {
+  const { discoverNarrativeDescriptiveLabelCandidates } = await import("../dist/motor-literario.js");
+  const input = {
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Ana, la heredera llegó.", entities: [ana, { ...ana, canonicalName: "Anita" }]
+  };
+  assert.throws(() => discoverNarrativeDescriptiveLabelCandidates(input), /únicas, válidas/);
+  assert.throws(() => discoverNarrativeDescriptiveLabelCandidates({
+    ...input, entities: [{ ...ana, aliases: ["", "Anita"] }]
+  }), /alias deben ser textos válidos/);
+  assert.throws(() => discoverNarrativeDescriptiveLabelCandidates({
+    ...input, entities: [{ ...ana, aliases: ["Anita", " anita "] }]
+  }), /alias deben ser textos válidos/);
+});
+
+test("no devuelve silenciosamente una lista parcial al superar el máximo de propuestas", async () => {
+  const { discoverNarrativeDescriptiveLabelCandidates } = await import("../dist/motor-literario.js");
+  assert.throws(() => discoverNarrativeDescriptiveLabelCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text: "Ana, la heredera llegó. Ana, la viajera volvió.",
+    entities: [ana], maxCandidates: 1
+  }), /no se devuelve un resultado parcial/);
+});
+
+test("ordena propuestas por posición textual aunque las entidades estén desordenadas", async () => {
+  const { discoverNarrativeDescriptiveLabelCandidates } = await import("../dist/motor-literario.js");
+  const text = "Bruno, el guardián llegó. Ana, la heredera volvió.";
+  const results = discoverNarrativeDescriptiveLabelCandidates({
+    projectId: "book-1", documentId: "chapter-2", revision: 4,
+    text, entities: [ana, bruno]
+  });
+  assert.deepEqual(results.map(x => x.proposedLabel), ["el guardián", "la heredera"]);
+});

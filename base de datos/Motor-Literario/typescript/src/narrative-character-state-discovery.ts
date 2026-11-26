@@ -12,7 +12,8 @@ export type NarrativeCharacterState =
   | "bound" | "free" | "sick" | "healthy" | "missing" | "present"
   | "asleep" | "awake" | "exhausted" | "afraid" | "angry" | "calm"
   | "pregnant" | "imprisoned" | "poisoned" | "blind" | "deaf" | "mute"
-  | "paralyzed" | "transformed" | "trapped" | "absent" | "lost" | "protected";
+  | "paralyzed" | "transformed" | "trapped" | "absent" | "lost" | "protected"
+  | "confused" | "disoriented" | "worried" | "hopeful" | "sad" | "happy" | "surprised";
 
 export type NarrativeCharacterStateCategory =
   | "vital" | "physical" | "cognitive" | "emotional" | "social" | "location" | "other";
@@ -80,10 +81,17 @@ const STATE_PATTERNS: readonly {
   { state: "present", category: "location", expression: /^presentes?(?![\p{L}\p{M}])/iu },
   { state: "absent", category: "location", expression: /^(?:ausentes?|alejad[oa]s?)(?![\p{L}\p{M}])/iu },
   { state: "lost", category: "location", expression: /^perdid[oa]s?(?![\p{L}\p{M}])/iu },
-  { state: "protected", category: "social", expression: /^protegid[oa]s?(?![\p{L}\p{M}])/iu }
+  { state: "protected", category: "social", expression: /^protegid[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "confused", category: "cognitive", expression: /^confundid[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "disoriented", category: "cognitive", expression: /^desorientad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "worried", category: "emotional", expression: /^preocupad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "hopeful", category: "emotional", expression: /^esperanzad[oa]s?(?![\p{L}\p{M}])/iu },
+  { state: "sad", category: "emotional", expression: /^tristes?(?![\p{L}\p{M}])/iu },
+  { state: "happy", category: "emotional", expression: /^(?:felices?|content[oa]s?)(?![\p{L}\p{M}])/iu },
+  { state: "surprised", category: "emotional", expression: /^sorprendid[oa]s?(?![\p{L}\p{M}])/iu }
 ];
 
-const COPULA = /^(?<marker>volvi[oó]\s+a\s+|dej[oó]\s+de\s+|ya\s+no\s+|todav[ií]a\s+no\s+|a[uú]n\s+no\s+|nunca\s+|jam[aá]s\s+|no\s+)?(?<copula>est[aá]s?|est[aá]n?|estaba(?:n)?|estuv(?:o|ieron)|estar|estar[aá]n?|er(?:a|an)|fu(?:e|eron)|ser[aá]n?|es|son|sigu(?:e|en|i[oó]|ieron)|permanece(?:n)?|contin[uú](?:a|an|ó)|se\s+encuentra|se\s+encontraba|qued[oó]|parece(?:n)?)\s+(?<adverb>(?:(?:muy|bastante|gravemente|ligeramente)\s+)?)(?<adjective>[\p{L}\p{M}]+)(?![\p{L}\p{M}])/iu;
+const COPULA = /^(?<marker>volvi[oó]\s+a\s+|dej[oó]\s+de\s+|ya\s+no\s+|todav[ií]a\s+no\s+|a[uú]n\s+no\s+|nunca\s+|jam[aá]s\s+|no\s+)?(?<copula>est[aá]s?|est[aá]n?|estaba(?:n)?|estuv(?:o|ieron)|estar|estar[aá]n?|er(?:a|an)|fu(?:e|eron)|ser[aá]n?|es|son|sigu(?:e|en|i[oó]|ieron)|permanece(?:n)?|contin[uú](?:a|an|ó)|se\s+encuentra|se\s+encontraba|se\s+siente|se\s+sentía|se\s+sintió|se\s+ve|se\s+veía|se\s+mostraba|qued[oó]|parece(?:n)?)\s+(?<adverb>(?:(?:muy|bastante|gravemente|ligeramente)\s+)?)(?<adjective>[\p{L}\p{M}]+)(?![\p{L}\p{M}])/iu;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -111,8 +119,8 @@ function tenseOf(copula: string, marker: string): NarrativeCharacterStateCandida
   const form = copula.toLocaleLowerCase("es");
   if (/(?:volvi[oó]\s+a|dej[oó]\s+de)/u.test(marker)) return "past";
   if (/(?:estar[aá]n?|ser[aá]n?)$/u.test(form)) return "future";
-  if (/(?:aba|aban|ía|ían|era|eran|fue|fueron|estuvo|estuvieron|sigui[oó]|siguieron|qued[oó]|encontraba)$/u.test(form)) return "past";
-  if (/^(?:est[aá]s?|est[aá]n?|es|son|sigue|siguen|permanece|permanecen|contin[uú]a|contin[uú]an|se encuentra|parece|parecen)$/u.test(form)) return "present";
+  if (/(?:aba|aban|ía|ían|era|eran|fue|fueron|estuvo|estuvieron|sigui[oó]|siguieron|qued[oó]|encontraba|se sentía|se sintió|se veía|se mostraba)$/u.test(form)) return "past";
+  if (/^(?:est[aá]s?|est[aá]n?|es|son|sigue|siguen|permanece|permanecen|contin[uú]a|contin[uú]an|se encuentra|se siente|se ve|parece|parecen)$/u.test(form)) return "present";
   return "unknown";
 }
 
@@ -229,7 +237,7 @@ export function discoverNarrativeCharacterStateCandidates(
           : /dej[oó]\s+de/iu.test(marker) ? "ceased"
           : /sigu|permanece|contin[uú]/iu.test(copula) ? "ongoing"
           : "ordinary";
-        const mode = /^parece/iu.test(copula) ? "perceptual" : "copular";
+        const mode = /^(?:parece|se siente|se ve)/iu.test(copula) ? "perceptual" : "copular";
         const base = input.baseOffset ?? 0;
 
         results.push({

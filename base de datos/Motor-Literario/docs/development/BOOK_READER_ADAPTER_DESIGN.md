@@ -129,3 +129,10 @@ La inspección del EPUB ahora recorre los documentos del spine y devuelve númer
 Se añade `typescript/src/book-evidence.ts` con `resolveBookEvidence(book, chapter, start, end)`. Convierte offsets UTF-16 del documento analizado en fragmentos trazables a los bloques entregados por el lector. El resultado conserva fuente, formato, libro, capítulo, cita exacta, IDs y secuencias de bloques, offsets locales y localizadores originales.
 
 Una evidencia que cruza bloques se divide en fragmentos, y los saltos de párrafo sintéticos quedan sin atribución. Esta distinción evita inventar procedencia para caracteres que no estaban literalmente en el libro. Los consumidores del análisis pueden usar el resolver para abrir el pasaje original, mostrar la página/archivo y verificar una afirmación narrativa contra su texto fuente.
+
+
+### Navegación y precisión estructural EPUB
+
+La inspección recupera ahora la tabla de contenidos EPUB 3 (`nav`) y la alternativa EPUB 2 (`NCX`), devolviendo etiquetas, destinos internos y profundidad jerárquica. La navegación se informa aparte y nunca reemplaza el orden de lectura del spine. Se añadieron fixtures para jerarquía nav y NCX.
+
+Se corrigió también la extracción de saltos XHTML `br` (se conservan como saltos de línea), y se reconocen nombres de elementos con prefijo XML. El lector ZIP rechaza directorios divididos y entradas cuyo rango de datos invade el directorio central, además de verificar que los flags locales coincidan con los del directorio central.

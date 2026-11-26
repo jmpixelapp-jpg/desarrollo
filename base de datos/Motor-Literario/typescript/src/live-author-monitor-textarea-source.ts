@@ -456,12 +456,16 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.listeners.clear();
     this.pendingInput = undefined;
     this.compositionActive = false;
+    // La instancia puede seguir referenciada después de dispose(); libera el manuscrito.
+    this.previousText = "";
   }
 
   private fail(code: LiveAuthorMonitorTextAreaErrorCode, message: string): void {
     this.needsResync = true;
     this.pendingInput = undefined;
     this.compositionActive = false;
+    // Mientras se espera un snapshot autoritativo no se necesita conservar texto.
+    this.previousText = "";
     this.report(new LiveAuthorMonitorTextAreaSourceError(code, message));
   }
 

@@ -631,6 +631,7 @@ export class HostEngineApi {
   private readonly liveMonitorLeaseGenerations = new Map<string, object>();
   private readonly liveMonitorLeaseReleasing = new Set<string>();
   private readonly liveMonitorLeaseHeartbeatInFlight = new Set<string>();
+  private readonly liveMonitorLeaseHeartbeatRequested = new Set<string>();
   private readonly liveMonitorLifecycleDocument: Document | undefined;
   private readonly liveMonitorLifecycleWindow: Window | undefined;
   private readonly onLiveMonitorVisibilityChange = (): void => {
@@ -4289,8 +4290,12 @@ export class HostEngineApi {
    * la titularidad local después de un cierre/liberación.
    */
   private async renewLiveAuthorMonitorLeaseFromHeartbeat(documentId: string): Promise<void> {
-    if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId) ||
-        this.liveMonitorLeaseHeartbeatInFlight.has(documentId)) return;
+    if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId)) return;
+    if (this.liveMonitorLeaseHeartbeatInFlight.has(documentId)) {
+      // No perder una revalidación solicitada al volver a primer plano.
+      this.liveMonitorLeaseHeartbeatRequested.add(documentId);
+      return;
+    }
     this.liveMonitorLeaseHeartbeatInFlight.add(documentId);
     try {
       const current = this.liveMonitorLeases.get(documentId);
@@ -4342,6 +4347,16 @@ export class HostEngineApi {
       this.liveMonitorLeaseErrors.delete(documentId);
     } finally {
       this.liveMonitorLeaseHeartbeatInFlight.delete(documentId);
+      if (this.liveMonitorLeaseHeartbeatRequested.delete(documentId) &&
+          !this.disposed && !this.liveMonitorLeaseReleasing.has(documentId)) {
+        // Ejecutar la revalidación pendiente tras finalizar la operación en curso.
+        queueMicrotask(() => {
+          void this.renewLiveAuthorMonitorLeaseFromHeartbeat(documentId).catch(error => {
+            this.liveMonitorLeaseErrors.set(documentId, error);
+            this.reportKnowledgeError(error);
+          });
+        });
+      }
     }
   }
 

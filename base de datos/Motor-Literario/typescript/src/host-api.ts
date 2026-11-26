@@ -163,25 +163,19 @@ function requireNarrativeRecordShape(record: unknown, collection: string): void 
     for (const links of [item.relatedEntityIds, item.relatedIdeaIds]) {
       if (links !== undefined && (!Array.isArray(links) ||
           links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
-          links.some((value: unknown) => typeof value !== "string" || !value.trim()) ||
-          new Set(links).size !== links.length)) invalid();
+          links.some((value: unknown) => typeof value !== "string" || !value.trim()))) invalid();
     }
-    if (item.relatedIdeaIds?.includes(item.id)) invalid();
+    // Al leer se conservan ciclos, aristas repetidas e historiales importados.
+    // La escritura nueva sigue validándose en el adaptador de persistencia.
     if (item.statusHistory !== undefined) {
-      if (!Array.isArray(item.statusHistory) || item.statusHistory.length === 0) invalid();
-      let previousChangedAt: number | undefined;
-      for (let index = 0; index < item.statusHistory.length; index++) {
-        const change = item.statusHistory[index];
+      if (!Array.isArray(item.statusHistory)) invalid();
+      for (const change of item.statusHistory) {
         if (!change || !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
             (change.reason === "text-revised" && change.status !== "IDEA") ||
-            (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-              change.status === item.statusHistory[index - 1]?.status) ||
-            (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-            (change.changedAt !== undefined && previousChangedAt !== undefined && change.changedAt < previousChangedAt)) invalid();
-        if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+            (change.changedAt !== undefined &&
+              (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0))) invalid();
       }
-      if (item.statusHistory[item.statusHistory.length - 1]?.status !== item.status) invalid();
     }
   } else if (collection === "afirmaciones") {
     if (typeof item.entityId !== "string" || !item.entityId.trim() ||
@@ -297,28 +291,18 @@ function isValidPersonalIdeaContext(
     for (const references of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
       if (references !== undefined &&
           (!Array.isArray(references) || references.length > MAX_NARRATIVE_IDEA_REFERENCES ||
-            references.some(id => typeof id !== "string" || !id.trim()) ||
-            new Set(references).size !== references.length)) return false;
+            references.some(id => typeof id !== "string" || !id.trim()))) return false;
     }
-    if (idea.relatedIdeaIds?.includes(idea.id)) return false;
     if (idea.statusHistory !== undefined) {
-      if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length === 0) return false;
-      let previousChangedAt: number | undefined;
-      for (let index = 0; index < idea.statusHistory.length; index++) {
-        const change = idea.statusHistory[index];
+      if (!Array.isArray(idea.statusHistory)) return false;
+      for (const change of idea.statusHistory) {
         if (!change ||
             !["IDEA", "incorporated", "discarded"].includes(change.status) ||
             !["initial", "writer", "text-revised"].includes(change.reason) ||
             (change.reason === "text-revised" && change.status !== "IDEA") ||
-            (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-              change.status === idea.statusHistory[index - 1]?.status) ||
             (change.changedAt !== undefined &&
-              (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-            (change.changedAt !== undefined && previousChangedAt !== undefined &&
-              change.changedAt < previousChangedAt)) return false;
-        if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+              (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0))) return false;
       }
-      if (idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) return false;
     }
   }
 
@@ -403,12 +387,10 @@ function isValidPersonalIdeaEntry(
   for (const references of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
     if (references !== undefined &&
         (!Array.isArray(references) || references.length > MAX_NARRATIVE_IDEA_REFERENCES ||
-          references.some(id => typeof id !== "string" || !id.trim()) ||
-          new Set(references).size !== references.length)) {
+          references.some(id => typeof id !== "string" || !id.trim()))) {
       return false;
     }
   }
-  if (idea.relatedIdeaIds?.includes(idea.id)) return false;
   if ((entry.context === undefined && entry.contextStatus !== undefined &&
         entry.contextStatus !== "missing-legacy-context") ||
       (entry.context !== undefined && entry.contextStatus !== undefined) ||
@@ -417,22 +399,15 @@ function isValidPersonalIdeaEntry(
     return false;
   }
   if (idea.statusHistory !== undefined) {
-    if (!Array.isArray(idea.statusHistory) || idea.statusHistory.length === 0) return false;
-    let previousChangedAt: number | undefined;
-    for (let index = 0; index < idea.statusHistory.length; index++) {
-      const change = idea.statusHistory[index];
+    if (!Array.isArray(idea.statusHistory)) return false;
+    for (const change of idea.statusHistory) {
       if (!change ||
           !["IDEA", "incorporated", "discarded"].includes(change.status) ||
-          (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
           !["initial", "writer", "text-revised"].includes(change.reason) ||
           (change.reason === "text-revised" && change.status !== "IDEA") ||
-          (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-            change.status === idea.statusHistory[index - 1]?.status) ||
-          (change.changedAt !== undefined && previousChangedAt !== undefined &&
-            change.changedAt < previousChangedAt)) return false;
-      if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+          (change.changedAt !== undefined &&
+            (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0))) return false;
     }
-    if (idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) return false;
   }
   return true;
 }

@@ -1,0 +1,174 @@
+/**
+ * Reconstruye transiciones propuestas entre afirmaciones explícitas de estado.
+ *
+ * Solo compara menciones del mismo personaje, estado, documento y revisión.
+ * No deduce orden entre capítulos/documentos ni convierte candidatos en hechos.
+ */
+import type { NarrativeCharacterStateCandidate } from "./narrative-character-state-discovery";
+import type { TextEvidence } from "./narrative-knowledge";
+
+export type NarrativeCharacterStateTransitionKind =
+  | "ceased"
+  | "reappeared"
+  | "reaffirmed"
+  | "remained-negated"
+  | "recurred";
+
+export type NarrativeCharacterStateTransitionBasis =
+  | "paired-assertions"
+  | "explicit-aspect-marker";
+
+export interface NarrativeCharacterStateTransitionCandidate {
+  readonly id: string;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly revision: number;
+  readonly entityId: string;
+  readonly state: NarrativeCharacterStateCandidate["state"];
+  readonly transition: NarrativeCharacterStateTransitionKind;
+  readonly basis: NarrativeCharacterStateTransitionBasis;
+  readonly previousCandidateId?: string;
+  readonly currentCandidateId: string;
+  readonly previousEvidence?: TextEvidence;
+  readonly currentEvidence: TextEvidence;
+  readonly evidence: TextEvidence;
+  readonly reviewStatus: "candidate";
+}
+
+export interface NarrativeCharacterStateTransitionDiscoveryInput {
+  readonly projectId: string;
+  readonly candidates: readonly NarrativeCharacterStateCandidate[];
+}
+
+export const MAX_NARRATIVE_CHARACTER_STATE_TRANSITIONS = 400;
+
+function validEvidence(evidence: TextEvidence): boolean {
+  return !!evidence &&
+    typeof evidence.documentId === "string" &&
+    Number.isSafeInteger(evidence.revision) && evidence.revision >= 0 &&
+    Number.isSafeInteger(evidence.start) && evidence.start >= 0 &&
+    Number.isSafeInteger(evidence.end) && evidence.end > evidence.start &&
+    typeof evidence.excerpt === "string" &&
+    evidence.excerpt.length > 0 &&
+    evidence.end - evidence.start === evidence.excerpt.length &&
+    evidence.status !== "stale";
+}
+
+function validate(input: NarrativeCharacterStateTransitionDiscoveryInput): void {
+  if (!input || typeof input !== "object" ||
+      typeof input.projectId !== "string" || !input.projectId.trim() ||
+      !Array.isArray(input.candidates)) {
+    throw new Error("Contexto inválido para reconstruir transiciones de estados.");
+  }
+  const ids = new Set<string>();
+  for (const candidate of input.candidates) {
+    if (!candidate || candidate.projectId !== input.projectId ||
+        typeof candidate.id !== "string" || !candidate.id.trim() ||
+        ids.has(candidate.id) ||
+        typeof candidate.entityId !== "string" || !candidate.entityId.trim() ||
+        typeof candidate.state !== "string" ||
+        typeof candidate.documentId !== "string" || !candidate.documentId.trim() ||
+        !Number.isSafeInteger(candidate.revision) || candidate.revision < 0 ||
+        !validEvidence(candidate.evidence) ||
+        candidate.evidence.documentId !== candidate.documentId ||
+        candidate.evidence.revision !== candidate.revision ||
+        !validEvidence(candidate.stateEvidence) ||
+        candidate.stateEvidence.documentId !== candidate.documentId ||
+        candidate.stateEvidence.revision !== candidate.revision) {
+      throw new Error("La trayectoria contiene candidatos duplicados, ajenos o sin evidencia válida.");
+    }
+    if (candidate.polarity !== "affirmed" && candidate.polarity !== "negated") {
+      throw new Error("La polaridad del estado no es válida.");
+    }
+    if (!["ordinary", "ongoing", "recurrent", "ceased"].includes(candidate.aspect)) {
+      throw new Error("El aspecto del estado no es válido.");
+    }
+    ids.add(candidate.id);
+  }
+}
+
+function transitionEvidence(
+  previous: NarrativeCharacterStateCandidate | undefined,
+  current: NarrativeCharacterStateCandidate
+): TextEvidence {
+  if (!previous) return current.evidence;
+  const start = Math.min(previous.evidence.start, current.evidence.start);
+  const end = Math.max(previous.evidence.end, current.evidence.end);
+  // Los dos fragmentos pueden estar separados por texto intermedio. La evidencia
+  // compuesta conserva ambos extractos sin fingir que el hueco fue citado.
+  return {
+    documentId: current.documentId,
+    revision: current.revision,
+    start,
+    end,
+    excerpt: previous.evidence.excerpt + " … " + current.evidence.excerpt
+  };
+}
+
+export function discoverNarrativeCharacterStateTransitions(
+  input: NarrativeCharacterStateTransitionDiscoveryInput
+): readonly NarrativeCharacterStateTransitionCandidate[] {
+  validate(input);
+  const ordered = [...input.candidates].sort((a, b) =>
+    a.documentId.localeCompare(b.documentId) ||
+    a.revision - b.revision ||
+    a.evidence.start - b.evidence.start ||
+    a.id.localeCompare(b.id)
+  );
+  const previousByState = new Map<string, NarrativeCharacterStateCandidate>();
+  const results: NarrativeCharacterStateTransitionCandidate[] = [];
+
+  for (const current of ordered) {
+    const key = [current.documentId, current.revision, current.entityId, current.state].join(":");
+    const previous = previousByState.get(key);
+    let transition: NarrativeCharacterStateTransitionKind | undefined;
+    let basis: NarrativeCharacterStateTransitionBasis = "paired-assertions";
+
+    if (current.aspect === "recurrent" && current.polarity === "affirmed") {
+      transition = "recurred";
+      basis = "explicit-aspect-marker";
+    } else if (current.aspect === "ceased" && current.polarity === "negated") {
+      transition = "ceased";
+      basis = "explicit-aspect-marker";
+    } else if (previous) {
+      if (previous.polarity === "affirmed" && current.polarity === "negated") {
+        transition = "ceased";
+      } else if (previous.polarity === "negated" && current.polarity === "affirmed") {
+        transition = "reappeared";
+      } else if (previous.polarity === "affirmed" && current.polarity === "affirmed") {
+        transition = "reaffirmed";
+      } else {
+        transition = "remained-negated";
+      }
+    }
+
+    if (transition) {
+      const evidence = transitionEvidence(previous, current);
+      results.push({
+        id: "character-state-transition:" + current.documentId + ":" +
+          current.revision + ":" + current.id + ":" + transition,
+        projectId: input.projectId,
+        documentId: current.documentId,
+        revision: current.revision,
+        entityId: current.entityId,
+        state: current.state,
+        transition,
+        basis,
+        ...(previous ? {
+          previousCandidateId: previous.id,
+          previousEvidence: previous.evidence
+        } : {}),
+        currentCandidateId: current.id,
+        currentEvidence: current.evidence,
+        evidence,
+        reviewStatus: "candidate"
+      });
+      if (results.length >= MAX_NARRATIVE_CHARACTER_STATE_TRANSITIONS) return results;
+    }
+    previousByState.set(key, current);
+  }
+  return results.sort((a, b) =>
+    a.currentEvidence.start - b.currentEvidence.start ||
+    a.entityId.localeCompare(b.entityId)
+  );
+}

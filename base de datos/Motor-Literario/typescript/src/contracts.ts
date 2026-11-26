@@ -370,7 +370,8 @@ export interface ProjectStore {
   /** Resuelve referencias a ideas archivadas fuera de la página, en una lectura agrupada y limitada a 128 claves. */
   loadPersonalIdeasByKeys?(
     writerId: string,
-    references: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[]
+    references: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[],
+    expectedLibraryVersion?: number
   ): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadProjectFinalizationReceipt?(
     writerId: string,

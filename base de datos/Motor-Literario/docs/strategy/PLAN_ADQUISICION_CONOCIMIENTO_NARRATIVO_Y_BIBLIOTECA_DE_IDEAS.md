@@ -561,3 +561,16 @@ Validación: pruebas añadidas y publicadas; build, type-check y suite completa 
 ### Corrección de atribución actor–objetivo (incluida en Fase AG)
 
 La validación de la fase reveló que el extractor podía confundir la mención del personaje objetivo con una segunda identidad actora. Ahora el candidato actor se determina por su posición anterior al marcador de intención: en «Mara desea ayudar a Elian», Mara es el actor y Elian el objetivo. Si dos personajes aparecen antes del marcador, el extractor se abstiene. Se actualizó la prueba de ambigüedad y se añadió una prueba específica actor/objetivo.
+
+
+## Fase AH: ampliación de evidencia causal explícita entre acontecimientos
+
+Se amplió el vocabulario de conectores que permite proponer una relación de consecuencia entre acontecimientos consecutivos. Se reconocen ahora, además de los conectores existentes, «debido a ello», «debido a eso», «a causa de ello» y «por esa causa».
+
+- La relación solo se propone cuando el conector aparece al inicio del acontecimiento consecuente.
+- Se conserva el fragmento literal del conector y sus offsets UTF-16.
+- La relación sigue siendo un candidato revisable (explicit-consequence-marker), nunca una causalidad confirmada por el sistema.
+- La mera sucesión temporal («después», «más tarde») no produce una relación causal.
+- Se mantiene la barrera de párrafo: no se enlazan acontecimientos a través de un salto de párrafo en blanco.
+
+Se añadieron cuatro casos de prueba para las variantes nuevas. La validación completa del proyecto debe ejecutarse sobre el último commit; no se declara CI aprobado.

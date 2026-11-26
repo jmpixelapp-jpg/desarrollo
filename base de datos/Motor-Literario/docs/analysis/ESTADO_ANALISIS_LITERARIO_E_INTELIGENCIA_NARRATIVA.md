@@ -446,3 +446,12 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Verificado que el dispositivo independiente puede progresar sin esperar la reconciliación del primero.
 - Documentado que el backoff no equivale a resolución de conflicto; la reconciliación semántica sigue requiriendo un contrato de dominio explícito.
 - Prueba publicada, pendiente de ejecución en entorno Node/IndexedDB y de CI.
+
+### Tanda — recuperación de conflicto tras backoff
+
+- Añadida una regresión del ciclo completo: el primer envío recibe un conflicto de revisión y conserva la operación con nextAttemptAt.
+- Un ciclo ejecutado un milisegundo antes del vencimiento no llama al transporte.
+- Al vencer el backoff, se reenvía la misma operación con el mismo operationId y el mismo payload; solo una nueva clasificación explícita de aceptación permite retirarla.
+- La prueba verifica que el contador de intentos avanza y que la operación desaparece únicamente después del acuse.
+- El contrato aclara que el tiempo no resuelve el conflicto, que el coordinador no altera el payload y que la prueba usa un transporte simulado.
+- **Validación:** prueba y documentación publicadas. Aún no se ha ejecutado la suite ni se dispone de resultados CI para estos commits.

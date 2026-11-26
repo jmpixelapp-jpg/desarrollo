@@ -53,10 +53,10 @@ const SIGNALS: readonly {
 ];
 
 function normalize(value: string): string {
-  return value.normalize("NFKC").trim().replace(/\\s+/gu, " ").toLocaleLowerCase("es");
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("es");
 }
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function validate(input: NarrativeMemoryEventsInput): void {
   if (!input || typeof input !== "object" ||
@@ -112,7 +112,7 @@ export function extractNarrativeMemoryEvents(
     .sort((a, b) => b.name.length - a.name.length);
 
   const found = new Map<string, NarrativeMemoryEvent>();
-  for (const lineMatch of input.text.matchAll(/[^\\n]+/gu)) {
+  for (const lineMatch of input.text.matchAll(/[^\n]+/gu)) {
     if (found.size >= MAX_NARRATIVE_MEMORY_EVENTS) break;
     const line = lineMatch[0];
     const lineStart = lineMatch.index ?? 0;
@@ -120,7 +120,7 @@ export function extractNarrativeMemoryEvents(
       for (const signal of SIGNALS) {
         if (found.size >= MAX_NARRATIVE_MEMORY_EVENTS) break;
         const expression = new RegExp(
-          String.raw`(?<![\\p{L}\\p{M}\\p{N}_])(${escapeRegExp(name)})(?![\\p{L}\\p{M}\\p{N}_])\\s+(?<!no )(?<!nunca )${escapeRegExp(signal.pattern)}\\s+(?:que\\s+)?(.+?)(?=[.!?;]|$)`,
+          String.raw`(?<![\p{L}\p{M}\p{N}_])(${escapeRegExp(name)})(?![\p{L}\p{M}\p{N}_])\s+(?<!no )(?<!nunca )${escapeRegExp(signal.pattern)}\s+(?:que\s+)?(.+?)(?=[.!?;]|$)`,
           "giu"
         );
         for (const match of line.matchAll(expression)) {

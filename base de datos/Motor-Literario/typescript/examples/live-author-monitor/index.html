@@ -64,8 +64,11 @@
     const hostApi = new HostEngineApi({ store });
     let disposeEditor;
     let disposePanel;
+    let editorIntegration;
     let refreshPanel = () => undefined;
     let closing = false;
+    let closeStage = "idle";
+    let closeError;
 
     function reportStatus(message, isError = false) {
       status.textContent = message;
@@ -95,7 +98,7 @@
       if (!snapshot) throw new Error("El motor no devolvió el manuscrito inicial.");
       textarea.value = snapshot.text;
 
-      disposeEditor = mountLiveAuthorMonitorTextArea({
+      editorIntegration = mountLiveAuthorMonitorTextArea({
         element: textarea,
         documentId: DOCUMENT_ID,
         hostApi,
@@ -112,6 +115,7 @@
         onError: error => reportStatus(error instanceof Error ? error.message : String(error), true)
       });
 
+      disposeEditor = () => editorIntegration.dispose();
       disposePanel = mountLiveAuthorMonitorPanel(
         document.querySelector("#monitor-panel"),
         hostApi,
@@ -134,6 +138,8 @@
         documentId: DOCUMENT_ID,
         getSnapshot: () => hostApi.getSnapshot(DOCUMENT_ID),
         getMetrics: () => hostApi.getLiveAuthorMonitorSnapshot(DOCUMENT_ID),
+        getPendingChanges: () => editorIntegration.getPendingChanges(),
+        getCloseState: () => ({ stage: closeStage, error: closeError ? String(closeError) : undefined }),
         refreshPanel: () => refreshPanel(),
         flush: () => hostApi.flushPendingChanges(),
         async closeSafely() {
@@ -141,15 +147,26 @@
           closing = true;
           saveButton.disabled = true;
           try {
+            closeStage = "flush";
             await hostApi.flushPendingChanges();
+            editorIntegration.retryPending();
+            await hostApi.flushPendingChanges();
+            if (editorIntegration.getPendingChanges().length > 0) {
+              throw new Error("No se puede cerrar: quedan deltas sin admitir en el editor.");
+            }
+            closeStage = "dispose-editor";
             disposeEditor();
             disposePanel();
-            await hostApi.closeLiveAuthorMonitorDocumentSafely(DOCUMENT_ID);
+            closeStage = "dispose-host-safely";
             await hostApi.disposeSafely();
+            closeStage = "close-store";
             await store.close();
+            closeStage = "closed";
             harness.closed = true;
             reportStatus("Sesión guardada de forma segura. Puedes recargar para comprobar su restauración.");
           } catch (error) {
+            closeError = error;
+            closeStage = "error";
             closing = false;
             saveButton.disabled = false;
             reportStatus(error instanceof Error ? error.message : String(error), true);

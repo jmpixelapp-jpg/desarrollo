@@ -24,7 +24,7 @@ La primera carga crea un proyecto y un documento de demostración. Las siguiente
 - Persistencia en IndexedDB y recuperación tras recargar.
 - Cierre seguro de la sesión, persistencia final del checkpoint y liberación del lease.
 
-El botón **Guardar sesión y cerrar monitoreo** vacía la cola, guarda el checkpoint, libera la coordinación entre pestañas y dispone la instancia. Después se puede recargar la misma URL para verificar la restauración.
+El botón **Guardar sesión y cerrar monitoreo** vacía y reintenta la cola, guarda todos los checkpoints con `HostEngineApi.disposeSafely()`, libera la coordinación entre pestañas y dispone la instancia. Después se puede recargar la misma URL para verificar la restauración.
 
 ## Límites deliberados
 

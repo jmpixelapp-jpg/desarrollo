@@ -95,7 +95,17 @@ test("el autor escribe, ve métricas, guarda y recupera el manuscrito y el check
       );
 
       await page.getByRole("button", { name: "Guardar sesión y cerrar monitoreo" }).click();
-      await page.waitForFunction(() => window.__liveAuthorMonitorDemo?.closed === true);
+      await page.waitForFunction(() => {
+        const demo = window.__liveAuthorMonitorDemo;
+        const closeState = demo?.getCloseState?.();
+        return demo?.closed === true || closeState?.stage === "error";
+      });
+      const closeResult = await page.evaluate(() => ({
+        closed: window.__liveAuthorMonitorDemo.closed,
+        closeState: window.__liveAuthorMonitorDemo.getCloseState(),
+        pending: window.__liveAuthorMonitorDemo.getPendingChanges()
+      }));
+      assert.equal(closeResult.closed, true, "el cierre seguro debe completar: " + JSON.stringify(closeResult));
 
       await page.reload();
       await page.waitForFunction(() => window.__liveAuthorMonitorDemo?.ready === true);

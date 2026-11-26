@@ -1,3 +1,4 @@
+  assert.match(writer, /if \(syncDraft\) queueSyncOperationInTransaction\(transaction, syncDraft, abortWith\)/);
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -129,7 +130,8 @@ function extractIdeaReferenceWriter(source) {
 
 test("la validación de vínculos y la escritura CAS de ideas comparten una transacción readwrite", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
-  assert.match(writer, /const stores = entityIds\.length > 0 \? \[IDEAS, ENTITIES\] : \[IDEAS\]/);
+  assert.match(writer, /const baseStores = entityIds\.length > 0 \? \[IDEAS, ENTITIES\] : \[IDEAS\]/);
+  assert.match(writer, /const stores = syncDraft\s+\? \[\.\.\.baseStores, SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES\]\s+: baseStores/);
   assert.match(writer, /db\.transaction\(stores, "readwrite"\)/);
   assert.match(writer, /transaction\.objectStore\(ENTITIES\)\.get\(\[idea\.projectId, id\]\)/);
   assert.match(writer, /ideaStore\.get\(\[idea\.projectId, id\]\)/);
@@ -138,8 +140,8 @@ test("la validación de vínculos y la escritura CAS de ideas comparten una tran
 
 test("el registro de idea solo se escribe después de completar todas las comprobaciones", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
-  assert.match(writer, /const markCheckComplete = \(\): void => \{\s*remaining--;\s*if \(remaining === 0\) ideaStore\.put\(idea\);\s*\}/);
-  assert.match(writer, /if \(totalChecks === 0\) \{\s*ideaStore\.put\(idea\);/);
+  assert.match(writer, /const markCheckComplete = \(\): void => \{\s*remaining--;\s*if \(remaining === 0\) putIdea\(\);\s*\}/);
+  assert.match(writer, /if \(totalChecks === 0\) \{\s*putIdea\(\);/);
   assert.ok(writer.indexOf("const totalChecks =") < writer.indexOf("const markCheckComplete ="));
   assert.ok(writer.indexOf("const markCheckComplete =") < writer.indexOf("transaction.oncomplete"));
 });
@@ -293,12 +295,12 @@ test("la continuidad entre documentos cuenta evidencias sin materializar arreglo
 test("la auditoría de atomicidad detecta perder el almacén de entidades del alcance transaccional", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
   const weakenedWriter = writer.replace(
-    "const stores = entityIds.length > 0 ? [IDEAS, ENTITIES] : [IDEAS];",
-    "const stores = [IDEAS];"
+    "const baseStores = entityIds.length > 0 ? [IDEAS, ENTITIES] : [IDEAS];",
+    "const baseStores = [IDEAS]"
   );
   assert.notEqual(weakenedWriter, writer);
   assert.doesNotMatch(
     weakenedWriter,
-    /const stores = entityIds\.length > 0 \? \[IDEAS, ENTITIES\] : \[IDEAS\]/
+    /const baseStores = entityIds\.length > 0 \? \[IDEAS, ENTITIES\] : \[IDEAS\]/
   );
 });

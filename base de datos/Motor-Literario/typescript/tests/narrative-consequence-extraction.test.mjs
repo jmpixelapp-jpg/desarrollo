@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { extractNarrativeConsequenceCandidates } from "../dist/motor-literario.js";
 
-function event(id, start, end, excerpt) {
+function event(id, start, end, excerpt, participants = []) {
   return {
     id, projectId: "book-1", label: excerpt,
-    participantEntityIds: [], actionCandidateIds: [],
+    participantEntityIds: participants, actionCandidateIds: [],
     reviewStatus: "candidate",
     evidence: { documentId: "chapter-1", revision: 2, start, end, excerpt }
   };
@@ -96,4 +96,38 @@ test("reconoce conectores causales explícitos adicionales sin convertir sucesi�
     assert.equal(result.marker,marker);
     assert.equal(text.slice(result.evidence.start,result.evidence.end),marker);
   }
+});
+
+test("marca la proximidad temporal como hipótesis no demostrada si comparten participante",()=>{
+  const text="Mara abrió la puerta. Poco después, Mara escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Poco después");
+  const events=[
+    event("source-temporal",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"]),
+    event("result-temporal",b,text.length,text.slice(b),["mara"])
+  ];
+  const [result]=extractNarrativeConsequenceCandidates(input(text,events));
+  assert.equal(result.relationType,"temporal-association-hypothesis");
+  assert.equal(result.causalStatus,"unproven-hypothesis");
+  assert.equal(result.marker,"Poco después");
+  assert.equal(text.slice(result.evidence.start,result.evidence.end), "Poco después");
+});
+test("no propone hipótesis temporal sin participantes compartidos",()=>{
+  const text="Mara abrió la puerta. Poco después, Elian escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Poco después");
+  const events=[
+    event("source-independent",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"]),
+    event("result-independent",b,text.length,text.slice(b),["elian"])
+  ];
+  assert.deepEqual(extractNarrativeConsequenceCandidates(input(text,events)),[]);
+});
+test("la sucesión temporal no se eleva a causalidad explícita",()=>{
+  const text="Mara abrió la puerta. Después, Mara escapó.";
+  const a=text.indexOf("Mara"), b=text.indexOf("Después");
+  const events=[
+    event("source-temporal-only",a,text.indexOf(".")+1,"Mara abrió la puerta.",["mara"]),
+    event("result-temporal-only",b,text.length,text.slice(b),["mara"])
+  ];
+  const [result]=extractNarrativeConsequenceCandidates(input(text,events));
+  assert.equal(result.causalStatus,"unproven-hypothesis");
+  assert.notEqual(result.relationType,"explicit-consequence-marker");
 });

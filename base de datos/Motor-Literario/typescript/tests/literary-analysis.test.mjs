@@ -2872,7 +2872,7 @@ test("el grafo declara truncamiento al alcanzar el presupuesto de un millón de 
     projectId,
     documentId: "chapter-budget",
     revision: 1,
-    text: "Escena 1\\nEl grafo supera el presupuesto de expansiones.",
+    text: "Escena 1\nEl grafo supera el presupuesto de expansiones.",
     knownProjectIdeas: catalog
   }).ideaGraph;
 

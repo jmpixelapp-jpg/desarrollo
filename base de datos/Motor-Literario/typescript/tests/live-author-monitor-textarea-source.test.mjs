@@ -56,6 +56,8 @@ class FakeTextArea extends FakeEventTarget {
     for (const listener of [...(this.listeners.get("compositionend") ?? [])]) listener({ isTrusted: true });
   }
 
+  emitBlur() { this.emit("blur"); }
+
   edit({ start, end, nextValue, inputType = "insertText", isComposing = false, data = null, inputData = null }) {
     this.selectionStart = start;
     this.selectionEnd = end;
@@ -229,12 +231,14 @@ test("desmonta listeners y exige snapshot autoritativo tras un intervalo sin obs
   const f = fixture();
   assert.equal(f.element.listeners.get("beforeinput").size, 1);
   assert.equal(f.element.listeners.get("input").size, 1);
+  assert.equal(f.element.listeners.get("blur").size, 1);
   assert.equal(f.element.listeners.get("compositionstart").size, 1);
   assert.equal(f.element.listeners.get("compositionend").size, 1);
 
   f.stop();
   assert.equal(f.element.listeners.get("beforeinput").size, 0);
   assert.equal(f.element.listeners.get("input").size, 0);
+  assert.equal(f.element.listeners.get("blur").size, 0);
   assert.equal(f.element.listeners.get("compositionstart").size, 0);
   assert.equal(f.element.listeners.get("compositionend").size, 0);
   assert.equal(f.source.getState().needsResync, true);
@@ -291,6 +295,37 @@ test("desmonta listeners y exige snapshot autoritativo tras un intervalo sin obs
   assert.equal(f.element.ownerDocument.defaultView.listenerCount("pagehide"), 0);
   f.source.dispose();
   assert.throws(() => f.source.subscribeChanges(() => {}), /ya dispuesto/);
+});
+
+test("blur suspende operaciones incompletas pero no interrumpe un editor inactivo", () => {
+  const idle = fixture("abc", 0, 0);
+  idle.element.emitBlur();
+  assert.equal(idle.source.getState().needsResync, false,
+    "perder el foco sin una operación abierta no rompe la continuidad");
+  idle.stop();
+  idle.source.dispose();
+
+  const composing = fixture("abc", 0, 0);
+  composing.element.emitCompositionStart();
+  composing.element.emitBlur();
+  assert.equal(composing.source.getState().needsResync, true);
+  assert.equal(composing.source.getState().compositionActive, false);
+  assert.equal(composing.source.previousText, "");
+  assert.equal(composing.errors[0].code, "resync-required");
+  composing.stop();
+  composing.source.dispose();
+
+  const pending = fixture("abc", 0, 0);
+  pending.element.selectionStart = 3;
+  pending.element.selectionEnd = 3;
+  pending.element.emitBeforeInput("insertText");
+  pending.element.emitBlur();
+  assert.equal(pending.source.getState().needsResync, true);
+  assert.equal(pending.errors[0].code, "missing-input");
+  assert.equal(pending.source.pendingInput, undefined,
+    "la operación parcial se libera al perder el foco");
+  pending.stop();
+  pending.source.dispose();
 });
 
 test("pagehide y freeze suspenden la captura y exigen snapshot tras volver", () => {

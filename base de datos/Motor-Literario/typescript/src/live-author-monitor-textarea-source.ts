@@ -129,13 +129,9 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
   private readonly handleCompositionEnd = (): void => {
     if (this.disposed) return;
-    if (this.pendingInput?.isComposing && !this.needsResync) {
-      this.fail(
-        "composition-state-mismatch",
-        "La composición terminó antes de recibir el input asociado a beforeinput."
-      );
-      return;
-    }
+    // Algunos navegadores despachan compositionend antes del input final.
+    // No invalidamos el beforeinput pendiente: el input que lo completa sigue
+    // siendo la evidencia necesaria para publicar el delta.
     this.compositionActive = false;
   };
 

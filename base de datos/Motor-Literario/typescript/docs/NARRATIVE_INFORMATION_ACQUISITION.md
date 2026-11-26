@@ -45,7 +45,8 @@ Reconoce un vocabulario controlado de acciones en frases que mencionan personaje
 
 Reglas de prudencia:
 - Solo vincula nombres canónicos o alias confirmados.
-- Si aparece un solo personaje conocido, conserva su ID como única mención; nunca lo presenta como sujeto, agente o actor sin análisis sintáctico.
+- Si aparece un solo personaje conocido, conserva su ID como única mención. Solo propone sujeto gramatical cuando el nombre abre la frase y el patrón inmediato antes del verbo es explícito; conserva evidencia del nombre y distingue voz activa/pasiva. Este candidato sintáctico no equivale a agente semántico ni a hecho confirmado.
+- No atribuye sujeto cuando el personaje aparece como complemento, después del verbo o en estructuras que el patrón limitado no reconoce.
 - Si aparecen varios personajes, conserva todos como mencionados y deja el actor sin resolver.
 - La presencia de una entidad en una frase no demuestra que sea objeto directo o destinatario.
 - La negación explícita se conserva; "no abrió" nunca se transforma en una acción afirmada.
@@ -70,7 +71,7 @@ Callback: `onNarrativeObservationCandidates(analysis, candidates)`.
 1. **Contexto coherente de escena:** aportar a cada análisis un contexto acotado de frases anteriores/posteriores del snapshot de la misma revisión, sin perder los offsets globales.
 2. **Menciones de personajes:** generar candidatos de nombres propios no registrados, resolver ambigüedades y solicitar confirmación antes de crear identidades.
 3. **Referencias pronominales:** ampliar resolución de él/ella/ellos/ellas y pronombres clíticos con concordancia, distancia, diálogo y ambigüedad; nunca enlazar identidades sin evidencia suficiente.
-4. **Acciones con sujeto gramatical:** mejorar concordancia sujeto-verbo, coordinación, diálogo y voz pasiva; no asignar actor solo por ser el único personaje nombrado si la sintaxis no lo demuestra.
+4. **Acciones con sujeto gramatical:** ampliar patrones conservadores para concordancia, coordinación, diálogo y voz pasiva; el patrón inicial actual es deliberadamente limitado y no asigna agente semántico.
 5. **Acontecimientos narrados:** detectar secuencias de acciones y participantes sin exigir etiquetas editoriales, manteniendo cada evento como candidato con evidencia.
 6. **Estados y emociones:** distinguir percepción, pensamiento, emoción, diálogo y acción; preservar negación, modalidad, tiempo y punto de vista.
 7. **Continuidad y contradicciones:** comparar afirmaciones explícitas entre revisiones/documentos y presentar pares de evidencia incompatibles, nunca un veredicto automático.

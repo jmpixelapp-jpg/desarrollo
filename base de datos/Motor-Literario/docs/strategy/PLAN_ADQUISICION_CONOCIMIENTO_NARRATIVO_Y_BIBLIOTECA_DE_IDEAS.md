@@ -607,3 +607,6 @@ La hipótesis temporal ya no utiliza cualquier entidad compartida como si fuera 
 La asociación temporal débil exige coincidencia en el segundo conjunto. Así, dos acontecimientos que mencionan la misma puerta, arma o ciudad, pero personajes distintos, no generan una hipótesis de continuidad entre personajes. La extracción deriva esta lista del catálogo de entidades y valida que cada personaje incluido también pertenezca al conjunto general de participantes.
 
 Se añadieron pruebas para el caso de objeto compartido y para listas de personajes incoherentes. La prueba de salto de párrafo fue corregida para utilizar saltos reales, no los caracteres literales `\\n`.
+
+
+La clasificación de IDs de personajes se calcula una sola vez por extracción de eventos y se reutiliza al construir cada acontecimiento, evitando repetir el recorrido del catálogo para cada oración. La prueba de extracción de eventos verifica explícitamente que los personajes se separen de los objetos.

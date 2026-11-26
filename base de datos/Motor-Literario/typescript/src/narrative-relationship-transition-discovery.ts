@@ -23,7 +23,7 @@ const DEFAULT_MAX_CANDIDATES=1_000;
 const MAX_CONTEXT_UNITS=180;
 interface Signal { family:NarrativeRelationshipFamily; transition:NarrativeRelationshipTransitionKind; expression:string; }
 const SIGNALS:readonly Signal[]=[
- {family:"friendship",transition:"formed",expression:"se\\s+hici(?:eron)\\s+amig[oa]s?|se\\s+volvieron\\s+amig[oa]s?|entabl(?:ó|aron)\\s+amistad|comenz(?:ó|aron)\\s+a\\s+ser\\s+amig[oa]s?"},
+ {family:"friendship",transition:"formed",expression:"se\\s+hicieron\\s+amig[oa]s?|se\\s+volvieron\\s+amig[oa]s?|entabl(?:ó|aron)\\s+amistad|comenz(?:ó|aron)\\s+a\\s+ser\\s+amig[oa]s?"},
  {family:"friendship",transition:"ended",expression:"rompi(?:ó|eron)\\s+(?:su|la)\\s+amistad|dej(?:ó|aron)\\s+de\\s+ser\\s+amig[oa]s?|se\\s+distanci(?:ó|aron)"},
  {family:"friendship",transition:"reconciled",expression:"se\\s+reconcili(?:ó|aron)|hicieron\\s+las\\s+paces"},
  {family:"enmity",transition:"formed",expression:"se\\s+enemist(?:ó|aron)|se\\s+convirti(?:ó|eron)\\s+en\\s+enemig[oa]s?"},
@@ -36,7 +36,7 @@ const SIGNALS:readonly Signal[]=[
  {family:"alliance",transition:"ended",expression:"rompi(?:ó|eron)\\s+la\\s+alianza|disolvi(?:ó|eron)\\s+la\\s+alianza|traicion(?:ó|aron)\\s+la\\s+alianza"}
 ];
 function escapeRegExp(value:string):string {
- const special=new Set([".","+","+","*","?","^","$","(",")","|","[","]","{","}"]);
+ const special=new Set([".","+","*","?","^","$","(",")","|","[","]","{","}"]);
  return Array.from(value,c=>special.has(c)||c.charCodeAt(0)===92?String.fromCharCode(92)+c:c).join("");
 }
 function makeEvidence(documentId:string,revision:number,base:number,start:number,end:number,excerpt:string):TextEvidence {
@@ -68,9 +68,9 @@ export function discoverNarrativeRelationshipTransitionCandidates(input:Narrativ
   if(left.entity.id===right.entity.id) continue;
   scanUnits+=input.text.length;
   if(scanUnits>MAX_NARRATIVE_RELATIONSHIP_TRANSITION_SCAN_UNITS) throw new Error("La búsqueda de cambios relacionales supera el presupuesto operativo de exploración.");
-  const pair=new RegExp("(?<![\\\\p{L}\\\\p{M}\\\\p{N}_])"+escapeRegExp(left.name)+
-   "(?![\\\\p{L}\\\\p{M}\\\\p{N}_])([^.!?;\\\\n]{0,"+MAX_CONTEXT_UNITS+"}?)(?<![\\\\p{L}\\\\p{M}\\\\p{N}_])"+
-   escapeRegExp(right.name)+"(?![\\\\p{L}\\\\p{M}\\\\p{N}_])","giu");
+  const pair=new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])"+escapeRegExp(left.name)+
+   "(?![\\p{L}\\p{M}\\p{N}_])([^.!?;\\n]{0,"+MAX_CONTEXT_UNITS+"}?)(?<![\\p{L}\\p{M}\\p{N}_])"+
+   escapeRegExp(right.name)+"(?![\\p{L}\\p{M}\\p{N}_])","giu");
   for(const match of input.text.matchAll(pair)){
    const segment=match[0]; const leftStart=match.index!; const rightStart=leftStart+segment.lastIndexOf(right.name);
    for(const trigger of match[1]!.matchAll(new RegExp(signal.expression,"giu"))){

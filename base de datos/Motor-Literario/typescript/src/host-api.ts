@@ -631,6 +631,11 @@ export class HostEngineApi {
   private readonly liveMonitorLeaseGenerations = new Map<string, object>();
   private readonly liveMonitorLeaseReleasing = new Set<string>();
   private readonly liveMonitorLeaseHeartbeatInFlight = new Set<string>();
+  private readonly liveMonitorLeaseHeartbeatFollowups = new Map<string, {
+    promise: Promise<void>;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  }>();
   private readonly liveMonitorLifecycleDocument: Document | undefined;
   private readonly liveMonitorLifecycleWindow: Window | undefined;
   private readonly onLiveMonitorVisibilityChange = (): void => {
@@ -4289,8 +4294,20 @@ export class HostEngineApi {
    * la titularidad local después de un cierre/liberación.
    */
   private async renewLiveAuthorMonitorLeaseFromHeartbeat(documentId: string): Promise<void> {
-    if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId) ||
-        this.liveMonitorLeaseHeartbeatInFlight.has(documentId)) return;
+    if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId)) return;
+    if (this.liveMonitorLeaseHeartbeatInFlight.has(documentId)) {
+      // Compartir una revalidación posterior; el caller espera el resultado real.
+      const existing = this.liveMonitorLeaseHeartbeatFollowups.get(documentId);
+      if (existing) return existing.promise;
+      let resolve!: () => void;
+      let reject!: (error: unknown) => void;
+      const promise = new Promise<void>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      this.liveMonitorLeaseHeartbeatFollowups.set(documentId, { promise, resolve, reject });
+      return promise;
+    }
     this.liveMonitorLeaseHeartbeatInFlight.add(documentId);
     try {
       const current = this.liveMonitorLeases.get(documentId);
@@ -4301,7 +4318,7 @@ export class HostEngineApi {
         if (acquired && !this.disposed) this.scheduleLiveAuthorMonitorCheckpoint(documentId);
         return;
       }
-      const generation = this.liveMonitorLeaseGenerations.get(documentId) ?? 0;
+      const generation = this.liveMonitorLeaseGenerations.get(documentId);
       const renew = this.store.renewLiveAuthorMonitorLease;
       if (!renew) return;
       const renewed = await renew.call(
@@ -4342,6 +4359,22 @@ export class HostEngineApi {
       this.liveMonitorLeaseErrors.delete(documentId);
     } finally {
       this.liveMonitorLeaseHeartbeatInFlight.delete(documentId);
+      const followup = this.liveMonitorLeaseHeartbeatFollowups.get(documentId);
+      if (followup) {
+        this.liveMonitorLeaseHeartbeatFollowups.delete(documentId);
+        if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId)) {
+          followup.resolve();
+        } else {
+          void this.renewLiveAuthorMonitorLeaseFromHeartbeat(documentId).then(
+            followup.resolve,
+            error => {
+              this.liveMonitorLeaseErrors.set(documentId, error);
+              this.reportKnowledgeError(error);
+              followup.reject(error);
+            }
+          );
+        }
+      }
     }
   }
 

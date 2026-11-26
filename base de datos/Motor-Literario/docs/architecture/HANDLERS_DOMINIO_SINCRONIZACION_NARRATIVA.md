@@ -59,3 +59,12 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 - `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.
 - `tests/narrative-sync-relation-event-handlers.test.mjs`: relaciones, acontecimientos y validación temporal.
 - `tests/narrative-sync-writer-concurrency.test.mjs`: replay paralelo entre escritores y exclusión de replay completo.
+
+
+## Manifiestos documentales y tombstones
+
+`persistNarrativeKnowledgeGraphSnapshotWithManifests` coordina dos fases ordenadas: primero persiste el grafo con CAS por registro; después publica el manifiesto activo de cada documento con CAS por generación. El manifiesto nunca se adelanta a los registros. Si falla una publicación, el grafo parcial permanece reintentable y el manifiesto anterior continúa siendo la referencia durable.
+
+`retireNarrativeDocumentProjection` publica un tombstone con inventarios vacíos y exige una revisión estrictamente posterior a la vigente. Repetir el mismo tombstone y revisión es idempotente; una retirada obsoleta se rechaza.
+
+El tombstone no borra entidades ni afirmaciones del proyecto. Esos registros pueden tener evidencia compartida con otros documentos y su eliminación requiere reconciliación referencial y política explícita de retención. El manifiesto enumera contribuciones por documento; no autoriza por sí solo un borrado físico.

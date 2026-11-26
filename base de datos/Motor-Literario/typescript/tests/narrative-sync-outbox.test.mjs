@@ -10,7 +10,8 @@ import {
   createNarrativeIdeaContinuityOutboxCallback,
   createNarrativeIdeaContinuityIndexUpsertHandler,
   deliverNarrativeSyncOutboxBatch,
-  IndexedDbNarrativeSyncOutbox
+  IndexedDbNarrativeSyncOutbox,
+  IndexedDbNarrativeSyncJournal
 } from "../dist/motor-literario.js";
 
 function idea(projectId, id, documentId, text) {
@@ -462,5 +463,49 @@ test("integra outbox, transporte y handler receptor con aplicación CAS e idempo
     assert.equal((await outbox.loadEntries(projectId, "delivered")).length, 2);
   } finally {
     outbox.close();
+  }
+});
+
+
+test("dos instalaciones pueden enviar la misma generación al mismo diario sin colisionar operationId", async () => {
+  const projectId = "outbox-multi-device-" + randomUUID();
+  const sharedIndex = makeIndex(projectId, 1, 100);
+  const outboxA = new IndexedDbNarrativeSyncOutbox({ databaseName: databaseName() });
+  const outboxB = new IndexedDbNarrativeSyncOutbox({ databaseName: databaseName() });
+  const receiver = new IndexedDbNarrativeSyncJournal({
+    databaseName: "receiver-multi-device-" + randomUUID()
+  });
+
+  try {
+    const [queuedA, queuedB] = await Promise.all([
+      outboxA.enqueueContinuityIndex({
+        index: sharedIndex,
+        writerId: "replica-device-a"
+      }),
+      outboxB.enqueueContinuityIndex({
+        index: sharedIndex,
+        writerId: "replica-device-b"
+      })
+    ]);
+    assert.notEqual(queuedA.entry.operationId, queuedB.entry.operationId);
+    assert.notEqual(queuedA.entry.envelope.digest, queuedB.entry.envelope.digest);
+    assert.equal(queuedA.entry.sequence, 1);
+    assert.equal(queuedB.entry.sequence, 1);
+
+    const [acceptedA, acceptedB] = await Promise.all([
+      receiver.accept(queuedA.entry.envelope),
+      receiver.accept(queuedB.entry.envelope)
+    ]);
+    assert.equal(acceptedA.status, "accepted");
+    assert.equal(acceptedB.status, "accepted");
+    assert.equal((await receiver.loadOperations(projectId)).length, 2);
+    assert.deepEqual(
+      (await receiver.loadWriterCursors(projectId)).map(item => item.writerId),
+      ["replica-device-a", "replica-device-b"]
+    );
+  } finally {
+    outboxA.close();
+    outboxB.close();
+    receiver.close();
   }
 });

@@ -316,3 +316,29 @@ Estados de enlace:
 El pipeline devuelve `informationChain`; el módulo se exporta desde `src/index.ts`. Se añadieron pruebas para dos transmisiones sucesivas, enlaces en el mismo capítulo, paráfrasis no enlazadas, antecedentes duplicados, rumores sin fuente inventada, procedencia y proyecto.
 
 **Límites:** esta reconstrucción no infiere paráfrasis, fuentes implícitas, intención de engañar, confianza, comprensión correcta ni verdad objetiva. La coincidencia literal solo demuestra compatibilidad textual e identitaria, no que el receptor haya entendido o aceptado la información. Los registros previos deben suministrarse desde la biblioteca/persistencia; el pipeline no consulta el almacén por sí solo.
+
+
+## Fase T: interpretación y deformación explícita de información
+
+Se añadió `narrative-information-interpretation.ts` para registrar interpretaciones declaradas por personajes y compararlas con la información que ya tenían atribuida.
+
+Se reconocen construcciones explícitas como:
+- `Mara entendió que...`
+- `Mara interpretó que...`
+- `Mara entendió mal que...`
+- `Mara interpretó erróneamente que...`
+
+La salida distingue:
+- `understood`: el texto declara que el personaje entendió una proposición.
+- `interpreted`: el texto declara una interpretación, sin calificarla como correcta o incorrecta.
+- `explicit-misinterpretation`: el texto califica expresamente la interpretación como equivocada.
+
+La comparación con la memoria previa del personaje produce:
+- `exact-content-match`: contenido igual tras normalización conservadora.
+- `different-content`: el contenido expresado difiere del contenido previo asociado al personaje.
+- `no-prior-information`: no hay registro previo para comparar.
+- `ambiguous-prior-information`: existen varios antecedentes posibles.
+
+El módulo se integra en el pipeline como `informationInterpretations` y recibe los antecedentes mediante `priorInformationProvenance`. Se añadieron seis pruebas unitarias y una de integración.
+
+**Precaución epistemológica:** una diferencia de texto no demuestra por sí misma una interpretación falsa. Incluso la señal explícita de malentendido se registra como lo que el texto declara, no como una verdad objetiva. No se infieren paráfrasis equivalentes, intención de engañar, motivos ni fiabilidad del personaje.

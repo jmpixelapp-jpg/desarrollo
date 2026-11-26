@@ -309,12 +309,13 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
           ? "correction" as const
           : before.inputType.startsWith("delete")
             ? "deletion" as const
-            : before.inputType === "insertText" ||
-              before.inputType === "insertLineBreak" ||
-              before.inputType === "insertParagraph" ||
-              before.inputType === "insertCompositionText"
-                ? "composition" as const
-                : "other" as const;
+            : before.inputType === "insertCompositionText"
+              ? "composition" as const
+              : before.inputType === "insertText" ||
+                before.inputType === "insertLineBreak" ||
+                before.inputType === "insertParagraph"
+                  ? "typing" as const
+                  : "other" as const;
     const change: EditorChange = Object.freeze({
       documentId: this.documentId,
       sequence: this.sequence + 1,

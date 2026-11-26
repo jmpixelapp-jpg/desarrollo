@@ -143,6 +143,62 @@ test("IndexedDB rechaza ventanas de latencia dispersas antes de persistir el che
   }
 });
 
+test("IndexedDB rechaza balances imposibles de pausas, caracteres, commits y latencias", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-metric-balance-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+
+  try {
+    const lease = await acquireLease(store, projectId, documentId);
+    const variants = [
+      {
+        label: "pauseCount",
+        overrides: { pauseCount: 2 },
+        expected: /pauseCount\.activity-balance/
+      },
+      {
+        label: "character-balance",
+        overrides: { insertedCharacters: 6 },
+        expected: /character-balance/
+      },
+      {
+        label: "commit-counts",
+        overrides: { committedChanges: 0 },
+        expected: /commit-counts/
+      },
+      {
+        label: "commitLatencies.last",
+        overrides: { lastCommitLatencyMs: 4 },
+        expected: /commitLatencies\.last/
+      },
+      {
+        label: "commitLatencies.count",
+        overrides: { commitLatencies: [] },
+        expected: /commitLatencies\.count/
+      }
+    ];
+
+    for (const variant of variants) {
+      await assert.rejects(
+        store.saveLiveAuthorMonitorCheckpoint(
+          checkpoint(projectId, documentId, Date.now(), variant.overrides),
+          lease
+        ),
+        variant.expected,
+        variant.label + " debe rechazarse antes de persistir"
+      );
+    }
+
+    assert.equal(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      undefined,
+      "ninguna variante inválida debe dejar un checkpoint durable"
+    );
+  } finally {
+    await store.close();
+  }
+});
+
 test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";

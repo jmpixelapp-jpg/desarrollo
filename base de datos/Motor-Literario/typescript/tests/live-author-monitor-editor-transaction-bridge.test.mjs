@@ -114,7 +114,11 @@ test("un listener defectuoso no impide entregar la transacción a los demás", (
   const transaction = native.apply("edit", "native-edit", {
     start: 3, end: 3, replacement: "!"
   });
-  assert.equal(bridge.publishAppliedTransaction("chapter-1", transaction), 1);
+  assert.equal(
+    bridge.publishAppliedTransaction("chapter-1", transaction),
+    2,
+    "el retorno cuenta los listeners seleccionados aunque uno falle"
+  );
   assert.equal(calls.length, 1);
   assert.equal(Object.isFrozen(calls[0]), true);
   assert.equal(Object.isFrozen(calls[0].change), true);

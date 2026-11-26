@@ -1,11 +1,15 @@
 import {
   areNarrativeSyncPayloadsEquivalent,
+  canonicalizeNarrativeSyncPayload,
   verifyNarrativeSyncOperationEnvelope,
+  type NarrativeSyncCanonicalizationLimits,
   type NarrativeSyncOperationEnvelope
 } from "./narrative-sync-integrity";
 
 export interface NarrativeSyncJournalOptions {
   readonly databaseName?: string;
+  /** Límites canónicos de las envolturas recibidas, aplicadas y auditadas. */
+  readonly canonicalizationLimits?: NarrativeSyncCanonicalizationLimits;
 }
 
 export type NarrativeSyncAcceptResult =
@@ -54,10 +58,19 @@ export type NarrativeSyncCursorRecoveryApplyResult =
 export class IndexedDbNarrativeSyncJournal {
   private database: Promise<IDBDatabase> | undefined;
   private readonly databaseName: string;
+  private readonly canonicalizationLimits: NarrativeSyncCanonicalizationLimits;
 
   constructor(options: NarrativeSyncJournalOptions = {}) {
     this.databaseName = options.databaseName ?? "motor-literario-sync-journal";
     if (!this.databaseName.trim()) throw new TypeError("El nombre de la base de sincronización es obligatorio.");
+    this.canonicalizationLimits = options.canonicalizationLimits ?? {};
+    // Valida los límites al construir el diario, no durante la primera recepción.
+    canonicalizeNarrativeSyncPayload(null, this.canonicalizationLimits);
+  }
+
+  /** Verifica una envoltura usando la política de tamaño configurada para este diario. */
+  verifyEnvelope(envelope: NarrativeSyncOperationEnvelope): Promise<boolean> {
+    return verifyNarrativeSyncOperationEnvelope(envelope, this.canonicalizationLimits);
   }
 
   close(): void {
@@ -69,7 +82,7 @@ export class IndexedDbNarrativeSyncJournal {
   async accept(
     envelope: NarrativeSyncOperationEnvelope
   ): Promise<NarrativeSyncAcceptResult> {
-    if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+    if (!(await this.verifyEnvelope(envelope))) {
       throw new Error("La operación narrativa no supera la verificación SHA-256.");
     }
     const database = await this.open();
@@ -358,7 +371,7 @@ export class IndexedDbNarrativeSyncJournal {
       }
       for (const entry of snapshot) {
         const { receivedAt: _receivedAt, appliedAt: _appliedAt, ...envelope } = entry;
-        if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+        if (!(await this.verifyEnvelope(envelope))) {
           return { status: "rejected", reason: "journal-not-complete" };
         }
       }
@@ -586,7 +599,9 @@ export interface NarrativeSyncJournalIntegrityReport {
  * por escritor. SHA-256 detecta corrupción, pero no autentica al emisor.
  */
 export async function inspectNarrativeSyncJournalIntegrity(
-  journal: Pick<IndexedDbNarrativeSyncJournal, "loadOperations" | "loadWriterCursors">,
+  journal: Pick<IndexedDbNarrativeSyncJournal, "loadOperations" | "loadWriterCursors"> & {
+    readonly verifyEnvelope?: (envelope: NarrativeSyncOperationEnvelope) => Promise<boolean>;
+  },
   projectId: string
 ): Promise<NarrativeSyncJournalIntegrityReport> {
   if (!journal || typeof journal.loadOperations !== "function" ||
@@ -616,7 +631,9 @@ export async function inspectNarrativeSyncJournalIntegrity(
       addIssue("invalid-applied-at", "El instante de aplicación es inválido o anterior a la recepción.");
     }
     const { receivedAt: _receivedAt, appliedAt: _appliedAt, ...envelope } = operation;
-    if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+    if (!(await (journal.verifyEnvelope
+      ? journal.verifyEnvelope(envelope)
+      : verifyNarrativeSyncOperationEnvelope(envelope)))) {
       addIssue("invalid-envelope", "La envoltura almacenada no supera la verificación de integridad.");
     }
     const writerOperations = writers.get(writerId) ?? [];
@@ -928,7 +945,7 @@ export async function replayPendingNarrativeSyncOperations(
               failure: "invalid-envelope"
             };
           }
-          if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+          if (!(await journal.verifyEnvelope(envelope))) {
             const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
             return {
               processed, remaining, stoppedAtOperationId: operation.operationId,

@@ -1702,6 +1702,6 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Regresión:** dos documentos tienen leases activos. Se demoran las primeras renovaciones de ambos y se disparan `visibilitychange` y `pageshow` repetidamente antes de resolverlas. Cada documento debe crear un único follow-up; al liberar las renovaciones suspendidas, debe ejecutar exactamente dos renovaciones por documento (la inicial y un follow-up), conservar propietario/fencing token y mantener un único heartbeat por documento.
 
-**Invariante:** el coalescing es por `documentId`; un evento de uno o varios tipos no puede multiplicar solicitudes ni fusionar la renovación de documentos distintos.
+**Invariante:** el coalescing es por `documentId`; un evento de uno o varios tipos no puede multiplicar solicitudes ni fusionar la renovación de documentos distintos. El test espera a que terminen las colas de checkpoint iniciales y reinicia sus contadores de renovación antes de disparar los eventos, para medir exclusivamente las solicitudes de reanudación.
 
 **Validación:** pendiente de GitHub Actions.

@@ -348,3 +348,10 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Una repetición equivalente no sobrescribe el registro existente ni reinicia contador, último error o fecha del próximo intento.
 - Se añadió una prueba de integración IndexedDB que reencola la misma operación después de un fallo, con claves del payload reordenadas, y comprueba que se conserva el backoff.
 - **Validación:** cambios y regresión publicados; falta ejecutar typecheck y pruebas en CI sobre el nuevo HEAD.
+
+### Tanda — orden causal de recuperación por dispositivo
+
+- La lectura de pendientes utilizaba `by-project-created-at`. Esto podía invertir operaciones del mismo dispositivo cuando `createdAt` se veía afectado por un reloj ajustado o por marcas temporales no monótonas.
+- Se cambió la recuperación al índice único `by-project-device-sequence`, que ordena por dispositivo y secuencia ascendente.
+- Se añadió una regresión con dos operaciones del mismo dispositivo cuyas fechas están deliberadamente invertidas, además de una operación de otro dispositivo; la expectativa verifica secuencia causal sin fingir que existe un reloj global entre dispositivos.
+- **Validación:** prueba añadida y cambio publicado; ejecución CI pendiente.

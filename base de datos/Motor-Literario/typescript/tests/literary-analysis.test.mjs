@@ -898,9 +898,15 @@ test("la cronología limita las muestras de identificadores de eventos y conserv
       raw: "año 2030",
       orderValue: 300
     },
-    evidenceCount: 0,
+    evidenceCount: 1,
     staleEvidenceCount: 0,
-    evidence: []
+    evidence: [{
+      documentId: "chapter-two",
+      revision: 1,
+      start: 0,
+      end: 1,
+      excerpt: "x"
+    }]
   }));
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
@@ -1605,7 +1611,6 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     /historial de decisiones del catálogo global/
   );
   for (const invalidHistory of [
-    [],
     [{ status: "incorporated", reason: "initial" }],
     [{ status: "IDEA", reason: "writer", changedAt: 1 }],
     [
@@ -2222,7 +2227,7 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
 });
 
 
-test("la cronología de proyecto excluye posiciones temporales no finitas", () => {
+test("la cronología de proyecto rechaza posiciones temporales no finitas", () => {
   const evidence = {
     documentId: "chapter-one",
     revision: 1,
@@ -2244,26 +2249,18 @@ test("la cronología de proyecto excluye posiciones temporales no finitas", () =
     },
     evidence: [evidence]
   });
-  const result = analyzeLiteraryFragment({
+  assert.throws(() => analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
-    text: "Escena 1\nAna.",
+    text: "Escena 1\\nAna.",
     knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
     knownProjectEvents: [
       makeEvent("valid", 2020),
       makeEvent("not-a-number", Number.NaN),
       makeEvent("infinite", Number.POSITIVE_INFINITY)
     ]
-  });
-  const timeline = result.characterNarrativeTrajectories.trajectories[0].projectEventTimeline;
-
-  assert.equal(timeline.sourceEventCount, 3);
-  assert.equal(timeline.timedEventCount, 1);
-  assert.equal(timeline.unverifiedEventCount, 2);
-  assert.equal(timeline.pointCount, 1);
-  assert.deepEqual(timeline.points[0].eventIds, ["valid"]);
-  assert.equal(timeline.transitionCount, 0);
+  }), /catálogo global de acontecimientos/);
 });
 
 

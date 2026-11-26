@@ -140,3 +140,27 @@ test("la auditoría detecta operaciones sin cursor durable e identidad de cursor
   assert.ok(codes.includes("cursor-without-operations"));
   assert.equal(report.intact, false);
 });
+
+
+test("la auditoría informa cursores con writerId no textual sin interrumpirse", async () => {
+  const journal = {
+    loadOperations: async () => [],
+    loadWriterCursors: async () => [{
+      projectId: "bad-cursor-project",
+      writerId: null,
+      lastSequence: 0,
+      lastOperationId: null,
+      updatedAt: -1
+    }]
+  };
+  const report = await inspectNarrativeSyncJournalIntegrity(journal, "bad-cursor-project");
+  assert.equal(report.intact, false);
+  assert.ok(report.issues.some(issue => issue.code === "invalid-cursor"));
+});
+
+test("la auditoría exige soporte para leer cursores antes de comenzar", async () => {
+  await assert.rejects(
+    inspectNarrativeSyncJournalIntegrity({ loadOperations: async () => [] }, "missing-cursor-reader"),
+    /diario y un proyecto válidos/
+  );
+});

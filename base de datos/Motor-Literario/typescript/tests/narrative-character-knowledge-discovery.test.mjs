@@ -48,3 +48,8 @@ test("respeta presupuesto y máximo de candidatos",()=>{
  const dense="Ana supo que Bruno mentía. ".repeat(501);
  assert.throws(()=>discover({...context,text:dense}),/límite de afirmaciones/);
 });
+
+test("distingue conocimiento ya poseído, información oída e información leída",()=>{
+ const r=discover({...context,text:"Ana sabía que Bruno mentía. Ana escuchó que el puente cayó. Ana leyó que la guerra había terminado."});
+ assert.deepEqual(r.map(x=>x.kind),["known","heard","read"]);
+});

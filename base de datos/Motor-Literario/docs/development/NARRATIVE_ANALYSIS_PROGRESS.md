@@ -584,3 +584,15 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - Se añadieron pruebas de acuse desde dos instancias `IndexedDbNarrativeSyncJournal` que comparten el mismo nombre de base de datos. El primer `appliedAt` durable se conserva ante acuses repetidos y un digest incorrecto se rechaza.
 - Esto no convierte el sistema en exactly-once: el efecto y el acuse siguen siendo dos escrituras separadas. Cada handler debe ofrecer idempotencia/CAS o una bandeja durable de deduplicación atómica con su efecto.
 - El archivo de pruebas del consumidor pasa a contener 14 pruebas declaradas. No se han ejecutado en este entorno; typecheck, build y suite completa continúan pendientes.
+
+
+## Corrección de compilación y contrato físico IndexedDB DB27
+
+- Se corrigió una aserción de tipo que interrumpía el parseo de `indexeddb-store.ts` al cargar la cola de reparaciones pendientes.
+- Se corrigieron los tipos estrictos de la reconciliación del grafo: `relatedIdeaIds` forma parte de los campos diagnosticables; los IDs de auditoría se estrechan antes de usar `.includes()`; `mergedFromIds` se trata como campo opcional.
+- La recuperación de cursores rechaza explícitamente un snapshot vacío antes de consultar su última operación.
+- El adaptador IndexedDB está en DB27. El manifiesto físico `storage_mapping_v0.4.2.json` declara `database_version: 27`, mapping version 16 y los almacenes `narrative-reference-repair-audits` y `narrative-reference-repair-pending` con clave compuesta e índice `by-project`.
+- La creación/reconciliación de esos índices usa `ensureIndex`, de modo que el auditor físico comprueba también los dos almacenes nuevos.
+- La prueba de migración parte de DB22, exige que DB27 cree los almacenes de reparación y verifica sus claves e índices, además de preservar el documento previo.
+
+**Evidencia de CI observada:** el type-check estricto terminó correctamente en el commit `e84c997` después de corregir los errores de tipos. En el commit `00a8f20` el pipeline Live Author Monitor superó type-check aislado, bundle de monitor, regresiones de recuperación, auditoría física DB27, bundle runtime y pruebas aisladas del monitor. La integración Chromium y el pipeline general de TypeScript seguían en ejecución al registrar esta nota; no se declara aprobada la suite completa ni el benchmark.

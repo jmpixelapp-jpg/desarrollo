@@ -332,3 +332,27 @@ La ejecución general [45721849896](https://github.com/jmpixelapp-jpg/desarrollo
 **Resultado verificado:** CI específica [45724891204](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45724891204): auditoría de MLDB y almacenes válida, build Vite y **102/102 pruebas aprobadas, 0 fallidas, 0 omitidas**.
 
 **Limitación:** esta protección de escritura no es un lease de edición ni sincroniza cursores/operaciones entre dos editores concurrentes. Impide regresiones del checkpoint, pero no sustituye la coordinación del journal durable.
+
+
+
+## 16. Nueva entrega — reserva de titularidad entre pestañas con fencing token (26 de noviembre de 2026)
+
+**Objetivo:** impedir que dos instancias del monitor publiquen checkpoints compartidos en paralelo y, especialmente, evitar que una pestaña antigua sobrescriba métricas después de que otra haya tomado la titularidad.
+
+**Esquema:** IndexedDB sube de v23 a **v24**. El manifiesto activo `storage_mapping_v0.4.2.json` sube a `mapping_version: 14` y registra `live-author-monitor-leases`, keyPath `[projectId, documentId]`, índice `by-project`. El almacén de checkpoints permanece separado.
+
+**Contrato:** `StoredLiveAuthorMonitorLease` guarda identidad de proyecto/documento, ownerId de la instancia, fencingToken creciente, acquiredAt, expiresAt y updatedAt. `ProjectStore` define acquire/renew/release; `saveLiveAuthorMonitorCheckpoint` recibe también el lease.
+
+**Persistencia atómica:** la adquisición, renovación y liberación se serializan con transacciones IndexedDB readwrite. La escritura del checkpoint abre una única transacción que incluye ambos almacenes, vuelve a leer el lease actual y compara ownerId/token/expiración antes de escribir. La fila liberada se conserva como expirada para que el próximo dueño reciba un token superior.
+
+**HostEngineApi:** genera un ownerId por instancia, adquiere titularidad al abrir/recuperar el documento, renueva cada 10 segundos con TTL de 30 segundos, restaura/publica métricas solo cuando es titular y reintenta la adquisición en el próximo punto seguro de checkpoint o al cerrar. `closeLiveAuthorMonitorDocumentSafely()` y `disposeSafely()` guardan el estado final y liberan la reserva. Si la transacción de liberación falla, el anfitrión conserva su lease local y reanuda el heartbeat para permitir el reintento.
+
+**Pruebas añadidas/ampliadas:** actualización de IndexedDB v22 a v24 preservando el documento previo y creando los dos almacenes nuevos; competencia atómica entre pestañas; renovación; incremento del fencing token; rechazo de escritura de un token anterior; continuidad con snapshot de lease local antiguo tras renovación; handoff entre dos HostEngineApi; y reintento si falla la transacción de liberación.
+
+**Archivos:** `typescript/src/contracts.ts`, `typescript/src/persistence/indexeddb-store.ts`, `typescript/src/host-api.ts`, `typescript/tests/live-author-monitor-indexeddb.test.mjs`, `typescript/tests/live-author-monitor-host-api.test.mjs`, `MLDB/storage_mapping_v0.4.2.json`, `docs/specifications/LIVE_AUTHOR_MONITOR_V0.1.md`.
+
+**Commits principales:** [f8b1432 — contrato de lease](https://github.com/jmpixelapp-jpg/desarrollo/commit/f8b14322da2727d4673320e3059f6e59e8d8e6e4), [8b1f6dd — almacén IndexedDB](https://github.com/jmpixelapp-jpg/desarrollo/commit/8b1f6ddb5421d1c5c044233736481ea7e700eb55), [fa2aa4a — operaciones atómicas de lease](https://github.com/jmpixelapp-jpg/desarrollo/commit/fa2aa4a3db4325dcbc6c37be51f567f0ced7c458), [1777b28 — fencing de checkpoints](https://github.com/jmpixelapp-jpg/desarrollo/commit/1777b28da2229530fbb9f365b7eac5e484f1d02c), [324f94b — mapeo MLDB v24](https://github.com/jmpixelapp-jpg/desarrollo/commit/324f94b76dc8ef8c6731aa7d65692846ce8f5b22), [eb69a53 — integración HostEngineApi](https://github.com/jmpixelapp-jpg/desarrollo/commit/eb69a53a0a09a812d7a48fb54611bf9fd4db2973), [d54c085 — handoff en siguiente punto seguro](https://github.com/jmpixelapp-jpg/desarrollo/commit/d54c085d3f0217bc9403bf815603b22be7c3f402), [9091ee7 — prueba de handoff entre pestañas](https://github.com/jmpixelapp-jpg/desarrollo/commit/9091ee77c28973fa610bc0161595f81f74d04074), [da8bc4f — snapshot de lease renovado](https://github.com/jmpixelapp-jpg/desarrollo/commit/da8bc4f023c58145a4be179fb97c99bd17a7515c), [5d1919a — retener lease ante fallo de liberación](https://github.com/jmpixelapp-jpg/desarrollo/commit/5d1919acd9eb13bfe0eb3cfd6fd23e024448f399), [56f7269 — prueba de reintento de liberación](https://github.com/jmpixelapp-jpg/desarrollo/commit/56f7269ba27afcd1883c3232c0968eef19ba76f2).
+
+**Resultado previo validado:** CI específica [45725988078](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45725988078): build Vite correcto, MLDB 0.4.2 válido, 25 tablas y 34 almacenes auditados y **106/106 pruebas aprobadas, 0 fallidas, 0 omitidas**. La nueva ejecución que incluye la regresión de fallo de liberación está en curso; este registro no da por aprobada esa última prueba hasta revisar el resultado.
+
+**Límites:** el lease coordina checkpoints de métricas, no bloquea ni sincroniza la edición del manuscrito. La prueba usa `fake-indexeddb` en memoria; la validación E2E en navegador real sigue pendiente. Los almacenes de anfitrión antiguos sin los métodos de lease mantienen compatibilidad, pero carecen de fencing multi-pestaña.

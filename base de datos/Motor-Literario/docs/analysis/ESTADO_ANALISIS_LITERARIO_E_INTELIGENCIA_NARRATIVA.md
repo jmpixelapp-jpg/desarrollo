@@ -323,3 +323,12 @@ La ejecución sobre el commit `7777e16cc5a86a1f4dc99130ea8186df9aa84516` termin�
 Se corrigió además el pipeline de pruebas: la suite completa incluye `live-author-monitor-diagnostics-isolation.test.mjs`, que importa el bundle `dist-monitor`. El script `test` ahora ejecuta `build:monitor-test` antes de descubrir todos los tests, evitando depender del orden o de que otro workflow haya construido ese artefacto. Los fixtures de migración v25 también incluyen el almacén `sync-outbox` en sus modelos de IndexedDB anterior.
 
 La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el coordinador y `IndexedDbProjectStore` trabajan juntos: un acuse elimina una operación, un conflicto permanece pendiente con su intento persistido y un acuse posterior la retira.
+
+
+### Tanda 26-11-2026 — límites de metadatos en respuestas de sincronización
+
+- La validación del resultado remoto ahora limita el código de cada conflicto a 128 caracteres, además del límite existente de 2.048 caracteres para el mensaje.
+- Una respuesta con un código excesivo se considera malformada: no confirma ni elimina la operación, registra el intento fallido y propaga el error para que el anfitrión pueda observarlo y reintentar según el backoff.
+- Se añadió una regresión del coordinador que comprueba rechazo del código de 129 caracteres, conservación durable de la operación y ausencia de acuse.
+- Se actualizó el contrato del transporte para documentar ambos límites.
+- **Validación:** cambio y regresión publicados en la rama de integración; typecheck y suite deben volver a ejecutarse en CI antes de marcarlo como verificado.

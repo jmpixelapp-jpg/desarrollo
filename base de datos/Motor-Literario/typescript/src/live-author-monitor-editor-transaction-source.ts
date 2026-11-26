@@ -292,7 +292,17 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     try {
       while (this.pendingTransactions.length > 0 && !this.disposed && !this.needsResync) {
         const transaction = this.pendingTransactions.shift();
-        if (transaction) this.processTransaction(transaction);
+        try {
+          // La frontera del proveedor es dinámica en runtime: incluso un payload
+          // null o un getter defectuoso debe pausar el source, no escapar al editor.
+          this.processTransaction(transaction as LiveAuthorMonitorEditorTransaction);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          this.fail(
+            "invalid-transaction",
+            "El proveedor emitió un payload que no pudo validarse de forma segura: " + detail
+          );
+        }
       }
     } finally {
       this.processingTransactions = false;

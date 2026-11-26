@@ -475,3 +475,51 @@ test("replay vuelve a verificar SHA-256 y no entrega sobrescrituras corruptas al
     });
   }
 });
+
+
+test("replay serializa consumidores concurrentes del mismo proyecto en el runtime", async () => {
+  const { indexedDB } = await import("fake-indexeddb");
+  const {
+    createNarrativeSyncOperationEnvelope,
+    IndexedDbNarrativeSyncJournal,
+    replayPendingNarrativeSyncOperations
+  } = await import("../dist/motor-literario.js");
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = indexedDB;
+  const databaseName = "sync-journal-consumer-lock-" + Math.random().toString(36).slice(2);
+  try {
+    const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+    const envelope = await createNarrativeSyncOperationEnvelope({
+      operationId: "consumer-lock-op", projectId: "project-consumer-lock",
+      writerId: "writer-consumer-lock", sequence: 1, kind: "idea-upsert",
+      payload: { id: "idea-consumer-lock" }
+    });
+    await journal.accept(envelope);
+    let release;
+    const blocked = new Promise(resolve => { release = resolve; });
+    let calls = 0;
+    const first = replayPendingNarrativeSyncOperations(journal, "project-consumer-lock", async operation => {
+      calls++;
+      assert.equal(operation.receivedAt, undefined);
+      assert.equal(operation.appliedAt, undefined);
+      await blocked;
+    }, "writer-consumer-lock");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const second = await replayPendingNarrativeSyncOperations(journal, "project-consumer-lock", async () => {
+      calls++;
+    }, "writer-consumer-lock");
+    assert.deepEqual(second, {
+      processed: 0, remaining: 1, failure: "consumer-already-running"
+    });
+    release();
+    assert.deepEqual(await first, { processed: 1, remaining: 0 });
+    assert.equal(calls, 1);
+    journal.close();
+  } finally {
+    globalThis.indexedDB = previous;
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+});

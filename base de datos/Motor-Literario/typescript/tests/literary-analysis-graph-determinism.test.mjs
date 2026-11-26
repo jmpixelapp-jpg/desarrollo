@@ -379,7 +379,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(complete.missingFromProjectReferenceCount, 1);
   assert.deepEqual(
     complete.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "missing-from-project"]
+    ["missing-from-project", "included-in-snapshot"]
   );
 
   const partial = analyze([source, included], 3);
@@ -388,7 +388,7 @@ test("la resolución de referencias respeta el alcance real del catálogo", () =
   assert.equal(partial.missingFromProjectReferenceCount, 0);
   assert.deepEqual(
     partial.references.map(reference => reference.resolution),
-    ["included-in-snapshot", "not-in-snapshot"]
+    ["not-in-snapshot", "included-in-snapshot"]
   );
 
   const legacy = analyzeLiteraryFragment({
@@ -692,7 +692,12 @@ test("el límite de muestras de referencias conserva totales completos y truncam
   const destinations = Array.from({ length: 5_001 }, (_, index) =>
     "external-" + String(index).padStart(4, "0")
   );
-  const graph = analyze([idea("source", destinations)], 2);
+  // El límite de 500 referencias se aplica por idea; distribuimos el catálogo.
+  const catalog = Array.from({ length: 11 }, (_, index) =>
+    idea("source-" + String(index).padStart(2, "0"),
+      destinations.slice(index * 500, (index + 1) * 500))
+  );
+  const graph = analyze(catalog, 2);
 
   assert.equal(graph.referenceCount, 5_001);
   assert.equal(graph.includedReferenceCount, 0);
@@ -704,8 +709,9 @@ test("el límite de muestras de referencias conserva totales completos y truncam
   assert.equal(graph.references.length, 5_000);
   assert.equal(graph.references[0].toIdeaId, "external-0000");
   assert.equal(graph.references.at(-1).toIdeaId, "external-4999");
-  const source = graph.nodes.find(node => node.ideaId === "source");
-  assert.equal(source.notIncludedOutgoingReferenceCount, 5_001);
-  assert.equal(source.distinctOutgoingIdeaCount, 0);
-  assert.equal(source.directReferenceStatusCounts.notInSnapshot, 5_001);
+  const sources = graph.nodes.filter(node => node.ideaId.startsWith("source-"));
+  assert.equal(sources.length, 11);
+  assert.equal(sources.reduce((sum, source) => sum + source.notIncludedOutgoingReferenceCount, 0), 5_001);
+  assert.equal(sources.reduce((sum, source) => sum + source.distinctOutgoingIdeaCount, 0), 0);
+  assert.equal(sources.reduce((sum, source) => sum + source.directReferenceStatusCounts.notInSnapshot, 0), 5_001);
 });

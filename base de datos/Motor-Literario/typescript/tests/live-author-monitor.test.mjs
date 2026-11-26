@@ -249,6 +249,64 @@ test("drena una ráfaga reentrante de 1000 snapshots sin recursión y en FIFO", 
   assert.equal(monitor.getSnapshot("chapter-1").pendingChanges, 1000);
 });
 
+test("expone fallos de suscriptores sin bloquear la escritura ni otros documentos", () => {
+  const { monitor, open, change, queued } = fixture();
+  open("chapter-1", "hello");
+  open("chapter-2", "world");
+  const delivered = [];
+  monitor.subscribe(() => { throw new Error("mensaje privado que no debe conservarse"); }, "chapter-1");
+  monitor.subscribe(snapshot => delivered.push(snapshot.listenerErrors), "chapter-1");
+
+  const first = monitor.recordAdmission(change(1, 0, 5, 5, "!"), queued("t-1"));
+  assert.equal(first.listenerErrors, 0);
+  assert.deepEqual(delivered, [0]);
+  assert.equal(monitor.getSnapshot("chapter-1").listenerErrors, 1);
+
+  monitor.recordAdmission(change(2, 1, 6, 6, "?"), queued("t-2"));
+  assert.deepEqual(delivered, [0, 1]);
+  assert.equal(monitor.getSnapshot("chapter-1").listenerErrors, 2);
+  assert.equal(monitor.getSnapshot("chapter-2").listenerErrors, 0);
+  assert.equal(JSON.stringify(monitor.getSnapshot("chapter-1")).includes("mensaje privado"), false);
+});
+
+test("valida suscriptores antes de registrarlos", () => {
+  const { monitor } = fixture();
+  assert.throws(() => monitor.subscribe(null), /debe ser una función/);
+  assert.throws(() => monitor.subscribe(() => {}, " "), /no puede estar vacío/);
+});
+
+test("notifica el fallo de una vista aislada sin exponer la excepción", () => {
+  const { monitor, open, change, queued } = fixture();
+  open();
+  let refresh;
+  let failures = 0;
+  const hostApi = {
+    getLiveAuthorMonitorSnapshot: documentId => monitor.getSnapshot(documentId),
+    getLiveAuthorMonitorSnapshots: () => monitor.getSnapshots(),
+    subscribeLiveAuthorMonitor: (listener, documentId) => monitor.subscribe(listener, documentId)
+  };
+  const unsubscribe = subscribeLiveAuthorMonitorWithRefresh(
+    hostApi,
+    snapshot => {
+      if (snapshot.latestSequence > 0) throw new Error("private view exception");
+    },
+    {
+      documentId: "chapter-1",
+      schedule(callback) { refresh = callback; return () => {}; },
+      onListenerError(snapshot) {
+        failures++;
+        assert.equal(snapshot.documentId, "chapter-1");
+      }
+    }
+  );
+  monitor.recordAdmission(change(1, 0, 5, 5, "!"), queued("t-1"));
+  assert.equal(failures, 1);
+  assert.equal(monitor.getSnapshot("chapter-1").acceptedChanges, 1);
+  refresh();
+  assert.equal(failures, 2);
+  unsubscribe();
+});
+
 test("valida secuencias, límite de documentos y retroceso del reloj", () => {
   const { monitor, open, change, queued, setTime } = fixture({ maxOpenDocuments: 1 });
   open();

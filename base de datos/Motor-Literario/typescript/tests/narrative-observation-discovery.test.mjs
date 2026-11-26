@@ -188,3 +188,10 @@ test("rechaza entidades ajenas al proyecto y límites inválidos", () => {
     ...context, baseOffset: -1, text: "Ana corrió."
   }));
 });
+
+test("no confunde nombres con secuencias de letras dentro de otras palabras", () => {
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text: "La ventana se abrió."
+  });
+  assert.deepEqual(found, []);
+});

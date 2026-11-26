@@ -328,3 +328,12 @@ Se incorporó `repairNarrativeDocumentProjectionManifest(store, projectId, docum
 Por seguridad, rechaza manifiestos inexistentes y tombstones: no inventa revisiones fuente ni reactiva documentos retirados. Se añadieron pruebas para reparar inventarios divergentes, comprobar que las tablas narrativas permanecen intactas, verificar el reintento sin cambios y rechazar casos que requieren decisión editorial.
 
 **Pendiente de verificación en entorno Node 22+:** `npm run typecheck` y `npm test`.
+
+
+## Integridad de referencias cruzadas
+
+Se amplió `reconcileNarrativeDocumentProjections` para detectar relaciones cuyos extremos no existen, participantes de acontecimientos inexistentes, afirmaciones sin entidad y vínculos inválidos de ideas con entidades u otras ideas. Los diagnósticos conservan el ID del registro y el documento de evidencia cuando existe; si no hay evidencia documental, `documentId` vacío representa un problema de alcance de proyecto.
+
+Se añadieron pruebas con datos deliberadamente inconsistentes y una comprobación de que el diagnóstico no modifica ninguna tabla. Estas referencias no se reparan automáticamente porque no existe una identidad fuente fiable para decidir cómo resolverlas.
+
+**Pendiente:** ejecutar typecheck y suite completa en Node 22+.

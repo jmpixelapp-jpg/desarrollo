@@ -10,6 +10,7 @@ import { discoverNarrativeIdeaCandidates } from "./narrative-idea-discovery";
 import { extractNarrativeActionCandidates } from "./narrative-action-extraction";
 import { extractNarrativeAttributedClaims } from "./narrative-claim-extraction";
 import { extractNarrativeDialogueAttributions } from "./narrative-dialogue-attribution";
+import { extractNarrativeInformationProvenance } from "./narrative-information-provenance";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
@@ -68,6 +69,7 @@ export interface NarrativeUnderstandingResult {
   readonly actions: ReturnType<typeof extractNarrativeActionCandidates>;
   readonly attributedClaims: ReturnType<typeof extractNarrativeAttributedClaims>;
   readonly dialogueAttributions: ReturnType<typeof extractNarrativeDialogueAttributions>;
+  readonly informationProvenance: ReturnType<typeof extractNarrativeInformationProvenance>;
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -191,6 +193,7 @@ export function understandNarrativeFragment(
   const actions = extractNarrativeActionCandidates(extractionContext);
   const attributedClaims = extractNarrativeAttributedClaims(extractionContext);
   const dialogueAttributions = extractNarrativeDialogueAttributions(extractionContext);
+  const informationProvenance = extractNarrativeInformationProvenance(extractionContext);
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,
@@ -253,7 +256,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

@@ -207,6 +207,51 @@ test("rechaza diarios con huecos aunque se presente una propuesta formal", async
   journal.close();
 });
 
+
+
+test("la recuperación acepta snapshots equivalentes con distinto orden de propiedades", async () => {
+  const databaseName = "sync-outbox-canonical-snapshot-" + Math.random().toString(36).slice(2);
+  const journal = new IndexedDbNarrativeSyncJournal({ databaseName });
+  try {
+    const envelope = await createNarrativeSyncOperationEnvelope({
+      operationId: "canonical-outbox-snapshot",
+      projectId: "canonical-outbox-project",
+      writerId: "canonical-outbox-writer",
+      sequence: 1,
+      createdAt: 100,
+      kind: "note",
+      payload: { text: "El orden de claves no cambia el contenido." }
+    });
+    await journal.accept(envelope);
+    const database = await journal.database;
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction("operations", "readwrite");
+      const store = transaction.objectStore("operations");
+      const request = store.get([envelope.projectId, envelope.operationId]);
+      request.onsuccess = () => store.put(Object.fromEntries(Object.entries(request.result).reverse()));
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    assert.deepEqual(
+      await journal.applyCursorRecoveryProposal({
+        projectId: envelope.projectId,
+        writerId: envelope.writerId,
+        lastSequence: envelope.sequence,
+        lastOperationId: envelope.operationId
+      }),
+      {
+        status: "already-consistent",
+        writerId: envelope.writerId,
+        lastSequence: envelope.sequence,
+        lastOperationId: envelope.operationId
+      }
+    );
+  } finally {
+    journal.close();
+  }
+});
 test("corrige una identidad final divergente sin alterar la secuencia", async () => {
   const databaseName = "narrative-sync-cursor-identity-" + Math.random().toString(36).slice(2);
   const journal = new IndexedDbNarrativeSyncJournal({ databaseName });

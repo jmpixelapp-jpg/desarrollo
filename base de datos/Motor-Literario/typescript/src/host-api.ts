@@ -3930,6 +3930,8 @@ export class HostEngineApi {
         try { this.liveAuthorMonitor.resynchronizeDocument(recoveredSnapshot); } catch { /* La sesión conserva su estado si aún hay commits pendientes. */ }
       }
       this.scheduleLiveAuthorMonitorCheckpoint(documentId);
+      const initialCheckpoint = this.liveMonitorCheckpointTails.get(documentId);
+      if (initialCheckpoint) await initialCheckpoint.catch(() => undefined);
       const recovery = this.diagnosticsPersistenceTail.then(async () => {
         await this.restoreDocumentDiagnostics(recoveredSnapshot);
       });
@@ -4088,10 +4090,7 @@ export class HostEngineApi {
       typeof this.store.releaseLiveAuthorMonitorLease === "function";
   }
 
-  private startLiveAuthorMonitorLeaseHeartbeat(
-    documentId: string,
-    lease: StoredLiveAuthorMonitorLease
-  ): void {
+  private startLiveAuthorMonitorLeaseHeartbeat(documentId: string): void {
     if (this.liveMonitorLeaseHeartbeats.has(documentId)) return;
     const timer = setInterval(() => {
       const current = this.liveMonitorLeases.get(documentId);
@@ -4160,7 +4159,7 @@ export class HostEngineApi {
       return undefined;
     }
     this.liveMonitorLeases.set(documentId, lease);
-    this.startLiveAuthorMonitorLeaseHeartbeat(documentId, lease);
+    this.startLiveAuthorMonitorLeaseHeartbeat(documentId);
     return lease;
   }
 

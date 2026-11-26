@@ -1519,18 +1519,17 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 
 ## 98. Consistencia del balance de caracteres en checkpoints (26 de noviembre de 2026)
 
-**Hallazgo:** la recuperación verificaba que `insertedCharacters`, `deletedCharacters` y `currentDocumentLength` fueran enteros seguros no negativos, pero no comprobaba que pudieran corresponder a una longitud inicial real del documento. Un checkpoint alterado podía declarar más caracteres borrados que la suma de los caracteres actualmente presentes y los insertados durante la sesión, lo que implicaría una longitud inicial negativa.
+**Hallazgo:** la recuperación debe verificar que los contadores acumulados puedan corresponder a una longitud inicial real del documento. La longitud inicial implícita se obtiene de la longitud actual, las inserciones y los borrados; debe ser un entero no negativo.
 
-**Invariante:** la longitud inicial implícita es `currentDocumentLength + deletedCharacters - insertedCharacters`. Debe ser no negativa; de forma equivalente, `deletedCharacters <= currentDocumentLength + insertedCharacters`.
+**Invariante correcto:** `initialLength = currentDocumentLength + deletedCharacters - insertedCharacters`. Por tanto, debe cumplirse `insertedCharacters <= currentDocumentLength + deletedCharacters`.
 
-**Corrección:** `restoreCheckpoint()` rechaza los registros que violan el balance, junto con las validaciones existentes de tipo, rango y correspondencia del snapshot. No cambia los contadores de escritura ni el formato v1.
+**Corrección aritmética:** la primera implementación publicada de esta comprobación invirtió la desigualdad y podía rechazar secuencias válidas de borrado. Se corrigió en el núcleo y en IndexedDB el 26 de noviembre de 2026. La validación ahora rechaza únicamente los registros cuya longitud inicial implícita sería negativa.
 
-**Regresión:** se crea un checkpoint válido para un documento de cinco caracteres sin ediciones; se altera `deletedCharacters` a seis. La restauración debe rechazarlo sin crear una sesión parcial.
+**Regresión corregida:** se parte de un documento actual de cinco caracteres, sin borrados, y se manipula `insertedCharacters` a seis; la longitud inicial reconstruida sería −1. Tanto la restauración como el guardado durable deben rechazar ese checkpoint sin dejar una sesión ni un registro parcial.
 
-**Validación CI dedicada:** [Live Author Monitor — run 45762924927](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924927), checkout exacto `fcb4ebca52dd43105f170d7b1621fd66da13c76e`, terminó `success`. Type-check estricto, bundle aislado, 17/17 diagnósticos, auditoría MLDB/almacenamiento y runtime build aprobados; suite monitor/panel/workspace/adaptadores **167/167**, incluida la nueva regresión (test 164); Page Lifecycle Chromium 1/1; host/editor/browser **168/168**. El benchmark procesó 100.000 commits en **502,47 ms** (~199.016 commits/s), heap 4,39 MiB a mitad y al final, crecimiento medido 0 MiB, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes.
+**Evidencia anterior:** [Live Author Monitor — run 45762924927](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924927) validó la primera iteración, pero no certifica la desigualdad corregida. No se reutiliza esa ejecución como evidencia del criterio actual.
 
-**Estado separado de la suite general:** [Motor Literario TypeScript — run 45762924925](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45762924925), sobre el mismo commit, terminó con 943/944. El único fallo fue `tests/narrative-unicode-boundaries.test.mjs:107` (test de extracción de entidades y marcas combinantes), fuera del módulo del monitor y perteneciente a cambios paralelos. Type-check aprobó. No se modificaron esos archivos ni se atribuye ese fallo al monitor.
-
+**Validación de la fórmula corregida:** pendiente de GitHub Actions para los commits de corrección y regresión.
 
 ## 99. Respuestas asíncronas de lease cercadas por generación (26 de noviembre de 2026)
 
@@ -1570,4 +1569,17 @@ La suite general del motor se valida por separado; este resultado certifica la l
 
 **Compatibilidad:** no cambia la versión ni la forma almacenada de los checkpoints; no requiere migración. Los campos de actividad continúan siendo opcionales en v1 para leer registros históricos.
  
+**Validación:** pendiente de GitHub Actions.
+
+
+## 102. Reglas de métricas completas antes de persistir checkpoints (26 de noviembre de 2026)
+
+**Hallazgo:** la recuperación ya exigía varias relaciones entre métricas, pero el validador de IndexedDB todavía podía aceptar checkpoints incompletos o matemáticamente imposibles. En concreto: pausas superiores al número de admisiones; longitud inicial implícita negativa; cambios aceptados sin resultado de commit; más muestras de latencia que resultados, ausencia de muestras cuando ya había resultados, o una última muestra distinta de `lastCommitLatencyMs`.
+
+**Corrección:** la validación previa a la transacción exige `pauseCount <= acceptedChanges + rejectedChanges`; `committedChanges + failedChanges === acceptedChanges`; `insertedCharacters <= currentDocumentLength + deletedCharacters`; y coherencia de cantidad, suma y última muestra de latencia. Se conserva la regla de rechazo de arrays dispersos mediante `Array.from()`.
+
+**Regresión:** IndexedDB recibe cinco variantes inválidas (pausas excesivas, balance de caracteres imposible, commit sin outcome, última latencia incongruente y ventana sin muestras). Todas deben rechazarse antes de persistir y la lectura posterior debe seguir sin encontrar checkpoint.
+
+**Compatibilidad:** son guards de lectura/escritura sobre la versión v1 existente; no cambian el formato ni exigen migración. Los checkpoints generados por `createCheckpoint()` cumplen estos invariantes porque solo se crean al no haber tickets pendientes.
+
 **Validación:** pendiente de GitHub Actions.

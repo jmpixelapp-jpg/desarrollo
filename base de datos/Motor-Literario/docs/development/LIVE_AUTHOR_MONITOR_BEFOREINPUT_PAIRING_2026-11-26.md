@@ -484,7 +484,7 @@ Se conectó el adaptador de captura del textarea a las señales de ciclo de vida
 - blur se escucha en el textarea.
 - Los listeners se instalan al iniciar la primera suscripción y se retiran al terminar la última o al disponer el adaptador.
 
-Ante pagehide o freeze, el adaptador suspende siempre la captura. Ante visibilitychange a oculto o blur, la suspende solo si existe un beforeinput pendiente o una composición activa; perder el foco o esconder una pestaña sin una operación abierta no rompe por sí solo la continuidad. Si el evento interrumpe un beforeinput/input pendiente, el diagnóstico es missing-input; si interrumpe solo una composición abierta, es resync-required. En todos los casos se cierran los estados incompletos y se libera la copia sombra previousText.
+Ante pagehide o freeze, el adaptador suspende siempre la captura. Ante visibilitychange a oculto o blur, suspende inmediatamente si existe una composición activa. Si solo hay un beforeinput de texto pendiente, conserva el par y expone pendingInput=true porque el input de textarea puede llegar como tarea posterior incluso después del blur o de ocultar la pestaña. Si ese input no llega y aparece otro beforeinput, se confirma missing-input; si pagehide/freeze o la retirada de la última suscripción interrumpen el stream, se exige snapshot y se libera previousText.
 
 **No hay reanudación automática en pageshow ni resume.** La vista y su polling pueden volver a estar activos, pero la fuente del documento permanece suspendida hasta que el anfitrión obtenga un snapshot autoritativo que coincida con el contenido visible y llame a resynchronize(snapshot) con el observador activo. Esto evita tratar una restauración BFCache o un regreso al foco como prueba de que no hubo cambios fuera de la secuencia observada.
 
@@ -502,7 +502,7 @@ live-author-monitor-textarea-source.test.mjs cubre:
 8. aceptación de una edición posterior con sequence y baseRevision consecutivos;
 9. retirada de listeners blur, visibilitychange, pagehide y freeze al cerrar la suscripción.
 
-Las pruebas unitarias de esta máquina usan EventTargets controlados. Además, live-author-monitor-browser.test.mjs ahora ejecuta una regresión en Chromium con automatización de teclado: observa un beforeinput confiable, un listener posterior cancela la acción por defecto, verifica que no aparece input y luego provoca blur real del textarea. El adaptador debe emitir missing-input, conservar cero deltas y suspenderse. Esta prueba acredita el pipeline DOM de Chromium bajo automatización, no un teclado físico ni un proveedor IME del sistema operativo. Tampoco simula un congelamiento físico del proceso ni una entrada real en BFCache; pagehide/freeze siguen cubiertos por pruebas de estado separadas.
+Las pruebas unitarias de esta máquina usan EventTargets controlados. Además, live-author-monitor-browser.test.mjs ahora ejecuta una regresión en Chromium con automatización de teclado: observa un beforeinput confiable, un listener posterior cancela la acción por defecto, verifica que no aparece input y luego provoca blur real del textarea. La cancelación final debe liberar pendingInput sin emitir delta ni error; el blur posterior no suspende una fuente que permanece sincronizada. Esta prueba acredita el pipeline DOM de Chromium bajo automatización, no un teclado físico ni un proveedor IME del sistema operativo. Tampoco simula un congelamiento físico del proceso ni una entrada real en BFCache; pagehide/freeze siguen cubiertos por pruebas de estado separadas.
 
 **Estado de validación:** el código y la regresión se publicaron en main; la ejecución CI sobre estos commits no está confirmada todavía. No se extrapolan aquí los resultados de CI de revisiones anteriores.
 
@@ -536,3 +536,10 @@ Las pruebas cubren:
 - composición activa que pierde el foco, suspendida de inmediato;
 - Chromium con teclado automatizado: el listener llama preventDefault() y element.blur() dentro de la misma propagación, verifica un blur y cero input, y confirma que la microtarea libera pendingInput sin diagnóstico.
 
+## Input pendiente durante blur y ocultación temporal — 26 de noviembre de 2026
+
+Se amplió la semántica de continuidad para reflejar el procesamiento de tareas del navegador: el input de un textarea puede entregarse en una tarea posterior. Por eso, blur o visibilitychange a oculto no invalidan por sí solos un beforeinput de texto ordinario que aún espera input. La fuente expone pendingInput=true en getState() y permite que ese input tardío complete la edición cuando llegue.
+
+Si llega otro beforeinput primero, se confirma missing-input sin publicar delta especulativo. Si la página entra en pagehide/freeze o se retira la última suscripción, se invalida la continuidad y se exige snapshot. La pérdida de foco u ocultación mientras compositionActive=true sí suspende de inmediato con resync-required.
+
+La regresión unitaria cubre tanto input tardío tras blur como input tardío tras ocultar/mostrar la pestaña. La prueba no simula que el sistema operativo entregue un IME físico; valida el estado del adaptador bajo una secuencia de eventos controlada.

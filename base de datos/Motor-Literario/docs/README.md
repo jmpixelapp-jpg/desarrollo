@@ -6,6 +6,7 @@
 - [Progreso del análisis literario e inteligencia narrativa](development/NARRATIVE_ANALYSIS_PROGRESS.md): entregas de análisis, integridad de sincronización, cobertura de pruebas y validación CI.
 - [Integridad de payloads y sincronización narrativa](architecture/INTEGRIDAD_DE_PAYLOADS_Y_SINCRONIZACION_NARRATIVA.md): canonicalización JSON determinista, huellas de consistencia, límites de entrada y límites de seguridad.
 - [Análisis de afirmaciones narrativas](architecture/ANALISIS_DE_AFIRMACIONES_NARRATIVAS.md): extracción conservadora de atributos con evidencia, offsets, revisiones y referencias temporales explícitas.\n- [Consistencia temporal de afirmaciones](architecture/CONSISTENCIA_TEMPORAL_DE_AFIRMACIONES.md): clasificación explicable de conflictos, evolución temporal y referencias incomparables.\n- [Grafo unificado de conocimiento narrativo](architecture/GRAFO_CONOCIMIENTO_NARRATIVO.md): composición de entidades, relaciones, eventos, ideas, afirmaciones y evidencias por proyecto.
+- [Actualización incremental del grafo narrativo](architecture/GRAFO_CONOCIMIENTO_NARRATIVO_INCREMENTAL.md): snapshots por documento, invalidación selectiva y reutilización de contribuciones.
 
 ## Integración con la aplicación anfitriona
 

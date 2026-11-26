@@ -4174,10 +4174,13 @@ export class IndexedDbProjectStore implements ProjectStore {
   /** Resuelve hasta 128 ideas archivadas por clave compuesta, sin cargar la biblioteca completa. */
   async loadPersonalIdeasByKeys(
     writerId: string,
-    references: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[]
+    references: readonly Pick<PersonalIdeaLibraryCursor, "sourceProjectId" | "ideaId">[],
+    expectedLibraryVersion?: number
   ): Promise<readonly PersonalIdeaLibraryEntry[]> {
     if (typeof writerId !== "string" || !writerId.trim() || writerId.length > 256 ||
-        !Array.isArray(references) || references.length > 128) {
+        !Array.isArray(references) || references.length > 128 ||
+        (expectedLibraryVersion !== undefined &&
+          (!Number.isSafeInteger(expectedLibraryVersion) || expectedLibraryVersion < 0))) {
       throw new Error("Parámetros inválidos para la lectura agrupada de la biblioteca personal.");
     }
     const seen = new Set<string>();
@@ -4194,20 +4197,40 @@ export class IndexedDbProjectStore implements ProjectStore {
     if (references.length === 0) return [];
 
     const db = await this.open();
-    const transaction = db.transaction(PERSONAL_IDEAS, "readonly");
+    const transaction = db.transaction(
+      [PERSONAL_IDEAS, WRITER_LIBRARY_VERSIONS], "readonly"
+    );
     const store = transaction.objectStore(PERSONAL_IDEAS);
+    const versionRequest = transaction.objectStore(WRITER_LIBRARY_VERSIONS).get(writerId);
     const requests = references.map(reference =>
       store.get([writerId, reference.sourceProjectId, reference.ideaId])
     );
     const results: (PersonalIdeaLibraryEntry | undefined)[] = new Array(references.length);
+    let actualLibraryVersion: number | undefined;
+    let requestError: Error | undefined;
     return new Promise((resolve, reject) => {
       let finished = false;
-      let requestError: Error | undefined;
       const fail = (error: unknown): void => {
         if (finished) return;
         finished = true;
         try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
         reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      versionRequest.onsuccess = () => {
+        const stored = versionRequest.result as {
+          readonly writerId?: unknown;
+          readonly version?: unknown;
+        } | undefined;
+        if (stored && (stored.writerId !== writerId ||
+            !Number.isSafeInteger(stored.version) || (stored.version as number) < 0)) {
+          fail(new Error("La generación durable de la biblioteca está malformada."));
+          return;
+        }
+        actualLibraryVersion = stored ? stored.version as number : 0;
+      };
+      versionRequest.onerror = () => {
+        requestError = versionRequest.error ?? new Error("No se pudo leer la generación de la biblioteca.");
+        try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
       };
       requests.forEach((request, index) => {
         request.onsuccess = () => {
@@ -4223,6 +4246,15 @@ export class IndexedDbProjectStore implements ProjectStore {
         finished = true;
         if (requestError) {
           reject(requestError);
+          return;
+        }
+        if (actualLibraryVersion === undefined) {
+          reject(new Error("La lectura agrupada no pudo establecer la generación de biblioteca."));
+          return;
+        }
+        if (expectedLibraryVersion !== undefined &&
+            actualLibraryVersion !== expectedLibraryVersion) {
+          reject(new Error("La biblioteca cambió durante la resolución de vínculos; reinicia la paginación."));
           return;
         }
         const entries = results.filter(

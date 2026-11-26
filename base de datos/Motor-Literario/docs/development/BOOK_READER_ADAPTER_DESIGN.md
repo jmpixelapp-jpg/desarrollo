@@ -119,3 +119,6 @@ Se ha añadido `typescript/src/epub-reader.ts` con `EpubBookReader` y `createEpu
 - Usa UTF-8 estricto y DecompressionStream para deflate-raw.
 
 Las pruebas de fixture cubren metadatos, orden, extracción de texto, notas, localizadores, rutas inseguras, mimetype incorrecto y corrupción CRC. Aún falta ejecutar la suite en el entorno del proyecto y contrastar con un corpus de EPUB reales. La extracción XHTML es estructural y conservadora, pero todavía no implementa todos los casos de HTML5, codificaciones XML alternativas, nav/NCX para jerarquía editorial, CSS de contenido oculto, overlays ni recursos remotos.
+
+
+La inspección del EPUB ahora recorre los documentos del spine y devuelve número de bloques extraídos, lista de documentos sin texto y advertencias por metadatos ausentes o documentos vacíos. Esto permite una etapa previa de control de calidad en la importación. No equivale todavía a un porcentaje de integridad del libro: para calcularlo se necesita una medida de contenido esperado que el formato realmente permita verificar.

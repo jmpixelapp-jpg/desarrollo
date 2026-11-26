@@ -480,6 +480,6 @@ La comparación:
 - Usa un vocabulario limitado de equivalencias y oposiciones verbales expresas. No generaliza una contradicción a partir de verbos sin relación demostrable.
 - Conserva la evidencia de intención y acción por separado y deja todos los resultados como candidatos.
 
-Se agregan nueve pruebas unitarias y una prueba de integración del pipeline para un objetivo de protección seguido por una acción explícita de traición. Las pruebas cubren además objetivos no coincidentes y evidencias obsoletas.
+Se agregan diez pruebas unitarias y una prueba de integración del pipeline para un objetivo de protección seguido por una acción explícita de traición. Las pruebas cubren además objetivos no coincidentes y evidencias obsoletas.
 
 **Límites:** una acción opuesta no demuestra engaño, hipocresía, intención oculta ni que el personaje haya abandonado su meta. Una acción negada no se trata como realizada. La comparación no cruza capítulos ni revisiones en esta fase; tampoco evalúa acciones pronominales todavía. Type-check, build y suite completa requieren ejecución CI sobre el head actualizado.

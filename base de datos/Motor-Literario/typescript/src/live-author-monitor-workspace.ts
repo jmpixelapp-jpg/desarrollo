@@ -185,12 +185,10 @@ function resolveDocumentLabel(
   getLabel: LiveAuthorMonitorWorkspaceOptions["getDocumentLabel"]
 ): string {
   if (!getLabel) return documentId;
-  try {
-    const label = getLabel(documentId);
-    return typeof label === "string" && label.trim() ? label.trim() : documentId;
-  } catch {
-    return documentId;
-  }
+  // El error se captura por documento en upsertSafely para mostrar un aviso
+  // local sin propagarlo al ciclo de escritura.
+  const label = getLabel(documentId);
+  return typeof label === "string" && label.trim() ? label.trim() : documentId;
 }
 
 /**
@@ -219,6 +217,8 @@ export function mountLiveAuthorMonitorWorkspace(
   const integer = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
   const decimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   const cards = new Map<string, WorkspaceCard>();
+  // Mantiene fallos locales de render por documento mientras la tarjeta exista.
+  const workspaceRenderErrors = new Map<string, number>();
   let disposed = false;
   let unsubscribe: (() => void) | undefined;
   let cancelRefresh: (() => void) | undefined;
@@ -348,8 +348,12 @@ export function mountLiveAuthorMonitorWorkspace(
     card.coordination.setAttribute("data-level", !diagnostics ? "warning" :
       diagnostics.leaseState === "error" || diagnostics.leaseState === "lost" ||
         diagnostics.leaseState === "expired" ? "error" : "info");
-    card.listenerErrors.textContent = formatLiveAuthorMonitorListenerErrorStatus(snapshot);
-    card.listenerErrors.setAttribute("data-level", snapshot.listenerErrors > 0 ? "warning" : "info");
+    const viewErrors = workspaceRenderErrors.get(snapshot.documentId) ?? 0;
+    card.listenerErrors.textContent = formatLiveAuthorMonitorListenerErrorStatus(
+      snapshot, viewErrors, locale
+    );
+    card.listenerErrors.setAttribute("data-level",
+      snapshot.listenerErrors + viewErrors > 0 ? "warning" : "info");
     const latest = Math.max(0, snapshot.latestSequence);
     const durable = Math.max(0, snapshot.durableSequence);
     const percentage = latest === 0 ? 100 : Math.max(0, Math.min(100, durable / latest * 100));
@@ -370,6 +374,29 @@ export function mountLiveAuthorMonitorWorkspace(
     updateCard(snapshot, card);
   };
 
+  const reportWorkspaceRenderError = (snapshot: LiveAuthorMonitorSnapshot): void => {
+    const failures = (workspaceRenderErrors.get(snapshot.documentId) ?? 0) + 1;
+    workspaceRenderErrors.set(snapshot.documentId, failures);
+    const card = cards.get(snapshot.documentId);
+    if (!card) return;
+    try {
+      card.listenerErrors.textContent = formatLiveAuthorMonitorListenerErrorStatus(
+        snapshot, failures, locale
+      );
+      card.listenerErrors.setAttribute("data-level", "warning");
+    } catch {
+      // El aviso local tampoco debe interrumpir el resto del workspace.
+    }
+  };
+
+  const upsertSafely = (snapshot: LiveAuthorMonitorSnapshot): void => {
+    try {
+      upsert(snapshot);
+    } catch {
+      reportWorkspaceRenderError(snapshot);
+    }
+  };
+
   const updateCount = (): void => {
     const total = cards.size;
     count.textContent = integer.format(total) + (total === 1 ? " documento observado" : " documentos observados");
@@ -384,12 +411,13 @@ export function mountLiveAuthorMonitorWorkspace(
       const currentIds = new Set<string>();
       for (const snapshot of snapshots) {
         currentIds.add(snapshot.documentId);
-        upsert(snapshot);
+        upsertSafely(snapshot);
       }
       for (const [documentId, card] of cards) {
         if (!currentIds.has(documentId)) {
           card.root.remove();
           cards.delete(documentId);
+          workspaceRenderErrors.delete(documentId);
         }
       }
       updateCount();
@@ -401,7 +429,7 @@ export function mountLiveAuthorMonitorWorkspace(
   try {
     unsubscribe = hostApi.subscribeLiveAuthorMonitor(snapshot => {
       if (disposed) return;
-      upsert(snapshot);
+      upsertSafely(snapshot);
       updateCount();
     });
     reconcile();
@@ -425,6 +453,7 @@ export function mountLiveAuthorMonitorWorkspace(
     try { unsubscribe?.(); } finally {
       try { cancelRefresh?.(); } finally {
         cards.clear();
+        workspaceRenderErrors.clear();
         root.remove();
       }
     }

@@ -110,10 +110,10 @@ function equalOccurrence(
 
 function normalizeExactPhrase(value: string): string {
   return value.normalize("NFKD")
-    .replace(/\\p{M}/gu, "")
+    .replace(/\p{M}/gu, "")
     .toLocaleLowerCase("es")
-    .replace(/[\\p{P}\\p{S}]+/gu, " ")
-    .replace(/\\s+/gu, " ")
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .replace(/\s+/gu, " ")
     .trim()
     .normalize("NFKC");
 }
@@ -130,10 +130,10 @@ function validateOccurrence(value: NarrativeIdeaOccurrenceReference): void {
       !["affirmed", "negated", "conditional", "hypothetical"].includes(value.polarity) ||
       !value.evidence || value.evidence.documentId !== value.documentId ||
       value.evidence.revision !== value.revision ||
-      !value.evidence.excerpt.replace(/\\s+/gu, " ").trim().includes(value.text.replace(/\\s+/gu, " ").trim()) ||
+      typeof value.evidence.excerpt !== "string" ||
+      !value.evidence.excerpt.replace(/\s+/gu, " ").trim().includes(value.text.replace(/\s+/gu, " ").trim()) ||
       !Number.isSafeInteger(value.evidence.start) || value.evidence.start < 0 ||
       !Number.isSafeInteger(value.evidence.end) || value.evidence.end <= value.evidence.start ||
-      typeof value.evidence.excerpt !== "string" ||
       value.evidence.excerpt.length > 2_000_000) {
     throw new Error("El índice de continuidad contiene una aparición o evidencia inválida.");
   }

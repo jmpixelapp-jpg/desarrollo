@@ -2212,7 +2212,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 22);
+      assert.equal(version, 24);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2243,6 +2243,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "writer-library-finalization-receipts", keyPath: ["writerId", "sourceProjectId", "receiptId"] },
       { name: "narrative-assertions", keyPath: ["projectId", "id"] },
       { name: "document-diagnostics", keyPath: ["projectId", "documentId"] },
+      { name: "live-author-monitor-checkpoints", keyPath: ["projectId", "documentId"] },
+      { name: "live-author-monitor-leases", keyPath: ["projectId", "documentId"] },
       { name: "manuscript-fragments", keyPath: ["projectId", "id"] },
       { name: "record-attributes", keyPath: ["projectId", "id"] },
       { name: "relation-attributes", keyPath: ["projectId", "id"] },
@@ -2293,6 +2295,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["narrative-assertions", "by-project"],
       ["narrative-assertions", "by-entity"],
       ["document-diagnostics", "by-project"],
+      ["live-author-monitor-checkpoints", "by-project"],
+      ["live-author-monitor-leases", "by-project"],
       ["manuscript-fragments", "by-project"],
       ["manuscript-fragments", "by-document-revision"],
       ["manuscript-fragments", "by-parent"],
@@ -2452,7 +2456,7 @@ test("IndexedDB repara índices ausentes en object stores de una base anterior",
   try {
     const store = new IndexedDbProjectStore();
     assert.deepEqual(await store.loadEntities("migration-test"), []);
-    assert.equal(openedVersion, 22);
+    assert.equal(openedVersion, 24);
     const expected = [
       ["project-settings", "by-project"],
       ["language-profiles", "by-project"],
@@ -10254,12 +10258,14 @@ test("IndexedDB sincroniza solo la identidad del proyecto entre pestañas y libe
       type: "motor-literario:narrative-change",
       projectId: "book-a"
     }]);
+    assert.equal(FakeBroadcastChannel.instances[1].closed, true);
 
     unsubscribe();
     assert.equal(FakeBroadcastChannel.instances[0].closed, true);
     readerStore.publishNarrativeChange("book-b");
     await new Promise(resolve => queueMicrotask(resolve));
     assert.deepEqual(received, ["book-a"]);
+    assert.equal(FakeBroadcastChannel.instances[2].closed, true);
   } finally {
     if (originalBroadcastChannel) {
       Object.defineProperty(globalThis, "BroadcastChannel", originalBroadcastChannel);

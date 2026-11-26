@@ -271,9 +271,15 @@ export function discoverNarrativeObservationCandidates(
         const localStart = baseOffset + segment.start + match.index;
         const start = baseOffset + segment.start;
         const end = baseOffset + segment.end;
-        const subjectCandidate = mentionedCharacters.length === 1
+        const subjectCandidates = characters.filter(entity =>
+          [entity.canonicalName, ...entity.aliases].some(name =>
+            sentence.toLocaleLowerCase("es").startsWith(name.toLocaleLowerCase("es")) &&
+            (sentence.length === name.length || !/[\\p{L}\\p{M}\\p{N}_]/u.test(sentence[name.length]!))
+          )
+        );
+        const subjectCandidate = subjectCandidates.length === 1
           ? (() => {
-              const entity = mentionedCharacters[0]!;
+              const entity = subjectCandidates[0]!;
               const names = [entity.canonicalName, ...entity.aliases]
                 .filter(name => name.trim().length > 0)
                 .sort((a, b) => b.length - a.length);

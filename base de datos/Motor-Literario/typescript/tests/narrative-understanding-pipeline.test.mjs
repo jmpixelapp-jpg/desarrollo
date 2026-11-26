@@ -51,3 +51,45 @@ test("rechaza entidades de otro proyecto antes de ejecutar extractores", () => {
     entities:[{ ...entities[0], projectId:"other" }]
   }));
 });
+
+
+test("integra resolución pronominal y atribuye acciones sin perder offsets absolutos", () => {
+  const text = "Mara llegó. Ella protegió a Elian.";
+  const nameStart = 0;
+  const pronounStart = text.indexOf("Ella");
+  const result = understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-pronouns", revision:2,
+    text, entities, baseOffset:800,
+    characterMentions:[{
+      characterId:"mara", documentId:"chapter-pronouns", revision:2,
+      start:800 + nameStart, end:800 + 4,
+      grammaticalNumber:"singular", grammaticalGender:"feminine"
+    }],
+    pronounReferences:[{
+      id:"pronoun-ella", documentId:"chapter-pronouns", revision:2,
+      start:800 + pronounStart, end:800 + pronounStart + 4,
+      surface:"Ella", grammaticalNumber:"singular", grammaticalGender:"feminine"
+    }]
+  });
+  assert.equal(result.pronounResolutions.length, 1);
+  assert.equal(result.pronounResolutions[0].status, "resolved");
+  assert.equal(result.pronounResolutions[0].characterId, "mara");
+  assert.equal(result.pronounActions.length, 1);
+  assert.equal(result.pronounActions[0].actorEntityId, "mara");
+  assert.equal(result.pronounActions[0].action, "protegió");
+  assert.equal(result.pronounActions[0].evidence.start, 800 + pronounStart);
+  assert.equal(result.pronounActions[0].evidence.documentId, "chapter-pronouns");
+});
+
+test("rechaza referencias pronominales cuya superficie no coincide con el texto", () => {
+  assert.throws(() => understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-pronouns", revision:2,
+    text:"Mara llegó. Ella protegió a Elian.",
+    entities,
+    pronounReferences:[{
+      id:"wrong-surface", documentId:"chapter-pronouns", revision:2,
+      start:13, end:17, surface:"Él",
+      grammaticalNumber:"singular", grammaticalGender:"masculine"
+    }]
+  }));
+});

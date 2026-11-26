@@ -751,3 +751,6 @@ Un aborto después de `checkpointStore.put()` debe revertir toda la transacción
 Cuando el navegador notifica `IDBDatabase.onclose`, el almacén elimina la promesa de conexión cacheada. Sin esa invalidación, operaciones futuras podrían seguir usando una conexión cerrada. La regresión de cierre externo dispara el evento `close` tras cerrar una conexión, lee dos veces el checkpoint y verifica que la primera lectura haya reabierto la base y la segunda reutilice la conexión nueva.
 
 Estas pruebas deterministas no equivalen a un apagado forzado de sistema operativo ni a pérdida real del almacenamiento; esos casos requieren pruebas de navegador/dispositivo adicionales.
+
+
+**Validación del aborto:** [run 45765202154](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45765202154) aprobó el rollback después de encolar el put (test 115); el checkpoint previo y la capacidad de escritura posterior quedaron verificados.

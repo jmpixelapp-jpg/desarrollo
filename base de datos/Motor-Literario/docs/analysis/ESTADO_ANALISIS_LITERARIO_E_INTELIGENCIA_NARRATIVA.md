@@ -325,3 +325,16 @@ La documentación debe seguir separando tres estados: implementación presente, 
 - **Verificación observada en GitHub Actions, ejecución 2753:** `Type-check` completado correctamente; compilación Vite completada; las pruebas específicas nuevas de ingesta estructural, TXT/Markdown y validación UTF-8 pasaron. La suite general registró 949 aprobadas y 39 fallidas de 988; por tanto, no se declara `npm test` verde. Los fallos incluyen rutas de entidades, relaciones, acontecimientos y proyecciones narrativas tras cambios concurrentes en `narrative-knowledge.ts`; ese frente requiere diagnóstico coordinado y no se considera resuelto por esta tanda.
 
 **Pendiente inmediato:** revisar junto con la línea de extracción de entidades el conjunto de 39 regresiones de la ejecución 2753, sin sobrescribir trabajo concurrente; mantener el lector TXT/Markdown y el analizador estructural aislados; después diseñar adaptadores EPUB/PDF/DOCX con procedencia por bloque y página antes de añadir inferencias narrativas de mayor nivel.
+
+
+### Tanda 26-11-2026 — integración de ingesta con observaciones ligadas a entidades
+
+- `NarrativeBookIngestionInput.entities` acepta fichas previamente identificadas del mismo proyecto; la validación rechaza entidades de otros libros.
+- `ingestNarrativeBookText` ahora devuelve `observations`: acciones detectadas en frases que mencionan personajes conocidos, con candidatos pronominales, roles no confirmados y evidencia exacta del verbo.
+- `observationStatus` distingue `extracted`, `no-entities` y `omitted-text-budget`. El descubrimiento de observaciones respeta el presupuesto de 2.000.000 unidades UTF-16 del extractor; no presenta una muestra parcial como análisis completo.
+- Se añadieron regresiones de extremo a extremo para «Ana cruzó el puente», offsets absolutos del verbo, asociación con la ficha de Ana y aislamiento de entidades por proyecto.
+- Se ajustó `HostEngineApi.extractNarrativeKnowledge` para diferenciar fragmentos de edición en vivo de extracciones completas: el flujo incremental aplaza nombres que todavía terminan en el borde del fragmento, mientras la extracción completa puede aceptar el último nombre del documento. El centinela de borde no se conserva en la evidencia publicada.
+- Commits de código y pruebas: `fc51727` (observaciones vinculadas), `9b580a1` (pruebas), `7d87458` (protección de nombres parciales en edición viva). Documentación: `288158c`, `f287202` y `a110eec`.
+- **Verificación:** en la ejecución 2767, TypeScript y build pasaron; 990 de 991 pruebas pasaron y la única regresión restante era la conservación de nombres incompletos durante edición viva. Se publicó la corrección `7d87458`; la ejecución 2768 está en curso y debe confirmar el resultado antes de declarar la suite completa verde.
+
+**Siguiente frente:** completar el diagnóstico de extracción de entidades con la línea de trabajo paralela sin sobrescribirla; después, implementar adaptadores EPUB/PDF/DOCX con trazabilidad de página, sección y bloque, y ampliar la resolución de participantes, causalidad y continuidad entre capítulos.

@@ -1025,6 +1025,21 @@ export class HostEngineApi {
         }
       }
 
+      const rawAnalysis = analyzeNarrativeIdeaCrossDocumentRelations({
+        projectId: project.projectId,
+        ideaCandidates: selectedCandidates,
+        ...(orderedDocumentIds ? { orderedDocumentIds } : {})
+      });
+      const sourceTruncated = rawAnalysis.truncated ||
+        candidateBudgetTruncated || anyDocumentTruncated;
+      const crossDocumentAnalysis = sourceTruncated
+        ? { ...rawAnalysis, truncated: true }
+        : rawAnalysis;
+      const evolution = buildNarrativeIdeaEvolution({
+        projectId: project.projectId,
+        crossDocumentAnalysis
+      });
+
       // Evita publicar una mezcla de revisiones si otro escritor editó un
       // documento mientras se leían los cuerpos del proyecto.
       const latestMetadata = await store.loadDocumentMetadata(project.projectId);
@@ -1048,21 +1063,6 @@ export class HostEngineApi {
           throw new Error("Una revisión avanzó durante la reconciliación de continuidad; se conserva el índice anterior.");
         }
       }
-
-      const rawAnalysis = analyzeNarrativeIdeaCrossDocumentRelations({
-        projectId: project.projectId,
-        ideaCandidates: selectedCandidates,
-        ...(orderedDocumentIds ? { orderedDocumentIds } : {})
-      });
-      const sourceTruncated = rawAnalysis.truncated ||
-        candidateBudgetTruncated || anyDocumentTruncated;
-      const crossDocumentAnalysis = sourceTruncated
-        ? { ...rawAnalysis, truncated: true }
-        : rawAnalysis;
-      const evolution = buildNarrativeIdeaEvolution({
-        projectId: project.projectId,
-        crossDocumentAnalysis
-      });
 
       if (this.disposed || this.project?.projectId !== project.projectId) return;
       const updated = await updateNarrativeIdeaContinuityIndexIncrementally(store, {

@@ -223,8 +223,8 @@ test("diario rechaza huecos, replay y colisión de operationId sin avanzar curso
 
     const first = await make("op-1", 1);
     await journal.accept(first);
-    await assert.rejects(() => journal.accept(await make("op-old", 1)), /Replay/u);
-    await assert.rejects(() => journal.accept(await make("op-1", 2, { changed: true })), /Conflicto/u);
+    await assert.rejects(async () => journal.accept(await make("op-old", 1)), /Replay/u);
+    await assert.rejects(async () => journal.accept(await make("op-1", 2, { changed: true })), /Conflicto/u);
     assert.equal(await journal.getLastSequence("project-b", "writer-b"), 1);
     journal.close();
   } finally {

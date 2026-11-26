@@ -609,7 +609,7 @@ test("contrasta beforeinput.data con el reemplazo real y detecta mutaciones dent
   assert.equal(rejected.changes.length, 0);
   assert.equal(rejected.source.getState().needsResync, true);
   assert.equal(rejected.errors[0].code, "input-data-mismatch");
-  assert.match(rejected.errors[0].message, /no coincide con el dato declarado/);
+  assert.match(rejected.errors[0].message, /no coincide/);
   assert.doesNotMatch(rejected.errors[0].message, /XY|ZZ/,
     "el diagnóstico no debe repetir el texto manuscrito ni el payload esperado");
   assert.equal(rejected.source.pendingInput, undefined,

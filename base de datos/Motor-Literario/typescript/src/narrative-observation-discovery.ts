@@ -43,6 +43,8 @@ export interface NarrativeObservationCandidate {
   readonly polarity: "affirmed" | "negated";
   readonly confidence: "medium";
   readonly reviewStatus: "candidate";
+  /** Evidencia exacta del verbo; evidence conserva el contexto completo de la oración. */
+  readonly actionEvidence: TextEvidence;
   readonly evidence: TextEvidence;
 }
 
@@ -296,6 +298,13 @@ export function discoverNarrativeObservationCandidates(
           polarity: before ? "negated" : "affirmed",
           confidence: "medium",
           reviewStatus: "candidate",
+          actionEvidence: {
+            documentId: input.documentId,
+            revision: input.revision,
+            start: localStart,
+            end: localStart + surface.length,
+            excerpt: surface
+          },
           evidence: {
             documentId: input.documentId,
             revision: input.revision,
@@ -309,7 +318,7 @@ export function discoverNarrativeObservationCandidates(
   }
 
   return [...results.values()]
-    .sort((a, b) => a.evidence.start - b.evidence.start ||
-      a.action.localeCompare(b.action) || a.id.localeCompare(b.id))
+    .sort((a, b) => a.actionEvidence.start - b.actionEvidence.start ||
+      a.id.localeCompare(b.id))
     .slice(0, MAX_NARRATIVE_OBSERVATION_CANDIDATES);
 }

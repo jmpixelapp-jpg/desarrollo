@@ -130,3 +130,24 @@ test("limita la negación al contexto de la acción y no a la oración anterior"
   assert.equal(arrived?.polarity, "affirmed");
   assert.equal(departed?.polarity, "negated");
 });
+
+test("la ingesta enlaza acciones solo mediante marcadores textuales explícitos", () => {
+  const character = {
+    projectId: "p", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const text = "Ana entró en la casa. Después Ana corrió hacia la puerta.";
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "chapter-links", revision: 2,
+    text, entities: [character]
+  });
+  assert.equal(result.observations.length, 2);
+  assert.equal(result.actionLinks.length, 1);
+  assert.equal(result.actionLinks[0].markerKind, "temporal");
+  assert.equal(result.actionLinks[0].marker, "Después");
+  assert.equal(text.slice(
+    result.actionLinks[0].evidence.start,
+    result.actionLinks[0].evidence.end
+  ), "Después");
+});

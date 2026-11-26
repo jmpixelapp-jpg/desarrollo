@@ -58,6 +58,8 @@ jobs:
           node-version: 22
       - name: Install development tools
         run: npm install --no-audit --no-fund
+      - name: Type-check isolated live author monitor and UI
+        run: npx tsc --noEmit --project tsconfig.live-author-monitor.json
       - name: Build isolated live author monitor test bundle
         run: npx vite build --config vite.monitor.config.ts
       - name: Run isolated diagnostic recovery regressions

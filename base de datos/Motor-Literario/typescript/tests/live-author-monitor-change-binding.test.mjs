@@ -448,7 +448,7 @@ test("el enlace FIFO solo reanuda TextAreaSource después de volver a suscribir 
 
   element.edit(5, 5, "abcxyz", "z");
   assert.deepEqual(submitted, [1, 3]);
-  assert.deepEqual(admissions, [[3, "queued"]]);
+  assert.deepEqual(admissions, [[1, "rejected"], [3, "queued"]]);
   assert.equal(source.getState().sequence, 3);
   assert.equal(source.getState().revision, 3);
 

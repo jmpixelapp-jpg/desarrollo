@@ -6,6 +6,8 @@ Esta carpeta contiene la implementación definitiva en TypeScript. El código Ru
 
 **Seguimiento del análisis literario:** consulte el [estado de análisis literario e inteligencia narrativa](../docs/analysis/ESTADO_ANALISIS_LITERARIO_E_INTELIGENCIA_NARRATIVA.md), que registra alcance, contratos, límites, pruebas y pendientes.
 
+**Ingesta de libros:** consulte [Ingesta y comprensión estructural de libros](../docs/analysis/INGESTA_Y_COMPRENSION_ESTRUCTURAL_DE_LIBROS.md), que documenta la segmentación, las señales respaldadas por evidencia y los límites de la primera capa de adquisición.
+
 ## Principios
 
 - Sin motores lingüísticos, correctores, servicios ni bibliotecas de terceros en tiempo de ejecución.

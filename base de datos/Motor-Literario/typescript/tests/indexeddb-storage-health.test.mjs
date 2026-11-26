@@ -26,6 +26,7 @@ test("diagnostica IndexedDB sin mutar datos y respeta las APIs opcionales del na
   assert.equal(baseline.databaseName, "motor-literario-local");
   assert.equal(baseline.databaseVersion, 25);
   assert.equal(baseline.recordCounts["sync-outbox"], 0);
+  assert.equal(baseline.recordCounts["sync-device-sequences"], 0);
   assert.equal(baseline.recordCounts.documents, 1);
   assert.equal(baseline.recordCounts.changes, 0);
   assert.deepEqual(after, before);

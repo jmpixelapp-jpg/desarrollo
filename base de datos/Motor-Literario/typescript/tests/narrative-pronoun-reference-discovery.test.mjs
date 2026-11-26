@@ -142,7 +142,7 @@ test("recorre segmentos de forma incremental y conserva evidencia en documentos 
   for (let index = 0; index < 2_500; index++) {
     chunks.push("La tormenta avanzó. Ella esperó.");
   }
-  const text = chunks.join("\\n");
+  const text = chunks.join("\n");
   const references = discover(text, { entities: [ana] });
   assert.equal(references.length, 2_000);
   for (const reference of references) {

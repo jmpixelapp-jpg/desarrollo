@@ -4,13 +4,9 @@ const monitorModule = await import("../dist-monitor/live-author-monitor.js")
   .catch(() => import("../dist/motor-literario.js"));
 const { LiveAuthorMonitorTextAreaSource } = monitorModule;
 
-class FakeTextArea {
-  value;
-  selectionStart = 0;
-  selectionEnd = 0;
+class FakeEventTarget {
   listeners = new Map();
-
-  constructor(value) { this.value = value; }
+  defaultView;
 
   addEventListener(type, listener) {
     const current = this.listeners.get(type) ?? new Set();
@@ -20,6 +16,26 @@ class FakeTextArea {
 
   removeEventListener(type, listener) {
     this.listeners.get(type)?.delete(listener);
+  }
+
+  emit(type, event = {}) {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) listener(event);
+  }
+
+  listenerCount(type) { return this.listeners.get(type)?.size ?? 0; }
+}
+
+class FakeTextArea extends FakeEventTarget {
+  value;
+  selectionStart = 0;
+  selectionEnd = 0;
+  ownerDocument;
+
+  constructor(value) {
+    super();
+    this.value = value;
+    this.ownerDocument = new FakeEventTarget();
+    this.ownerDocument.defaultView = new FakeEventTarget();
   }
 
   emitBeforeInput(inputType, isComposing = false, isTrusted = true, data = null) {
@@ -271,8 +287,66 @@ test("desmonta listeners y exige snapshot autoritativo tras un intervalo sin obs
   assert.equal(f.changes[0].baseRevision, 5);
 
   stopAgain();
+  assert.equal(f.element.ownerDocument.listenerCount("freeze"), 0);
+  assert.equal(f.element.ownerDocument.defaultView.listenerCount("pagehide"), 0);
   f.source.dispose();
   assert.throws(() => f.source.subscribeChanges(() => {}), /ya dispuesto/);
+});
+
+test("pagehide y freeze suspenden la captura y exigen snapshot tras volver", () => {
+  const f = fixture("abc", 0, 0);
+  const documentTarget = f.element.ownerDocument;
+  const viewTarget = documentTarget.defaultView;
+
+  assert.equal(documentTarget.listenerCount("freeze"), 1);
+  assert.equal(viewTarget.listenerCount("pagehide"), 1);
+
+  // Simula una composición abierta cuando la página entra en BFCache.
+  f.element.emitCompositionStart();
+  assert.equal(f.source.getState().compositionActive, true);
+  viewTarget.emit("pagehide", { persisted: true });
+
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.source.getState().compositionActive, false);
+  assert.equal(f.source.previousText, "");
+  assert.equal(f.errors[0].code, "resync-required");
+
+  // freeze duplicado no emite diagnósticos repetidos ni reanuda la fuente.
+  documentTarget.emit("freeze");
+  assert.equal(f.errors.length, 1);
+
+  f.element.value = "abc日本";
+  f.element.selectionStart = 5;
+  f.element.selectionEnd = 5;
+  f.element.emitBeforeInput("insertText");
+  f.element.value = "abc日本!";
+  f.element.emitInput(false, "insertText");
+  assert.equal(f.changes.length, 0,
+    "la página restaurada no captura hasta recibir un snapshot autoritativo");
+
+  const recovered = f.source.resynchronize({
+    documentId: "chapter-1",
+    text: "abc日本!",
+    revision: 7,
+    sequence: 12
+  });
+  assert.equal(recovered.needsResync, false);
+
+  f.element.edit({
+    start: 6,
+    end: 6,
+    nextValue: "abc日本!?",
+    inputType: "insertText",
+    data: "?"
+  });
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].sequence, 13);
+  assert.equal(f.changes[0].baseRevision, 7);
+
+  f.stop();
+  assert.equal(documentTarget.listenerCount("freeze"), 0);
+  assert.equal(viewTarget.listenerCount("pagehide"), 0);
+  f.source.dispose();
 });
 
 test("no inicia la primera suscripción si el textarea ya difiere del snapshot", () => {

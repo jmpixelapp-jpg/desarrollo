@@ -142,3 +142,7 @@ El adaptador de `textarea` exige ahora `Event.isTrusted === true` en `beforeinpu
 Esto evita que un script simule una edición enviando un `InputEvent` con `inputType: "insertText"`. Los editores que actualicen el texto mediante transacciones programáticas deben conectarse por el adaptador transaccional y aportar origen explícito, no falsificar eventos DOM confiables.
 
 La prueba unitaria verifica que se rechacen tanto un `beforeinput` sintético como un `input` sintético posterior a un `beforeinput` confiable. La prueba Chromium ahora escribe una tecla mediante la automatización real del teclado del navegador y, por separado, intenta un `dispatchEvent()` sintético que debe bloquearse. La prueba de Chromium aún debe terminar en CI antes de considerar esta capa validada.
+
+## Límites Unicode en marcadores discursivos
+
+La suite detectó que el conector `Aun así` no era encontrado: los límites `\b` de JavaScript no separan de forma fiable ciertas palabras que terminan en letras acentuadas como `í`. Se reemplazaron en los tres grupos de marcadores (temporales, causales y adversativos) por lookbehind/lookahead con `\p{L}`, `\p{M}`, `\p{N}` y `_`, para no reconocer subcadenas dentro de palabras y sí respetar letras acentuadas y marcas combinantes. El test adversativo `Aun así` permanece como regresión del defecto.

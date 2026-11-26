@@ -603,6 +603,7 @@ export interface HostEngineOptions extends Omit<EngineOptions, "onAnalysis" | "o
  * La aplicación crea proyectos/documentos y entrega sus snapshots y cambios.
  */
 export class HostEngineApi {
+  private disposed = false;
   private readonly engine: LiteraryEngine;
   private readonly liveAuthorMonitor: LiveAuthorMonitor;
   private project?: ProjectIdentity;
@@ -3859,6 +3860,8 @@ export class HostEngineApi {
 
   /** Libera el suscriptor opcional de sincronización entre pestañas. */
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.unsubscribeNarrativeChanges?.();
     this.unsubscribeNarrativeChanges = undefined;
     for (const documentId of this.liveMonitorLeases.keys()) {
@@ -3897,6 +3900,7 @@ export class HostEngineApi {
   }
 
   private async afterDocumentRecovery(documentId: string): Promise<void> {
+    if (this.disposed) return;
     const recoveredSnapshot = this.engine.getSnapshot(documentId);
     if (recoveredSnapshot) {
       const projectId = this.requireProject().projectId;
@@ -3909,6 +3913,8 @@ export class HostEngineApi {
           this.reportKnowledgeError(error);
         }
       }
+      // dispose() puede ejecutarse mientras IndexedDB resuelve la adquisición.
+      if (this.disposed) return;
       const monitored = this.liveAuthorMonitor.getSnapshot(documentId);
       if (!monitored) {
         let restored = false;
@@ -4108,7 +4114,7 @@ export class HostEngineApi {
   }
 
   private startLiveAuthorMonitorLeaseHeartbeat(documentId: string): void {
-    if (this.liveMonitorLeaseHeartbeats.has(documentId) ||
+    if (this.disposed || this.liveMonitorLeaseHeartbeats.has(documentId) ||
         this.liveMonitorLeaseReleasing.has(documentId)) return;
     const timer = setInterval(() => {
       void this.renewLiveAuthorMonitorLeaseFromHeartbeat(documentId).catch(error => {
@@ -4124,7 +4130,7 @@ export class HostEngineApi {
    * la titularidad local después de un cierre/liberación.
    */
   private async renewLiveAuthorMonitorLeaseFromHeartbeat(documentId: string): Promise<void> {
-    if (this.liveMonitorLeaseReleasing.has(documentId)) return;
+    if (this.disposed || this.liveMonitorLeaseReleasing.has(documentId)) return;
     const current = this.liveMonitorLeases.get(documentId);
     const generation = this.liveMonitorLeaseGenerations.get(documentId) ?? 0;
     if (!current) {
@@ -4143,7 +4149,8 @@ export class HostEngineApi {
     );
 
     // Una liberación, dispose o cambio de generación invalida esta respuesta.
-    if (this.liveMonitorLeaseGenerations.get(documentId) !== generation ||
+    if (this.disposed ||
+        this.liveMonitorLeaseGenerations.get(documentId) !== generation ||
         this.liveMonitorLeaseReleasing.has(documentId)) return;
     const latest = this.liveMonitorLeases.get(documentId);
     if (!latest || latest.ownerId !== current.ownerId ||
@@ -4170,7 +4177,7 @@ export class HostEngineApi {
   private async acquireOrRenewLiveAuthorMonitorLease(
     documentId: string
   ): Promise<StoredLiveAuthorMonitorLease | undefined> {
-    if (!this.supportsLiveAuthorMonitorLeases() ||
+    if (this.disposed || !this.supportsLiveAuthorMonitorLeases() ||
         this.liveMonitorLeaseReleasing.has(documentId)) return undefined;
     const now = Date.now();
     const current = this.liveMonitorLeases.get(documentId);
@@ -4185,7 +4192,7 @@ export class HostEngineApi {
         HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
       );
     }
-    if (!lease && acquire) {
+    if (!lease && acquire && !this.disposed) {
       lease = await acquire.call(
         this.store,
         this.requireProject().projectId,
@@ -4194,6 +4201,18 @@ export class HostEngineApi {
         now,
         HostEngineApi.LIVE_MONITOR_LEASE_DURATION_MS
       );
+    }
+    if (this.disposed) {
+      // La adquisición pudo confirmarse después de dispose(); no dejar una
+      // reserva huérfana ni volver a crear el heartbeat de esta instancia.
+      if (lease && this.store.releaseLiveAuthorMonitorLease) {
+        try {
+          await this.store.releaseLiveAuthorMonitorLease.call(this.store, lease, Date.now());
+        } catch (error) {
+          this.reportKnowledgeError(error);
+        }
+      }
+      return undefined;
     }
     if (!lease) {
       this.liveMonitorLeases.delete(documentId);
@@ -4238,9 +4257,10 @@ export class HostEngineApi {
   }
 
   private scheduleLiveAuthorMonitorCheckpoint(documentId: string): void {
-    if (!this.store.saveLiveAuthorMonitorCheckpoint) return;
+    if (this.disposed || !this.store.saveLiveAuthorMonitorCheckpoint) return;
     const previous = this.liveMonitorCheckpointTails.get(documentId) ?? Promise.resolve();
     const queued = previous.catch(() => undefined).then(async () => {
+      if (this.disposed) return;
       if (this.supportsLiveAuthorMonitorLeases() && !this.liveMonitorLeases.has(documentId)) {
         // Las pestañas observadoras vuelven a competir solo en un punto seguro
         // de persistencia; si el lease sigue ocupado, omiten este checkpoint.

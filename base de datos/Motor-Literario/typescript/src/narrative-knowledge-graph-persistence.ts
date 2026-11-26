@@ -772,6 +772,101 @@ export interface NarrativeReferenceRepairRecoveryResult {
   readonly pending: readonly { readonly operationId: string; readonly error: string }[];
 }
 
+export type NarrativeReferenceRepairPendingStatus =
+  | "ready-to-recover"
+  | "already-applied"
+  | "record-missing"
+  | "record-changed"
+  | "replacement-not-proven"
+  | "invalid-intent";
+
+export interface NarrativeReferenceRepairPendingInspection {
+  readonly operationId: string;
+  readonly recordType: NarrativeReferenceRepairPendingEntry["recordType"];
+  readonly recordId: string;
+  readonly status: NarrativeReferenceRepairPendingStatus;
+  readonly detail: string;
+}
+
+/**
+ * Inspecciona intenciones pendientes sin mutar el grafo, la auditoría ni la
+ * cola. Permite que el anfitrión presente conflictos antes de solicitar replay.
+ */
+export async function inspectNarrativeReferenceRepairPending(
+  store: ProjectStore,
+  projectId: string
+): Promise<readonly NarrativeReferenceRepairPendingInspection[]> {
+  if (!store || typeof projectId !== "string" || !projectId.trim() ||
+      typeof store.loadNarrativeReferenceRepairPending !== "function" ||
+      typeof store.loadEntities !== "function" ||
+      typeof store.loadRelations !== "function" ||
+      typeof store.loadEvents !== "function" ||
+      typeof store.loadIdeas !== "function" ||
+      typeof store.loadAssertions !== "function") {
+    throw new Error("El almacenamiento no permite inspeccionar reparaciones pendientes.");
+  }
+  const [pending, entities, relations, events, ideas, assertions] = await Promise.all([
+    store.loadNarrativeReferenceRepairPending(projectId),
+    store.loadEntities(projectId),
+    store.loadRelations(projectId),
+    store.loadEvents(projectId),
+    store.loadIdeas(projectId),
+    store.loadAssertions(projectId)
+  ]);
+  const records = {
+    relation: relations,
+    event: events,
+    idea: ideas,
+    assertion: assertions
+  } as const;
+  const entityById = new Map(entities.map(entity => [entity.id, entity]));
+  return pending.map(entry => {
+    const expectedId = [
+      "reference-repair", projectId, entry.recordType, entry.recordId,
+      entry.referenceField, entry.missingReferenceId, entry.replacementEntityId
+    ].join("|");
+    if (entry.projectId !== projectId || entry.operationId !== expectedId ||
+        !entry.recordId.trim() || !entry.missingReferenceId.trim() ||
+        !entry.replacementEntityId.trim()) {
+      return { operationId: entry.operationId, recordType: entry.recordType,
+        recordId: entry.recordId, status: "invalid-intent",
+        detail: "La identidad o los datos de la intención no son válidos." };
+    }
+    const record = records[entry.recordType].find(item => item.id === entry.recordId) as
+      (Record<string, unknown> & { readonly id: string }) | undefined;
+    if (!record) {
+      return { operationId: entry.operationId, recordType: entry.recordType,
+        recordId: entry.recordId, status: "record-missing",
+        detail: "El registro que debía repararse ya no existe." };
+    }
+    const field = record[entry.referenceField];
+    const contains = (value: unknown, id: string): boolean =>
+      typeof value === "string" ? value === id :
+      Array.isArray(value) ? value.includes(id) : false;
+    const hasMissing = contains(field, entry.missingReferenceId);
+    const hasReplacement = contains(field, entry.replacementEntityId);
+    if (!hasMissing && hasReplacement) {
+      return { operationId: entry.operationId, recordType: entry.recordType,
+        recordId: entry.recordId, status: "already-applied",
+        detail: "La referencia sustituta ya está presente en el registro." };
+    }
+    if (!hasMissing) {
+      return { operationId: entry.operationId, recordType: entry.recordType,
+        recordId: entry.recordId, status: "record-changed",
+        detail: "El registro ya no contiene la referencia original; requiere revisión." };
+    }
+    const replacement = entityById.get(entry.replacementEntityId);
+    if (!replacement || !replacement.mergedFromIds.includes(entry.missingReferenceId)) {
+      return { operationId: entry.operationId, recordType: entry.recordType,
+        recordId: entry.recordId, status: "replacement-not-proven",
+        detail: "No se puede demostrar que la entidad sustituta proceda de la identidad faltante." };
+    }
+    return { operationId: entry.operationId, recordType: entry.recordType,
+      recordId: entry.recordId, status: "ready-to-recover",
+      detail: "La referencia original sigue presente y la procedencia de la sustituta está demostrada." };
+  });
+}
+
 /**
  * Reanuda intenciones previamente aprobadas. El CAS se vuelve a comprobar:
  * si el cambio ya ocurrió, la aplicación devuelve replay y completa la

@@ -311,5 +311,6 @@ test("no propone complemento personal si el personaje solo se menciona antes del
   });
   assert.equal(found.length, 1);
   assert.equal(found[0].personalObjectCandidate?.entityId, character.id);
-  assert.equal(found[0].grammaticalSubjectCandidate, undefined);
+  assert.equal(found[0].grammaticalSubjectCandidate?.entityId, bruno.id);
+  assert.equal(found[0].grammaticalSubjectCandidate?.voice, "active");
 });

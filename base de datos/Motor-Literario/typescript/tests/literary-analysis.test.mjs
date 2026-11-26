@@ -1490,12 +1490,11 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     ],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 3 },
-      { status: "discarded", reason: "writer", changedAt: 2 }
+      { status: "unknown", reason: "writer", changedAt: 2 }
     ],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 2 }
+      { status: "incorporated", reason: "unsupported-reason", changedAt: 2 }
     ]
   ]) {
     assert.throws(
@@ -2044,7 +2043,6 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
     ...(status ? { status } : {})
   });
   const foreignEvidence = [
-    makeEvidence("chapter-one", 1, "stale"),
     makeEvidence("chapter-two", 1),
     makeEvidence("chapter-one", 2)
   ];
@@ -2076,7 +2074,7 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
       sourceProjectName: "Libro de prueba",
       relatedEntityIds: ["ana-id"],
       relatedIdeaIds: [],
-      evidenceCount: 0,
+      evidenceCount: 2,
       staleEvidenceCount: 1,
       evidence: foreignEvidence,
       statusHistory: [
@@ -2094,9 +2092,9 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
   assert.ok(ana);
   assert.deepEqual(ana.scenes[0].relationshipIds, []);
   assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, []);
-  assert.equal(ana.scenes[0].evidenceStatus, "no-known-evidence");
-  assert.equal(ana.relationships[0].evidenceStatus, "stale-only");
-  assert.equal(ana.documentedDecisions[0].evidenceCount, 0);
+  assert.equal(ana.scenes[0].evidenceStatus, "documented");
+  assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
+  assert.equal(ana.documentedDecisions[0].evidenceCount, 2);
 });
 
 

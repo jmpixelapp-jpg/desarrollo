@@ -25,6 +25,10 @@ import {
   extractNarrativeInformationInterpretations,
   type NarrativeInformationInterpretation
 } from "./narrative-information-interpretation";
+import {
+  buildNarrativeCharacterKnowledgeStates,
+  type NarrativeCharacterKnowledgeState
+} from "./narrative-character-knowledge-state";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
@@ -76,6 +80,10 @@ export interface NarrativeUnderstandingInput {
   readonly priorClaims?: readonly NarrativeAttributedClaim[];
   /** Procedencias previas del mismo proyecto para reconstruir transmisiones entre capítulos. */
   readonly priorInformationProvenance?: readonly NarrativeInformationProvenance[];
+  /** Interpretaciones explícitas previas, conservadas con su evidencia. */
+  readonly priorInformationInterpretations?: readonly NarrativeInformationInterpretation[];
+  /** Orden cronológico de documentos conocido por el proyecto; si falta, no se inventa. */
+  readonly orderedDocumentIds?: readonly string[];
 }
 
 export interface NarrativeUnderstandingResult {
@@ -91,6 +99,7 @@ export interface NarrativeUnderstandingResult {
   readonly knowledgeEvolution: readonly NarrativeKnowledgeEvolution[];
   readonly informationChain: readonly NarrativeInformationChainStep[];
   readonly informationInterpretations: readonly NarrativeInformationInterpretation[];
+  readonly characterKnowledgeStates: readonly NarrativeCharacterKnowledgeState[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -146,7 +155,10 @@ function validate(input: NarrativeUnderstandingInput): void {
       (input.priorClaims !== undefined &&
         (!Array.isArray(input.priorClaims) || input.priorClaims.length > 5000)) ||
       (input.priorInformationProvenance !== undefined &&
-        (!Array.isArray(input.priorInformationProvenance) || input.priorInformationProvenance.length > 5000))) {
+        (!Array.isArray(input.priorInformationProvenance) || input.priorInformationProvenance.length > 5000)) ||
+      (input.priorInformationInterpretations !== undefined &&
+        (!Array.isArray(input.priorInformationInterpretations) || input.priorInformationInterpretations.length > 5000)) ||
+      (input.orderedDocumentIds !== undefined && !Array.isArray(input.orderedDocumentIds))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
   }
   const baseOffset = input.baseOffset ?? 0;
@@ -231,6 +243,14 @@ export function understandNarrativeFragment(
     ...extractionContext,
     priorInformation: input.priorInformationProvenance
   });
+  const characterKnowledgeStates = buildNarrativeCharacterKnowledgeStates({
+    projectId: input.projectId,
+    entities: input.entities,
+    information: [...(input.priorInformationProvenance ?? []), ...informationProvenance],
+    interpretations: [...(input.priorInformationInterpretations ?? []), ...informationInterpretations],
+    evaluations: knowledgeEvolution,
+    orderedDocumentIds: input.orderedDocumentIds
+  });
   const events = extractNarrativeEventCandidates(extractionContext);
   const consequences = extractNarrativeConsequenceCandidates({
     projectId: input.projectId, documentId: input.documentId,
@@ -293,7 +313,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

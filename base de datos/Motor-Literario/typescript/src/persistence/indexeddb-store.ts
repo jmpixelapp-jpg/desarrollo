@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic, NarrativeDocumentProjectionManifest } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 24;
+const DATABASE_VERSION = 25;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -43,6 +43,7 @@ const PERSONAL_IDEA_SOURCE_INDEX = "by-source-project";
 const FINALIZATION_RECEIPTS = "writer-library-finalization-receipts";
 const FINALIZATION_RECEIPT_ID = "finalization-v1";
 const ASSERTIONS = "narrative-assertions";
+const NARRATIVE_PROJECTION_MANIFESTS = "narrative-document-projection-manifests";
 const DIAGNOSTICS = "document-diagnostics";
 const LIVE_AUTHOR_MONITOR_CHECKPOINTS = "live-author-monitor-checkpoints";
 const LIVE_AUTHOR_MONITOR_LEASES = "live-author-monitor-leases";
@@ -78,6 +79,31 @@ function checksumArchivedIdeaIds(ids: readonly string[]): string {
     hash = BigInt.asUintN(64, hash * 0x100000001b3n);
   }
   return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
+
+function validateNarrativeDocumentProjectionManifest(
+  manifest: NarrativeDocumentProjectionManifest, projectId: string, documentId: string
+): void {
+  const arrays = ["entityIds", "relationIds", "eventIds", "ideaIds", "assertionIds"] as const;
+  if (!manifest || manifest.projectId !== projectId || manifest.documentId !== documentId ||
+      !projectId.trim() || !documentId.trim() ||
+      !Number.isSafeInteger(manifest.revision) || manifest.revision < 0 ||
+      !Number.isSafeInteger(manifest.generation) || manifest.generation < 1 ||
+      (manifest.status !== "active" && manifest.status !== "deleted") ||
+      !Number.isFinite(manifest.updatedAt) || manifest.updatedAt < 0) {
+    throw new Error("Manifiesto de proyección narrativa inválido.");
+  }
+  for (const key of arrays) {
+    const values = manifest[key];
+    if (!Array.isArray(values) || values.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(values).size !== values.length) {
+      throw new Error("El manifiesto contiene IDs duplicados o inválidos: " + key);
+    }
+  }
+  if (manifest.status === "deleted" &&
+      arrays.some(key => manifest[key].length !== 0)) {
+    throw new Error("Un tombstone documental no puede conservar IDs de proyección activos.");
+  }
 }
 
 function validateFinalizationReceipt(
@@ -1794,6 +1820,12 @@ export class IndexedDbProjectStore implements ProjectStore {
           assertions.createIndex("by-project", "projectId", { unique: false });
           assertions.createIndex("by-entity", ["projectId", "entityId"], { unique: false });
         }
+        if (!db.objectStoreNames.contains(NARRATIVE_PROJECTION_MANIFESTS)) {
+          const manifests = db.createObjectStore(NARRATIVE_PROJECTION_MANIFESTS, {
+            keyPath: ["projectId", "documentId"]
+          });
+          manifests.createIndex("by-project", "projectId", { unique: false });
+        }
         if (!db.objectStoreNames.contains(DIAGNOSTICS)) {
           const diagnostics = db.createObjectStore(DIAGNOSTICS, {
             keyPath: ["projectId", "documentId"]
@@ -1978,6 +2010,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         ensureIndex(FINALIZATION_RECEIPTS, "by-writer-source", ["writerId", "sourceProjectId"]);
         ensureIndex(ASSERTIONS, "by-project", "projectId");
         ensureIndex(ASSERTIONS, "by-entity", ["projectId", "entityId"]);
+        ensureIndex(NARRATIVE_PROJECTION_MANIFESTS, "by-project", "projectId");
         ensureIndex(DIAGNOSTICS, "by-project", "projectId");
         ensureIndex(LIVE_AUTHOR_MONITOR_CHECKPOINTS, "by-project", "projectId");
         ensureIndex(LIVE_AUTHOR_MONITOR_LEASES, "by-project", "projectId");
@@ -4085,6 +4118,61 @@ export class IndexedDbProjectStore implements ProjectStore {
       identities.add(identity);
     }
     return entries;
+  }
+
+  async loadNarrativeDocumentProjectionManifest(
+    projectId: string, documentId: string
+  ): Promise<NarrativeDocumentProjectionManifest | undefined> {
+    if (typeof projectId !== "string" || !projectId.trim() ||
+        typeof documentId !== "string" || !documentId.trim()) {
+      throw new Error("Identidad documental inválida para leer el manifiesto narrativo.");
+    }
+    const db = await this.open();
+    const transaction = db.transaction(NARRATIVE_PROJECTION_MANIFESTS, "readonly");
+    const request = transaction.objectStore(NARRATIVE_PROJECTION_MANIFESTS).get([projectId, documentId]);
+    const result = await readAfterTransaction(
+      transaction, request, "No se pudo leer el manifiesto de proyección narrativa."
+    ) as NarrativeDocumentProjectionManifest | undefined;
+    if (result) validateNarrativeDocumentProjectionManifest(result, projectId, documentId);
+    return result;
+  }
+
+  async saveNarrativeDocumentProjectionManifestIfUnchanged(
+    manifest: NarrativeDocumentProjectionManifest,
+    expectedGeneration?: number
+  ): Promise<void> {
+    validateNarrativeDocumentProjectionManifest(manifest, manifest.projectId, manifest.documentId);
+    if (expectedGeneration !== undefined &&
+        (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0)) {
+      throw new Error("Generación esperada del manifiesto inválida.");
+    }
+    if (manifest.generation !== (expectedGeneration ?? 0) + 1) {
+      throw new Error("La generación del manifiesto debe avanzar exactamente una unidad.");
+    }
+    const db = await this.open();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(NARRATIVE_PROJECTION_MANIFESTS, "readwrite");
+      const objectStore = transaction.objectStore(NARRATIVE_PROJECTION_MANIFESTS);
+      const request = objectStore.get([manifest.projectId, manifest.documentId]);
+      request.onsuccess = () => {
+        const current = request.result as NarrativeDocumentProjectionManifest | undefined;
+        const actualGeneration = current?.generation;
+        if (actualGeneration !== expectedGeneration) {
+          transaction.abort();
+          return;
+        }
+        objectStore.put({ ...manifest,
+          entityIds: [...manifest.entityIds], relationIds: [...manifest.relationIds],
+          eventIds: [...manifest.eventIds], ideaIds: [...manifest.ideaIds],
+          assertionIds: [...manifest.assertionIds]
+        });
+      };
+      request.onerror = () => transaction.abort();
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(new Error("Conflicto CAS o aborto al guardar manifiesto narrativo."));
+      transaction.onerror = () => reject(transaction.error ?? new Error("Error al guardar manifiesto narrativo."));
+    });
+    this.publishNarrativeChange(manifest.projectId);
   }
 
   async saveAssertion(assertion: NarrativeAssertion): Promise<void> {

@@ -155,6 +155,23 @@ test("conserva negación y futuro en cambios de condición sin aplicarlos al est
   }
 });
 
+test("no convierte infinitivos subordinados de intento, deseo o posibilidad en cambios ejecutados", () => {
+  const texts = [
+    "Ana intentó romper la Espada Solar.",
+    "Ana quiso abrir la Espada Solar.",
+    "Ana podría destruir la Espada Solar.",
+    "Ana no pudo activar la Espada Solar."
+  ];
+  for (const text of texts) {
+    const observations = observe(text);
+    const transitions = discoverNarrativeObjectTransitionCandidates({
+      projectId: context.projectId, documentId: context.documentId,
+      revision: context.revision, observations
+    });
+    assert.deepEqual(transitions, [], text);
+  }
+});
+
 test("no propone transición si faltan objeto o participante activo", () => {
   const observations = observe("Ana perdió el recuerdo.");
   const transitions = discoverNarrativeObjectTransitionCandidates({

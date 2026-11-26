@@ -30,6 +30,7 @@ import {
   type NarrativeCharacterKnowledgeState
 } from "./narrative-character-knowledge-state";
 import { extractNarrativeEventCandidates } from "./narrative-event-extraction";
+import { extractNarrativeMemoryEvents, type NarrativeMemoryEvent } from "./narrative-memory-events";
 import { extractNarrativeConsequenceCandidates } from "./narrative-consequence-extraction";
 import {
   assignNarrativeEvidenceToScene,
@@ -102,6 +103,7 @@ export interface NarrativeUnderstandingResult {
   readonly informationChain: readonly NarrativeInformationChainStep[];
   readonly informationInterpretations: readonly NarrativeInformationInterpretation[];
   readonly characterKnowledgeStates: readonly NarrativeCharacterKnowledgeState[];
+  readonly memoryEvents: readonly NarrativeMemoryEvent[];
   readonly events: ReturnType<typeof extractNarrativeEventCandidates>;
   readonly consequences: ReturnType<typeof extractNarrativeConsequenceCandidates>;
   readonly scenes: ReturnType<typeof segmentNarrativeScenes>;
@@ -247,6 +249,7 @@ export function understandNarrativeFragment(
     ...extractionContext,
     priorInformation: input.priorInformationProvenance
   });
+  const memoryEvents = extractNarrativeMemoryEvents(extractionContext);
   const characterKnowledgeStates = buildNarrativeCharacterKnowledgeStates({
     projectId: input.projectId,
     entities: input.entities,
@@ -317,7 +320,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

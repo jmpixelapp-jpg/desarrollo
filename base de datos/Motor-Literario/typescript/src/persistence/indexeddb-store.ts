@@ -5681,8 +5681,13 @@ export class IndexedDbProjectStore implements ProjectStore {
           }
           return;
         }
-        try { store.add(structuredClone(operation)); }
-        catch (error) {
+        try {
+          const addRequest = store.add(structuredClone(operation));
+          addRequest.onerror = () => {
+            failure = addRequest.error ?? new Error("No se pudo encolar la operación de sincronización.");
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          };
+        } catch (error) {
           failure = error instanceof Error ? error : new Error("No se pudo encolar la operación de sincronización.");
           try { transaction.abort(); } catch { /* transacción ya abortada */ }
         }

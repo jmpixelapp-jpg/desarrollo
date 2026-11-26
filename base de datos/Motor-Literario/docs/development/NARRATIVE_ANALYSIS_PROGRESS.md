@@ -392,3 +392,12 @@ IndexedDB incorpora el almacén `narrative-reference-repair-pending` mediante mi
 
 
 La cobertura de recuperación contempla ahora los dos lados de la interrupción: intención persistida antes de que el CAS ocurra, e interrupción posterior al CAS pero anterior a la auditoría. En ambos casos se comprueba que la intención se cierra solo después de confirmar la auditoría y que el resultado final no duplica escrituras.
+
+
+## Migración IndexedDB y persistencia de intenciones — cobertura de esquema
+
+Se añadió `tests/indexeddb-narrative-repair-pending.test.mjs` con `fake-indexeddb`. La prueba crea una base legada en versión 26, abre el store para forzar la migración a 27 y verifica que existan los almacenes de auditoría e intenciones y el índice `by-project`. También cubre persistencia tras cerrar/reabrir la instancia, reintento idempotente con timestamp distinto, rechazo de contenido incompatible y borrado explícito de la intención.
+
+La prueba queda incorporada al comando de suite (`tests/*.test.mjs`). Esto verifica el contrato de migración y CRUD de IndexedDB en Node; no equivale a una prueba en todos los navegadores ni a una recuperación automática al arrancar la aplicación. La recuperación sigue siendo una operación explícita por proyecto mediante `recoverNarrativeReferenceRepairs`, porque ejecutarla dentro de `open()` produciría reentrada: la propia recuperación vuelve a utilizar métodos del store que necesitan abrir la base.
+
+**Validación pendiente:** ejecutar `npm run typecheck` y `npm test` en Node 22.13+. No se atribuye aprobación a CI sin una ejecución observada.

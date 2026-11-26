@@ -45,8 +45,7 @@ export interface NarrativePronounResolution {
   readonly reason:
     | "unique-compatible-antecedent"
     | "multiple-compatible-antecedents"
-    | "no-compatible-antecedent"
-    | "invalid-or-out-of-scope-context";
+    | "no-compatible-antecedent";
 }
 
 export interface NarrativePronounResolutionOptions {
@@ -85,8 +84,10 @@ function compatible(
   mention: NarrativeCharacterMention
 ): boolean {
   if (reference.grammaticalNumber !== mention.grammaticalNumber) return false;
-  if (reference.grammaticalGender === "unknown" ||
-      mention.grammaticalGender === "unknown") return true;
+  // Un rasgo desconocido en la referencia no permite filtrar candidatos.
+  // Pero un antecedente desconocido no puede confirmar un pronombre marcado.
+  if (reference.grammaticalGender === "unknown") return true;
+  if (mention.grammaticalGender === "unknown") return false;
   // "Neutral" es una clase explícita distinta: no se equipara automáticamente
   // con masculino o femenino.
   return reference.grammaticalGender === mention.grammaticalGender;

@@ -1032,7 +1032,7 @@ export class HostEngineApi {
       if (this.disposed || this.project?.projectId !== project.projectId) return;
 
       const callback = this.onNarrativeIdeaContinuityIndexUpdated;
-      if (callback) {
+      if (callback && !updated.reused) {
         const notice: NarrativeIdeaContinuityIndexUpdateNotice = {
           projectId: project.projectId,
           index: updated.index,
@@ -1041,13 +1041,15 @@ export class HostEngineApi {
           sourceDocumentCount: sourceRevisions.length,
           analyzedCandidateCount: selectedCandidates.length,
           truncated: updated.index.summary.sourceAnalysisTruncated,
-          reused: updated.reused
+          reused: false
         };
         try {
-          // El callback es una señal para encolar transporte, no para enviar
-          // por red dentro de la cola de escritura del documento.
-          void Promise.resolve(callback(notice)).catch(error => this.reportKnowledgeError(error));
+          // El callback debe confirmar la inserción durable en el outbox; el
+          // transporte de red se ejecuta en el trabajador del anfitrión.
+          await callback(notice);
         } catch (error) {
+          // El índice local ya está confirmado. Un fallo de outbox se informa
+          // sin revertir ni invalidar el documento que acaba de guardarse.
           this.reportKnowledgeError(error);
         }
       }

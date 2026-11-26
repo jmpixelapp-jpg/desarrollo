@@ -90,3 +90,28 @@ test("rechaza entidades de otro proyecto y offsets inválidos", () => {
     ...context, text: "Mara cree que volverá.", baseOffset: -1
   }));
 });
+
+
+test("separa la negación de la atribución de la negación de la proposición", () => {
+  const attributionNegated = extractNarrativeAttributedClaims({
+    ...context, text:"Mara no cree que Elian sea culpable."
+  })[0];
+  assert.equal(attributionNegated.attributionPolarity, "negated");
+  assert.equal(attributionNegated.contentPolarity, "affirmed");
+  assert.equal(attributionNegated.polarity, "negated");
+
+  const propositionNegated = extractNarrativeAttributedClaims({
+    ...context, text:"Mara cree que Elian no es culpable."
+  })[0];
+  assert.equal(propositionNegated.attributionPolarity, "affirmed");
+  assert.equal(propositionNegated.contentPolarity, "negated");
+  assert.equal(propositionNegated.polarity, "affirmed");
+});
+
+test("detecta marcadores de negación internos sin confundirlos con el verbo de atribución", () => {
+  const found = extractNarrativeAttributedClaims({
+    ...context,
+    text:"Mara afirma que Elian nunca regresará. Elian teme que Mara tampoco sobreviva."
+  });
+  assert.deepEqual(found.map(item => item.contentPolarity), ["negated", "negated"]);
+});

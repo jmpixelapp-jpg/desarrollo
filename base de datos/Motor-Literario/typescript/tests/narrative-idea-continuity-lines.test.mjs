@@ -9,7 +9,7 @@ import {
 
 function idea(id, documentId, text, options = {}) {
   const excerpt = "La idea expresada es " + text + ".";
-  const start = 10 + excerpt.indexOf(text);
+  const start = (options.offset ?? 10) + excerpt.indexOf(text);
   return {
     id,
     projectId: "book-1",
@@ -343,4 +343,19 @@ test("rechaza resúmenes incoherentes y eventos con extremos ausentes", () => {
     ...base,
     events: [{ ...base.events[0], firstOccurrence: undefined }]
   }));
+});
+
+
+test("usa offsets de origen para ordenar apariciones del mismo documento y revisión", () => {
+  const result = linesFromEvolution(evolution([
+    idea("same-doc-first", "chapter-1", "memoria secreta del reino", { offset: 10 }),
+    idea("same-doc-second", "chapter-1", "destino eterno del reino", { offset: 200 }),
+    idea("later-chapter", "chapter-2", "memoria destino reino secreto eterno", { offset: 10 })
+  ], ["chapter-1", "chapter-2"]));
+
+  assert.equal(result.summary.lineCount, 1);
+  assert.equal(result.lines[0].chronology, "complete");
+  assert.deepEqual(result.lines[0].orderedOccurrenceIds, [
+    "same-doc-first", "same-doc-second", "later-chapter"
+  ]);
 });

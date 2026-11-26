@@ -145,3 +145,12 @@ Cobertura deliberadamente acotada:
 Se agregan cuatro pruebas directas del detector y dos pruebas de integración que comprueban resolución automática y el comportamiento seguro cuando falta el género.
 
 **Límites:** no detecta todavía plurales, clíticos (`lo/la/le/se`), pronombres relativos ni sujetos omitidos. Tampoco deduce género por terminaciones de nombres. La detección léxica no sustituye un analizador sintáctico; cuando haya varios antecedentes compatibles, la resolución permanece ambigua.
+
+
+### Fase J: referencias enfáticas y endurecimiento del pipeline
+
+Se amplía el detector para reconocer las formas explícitas `él mismo` y `ella misma` como una sola referencia, conservando el género gramatical de la forma pronominal y el rango completo de la expresión. El vínculo con acciones sigue exigiendo un verbo del catálogo y conserva negación explícita.
+
+También se corrige el orden de validación del pipeline: las entidades se validan antes de recorrerlas para comprobar menciones. Así, una colección malformada produce un error controlado en vez de una excepción accidental por acceso a una propiedad.
+
+Se agregan pruebas de integración para `Ella misma protegió` y para colecciones de entidades nulas.

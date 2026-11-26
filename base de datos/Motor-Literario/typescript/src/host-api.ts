@@ -1644,9 +1644,11 @@ export class HostEngineApi {
         const statusHistory = idea.statusHistory ?? [
           {status:idea.status,reason:"initial" as const}
         ];
-        const textFitsBudget = lexicalTextUnitCount + idea.text.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;
-        if (textFitsBudget) lexicalTextUnitCount += idea.text.length;
-        const includeLexicalText = !knownLinkedIdeaIds.has(idea.id) && textFitsBudget;
+        // Solo se descuenta presupuesto por texto que realmente se copia al
+        // catálogo léxico global; las ideas enlazadas viajan por knownIdeas.
+        const includeLexicalText = !knownLinkedIdeaIds.has(idea.id) &&
+          lexicalTextUnitCount + idea.text.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;
+        if (includeLexicalText) lexicalTextUnitCount += idea.text.length;
         return {
           projectId:idea.projectId,
           ideaId:idea.id,

@@ -712,6 +712,65 @@ test("publica el error de cuota del checkpoint sin exponer el texto interno", as
   api.dispose();
 });
 
+test("limpia el diagnóstico QuotaExceededError cuando una escritura posterior se recupera", async () => {
+  let rejectFirstAttempt;
+  let resolveRecoveredAttempt;
+  const firstAttempt = new Promise(resolve => { rejectFirstAttempt = resolve; });
+  const recoveredAttempt = new Promise(resolve => { resolveRecoveredAttempt = resolve; });
+
+  class RecoveringQuotaStore extends MemoryDocumentStore {
+    failNext = true;
+
+    async saveLiveAuthorMonitorCheckpoint(checkpoint, lease) {
+      if (this.failNext) {
+        this.failNext = false;
+        rejectFirstAttempt();
+        throw new DOMException("PRIVATE_MANUSCRIPT_TEXT", "QuotaExceededError");
+      }
+      await super.saveLiveAuthorMonitorCheckpoint(checkpoint, lease);
+      resolveRecoveredAttempt();
+    }
+  }
+
+  const store = new RecoveringQuotaStore();
+  const api = new HostEngineApi({ store });
+  api.initializeProject({ projectId: "monitor-quota-recovery", projectName: "Quota recovery" });
+
+  try {
+    await api.openDocument({
+      documentId: "chapter-1",
+      text: "A",
+      revision: 0,
+      sequence: 0
+    });
+    await firstAttempt;
+
+    const failed = api.getLiveAuthorMonitorPersistenceDiagnostics("chapter-1");
+    assert.equal(failed.checkpointState, "error");
+    assert.equal(failed.checkpointErrorCode, "QuotaExceededError");
+
+    const admission = api.onEditorChange({
+      documentId: "chapter-1",
+      sequence: 1,
+      baseRevision: 0,
+      start: 1,
+      end: 1,
+      replacement: "B"
+    });
+    assert.equal(admission.status, "queued");
+    await api.flushPendingChanges();
+    await recoveredAttempt;
+
+    const recovered = api.getLiveAuthorMonitorPersistenceDiagnostics("chapter-1");
+    assert.equal(recovered.checkpointState, "saved");
+    assert.equal(recovered.checkpointErrorCode, undefined);
+    assert.equal(store.monitorCheckpoints.get("monitor-quota-recovery:chapter-1").revision, 1);
+    assert.equal(api.getLiveAuthorMonitorSnapshot("chapter-1").committedChanges, 1);
+  } finally {
+    api.dispose();
+  }
+});
+
 test("informa pérdida del lease cuando otra pestaña sustituye el fencing token", async () => {
   const store = new MemoryDocumentStore();
   const api = new HostEngineApi({ store });

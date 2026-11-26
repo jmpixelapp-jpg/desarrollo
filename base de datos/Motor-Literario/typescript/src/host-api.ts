@@ -4383,9 +4383,10 @@ export class HostEngineApi {
   ): Promise<StoredLiveAuthorMonitorLease | undefined> {
     if (this.disposed || !this.supportsLiveAuthorMonitorLeases() ||
         this.liveMonitorLeaseReleasing.has(documentId)) return undefined;
-    // Cada renovación/adquisición tiene una generación propia. Una liberación
-    // o una operación posterior invalida cualquier respuesta asíncrona antigua.
-    const generation = this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
+    // Las renovaciones concurrentes comparten la época vigente; solo una
+    // pérdida o liberación cambia la generación e invalida sus respuestas.
+    const generation = this.liveMonitorLeaseGenerations.get(documentId) ??
+      this.bumpLiveAuthorMonitorLeaseGeneration(documentId);
     const isCurrentOperation = (): boolean =>
       this.liveMonitorLeaseGenerations.get(documentId) === generation &&
       !this.liveMonitorLeaseReleasing.has(documentId);

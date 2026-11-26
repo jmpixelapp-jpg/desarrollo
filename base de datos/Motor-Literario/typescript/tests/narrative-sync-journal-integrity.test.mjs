@@ -187,7 +187,7 @@ test("el planificador propone reconstrucción solo con diario completo y no muta
   const plan = await planNarrativeSyncJournalCursorRecovery(journal, "plan-project");
   assert.equal(plan.proposedRebuildCount, 1);
   assert.equal(plan.manualReviewCount, 0);
-  assert.equal(plan.safe, true);
+  assert.equal(plan.requiresManualReview, false);
   assert.deepEqual(plan.items[0], {
     writerId: "writer-a",
     action: "rebuild-cursor-from-complete-journal",
@@ -231,7 +231,7 @@ test("el planificador exige revisión manual ante huecos o cursores adelantados"
   const plan = await planNarrativeSyncJournalCursorRecovery(journal, "manual-project");
   assert.equal(plan.manualReviewCount, 2);
   assert.equal(plan.proposedRebuildCount, 0);
-  assert.equal(plan.safe, false);
+  assert.equal(plan.requiresManualReview, true);
   assert.ok(plan.items.every(item => item.action === "manual-review"));
   assert.ok(plan.items.find(item => item.writerId === "writer-gap").issueCodes.includes("sequence-gap"));
   assert.ok(plan.items.find(item => item.writerId === "writer-ahead").issueCodes.includes("cursor-ahead-of-journal"));
@@ -254,4 +254,32 @@ test("el planificador reconoce un cursor coherente y no recomienda cambios", asy
   assert.equal(plan.proposedRebuildCount, 0);
   assert.equal(plan.manualReviewCount, 0);
   assert.equal(plan.items[0].action, "no-action");
+});
+
+
+test("el planificador solo propone corregir identidad final cuando la secuencia está completa", async () => {
+  const first = await createNarrativeSyncOperationEnvelope({
+    operationId: "identity-plan-1", projectId: "identity-plan-project",
+    writerId: "writer-identity", sequence: 1, kind: "note", payload: { n: 1 }
+  });
+  const second = await createNarrativeSyncOperationEnvelope({
+    operationId: "identity-plan-2", projectId: "identity-plan-project",
+    writerId: "writer-identity", sequence: 2, kind: "note", payload: { n: 2 }
+  });
+  const journal = {
+    loadOperations: async () => [
+      { ...first, receivedAt: 10 },
+      { ...second, receivedAt: 20 }
+    ],
+    loadWriterCursors: async () => [{
+      projectId: "identity-plan-project", writerId: "writer-identity",
+      lastSequence: 2, lastOperationId: "wrong-operation-id", updatedAt: 30
+    }]
+  };
+  const plan = await planNarrativeSyncJournalCursorRecovery(journal, "identity-plan-project");
+  assert.equal(plan.proposedRebuildCount, 1);
+  assert.equal(plan.requiresManualReview, false);
+  assert.equal(plan.items[0].action, "rebuild-cursor-from-complete-journal");
+  assert.equal(plan.items[0].proposal.lastOperationId, "identity-plan-2");
+  assert.deepEqual(plan.items[0].issueCodes, ["cursor-last-operation-mismatch"]);
 });

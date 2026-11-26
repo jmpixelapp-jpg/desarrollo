@@ -281,46 +281,136 @@ function validateNarrativeIdeaRecord(idea: NarrativeIdea, label: string): void {
       throw new Error(`Registro de ${label} malformado: evidencia inválida.`);
     }
   }
+  // Lectura compatible: las relaciones heredadas pueden repetir destinos o
+  // formar ciclos, incluida una auto-referencia. El grafo las conserva para
+  // diagnosticarlas; las altas y cambios nuevos se validan por separado.
   for (const links of [idea.relatedEntityIds, idea.relatedIdeaIds]) {
     if (links !== undefined &&
         (!Array.isArray(links) || links.length > MAX_NARRATIVE_IDEA_REFERENCES ||
-          links.some(id => typeof id !== "string" || !id.trim()) ||
-          new Set(links).size !== links.length)) {
+          links.some(id => typeof id !== "string" || !id.trim()))) {
       throw new Error(
-        `Registro de ${label} malformado: referencias inválidas, duplicadas o superiores al límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`
+        `Registro de ${label} malformado: referencias inválidas o superiores al límite de ${MAX_NARRATIVE_IDEA_REFERENCES}.`
       );
     }
-  }
-  if (idea.relatedIdeaIds?.includes(idea.id)) {
-    throw new Error(`Registro de ${label} malformado: una idea no puede relacionarse consigo misma.`);
   }
   if (idea.statusHistory !== undefined) {
     if (!Array.isArray(idea.statusHistory)) {
       throw new Error(`Registro de ${label} malformado: historial inválido.`);
     }
-    let previousChangedAt: number | undefined;
-    for (let index = 0; index < idea.statusHistory.length; index++) {
-      const change = idea.statusHistory[index];
+    for (const change of idea.statusHistory) {
       if (!change ||
           (change.status !== "IDEA" && change.status !== "incorporated" && change.status !== "discarded") ||
-          (change.changedAt !== undefined && (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
+          (change.changedAt !== undefined &&
+            (typeof change.changedAt !== "number" || !Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
           (change.reason !== "initial" && change.reason !== "writer" && change.reason !== "text-revised") ||
-          (change.reason === "text-revised" && change.status !== "IDEA") ||
-          (index === 0 ? change.reason !== "initial" : change.reason === "initial" ||
-            change.status === idea.statusHistory[index - 1]?.status) ||
-          (change.changedAt !== undefined && previousChangedAt !== undefined &&
-            change.changedAt < previousChangedAt)) {
-        throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);
+          (change.reason === "text-revised" && change.status !== "IDEA")) {
+        throw new Error(`Registro de ${label} malformado: historial inválido.`);
       }
-      if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
-    }
-    if (idea.statusHistory.length === 0 ||
-        idea.statusHistory[idea.statusHistory.length - 1]?.status !== idea.status) {
-      throw new Error(`Registro de ${label} malformado: el historial no coincide con el estado actual.`);
     }
   }
 }
 
+/** Reglas estrictas para ideas nuevas: el histórico leído se conserva, pero no se crean anomalías nuevas. */
+function validateNarrativeIdeaWriteRecord(idea: NarrativeIdea, label: string): void {
+  validateNarrativeIdeaRecord(idea, label);
+  for (const links of [idea.relatedEntityIds ?? [], idea.relatedIdeaIds ?? []]) {
+    if (new Set(links).size !== links.length) {
+      throw new Error(`Registro de ${label} malformado: referencias duplicadas.`);
+    }
+  }
+  if (idea.relatedIdeaIds?.includes(idea.id)) {
+    throw new Error(`Registro de ${label} malformado: una idea no puede relacionarse consigo misma.`);
+  }
+  validateStrictNarrativeIdeaStatusHistory(idea, label);
+}
+
+function validateStrictNarrativeIdeaStatusHistory(idea: NarrativeIdea, label: string): void {
+  const history = idea.statusHistory;
+  if (history === undefined) return;
+  if (!Array.isArray(history) || history.length === 0) {
+    throw new Error(`Registro de ${label} malformado: historial vacío.`);
+  }
+  let previousChangedAt: number | undefined;
+  for (let index = 0; index < history.length; index++) {
+    const change = history[index]!;
+    if ((index === 0
+        ? change.reason !== "initial"
+        : change.reason === "initial" || change.status === history[index - 1]?.status) ||
+        (change.changedAt !== undefined && previousChangedAt !== undefined &&
+          change.changedAt < previousChangedAt)) {
+      throw new Error(`Registro de ${label} malformado: transición de estado inválida.`);
+    }
+    if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+  }
+  if (history[history.length - 1]?.status !== idea.status) {
+    throw new Error(`Registro de ${label} malformado: el historial no coincide con el estado actual.`);
+  }
+}
+
+/**
+ * Actualizar una idea antigua no debe exigir que su prefijo histórico ya fuera
+ * perfecto. Se permite conservarlo literalmente y solo se valida la transición
+ * nueva que se añade al final.
+ */
+function validateNarrativeIdeaUpdateRecord(
+  idea: NarrativeIdea,
+  expectedCurrent: NarrativeIdea,
+  label: string
+): void {
+  validateNarrativeIdeaRecord(idea, label);
+  validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
+  if (idea.projectId !== expectedCurrent.projectId || idea.id !== expectedCurrent.id) {
+    throw new Error("La actualización debe conservar la identidad de la idea original.");
+  }
+  const sameArray = (first: readonly string[] = [], second: readonly string[] = []): boolean =>
+    first.length === second.length && first.every((value, index) => value === second[index]);
+  if (!sameArray(idea.relatedEntityIds, expectedCurrent.relatedEntityIds) ||
+      !sameArray(idea.relatedIdeaIds, expectedCurrent.relatedIdeaIds)) {
+    validateNarrativeIdeaWriteRecord({
+      ...idea,
+      statusHistory: expectedCurrent.statusHistory
+    }, label + " con vínculos modificados");
+  }
+
+  const previousHistory = expectedCurrent.statusHistory ?? [];
+  const nextHistory = idea.statusHistory ?? [];
+  const isPreservedPrefix = previousHistory.length <= nextHistory.length &&
+    previousHistory.every((change, index) =>
+      JSON.stringify(change) === JSON.stringify(nextHistory[index])
+    );
+  if (!isPreservedPrefix) {
+    validateStrictNarrativeIdeaStatusHistory(idea, label);
+    return;
+  }
+  const additions = nextHistory.slice(previousHistory.length);
+  if (additions.length === 0) {
+    if (idea.status !== expectedCurrent.status) {
+      throw new Error("Un cambio de estado requiere una nueva transición editorial.");
+    }
+    return;
+  }
+  let previousStatus = previousHistory.at(-1)?.status ?? expectedCurrent.status;
+  let previousChangedAt = previousHistory.reduce<number | undefined>(
+    (latest, change) => change.changedAt === undefined
+      ? latest
+      : latest === undefined ? change.changedAt : Math.max(latest, change.changedAt),
+    undefined
+  );
+  for (const change of additions) {
+    if (change.reason === "initial" ||
+        change.status === previousStatus ||
+        (change.reason === "text-revised" && change.status !== "IDEA") ||
+        (change.changedAt !== undefined && previousChangedAt !== undefined &&
+          change.changedAt < previousChangedAt)) {
+      throw new Error("La actualización añade una transición editorial inválida.");
+    }
+    previousStatus = change.status;
+    if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
+  }
+  if (previousStatus !== idea.status) {
+    throw new Error("La nueva transición editorial no coincide con el estado actual.");
+  }
+}
 function validateNarrativeAssertionRecord(
   assertion: NarrativeAssertion,
   label: string
@@ -4157,15 +4247,15 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   async saveIdea(idea: NarrativeIdea): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
+    validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea);
     this.publishNarrativeChange(idea.projectId);
   }
 
   async saveIdeaIfUnchanged(idea: NarrativeIdea, expectedCurrent?: NarrativeIdea): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
-    if (expectedCurrent !== undefined) validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
+    if (expectedCurrent === undefined) validateNarrativeIdeaWriteRecord(idea, "idea narrativa");
+    else validateNarrativeIdeaUpdateRecord(idea, expectedCurrent, "idea narrativa");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
     this.publishNarrativeChange(idea.projectId);
@@ -4180,8 +4270,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     idea: NarrativeIdea,
     expectedCurrent: NarrativeIdea
   ): Promise<void> {
-    validateNarrativeIdeaRecord(idea, "idea narrativa");
-    validateNarrativeIdeaRecord(expectedCurrent, "idea anterior");
+    validateNarrativeIdeaUpdateRecord(idea, expectedCurrent, "idea narrativa");
     const db = await this.open();
     await saveNarrativeIdeaWithReferences(db, idea, expectedCurrent, true);
     this.publishNarrativeChange(idea.projectId);

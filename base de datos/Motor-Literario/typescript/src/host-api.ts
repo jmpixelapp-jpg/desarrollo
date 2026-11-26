@@ -847,20 +847,21 @@ export class HostEngineApi {
         );
         try {
           const snapshot = this.getSnapshot(result.documentId);
-          // La ventana contextual permite resolver menciones repetidas entre frases
-          // cercanas sin analizar todo el manuscrito en cada pulsación. Los offsets
-          // siguen siendo absolutos dentro del documento.
+          // La ventana contextual permite reconocer referencias cercanas sin
+          // analizar todo el manuscrito en cada pulsación. Nunca mezcla revisiones.
           const contextRadius = 12_000;
-          const snapshotMatchesRevision = snapshot?.revision === result.revision;
-          const contextStart = snapshotMatchesRevision
+          const coherentSnapshot = snapshot && snapshot.revision === result.revision
+            ? snapshot
+            : undefined;
+          const contextStart = coherentSnapshot
             ? Math.max(0, result.affectedStart - contextRadius)
             : result.affectedStart;
           const affectedEnd = result.affectedStart + result.affectedText.length;
-          const contextEnd = snapshotMatchesRevision
-            ? Math.min(snapshot.text.length, affectedEnd + contextRadius)
+          const contextEnd = coherentSnapshot
+            ? Math.min(coherentSnapshot.text.length, affectedEnd + contextRadius)
             : affectedEnd;
-          const contextText = snapshotMatchesRevision
-            ? snapshot.text.slice(contextStart, contextEnd)
+          const contextText = coherentSnapshot
+            ? coherentSnapshot.text.slice(contextStart, contextEnd)
             : result.affectedText;
           const candidates = discoverNarrativeObservationCandidates({
             projectId: this.requireProject().projectId,

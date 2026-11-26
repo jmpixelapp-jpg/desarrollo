@@ -209,7 +209,7 @@ test("exige resincronización para undo/redo y no emite deltas inventados", () =
   f.source.dispose();
 });
 
-test("no inventa una categoría cuando el navegador entrega inputType vacío", () => {
+test("suspende de forma conservadora cuando el navegador entrega inputType vacío", () => {
   const f = fixture("abc", 0, 0);
   f.element.edit({
     start: 3,
@@ -218,11 +218,10 @@ test("no inventa una categoría cuando el navegador entrega inputType vacío", (
     inputType: ""
   });
 
-  assert.equal(f.changes.length, 1);
-  assert.equal(f.changes[0].activityKind, undefined);
-  assert.equal(Object.prototype.hasOwnProperty.call(f.changes[0], "inputType"), false);
-  assert.equal(f.source.getState().needsResync, false,
-    "el delta textual puede ser exacto aunque su procedencia no esté identificada");
+  assert.equal(f.changes.length, 0,
+    "sin un tipo de inserción/eliminación verificable, el textarea no inventa el rango operativo");
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors[0].code, "unsupported-input-type");
   f.stop();
   f.source.dispose();
 });
@@ -242,8 +241,10 @@ test("conserva inputType nativo exacto sin exportar InputEvent.data", () => {
   assert.equal(f.changes[0].activityKind, "other");
   assert.equal(Object.prototype.hasOwnProperty.call(f.changes[0], "data"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(f.changes[0], "inputData"), false);
-  assert.equal(JSON.stringify(f.changes[0]).includes("dictated"), false,
-    "el delta conserva solo el tipo de operación, no el payload enviado por el evento");
+  assert.deepEqual(Object.keys(f.changes[0]).sort(), [
+    "activityKind", "baseRevision", "documentId", "end",
+    "inputType", "replacement", "sequence", "start"
+  ], "el delta conserva metadatos y el reemplazo necesario, no propiedades extra del InputEvent");
   f.stop();
   f.source.dispose();
 });

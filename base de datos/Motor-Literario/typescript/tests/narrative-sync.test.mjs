@@ -244,3 +244,23 @@ test("una operación retrasada bloquea la cola para conservar el orden de secuen
   assert.equal(result.remaining, 2);
   assert.equal(pushes, 0);
 });
+
+
+test("rechaza códigos de conflicto excesivos y conserva la operación", async () => {
+  const outbox = createOutbox([operation("op-oversized-code", 1)]);
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push() {
+      return {
+        acknowledgedOperationIds: [],
+        conflicts: [{ operationId: "op-oversized-code", code: "x".repeat(129) }],
+        retryableOperationIds: []
+      };
+    }
+  }, { now: () => 100, retryBaseDelayMs: 1_000, retryMaxDelayMs: 1_000, random: () => 1 });
+
+  await assert.rejects(coordinator.syncOnce("project-a"), /código del conflicto supera el límite/);
+  assert.equal(outbox.pending.length, 1, "una respuesta inválida no puede retirar la operación");
+  assert.equal(outbox.acknowledged.length, 0);
+  assert.equal(outbox.attempts.length, 1);
+  assert.equal(outbox.attempts[0].error, "El código del conflicto supera el límite permitido.");
+});

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
-import { IndexedDbProjectStore, NarrativeSyncCoordinator } from "../dist/motor-literario.js";
+import { IndexedDbProjectStore, IndexedDbSyncExecutionLock, NarrativeSyncCoordinator } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 globalThis.IDBKeyRange = IDBKeyRange;
@@ -205,6 +205,37 @@ test("el coordinador usa la bandeja IndexedDB real y conserva conflictos hasta s
     assert.equal((await store.loadPendingSyncOperations("sync-outbox-project")).length, 0);
   } finally {
     await store.close();
+    await deleteDatabase();
+  }
+});
+
+
+test("el adaptador IndexedDB serializa coordinadores con propietarios distintos", async () => {
+  await deleteDatabase();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  const firstLock = new IndexedDbSyncExecutionLock(firstStore, {
+    ownerId: "tab-owner-one", leaseDurationMs: 1_000, pollIntervalMs: 25
+  });
+  const secondLock = new IndexedDbSyncExecutionLock(secondStore, {
+    ownerId: "tab-owner-two", leaseDurationMs: 1_000, pollIntervalMs: 25
+  });
+  let active = 0;
+  let maximumActive = 0;
+  const order = [];
+  const run = (lock, label) => lock.runExclusive("narrative-sync:lease-project", async () => {
+    active++;
+    maximumActive = Math.max(maximumActive, active);
+    order.push(label + ":start");
+    await new Promise(resolve => setTimeout(resolve, 60));
+    order.push(label + ":end");
+    active--;
+  });
+  try {
+    await Promise.all([run(firstLock, "first"), run(secondLock, "second")]);
+    assert.equal(maximumActive, 1);
+    assert.deepEqual(order, ["first:start", "first:end", "second:start", "second:end"]);
+  } finally {
     await deleteDatabase();
   }
 });

@@ -343,17 +343,26 @@ test("la reapertura del outbox recupera operaciones pendientes para otro trabaja
   const index = makeIndex(projectId, 1, 100);
 
   await first.enqueueContinuityIndex({ index, writerId: "device-a" });
+  const [abandonedLease] = await first.claimPending({
+    projectId, workerId: "worker-before-crash", now: 200, leaseMs: 1_000
+  });
   first.close();
 
   const reopened = new IndexedDbNarrativeSyncOutbox({ databaseName: name });
   try {
-    const entries = await reopened.loadEntries(projectId, "pending");
+    const entries = await reopened.loadEntries(projectId, "leased");
     assert.equal(entries.length, 1);
     assert.equal(entries[0].envelope.payload.index.fingerprint, index.fingerprint);
+    assert.equal(entries[0].operationId, abandonedLease.operationId);
+    assert.deepEqual(await reopened.claimPending({
+      projectId, workerId: "worker-after-restart", now: 1_199
+    }), []);
     const [claim] = await reopened.claimPending({
-      projectId, workerId: "worker-after-restart", now: 200
+      projectId, workerId: "worker-after-restart", now: 1_200
     });
     assert.equal(claim.generation, 1);
+    assert.equal(claim.operationId, abandonedLease.operationId);
+    assert.equal(claim.attempts, 2);
   } finally {
     reopened.close();
   }

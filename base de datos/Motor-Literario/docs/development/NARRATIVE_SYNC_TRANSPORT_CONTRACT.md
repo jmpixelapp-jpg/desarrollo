@@ -54,3 +54,7 @@ El coordinador también valida el tamaño y la estructura JSON de cada payload a
 `tests/indexeddb-sync-outbox.test.mjs` verifica la bandeja real con IndexedDB, el conteo durable y la persistencia del próximo intento; `tests/indexeddb-storage-health.test.mjs` cubre diagnósticos de cuota/almacenamiento. `tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, respuestas parciales, coalescencia concurrente, paralelismo por proyecto, backoff exponencial, bloqueo de secuencia mientras una operación espera y validación de payloads/lotes.
 
 La existencia de estos tests acredita cobertura escrita, no ejecución satisfactoria. La validación requiere `npm run typecheck` y `npm test` desde `typescript/`.
+
+## Idempotencia de la bandeja local
+
+La clave `operationId` identifica el contenido inmutable de una operación: proyecto, dispositivo, secuencia, tipo, fecha de creación y payload JSON. Los metadatos locales de reintento (`attemptCount`, `lastAttemptAt`, `lastError` y `nextAttemptAt`) no forman parte de esa identidad. Reencolar una operación ya persistida tras un timeout o un reinicio es idempotente y no debe borrar ni reiniciar su backoff. La comparación del payload normaliza recursivamente las claves de objetos JSON, preservando el orden de los arrays.

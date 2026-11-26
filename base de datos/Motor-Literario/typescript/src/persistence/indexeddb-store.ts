@@ -4572,9 +4572,13 @@ export class IndexedDbProjectStore implements ProjectStore {
       // Un guardado compatible no dispone de la reconstrucción y verificación
       // atómica del checkpoint. Por eso no puede avanzar el snapshot si hay
       // deltas pendientes ni inicializarlo sobre un journal huérfano.
-      const transaction = db.transaction([DOCUMENTS, CHANGES], "readwrite");
+      const transaction = db.transaction(
+        syncDraft ? [DOCUMENTS, CHANGES, SYNC_OUTBOX] : [DOCUMENTS, CHANGES],
+        "readwrite"
+      );
       const documents = transaction.objectStore(DOCUMENTS);
       const changes = transaction.objectStore(CHANGES);
+      const outbox = syncDraft ? transaction.objectStore(SYNC_OUTBOX) : undefined;
       let conflict = false;
       const abort = () => {
         try { transaction.abort(); } catch { /* transacción ya abortada */ }
@@ -4834,7 +4838,7 @@ export class IndexedDbProjectStore implements ProjectStore {
     });
   }
 
-  async appendChange(change: StoredChange): Promise<void> {
+  async appendChange(change: StoredChange, syncDraft?: Omit<StoredSyncOperation, "sequence">): Promise<void> {
     if (!change || typeof change.projectId !== "string" || !change.projectId.trim() ||
         typeof change.documentId !== "string" || !change.documentId.trim() ||
         !Number.isSafeInteger(change.sequence) || change.sequence < 1 ||
@@ -4846,6 +4850,26 @@ export class IndexedDbProjectStore implements ProjectStore {
         typeof change.replacement !== "string" ||
         !Number.isFinite(change.committedAt) || change.committedAt < 0) {
       throw new Error("Registro de journal inválido: no se puede persistir una edición malformada.");
+    }
+    if (syncDraft !== undefined) {
+      if (!syncDraft || syncDraft.projectId !== change.projectId ||
+          typeof syncDraft.operationId !== "string" || !syncDraft.operationId.trim() ||
+          syncDraft.operationId.length > 256 ||
+          typeof syncDraft.deviceId !== "string" || !syncDraft.deviceId.trim() ||
+          syncDraft.deviceId.length > 256 ||
+          typeof syncDraft.kind !== "string" || !syncDraft.kind.trim() || syncDraft.kind.length > 128 ||
+          typeof syncDraft.payload !== "string" || syncDraft.payload.length > 2_000_000 ||
+          syncDraft.createdAt !== change.committedAt || syncDraft.attemptCount !== 0 ||
+          syncDraft.lastAttemptAt !== undefined || syncDraft.lastError !== undefined ||
+          syncDraft.nextAttemptAt !== undefined) {
+        throw new Error("Borrador de sincronización inválido para el commit narrativo.");
+      }
+      let parsed: unknown;
+      try { parsed = JSON.parse(syncDraft.payload); }
+      catch { throw new Error("El payload del commit narrativo debe ser JSON válido."); }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("El payload del commit narrativo debe ser un objeto JSON.");
+      }
     }
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
@@ -4879,7 +4903,38 @@ export class IndexedDbProjectStore implements ProjectStore {
           changes.add(change);
         } catch {
           abort();
+          return;
         }
+        if (!syncDraft || !outbox) return;
+        const existingRequest = outbox.get(syncDraft.operationId);
+        existingRequest.onsuccess = () => {
+          if (existingRequest.result) {
+            conflict = true;
+            abort();
+            return;
+          }
+          const range = IDBKeyRange.bound(
+            [syncDraft.projectId, syncDraft.deviceId, 0],
+            [syncDraft.projectId, syncDraft.deviceId, Number.MAX_SAFE_INTEGER]
+          );
+          const lastRequest = outbox.index("by-project-device-sequence").openCursor(range, "prev");
+          lastRequest.onsuccess = () => {
+            const last = lastRequest.result?.value as StoredSyncOperation | undefined;
+            const sequence = (last?.sequence ?? 0) + 1;
+            if (!Number.isSafeInteger(sequence) || sequence < 1) {
+              conflict = true;
+              abort();
+              return;
+            }
+            try {
+              outbox.add({ ...syncDraft, sequence });
+            } catch {
+              abort();
+            }
+          };
+          lastRequest.onerror = abort;
+        };
+        existingRequest.onerror = abort;
       };
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(

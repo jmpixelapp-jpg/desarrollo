@@ -82,3 +82,42 @@ test("rechaza contextos y offsets inválidos", () => {
     ...context, text: "El tema central es la memoria.", baseOffset: -1
   }));
 });
+
+
+test("detecta objetivos, motivaciones y dilemas expresados sin etiquetas", () => {
+  const text = [
+    "Mara desea encontrar a su hermano desaparecido.",
+    "Su motivación principal es proteger a su familia.",
+    "El guardián debe elegir entre salvar la ciudad o cumplir su juramento."
+  ].join("\\n");
+
+  const found = discoverNarrativeIdeaCandidates({ ...context, text });
+  assert.deepEqual(found.map(item => item.kind), ["goal", "motivation", "dilemma"]);
+  assert.deepEqual(found.map(item => item.text), [
+    "encontrar a su hermano desaparecido",
+    "proteger a su familia",
+    "salvar la ciudad o cumplir su juramento"
+  ]);
+  assert.ok(found.every(item => item.polarity === "affirmed"));
+});
+
+test("no transforma un objetivo negado en un deseo afirmado", () => {
+  const found = discoverNarrativeIdeaCandidates({
+    ...context,
+    text: "Mara no quiere abandonar a su hermano."
+  });
+
+  assert.equal(found.length, 1);
+  assert.equal(found[0].kind, "goal");
+  assert.equal(found[0].polarity, "negated");
+  assert.equal(found[0].text, "abandonar a su hermano");
+});
+
+test("marca preguntas e hipótesis como modalidades no confirmadas", () => {
+  const found = discoverNarrativeIdeaCandidates({
+    ...context,
+    text: "¿Qué pasaría si la ciudad desapareciera? Tal vez Mara conozca la verdad."
+  });
+
+  assert.deepEqual(found.map(item => item.polarity), ["hypothetical", "hypothetical"]);
+});

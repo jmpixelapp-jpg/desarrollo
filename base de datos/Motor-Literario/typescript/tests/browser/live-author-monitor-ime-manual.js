@@ -1,4 +1,5 @@
 import { LiveAuthorMonitorTextAreaSource } from "../../src/live-author-monitor-textarea-source.ts";
+import { LiveAuthorMonitorImePairing } from "./live-author-monitor-ime-pairing.js";
 
 const editor = document.querySelector("#editor");
 const startButton = document.querySelector("#start");
@@ -26,8 +27,7 @@ let source;
 let baselineLengthUtf16 = 0;
 let startedAt;
 let disposed = false;
-let beforeInputSequence = 0;
-let pendingBeforeInput;
+const inputPairing = new LiveAuthorMonitorImePairing();
 
 const eventCounters = {
   beforeInputCount: 0,
@@ -53,19 +53,6 @@ const deltaCounters = {
   other: 0
 };
 const errorCodeCounts = Object.create(null);
-const pairingCounters = {
-  pairedInputCount: 0,
-  pairedWithoutInputTypeCount: 0,
-  unmatchedBeforeInputCount: 0,
-  orphanInputCount: 0,
-  inputTypeMismatchCount: 0,
-  defaultPreventedBeforeInputCount: 0,
-  inputDataMatchCount: 0,
-  inputDataMismatchCount: 0,
-  inputDataOneSidedCount: 0,
-  inputDataUnavailableCount: 0
-};
-
 function safeDataLength(event) {
   return typeof event.data === "string" ? event.data.length : null;
 }
@@ -76,91 +63,6 @@ function appendTraceEntry(entry) {
     droppedEventCount += 1;
   }
   events.push(entry);
-}
-
-function correlateInputEvent(entry, event) {
-  if (entry.type === "beforeinput") {
-    eventCounters.beforeInputCount += 1;
-    if (entry.inputType === "insertCompositionText") {
-      eventCounters.compositionBeforeInputCount += 1;
-    }
-    if (pendingBeforeInput) {
-      pairingCounters.unmatchedBeforeInputCount += 1;
-      pendingBeforeInput.entry.pairStatus = "superseded-by-next-beforeinput";
-      pendingBeforeInput.inputData = null;
-    }
-
-    const pairId = ++beforeInputSequence;
-    entry.pairId = pairId;
-    if (entry.defaultPrevented === true) {
-      entry.pairStatus = "default-prevented";
-      entry.dataComparison = "not-applicable";
-      pairingCounters.defaultPreventedBeforeInputCount += 1;
-      pendingBeforeInput = undefined;
-    } else {
-      entry.pairStatus = "awaiting-input";
-      pendingBeforeInput = {
-        pairId,
-        inputType: entry.inputType,
-        inputData: typeof event.data === "string" ? event.data : null,
-        entry
-      };
-    }
-    return;
-  }
-
-  if (entry.type !== "input") return;
-  eventCounters.inputCount += 1;
-  if (entry.inputType === "insertCompositionText") {
-    eventCounters.compositionInputCount += 1;
-  }
-  if (!pendingBeforeInput) {
-    pairingCounters.orphanInputCount += 1;
-    entry.pairStatus = "orphan-input";
-    return;
-  }
-
-  const pending = pendingBeforeInput;
-  entry.pairId = pending.pairId;
-  pending.entry.pairStatus = "paired";
-  const hasCurrentInputType = typeof entry.inputType === "string" && entry.inputType.length > 0;
-  const hasPreviousInputType = typeof pending.inputType === "string" && pending.inputType.length > 0;
-  if (hasCurrentInputType && hasPreviousInputType && entry.inputType !== pending.inputType) {
-    entry.pairStatus = "inputtype-mismatch";
-    pending.entry.pairStatus = "inputtype-mismatch";
-    pairingCounters.inputTypeMismatchCount += 1;
-  } else {
-    pairingCounters.pairedInputCount += 1;
-    if (!hasCurrentInputType) {
-      pairingCounters.pairedWithoutInputTypeCount += 1;
-      entry.pairStatus = "paired-inputtype-unavailable";
-      pending.entry.pairStatus = "paired-inputtype-unavailable";
-    } else {
-      entry.pairStatus = "paired";
-      pending.entry.pairStatus = "paired";
-    }
-  }
-
-  // Se comparan los valores exactos en memoria, pero solo se exporta el
-  // resultado de la comparación. Los strings se liberan al cerrar el par.
-  const inputData = typeof event.data === "string" ? event.data : null;
-  if (pending.inputData !== null && inputData !== null) {
-    const matches = pending.inputData === inputData;
-    entry.dataComparison = matches ? "match" : "mismatch";
-    pending.entry.dataComparison = entry.dataComparison;
-    if (matches) pairingCounters.inputDataMatchCount += 1;
-    else pairingCounters.inputDataMismatchCount += 1;
-  } else if (pending.inputData !== null || inputData !== null) {
-    entry.dataComparison = "one-sided";
-    pending.entry.dataComparison = "one-sided";
-    pairingCounters.inputDataOneSidedCount += 1;
-  } else {
-    entry.dataComparison = "unavailable";
-    pending.entry.dataComparison = "unavailable";
-    pairingCounters.inputDataUnavailableCount += 1;
-  }
-  pending.inputData = null;
-  pendingBeforeInput = undefined;
 }
 
 function recordEvent(event) {
@@ -188,7 +90,8 @@ function recordEvent(event) {
   else if (event.type === "compositionupdate") eventCounters.compositionUpdateCount += 1;
   else if (event.type === "compositionend") eventCounters.compositionEndCount += 1;
 
-  correlateInputEvent(entry, event);
+  if (entry.type === "beforeinput") inputPairing.recordBeforeInput(entry, event);
+  else if (entry.type === "input") inputPairing.recordInput(entry, event);
   appendTraceEntry(entry);
   render();
 }
@@ -197,12 +100,7 @@ function recordError(error) {
   traceEntryCount += 1;
   eventCounters.monitorErrorCount += 1;
   errorCodeCounts[error.code] = (errorCodeCounts[error.code] ?? 0) + 1;
-  if (pendingBeforeInput) {
-    pairingCounters.unmatchedBeforeInputCount += 1;
-    pendingBeforeInput.entry.pairStatus = "monitor-error-before-input";
-    pendingBeforeInput.inputData = null;
-    pendingBeforeInput = undefined;
-  }
+  inputPairing.interrupt("monitor-error-before-input");
   appendTraceEntry({
     index: traceEntryCount,
     atMs: Number(performance.now().toFixed(3)),
@@ -213,11 +111,7 @@ function recordError(error) {
 }
 
 function currentPairingSummary() {
-  return {
-    ...pairingCounters,
-    pendingBeforeInputCount: pendingBeforeInput ? 1 : 0,
-    pendingBeforeInputPairId: pendingBeforeInput?.pairId ?? null
-  };
+  return inputPairing.snapshot();
 }
 
 function render() {
@@ -345,10 +239,7 @@ window.addEventListener("pagehide", () => {
     disposed = true;
     source.dispose();
   }
-  if (pendingBeforeInput) {
-    pendingBeforeInput.inputData = null;
-    pendingBeforeInput = undefined;
-  }
+  inputPairing.dispose();
 });
 
 render();

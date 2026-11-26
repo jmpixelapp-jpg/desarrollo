@@ -1,12 +1,12 @@
 {
   "format": "MLDB_STORAGE_MAPPING",
-  "mapping_version": 16,
+  "mapping_version": 17,
   "schema_version": "0.4.2",
   "storage_model": "journal-first-key-value",
   "runtime": {
     "technology": "IndexedDB nativo",
     "database_name": "motor-literario-local",
-    "database_version": 27,
+    "database_version": 28,
     "object_stores": [
       {
         "name": "project-settings",
@@ -899,6 +899,11 @@
             false
           ]
         ]
+      },
+      {
+        "name": "narrative-idea-continuity-indexes",
+        "keyPath": "projectId",
+        "indexes": []
       }
     ]
   },
@@ -1506,6 +1511,25 @@
         [
           "projectId",
           "documentId"
+        ]
+      ]
+    },
+    {
+      "table": "narrative_idea_continuity_indexes",
+      "logicalScope": "project",
+      "storageScopes": [
+        "project"
+      ],
+      "keyPrefixes": [],
+      "representation": "derived-projection",
+      "contract": "NarrativeIdeaContinuityIndex; índice compacto reconstruible de continuidad narrativa, con vector de revisiones, evidencia deduplicada, generación CAS y huella de consistencia. No es una ficha de idea canónica ni modifica la biblioteca editorial.",
+      "implementationStatus": "implemented",
+      "objectStores": [
+        "narrative-idea-continuity-indexes"
+      ],
+      "keyPath": [
+        [
+          "projectId"
         ]
       ]
     }

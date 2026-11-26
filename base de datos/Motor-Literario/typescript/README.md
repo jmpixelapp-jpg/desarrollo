@@ -443,3 +443,5 @@ El documento [Registro técnico de lectura y trazabilidad narrativa](../docs/ana
 La API de evidencia versionada requiere que el snapshot declare `revision` y que coincida con la revisión de cada evidencia; además compara exactamente el texto citado. La resolución de colecciones falla de forma integral si una evidencia no puede verificarse.
 
 Las pruebas mencionadas en esta documentación son pruebas **escritas**. No se debe interpretar su presencia como ejecución satisfactoria: typecheck, build, suite completa y validación con corpus real deben registrarse por separado cuando se ejecuten.
+
+La evidencia persistida puede contener un rango de ocurrencia más una línea contextual completa. El resolver compara la línea de origen con el excerpt y devuelve el rango exacto como fragmento. Los IDs internos de capítulos importados no se consideran automáticamente iguales a los IDs documentales del anfitrión; esa correspondencia está pendiente de un contrato explícito.

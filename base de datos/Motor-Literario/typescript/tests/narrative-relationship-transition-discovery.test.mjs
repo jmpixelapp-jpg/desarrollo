@@ -42,3 +42,9 @@ test("omite nombres compartidos entre fichas distintas para no resolver identida
  const duplicate={...ana,id:"ana-2"};
  assert.deepEqual(run("Ana y Bruno se hicieron amigos.",[ana,duplicate,bruno]),[]);
 });
+
+test("prefiere el par de personajes más próximo al disparador frente a un personaje incidental",()=>{
+ const [c]=run("Ana y Bruno se hicieron amigos mientras Carla observaba.",[ana,bruno,carla]);
+ assert.equal(c.firstEntityId,"ana");
+ assert.equal(c.secondEntityId,"bruno");
+});

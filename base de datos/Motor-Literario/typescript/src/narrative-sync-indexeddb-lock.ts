@@ -71,6 +71,7 @@ export class IndexedDbSyncExecutionLock implements SyncExecutionLock {
     let leaseLost = false;
     let renewal: ReturnType<typeof setTimeout> | undefined;
     let renewalFailure: unknown;
+    let renewalWork: Promise<void> | undefined;
     const renew = async (): Promise<void> => {
       if (stopped) return;
       try {
@@ -88,20 +89,23 @@ export class IndexedDbSyncExecutionLock implements SyncExecutionLock {
         return;
       }
       if (!stopped) {
-        renewal = setTimeout(() => { void renew(); }, Math.max(250, Math.floor(this.leaseDurationMs / 3)));
+        renewal = setTimeout(() => { renewalWork = renew(); }, Math.max(250, Math.floor(this.leaseDurationMs / 3)));
       }
     };
     renewal = setTimeout(() => { void renew(); }, Math.max(250, Math.floor(this.leaseDurationMs / 3)));
 
     let result!: T;
     let taskFailure: unknown;
+    let taskFailed = false;
     try {
       result = await task();
     } catch (error) {
+      taskFailed = true;
       taskFailure = error;
     } finally {
       stopped = true;
       if (renewal !== undefined) clearTimeout(renewal);
+      if (renewalWork) await renewalWork;
       try {
         const released = await this.store.releaseLiveAuthorMonitorLease(lease, this.timestamp());
         if (!released) leaseLost = true;
@@ -110,7 +114,7 @@ export class IndexedDbSyncExecutionLock implements SyncExecutionLock {
         leaseLost = true;
       }
     }
-    if (taskFailure !== undefined) throw taskFailure;
+    if (taskFailed) throw taskFailure;
     if (leaseLost) {
       throw new Error("Se perdió el lease compartido durante la sincronización; el resultado requiere reconciliación.", {
         cause: renewalFailure

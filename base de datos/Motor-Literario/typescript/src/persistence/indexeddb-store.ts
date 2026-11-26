@@ -5152,8 +5152,10 @@ export class IndexedDbProjectStore implements ProjectStore {
           ownerId,
           fencingToken,
           acquiredAt: sameActiveOwner ? existing.acquiredAt : now,
-          expiresAt: now + leaseDurationMs,
-          updatedAt: now
+          expiresAt: sameActiveOwner
+            ? Math.max(existing.expiresAt, now + leaseDurationMs)
+            : now + leaseDurationMs,
+          updatedAt: sameActiveOwner ? Math.max(existing.updatedAt, now) : now
         };
         try {
           store.put(structuredClone(acquired));
@@ -5203,8 +5205,8 @@ export class IndexedDbProjectStore implements ProjectStore {
             existing.expiresAt <= now || lease.expiresAt <= now) return;
         renewed = {
           ...existing,
-          expiresAt: now + leaseDurationMs,
-          updatedAt: now
+          expiresAt: Math.max(existing.expiresAt, now + leaseDurationMs),
+          updatedAt: Math.max(existing.updatedAt, now)
         };
         try {
           store.put(structuredClone(renewed));
@@ -5256,7 +5258,7 @@ export class IndexedDbProjectStore implements ProjectStore {
         try {
           store.put({
             ...existing,
-            expiresAt: now,
+            expiresAt: Math.max(existing.acquiredAt, now),
             updatedAt: Math.max(existing.acquiredAt, now)
           } satisfies StoredLiveAuthorMonitorLease);
         } catch (error) {

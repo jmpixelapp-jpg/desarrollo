@@ -213,7 +213,7 @@ export class LiveAuthorMonitor {
       acceptedChanges: 0,
       typingChanges: 0,
       compositionChanges: 0,
-      pasteChanges: 0;
+      pasteChanges: 0,
       deletionChanges: 0,
       correctionChanges: 0,
       undoChanges: 0,

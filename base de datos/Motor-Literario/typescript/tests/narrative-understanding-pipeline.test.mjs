@@ -214,3 +214,17 @@ test("no compara memoria narrativa de otro proyecto", () => {
     }]
   }), /proyecto/i);
 });
+
+
+test("rechaza afirmaciones previas de personajes que no pertenecen al contexto del proyecto", () => {
+  assert.throws(() => understandNarrativeFragment({
+    projectId:"novel", documentId:"chapter-current", revision:1,
+    text:"Mara tiene 20 años.", entities,
+    priorAssertions:[{
+      projectId:"novel", id:"unknown-character", entityId:"unknown",
+      entityName:"Desconocido", attribute:"age", value:19,
+      evidence:{ documentId:"chapter-old", revision:1, start:0, end:10, excerpt:"Desconocido tenía 19." },
+      capturedAt:1
+    }]
+  }), /personajes conocidos/i);
+});

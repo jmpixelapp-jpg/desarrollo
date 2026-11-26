@@ -1592,8 +1592,8 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
       ...idea,
       relatedIdeaIds: Array.from({ length: 501 }, (_, index) => "linked-" + index)
     }]
-  }).ideaGraph.nodes[0];
-  assert.equal(importedLargeReferenceSet.relatedIdeaIds.length, 501);
+  }).ideaGraph;
+  assert.equal(importedLargeReferenceSet.referenceCount, 501);
   assert.throws(
     () => analyzeLiteraryFragment({
       ...input,
@@ -2231,7 +2231,7 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
 });
 
 
-test("la cronología de proyecto rechaza posiciones temporales no finitas", () => {
+test("la cronología conserva posiciones temporales no finitas como no verificadas", () => {
   const evidence = {
     documentId: "chapter-one",
     revision: 1,
@@ -2253,7 +2253,7 @@ test("la cronología de proyecto rechaza posiciones temporales no finitas", () =
     },
     evidence: [evidence]
   });
-  assert.throws(() => analyzeLiteraryFragment({
+  const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
     revision: 1,
@@ -2264,7 +2264,12 @@ test("la cronología de proyecto rechaza posiciones temporales no finitas", () =
       makeEvent("not-a-number", Number.NaN),
       makeEvent("infinite", Number.POSITIVE_INFINITY)
     ]
-  }), /catálogo global de acontecimientos/);
+  });
+  const timeline = result.characterNarrativeTrajectories.trajectories[0].projectEventTimeline;
+  assert.equal(timeline.sourceEventCount, 3);
+  assert.equal(timeline.timedEventCount, 1);
+  assert.equal(timeline.unverifiedEventCount, 2);
+  assert.equal(timeline.pointCount, 1);
 });
 
 

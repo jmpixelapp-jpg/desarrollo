@@ -375,10 +375,12 @@ El banco manual exporta ahora el formato `live-author-monitor-ime-trace-v2`.
 ### Correlación `beforeinput`/`input`
 
 Cada `beforeinput` no cancelado recibe un `pairId`. El evento `input` siguiente consume ese identificador y ambos registros reciben el estado de pareja. El resumen de sesión distingue:
-- `pairedInputCount`: pares completados;
+- `pairedInputCount`: pares asociados y completados;
+- `pairedWithoutInputTypeCount`: pares en los que `input` no informó un `inputType` utilizable;
 - `pendingBeforeInputCount`: operación cuyo `input` todavía no llegó;
 - `unmatchedBeforeInputCount`: un nuevo `beforeinput` reemplazó uno pendiente;
 - `orphanInputCount`: `input` sin un `beforeinput` pendiente;
+- `interruptedBeforeInputCount`: pares pendientes interrumpidos por error del monitor o disposición de la página;
 - `inputTypeMismatchCount`: los dos eventos informaron tipos incompatibles;
 - `defaultPreventedBeforeInputCount`: el navegador notificó que la operación estaba cancelada antes del cambio por defecto.
 
@@ -393,13 +395,13 @@ Durante el par, el banco compara los strings `beforeinput.data` y `input.data` s
 - `unavailable`: ninguno estaba disponible;
 - `not-applicable`: no se esperaba un `input` porque el `beforeinput` estaba cancelado.
 
-Los valores literales no se copian a los objetos de eventos, al resumen ni al JSON exportado. El string temporal del evento anterior se libera al emparejar el `input`, al ser reemplazado por otro `beforeinput`, cuando el monitor informa un error o al abandonar la página. En caso de error con un par pendiente, el banco marca ese `beforeinput` como interrumpido, aumenta el contador de no emparejados y descarta el payload en memoria. Esto permite contrastar exactamente los datos de ambos eventos sin incluir el manuscrito ni los candidatos en la traza.
+Los valores literales no se copian a los objetos de eventos, al resumen ni al JSON exportado. El string temporal del evento anterior se libera al emparejar el `input`, al ser reemplazado por otro `beforeinput`, cuando el monitor informa un error o al abandonar la página. En caso de error con un par pendiente, el banco marca ese `beforeinput` como interrumpido, aumenta `interruptedBeforeInputCount` y descarta el payload en memoria. La sustitución por otro `beforeinput` se contabiliza por separado en `unmatchedBeforeInputCount`. Esto permite contrastar exactamente los datos de ambos eventos sin incluir el manuscrito ni los candidatos en la traza.
 
 ### Contadores acumulativos y límite del buffer
 
 Los contadores de eventos, confianza, composición, deltas, errores y parejas ahora se incrementan durante toda la sesión y no se calculan filtrando el buffer visible. El buffer de eventos conserva como máximo 2.000 entradas y el de deltas como máximo 2.000; los contadores `droppedEventCount` y `droppedDeltaCount` informan cuántas entradas antiguas se descartaron. Por tanto, una sesión larga puede seguir reportando totales completos aunque su traza detallada cubra solo el tramo más reciente.
 
-La prueba Playwright amplía la prueba de privacidad: realiza una escritura nativa, verifica un par de eventos completo, despacha 2.010 `compositionupdate` sintéticos solo para estresar el límite del registrador, y comprueba que:
+La lógica de correlación vive ahora en `tests/browser/live-author-monitor-ime-pairing.js` y se cubre con pruebas unitarias de pares coincidentes, datos contradictorios, datos ausentes/de un solo lado, `inputType` discordante o ausente, cancelación, eventos huérfanos, sustitución de operaciones y liberación por error/disposición. La prueba Playwright amplía la prueba de privacidad: realiza una escritura nativa, verifica un par de eventos completo, despacha 2.010 `compositionupdate` sintéticos solo para estresar el límite del registrador, y comprueba que:
 - los contadores registran las 2.010 actualizaciones aunque solo se retengan 2.000 entradas;
 - el número de parejas y deltas no cambia cuando se descartan eventos antiguos;
 - los valores centinela privados del manuscrito y de los candidatos no aparecen en el JSON;

@@ -767,3 +767,20 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Validación CI:** aprobada en GitHub Actions, ejecución `45787774176`: instalación de Chromium, type-check, compilación, conjunto automatizado y benchmark finalizaron correctamente.
 
+
+## Recuperación conservadora de sujetos omitidos
+
+**Nuevo módulo:** `typescript/src/narrative-elliptical-subject-discovery.ts`. Añade una capa de continuidad referencial para acciones cuyo sujeto no fue identificado por el extractor de observaciones. Su propósito no es adivinar automáticamente el sujeto elíptico, sino generar una hipótesis revisable cuando existe un anclaje textual inmediato y explícito.
+
+**Regla de recuperación:** considera dos observaciones de acción consecutivas del mismo documento y revisión. La observación anterior debe tener un sujeto gramatical candidato explícito en voz activa; la observación actual no debe tener sujeto gramatical ni mencionar personajes por nombre. Entre ambas evidencias no puede haber otro nombre de personaje registrado ni un salto de párrafo. No se propagan sujetos a través de una hipótesis anterior: cada candidato debe apoyarse en un sujeto explícito original.
+
+**Resultado:** conserva el ID de la observación actual, el personaje candidato, la evidencia del sujeto antecedente, las dos acciones y la distancia textual. El estado siempre es `candidate`; no se reescribe la observación, no se declara agente confirmado y no se interpreta concordancia de género o número. La ausencia de menciones intermedias solo aumenta la continuidad textual, no demuestra continuidad semántica.
+
+**Límites deliberados:** esta primera versión no resuelve cambios de foco, coordinación compleja, diálogo, sujetos de primera o segunda persona, verbos no finitos, sujetos colectivos ni continuidad a través de párrafos. Si aparece otro personaje entre acciones, si el sujeto anterior es pasivo o si la acción intermedia carece de sujeto explícito, se abstiene. Tampoco convierte una hipótesis en anclaje para la siguiente acción.
+
+**Presupuesto:** distancia predeterminada de 300 unidades UTF-16, configurable hasta 2.000; texto máximo de 2.000.000 unidades; máximo 2.000 candidatos. Se exige coherencia de proyecto, documento, revisión y rangos absolutos UTF-16.
+
+**Pruebas añadidas:** continuidad después de sujeto activo explícito, no propagación desde hipótesis, abstención ante personaje intermedio, salto de párrafo, límite de distancia, offsets con emoji, revisión/documento incorrectos y límites de coincidencia de nombres completos.
+
+**Validación CI:** pendiente de la ejecución del módulo, sus pruebas y exportación. No declarar aprobada hasta que finalicen type-check, compilación, pruebas automatizadas y benchmark.
+

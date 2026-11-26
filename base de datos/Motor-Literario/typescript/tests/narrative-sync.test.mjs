@@ -141,3 +141,15 @@ test("permite sincronizar proyectos distintos en paralelo", async () => {
   await Promise.all([a, b]);
   assert.deepEqual(outbox.acknowledged.sort(), ["op-a", "op-b"]);
 });
+
+test("rechaza respuestas parciales que dejan operaciones sin clasificar", async () => {
+  const outbox = createOutbox([operation("op-1", 1), operation("op-2", 2)]);
+  const coordinator = new NarrativeSyncCoordinator(outbox, {
+    async push() {
+      return { acknowledgedOperationIds: ["op-1"], conflicts: [], retryableOperationIds: [] };
+    }
+  });
+  await assert.rejects(coordinator.syncOnce("project-a"), /sin clasificar/);
+  assert.equal(outbox.pending.length, 2);
+  assert.equal(outbox.acknowledged.length, 0);
+});

@@ -100,12 +100,12 @@ Cuando el registro no tiene evidencia documental, el diagnóstico usa `documentI
 
 `applyNarrativeReferenceRepair(store, proposal, approved, appliedAt)` aplica una propuesta de entidad sólo tras aprobación explícita. Revalida que el ID perdido siga documentado en `mergedFromIds` de una única identidad destino, vuelve a leer el registro y usa el método CAS específico de relaciones, acontecimientos, afirmaciones o ideas. Una repetición reconocible es idempotente; una referencia que cambió de forma incompatible se rechaza.
 
-La operación devuelve un registro de auditoría con campo, valor anterior, valor nuevo, identidad sustituida y marca temporal. Este registro queda en manos del llamador para persistencia durable: esta función no presupone un almacén de auditoría que el contrato actual de `ProjectStore` todavía no define.
+La función exige persistencia durable de auditoría e intención pendiente. Guarda la intención antes del CAS, confirma la auditoría append-only después del CAS y elimina la intención al final. Si falla cualquier frontera, la operación puede reanudarse mediante `recoverNarrativeReferenceRepairs(store, projectId)`; los conflictos permanecen pendientes para revisión.
 
 
 ### Auditoría durable de reparaciones
 
-El contrato `ProjectStore` incorpora `appendNarrativeReferenceRepairAudit` y `loadNarrativeReferenceRepairAudits`. IndexedDB almacena los registros en `narrative-reference-repair-audits`, aislados por proyecto y operación, con inserción append-only e idempotente. La base avanza a la versión 26; las bases existentes crean el almacén durante la migración sin alterar los registros previos.
+El contrato `ProjectStore` incorpora `appendNarrativeReferenceRepairAudit` y `loadNarrativeReferenceRepairAudits`. IndexedDB almacena los registros en `narrative-reference-repair-audits`, aislados por proyecto y operación, con inserción append-only e idempotente. La base avanzó a la versión 26 para la auditoría y a la versión 27 para las intenciones pendientes; las bases existentes crean ambos almacenes durante sus migraciones sin alterar los registros previos.
 
 La API pública de aplicación exige que el almacenamiento ofrezca auditoría durable antes de iniciar una reparación. Después del CAS del registro, añade la auditoría antes de devolver éxito. Si la escritura de auditoría falla tras el CAS, el llamador puede reintentar la misma propuesta: la aplicación reconoce el estado ya actualizado y completa el registro pendiente. La mutación del grafo y la escritura de auditoría son dos transacciones, no una transacción IndexedDB conjunta.
 

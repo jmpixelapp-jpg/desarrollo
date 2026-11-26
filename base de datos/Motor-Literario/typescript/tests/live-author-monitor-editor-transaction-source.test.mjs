@@ -25,7 +25,9 @@ class FakeTransactionalEditor {
     };
   }
 
-  apply(kind, transactionId, { start, end, replacement }, sequence = this.snapshot.sequence + 1) {
+  apply(kind, transactionId, {
+    start, end, replacement, activityKind, inputType
+  }, sequence = this.snapshot.sequence + 1) {
     const previous = this.snapshot;
     const change = {
       documentId: previous.documentId,
@@ -33,7 +35,9 @@ class FakeTransactionalEditor {
       baseRevision: previous.revision,
       start,
       end,
-      replacement
+      replacement,
+      ...(activityKind === undefined ? {} : { activityKind }),
+      ...(inputType === undefined ? {} : { inputType })
     };
     const nextText = previous.text.slice(0, start) + replacement + previous.text.slice(end);
     this.snapshot = {
@@ -758,6 +762,57 @@ test("dispose repetido vuelve a intentar liberar el listener del proveedor", () 
   assert.equal(unsubscribeAttempts, 2, "una vez liberado, dispose sigue siendo idempotente");
 });
 
+
+test("conserva inputType nativo en una transacción autoritativa", () => {
+  const f = fixture();
+  f.editor.apply("edit", "tx-native-input-type", {
+    start: 3,
+    end: 3,
+    replacement: "x",
+    activityKind: "typing",
+    inputType: "insertText"
+  });
+
+  assert.equal(f.changes.length, 1);
+  assert.equal(f.changes[0].activityKind, "typing");
+  assert.equal(f.changes[0].inputType, "insertText");
+  assert.equal(Object.prototype.hasOwnProperty.call(f.changes[0], "data"), false);
+  f.stop();
+  f.source.dispose();
+});
+
+test("rechaza inputType nativo inválido sin publicar la transacción", () => {
+  const invalidInputTypes = ["", "x".repeat(129), "insertText" + String.fromCharCode(0) + "suffix"];
+  for (const inputType of invalidInputTypes) {
+    const f = fixture();
+    f.editor.replaceSnapshot({
+      documentId: "chapter-1",
+      text: "abcX",
+      revision: 1,
+      sequence: 1
+    });
+    f.editor.publish({
+      transactionId: "tx-invalid-input-type",
+      kind: "edit",
+      change: {
+        documentId: "chapter-1",
+        sequence: 1,
+        baseRevision: 0,
+        start: 3,
+        end: 3,
+        replacement: "X",
+        inputType
+      }
+    });
+
+    assert.equal(f.changes.length, 0);
+    assert.equal(f.source.getState().needsResync, true);
+    assert.equal(f.errors.at(-1).code, "invalid-transaction");
+    assert.match(f.errors.at(-1).message, /inputType/);
+    f.stop();
+    f.source.dispose();
+  }
+});
 
 test("exige resincronización si se reutiliza transactionId cambiando activityKind", () => {
   const f = fixture();

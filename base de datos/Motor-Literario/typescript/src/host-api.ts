@@ -4090,7 +4090,8 @@ export class HostEngineApi {
         recoveredSnapshot.documentId,
         recoveredSnapshot.revision,
         recoveredSnapshot.text,
-        0
+        0,
+        true
       ).catch(error => this.reportKnowledgeError(error));
     }
   }

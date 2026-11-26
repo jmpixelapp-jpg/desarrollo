@@ -4,33 +4,34 @@
 
 Los handlers conectan las envolturas verificadas del diario con el almacenamiento del dominio. El dispatcher no conoce las tablas MLDB y el diario no aplica cambios al proyecto; esta capa realiza la transición explícita entre ambos.
 
-## Operación implementada: `idea-upsert`
+## Operaciones implementadas
 
-El payload tiene esta forma:
+| Tipo | Payload | Almacenamiento CAS |
+|---|---|---|
+| `idea-upsert` | `{ idea: NarrativeIdea }` | `loadIdeas` / `saveIdeaIfUnchanged` |
+| `assertion-upsert` | `{ assertion: NarrativeAssertion }` | `loadAssertions` / `saveAssertionIfUnchanged` |
+| `relation-upsert` | `{ relation: NarrativeRelation }` | `loadRelations` / `saveRelationIfUnchanged` |
+| `event-upsert` | `{ event: NarrativeEvent }` | `loadEvents` / `saveEventIfUnchanged` |
 
-```ts
-{
-  idea: NarrativeIdea
-}
-```
+Las fábricas públicas son `createNarrativeIdeaUpsertHandler`, `createNarrativeAssertionUpsertHandler`, `createNarrativeRelationUpsertHandler` y `createNarrativeEventUpsertHandler`, en `typescript/src/narrative-sync-domain-handlers.ts`.
 
-El handler `createNarrativeIdeaUpsertHandler(store)`:
+## Validación del dominio
 
-1. exige `loadIdeas` y `saveIdeaIfUnchanged` en el `ProjectStore`;
-2. valida la estructura básica de la idea y exige que `idea.projectId` coincida con `operation.projectId`;
-3. carga la idea actual dentro del proyecto;
-4. no escribe cuando el registro ya coincide exactamente, haciendo inocuo el reintento tras una caída posterior al CAS y anterior al acuse del diario;
-5. inserta o actualiza con compare-and-swap, entregando la versión observada como `expectedCurrent`.
+Todos los handlers comprueban que el proyecto del registro coincide con el proyecto del sobre antes de escribir. Las validaciones limitan longitud y cardinalidad de campos, verifican IDs, y rechazan evidencia con revisiones o rangos UTF-16 inválidos.
+
+Las relaciones requieren evidencia no vacía. Los acontecimientos validan participantes únicos y referencias temporales explícitas. Una referencia `calendar` no puede usar precisión `day-index`; una referencia `story-day` debe usarla. Las afirmaciones validan atributo, valor, evidencia y la misma distinción temporal.
 
 ## Conflictos
 
-Si la idea cambia después de la lectura, el store debe rechazar el CAS. El error detiene el replay y la operación permanece pendiente. El handler no elige silenciosamente entre dos ediciones concurrentes ni sobrescribe una versión que no observó.
+Cada handler carga el registro actual del proyecto y ejecuta el método CAS con la versión observada como `expectedCurrent`. Si el registro cambia entre lectura y escritura, el store debe rechazar el CAS. El error detiene el replay y la operación permanece pendiente.
 
-El anfitrión debe presentar el conflicto para reconciliación editorial y, una vez resuelto, generar una operación nueva o una política explícita de resolución. No se debe editar manualmente el payload de una envoltura ya sellada: cualquier cambio invalida su digest.
+No se elige silenciosamente entre dos ediciones concurrentes ni se sobrescribe una versión no observada. El anfitrión debe presentar el conflicto para reconciliación editorial y, una vez resuelto, generar una operación nueva. No se debe editar el payload de una envoltura ya sellada: cualquier cambio invalida su digest.
 
 ## Entrega e idempotencia
 
-El diario ofrece entrega al menos una vez. La idempotencia de este handler se basa en la igualdad del estado persistido antes de escribir, además del CAS. La garantía solo cubre la mutación de la idea; no convierte el diario y el almacén de ideas en una transacción única.
+El diario ofrece entrega al menos una vez. Cada handler trata como no-op una repetición cuyo registro persistido coincide exactamente, cubriendo la caída posterior a la escritura de dominio y anterior al acuse del diario.
+
+Esta garantía es por registro. No convierte el diario y el almacén de dominio en una transacción única ni hace atómica una operación que afecte varias entidades.
 
 ## Concurrencia del replay
 
@@ -38,14 +39,17 @@ Los replays del mismo escritor/proyecto se serializan dentro del runtime. Escrit
 
 ## Alcance no implementado
 
-- No autentica `writerId`; la identidad debe proceder de una sesión validada por el anfitrión/servidor.
-- No implementa transporte remoto ni autorización por proyecto.
-- No fusiona automáticamente ediciones de texto concurrentes.
-- No ofrece exactamente-una-vez ni atomicidad distribuida entre el diario y las proyecciones.
-- Los handlers de entidades, relaciones, acontecimientos y afirmaciones siguen pendientes.
+- No existe todavía handler de `entity-upsert`.
+- No hay resolución automática de conflictos ni fusión de ediciones de texto.
+- No hay transporte remoto ni autorización por proyecto.
+- El diario no autentica `writerId`; la identidad debe proceder de una sesión validada por el anfitrión/servidor.
+- SHA-256 verifica integridad, no identidad del emisor.
+- No hay exactamente-una-vez ni atomicidad distribuida entre diario y proyecciones.
+- La reconciliación de tombstones y la eliminación segura de afirmaciones/documentos requieren un flujo específico; no se simulan mediante upserts.
 
 ## Pruebas
 
-`tests/narrative-sync-domain-handlers.test.mjs` cubre persistencia CAS, repetición tras fallo antes del acuse, conflicto CAS y validación de payload.
-
-`tests/narrative-sync-writer-concurrency.test.mjs` cubre replay concurrente de escritores diferentes y exclusión entre replay de proyecto completo y replay de escritor.
+- `tests/narrative-sync-domain-handlers.test.mjs`: ideas, CAS, reintentos y conflictos.
+- `tests/narrative-sync-assertion-handler.test.mjs`: afirmaciones, evidencia, referencias temporales y reintentos.
+- `tests/narrative-sync-relation-event-handlers.test.mjs`: relaciones, acontecimientos y validación temporal.
+- `tests/narrative-sync-writer-concurrency.test.mjs`: replay paralelo entre escritores y exclusión de replay completo.

@@ -44,8 +44,8 @@ export interface NarrativeBehaviorShiftCandidate {
       readonly id: string;
       readonly transition: NarrativeCharacterIntentEvolution["transition"];
     }[];
-    readonly interpretation: "explicit-memory-connector-present" | "decision-context-present" |
-      "knowledge-context-present" | "no-linked-context";
+    readonly interpretation: "explicit-memory-connector-present" | "memory-link-present" |
+      "decision-context-present" | "knowledge-context-present" | "no-linked-context";
   };
   readonly reviewStatus: "candidate";
 }
@@ -92,7 +92,9 @@ function validEvidence(value: TextEvidence): boolean {
 }
 function shiftKind(from: NarrativeBehaviorValence, to: NarrativeBehaviorValence,
                    previousAction: string, currentAction: string): NarrativeBehaviorShiftKind | undefined {
-  if (from === to && previousAction === currentAction) return undefined;
+  const previousNormalized = previousAction.normalize("NFKC").trim().toLocaleLowerCase("es");
+  const currentNormalized = currentAction.normalize("NFKC").trim().toLocaleLowerCase("es");
+  if (from === to && previousNormalized === currentNormalized) return undefined;
   if (from === "supportive" && to === "hostile") return "supportive-to-hostile";
   if (from === "hostile" && to === "supportive") return "hostile-to-supportive";
   if (from === "supportive" && to === "neutral-or-unknown") return "supportive-to-neutral";
@@ -241,6 +243,7 @@ export function detectNarrativeBehaviorEvolution(
     const interpretation: NarrativeBehaviorShiftCandidate["context"]["interpretation"] =
       currentMemory.some(item => item.relation === "explicit-causal-link" && item.connectorEvidence)
         ? "explicit-memory-connector-present"
+        : currentMemory.length ? "memory-link-present"
         : currentContexts.length ? "decision-context-present"
         : currentKnowledge.length ? "knowledge-context-present"
         : "no-linked-context";

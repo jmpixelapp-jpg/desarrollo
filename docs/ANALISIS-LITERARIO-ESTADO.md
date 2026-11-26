@@ -456,3 +456,169 @@ La extracción del libro debe identificar candidatos a ilustración y aportar ev
 - No considerar suficiente una imagen aislada: validar también la gestión de identidad, versiones y vínculos narrativos.
 
 **Nota de estado:** este apartado formaliza el alcance deseado. No acredita que el repositorio ya disponga de un motor de ilustración, generación de imágenes, almacenamiento de referencias visuales o control de consistencia entre imágenes. Esas piezas deberán diseñarse, implementarse e integrarse con pruebas propias.
+
+
+---
+
+## Ampliación del alcance: revisión editorial, detección de omisiones y verificación de retos
+**Estado: requisitos propuestos en definición; todavía no implementados ni verificados.**
+
+### 1. Principio de funcionamiento: capacidades bajo demanda y control del usuario
+
+El producto no debe comportarse como un agente autónomo que decide ejecutar tareas creativas o editoriales por iniciativa propia. Debe ofrecer capacidades que el usuario activa expresamente desde la interfaz del programa, mediante botones, comandos o solicitudes explícitas.
+
+La excepción operativa básica es la recepción del libro y su lectura/preparación interna para que el contenido esté disponible. Esa preparación no autoriza a ejecutar automáticamente traducciones, reescrituras, correcciones, ilustraciones, mapas, ampliaciones ni otras tareas.
+
+Reglas obligatorias:
+
+- Cargar, leer y preparar/indexar el libro para su consulta constituye el flujo inicial permitido.
+- Las revisiones, análisis especializados y operaciones adicionales se ejecutan solo cuando el usuario las solicita.
+- No generar ilustraciones, mapas, fichas visuales ni otros recursos si no se pulsa la acción correspondiente o se formula la solicitud.
+- No traducir el libro ni fragmentos por iniciativa propia.
+- No completar, continuar, reescribir ni modificar una obra sin una petición explícita.
+- No aplicar correcciones directamente al original. Presentar hallazgos y propuestas; cualquier cambio debe depender de una orden y conservar la posibilidad de revisar o rechazar.
+- No confundir que una capacidad esté disponible con que deba ejecutarse automáticamente.
+- Mostrar qué operación se va a realizar y sobre qué alcance (libro, capítulo, escena, párrafo o selección) cuando sea pertinente.
+- Mantener el original intacto y registrar resultados, decisiones y versiones de las operaciones solicitadas.
+
+La interfaz debe exponer acciones diferenciadas y comprensibles. Por ejemplo: «Revisar ortografía», «Analizar redacción», «Buscar cabos sueltos», «Comprobar continuidad», «Traducir», «Crear retrato», «Generar mapa» o «Verificar reto». La disponibilidad de un botón no implica ejecución hasta que el usuario lo active.
+
+### 2. Revisión de ortografía, gramática y redacción
+
+A petición del usuario, el sistema deberá revisar el texto para detectar y explicar, como mínimo:
+
+- Errores ortográficos, tildes, mayúsculas y signos de puntuación.
+- Errores gramaticales, concordancia de género y número, tiempos verbales y construcciones incorrectas.
+- Problemas sintácticos, frases incompletas, construcciones confusas y ambigüedades involuntarias.
+- Repeticiones innecesarias de palabras, expresiones o ideas.
+- Muletillas, redundancias, cacofonías y problemas de fluidez.
+- Cambios involuntarios de tiempo verbal, persona narrativa o punto de vista.
+- Diálogos poco claros en su atribución, puntuación o formato.
+- Inconsistencias de nombres, términos, tratamientos y convenciones internas.
+- Frases que puedan resultar difíciles de comprender, señalando el motivo sin imponer una preferencia estilística como si fuera un error objetivo.
+
+Cada hallazgo deberá incluir ubicación precisa, fragmento original, categoría, explicación, gravedad o prioridad estimada y, cuando sea útil, una o más propuestas de corrección. Se distinguirán errores objetivos de sugerencias de estilo: una elección deliberada del autor no debe marcarse como incorrecta solo por apartarse de una preferencia del sistema.
+
+El usuario podrá solicitar una revisión de todo el libro, de un capítulo, de una escena o de un fragmento. También podrá pedir únicamente una categoría concreta. La corrección automática del documento nunca será implícita: deberá existir una acción explícita para aplicar cambios, idealmente con vista previa, aceptación individual o por lote y posibilidad de deshacer.
+
+### 3. Detección de elementos narrativos ausentes o sin resolver
+
+A petición del usuario, el motor deberá revisar la coherencia y el cierre narrativo para señalar posibles omisiones, cabos sueltos y promesas narrativas que no reciben resolución suficiente.
+
+Entre los casos que debe poder investigar:
+
+- Tramas principales o secundarias que se abandonan sin cierre identificable.
+- Personajes introducidos como relevantes que desaparecen sin explicación o sin una función narrativa clara.
+- Objetivos, conflictos, misterios, amenazas o preguntas planteadas que no reciben respuesta.
+- Objetos, pistas, secretos, profecías, promesas o acontecimientos preparados que no vuelven a tener consecuencia.
+- Decisiones que parecen producir consecuencias pero cuyo resultado no se muestra.
+- Relaciones entre personajes que quedan en un estado aparentemente inconcluso.
+- Cambios de personaje que se anuncian pero no se desarrollan o contradicen su evolución posterior.
+- Escenas o transiciones que parecen faltar para comprender cómo se llegó de un acontecimiento a otro.
+- Información necesaria para entender una resolución que nunca se proporciona.
+- Elementos mencionados en una parte y aparentemente olvidados en el resto de la obra.
+- Finales que resuelven el conflicto externo, pero dejan sin tratar una pregunta que la propia narración presentó como central.
+
+No debe asumir que todo misterio tiene que resolverse ni que todo personaje necesita un cierre explícito. Debe distinguir entre: cabo suelto probable, misterio intencional, ambigüedad artística, elemento posiblemente olvidado y caso no concluyente. Para justificar una alerta, deberá mostrar la introducción del elemento, sus apariciones o consecuencias posteriores y el motivo por el que considera que podría faltar una resolución.
+
+El sistema no debe inventar una respuesta ni completar la trama. Puede ofrecer alternativas de resolución únicamente si el usuario pulsa o solicita una acción de propuesta creativa. La decisión sobre qué debe permanecer abierto pertenece al autor.
+
+### 4. Continuidad y consistencia de la obra
+
+La revisión solicitada podrá buscar contradicciones o discontinuidades entre capítulos y escenas, incluyendo:
+
+- Cronología, edades, fechas, duración de viajes y orden de acontecimientos.
+- Ubicación, desplazamientos, distancias y disponibilidad de personajes.
+- Rasgos físicos, heridas, vestuario, posesiones y estados de personajes u objetos.
+- Conocimiento de cada personaje: qué sabe, cuándo lo descubre y quién se lo comunicó.
+- Relaciones, alianzas, parentescos, motivaciones y objetivos.
+- Reglas del mundo, magia, tecnología, geografía, culturas e idiomas ficticios.
+- Nombres, títulos, vocabulario y términos recurrentes.
+- Causas y consecuencias de acontecimientos, decisiones y acciones.
+
+Cada posible contradicción deberá enlazar las evidencias relevantes y distinguir una contradicción explícita de una inferencia incierta o una variación que podría estar justificada por el paso del tiempo, un narrador no fiable o una decisión deliberada.
+
+### 5. Verificación de retos y consignas de escritura
+
+El programa deberá incorporar una capacidad de comprobación de consignas, ejercicios y retos definidos por el usuario o por la propia aplicación. Su objetivo no será juzgar si un texto es literariamente excelente, sino comprobar de forma rigurosa si satisface las condiciones especificadas.
+
+Ejemplos de retos:
+
+- «Escribe un relato de 10 líneas».
+- «Escribe una frase».
+- «Escribe un relato de 30 palabras».
+- «Escribe un diálogo de dos personajes con seis intervenciones».
+- «Escribe un texto que incluya determinadas palabras».
+- «Escribe una escena en pasado y en primera persona».
+- «Escribe un relato con principio, conflicto y desenlace».
+- «Escribe un texto sin superar un límite de palabras».
+- «Escribe una historia que contenga una condición temática o narrativa concreta».
+
+#### 5.1. Validación estructural y cuantitativa
+
+El verificador deberá medir las condiciones exactas del reto y explicar el criterio utilizado:
+
+- Recuento de palabras con una política de tokenización definida y documentada.
+- Recuento de frases y oraciones, sin confundir automáticamente puntos de abreviaturas, decimales o signos dentro de diálogos.
+- Recuento de líneas según una definición explícita: saltos de línea reales, líneas no vacías o líneas editoriales, según indique el reto.
+- Recuento de párrafos, intervenciones, personajes hablantes, versos u otros elementos estructurales.
+- Límites mínimos, máximos y exactos.
+- Presencia y cantidad de términos obligatorios; ausencia de términos prohibidos.
+- Idioma, persona gramatical, tiempo verbal y formato cuando sean condiciones verificables.
+- Comprobación de que no falten partes obligatorias de la consigna.
+
+El resultado deberá mostrar el valor observado y el valor exigido. Por ejemplo: «30 palabras requeridas; 30 palabras válidas detectadas» o «10 líneas requeridas; 8 líneas no vacías detectadas». La política de conteo debe ser estable, visible y coherente en toda la aplicación.
+
+#### 5.2. Validación de contenido y sentido
+
+No basta con cumplir números. El sistema deberá comprobar, en la medida técnicamente posible, que el texto responde a la consigna y no es una secuencia arbitraria de caracteres.
+
+Por ejemplo, ante el reto «escribe un relato de 30 palabras», una cadena como «ffffsd d sf sdf...» no debe aprobarse por alcanzar un número aparente de tokens. La validación debe buscar señales de contenido lingüístico comprensible, relación con el idioma solicitado y correspondencia semántica con el tipo de texto requerido.
+
+Según el reto, podrá comprobar:
+
+- Que exista texto lingüísticamente interpretable y no solo caracteres aleatorios o repeticiones para inflar el recuento.
+- Que las palabras formen enunciados comprensibles, no una lista sin relación cuando se pidió un relato.
+- Que haya una secuencia narrativa mínima cuando se solicite una historia: situación, acción o cambio y algún grado de progresión.
+- Que se cumplan tema, género, perspectiva, personajes, escenario o acontecimientos exigidos.
+- Que los requisitos obligatorios estén presentes y las restricciones se respeten.
+- Que el texto no sea una repetición mecánica de una misma palabra o frase para simular cumplimiento.
+
+La validación lingüística no debe convertirse en censura estilística: un poema, un texto experimental, una frase absurda intencional o una obra deliberadamente fragmentaria pueden ser válidos si la consigna lo permite. El verificador debe evaluar contra la consigna concreta, no contra una idea rígida de cómo debe escribirse.
+
+#### 5.3. Resultado verificable y estados
+
+El sistema deberá devolver un informe comprensible con:
+
+- Estado: cumple, no cumple o no se puede determinar con suficiente confianza.
+- Requisitos individuales y resultado de cada uno.
+- Recuento y método aplicado.
+- Evidencias o fragmentos que justifican las comprobaciones semánticas.
+- Incumplimientos concretos y explicación.
+- Condiciones ambiguas que requieren aclaración.
+- Nivel de confianza para comprobaciones interpretativas, sin presentar una estimación como garantía absoluta.
+
+Un reto solo se marcará como cumplido si supera todos los requisitos obligatorios definidos. Si cumple la extensión pero no el contenido, debe figurar como no cumplido, indicando exactamente qué falta. Si el sistema no puede verificar una condición con fiabilidad, deberá indicarlo en vez de aprobarla falsamente.
+
+#### 5.4. Integración con la interfaz y control del usuario
+
+La aplicación podrá ofrecer botones como «Comprobar reto» o «Validar texto». La comprobación se ejecutará únicamente cuando el usuario la solicite, salvo que el usuario configure expresamente otro comportamiento en una función futura. El sistema no deberá reescribir el texto para hacerlo aprobar ni cambiar el reto por su cuenta.
+
+La validación y la generación son operaciones distintas: si el usuario pide ayuda para corregir un reto incumplido, esa asistencia deberá solicitarse por separado. El usuario conserva el control sobre el texto y sobre cualquier cambio.
+
+### 6. Criterios de aceptación futuros
+
+Estas capacidades no se considerarán terminadas solo por mostrar ejemplos o producir alertas. Requerirán:
+
+1. Reglas y contratos documentados para cada tipo de revisión y reto.
+2. Localización reproducible de cada hallazgo dentro del documento y su versión.
+3. Corpus de prueba con errores reales, usos correctos, excepciones y falsos positivos.
+4. Pruebas multilingües y políticas explícitas de conteo por idioma.
+5. Casos de tramas intencionalmente abiertas para evitar clasificarlas automáticamente como defectos.
+6. Pruebas adversariales de texto aleatorio, repetición, relleno y manipulación de contadores en retos.
+7. Separación entre comprobaciones objetivas, inferencias y juicios editoriales.
+8. Informes explicables, revisión del usuario y ausencia de modificaciones no autorizadas.
+9. Integración real con botones/acciones de la aplicación y pruebas de que ninguna tarea bajo demanda se ejecuta sin activación.
+10. Documentación de límites, falsos positivos, falsos negativos y dependencias externas.
+
+**Nota de estado:** esta ampliación registra requisitos funcionales y reglas de interacción solicitadas. No significa que la revisión editorial avanzada, la detección fiable de cabos sueltos ni el verificador semántico de retos estén implementados. Deben diseñarse, implementarse y validarse como capacidades separadas e invocables por el usuario.

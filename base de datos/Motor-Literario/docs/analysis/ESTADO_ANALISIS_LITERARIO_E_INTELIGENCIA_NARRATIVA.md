@@ -529,6 +529,8 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 **Incidencias detectadas por CI y correcciones aplicadas:** la primera ejecución reveló que la evidencia histórica de acontecimientos declarados conserva el rango del rótulo pero el excerpt de la línea completa. La integración de auditoría ahora construye el fragmento exacto desde los offsets originales antes de validar. También se sustituyó la segmentación regex por un recorrido determinista UTF-16 para manejar puntuación, CRLF y líneas sin puntuación, y se optimizó la cobertura con un barrido de evidencias ordenadas. Se añadieron pruebas para colas limitadas y omisiones contabilizadas. Los runs iniciales con fallos no se consideran validación; la revisión posterior sigue pendiente de CI completa.
 
+**Auditoría de cobertura ampliada:** `extractionAudit` ahora recibe evidencias adicionales de estados de personajes y transiciones de ubicación. Separa el subtotal de acciones/acontecimientos del subtotal de otros extractores y calcula `coverageRatio` sobre la unión de evidencias, evitando marcar como pendiente una frase ya cubierta por otro tipo de extracción. La cola de revisión solo incluye frases sin evidencia de ningún extractor integrado. Añadida prueba específica de esta distinción. Cambios pendientes de CI.
+
 ### Estados explícitos de personajes y movimientos espaciales — 26-11-2026
 
 - Añadido `narrative-character-state-discovery.ts`: propone estados copulativos explícitos de personajes, con polaridad, tiempo verbal, aspecto, modo de afirmación y evidencias separadas para identidad, predicado y afirmación.

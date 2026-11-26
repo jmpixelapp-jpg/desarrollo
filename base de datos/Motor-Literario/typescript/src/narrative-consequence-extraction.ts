@@ -23,6 +23,14 @@ export interface NarrativeConsequenceCandidate {
   readonly relationType: "explicit-consequence-marker" | "temporal-association-hypothesis";
   /** No es causalidad demostrada; indica solo proximidad temporal y participantes compartidos. */
   readonly causalStatus: "explicitly-signaled-candidate" | "unproven-hypothesis";
+  readonly hypothesisBasis: "explicit-linguistic-connector" | "temporal-marker-and-shared-character";
+  /** Personajes compartidos que justifican la hipótesis; vacío para conectores explícitos. */
+  readonly sharedCharacterEntityIds: readonly string[];
+  /** Conserva las dos evidencias completas que se relacionan, además del marcador. */
+  readonly supportingEvidence: {
+    readonly sourceEvent: NarrativeEventCandidate["evidence"];
+    readonly consequenceEvent: NarrativeEventCandidate["evidence"];
+  };
   readonly marker: string;
   readonly reviewStatus: "candidate";
   readonly evidence: {
@@ -143,6 +151,12 @@ export function extractNarrativeConsequenceCandidates(
       consequenceEventId: consequence.id,
       relationType: "explicit-consequence-marker",
       causalStatus: "explicitly-signaled-candidate",
+      hypothesisBasis: "explicit-linguistic-connector",
+      sharedCharacterEntityIds: [],
+      supportingEvidence: {
+        sourceEvent: source.evidence,
+        consequenceEvent: consequence.evidence
+      },
       marker: excerpt,
       reviewStatus: "candidate",
       evidence: {
@@ -186,6 +200,12 @@ export function extractNarrativeConsequenceCandidates(
       consequenceEventId: consequence.id,
       relationType: "temporal-association-hypothesis",
       causalStatus: "unproven-hypothesis",
+      hypothesisBasis: "temporal-marker-and-shared-character",
+      sharedCharacterEntityIds: [...shared].sort(),
+      supportingEvidence: {
+        sourceEvent: source.evidence,
+        consequenceEvent: consequence.evidence
+      },
       marker: excerpt,
       reviewStatus: "candidate",
       evidence: {

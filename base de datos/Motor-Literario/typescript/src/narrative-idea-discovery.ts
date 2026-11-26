@@ -80,6 +80,21 @@ const DISCOVERY_PATTERNS: readonly DiscoveryPattern[] = [
     expression: /\b(?:la\s+historia|el\s+relato|la\s+novela)\s+trata\s+sobre\s+(.+?)(?=[.!?;]|$)/iu
   },
   {
+    kind: "premise",
+    confidence: "medium",
+    expression: /\b(?:me\s+gustar[ií]a\s+explorar|ser[ií]a\s+interesante\s+que|imagina\s+una\s+historia\s+(?:en\s+la\s+que|donde))\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "theme",
+    confidence: "medium",
+    expression: /\b(?:la\s+trama|la\s+historia)\s+gira\s+en\s+torno\s+a\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
+    kind: "goal",
+    confidence: "medium",
+    expression: /\b(?:necesita|sueña\s+con)\s+(.+?)(?=[.!?;]|$)/iu
+  },
+  {
     kind: "conflict",
     confidence: "high",
     expression: /\b(?:conflicto\s+central|conflicto\s+principal|problema\s+central)\s*(?:es|consiste\s+en|:)?\s+(.+?)(?=[.!?;]|$)/iu

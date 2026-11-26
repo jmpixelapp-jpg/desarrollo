@@ -579,3 +579,30 @@ test("un duplicado malformado no escapa al callback nativo ni interrumpe el edit
   f.stop();
   f.source.dispose();
 });
+
+
+test("un provider directo que emite null pausa el source sin ignorar el evento", () => {
+  const f = fixture();
+  assert.doesNotThrow(() => f.editor.publish(null));
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "invalid-transaction");
+  assert.equal(f.editor.listeners.size, 0);
+  f.stop();
+  f.source.dispose();
+});
+
+test("un getter defectuoso del provider se contiene en la frontera transaccional", () => {
+  const f = fixture();
+  const malformed = new Proxy({}, {
+    get() {
+      throw new Error("transaction_getter_failed");
+    }
+  });
+  assert.doesNotThrow(() => f.editor.publish(malformed));
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors.at(-1).code, "invalid-transaction");
+  assert.match(f.errors.at(-1).message, /transaction_getter_failed/);
+  assert.equal(f.editor.listeners.size, 0);
+  f.stop();
+  f.source.dispose();
+});

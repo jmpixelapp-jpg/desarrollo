@@ -377,7 +377,7 @@ export function discoverNarrativeObservationCandidates(
               for (const name of names) {
                 if (!sentence.toLocaleLowerCase("es").startsWith(name.toLocaleLowerCase("es"))) continue;
                 const afterName = sentence.slice(name.length, match.index);
-                const activePattern = /^\s*(?:(?:no|nunca|jamás)\s+)?$/iu;
+                const activePattern = /^\s*(?:(?:no|nunca|jamás)\s+)?(?:(?:ha|han|había|habían|habrá|habrán|habría|habrían|está|están|estaba|estaban|estuvo|estuvieron|puede|pueden|podía|podían|pudo|pudieron|quiere|quieren|quería|querían)\s+){0,3}$/iu;
                 const passivePattern = /^\s+(?:(?:no|nunca|jamás)\s+)?(?:fue|fueron|era|eran|es|son|será|serán|ha sido|han sido|había sido|habían sido)\s+$/iu;
                 const voice = activePattern.test(afterName) ? "active" as const
                   : passivePattern.test(afterName) && classifyGrammaticalTense(surface) === "participle"

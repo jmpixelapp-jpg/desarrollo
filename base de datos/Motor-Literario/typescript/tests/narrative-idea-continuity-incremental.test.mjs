@@ -121,7 +121,7 @@ test("detecta cambios de contenido/modo aunque el identificador del evento se co
   ];
   const previous = snapshot(initial, orderedThree);
   const changed = [
-    initial[0]!,
+    initial[0],
     idea("b", "chapter-2", "memoria antigua del reino", { polarity: "negated", revision: 2 })
   ];
   const next = update(previous, changed, orderedThree, ["chapter-2"]);

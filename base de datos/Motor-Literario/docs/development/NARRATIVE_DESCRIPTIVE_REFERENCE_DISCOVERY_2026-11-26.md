@@ -62,3 +62,16 @@ La detección exige: nombre canónico o alias explícito; coma después del nomb
 **Límite semántico importante:** esto no es análisis sintáctico completo ni determina si la cláusula expresa verdad, creencia, memoria, hipótesis o discurso referido. Tampoco infiere propiedades a partir del contenido. Las formas verbales se reconocen mediante heurística morfológica acotada; por ello se requiere revisión editorial y evaluación con corpus literarios antes de usar los resultados como datos confirmados.
 
 Se incorporan pruebas para una relativa explícita, offsets con emoji, rechazo de cláusula sin verbo finito, límites de oración y exceso de resultados. La ejecución debe confirmarse en CI.
+
+
+## Extracción de aposiciones relacionales — 26 de noviembre de 2026
+
+Se añade `discoverNarrativeRelationalAppositionCandidates` para localizar relaciones explícitas con un referente nominal registrado, por ejemplo «Bruno, hermano menor de Ana, volvió». La función conserva tres evidencias: la entidad ancla, la frase relacional completa y la mención del objetivo.
+
+El objetivo solo se vincula si su texto coincide con un nombre canónico o alias registrado. Si la misma forma nominal corresponde a varias entidades, se conservan todos los IDs candidatos; no se selecciona uno arbitrariamente. Si no hay coincidencia registrada, no se emite una propuesta. Se excluye la entidad ancla de los posibles objetivos.
+
+El vocabulario inicial cubre parentesco, vínculos sociales y algunos roles/títulos (hermano, hija, padre, compañera, amigo, maestro, jefe, capitán, rey, etc.). Admite hasta dos palabras modificadoras entre el núcleo relacional y «de» (por ejemplo, «hermano menor de»). Requiere coma de cierre del inciso. No interpreta por sí mismo la dirección social, el grado de parentesco, la verdad de la afirmación ni su vigencia temporal.
+
+Límites: máximo 2.000 entidades, 100 alias por entidad, 256 unidades UTF-16 por nombre/alias, texto máximo 2.000.000, 2.000 propuestas y presupuesto de exploración agregado de 25.000.000. La extracción conserva offsets UTF-16 absolutos y falla explícitamente ante exceso de resultados.
+
+Pruebas añadidas para parentesco explícito, objetivo ambiguo, objetivo no registrado y exceso de resultados. Pendiente de confirmación de ejecución en CI.

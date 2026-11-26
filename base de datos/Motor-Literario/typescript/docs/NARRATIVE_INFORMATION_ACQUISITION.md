@@ -41,7 +41,7 @@ El análisis de acciones usa el snapshot del documento abierto cuando su revisi�
 
 Módulo: `src/narrative-observation-discovery.ts`
 
-Reconoce un vocabulario controlado de acciones en frases que mencionan personajes previamente identificados. Devuelve verbo normalizado, forma superficial, personajes y otras entidades mencionadas, polaridad afirmada/negada y frase probatoria.
+Reconoce un vocabulario controlado de acciones en frases que mencionan personajes previamente identificados. Devuelve verbo normalizado, forma superficial, clasificación morfológica del tiempo verbal (pretérito, imperfecto, presente, infinitivo, gerundio o participio), personajes y otras entidades mencionadas, polaridad afirmada/negada y frase probatoria. El tiempo verbal no se convierte en fecha ni en orden cronológico global.
 
 Reglas de prudencia:
 - Solo vincula nombres canónicos o alias confirmados.
@@ -49,6 +49,7 @@ Reglas de prudencia:
 - Si aparecen varios personajes, conserva todos como mencionados y deja el actor sin resolver.
 - La presencia de una entidad en una frase no demuestra que sea objeto directo o destinatario.
 - La negación explícita se conserva; "no abrió" nunca se transforma en una acción afirmada.
+- La clasificación morfológica verbal describe solo la forma escrita; no deduce fechas, orden de acontecimientos ni tiempo del mundo narrativo.
 - Los pronombres iniciales explícitos (él/ella/ellos/ellas) se registran como referencias pendientes; se conserva el tramo literal del pronombre con offsets exactos, la frase anterior como evidencia y los posibles antecedentes como candidatos, sin resolver identidad automáticamente.
 - No se infieren emociones, motivaciones, causalidad ni cronología.
 

@@ -38,6 +38,8 @@ export interface LiveAuthorMonitorTextAreaSourceState {
   readonly sequence: number;
   readonly documentLength: number;
   readonly compositionActive: boolean;
+  /** Hay un beforeinput aceptado que aún espera su input correspondiente. */
+  readonly pendingInput: boolean;
   readonly needsResync: boolean;
 }
 
@@ -166,18 +168,11 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       return;
     }
 
-    const pending = this.pendingInput;
-    if (!pending) return;
-    // Un listener posterior de beforeinput puede cancelar y desenfocar el
-    // textarea dentro de la misma propagación. La comprobación de cancelación
-    // ya encolada debe ejecutarse antes de decidir que falta input.
-    queueMicrotask(() => {
-      if (this.disposed || this.needsResync || this.pendingInput !== pending) return;
-      this.fail(
-        "missing-input",
-        "El textarea perdió el foco antes de completar un beforeinput no cancelado; se requiere un snapshot autoritativo."
-      );
-    });
+    // No invalidar todavía un beforeinput de texto ordinario: HTML puede
+    // entregar el input correspondiente en una tarea posterior. El pending
+    // queda visible en getState(); si llega input se completa, si llega otro
+    // beforeinput se confirma missing-input, y pagehide/hidden/desuscripción
+    // invalidan la continuidad antes de retirar los listeners.
   };
 
   private readonly handleCompositionStart = (event: Event): void => {
@@ -538,6 +533,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       sequence: this.sequence,
       documentLength: this.documentLength,
       compositionActive: this.compositionActive,
+      pendingInput: this.pendingInput !== undefined,
       needsResync: this.needsResync
     });
   }

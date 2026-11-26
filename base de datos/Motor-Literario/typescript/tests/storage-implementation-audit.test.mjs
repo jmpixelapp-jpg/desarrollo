@@ -8,10 +8,12 @@ import { auditStorageImplementation } from "../scripts/audit-storage-implementat
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const MAPPING_PATH = resolve(TEST_DIR, "../../MLDB/storage_mapping_v0.4.2.json");
 const RUNTIME_PATH = resolve(TEST_DIR, "../src/persistence/indexeddb-store.ts");
+const HOST_API_PATH = resolve(TEST_DIR, "../src/host-api.ts");
 
-const [mappingText, runtimeSource] = await Promise.all([
+const [mappingText, runtimeSource, hostApiSource] = await Promise.all([
   readFile(MAPPING_PATH, "utf8"),
-  readFile(RUNTIME_PATH, "utf8")
+  readFile(RUNTIME_PATH, "utf8"),
+  readFile(HOST_API_PATH, "utf8")
 ]);
 const mapping = JSON.parse(mappingText);
 
@@ -147,6 +149,22 @@ test("un destino inválido aborta la transacción y no confirma la escritura", (
   assert.match(writer, /transaction\.onabort = \(\) => reject\(/);
   assert.match(writer, /transaction\.oncomplete = \(\) => resolve\(\)/);
 });
+
+test("el presupuesto léxico solo descuenta texto copiado al catálogo global", () => {
+  const start = hostApiSource.indexOf("const knownProjectIdeas: LiteraryAnalysisKnownProjectIdea[] | undefined");
+  const end = hostApiSource.indexOf("const knownIdeas=linkedIdeas.slice", start);
+  assert.notEqual(start, -1, "debe existir la proyección del catálogo global");
+  assert.ok(end > start, "la proyección debe terminar antes de construir knownIdeas");
+  const projection = hostApiSource.slice(start, end);
+
+  assert.match(
+    projection,
+    /const includeLexicalText = !knownLinkedIdeaIds\.has\(idea\.id\) &&\s*lexicalTextUnitCount \+ idea\.text\.length <= MAX_LITERARY_IDEA_LEXICAL_TEXT_UNITS;/
+  );
+  assert.match(projection, /if \(includeLexicalText\) lexicalTextUnitCount \+= idea\.text\.length;/);
+  assert.doesNotMatch(projection, /const textFitsBudget =/);
+});
+
 
 test("la auditoría de atomicidad detecta perder el almacén de entidades del alcance transaccional", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);

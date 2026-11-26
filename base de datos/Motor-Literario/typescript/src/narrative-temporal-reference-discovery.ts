@@ -129,10 +129,12 @@ function discoverMatches(text: string): readonly Match[] {
     anchorRequired: false, absoluteResolution: "ambiguous", priority: 90
   }]);
 
-  add(/(?<![\p{L}\p{M}\p{N}_])(?:en\s+)?(?:1[0-9]{3}|20[0-9]{2})(?![\p{L}\p{M}\p{N}_])/gu, () => [{
-    kind: "calendar-year", relation: "unspecified",
-    anchorRequired: false, absoluteResolution: "explicit-calendar-value", priority: 40
-  }]);
+  add(/(?<![\p{L}\p{M}\p{N}_])(?:en\s+)?(?<year>[0-9]{4})(?![\p{L}\p{M}\p{N}_])/gu, match =>
+    Number(match.groups!.year) > 0 ? [{
+      kind: "calendar-year", relation: "unspecified",
+      anchorRequired: false, absoluteResolution: "explicit-calendar-value", priority: 40
+    }] : []
+  );
 
   const relative: readonly {
     expression: RegExp;

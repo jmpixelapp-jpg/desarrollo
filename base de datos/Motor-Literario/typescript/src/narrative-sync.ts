@@ -284,7 +284,9 @@ export class NarrativeSyncCoordinator {
     }
 
     const acknowledgedIds = new Set(response.acknowledgedOperationIds);
-    const conflictsById = new Map(response.conflicts.map(conflict => [conflict.operationId, conflict]));
+    const conflictsById = new Map<string, SyncConflict>(
+      response.conflicts.map(conflict => [conflict.operationId, conflict] as const)
+    );
     const retryableIds = new Set(response.retryableOperationIds);
 
     // Los acuses limpian el backoff anterior. Conflictos y reintentos quedan

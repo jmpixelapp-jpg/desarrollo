@@ -51,6 +51,6 @@ El coordinador también valida el tamaño y la estructura JSON de cada payload a
 
 ## Pruebas añadidas
 
-`tests/indexeddb-sync-outbox.test.mjs` verifica la bandeja real con IndexedDB y su integración con el coordinador; `tests/indexeddb-storage-health.test.mjs` cubre diagnósticos de cuota/almacenamiento. `tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, respuestas parciales, coalescencia concurrente por proyecto, ejecución paralela entre proyectos, persistencia del intento ante fallo de transporte, aislamiento de proyecto y validación del tamaño de lote.
+`tests/indexeddb-sync-outbox.test.mjs` verifica la bandeja real con IndexedDB, el conteo durable y la persistencia del próximo intento; `tests/indexeddb-storage-health.test.mjs` cubre diagnósticos de cuota/almacenamiento. `tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, respuestas parciales, coalescencia concurrente, paralelismo por proyecto, backoff exponencial, bloqueo de secuencia mientras una operación espera y validación de payloads/lotes.
 
 La existencia de estos tests acredita cobertura escrita, no ejecución satisfactoria. La validación requiere `npm run typecheck` y `npm test` desde `typescript/`.

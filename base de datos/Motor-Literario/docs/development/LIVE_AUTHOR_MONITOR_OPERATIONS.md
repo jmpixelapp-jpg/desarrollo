@@ -491,3 +491,15 @@ La lista de destinatarios se fija para cada publicación. Un suscriptor añadido
 La lane conserva como fallos reales los errores de auditoría MLDB y de mapeo físico, pero no deja que estos impidan ejecutar la compilación runtime, las pruebas específicas del monitor y el benchmark de heap. Esos tres pasos usan \`if: \${{ !cancelled() }}\`, para continuar después de una falla previa sin ejecutar si el workflow fue cancelado.
 
 Esto separa el diagnóstico del monitor de errores de infraestructura compartida: la lane seguirá en rojo si falla la auditoría, pero ofrecerá evidencia adicional sobre el código de monitoreo. No se usa \`continue-on-error\` para ocultar o convertir en éxito la auditoría.
+
+
+## 36. Pruebas unitarias independientes del bundle completo del motor
+
+El entrypoint aislado `live-author-monitor-test-entry.ts` exporta el núcleo, el panel y el workspace sin importar la persistencia narrativa. El test principal del monitor y el benchmark intentan cargar primero `dist-monitor/live-author-monitor.js`, y solo usan `dist/motor-literario.js` como fallback cuando el bundle aislado no existe. Así se puede ejecutar el comportamiento puro de `LiveAuthorMonitor` aunque otro módulo ajeno impida compilar el motor completo.
+
+La lane ahora separa tres grupos:
+- pruebas unitarias del monitor y recuperación diagnóstica, siempre después del build aislado;
+- integración con HostEngineApi, editor y Chromium, únicamente cuando el bundle runtime general se construyó correctamente;
+- benchmark de heap del núcleo, usando el bundle aislado si está disponible.
+
+La auditoría MLDB continúa ejecutándose como control independiente. Sus errores siguen dejando la lane en rojo y no se ocultan con `continue-on-error`.

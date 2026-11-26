@@ -157,3 +157,11 @@ La regla exige un sujeto gramatical activo identificado al inicio de la oración
 
 Estos papeles son etiquetas operativas de extracción, no conclusiones definitivas sobre motivaciones, consentimiento, éxito o consecuencias. Por ejemplo, `Ana intentó salvar a Bruno` no demuestra que Bruno haya sido salvado: el patrón léxico actual solo registra la acción verbal y el participante como beneficiario candidato. Todas las relaciones siguen con `reviewStatus: candidate`.
 
+### Transiciones candidatas de objetos en la ingesta
+
+La ingesta de libro ahora publica `objectTransitionCandidates`, calculadas a partir de las observaciones de acciones de la misma revisión. Se reutiliza el módulo `src/narrative-object-state-discovery.ts` y su vocabulario deliberadamente limitado: encontrar, perder, entregar y recibir, siempre con una entidad de objeto identificada en el complemento directo y los roles gramaticales exigidos por cada patrón.
+
+Esto conecta la extracción de acciones con información útil de escena: qué objeto aparece en una acción de descubrimiento, pérdida, entrega o recepción y qué personajes están explícitamente identificados como actor o receptor. No crea un inventario ni afirma quién conserva el objeto después de la acción. La negación se marca como `not-applied`, el futuro como `prospective` y el resto como `candidate`; ninguna de esas salidas se confirma automáticamente.
+
+La ingesta conserva las evidencias exactas del verbo, objeto y participantes con documento, revisión y offsets UTF-16 absolutos. Si no hay una entidad de objeto reconocida, no se inventa una transición a partir de un nombre común aislado. Los tests cubren una entrega con emisor y receptor explícitos, offsets desplazados por `baseOffset` y ausencia de transición cuando falta una ficha de objeto.
+

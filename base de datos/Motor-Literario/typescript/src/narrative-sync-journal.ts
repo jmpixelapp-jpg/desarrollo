@@ -343,7 +343,9 @@ export async function replayPendingNarrativeSyncOperations(
       sequence: operation.sequence,
       createdAt: operation.createdAt,
       kind: operation.kind,
-      payload: operation.payload,
+      // IndexedDB entrega un structured clone; normalizamos el payload al
+      // subconjunto JSON antes de verificar su representación canónica.
+      payload: JSON.parse(JSON.stringify(operation.payload)) as unknown,
       digest: operation.digest
     };
     if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {

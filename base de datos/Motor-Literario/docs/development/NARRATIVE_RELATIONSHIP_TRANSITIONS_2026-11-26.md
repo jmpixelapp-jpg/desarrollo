@@ -34,3 +34,10 @@ La ventana máxima de contexto sigue siendo de 180 unidades UTF-16. El presupues
 ## Reducción de asociaciones incidentales
 
 Cuando una oración menciona más de dos personajes, el extractor ya no genera todas las combinaciones posibles. Para cada disparador selecciona el par cuyo fragmento conjunto —dos menciones y disparador— ocupa la menor ventana textual, con desempate determinista por ID. Esto reduce falsos vínculos con personajes que solo aparecen como testigos o en una cláusula lateral. Sigue siendo una heurística de proximidad, no un análisis sintáctico; por ello los resultados permanecen como candidatos revisables.
+
+
+## Marco epistémico y polaridad de las transiciones
+
+Cada candidato relacional incorpora ahora un marco epistémico local: narración afirmada, creencia, memoria, deseo, discurso referido o hipótesis. Si el texto contiene discurso referido, se propone un emisor únicamente cuando una mención de personaje es inequívoca antes del marcador. La negación local («no», «nunca», «jamás») se conserva por separado con evidencia propia.
+
+Estos campos describen el encuadre lingüístico del pasaje; no prueban que la transición haya ocurrido. En particular, una transición negada sigue siendo un candidato textual que expresa la negación de ese cambio, no un evento positivo del grafo. Las señales son locales y heurísticas: no resuelven todavía negación de alcance amplio, ironía, estilo indirecto libre, condicionales complejos ni contradicciones entre capítulos. Se agregan pruebas de regresión para negación, creencia, atribución explícita, discurso impersonal e hipótesis.

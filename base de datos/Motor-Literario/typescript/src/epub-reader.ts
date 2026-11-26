@@ -150,6 +150,8 @@ class EpubArchive {
     const count = view.getUint16(eocd + 10, true);
     const directorySize = view.getUint32(eocd + 12, true);
     const directoryOffset = view.getUint32(eocd + 16, true);
+    const commentLength = view.getUint16(eocd + 20, true);
+    if (eocd + 22 + commentLength !== bytes.length) fail("comentario final ZIP truncado o longitud inconsistente.");
     if (count === 0xffff || directorySize === 0xffffffff || directoryOffset === 0xffffffff) {
       fail("ZIP64 todavía no está admitido por este lector.");
     }
@@ -188,6 +190,11 @@ class EpubArchive {
   }
 
   has(path: string): boolean { return this.entries.has(path); }
+
+  isStoredAtStart(path: string): boolean {
+    const entry = this.entries.get(path);
+    return !!entry && entry.method === 0 && entry.localOffset === 0;
+  }
 
   async text(path: string): Promise<string> {
     const entry = this.entries.get(path);
@@ -298,6 +305,7 @@ export class EpubBookReader implements BookReaderAdapter<ArrayBuffer | Uint8Arra
   private async archive(source: ArrayBuffer | Uint8Array): Promise<{ zip: EpubArchive; opfPath: string; opf: string; spine: string[]; metadata: EpubMetadata; warnings: string[] }> {
     const zip = await EpubArchive.open(source, this.limits);
     if (!zip.has("mimetype")) fail("falta la entrada mimetype.");
+    if (!zip.isStoredAtStart("mimetype")) fail("la entrada mimetype debe ser la primera y no estar comprimida.");
     const mime = (await zip.text("mimetype")).trim();
     if (mime !== "application/epub+zip") fail("mimetype no identifica un EPUB.");
     const container = await zip.text("META-INF/container.xml");

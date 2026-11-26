@@ -541,3 +541,8 @@ El 26 de noviembre de 2026, la lane aislada pasó el bundle reducido, 17/17 prue
 El benchmark procesó 100.000 commits en 499,17 ms (~200.332 commits/s). Tras GC, el heap fue 4,26 MiB a mitad y al final de la carga; 0,50 MiB quedaron retenidos por las sesiones abiertas y no hubo cambios pendientes. La lectura corresponde a Node.js 22.23.5 y ocho documentos con 1.048.576 unidades UTF-16 cada uno.
 
 La lane completa mantiene fallo porque la auditoría de esquema y la compilación del bundle runtime general detectan problemas en la línea de persistencia concurrente. No se modificaron esos archivos desde el desarrollo del monitor; las integraciones dependientes del motor completo siguen pendientes.
+
+
+## 42. Type-check aislado del núcleo y de las vistas
+
+El archivo `tsconfig.live-author-monitor.json` extiende la configuración estricta del proyecto, pero incluye solo el entrypoint reducido `src/live-author-monitor-test-entry.ts`. TypeScript sigue resolviendo y comprobando sus dependencias transitivas (monitor, panel, workspace y contratos utilizados) sin cargar módulos de persistencia que no forman parte de esta lane. La comprobación se ejecuta antes del bundle Vite y de las regresiones; no sustituye el type-check global, que permanece como control separado del proyecto completo.

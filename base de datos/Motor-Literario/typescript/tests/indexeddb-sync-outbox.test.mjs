@@ -703,3 +703,35 @@ test("asigna secuencias consecutivas de forma atómica entre dos instancias Inde
     await deleteDatabase();
   }
 });
+
+
+test("dos instancias concurrentes recuperan la misma secuencia para un operationId idempotente", async () => {
+  await deleteDatabase();
+  const firstStore = new IndexedDbProjectStore();
+  const secondStore = new IndexedDbProjectStore();
+  try {
+    const base = {
+      projectId: "sync-outbox-project",
+      deviceId: "same-operation-device",
+      kind: "narrative-idea-upsert",
+      createdAt: 700,
+      attemptCount: 0
+    };
+    const [first, second] = await Promise.all([
+      firstStore.enqueueNextSyncOperation({
+        ...base, operationId: "same-allocated-operation",
+        payload: JSON.stringify({ ideaId: "idea-7", text: "Persistente" })
+      }),
+      secondStore.enqueueNextSyncOperation({
+        ...base, operationId: "same-allocated-operation",
+        payload: JSON.stringify({ text: "Persistente", ideaId: "idea-7" })
+      })
+    ]);
+    assert.equal(first.sequence, second.sequence);
+    assert.equal(first.operationId, second.operationId);
+    assert.equal(await firstStore.countPendingSyncOperations("sync-outbox-project"), 1);
+  } finally {
+    await Promise.all([firstStore.close(), secondStore.close()]);
+    await deleteDatabase();
+  }
+});

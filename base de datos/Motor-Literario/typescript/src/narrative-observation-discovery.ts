@@ -77,14 +77,6 @@ function futureActionExpression(action: string): RegExp {
   );
 }
 
-const ACTION_SIGNALS: readonly ActionSignal[] = [");
-  return new RegExp(
-    "(?<![\\p{L}\\p{M}\\p{N}_])" + escaped + FUTURE_ENDINGS +
-    "(?![\\p{L}\\p{M}\\p{N}_])",
-    "giu"
-  );
-}
-
 const ACTION_SIGNALS: readonly ActionSignal[] = [
   { action: "cruzar", expression: /(?<![\p{L}\p{M}\p{N}_])(?:cruzar|cruz(?:ó|aba|aban|ábamos|abas|aron|a|an|amos|ar|ad[oa]s?|ando|aré|arás|ará|aremos|arán))(?![\p{L}\p{M}\p{N}_])/giu },
   { action: "entrar", expression: /(?<![\p{L}\p{M}\p{N}_])entr(?:ó|aba|aron|a|an|ar|ado|ando|aré|arás|ará|aremos|arán)(?![\p{L}\p{M}\p{N}_])/giu },

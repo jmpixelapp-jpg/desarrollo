@@ -79,30 +79,31 @@ function createDisjointSet(): DisjointSet {
   const parent = new Map<string, string>();
   const rank = new Map<string, number>();
 
-  return {
-    find(id: string): string {
-      const current = parent.get(id);
-      if (current === undefined) {
-        parent.set(id, id);
-        rank.set(id, 0);
-        return id;
-      }
-      if (current === id) return id;
-      const root = this.find(current);
-      parent.set(id, root);
-      return root;
-    },
-    union(a: string, b: string): void {
-      let rootA = this.find(a);
-      let rootB = this.find(b);
-      if (rootA === rootB) return;
-      const rankA = rank.get(rootA) ?? 0;
-      const rankB = rank.get(rootB) ?? 0;
-      if (rankA < rankB) [rootA, rootB] = [rootB, rootA];
-      parent.set(rootB, rootA);
-      if (rankA === rankB) rank.set(rootA, rankA + 1);
+  function find(id: string): string {
+    const current = parent.get(id);
+    if (current === undefined) {
+      parent.set(id, id);
+      rank.set(id, 0);
+      return id;
     }
-  };
+    if (current === id) return id;
+    const root = find(current);
+    parent.set(id, root);
+    return root;
+  }
+
+  function union(a: string, b: string): void {
+    let rootA = find(a);
+    let rootB = find(b);
+    if (rootA === rootB) return;
+    const rankA = rank.get(rootA) ?? 0;
+    const rankB = rank.get(rootB) ?? 0;
+    if (rankA < rankB) [rootA, rootB] = [rootB, rootA];
+    parent.set(rootB, rootA);
+    if (rankA === rankB) rank.set(rootA, rankA + 1);
+  }
+
+  return { find, union };
 }
 
 function containsTextWithWhitespace(excerpt: string, text: string): boolean {
@@ -320,6 +321,8 @@ export function buildNarrativeIdeaContinuityLines(
       input.evolution.events.length > MAX_EVENTS ||
       !Number.isSafeInteger(input.evolution.summary.eventCount) ||
       input.evolution.summary.eventCount !== input.evolution.events.length ||
+      !Number.isSafeInteger(input.evolution.summary.relationCount) ||
+      input.evolution.summary.relationCount !== input.evolution.events.length ||
       typeof input.evolution.summary.sourceAnalysisTruncated !== "boolean") {
     throw new Error("Contexto inválido para reconstruir líneas de continuidad de ideas.");
   }

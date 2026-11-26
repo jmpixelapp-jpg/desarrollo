@@ -1562,6 +1562,15 @@ function validateLiveAuthorMonitorLeaseRequest(
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
+export interface IndexedDbStorageHealthReport {
+  readonly databaseName: string;
+  readonly databaseVersion: number;
+  readonly usageBytes: number | null;
+  readonly quotaBytes: number | null;
+  readonly persistentStorage: boolean | null;
+  readonly recordCounts: Readonly<Record<string, number>>;
+}
+
 export class IndexedDbProjectStore implements ProjectStore {
   private database: Promise<IDBDatabase> | undefined;
   private narrativeChangeChannel: BroadcastChannel | undefined;

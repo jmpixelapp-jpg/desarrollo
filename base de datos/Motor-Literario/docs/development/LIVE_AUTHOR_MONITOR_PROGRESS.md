@@ -964,3 +964,18 @@ En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelap
 - RSS al final: 75,33 MB; los ocho documentos terminaron con 12.500 commits y 0 pendientes.
 
 **Límite:** las cifras de heap/RSS son del proceso Node del runner, no medición física de Chromium ni del editor en producción. El resultado confirma que el estado del monitor permanece acotado en el escenario de carga medido; no sustituye un soak físico de navegador durante horas.
+
+## 52. Reparación del fencing, reanudación y validación integral (26 de noviembre de 2026)
+
+**Cambios en el runtime y las regresiones:**
+- Se conserva el valor `undefined` al capturar la generación de un lease. Sustituirlo por `0` hacía que la respuesta de renovación se descartara por una comparación de generación aunque siguiera siendo válida.
+- Las revalidaciones que llegan mientras hay un heartbeat activo comparten una promesa de seguimiento; al terminar el heartbeat se ejecuta una revalidación posterior y los callers esperan su resultado.
+- El diagnóstico prioriza el estado de lease perdido cuando la titularidad ya no existe.
+- El helper de pruebas del workspace identifica tarjetas por `data-document-id`, sin contar los `role=listitem` usados por las métricas accesibles.
+- El pipeline general genera el bundle aislado del monitor antes de ejecutar la suite completa.
+
+**Correcciones adicionales de tipado estricto:** se tiparon explícitamente los acumuladores de métricas y se definió el total de actividad clasificada en los caminos de restauración de checkpoint.
+
+**Validación confirmada:** los workflows **Motor Literario TypeScript** y **Live Author Monitor** terminaron en `success` para el commit `71d6144c820512ce5989be17d03e6cdc88d6ccdb`. Se aprobaron typecheck, build, suite automatizada, regresiones de monitor, validación MLDB y benchmarks. Los commits posteriores `7a75e0e` (configuración del entrypoint aislado) y `f7dfabb` (distinción de arrays dispersos y propiedades adicionales) están sometidos a una nueva ejecución CI; su estado debe consultarse por separado.
+
+**Alcance:** las mejoras del lease corrigen la coordinación local entre pestañas del navegador. No sustituyen un servidor remoto ni constituyen por sí solas sincronización multidispositivo.

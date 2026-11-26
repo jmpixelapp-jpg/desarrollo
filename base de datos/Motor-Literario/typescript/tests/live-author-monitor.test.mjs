@@ -756,7 +756,7 @@ test("rechaza checkpoints con más pausas que admisiones registradas", () => {
   assert.equal(second.monitor.getSnapshot("chapter-1"), undefined);
 });
 
-test("rechaza checkpoints que declaran más caracteres borrados que los que podían existir", () => {
+test("rechaza checkpoints con un balance de caracteres que implicaría longitud inicial negativa", () => {
   const first = fixture();
   first.open("chapter-1", "hello");
   const checkpoint = first.monitor.createCheckpoint("chapter-1", 100);
@@ -767,7 +767,7 @@ test("rechaza checkpoints que declaran más caracteres borrados que los que pod�
 
   const second = fixture();
   assert.throws(() => second.monitor.restoreCheckpoint(
-    { ...checkpoint, deletedCharacters: 6 },
+    { ...checkpoint, insertedCharacters: 6 },
     { documentId: "chapter-1", text: "hello", revision: 0, sequence: 0 },
     "book-1",
     101

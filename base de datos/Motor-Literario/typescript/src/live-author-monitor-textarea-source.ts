@@ -25,7 +25,7 @@ export class LiveAuthorMonitorTextAreaSourceError extends Error {
 
 export interface LiveAuthorMonitorTextAreaSourceOptions {
   readonly element: HTMLTextAreaElement;
-  /** Snapshot autoritativo usado al abrir el documento. No se conserva. */
+  /** Snapshot autoritativo; su texto se mantiene solo como referencia efímera en memoria. */
   readonly initialSnapshot: DocumentSnapshot;
   readonly onError?: (error: LiveAuthorMonitorTextAreaSourceError) => void;
 }
@@ -49,8 +49,9 @@ interface BeforeInputState {
 
 /**
  * Convierte eventos nativos beforeinput/input de un textarea en deltas del motor.
- * Solo conserva longitud, revisión y secuencia; no mantiene una copia sombra
- * del manuscrito. Todos los offsets siguen la convención UTF-16 del navegador.
+ * Mantiene una copia sombra efímera en memoria para comprobar el contexto
+ * anterior y posterior a cada edición. No la persiste ni la incluye en diagnósticos.
+ * Todos los offsets siguen la convención UTF-16 del navegador.
  *
  * historyUndo/historyRedo requieren el adaptador de historial del editor:
  * el stream se suspende antes de inventar un rango que el navegador no expone.
@@ -266,14 +267,23 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
     // inputType informa el mecanismo del navegador, no siempre la intención.
     // Drop y yank no se etiquetan como pegado/corrección sin evidencia específica.
-    const activityKind = before.inputType === "insertFromPaste" ||
+    // La categoría se deriva del inputType declarado por el navegador, nunca
+    // de que el delta reemplace una selección. "typing" significa aquí entrada
+    // de texto reportada por el navegador, no prueba de teclado físico o intención.
+    const activityKind =
+      before.inputType === "insertFromPaste" ||
       before.inputType === "insertFromPasteAsQuotation"
-      ? "paste" as const
-      : before.inputType === "insertReplacementText"
-        ? "correction" as const
-        : before.inputType.startsWith("delete") ? "deletion" as const
-          : before.inputType === "insertFromDrop" || before.inputType === "insertFromYank"
-            ? "other" as const : undefined;
+        ? "paste" as const
+        : before.inputType === "insertReplacementText"
+          ? "correction" as const
+          : before.inputType.startsWith("delete")
+            ? "deletion" as const
+            : before.inputType === "insertText" ||
+              before.inputType === "insertLineBreak" ||
+              before.inputType === "insertParagraph" ||
+              before.inputType === "insertCompositionText"
+                ? "typing" as const
+                : "other" as const;
     const change: EditorChange = Object.freeze({
       documentId: this.documentId,
       sequence: this.sequence + 1,

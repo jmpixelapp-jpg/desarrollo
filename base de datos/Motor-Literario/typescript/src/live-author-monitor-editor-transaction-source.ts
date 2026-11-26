@@ -471,7 +471,7 @@ export class LiveAuthorMonitorEditorTransactionSource implements LiveAuthorMonit
     const inputType: unknown = change.inputType;
     if (inputType !== undefined &&
         (typeof inputType !== "string" || !inputType.length || inputType.length > 128 ||
-         /[\\u0000-\\u001f\\u007f]/.test(inputType))) {
+         /[\u0000-\u001f\u007f]/.test(inputType))) {
       this.fail("invalid-transaction", "El editor emitió un inputType nativo inválido.");
       return;
     }

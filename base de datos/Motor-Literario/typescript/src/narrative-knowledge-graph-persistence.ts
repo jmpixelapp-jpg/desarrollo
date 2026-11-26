@@ -254,7 +254,7 @@ export type NarrativeProjectionReconciliationIssueCode =
 export interface NarrativeProjectionReconciliationIssue {
   readonly code: NarrativeProjectionReconciliationIssueCode;
   readonly documentId: string;
-  readonly recordType: "entity" | "relation" | "event" | "idea" | "assertion";
+  readonly recordType: "document" | "entity" | "relation" | "event" | "idea" | "assertion";
   readonly recordId?: string;
   readonly detail: string;
 }
@@ -333,7 +333,7 @@ export async function reconcileNarrativeDocumentProjections(
   for (const documentId of allDocumentIds) {
     const manifest = manifestByDocument.get(documentId);
     if (!manifest) {
-      emit("missing-manifest", documentId, "entity", undefined,
+      emit("missing-manifest", documentId, "document", undefined,
         "Hay evidencia documental sin manifiesto durable.");
     }
     for (const collection of collections) {

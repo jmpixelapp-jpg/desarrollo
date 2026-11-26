@@ -5,7 +5,7 @@
 import type { NarrativeEntity, TextEvidence } from "./narrative-knowledge";
 
 export type NarrativeCharacterKnowledgeKind =
-  | "learned" | "discovered" | "suspected" | "believed" | "remembered" | "forgotten" | "reported";
+  | "learned" | "known" | "heard" | "read" | "discovered" | "suspected" | "believed" | "remembered" | "forgotten" | "reported";
 export type NarrativeCharacterKnowledgeMode =
   | "asserted-cognition" | "uncertain-cognition" | "reported-transfer";
 
@@ -51,7 +51,10 @@ interface Signal {
   readonly pattern: RegExp;
 }
 const COGNITIVE_SIGNALS: readonly Signal[] = [
-  { kind:"learned",mode:"asserted-cognition",certainty:"explicit-claim",pattern:/(?<trigger>se\s+enter[oó]|se\s+enteraba|supo|sab[ií]a|averigu[oó]|averiguaba)\s+(?:de\s+)?que\s+(?<proposition>[^.!?;\n]{1,500})/giu },
+  { kind:"learned",mode:"asserted-cognition",certainty:"explicit-claim",pattern:/(?<trigger>se\s+enter[oó]|se\s+enteraba|supo|averigu[oó]|averiguaba)\s+(?:de\s+)?que\s+(?<proposition>[^.!?;\n]{1,500})/giu },
+  { kind:"known",mode:"asserted-cognition",certainty:"explicit-claim",pattern:/(?<trigger>sab[ií]a|sabe|saben)\s+que\s+(?<proposition>[^.!?;\n]{1,500})/giu },
+  { kind:"heard",mode:"asserted-cognition",certainty:"explicit-claim",pattern:/(?<trigger>oy[oó]|o[ií]a|escuch[oó]|escuchaba)\s+que\s+(?<proposition>[^.!?;\n]{1,500})/giu },
+  { kind:"read",mode:"asserted-cognition",certainty:"explicit-claim",pattern:/(?<trigger>ley[oó]|le[ií]a|leyeron)\s+que\s+(?<proposition>[^.!?;\n]{1,500})/giu },
   { kind:"discovered",mode:"asserted-cognition",certainty:"explicit-claim",pattern:/(?<trigger>descubri[oó]|descubr[ií]a|comprendi[oó]|comprend[ií]a|advirti[oó]|se\s+dio\s+cuenta)\s+(?:de\s+)?que\s+(?<proposition>[^.!?;\n]{1,500})/giu },
   { kind:"suspected",mode:"uncertain-cognition",certainty:"uncertain-claim",pattern:/(?<trigger>sospech[oó]|sospechaba|intuy[oó]|intu[ií]a|dud[oó]|dudaba)\s+(?:que|de\s+que)\s+(?<proposition>[^.!?;\n]{1,500})/giu },
   { kind:"believed",mode:"uncertain-cognition",certainty:"uncertain-claim",pattern:/(?<trigger>crey[oó]|cre[ií]a|pens[oó]|pensaba|supuso|supon[ií]a|imagin[oó]|imaginaba)\s+que\s+(?<proposition>[^.!?;\n]{1,500})/giu },

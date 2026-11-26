@@ -2559,6 +2559,7 @@ test("IndexedDB reemplaza índices existentes con definición incompatible", asy
     "narrative-entities", "narrative-relations",
     "narrative-events", "narrative-ideas", "personal-idea-library",
     "writer-library-finalization-receipts", "narrative-assertions", "document-diagnostics",
+    "live-author-monitor-checkpoints", "live-author-monitor-leases",
     "project-dictionaries", "dictionary-entries", "manuscript-fragments",
     "record-attributes", "relation-attributes", "active-suggestions",
     "import-authorizations", "schema-migrations", "project-records", "record-names",

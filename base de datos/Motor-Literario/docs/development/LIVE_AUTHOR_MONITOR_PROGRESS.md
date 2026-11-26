@@ -1552,3 +1552,20 @@ La lane dedicada del monitor para el código fuente con este guard, [run 4576223
 **Regresión:** se demora la respuesta de la primera renovación después de que el almacén la confirma; se completa una segunda renovación más reciente y luego se libera la respuesta antigua. El estado local debe conservar la expiración y actualización más nuevas.
 
 **Validación:** pendiente de GitHub Actions.
+
+
+## 101. Integridad de muestras y clasificación al persistir checkpoints (26 de noviembre de 2026)
+
+**Hallazgo A — arrays dispersos:** el validador de la capa IndexedDB usaba `some()` y `reduce()` directamente sobre `commitLatencies`. Ambos omiten posiciones vacías, por lo que una ventana dispersa podía superar la validación de escritura aunque la restauración del monitor ya la rechazara.
+
+**Corrección A:** la validación materializa las muestras con `Array.from()` antes de comprobar sus valores. Un hueco se convierte en `undefined` y provoca el rechazo antes de abrir la transacción de escritura.
+
+**Hallazgo B — desglose de actividad:** el guard de monotonía comparaba duración y contadores globales, pero no impedía que un checkpoint posterior de la misma sesión redujera `typingChanges`, `pasteChanges`, `deletionChanges`, `correctionChanges`, `undoChanges`, `redoChanges` u `otherChanges` manteniendo el mismo `acceptedChanges`.
+
+**Corrección B:** los siete contadores también son monótonos dentro de la misma identidad de sesión. Para checkpoints v1 históricos que no incluyan el desglose opcional, los cambios anteriores se interpretan como `otherChanges = acceptedChanges`; la comparación calcula ese valor implícito y permite que la sesión siga creciendo sin reclasificar el pasado.
+
+**Regresiones:** (1) IndexedDB rechaza una ventana de latencia con una posición vacía y no persiste ningún registro; (2) rechaza una reclasificación retroactiva aunque el total aceptado permanezca igual; (3) permite actualizar un checkpoint v1 histórico sin desglose, conservando su contador `other` implícito.
+
+**Compatibilidad:** no cambia la versión ni la forma almacenada de los checkpoints; no requiere migración. Los campos de actividad continúan siendo opcionales en v1 para leer registros históricos.
+ 
+**Validación:** pendiente de GitHub Actions.

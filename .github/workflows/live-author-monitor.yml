@@ -14,6 +14,8 @@ on:
       - "base de datos/Motor-Literario/typescript/tests/browser/**"
       - "base de datos/Motor-Literario/typescript/examples/live-author-monitor/**"
       - "base de datos/Motor-Literario/typescript/tests/storage-implementation-audit.test.mjs"
+      - "base de datos/Motor-Literario/typescript/bench/**"
+      - "base de datos/Motor-Literario/typescript/package.json"
       - ".github/workflows/live-author-monitor.yml"
   pull_request:
     paths:
@@ -27,6 +29,8 @@ on:
       - "base de datos/Motor-Literario/typescript/tests/browser/**"
       - "base de datos/Motor-Literario/typescript/examples/live-author-monitor/**"
       - "base de datos/Motor-Literario/typescript/tests/storage-implementation-audit.test.mjs"
+      - "base de datos/Motor-Literario/typescript/bench/**"
+      - "base de datos/Motor-Literario/typescript/package.json"
       - ".github/workflows/live-author-monitor.yml"
   workflow_dispatch:
 

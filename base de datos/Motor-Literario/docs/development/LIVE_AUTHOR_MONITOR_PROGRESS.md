@@ -769,3 +769,13 @@ Se incorpora `visibleMetrics` en el montaje del panel individual y del workspace
 **Límite de medición:** esta medición es heap/RSS del proceso Node en CI, no heap de Chromium ni RAM del editor en producción. No se fija un umbral global arbitrario; se publica el valor observado y se conserva la verificación estructural de las ventanas acotadas.
 
 **Validación:** pendiente de CI para este commit.
+
+- Precisión de unidades: el tamaño de documento del benchmark se expresa en unidades UTF-16 (la misma convención de offsets del motor), no como bytes físicos de RAM. El resultado `initialCodeUnitsPerDocument` evita atribuir al heap un tamaño de almacenamiento que depende del runtime.
+
+## 41. Precisión de medición y disparadores de benchmark (25 de noviembre de 2026)
+
+- El benchmark usa `DOCUMENT_CODE_UNITS` y reporta `initialCodeUnitsPerDocument`, para no confundir longitud UTF-16 con bytes físicos de almacenamiento. El texto inicial se libera tras abrir las sesiones y el monitor conserva únicamente longitud y métricas.
+- Se incluyen `typescript/bench/**` y `typescript/package.json` en los filtros `push` y `pull_request` del workflow específico; los cambios en benchmarks/scripts ya no quedan fuera de la CI directa del monitor.
+- La lectura de heap se hace con GC explícito en el proceso Node del runner. No se fija un presupuesto global no calibrado; el reporte servirá para establecer una línea base y detectar regresiones relativas. No sustituye una medición de heap de Chromium.
+
+**Validación:** el commit que incorpora el benchmark quedó sujeto a CI; el resultado debe registrarse cuando termine el workflow.

@@ -197,7 +197,7 @@ No marcar una tarea como validada cuando el workflow se haya detenido antes de e
 
 Las pruebas `live-author-monitor-panel.test.mjs` y `live-author-monitor-workspace.test.mjs` montan el DOM con las siete categorías (seis operaciones y `other`) y verifican que cada valor se muestre como `1` en el capítulo correcto. También verifican que el texto privado no aparezca en la interfaz.
 
-## Configuración de las métricas visibles del panel
+## 11. Configuración de las métricas visibles del panel
 
 El panel individual y el workspace aceptan `visibleMetrics`. Si no se proporciona, muestran todas las métricas. Una selección personalizada puede reducir la densidad visual:
 
@@ -214,7 +214,7 @@ mountLiveAuthorMonitorWorkspace(workspaceContainer, api, {
 
 Cada tipo exporta su unión de claves permitidas. En runtime, claves desconocidas o duplicadas se rechazan antes de insertar elementos DOM. La selección no cambia las métricas calculadas o persistidas; solo reduce lo que esa vista renderiza. Las métricas se conservan con semántica de lista para tecnologías de asistencia.
 
-## Benchmark reproducible de heap del monitor
+## 12. Benchmark reproducible de heap del monitor
 
 El repositorio dispone de `bench/live-author-monitor-memory-benchmark.mjs`, ejecutable después del build:
 
@@ -222,8 +222,8 @@ El repositorio dispone de `bench/live-author-monitor-memory-benchmark.mjs`, ejec
 npm run bench:monitor
 ```
 
-El escenario predeterminado crea ocho sesiones con documentos de 1 MiB y confirma 12.500 cambios por documento (100.000 commits). Ejecuta GC explícito antes de tomar muestras y reporta heap/RSS del proceso Node antes y después de la carga, además del crecimiento entre la mitad y el total de cambios. También verifica que cada documento termina con todos los commits, sin pendientes y con una ventana de latencia limitada.
+El escenario predeterminado crea ocho sesiones con documentos de 1.048.576 unidades UTF-16 y confirma 12.500 cambios por documento (100.000 commits). Ejecuta GC explícito antes de tomar muestras y reporta heap/RSS del proceso Node antes y después de la carga, además del crecimiento entre la mitad y el total de cambios. También verifica que cada documento termina con todos los commits, sin pendientes y con una ventana de latencia limitada.
 
-Las dimensiones pueden variarse con `MONITOR_BENCH_DOCUMENTS`, `MONITOR_BENCH_CHANGES_PER_DOCUMENT`, `MONITOR_BENCH_DOCUMENT_BYTES` y `MONITOR_BENCH_SAMPLE_WINDOW`. Los rangos admitidos están validados por el script.
+Las dimensiones pueden variarse con `MONITOR_BENCH_DOCUMENTS`, `MONITOR_BENCH_CHANGES_PER_DOCUMENT`, `MONITOR_BENCH_DOCUMENT_CODE_UNITS` y `MONITOR_BENCH_SAMPLE_WINDOW`. Los rangos admitidos están validados por el script.
 
 Este benchmark mide el heap del proceso Node del runner, no memoria de Chromium ni consumo de la aplicación de producción. Reporta la medición sin umbral universal fijo para evitar fallos por diferencias de V8/runner. El job del monitor lo ejecuta después de la suite automatizada, y el benchmark general lo incluye como parte de `npm run bench`.

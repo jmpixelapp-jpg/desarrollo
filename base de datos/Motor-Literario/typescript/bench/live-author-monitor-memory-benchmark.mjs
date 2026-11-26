@@ -3,13 +3,13 @@ import { LiveAuthorMonitor } from "../dist/motor-literario.js";
 
 const DOCUMENT_COUNT = Number(process.env.MONITOR_BENCH_DOCUMENTS ?? 8);
 const CHANGES_PER_DOCUMENT = Number(process.env.MONITOR_BENCH_CHANGES_PER_DOCUMENT ?? 12_500);
-const DOCUMENT_BYTES = Number(process.env.MONITOR_BENCH_DOCUMENT_BYTES ?? 1_048_576);
+const DOCUMENT_CODE_UNITS = Number(process.env.MONITOR_BENCH_DOCUMENT_CODE_UNITS ?? 1_048_576);
 const SAMPLE_WINDOW = Number(process.env.MONITOR_BENCH_SAMPLE_WINDOW ?? 64);
 
 for (const [name, value, minimum, maximum] of [
   ["MONITOR_BENCH_DOCUMENTS", DOCUMENT_COUNT, 1, 64],
   ["MONITOR_BENCH_CHANGES_PER_DOCUMENT", CHANGES_PER_DOCUMENT, 1, 1_000_000],
-  ["MONITOR_BENCH_DOCUMENT_BYTES", DOCUMENT_BYTES, 1, 50 * 1024 * 1024],
+  ["MONITOR_BENCH_DOCUMENT_CODE_UNITS", DOCUMENT_CODE_UNITS, 1, 50 * 1024 * 1024],
   ["MONITOR_BENCH_SAMPLE_WINDOW", SAMPLE_WINDOW, 1, 4096]
 ]) {
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
@@ -37,8 +37,8 @@ const monitor = new LiveAuthorMonitor({
   commitSampleWindow: SAMPLE_WINDOW
 });
 
-let initialText = "x".repeat(DOCUMENT_BYTES);
-const lengths = new Array(DOCUMENT_COUNT).fill(DOCUMENT_BYTES);
+let initialText = "x".repeat(DOCUMENT_CODE_UNITS);
+const lengths = new Array(DOCUMENT_COUNT).fill(DOCUMENT_CODE_UNITS);
 const sequences = new Array(DOCUMENT_COUNT).fill(0);
 const revisions = new Array(DOCUMENT_COUNT).fill(0);
 const documentIds = Array.from({ length: DOCUMENT_COUNT }, (_, index) => "monitor-memory-" + index);
@@ -109,7 +109,7 @@ for (const snapshot of snapshots) {
       snapshot.pendingChanges !== 0 ||
       snapshot.failedChanges !== 0 ||
       snapshot.commitLatencySamples !== Math.min(CHANGES_PER_DOCUMENT, SAMPLE_WINDOW) ||
-      snapshot.currentDocumentLength !== DOCUMENT_BYTES + CHANGES_PER_DOCUMENT) {
+      snapshot.currentDocumentLength !== DOCUMENT_CODE_UNITS + CHANGES_PER_DOCUMENT) {
     throw new Error("Los invariantes de métricas/ventana no se cumplieron para " + snapshot.documentId + ".");
   }
 }
@@ -119,7 +119,7 @@ const output = {
   runtime: "node",
   nodeVersion: process.version,
   documents: DOCUMENT_COUNT,
-  initialBytesPerDocument: DOCUMENT_BYTES,
+  initialCodeUnitsPerDocument: DOCUMENT_CODE_UNITS,
   changesPerDocument: CHANGES_PER_DOCUMENT,
   totalCommits: DOCUMENT_COUNT * CHANGES_PER_DOCUMENT,
   latencySampleWindow: SAMPLE_WINDOW,

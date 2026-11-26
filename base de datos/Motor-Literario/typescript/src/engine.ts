@@ -516,13 +516,17 @@ export class LiteraryEngine {
           if (typeof deviceId !== "string" || !deviceId.trim() || deviceId.length > 256) {
             throw new Error("syncDeviceId debe ser un identificador estable válido.");
           }
+          const appendAtomic = this.options.store.appendChangeAndEnqueueSyncOperation;
+          if (typeof appendAtomic !== "function") {
+            throw new Error("La sincronización automática requiere un adaptador con commit atómico de journal y outbox.");
+          }
           const operationId = "narrative-change:" +
             encodeURIComponent(project.projectId) + ":" +
             encodeURIComponent(change.documentId) + ":" + change.sequence;
           if (operationId.length > 256) {
             throw new Error("La identidad del cambio excede el límite admitido para sincronización.");
           }
-          await this.options.store.appendChange(journalEntry, {
+          await appendAtomic.call(this.options.store, journalEntry, {
             operationId,
             projectId: project.projectId,
             deviceId,

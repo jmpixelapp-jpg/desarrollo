@@ -292,6 +292,41 @@ test("crea y restaura checkpoint durable conservando métricas y contando la int
   assert.equal(next.latestSequence, 2);
 });
 
+test("una recuperación inmediata no sitúa la última actividad antes del inicio de la sesión", () => {
+  const first = fixture({ idleAfterMs: 10 });
+  first.open("chapter-1", "a");
+  first.setTime(1);
+  first.monitor.recordAdmission(
+    first.change(1, 0, 1, 1, "b"),
+    first.queued("short-session-ticket")
+  );
+  first.setTime(2);
+  first.monitor.recordCommit({
+    ticketId: "short-session-ticket",
+    status: "applied",
+    revision: 1
+  });
+  first.setTime(3);
+  const checkpoint = first.monitor.createCheckpoint("chapter-1", 100);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.sessionDurationMs, 3);
+  assert.equal(checkpoint.lastActivityAgeMs, 2);
+
+  const second = fixture({ idleAfterMs: 10 });
+  const restored = second.monitor.restoreCheckpoint(
+    checkpoint,
+    { documentId: "chapter-1", text: "ab", revision: 1, sequence: 1 },
+    "book-1",
+    101
+  );
+  assert.equal(restored.sessionDurationMs, 4);
+  assert.equal(restored.idleDurationMs, checkpoint.idleDurationMs + 1);
+  const nextCheckpoint = second.monitor.createCheckpoint("chapter-1", 102);
+  assert.ok(nextCheckpoint);
+  assert.equal(nextCheckpoint.lastActivityAgeMs, 3);
+  assert.ok(nextCheckpoint.lastActivityAgeMs <= nextCheckpoint.sessionDurationMs + 1);
+});
+
 test("rechaza checkpoints que no coinciden con el snapshot durable o contienen métricas inválidas", () => {
   const first = fixture();
   first.open("chapter-1", "hello");

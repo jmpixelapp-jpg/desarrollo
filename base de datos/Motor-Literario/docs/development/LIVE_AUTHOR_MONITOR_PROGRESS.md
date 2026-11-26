@@ -600,3 +600,12 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **Regresión añadida:** `live-author-monitor-engine-pending-sequence.test.mjs` bloquea deliberadamente la primera escritura del journal, admite 40 ediciones consecutivas mientras está pendiente y verifica que `pendingSequence` no retroceda, que los 40 commits se completen y que el texto final sea íntegro.
 
 **Validación CI:** pendiente para este commit.
+
+
+## 29. Restauración inmediata sin edad de actividad anterior al inicio de sesión (25 de noviembre de 2026)
+
+**Defecto reproducido:** al restaurar un checkpoint de una sesión muy reciente, `restoreCheckpoint()` elevaba artificialmente `lastActivityAgeMs` hasta `idleAfterMs + 1`. Si la sesión completa era más corta que ese umbral y la interrupción entre procesos era breve, la última actividad quedaba fechada antes del inicio de la sesión. El checkpoint siguiente era rechazado por IndexedDB.
+
+**Corrección:** la edad restaurada ahora es exactamente `checkpoint.lastActivityAgeMs + downtime`. El downtime ya se incorpora íntegramente a `idleDurationMs`; no se necesita alterar la antigüedad de la última pulsación ni fabricar tiempo anterior al inicio de sesión.
+
+**Regresión:** se crea una sesión de 3 ms con umbral de inactividad de 10 ms, se restaura tras 1 ms y se crea un segundo checkpoint. La prueba verifica que la última actividad (3 ms de antigüedad) sigue dentro de la sesión (4 ms), y que el checkpoint posterior es válido.

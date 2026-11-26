@@ -184,3 +184,8 @@ La prueba de navegador de referencia valida dos documentos persistidos en Indexe
 El motor puede recibir nuevas pulsaciones mientras el almacenamiento confirma el delta anterior. Al reemplazar el estado del documento tras cada commit, debe conservar el `pendingSequence` más reciente de la instancia viva, no el valor capturado antes de `appendChange()`. Una regresión bloquea la primera escritura del journal, admite 40 deltas y verifica que la secuencia pendiente permanezca monótona y que todos los commits se apliquen.
 
 Esta regla es esencial cuando el editor cambia de capítulo: el anfitrión debe poder comprobar que `pendingSequence === sequence` después de vaciar la cola sin que un commit atrasado reescriba un contador antiguo.
+
+
+## 14. Restauración de sesiones de duración inferior al umbral de inactividad
+
+Al recuperar un checkpoint, sumar el downtime a `idleDurationMs` ya garantiza que el tiempo fuera del proceso nunca se contabilice como tiempo escribiendo. No se debe forzar `lastActivityAgeMs` a `idleAfterMs + 1`: para sesiones recién abiertas puede superar la duración total y volver inválido el siguiente checkpoint. Se conserva `edadAnterior + downtime`, sin inventar actividad anterior al inicio de la sesión.

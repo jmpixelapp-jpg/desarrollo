@@ -432,9 +432,12 @@ export class LiveAuthorMonitor {
         !Number.isFinite(idleDurationMs)) {
       throw new RangeError("El intervalo de recuperación excede el rango numérico admitido.");
     }
+    // La interrupción completa ya se suma a idleDurationMs. Conservar la
+    // edad real evita situar lastActivityAt antes del inicio de una sesión
+    // muy reciente cuando el downtime es menor que idleAfterMs.
     const restoredActivityAge = checkpoint.lastActivityAgeMs === null
       ? undefined
-      : Math.max(checkpoint.lastActivityAgeMs + downtime, this.idleAfterMs + 1);
+      : checkpoint.lastActivityAgeMs + downtime;
     const session: DocumentSession = {
       sessionId: checkpoint.sessionId,
       projectId,

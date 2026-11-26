@@ -820,3 +820,10 @@ La recuperación vuelve a cargar ambos snapshots y sus checkpoints desde Indexed
 Se corrige una carrera entre la admisión sincrónica y la persistencia asíncrona del motor. El objeto siguiente del documento ya no captura `pendingSequence` antes de esperar al almacén. Después de confirmar el delta, el motor lee el contador actual de la instancia viva y lo conserva al instalar el nuevo buffer/revisión/sequence. Así, una escritura lenta no puede hacer retroceder el número de cambios admitidos en el documento.
 
 **Prueba de regresión:** el primer `appendChange` queda retenido mientras se admiten 40 cambios sucesivos. Antes de liberarlo, la prueba ve `sequence=0, pendingSequence=40`; al finalizar, verifica `sequence=40, pendingSequence=40`, 40 commits aplicados y el texto completo.
+
+
+## 45. Checkpoints válidos tras recuperación inmediata
+
+La restauración suma el downtime completo a `idleDurationMs` y conserva la edad de última actividad como `lastActivityAgeMs + downtime`. No impone un mínimo artificial de `idleAfterMs + 1`, porque una sesión abierta durante menos tiempo que ese umbral no podría contener una última actividad más antigua que su propio inicio.
+
+La regresión cubre una sesión de 3 ms, umbral de inactividad de 10 ms y downtime de 1 ms. El checkpoint restaurado conserva 4 ms de duración, 3 ms de edad de última actividad y puede volver a persistirse sin vulnerar el contrato.

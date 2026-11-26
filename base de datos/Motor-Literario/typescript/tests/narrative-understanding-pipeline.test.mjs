@@ -18,6 +18,17 @@ test("coordina ideas, acciones, eventos, consecuencias y escenas con una procede
   assert.equal(result.actions.length, 2);
   assert.equal(result.events.length, 2);
   assert.equal(result.consequences.length, 1);
+  const relation = result.consequences[0];
+  const sourceEvent = result.events.find(event => event.id === relation.sourceEventId);
+  const consequenceEvent = result.events.find(event => event.id === relation.consequenceEventId);
+  assert.deepEqual(relation.supportingActionCandidateIds.sourceEvent, sourceEvent.actionCandidateIds);
+  assert.deepEqual(relation.supportingActionCandidateIds.consequenceEvent, consequenceEvent.actionCandidateIds);
+  assert.ok(relation.supportingActionCandidateIds.sourceEvent.every(id =>
+    result.actions.some(action => action.id === id)
+  ));
+  assert.ok(relation.supportingActionCandidateIds.consequenceEvent.every(id =>
+    result.actions.some(action => action.id === id)
+  ));
   assert.equal(result.ideas.length, 1);
   assert.equal(result.interactions.length, 2);
   assert.equal(result.interactionShifts.length, 1);

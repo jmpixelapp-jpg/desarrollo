@@ -505,3 +505,13 @@ Los identificadores del diario remoto se mantienen separados de los identificado
 - La política sigue siendo conservadora: los hallazgos no disparan reconstrucciones automáticas ni avanzan cursores.
 
 **Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` en este entorno.
+
+
+## Integridad bidireccional de cursores
+
+- La auditoría detecta operaciones de escritores cuyo cursor durable desapareció (`cursor-missing-for-operations`).
+- Comprueba secuencia positiva segura, `updatedAt`, `lastOperationId` y pertenencia al proyecto (`invalid-cursor`).
+- Pruebas nuevas cubren operaciones huérfanas, cursores malformados y lectura IndexedDB de snapshots ordenados por escritor.
+- La reconciliación sigue siendo read-only; no inventa cursores, no avanza secuencias y no confirma operaciones automáticamente.
+
+**Validación pendiente:** no se han ejecutado `npm run typecheck` ni `npm test` en este entorno.

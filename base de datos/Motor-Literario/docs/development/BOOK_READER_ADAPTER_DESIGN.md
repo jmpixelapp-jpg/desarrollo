@@ -136,3 +136,6 @@ Una evidencia que cruza bloques se divide en fragmentos, y los saltos de párraf
 La inspección recupera ahora la tabla de contenidos EPUB 3 (`nav`) y la alternativa EPUB 2 (`NCX`), devolviendo etiquetas, destinos internos y profundidad jerárquica. La navegación se informa aparte y nunca reemplaza el orden de lectura del spine. Se añadieron fixtures para jerarquía nav y NCX.
 
 Se corrigió también la extracción de saltos XHTML `br` (se conservan como saltos de línea), y se reconocen nombres de elementos con prefijo XML. El lector ZIP rechaza directorios divididos y entradas cuyo rango de datos invade el directorio central, además de verificar que los flags locales coincidan con los del directorio central.
+
+
+La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto del documento anfitrión. `resolveNarrativeTextEvidence()` exige que esa revisión coincida con la evidencia persistida, además de comprobar que la cita coincide carácter por carácter con el rango. Rechaza snapshots sin versión, revisiones distintas, citas modificadas y evidencias marcadas como obsoletas. Esta verificación evita enlazar accidentalmente una evidencia histórica a una edición actual que contenga texto parecido.

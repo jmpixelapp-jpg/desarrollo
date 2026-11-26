@@ -651,7 +651,7 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 
 **Cambio incorporado:** se añadió una comprobación acotada de la secuencia anterior a la acción. Reconoce `no`, `nunca` o `jamás` seguidos por una cadena limitada de auxiliares/modales frecuentes (`haber`, `estar`, formas de `ser`, `poder` y `querer`). La ventana se limita a tres formas auxiliares contiguas y no busca negaciones arbitrariamente lejos dentro de la oración.
 
-**Protección de alcance:** la negación se evalúa por separado para cada verbo. En «Ana dijo que no había llegado», la acción matriz `decir` permanece afirmada y `llegar` queda negada. La polaridad negativa también impide construir relaciones dirigidas de transferencia o interacción como si el acontecimiento hubiera ocurrido.
+**Protección de alcance:** la negación se evalúa por separado para cada verbo. En «Ana dijo que no había llegado», la acción matriz `decir` permanece afirmada y `llegar` queda negada. La polaridad negativa también impide construir relaciones dirigidas de transferencia o interacción como si el acontecimiento hubiera ocurrido. La detección del sujeto activo también admite las cadenas auxiliares acotadas, por lo que no se pierde la atribución gramatical de Ana en «Ana no había llegado» o «Ana no pudo abrir».
 
 **Pruebas añadidas:** negación en «no había llegado», «no pudo abrir» y alcance diferenciado entre verbo matriz y subordinado.
 

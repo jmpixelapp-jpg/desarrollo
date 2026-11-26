@@ -94,22 +94,31 @@ export function discoverNarrativeRelationshipTransitionCandidates(input:Narrativ
     if(!previous||distance<previousDistance) nearestByEntity.set(occurrence.entityId,occurrence);
    }
    const selected=[...nearestByEntity.values()].sort((a,b)=>a.start-b.start||a.entityId.localeCompare(b.entityId));
+   const pairCandidates:{first:NameOccurrence;second:NameOccurrence;start:number;end:number;span:number}[]=[];
    for(let i=0;i<selected.length;i++) for(let j=i+1;j<selected.length;j++){
     const first=selected[i]!;const second=selected[j]!;
-    const contextStart=Math.min(first.start,second.start,triggerStart);
-    const contextEnd=Math.max(first.end,second.end,triggerEnd);
-    if(contextEnd-contextStart>MAX_CONTEXT_UNITS) continue;
+    const start=Math.min(first.start,second.start,triggerStart);
+    const end=Math.max(first.end,second.end,triggerEnd);
+    if(end-start<=MAX_CONTEXT_UNITS) pairCandidates.push({first,second,start,end,span:end-start});
+   }
+   // Preferimos el par con el menor contexto que contiene las dos menciones y
+   // el disparador: reduce asociaciones accidentales con personajes incidentales.
+   pairCandidates.sort((a,b)=>a.span-b.span||a.first.entityId.localeCompare(b.first.entityId)||a.second.entityId.localeCompare(b.second.entityId));
+   const chosen=pairCandidates[0];
+   if(chosen){
+    const {first,second,start:contextStart,end:contextEnd}=chosen;
     const key=[first.entityId,second.entityId,signal.family,signal.transition,triggerStart].join(":");
-    if(results.has(key)) continue;
-    results.set(key,{id:"relationship-transition-candidate:"+JSON.stringify([input.documentId,input.revision,base+triggerStart,first.entityId,second.entityId,signal.family,signal.transition]),
-     projectId:input.projectId,documentId:input.documentId,revision:input.revision,
-     firstEntityId:first.entityId,secondEntityId:second.entityId,family:signal.family,transition:signal.transition,trigger:trigger[0],
-     triggerEvidence:makeEvidence(input.documentId,input.revision,base,triggerStart,triggerEnd,trigger[0]),
-     firstEntityEvidence:makeEvidence(input.documentId,input.revision,base,first.start,first.end,first.surface),
-     secondEntityEvidence:makeEvidence(input.documentId,input.revision,base,second.start,second.end,second.surface),
-     contextEvidence:makeEvidence(input.documentId,input.revision,base,contextStart,contextEnd,input.text.slice(contextStart,contextEnd)),
-     reviewStatus:"candidate"});
-    if(results.size>max) throw new Error("La extracción supera el máximo de cambios relacionales; no se devuelve un resultado parcial.");
+    if(!results.has(key)){
+     results.set(key,{id:"relationship-transition-candidate:"+JSON.stringify([input.documentId,input.revision,base+triggerStart,first.entityId,second.entityId,signal.family,signal.transition]),
+      projectId:input.projectId,documentId:input.documentId,revision:input.revision,
+      firstEntityId:first.entityId,secondEntityId:second.entityId,family:signal.family,transition:signal.transition,trigger:trigger[0],
+      triggerEvidence:makeEvidence(input.documentId,input.revision,base,triggerStart,triggerEnd,trigger[0]),
+      firstEntityEvidence:makeEvidence(input.documentId,input.revision,base,first.start,first.end,first.surface),
+      secondEntityEvidence:makeEvidence(input.documentId,input.revision,base,second.start,second.end,second.surface),
+      contextEvidence:makeEvidence(input.documentId,input.revision,base,contextStart,contextEnd,input.text.slice(contextStart,contextEnd)),
+      reviewStatus:"candidate"});
+     if(results.size>max) throw new Error("La extracción supera el máximo de cambios relacionales; no se devuelve un resultado parcial.");
+    }
    }
   }
  }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
-import { IndexedDbProjectStore } from "../dist/motor-literario.js";
+import { HostEngineApi, IndexedDbProjectStore } from "../dist/motor-literario.js";
 
 globalThis.indexedDB = new IDBFactory();
 
@@ -162,6 +162,122 @@ test("IndexedDB valida destinos idea dentro del proyecto y revierte referencias 
       linked
     );
   } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+
+test("IndexedDB archiva la biblioteca personal y su operación outbox en una sola transacción", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const writerId = "writer-library-archive";
+  const archivedAt = 55;
+  const syncOperation = {
+    operationId: "personal-library-archive-operation",
+    projectId,
+    deviceId: "device-library-archive",
+    kind: "personal-idea-archive",
+    payload: JSON.stringify({ archive: "pending" }),
+    createdAt: archivedAt
+  };
+
+  try {
+    await store.saveIdea(idea());
+    const entries = await store.archiveUnincorporatedIdeas(
+      projectId, writerId, "Libro transaccional", archivedAt, syncOperation
+    );
+    assert.deepEqual(entries.map(entry => entry.idea.id), ["idea-source"]);
+    assert.deepEqual(await store.loadIdeas(projectId), []);
+
+    const library = await store.loadPersonalIdeas(writerId);
+    assert.deepEqual(library.map(entry => entry.idea.id), ["idea-source"]);
+    assert.equal(library[0].context.version, 1);
+
+    const receipt = await store.loadProjectFinalizationReceipt(writerId, projectId);
+    assert.deepEqual(receipt.archivedIdeaIds, ["idea-source"]);
+    assert.equal(receipt.archiveChecksum.startsWith("fnv1a64:"), true);
+
+    const [pending] = await store.loadPendingSyncOperations(projectId);
+    assert.equal(pending.operationId, syncOperation.operationId);
+    assert.equal(pending.kind, "personal-idea-archive");
+    assert.equal(pending.sequence, 1);
+    assert.equal(pending.deviceId, syncOperation.deviceId);
+    assert.deepEqual(JSON.parse(pending.payload), {
+      writerId,
+      sourceProjectName: "Libro transaccional",
+      archivedAt,
+      archivedIdeaIds: ["idea-source"],
+      archiveChecksum: receipt.archiveChecksum
+    });
+    assert.equal(await store.loadLastSyncOperationSequence(projectId, syncOperation.deviceId), 1);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+test("IndexedDB revierte el archivo y la outbox si los IDs esperados ya no coinciden", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const writerId = "writer-library-conflict";
+  const syncOperation = {
+    operationId: "personal-library-conflict-operation",
+    projectId,
+    deviceId: "device-library-conflict",
+    kind: "personal-idea-archive",
+    payload: JSON.stringify({ archive: "pending" }),
+    createdAt: 66
+  };
+
+  try {
+    await store.saveIdea(idea());
+    await assert.rejects(
+      store.archiveUnincorporatedIdeas(
+        projectId, writerId, "Libro transaccional", 66, syncOperation, []
+      ),
+      /conjunto de ideas del libro cambió/u
+    );
+
+    assert.deepEqual(await store.loadIdeas(projectId), [idea()]);
+    assert.deepEqual(await store.loadPersonalIdeas(writerId), []);
+    assert.equal(await store.loadProjectFinalizationReceipt(writerId, projectId), undefined);
+    assert.deepEqual(await store.loadPendingSyncOperations(projectId), []);
+    assert.equal(await store.loadLastSyncOperationSequence(projectId, syncOperation.deviceId), 0);
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});
+
+
+test("HostEngineApi sincroniza la finalización de libro y biblioteca personal con su identidad de dispositivo", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const writerId = "writer-host-library";
+  const deviceId = "device-host-library";
+  const api = new HostEngineApi({ store });
+  api.initializeProject({
+    projectId, projectName: "Libro transaccional",
+    writerId, deviceId
+  });
+
+  try {
+    await store.saveIdea(idea());
+    const entries = await api.archiveUnincorporatedIdeas();
+    assert.deepEqual(entries.map(entry => entry.idea.id), ["idea-source"]);
+
+    const [operation] = await store.loadPendingSyncOperations(projectId);
+    assert.equal(operation.kind, "personal-idea-archive");
+    assert.equal(operation.deviceId, deviceId);
+    assert.equal(operation.sequence, 1);
+    const payload = JSON.parse(operation.payload);
+    assert.equal(payload.writerId, writerId);
+    assert.equal(payload.sourceProjectName, "Libro transaccional");
+    assert.deepEqual(payload.archivedIdeaIds, ["idea-source"]);
+    assert.equal(typeof payload.archiveChecksum, "string");
+  } finally {
+    api.dispose();
     await store.close();
     await deleteDatabase();
   }

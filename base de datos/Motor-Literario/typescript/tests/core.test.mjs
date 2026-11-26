@@ -2217,7 +2217,7 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: { open(_name, version) {
-      assert.equal(version, 27);
+      assert.equal(version, 28);
       const request = { result: database, transaction: upgradeTransaction };
       queueMicrotask(() => {
         request.onupgradeneeded?.();
@@ -2266,7 +2266,9 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       { name: "timeline-occurrences", keyPath: ["projectId", "id"] },
       { name: "project-dictionaries", keyPath: ["projectId", "id"] },
       { name: "dictionary-entries", keyPath: ["projectId", "id"] },
-      { name: "dictionary-entry-entities", keyPath: ["projectId", "entryId", "recordId"] }
+      { name: "dictionary-entry-entities", keyPath: ["projectId", "entryId", "recordId"] },
+      { name: "sync-outbox", keyPath: "operationId" },
+      { name: "sync-device-sequences", keyPath: ["projectId", "deviceId"] }
     ]);
     assert.deepEqual(createdIndexes.map(index => [index.store, index.name]), [
       ["project-settings", "by-project"],
@@ -2341,6 +2343,8 @@ test("IndexedDB crea el esquema completo al inicializar una base nueva", async (
       ["timeline-occurrences", "by-project"],
       ["timeline-occurrences", "by-event-record"],
       ["timeline-occurrences", "by-track-order"],
+      ["sync-outbox", "by-project-created-at"],
+      ["sync-outbox", "by-project-device-sequence"],
       ["project-dictionaries", "by-project"],
       ["project-dictionaries", "by-project-language-name"],
       ["dictionary-entries", "by-project"],

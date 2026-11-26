@@ -345,3 +345,24 @@ Anota también las versiones exactas del sistema operativo, navegador y proveedo
 ### Validación de privacidad del export
 
 Se añadió una prueba Playwright que introduce un sentinel de manuscrito y una letra de prueba, inicia la captura, exporta el JSON y verifica que ambos contenidos están ausentes. A la vez verifica que el informe conserva longitudes, `inputType`, metadatos de confianza y longitud de reemplazo. La existencia de datos suficientes para diagnosticar el evento no requiere registrar el contenido literal.
+
+
+## Validación de corroboración doble y banco manual — 26 de noviembre de 2026
+
+Los dos workflows terminaron en `success` sobre el commit `917d46351d0c86af54ec208a38dcd3e92de3b138`:
+
+- **[Live Author Monitor — run 45789096960](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45789096960):** type-check aislado; 17/17 pruebas de recuperación iniciales; 180/180 pruebas unitarias/diagnósticas; Page Lifecycle Chromium; integración de navegador y anfitrión. Resultado final: **200/200 pruebas, 0 fallos**. Se aprobaron explícitamente el test de candidatos IME por CDP y el test de exportación manual sin contenido del manuscrito.
+- **[Motor Literario TypeScript — run 45789096966](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45789096966):** type-check, build y suite global. Resultado: **1.170/1.170 pruebas, 0 fallos**. Pasaron además la prueba de exportación IME y las dos regresiones de nombres con metacaracteres del detector de sujetos elípticos.
+
+### Benchmark del núcleo en estos workflows
+
+- Workflow dedicado: 100.000 commits, 617,21 ms, 162.019,24 commits/s, 0,5 MB retenidos por sesiones abiertas, 0 MB de crecimiento del heap entre media carga y carga completa, RSS 70,73 MB.
+- Workflow global: 100.000 commits, 371,20 ms, 269.396,07 commits/s, 0,5 MB retenidos, 0 MB de crecimiento del heap entre media carga y carga completa, RSS 71,82 MB.
+
+Son resultados del benchmark `live-author-monitor-bounded-heap` sobre el núcleo `LiveAuthorMonitor`; no miden el coste total del adaptador de texto y no representan garantías de rendimiento en otros equipos.
+
+### Estado de validación del banco manual
+
+La página manual está compilada y su exportación de metadatos se prueba en Chromium con texto sentinel y entrada de teclado nativa. El JSON descargado no incluye ni el texto sentinel ni el carácter introducido; sí conserva longitudes, offsets y metadatos suficientes para investigar la secuencia. El buffer de eventos y el de deltas se limitan a 2.000 entradas cada uno, con contadores de descartes.
+
+**Pendiente fuera de CI:** todavía no se han ejecutado sesiones con IME físicos ni se han recibido trazas de los equipos de Windows, macOS y Linux descritos en la matriz anterior. No se debe marcar esa matriz como aprobada hasta probar cada combinación real. La página ya está disponible en `tests/browser/live-author-monitor-ime-manual.html` para realizar esa validación en los dispositivos correspondientes.

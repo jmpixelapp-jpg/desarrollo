@@ -89,6 +89,16 @@ Además, cada evidencia específica (acción, objeto, actor y destinatario) debe
 
 La comparación entre frases y evidencias utiliza intervalos ordenados y un recorrido lineal, evitando comparar cada frase contra toda la colección de evidencias. El procesamiento mantiene límites explícitos y offsets UTF-16 para que la auditoría siga siendo viable en manuscritos extensos.
 
+### Trayectorias de ubicación derivadas del texto
+
+Módulo: `typescript/src/narrative-location-transition-discovery.ts`
+
+La ingesta puede proponer movimientos cuando coinciden tres elementos explícitos dentro de una misma evidencia: una acción reconocida, una entidad clasificada como `location` y la relación preposicional entre ambas. Se reconocen, de forma conservadora, llegada (`llegar a/al/hasta/en`), salida (`salir de/desde`), entrada (`entrar en/a/al/hacia`), tránsito (`cruzar por/a través de/a lo largo de`) y regreso (`regresar/volver a/al/hacia/hasta`).
+
+Cada propuesta conserva IDs, revisión, acción, lugar, sujeto gramatical activo si se pudo identificar, fragmento de relación preposicional y contexto literal. La negación se marca como `not-applied`, el futuro como `prospective` y las formas verbales no resueltas no se convierten en movimientos consolidados. Toda salida permanece como candidata revisable.
+
+**Límites deliberados:** no se infiere ubicación actual, coordenadas, distancia, ruta, dirección geográfica, estancia continua ni presencia posterior. Una mención cercana no basta: si falta la preposición esperada o la entidad no está tipada como lugar, no se crea una transición. Los movimientos con pronombres o sujeto ambiguo pueden conservar el lugar y la acción, pero no reciben actor inventado.
+
 ### Auditoría de cobertura: localizar lo que el extractor todavía no comprende
 
 Módulo: `typescript/src/narrative-extraction-audit.ts`

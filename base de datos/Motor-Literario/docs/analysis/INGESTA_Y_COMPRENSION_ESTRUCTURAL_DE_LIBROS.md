@@ -35,6 +35,7 @@ La función asíncrona `readNarrativeBookFile(file)` adquiere archivos TXT y Mar
 ## Límites de procesamiento
 
 - Archivos TXT/Markdown: 20.000.000 bytes como máximo; UTF-8 estricto, extensiones y MIME validados, bytes nulos rechazados.
+- Observaciones ligadas a entidades: 2.000.000 unidades UTF-16 por análisis; cuando el libro supera ese presupuesto, `observationStatus: "omitted-text-budget"` informa la omisión en vez de presentar una extracción parcial como completa.
 - Texto de entrada: 5.000.000 unidades UTF-16.
 - Capítulos: 2.000.
 - Párrafos: 100.000.

@@ -93,7 +93,8 @@ function validateInput(input: NarrativeIdeaCrossDocumentAnalysisInput): void {
       typeof input.projectId !== "string" || !input.projectId.trim() ||
       !Array.isArray(input.ideaCandidates) ||
       input.ideaCandidates.length > MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_CANDIDATES ||
-      (input.orderedDocumentIds !== undefined && !Array.isArray(input.orderedDocumentIds))) {
+      (input.orderedDocumentIds !== undefined &&
+        (!Array.isArray(input.orderedDocumentIds) || input.orderedDocumentIds.length > 10_000))) {
     throw new Error("Contexto inválido para relacionar ideas entre documentos.");
   }
 
@@ -106,6 +107,9 @@ function validateInput(input: NarrativeIdeaCrossDocumentAnalysisInput): void {
         !Number.isSafeInteger(candidate.revision) || candidate.revision < 0 ||
         typeof candidate.text !== "string" || !candidate.text.trim() ||
         candidate.text.length > MAX_NARRATIVE_IDEA_CROSS_DOCUMENT_TEXT_UNITS ||
+        !["theme", "premise", "conflict", "goal", "motivation", "dilemma", "question", "hypothesis", "motif"].includes(candidate.kind) ||
+        !["affirmed", "negated", "conditional", "hypothetical"].includes(candidate.polarity) ||
+        !["high", "medium"].includes(candidate.confidence) || candidate.reviewStatus !== "candidate" ||
         !candidate.evidence || !Number.isSafeInteger(candidate.evidence.start) ||
         !Number.isSafeInteger(candidate.evidence.end) ||
         candidate.evidence.start < 0 || candidate.evidence.end <= candidate.evidence.start ||
@@ -236,6 +240,12 @@ export function analyzeNarrativeIdeaCrossDocumentRelations(
       const laterIndex = documentOrder.get(secondCandidate.documentId);
       const chronologyKnown = earlierIndex !== undefined && laterIndex !== undefined &&
         earlierIndex !== laterIndex;
+      const earlierDocumentId = chronologyKnown
+        ? (earlierIndex! < laterIndex! ? firstCandidate.documentId : secondCandidate.documentId)
+        : undefined;
+      const laterDocumentId = chronologyKnown
+        ? (earlierIndex! < laterIndex! ? secondCandidate.documentId : firstCandidate.documentId)
+        : undefined;
       const idParts = [firstCandidate.id, secondCandidate.id].map(encodeURIComponent);
 
       relations.push({
@@ -246,11 +256,9 @@ export function analyzeNarrativeIdeaCrossDocumentRelations(
         first: occurrence(firstCandidate),
         second: occurrence(secondCandidate),
         chronology: chronologyKnown ? "ordered" : "unknown",
-        ...(chronologyKnown ? {
-          earlierDocumentId: earlierIndex < laterIndex
-            ? firstCandidate.documentId : secondCandidate.documentId,
-          laterDocumentId: earlierIndex < laterIndex
-            ? secondCandidate.documentId : firstCandidate.documentId
+        ...(earlierDocumentId && laterDocumentId ? {
+          earlierDocumentId,
+          laterDocumentId
         } : {}),
         normalizedSimilarity,
         overlapCoefficient,

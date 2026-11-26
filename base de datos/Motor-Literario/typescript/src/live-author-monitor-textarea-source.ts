@@ -577,6 +577,10 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
   }
 
   private fail(code: LiveAuthorMonitorTextAreaErrorCode, message: string): void {
+    // Una discontinuidad ya registrada invalida todos los eventos posteriores.
+    // Mantener la transición idempotente evita duplicar diagnósticos cuando
+    // binding y anfitrión solicitan la misma resincronización.
+    if (this.disposed || this.needsResync) return;
     this.needsResync = true;
     this.pendingInput = undefined;
     this.compositionActive = false;

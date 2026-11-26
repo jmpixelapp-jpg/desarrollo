@@ -506,6 +506,9 @@ test("Chromium captura candidatos IME y separa la confirmación de texto por CDP
 
         const blurTextarea = page.locator("#blur-recovery-textarea");
         await blurTextarea.focus();
+        await blurTextarea.evaluate(element => element.setSelectionRange(
+          element.value.length, element.value.length
+        ));
         await page.keyboard.type("X");
         const beforeBlur = await page.evaluate(() => ({
           observed: [...window.__blurRecoveryHarness.observed],

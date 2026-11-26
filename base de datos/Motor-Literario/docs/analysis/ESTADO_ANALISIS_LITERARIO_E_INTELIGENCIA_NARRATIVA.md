@@ -294,3 +294,21 @@ La documentación debe seguir separando tres estados: implementación presente, 
 
 
 **Extensión del frente Unicode:** los extractores de entidades y relaciones también incluyen marcas combinantes dentro de los nombres y las tratan como parte de los límites. Así se evita que `Ana` se asocie falsamente a `Ana` seguido de una marca combinante y se permite reconocer el nombre descompuesto completo.
+
+
+### Tanda 26-11-2026 — primera capa de ingesta estructural de libros
+
+**Objetivo del frente:** reforzar la adquisición de información desde el texto real de las obras, antes de ampliar el grafo, la causalidad o la sincronización.
+
+- Se añadió `typescript/src/narrative-book-ingestion.ts` y se exportó desde `src/index.ts`.
+- La API `ingestNarrativeBookText` recibe texto ya decodificado e identidad de proyecto/documento/revisión; produce capítulos, párrafos, clasificación inicial de narración/diálogo/mixto y señales candidatas de acciones, referencias temporales, marcadores causales y contrastes.
+- Cada capítulo y señal conserva evidencia literal, documento, revisión y offsets UTF-16 absolutos. Se admiten offsets base para texto que procede de fragmentos de un documento mayor.
+- Los límites de entrada y salida son explícitos: 5.000.000 unidades UTF-16, 2.000 capítulos, 100.000 párrafos y 20.000 señales. El resultado declara omisiones y truncamiento.
+- Las señales no se elevan automáticamente a hechos: no asignan agente, participante, identidad de personaje, causa confirmada ni fecha absoluta.
+- Se añadió `tests/narrative-book-ingestion.test.mjs` con casos de capítulos, evidencia/offsets, marcadores, cautela semántica, límites y determinismo.
+- Se documentó el alcance, garantías, límites y hoja de ruta en `INGESTA_Y_COMPRENSION_ESTRUCTURAL_DE_LIBROS.md`; el README de TypeScript enlaza esa guía.
+- Commits publicados en `main`: `1f2bcfb` (módulo), `1d68923` (pruebas), `67ada3e` (documentación inicial), `409ce93` (exportación), `7bf443f` (límites de párrafo), `d73bffe` (enlace README) y `ce5756c` (ajuste de regresión de offsets).
+
+**Validación:** la prueba automatizada está escrita, pero no se declara ejecutada. No se dispone todavía de resultado observable de `npm run typecheck`, `npm run build` o `npm test` para esta tanda. Los adaptadores binarios EPUB/PDF/DOCX y OCR no forman parte de esta entrega: la API actual ingiere texto ya decodificado.
+
+**Siguiente trabajo prioritario:** conectar adaptadores reales de lectura de formatos con un mapa de procedencia entre texto extraído y ubicación original; después, resolver menciones y referencias entre párrafos, construir acontecimientos con roles explícitos, y contrastar continuidad y causalidad entre capítulos sin perder evidencia ni incertidumbre.

@@ -664,8 +664,13 @@ async function saveNarrativeIdeaWithReferences(
   db: IDBDatabase,
   idea: NarrativeIdea,
   expectedCurrent?: NarrativeIdea,
-  checkExpectedCurrent = expectedCurrent !== undefined
+  checkExpectedCurrent = expectedCurrent !== undefined,
+  syncOperation?: SyncOperationDraft
 ): Promise<void> {
+  const syncDraft = syncOperation === undefined ? undefined : normalizeSyncOperationDraft(syncOperation);
+  if (syncDraft && syncDraft.projectId !== idea.projectId) {
+    throw new Error("El proyecto de la idea y de la operación de sincronización no coincide.");
+  }
   const entityIds = idea.relatedEntityIds ?? [];
   const relatedIdeaIds = idea.relatedIdeaIds ?? [];
   if (expectedCurrent && (
@@ -673,9 +678,21 @@ async function saveNarrativeIdeaWithReferences(
   )) {
     throw new Error("La actualización debe conservar la identidad de la idea original.");
   }
-  const stores = entityIds.length > 0 ? [IDEAS, ENTITIES] : [IDEAS];
+  const baseStores = entityIds.length > 0 ? [IDEAS, ENTITIES] : [IDEAS];
+  const stores = syncDraft
+    ? [...baseStores, SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES]
+    : baseStores;
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(stores, "readwrite");
+    let syncFailure: Error | undefined;
+    const abortWith = (error: unknown): void => {
+      syncFailure = error instanceof Error ? error : new Error("No se pudo encolar la idea narrativa.");
+      try { transaction.abort(); } catch { /* transacción ya abortada */ }
+    };
+    const putIdea = (): void => {
+      ideaStore.put(idea);
+      if (syncDraft) queueSyncOperationInTransaction(transaction, syncDraft, abortWith);
+    };
     const ideaStore = transaction.objectStore(IDEAS);
     const checks: {
       readonly request: IDBRequest<unknown>;
@@ -698,7 +715,7 @@ async function saveNarrativeIdeaWithReferences(
       : undefined;
     const totalChecks = checks.length + (existingRequest ? 1 : 0);
     if (totalChecks === 0) {
-      ideaStore.put(idea);
+      putIdea();
     } else {
       let remaining = totalChecks;
       const abortWith = (error: unknown): void => {
@@ -707,7 +724,7 @@ async function saveNarrativeIdeaWithReferences(
       };
       const markCheckComplete = (): void => {
         remaining--;
-        if (remaining === 0) ideaStore.put(idea);
+        if (remaining === 0) putIdea();
       };
       if (existingRequest) {
         existingRequest.onsuccess = () => {
@@ -755,8 +772,8 @@ async function saveNarrativeIdeaWithReferences(
       }
     }
     transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo guardar la idea."));
-    transaction.onabort = () => reject(transaction.error ?? new Error("Se canceló el guardado de la idea."));
+    transaction.onerror = () => reject(syncFailure ?? transaction.error ?? new Error("No se pudo guardar la idea."));
+    transaction.onabort = () => reject(syncFailure ?? transaction.error ?? new Error("Se canceló el guardado de la idea."));
   });
 }
 
@@ -764,8 +781,13 @@ async function saveNarrativeEventWithReferences(
   db: IDBDatabase,
   event: NarrativeEvent,
   expectedCurrent?: NarrativeEvent,
-  checkExpectedCurrent = false
+  checkExpectedCurrent = false,
+  syncOperation?: SyncOperationDraft
 ): Promise<void> {
+  const syncDraft = syncOperation === undefined ? undefined : normalizeSyncOperationDraft(syncOperation);
+  if (syncDraft && syncDraft.projectId !== event.projectId) {
+    throw new Error("El proyecto del acontecimiento y de la operación de sincronización no coincide.");
+  }
   const requiredIds = [...new Set(event.participants)];
   if (requiredIds.some(id => typeof id !== "string" || !id.trim())) {
     throw new Error("El acontecimiento contiene participantes inválidos.");
@@ -775,7 +797,12 @@ async function saveNarrativeEventWithReferences(
     throw new Error("La actualización debe conservar la identidad del acontecimiento.");
   }
   await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction([ENTITIES, TIMELINE_TRACKS, EVENTS], "readwrite");
+    const transaction = db.transaction(
+      syncDraft
+        ? [ENTITIES, TIMELINE_TRACKS, EVENTS, SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES]
+        : [ENTITIES, TIMELINE_TRACKS, EVENTS],
+      "readwrite"
+    );
     const eventStore = transaction.objectStore(EVENTS);
     let entitiesReady = false;
     let trackReady = event.timelineTrackId === undefined;
@@ -790,6 +817,9 @@ async function saveNarrativeEventWithReferences(
     const saveIfReady = (): void => {
       if (!entitiesReady || !trackReady || !expectedReady || failure) return;
       eventStore.put(event);
+      if (syncDraft) {
+        queueSyncOperationInTransaction(transaction, syncDraft, error => abortWith(error));
+      }
     };
 
     const entitiesRequest = transaction.objectStore(ENTITIES).index("by-project").getAll(event.projectId);
@@ -893,10 +923,18 @@ async function saveNarrativeEntityRecord(
   db: IDBDatabase,
   entity: NarrativeEntity,
   expectedCurrent?: NarrativeEntity,
-  checkExpectedCurrent = false
+  checkExpectedCurrent = false,
+  syncOperation?: SyncOperationDraft
 ): Promise<void> {
+  const syncDraft = syncOperation === undefined ? undefined : normalizeSyncOperationDraft(syncOperation);
+  if (syncDraft && syncDraft.projectId !== entity.projectId) {
+    throw new Error("El proyecto de la entidad y de la operación de sincronización no coincide.");
+  }
   await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(ENTITIES, "readwrite");
+    const transaction = db.transaction(
+      syncDraft ? [ENTITIES, SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES] : [ENTITIES],
+      "readwrite"
+    );
     const store = transaction.objectStore(ENTITIES);
     const request = store.index("by-project").getAll(entity.projectId);
     let requestError: unknown;
@@ -911,6 +949,12 @@ async function saveNarrativeEntityRecord(
         next.push(entity);
         validateNarrativeEntityIdentityHistory(next);
         store.put(entity);
+        if (syncDraft) {
+          queueSyncOperationInTransaction(transaction, syncDraft, error => {
+            requestError = error;
+            try { transaction.abort(); } catch { /* transacción ya abortada */ }
+          });
+        }
       } catch (error) {
         requestError = error;
         try { transaction.abort(); } catch { /* transacción ya abortada */ }
@@ -938,8 +982,13 @@ async function saveNarrativeRecordWithEntityReferences<T extends { readonly proj
   entityIds: readonly string[],
   failureMessage: string,
   expectedCurrent?: T,
-  checkExpectedCurrent = false
+  checkExpectedCurrent = false,
+  syncOperation?: SyncOperationDraft
 ): Promise<void> {
+  const syncDraft = syncOperation === undefined ? undefined : normalizeSyncOperationDraft(syncOperation);
+  if (syncDraft && syncDraft.projectId !== record.projectId) {
+    throw new Error("El proyecto del registro narrativo y de la operación de sincronización no coincide.");
+  }
   const requiredIds = [...new Set(entityIds)];
   if (requiredIds.some(id => typeof id !== "string" || !id.trim())) {
     throw new Error("La referencia narrativa contiene identificadores de entidad inválidos.");
@@ -949,7 +998,12 @@ async function saveNarrativeRecordWithEntityReferences<T extends { readonly proj
     throw new Error("La actualización debe conservar la identidad del registro narrativo.");
   }
   await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction([ENTITIES, storeName], "readwrite");
+    const transaction = db.transaction(
+      syncDraft
+        ? [ENTITIES, storeName, SYNC_OUTBOX, SYNC_DEVICE_SEQUENCES]
+        : [ENTITIES, storeName],
+      "readwrite"
+    );
     const recordStore = transaction.objectStore(storeName);
     let failure: Error | undefined;
     let referenceConflict = false;
@@ -963,6 +1017,9 @@ async function saveNarrativeRecordWithEntityReferences<T extends { readonly proj
     const saveIfReady = () => {
       if (!entitiesReady || !expectedReady || failure) return;
       recordStore.put(record);
+      if (syncDraft) {
+        queueSyncOperationInTransaction(transaction, syncDraft, abort);
+      }
     };
     const request = transaction.objectStore(ENTITIES).index("by-project").getAll(record.projectId);
     request.onsuccess = () => {
@@ -1660,6 +1717,46 @@ function normalizeSyncOperationDraft(operation: SyncOperationDraft): SyncOperati
     payload: normalized.payload,
     createdAt: normalized.createdAt
   };
+}
+function queueSyncOperationInTransaction(
+  transaction: IDBTransaction,
+  operation: SyncOperationDraft,
+  onError: (error: unknown) => void
+): void {
+  const normalized = normalizeSyncOperationDraft(operation);
+  const sequenceStore = transaction.objectStore(SYNC_DEVICE_SEQUENCES);
+  const outboxStore = transaction.objectStore(SYNC_OUTBOX);
+  const request = sequenceStore.get([normalized.projectId, normalized.deviceId]);
+  request.onsuccess = () => {
+    try {
+      const current = request.result as { readonly lastSequence?: unknown } | undefined;
+      const lastSequence = current?.lastSequence ?? 0;
+      if (!Number.isSafeInteger(lastSequence) || (lastSequence as number) < 0 ||
+          (lastSequence as number) >= Number.MAX_SAFE_INTEGER) {
+        throw new Error("El cursor de secuencia del dispositivo está corrupto o agotado.");
+      }
+      const stored = normalizeSyncOperation({
+        ...normalized, sequence: (lastSequence as number) + 1, attemptCount: 0
+      });
+      const outboxRequest = outboxStore.add(stored);
+      outboxRequest.onerror = () => onError(
+        outboxRequest.error ?? new Error("No se pudo encolar la operación narrativa.")
+      );
+      const sequenceRequest = sequenceStore.put({
+        projectId: normalized.projectId,
+        deviceId: normalized.deviceId,
+        lastSequence: stored.sequence
+      });
+      sequenceRequest.onerror = () => onError(
+        sequenceRequest.error ?? new Error("No se pudo avanzar la secuencia narrativa del dispositivo.")
+      );
+    } catch (error) {
+      onError(error);
+    }
+  };
+  request.onerror = () => onError(
+    request.error ?? new Error("No se pudo leer el cursor narrativo del dispositivo.")
+  );
 }
 function syncOperationFingerprint(operation: StoredSyncOperation): string {
   // Los metadatos de transporte cambian durante los reintentos y no forman parte

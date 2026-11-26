@@ -385,9 +385,17 @@ export function createNarrativeEntityMergeHandler(
  * Registra los seis handlers de dominio para el consumidor entrante.
  * Incluye la fusión de identidades, que delega en la primitiva atómica del almacén.
  */
+export type NarrativeSyncDomainHandler =
+  | NarrativeSyncOperationHandler<NarrativeEntityUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeEntityMergePayload>
+  | NarrativeSyncOperationHandler<NarrativeIdeaUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeAssertionUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeRelationUpsertPayload>
+  | NarrativeSyncOperationHandler<NarrativeEventUpsertPayload>;
+
 export function createNarrativeSyncDomainHandlers(
   store: ProjectStore
-): readonly NarrativeSyncOperationHandler[] {
+): readonly NarrativeSyncDomainHandler[] {
   return [
     createNarrativeEntityUpsertHandler(store),
     createNarrativeEntityMergeHandler(store),

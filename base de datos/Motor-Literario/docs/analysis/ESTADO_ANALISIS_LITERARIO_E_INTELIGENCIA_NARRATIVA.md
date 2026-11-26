@@ -332,3 +332,11 @@ La prueba de integración real `indexeddb-sync-outbox.test.mjs` confirma que el 
 - Se añadió una regresión del coordinador que comprueba rechazo del código de 129 caracteres, conservación durable de la operación y ausencia de acuse.
 - Se actualizó el contrato del transporte para documentar ambos límites.
 - **Validación:** cambio y regresión publicados en la rama de integración; typecheck y suite deben volver a ejecutarse en CI antes de marcarlo como verificado.
+
+
+### Tanda adicional — fronteras del contrato de conflictos remotos
+
+- Se añadió una regresión que acepta un código de conflicto de exactamente 128 caracteres y confirma que el conflicto sigue pendiente, con su error registrado.
+- Se añadió una regresión que rechaza un mensaje de conflicto de 2.049 caracteres, sin retirar la operación ni emitir un acuse.
+- Estas pruebas complementan el rechazo ya incorporado para códigos de 129 caracteres.
+- **Validación:** pruebas escritas y publicadas; todavía requieren ejecución CI sobre el HEAD actualizado.

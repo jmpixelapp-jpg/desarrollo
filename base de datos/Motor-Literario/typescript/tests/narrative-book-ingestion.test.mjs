@@ -193,7 +193,7 @@ test("reconoce acciones de movimiento y llegada en varios tiempos sin aceptar pr
 });
 
 test("la ingesta expone acontecimientos declarados y participantes con evidencia absoluta", () => {
-  const text = "Personaje Ana\\nACONTECIMIENTO: Ana desaparece mañana.";
+  const text = "Personaje Ana\nACONTECIMIENTO: Ana desaparece mañana.";
   const baseOffset = 240;
   const result = ingestNarrativeBookText({
     projectId: "p", documentId: "chapter-events", revision: 6,

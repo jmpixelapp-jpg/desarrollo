@@ -282,3 +282,10 @@ Durante la inspección de CI se detectó en `src/narrative-history.ts` una decla
 **Límites:** el coordinador aún requiere un adaptador para la bandeja IndexedDB, transporte remoto real, autenticación/autorización, idempotencia del servidor, backoff y resolución de conflictos. No representa sincronización multidispositivo completa. El PR #52 que contiene la bandeja durable sigue separado y no integrado en `main`.
 
 **Validación:** el workflow observado para el HEAD anterior falló en el typecheck por el error TS1002 descrito. La corrección ya está en esta rama nueva; todavía no se ha observado una ejecución CI para su HEAD ni se declara suite aprobada. Se debe verificar typecheck y suite completa en esta nueva base.
+
+
+### Seguimiento de typecheck tras corregir TS1002
+
+La primera ejecución de CI sobre esta rama ya superó el bloqueo sintáctico de `NarrativeAssertion`, pero reveló errores estrictos de TypeScript en acumuladores de actividad del monitor y del validador IndexedDB. Se sustituyeron los `reduce` inferidos con acumuladores opcionales por bucles con acumuladores numéricos explícitos. En la restauración del monitor también se eliminó una referencia inexistente a `activityCountTotal` y se dejó la validación de consistencia centralizada en `validActivityCounts`, que contempla correctamente el contador residual `otherChanges`.
+
+La siguiente ejecución de CI debe confirmar estas correcciones. La ejecución de la suite completa continúa pendiente mientras el paso de typecheck no finalice correctamente.

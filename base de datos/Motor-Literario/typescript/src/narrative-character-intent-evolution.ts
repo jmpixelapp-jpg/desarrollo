@@ -142,6 +142,14 @@ export function evolveNarrativeCharacterIntents(
     } else if (current.polarity === "negated" && exact.length === 1) {
       transition = "withdrawn";
       candidates = exact;
+    } else if (signal?.kind === "withdrawal") {
+      const excerpt = normalize(current.evidence.excerpt);
+      const withdrawn = orderedPrior.filter(item =>
+        item.polarity === "affirmed" && excerpt.includes(normalize(item.text))
+      );
+      transition = withdrawn.length === 1 ? "withdrawn" : withdrawn.length > 1
+        ? "ambiguous-predecessor" : "coexisting";
+      candidates = withdrawn;
     } else if (signal?.kind === "replacement") {
       const excerpt = normalize(current.evidence.excerpt);
       const affirmed = orderedPrior.filter(item =>

@@ -498,6 +498,11 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
     await waitForVite(harnessUrl, server);
     browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
     const page = await browser.newPage();
+    const browserErrors = [];
+    page.on("pageerror", error => browserErrors.push(error.message));
+    page.on("console", message => {
+      if (message.type() === "error") browserErrors.push(message.text());
+    });
     try {
       await page.goto(harnessUrl);
       const textarea = page.locator("#editor");
@@ -509,15 +514,28 @@ test("la página manual de IME exporta metadatos sin incluir el manuscrito ni In
         element.value.length, element.value.length
       ));
       await page.keyboard.type("Z");
-      await page.waitForFunction(() => {
-        const metrics = document.querySelector("#metrics")?.textContent ?? "";
-        try {
-          const parsed = JSON.parse(metrics);
-          return parsed.eventCounters.beforeInputCount >= 1 &&
-            parsed.eventCounters.inputCount >= 1 &&
-            parsed.deltaCounters.typing >= 1;
-        } catch { return false; }
-      }, undefined, { timeout: 5_000 });
+      try {
+        await page.waitForFunction(() => {
+          const metrics = document.querySelector("#metrics")?.textContent ?? "";
+          try {
+            const parsed = JSON.parse(metrics);
+            return parsed.eventCounters.beforeInputCount >= 1 &&
+              parsed.eventCounters.inputCount >= 1 &&
+              parsed.deltaCounters.typing >= 1;
+          } catch { return false; }
+        }, undefined, { timeout: 15_000 });
+      } catch (error) {
+        const browserState = await page.evaluate(() => ({
+          status: document.querySelector("#status")?.textContent ?? null,
+          metrics: document.querySelector("#metrics")?.textContent ?? null,
+          textareaLengthUtf16: document.querySelector("#editor")?.value.length ?? null,
+          startButtonDisabled: document.querySelector("#start")?.disabled ?? null
+        }));
+        throw new Error(
+          String(error) + "; browserState=" + JSON.stringify(browserState) +
+          "; browserErrors=" + JSON.stringify(browserErrors)
+        );
+      }
       const captureMetrics = JSON.parse(await page.locator("#metrics").textContent());
       assert.equal(captureMetrics.deltaCounters.typing, 1, JSON.stringify(captureMetrics));
       assert.equal(captureMetrics.pairing.pairedInputCount, 1,

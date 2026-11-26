@@ -800,3 +800,19 @@ Se corrigieron tres expresiones léxicas del detector de acciones (`atravesar`, 
 **Pruebas añadidas:** etiqueta literal única, descriptor compartido ambiguo, ausencia de etiqueta registrada, coincidencia parcial, offsets con emoji, evidencia obsoleta, exclusión de entidades no-personaje, proyecto/perfiles duplicados, evidencia inválida, límites de salida y preservación de procedencia.
 
 **Validación CI:** aprobada en GitHub Actions, ejecución `45789179406`, commit `8d45f091`: instalación de Chromium, type-check, compilación, conjunto completo de pruebas automatizadas y benchmark finalizaron correctamente.
+
+## Descubrimiento de relaciones explícitas entre personajes
+
+**Nuevo módulo:** `typescript/src/narrative-relationship-discovery.ts`. Recupera candidatos de relaciones narrativas expresadas mediante construcciones nominales explícitas como «Ana es hermana de Bruno» y descripciones registradas como «el hermano de Ana». Se integra con los perfiles descriptivos previamente revisados: la expresión relacional solo identifica a un personaje si esa descripción ya está vinculada a una ficha con evidencia.
+
+**Relaciones cubiertas inicialmente:** parentesco parental (`parent-of`), filiación (`child-of`), hermandad (`sibling-of`), matrimonio (`spouse-of`), amistad (`friend-of`), enemistad (`enemy-of`) y acompañamiento (`companion-of`). La dirección se conserva desde el personaje descrito o nombrado hacia la entidad complementaria; las relaciones simétricas mantienen su etiqueta relacional, no se duplican como hechos inversos.
+
+**Evidencia:** se preservan por separado la expresión relacional, la mención de la entidad de origen y la mención de la entidad destino, con documento, revisión y offsets UTF-16 absolutos. Los resultados son siempre candidatos revisables; no modifican fichas ni consolidan entidades. Cuando una misma expresión y destino pueden corresponder a más de un personaje descrito, se marca la ambigüedad.
+
+**Abstenciones deliberadas:** no se resuelve «su hermano», «su hija» o «su amigo» sin antecedente posesivo previamente desambiguado. Tampoco se infiere parentesco por cercanía, género, apellido compartido, convivencia o contexto. Los perfiles con evidencia obsoleta no autorizan asociaciones.
+
+**Presupuesto:** texto máximo 2.000.000 unidades UTF-16; 1.000 resultados por defecto y 3.000 como máximo; offsets absolutos con `baseOffset`.
+
+**Pruebas añadidas:** relación explícita entre dos nombres, descriptor respaldado por perfil, abstención ante posesivo no resuelto, ausencia de perfil, autorrelación, offsets con emoji, evidencia obsoleta, entidades de otro proyecto, perfiles duplicados y límite de resultados.
+
+**Validación CI:** pendiente de type-check, compilación, suite automatizada y benchmark de la exportación actual. No considerar aprobada hasta que la ejecución finalice correctamente.

@@ -431,3 +431,6 @@ La inspección EPUB también recupera la jerarquía de navegación de EPUB 3 (`n
 
 
 La ingesta admite ahora `metadata.revision` para identificar el snapshot exacto del documento anfitrión. `resolveNarrativeTextEvidence()` exige que esa revisión coincida con la evidencia persistida, además de comprobar que la cita coincide carácter por carácter con el rango. Rechaza snapshots sin versión, revisiones distintas, citas modificadas y evidencias marcadas como obsoletas. Esta verificación evita enlazar accidentalmente una evidencia histórica a una edición actual que contenga texto parecido.
+
+
+Para fichas con varias citas se ofrece `resolveNarrativeEvidenceCollection(book, evidences)`: resuelve todos los pasajes contra el mismo snapshot y falla como conjunto si alguna evidencia no es verificable. No entrega una lista parcial que pudiera aparentar respaldo completo.

@@ -519,6 +519,16 @@ La ejecución 2775 de CI permitió aislar dos defectos concretos, no relacionado
 
 
 
+
+
+### Corroboración de transferencias entre capítulos — 26-11-2026
+
+- Se confirmó que los runs 2885–2894 terminaron correctamente, incluyendo Type-check, compilación/pruebas y benchmark en los flujos correspondientes. En particular, el run 2894 (`09004672`) valida la documentación de la tanda anterior; los runs 2887–2890 cubren módulos/exports previos.
+- Se amplió `narrative-object-trajectory.ts` (`6420ea7e`) para detectar un vínculo candidato entre dos transiciones consecutivas del mismo objeto: entrega afirmada a un destinatario explícito y recepción afirmada posterior por ese mismo destinatario.
+- La salida `continuitySignals` conserva IDs de ambas transiciones y las dos evidencias textuales. No consolida posesión ni afirma que el traspaso se haya consumado.
+- Se añadieron pruebas de corroboración positiva y de exclusión de entrega negada, prospectiva y destinatario divergente (`04ec1124`). Documentación funcional: `5d1ae67a`.
+- La nueva tanda de código y pruebas (commits posteriores a `6420ea7e`) está pendiente de su ejecución completa en CI. No debe considerarse validada hasta que Type-check, pruebas y benchmark concluyan correctamente.
+
 ### Trayectorias de objetos entre capítulos — 26-11-2026
 
 - Runs 2881 (`303cc32b`) y 2882 (`648df19c`) terminaron con Type-check, compilación/pruebas y benchmark aprobados. Esto valida la corrección de offsets del contexto de observación y la prueba de varias oraciones en una misma línea.

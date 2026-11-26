@@ -696,3 +696,10 @@ Las rutas genéricas de adquisición/renovación pueden solaparse con checkpoint
 Un cierre seguro incrementa la generación antes de liberar el registro. Cualquier renovación que devuelva después queda invalidada: no repuebla `liveMonitorLeases`, no reactiva el heartbeat y devuelve `undefined`. La regla también evita que un error tardío de una operación antigua sobrescriba el diagnóstico de una operación posterior.
 
 La regresión usa un almacén que completa la renovación pero retrasa la respuesta. El cierre libera el lease mientras la respuesta está suspendida; al reanudarla, la prueba verifica que no reaparezcan la titularidad local ni el temporizador, y que el registro persistido siga vencido.
+
+
+## 61. Monotonía de expiración y actualización del lease
+
+Dos llamadas de renovación pueden completarse en orden distinto al de su inicio. Cuando pertenecen al mismo propietario y al mismo fencing token, la publicación local combina `expiresAt` y `updatedAt` con el máximo de la respuesta y del estado ya publicado. Una respuesta con fencing token menor que el estado local se descarta; un token igual asociado a otro propietario no puede reemplazarlo.
+
+Esta regla evita que una respuesta atrasada reduzca el plazo local de titularidad. No modifica el token de fencing ni extiende artificialmente el lease persistido: solo conserva la información más reciente ya confirmada por el almacén. La prueba retrasa la primera respuesta hasta después de que una segunda renovación haya sido publicada y exige que los dos metadatos permanezcan monótonos.

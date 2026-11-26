@@ -933,7 +933,9 @@ test("reconcilia escrituras simultáneas desde dos instancias independientes del
     assert.deepEqual(firstResult.relatedIdeaIds, ["idea-target-a"]);
     assert.deepEqual(secondResult.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
     assert.equal(store.writes, 3);
-    assert.equal(store.ideaReads, 3);
+    // Cada instancia verifica el destino en el almacenamiento y la que
+    // pierde el CAS vuelve a cargar el catálogo antes de reintentar.
+    assert.equal(store.ideaReads, 5);
 
     // La primera instancia conserva una instantánea anterior a la escritura
     // de la segunda. Su siguiente mutación debe detectar CAS, recargar y

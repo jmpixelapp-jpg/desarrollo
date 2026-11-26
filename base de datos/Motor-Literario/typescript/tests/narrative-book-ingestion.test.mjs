@@ -206,6 +206,28 @@ test("la ingesta publica afirmaciones de estado de personajes con evidencia y re
   }
 });
 
+test("la ingesta extrae movimientos de personajes hacia lugares con evidencia explícita", () => {
+  const ana = {
+    projectId: "p", id: "character:ana", kind: "character",
+    canonicalName: "Ana", normalizedName: "ana", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const port = {
+    projectId: "p", id: "location:puerto", kind: "location",
+    canonicalName: "puerto", normalizedName: "puerto", aliases: [],
+    evidence: [], firstSeenAt: 1, lastSeenAt: 1, extractionVersion: 1
+  };
+  const text = "Ana llegó al puerto.";
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "location-scene", revision: 2,
+    text, entities: [ana, port]
+  });
+  assert.equal(result.locationTransitionCandidates.length, 1);
+  assert.equal(result.locationTransitionCandidates[0].transition, "arrived");
+  assert.equal(result.locationTransitionCandidates[0].locationEntityId, port.id);
+  assert.equal(result.locationTransitionCandidates[0].contextEvidence.excerpt, text);
+});
+
 test("no infiere entidades de nombres propios sin etiqueta explícita", () => {
   const result = ingestNarrativeBookText({
     projectId: "p", documentId: "no-name-guess", revision: 1,

@@ -428,6 +428,53 @@ test("no anticipa una acción cuando el autor todavía está escribiendo el verb
   assert.equal(found.length, 0);
 });
 
+test("extrae interacciones dirigidas con roles explícitos y diferenciados", () => {
+  const bruno = { ...character, id: "entity:character:bruno", canonicalName: "Bruno" };
+  const cases = [
+    ["Ana atacó a Bruno.", "atacar", "attacks", "target"],
+    ["Ana ayudó a Bruno.", "ayudar", "helps", "beneficiary"],
+    ["Ana protegió a Bruno.", "proteger", "protects", "protected"],
+    ["Ana salvó a Bruno.", "salvar", "saves", "beneficiary"]
+  ];
+  for (const [text, action, relation, targetRole] of cases) {
+    const found = discoverNarrativeObservationCandidates({
+      ...context, entities: [character, bruno, other], text, baseOffset: 25
+    });
+    const observation = found.find(item => item.action === action);
+    assert.ok(observation, text);
+    const candidate = observation.directedInteractionCandidate;
+    assert.ok(candidate, text);
+    assert.equal(candidate.relation, relation);
+    assert.equal(candidate.targetRole, targetRole);
+    assert.equal(candidate.fromEntityId, character.id);
+    assert.equal(candidate.toEntityId, bruno.id);
+    assert.equal(candidate.subjectEvidence.excerpt, "Ana");
+    assert.equal(candidate.targetEvidence.excerpt, "Bruno");
+    assert.equal(candidate.actionEvidence.excerpt, text.match(/atacó|ayudó|protegió|salvó/u)[0]);
+    for (const evidence of [candidate.subjectEvidence, candidate.targetEvidence, candidate.actionEvidence]) {
+      assert.equal(text.slice(evidence.start - 25, evidence.end - 25), evidence.excerpt);
+      assert.equal(evidence.revision, 7);
+    }
+    assert.equal(observation.reviewStatus, "candidate");
+  }
+});
+
+test("no crea interacciones dirigidas cuando hay negación, voz pasiva o roles incompletos", () => {
+  const bruno = { ...character, id: "entity:character:bruno", canonicalName: "Bruno" };
+  const inputs = [
+    "Ana no atacó a Bruno.",
+    "Bruno fue atacado por Ana.",
+    "Ana atacó.",
+    "Ana ayudó a Ana."
+  ];
+  for (const text of inputs) {
+    const found = discoverNarrativeObservationCandidates({
+      ...context, entities: [character, bruno, other], text
+    });
+    assert.ok(found.every(item => item.directedInteractionCandidate === undefined), text);
+  }
+});
+
 test("no confunde un nombre propio más largo con el prefijo de un personaje conocido", () => {
   const bruno = {
     ...character, id: "character:bruno", canonicalName: "Bruno",

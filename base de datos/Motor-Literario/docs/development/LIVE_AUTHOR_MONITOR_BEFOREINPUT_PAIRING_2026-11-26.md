@@ -169,3 +169,7 @@ Pasaron todos los pasos del workflow específico:
 La suite combinada de integración informó **196 pruebas aprobadas y 0 fallidas**. El benchmark informado por el runner (Node v22.23.5) ejecutó 100.000 commits: 8 documentos, 1.048.576 unidades UTF-16 iniciales por documento y 12.500 cambios por documento. Midió 642,39 ms (155.669,68 commits/s), 0 MB de crecimiento adicional del heap entre media y carga completa, 0,5 MB retenidos por las sesiones abiertas y 70,43 MB de RSS. Son medidas de ese runner y de ese escenario, no una garantía de rendimiento idéntica en todos los equipos.
 
 **Estado:** el workflow específico de monitoreo está validado de extremo a extremo en esa revisión. La suite general del repositorio es independiente y sigue verificándose tras los cambios recientes del módulo narrativo; no se infiere que esté aprobada a partir de este workflow.
+
+## Normalización de adjetivo emocional singular
+
+La suite global detectó que el patrón emocional incluía `felices?`, que no cubría el singular español `feliz`. Se explicitó `feliz|felices`, conservando la frontera Unicode existente para impedir coincidencias parciales.

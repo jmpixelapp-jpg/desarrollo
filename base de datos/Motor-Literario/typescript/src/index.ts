@@ -76,3 +76,4 @@ export * from "./narrative-descriptive-reference-discovery";
 export * from "./narrative-relationship-discovery";
 export * from "./narrative-relationship-transition-discovery";
 \nexport * from "./narrative-object-description-reference-discovery";\n
+export * from "./narrative-object-identity-candidate-discovery";

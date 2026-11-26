@@ -589,3 +589,19 @@ Se implementó el primer adaptador real de formato, `typescript/src/epub-reader.
 **Limitaciones conocidas:** ZIP64 y ZIP multi-volumen no están soportados; deflate requiere `DecompressionStream("deflate-raw")`; codificaciones XML distintas de UTF-8, navegación NCX/nav, semántica CSS de contenido oculto y corpus EPUB complejos requieren trabajo adicional. El parser XHTML actual es deliberadamente acotado y no sustituye un parser HTML5 completo.
 
 **Validación pendiente:** los tests nuevos se han añadido pero no se han ejecutado; typecheck/build y suite completa siguen pendientes. Se necesita validar con libros EPUB reales y comparar la extracción con lectores de referencia antes de considerar completa la lectura EPUB.
+
+
+### Control de calidad de extracción EPUB
+
+La API `EpubBookReader.inspect(source)` ahora recorre el spine, además de inspeccionar los metadatos. Informa el número de bloques obtenidos, documentos del spine sin texto y advertencias por título/autor ausentes. Se añadieron fixtures para documentos vacíos y límites de archivo/entradas. Esto permite detectar un EPUB formalmente válido que no produjo contenido textual; todavía no se calcula un porcentaje de integridad porque falta una medida verificable del contenido esperado.
+
+### Tanda actual — resumen de archivos
+
+- Nuevo `typescript/src/epub-reader.ts`: lector ZIP/OPF/spine/XHTML.
+- Actualizado `typescript/src/index.ts`: exporta la API EPUB.
+- Nuevo `typescript/tests/epub-reader.test.mjs`: pruebas de metadatos, orden, contenido, notas, límites, rutas y CRC.
+- Actualizado `typescript/README.md`.
+- Actualizado `docs/development/BOOK_READER_ADAPTER_DESIGN.md`.
+- Actualizado este estado de desarrollo.
+
+La lectura EPUB ya tiene una implementación concreta, pero su madurez aún es inicial. Falta validación con corpus real y cobertura completa de HTML5, nav/NCX, codificaciones XML alternativas, EPUB cifrados/protegidos, CSS de visibilidad, recursos complejos y más casos de notas. El siguiente lector será PDF por página, pero primero se debe ejecutar y corregir el typecheck y los fixtures EPUB.

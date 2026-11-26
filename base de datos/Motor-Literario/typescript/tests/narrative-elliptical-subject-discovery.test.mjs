@@ -80,3 +80,10 @@ test("rechaza observaciones de otra revisión o fuera del documento", () => {
   const invalid = { ...observation("o1", 0, 10, ana.id, [ana.id]), revision: 3 };
   assert.throws(() => discover("Ana salió.", [invalid]), /mismo documento/);
 });
+
+test("no interpreta menciones parciales dentro de palabras como personajes intermedios", () => {
+  const text = "Ana abrió la puerta. Anabel salió.";
+  const first = observation("o1", 0, 20, ana.id, [ana.id]);
+  const second = observation("o2", 21, text.length, undefined, []);
+  assert.equal(discover(text, [first, second]).length, 1);
+});

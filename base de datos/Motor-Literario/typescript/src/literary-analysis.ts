@@ -1940,28 +1940,41 @@ function findSceneEventLinks(
   const characterIds = new Set(characters.map(character => character.entityId));
   const links: LiterarySceneEventLink[] = [];
   for (const event of events) {
-    const matchingEvidence = event.evidence
-      .filter(evidence =>
-        evidence.status !== "stale" &&
-        evidence.documentId === documentId &&
-        evidence.revision === revision &&
-        evidence.end > sceneStart &&
-        evidence.start < sceneEnd &&
-        evidence.end > evidence.start
-      )
-      .map(evidence => ({
+    let matchingEvidenceCount = 0;
+    const matchingEvidence: LiteraryAnalysisOccurrence[] = [];
+    for (const evidence of event.evidence) {
+      if (
+        evidence.status === "stale" ||
+        evidence.documentId !== documentId ||
+        evidence.revision !== revision ||
+        evidence.end <= sceneStart ||
+        evidence.start >= sceneEnd ||
+        evidence.end <= evidence.start
+      ) continue;
+      matchingEvidenceCount++;
+      const sample = {
         start:Math.max(sceneStart,evidence.start),
         end:Math.min(sceneEnd,evidence.end)
-      }))
-      .sort((a,b) => a.start-b.start || a.end-b.end);
-    if (matchingEvidence.length === 0) continue;
+      };
+      const insertionIndex = matchingEvidence.findIndex(existing =>
+        sample.start < existing.start ||
+        (sample.start === existing.start && sample.end < existing.end)
+      );
+      if (insertionIndex < 0) {
+        if (matchingEvidence.length < 20) matchingEvidence.push(sample);
+      } else {
+        matchingEvidence.splice(insertionIndex,0,sample);
+        if (matchingEvidence.length > 20) matchingEvidence.pop();
+      }
+    }
+    if (matchingEvidenceCount === 0) continue;
     if (links.length >= 100) return {links,truncated:true};
     links.push({
       eventId:event.eventId,
       label:event.label,
-      matchingEvidenceCount:matchingEvidence.length,
-      matchingEvidenceTruncated:matchingEvidence.length>20,
-      matchingEvidence:matchingEvidence.slice(0,20),
+      matchingEvidenceCount,
+      matchingEvidenceTruncated:matchingEvidenceCount>matchingEvidence.length,
+      matchingEvidence,
       participants:[...new Set(event.participants)].sort((a,b) => a.localeCompare(b,"en")).map(entityId => ({
         entityId,
         mentionedByName:characterIds.has(entityId)

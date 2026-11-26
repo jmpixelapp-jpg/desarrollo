@@ -124,7 +124,7 @@ function validate(input: NarrativePronounReferenceDiscoveryInput): void {
         typeof entity.kind !== "string" || !entity.kind.trim() ||
         !Array.isArray(entity.aliases) ||
         entity.aliases.length > MAX_NARRATIVE_PRONOUN_ALIASES_PER_ENTITY ||
-        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim() ||
+        entity.aliases.some((alias: unknown) => typeof alias !== "string" || !alias.trim() ||
           alias.length > MAX_NARRATIVE_PRONOUN_NAME_LENGTH)) {
       throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
     }

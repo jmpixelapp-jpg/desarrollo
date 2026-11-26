@@ -1803,3 +1803,18 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Incidencia independiente observada en esa ejecución:** el build runtime también falló por una cadena sin cerrar en `src/narrative-observation-discovery.ts:373`. Está fuera del módulo Live Author Monitor y no se modificó en esta entrega. La rama recibió después commits de corrección en esa zona; la nueva ejecución es la que determina el estado actual.
 
 **CI posterior a la corrección:** pendiente de consulta. No se declara suite aprobada hasta observar el resultado del workflow disparado por el cambio de test.
+## 117. CI Chromium aislada para cancelación tardía de beforeinput (26 de noviembre de 2026)
+
+**Motivo:** la prueba de navegador de la entrada 115 forma parte de la integración general, pero el workflow Live Author Monitor puede omitir ese paso cuando el build runtime falla en módulos ajenos. Para obtener evidencia independiente de la regresión, se separó su ejecución sin cambiar el pipeline integral.
+
+**Workflow nuevo:** `.github/workflows/live-author-monitor-beforeinput-cancellation.yml`.
+- Se activa cuando cambian la fuente textarea, el test, el fixture manual IME o el propio workflow; también admite ejecución manual y pull request.
+- Usa Node.js 22, instala dependencias y Chromium con sus dependencias de sistema.
+- Ejecuta exactamente `node --test tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs`.
+- No depende del bundle runtime general ni de módulos de análisis narrativo.
+
+**Documento actualizado:** `docs/development/LIVE_AUTHOR_MONITOR_BEFOREINPUT_CANCELLATION_CHROMIUM_2026-11-26.md` explica que la validación independiente y la integral deben informarse por separado.
+
+**Evidencia previa:** en el workflow integral posterior a la corrección FIFO, ejecución `45806648334`, el type-check aislado, bundle aislado, diagnósticos, esquema, suite unitaria/diagnóstica **191/191**, Page Lifecycle Chromium y benchmark terminaron correctamente. El build runtime falló por el error independiente `narrative-observation-discovery.ts:373:67`; por la condición del workflow, la integración host/editor/browser quedó `skipped`. Por ello, todavía no se cuenta esa ejecución como validación de la nueva prueba de teclado/cancelación.
+
+**Commits de esta entrega:** workflow aislado `11367cc`; documentación de la validación independiente `33e516d`. Resultado del nuevo workflow pendiente de consulta.

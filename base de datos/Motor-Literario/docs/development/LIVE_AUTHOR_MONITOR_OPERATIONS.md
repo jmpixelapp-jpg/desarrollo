@@ -563,3 +563,39 @@ La conclusión global de la lane sigue siendo fallo por la auditoría IndexedDB 
 ## 45. Restauración sin heredar fallos de vistas de la instancia anterior
 
 La ejecución [Live Author Monitor — run 45756913002](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45756913002) aprobó la regresión de checkpoint: tras provocar dos fallos de suscriptor, el snapshot local cuenta ambos; el checkpoint durable no declara ni serializa `listenerErrors`; y `restoreCheckpoint()` inicia el documento recuperado con cero fallos de vistas. La suite completa aislada terminó en 59/59 y el type-check estricto independiente pasó. Esto evita que un error de DOM o de un panel antes de un cierre forzado se arrastre como alerta de la sesión recuperada.
+
+
+## 46. Fallos de renderización y reconciliación por capítulo
+
+El workspace no deja que una excepción de actualización de una tarjeta detenga la reconciliación de las demás. Los fallos locales del renderer se cuentan por documento en memoria y se presentan junto al diagnóstico de listeners, con mensajes genéricos. El contador se elimina cuando desaparece el documento o se desmonta el workspace; no se guarda en checkpoints y no altera los contadores del motor. La prueba fuerza un `getDocumentLabel()` que falla una vez, comprueba la alerta en la tarjeta correcta y verifica que el siguiente refresco recupera la etiqueta sin borrar el aviso histórico de esa instancia.
+
+
+**Validación de la reconciliación del workspace:** [Live Author Monitor — run 45757281903](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45757281903) aprobó 61/61 pruebas del núcleo, panel, workspace y diagnósticos, con type-check estricto y build aislado correctos. La prueba de etiqueta transitoriamente defectuosa mostró que el refresco conserva el aviso sólo en la tarjeta afectada y se recupera en el pulso siguiente. El benchmark midió 100.000 commits en 511,50 ms (~195.503 commits/s), heap estable de 4,26 MiB y cero pendientes. La lane completa continúa roja sólo por la auditoría y la compilación general de la persistencia concurrente.
+
+
+## 47. Scheduler de visibilidad: contrato de suspensión y limpieza
+
+El refresco visual debe existir solamente mientras el documento está visible y no suspendido por Page Lifecycle. `visibilitychange` consulta el valor autoritativo `document.hidden`; por ello `pageshow` o `resume` no reactivan polling mientras permanezca oculto. Cada intervalo tiene una generación: callbacks de intervalos cancelados o de instalaciones síncronas invalidadas no se ejecutan aunque ya estén encolados.
+
+La inicialización es transaccional respecto de los listeners: si el registro parcial o la función de cancelación falla, se invalidan callbacks y se intenta retirar todos los handlers. El desmontaje intenta todos los `removeEventListener` y cancela el intervalo aun si una limpieza aislada falla; comunica al final el primer error de limpieza. La nueva suite pura de `live-author-monitor-visibility.test.mjs` fija estos comportamientos sin iniciar Chromium.
+
+
+## 48. Validación aislada del scheduler de visibilidad (run 45757854690)
+
+La lane de Live Author Monitor aprobó el type-check estricto, build aislado, 17/17 pruebas de recuperación y 69/69 pruebas combinadas. Las ocho pruebas dedicadas a visibilidad/Page Lifecycle cubren `visibilitychange`, `pagehide/pageshow`, `freeze/resume`, ticks obsoletos, transiciones síncronas durante el montaje, rollback por alta de listeners o scheduler defectuoso, limpieza parcial, modo sin Page Visibility y desmontaje idempotente.
+
+El benchmark midió 100.000 commits en 660,83 ms (~151.325 commits/s); el heap tras GC quedó en 4,27 MiB a mitad y 4,26 MiB al final, 0,50 MiB retenidos por sesiones abiertas y cero tickets pendientes. La ejecución global sigue roja por la auditoría IndexedDB y el error de compilación de la ruta de persistencia compartida; las pruebas aisladas del monitor sí pasaron.
+
+
+## 49. Integración del editor validada sin el runtime narrativo completo
+
+Las suites de los adaptadores del editor se ejecutan desde el bundle aislado del monitor, no desde el bundle principal del motor. El entrypoint de pruebas exporta ahora el binding de cambios, la fuente transaccional nativa, su bridge y su integración, la integración del panel de pestaña activa y las fuentes/integración del textarea. TypeScript estricto comprueba sus dependencias transitivas, y Vite genera el bundle reducido antes de ejecutar las pruebas.
+
+La evidencia del run 45758057459 es 161/161 pruebas y type-check estricto aprobados. Esto valida contratos y comportamiento determinista de los adaptadores con editores fake que emiten eventos nativos controlados; no sustituye aún las pruebas de navegador con IndexedDB real ni demuestra compatibilidad con una implementación externa concreta de editor. Las integraciones browser/host siguen condicionadas a que el bundle completo y la auditoría de persistencia pasen.
+
+
+## 50. Hito de integración end-to-end alcanzado en commit 948408ae
+
+La ejecución [Live Author Monitor — run 45758096783](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45758096783) pasó todos los pasos: type-check estricto, bundle monitor, MLDB 0.4.2 con 27 tablas, runtime bundle, Chromium, 161/161 pruebas unitarias/aisladas y 167/167 al incluir host/editor/browser. En Chromium pasaron el lease entre dos páginas con IndexedDB real y fencing token, el ciclo de vida de pestaña y escritura/guardado/recuperación de dos capítulos.
+
+Se documenta como evidencia válida del checkout `948408ae9e9519495dc8df97f48abcf20a38020e`. No se extrapola al HEAD actual: commits de sincronización posteriores modificaron persistencia y una validación posterior reporta sintaxis inválida en `indexeddb-store.ts:2560`. El próximo gate es repetir el pipeline integral sobre un commit actual cuando las modificaciones de persistencia queden estables.

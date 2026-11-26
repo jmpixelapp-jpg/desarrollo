@@ -53,7 +53,7 @@ const INITIAL_PERSONAL_PRONOUN =
   /^\s*(él|ella|ellos|ellas|usted|ustedes)\b/iu;
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\\]\\]/gu, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function findLastNameMention(

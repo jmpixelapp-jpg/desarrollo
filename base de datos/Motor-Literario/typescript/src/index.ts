@@ -43,6 +43,7 @@ export * from "./narrative-idea-cross-document-relations";
 export * from "./narrative-idea-evolution";
 export * from "./narrative-idea-continuity-lines";
 export * from "./narrative-idea-continuity-incremental";
+export * from "./narrative-idea-continuity-index";
 export * from "./narrative-idea-entity-attribution";
 
 export * from "./narrative-claim-extraction";

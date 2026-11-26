@@ -902,3 +902,48 @@ test("no crea vínculos colgantes si el destino desaparece durante un conflicto 
     api.dispose();
   }
 });
+
+test("reconcilia escrituras simultáneas desde dos instancias independientes del anfitrión", async () => {
+  const store = new RacingStore([
+    idea("idea-source"),
+    idea("idea-target-a"),
+    idea("idea-target-b")
+  ]);
+  const firstApi = createApi(store);
+  const secondApi = createApi(store);
+
+  try {
+    const [firstSnapshot, secondSnapshot] = await Promise.all([
+      firstApi.getNarrativeIdeas(),
+      secondApi.getNarrativeIdeas()
+    ]);
+    assert.equal(firstSnapshot.length, 3);
+    assert.equal(secondSnapshot.length, 3);
+    assert.equal(store.ideaReads, 2);
+
+    const [firstResult, secondResult] = await Promise.all([
+      firstApi.setNarrativeIdeaLink("idea-source", "idea-target-a", true),
+      secondApi.setNarrativeIdeaLink("idea-source", "idea-target-b", true)
+    ]);
+
+    const persisted = store.ideas.get(projectId + ":idea-source");
+    assert.deepEqual(persisted.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+    assert.deepEqual(firstResult.relatedIdeaIds, ["idea-target-a"]);
+    assert.deepEqual(secondResult.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+    assert.equal(store.writes, 3);
+    assert.equal(store.ideaReads, 3);
+
+    const [firstRefresh, secondRefresh] = await Promise.all([
+      firstApi.getNarrativeIdeas(),
+      secondApi.getNarrativeIdeas()
+    ]);
+    for (const snapshot of [firstRefresh, secondRefresh]) {
+      const source = snapshot.find(item => item.id === "idea-source");
+      assert.deepEqual(source.relatedIdeaIds, ["idea-target-a", "idea-target-b"]);
+    }
+    assert.equal(store.ideaReads, 3);
+  } finally {
+    firstApi.dispose();
+    secondApi.dispose();
+  }
+});

@@ -127,7 +127,7 @@ export function detectNarrativePronounInputs(
   mentions.sort((a,b) => a.start-b.start || a.end-b.end || a.characterId.localeCompare(b.characterId));
 
   const references: NarrativePronounReference[] = [];
-  const pronounPattern = /(?<![\p{L}\p{M}\p{N}_])(él|ella)(?![\p{L}\p{M}\p{N}_])/giu;
+  const pronounPattern = /(?<![\p{L}\p{M}\p{N}_])(él|ella)(?:\s+(mismo|misma))?(?![\p{L}\p{M}\p{N}_])/giu;
   for (const match of text.matchAll(pronounPattern)) {
     const localStart = match.index ?? 0;
     const localEnd = localStart + match[0].length;

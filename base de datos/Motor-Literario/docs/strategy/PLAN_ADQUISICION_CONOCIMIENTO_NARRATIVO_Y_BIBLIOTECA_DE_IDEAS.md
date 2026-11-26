@@ -269,3 +269,15 @@ Cada entrega debe indicar claramente:
 - siguiente cambio concreto.
 
 No usar porcentajes estimados como sustituto de estos datos. Distinguir siempre código escrito, pruebas aprobadas, CI aprobado y cambios fusionados en `main`.
+
+
+### Fase B: referencias temporales explícitas en acontecimientos
+
+El extractor de acontecimientos ahora reconoce referencias temporales conservadoras dentro de la oración que contiene la acción:
+- fechas ISO completas (`AAAA-MM-DD`) y fechas numéricas españolas (`DD/MM/AAAA`), validadas contra el calendario real;
+- años aislados entre 1000 y 2999, sin inventar mes ni día;
+- contadores explícitos del mundo narrativo como `día 12`, conservados como escala `story-day` independiente del calendario real.
+
+Cada referencia conserva el texto original, su precisión y un valor ordinal determinista (días UTC desde epoch para calendario; entero explícito para día interno). No se comparan escalas distintas como si fueran equivalentes. Si una oración contiene más de una referencia temporal distinta, el extractor deja el campo vacío en lugar de escoger una arbitrariamente. Una fecha ausente, inválida o ambigua no se completa por contexto.
+
+Se añadieron pruebas para año bisiesto, fecha inválida, año aislado, día interno y referencias múltiples. Estas pruebas están escritas pero todavía requieren ejecución en CI; no se declara validación hasta que el workflow complete la suite.

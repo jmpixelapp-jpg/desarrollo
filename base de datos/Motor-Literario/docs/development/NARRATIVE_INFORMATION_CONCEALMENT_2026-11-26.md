@@ -15,7 +15,7 @@ Actor y destinatario deben resolverse mediante nombres o alias explícitos de en
 
 ## Evidencia y semántica
 
-Cada candidato conserva evidencia separada para actor, verbo desencadenante, proposición y destinatario cuando existe. `assertionStatus=textually-asserted` indica que la construcción aparece en el texto. `deceptionEstablished=false` e `intentEstablished=false` impiden interpretar la señal como prueba de falsedad, engaño efectivo, voluntad de engañar o recepción por parte del destinatario. Incluso «mintió» se registra como afirmación narrativa pendiente de revisión.
+Cada candidato conserva evidencia separada para actor, verbo desencadenante, proposición y destinatario cuando existe, además de la polaridad textual afirmada o negada. `assertionStatus=textually-asserted` indica que la construcción aparece en el texto. `deceptionEstablished=false` e `intentEstablished=false` impiden interpretar la señal como prueba de falsedad, engaño efectivo, voluntad de engañar o recepción por parte del destinatario. Incluso «mintió» se registra como afirmación narrativa pendiente de revisión.
 
 ## Límites
 

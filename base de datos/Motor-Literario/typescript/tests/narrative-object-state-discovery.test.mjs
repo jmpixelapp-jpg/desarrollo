@@ -113,6 +113,22 @@ test("no propone transición si faltan objeto o participante activo", () => {
   assert.deepEqual(transitions, []);
 });
 
+test("admite varias oraciones en una línea y conserva rangos del contexto", () => {
+  const text = "Ana miró la Espada Solar. Ana perdió la Espada Solar.";
+  const observations = observe(text);
+  const transitions = discoverNarrativeObjectTransitionCandidates({
+    projectId: context.projectId, documentId: context.documentId,
+    revision: context.revision, observations
+  });
+  assert.equal(transitions.length, 1);
+  const evidence = transitions[0].contextEvidence;
+  assert.equal(evidence.start, 0);
+  assert.equal(evidence.end, text.length);
+  assert.equal(evidence.excerpt, text);
+  assert.equal(text.slice(transitions[0].actionEvidence.start, transitions[0].actionEvidence.end),
+    transitions[0].actionEvidence.excerpt);
+});
+
 test("rechaza offsets de evidencia que no corresponden a su fragmento UTF-16", () => {
   const [observation] = observe("Ana perdió la Espada Solar.");
   assert.throws(() => discoverNarrativeObjectTransitionCandidates({

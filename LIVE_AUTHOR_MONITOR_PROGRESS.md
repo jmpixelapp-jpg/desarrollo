@@ -1851,3 +1851,18 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Documento:** se amplió `docs/development/LIVE_AUTHOR_MONITOR_BEFOREINPUT_CANCELLATION_CHROMIUM_2026-11-26.md` para distinguir la ejecución focalizada, la del workflow habitual y la suite completa del editor.
 
 **CI del cambio de workflow:** pendiente de consultar. No se considera aprobada la prueba hasta que el nuevo paso Chromium termine en `success`.
+## 120. Resolver cancelación tardía de beforeinput tras propagación nativa (26 de noviembre de 2026)
+
+**Regresión detectada con Chromium real:** la prueba observó un `beforeinput` confiable, cancelable (`isTrusted=true`, `cancelable=true`) y cancelado por un listener posterior (`defaultPrevented=true`), pero `LiveAuthorMonitorTextAreaSource` conservaba el candidato como pendiente.
+
+**Causa confirmada por traza:** el navegador ejecutó la microtarea programada por el listener inicial del monitor antes de que terminara toda la propagación. Cuando el listener anfitrión canceló después, el chequeo rápido ya había observado `defaultPrevented=false` y había terminado. Una microtarea adicional programada desde el listener posterior vio `defaultPrevented=true` mientras `pendingInput` seguía activo.
+
+**Cambio de producción:** `src/live-author-monitor-textarea-source.ts` conserva la comprobación rápida por `queueMicrotask`; si el mismo candidato sigue pendiente y el evento es cancelable, añade una comprobación de respaldo en la tarea siguiente (`setTimeout(..., 0)`). Esta segunda comprobación solo elimina el candidato si la misma referencia sigue activa y `defaultPrevented` es verdadero. El `input` correspondiente a una edición normal lo resuelve antes, por lo que el fallback no fabrica ni retrasa deltas aceptados.
+
+**Prueba de navegador:** `tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs` conserva la traza de `beforeinput`, microtarea posterior al listener anfitrión y tarea posterior. Verifica que el evento cancelado no genera cambios y que la siguiente pulsación aceptada conserva secuencia/revisión.
+
+**Documento técnico:** `docs/development/LIVE_AUTHOR_MONITOR_BEFOREINPUT_CANCELLATION_CHROMIUM_2026-11-26.md` contiene la causa observada y el nuevo comportamiento.
+
+**Commits:** implementación `13024db`; test de instrumentación `40ef9f0`; documento de causa/corrección `f233e3d`.
+
+**CI posterior al cambio de producción:** pendiente. Los runs anteriores demuestran que la regresión existía; solo un nuevo resultado exitoso de la prueba Chromium permitirá marcarla resuelta.

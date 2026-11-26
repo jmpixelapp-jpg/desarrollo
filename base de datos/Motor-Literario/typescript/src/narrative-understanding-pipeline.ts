@@ -27,6 +27,14 @@ import {
 import { extractNarrativePronounActionCandidates } from "./narrative-pronoun-action-link";
 import { linkNarrativePronounActionTargets } from "./narrative-pronoun-target-link";
 import {
+  extractNarrativeAssertions,
+  type NarrativeAssertion
+} from "./narrative-history";
+import {
+  analyzeNarrativeConsistency,
+  type NarrativeConsistencyFinding
+} from "./narrative-consistency";
+import {
   detectNarrativePronounInputs,
   type NarrativeCharacterPronounProfile
 } from "./narrative-pronoun-detection";
@@ -45,6 +53,8 @@ export interface NarrativeUnderstandingInput {
   readonly pronounReferences?: readonly NarrativePronounReference[];
   readonly pronounResolutionOptions?: NarrativePronounResolutionOptions;
   readonly characterProfiles?: readonly NarrativeCharacterPronounProfile[];
+  /** Afirmaciones previas del mismo proyecto, procedentes de otros fragmentos o capítulos. */
+  readonly priorAssertions?: readonly NarrativeAssertion[];
 }
 
 export interface NarrativeUnderstandingResult {
@@ -63,6 +73,8 @@ export interface NarrativeUnderstandingResult {
   readonly pronounActions: ReturnType<typeof extractNarrativePronounActionCandidates>;
   readonly pronounTargetActions: ReturnType<typeof linkNarrativePronounActionTargets>;
   readonly skippedAmbiguousCharacterNames: readonly string[];
+  readonly assertions: readonly NarrativeAssertion[];
+  readonly consistencyFindings: readonly NarrativeConsistencyFinding[];
   readonly sceneAssignments: {
     readonly ideaCandidates: readonly {
       readonly candidateId: string;
@@ -101,7 +113,9 @@ function validate(input: NarrativeUnderstandingInput): void {
         (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
           input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length)) ||
       (input.characterMentions !== undefined && !Array.isArray(input.characterMentions)) ||
-      (input.pronounReferences !== undefined && !Array.isArray(input.pronounReferences))) {
+      (input.pronounReferences !== undefined && !Array.isArray(input.pronounReferences)) ||
+      (input.priorAssertions !== undefined &&
+        (!Array.isArray(input.priorAssertions) || input.priorAssertions.length > 5000))) {
     throw new Error("Contexto inválido para comprender el fragmento narrativo.");
   }
   const baseOffset = input.baseOffset ?? 0;
@@ -152,6 +166,18 @@ export function understandNarrativeFragment(
     entities: input.entities,
     baseOffset
   };
+  for (const assertion of input.priorAssertions ?? []) {
+    if (!assertion || assertion.projectId !== input.projectId) {
+      throw new Error("Las afirmaciones previas deben pertenecer al proyecto analizado.");
+    }
+  }
+  const assertions = extractNarrativeAssertions(
+    input.projectId, input.documentId, input.revision, input.text,
+    input.entities, baseOffset
+  );
+  const consistencyFindings = analyzeNarrativeConsistency(
+    input.projectId, [...(input.priorAssertions ?? []), ...assertions]
+  );
   const ideas = discoverNarrativeIdeaCandidates({
     projectId: input.projectId, documentId: input.documentId,
     revision: input.revision, text: input.text, baseOffset
@@ -221,6 +247,7 @@ export function understandNarrativeFragment(
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
     ideas, actions, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
+    assertions, consistencyFindings,
     sceneAssignments: {
       ideaCandidates: assign(ideas),
       actionCandidates: assign(actions),

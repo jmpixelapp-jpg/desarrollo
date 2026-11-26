@@ -40,7 +40,6 @@ const CONNECTORS = [
   "como consecuencia de ello",
   "a consecuencia de ello",
   "como resultado de ello",
-  "debido a causa de ello",
   "debido a ello",
   "debido a eso",
   "a causa de ello",

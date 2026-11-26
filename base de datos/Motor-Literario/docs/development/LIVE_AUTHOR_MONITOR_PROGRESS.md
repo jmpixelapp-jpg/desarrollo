@@ -1273,3 +1273,14 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 **Regresiones:** una prueba provoca un pegado reentrante individual de dos unidades con un presupuesto de una; otra encola dos ediciones reentrantes de una unidad cada una para comprobar que el límite es agregado. Ambas verifican que el delta que desborda no llega al monitor y que el source se pausa. También se comprueba que un pegado de cinco unidades en reposo se admite pese al presupuesto de backlog igual a uno, y que la integración rechaza un límite cero antes de consultar el anfitrión.
 
 **Validación de la implementación base:** [Live Author Monitor — run 45754354474](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45754354474) aprobó build aislado, regresiones diagnósticas, Chromium, auditoría MLDB, build runtime, suite del monitor y benchmark. [Motor Literario TypeScript — run 45754354266](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45754354266) pasó type-check y ejecutó 863 pruebas: 861 aprobadas y 2 fallidas en los handlers ajenos al monitor `assertion-upsert` y `entity-upsert`, documentados en la sección 75. **Cobertura agregada adicional:** la prueba que encola dos eventos reentrantes pequeños y verifica el presupuesto acumulado se añadió en `eae1281`; sus nuevas ejecuciones [Live Author Monitor — run 45754532122](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45754532122) y [Motor Literario TypeScript — run 45754532101](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45754532101) siguen en curso al momento de esta anotación.
+
+
+## 78. Entrega FIFO de snapshots ante callbacks reentrantes (26 de noviembre de 2026)
+
+**Hallazgo:** `publish()` recorría el conjunto de listeners directamente. Si un panel provocaba otra admisión síncrona durante la notificación del primer snapshot, la publicación anidada recorría todos los listeners antes de que terminara la publicación exterior. Un segundo panel podía recibir la secuencia 2 y después la secuencia 1, haciendo retroceder visualmente sus métricas aunque el motor estuviera correcto.
+
+**Corrección:** las publicaciones se serializan mediante una cola FIFO de snapshots inmutables. Cada snapshot conserva los destinatarios que estaban suscritos al publicarse; las altas no reciben estados pasados y las bajas se comprueban antes de invocar cada callback. Las excepciones siguen aisladas. `dispose()` limpia la cola y la colección de suscriptores, evitando entregas pendientes tras el desmontaje.
+
+**Regresiones:** se añaden pruebas para (1) admisión reentrante y orden monotónico observado por un segundo panel, (2) alta/baja de suscriptores durante una notificación y (3) `dispose()` durante una publicación con una segunda notificación encolada.
+
+**Validación:** pendiente de la ejecución de GitHub Actions para este commit. No se afirma todavía que el type-check, la suite o el benchmark hayan pasado.

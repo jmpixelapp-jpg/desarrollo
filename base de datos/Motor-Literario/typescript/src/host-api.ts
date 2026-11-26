@@ -3399,6 +3399,7 @@ export class HostEngineApi {
     await this.enqueueKnowledgeOperation(async () => {
       this.invalidateNarrativeKnowledgeCaches();
     });
+    await this.refreshNarrativeIdeaContinuityIndex();
   }
 
   /**

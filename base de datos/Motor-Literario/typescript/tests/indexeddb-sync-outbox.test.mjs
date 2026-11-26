@@ -336,3 +336,30 @@ test("dos coordinadores completos comparten la bandeja y el lease antes de envia
     await deleteDatabase();
   }
 });
+
+
+test("un lease antiguo no puede renovar ni liberar la titularidad tras el fencing takeover", async () => {
+  await deleteDatabase();
+  const store = new IndexedDbProjectStore();
+  const projectId = "fencing-project";
+  const documentId = "__narrative_sync_project__";
+  try {
+    const stale = await store.acquireLiveAuthorMonitorLease(
+      projectId, documentId, "old-owner", 10_000, 1_000
+    );
+    assert.ok(stale);
+    const current = await store.acquireLiveAuthorMonitorLease(
+      projectId, documentId, "new-owner", 11_001, 1_000
+    );
+    assert.ok(current);
+    assert.ok(current.fencingToken > stale.fencingToken);
+    assert.equal(await store.renewLiveAuthorMonitorLease(stale, 11_002, 1_000), undefined);
+    assert.equal(await store.releaseLiveAuthorMonitorLease(stale, 11_003), false);
+    const renewed = await store.renewLiveAuthorMonitorLease(current, 11_004, 1_000);
+    assert.ok(renewed);
+    assert.equal(renewed.ownerId, "new-owner");
+  } finally {
+    await store.close();
+    await deleteDatabase();
+  }
+});

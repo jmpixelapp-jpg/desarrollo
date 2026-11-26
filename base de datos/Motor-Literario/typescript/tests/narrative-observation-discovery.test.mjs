@@ -195,3 +195,20 @@ test("no confunde nombres con secuencias de letras dentro de otras palabras", ()
   });
   assert.deepEqual(found, []);
 });
+
+test("reconoce futuro en acciones vinculadas a personajes sin convertirlo en fecha", () => {
+  const forms = [
+    ["Ana cruzará el puente.", "cruzar", "cruzará"],
+    ["Ana llegará mañana.", "llegar", "llegará"],
+    ["Ana caminará hasta el puerto.", "caminar", "caminará"],
+    ["Ana entrará al castillo.", "entrar", "entrará"]
+  ];
+  for (const [text, action, surface] of forms) {
+    const found = discoverNarrativeObservationCandidates({ ...context, text });
+    assert.equal(found.length, 1, text);
+    assert.equal(found[0].action, action, text);
+    assert.equal(found[0].surface, surface, text);
+    assert.equal(found[0].grammaticalTense, "future", text);
+    assert.equal(found[0].singleMentionedCharacterId, character.id, text);
+  }
+});

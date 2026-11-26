@@ -1775,18 +1775,24 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
     { length: 5_003 },
     (_, index) => `external-${String(index).padStart(5, "0")}`
   );
-  const ideas = [{
-    projectId,
-    id: "reference-sample-source",
-    text: "Una única idea con muchas referencias explícitas",
-    status: "IDEA",
-    originDocumentId: "chapter",
-    sourceProjectName: "Book",
-    evidence: [],
-    relatedIdeaIds,
-    relatedEntityIds: [],
-    statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
-  }];
+  // Cada idea respeta el límite contractual de 500 vínculos; el catálogo
+  // completo, no un único registro inválido, supera las cinco mil aristas.
+  const ideas = Array.from({ length: 11 }, (_, sourceIndex) => {
+    const start = sourceIndex * 500;
+    const end = Math.min(5_003, start + 500);
+    return {
+      projectId,
+      id: `reference-sample-source-${String(sourceIndex).padStart(2, "0")}`,
+      text: `Idea fuente ${sourceIndex} con muchas referencias explícitas`,
+      status: "IDEA",
+      originDocumentId: "chapter",
+      sourceProjectName: "Book",
+      evidence: [],
+      relatedIdeaIds: relatedIdeaIds.slice(start, end),
+      relatedEntityIds: [],
+      statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
+    };
+  });
   const api = new HostEngineApi({
     store: { ...store, documents: new Map(), ideas }
   });
@@ -1799,7 +1805,7 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
   });
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(graph.ideaCount, 1);
+    assert.equal(graph.ideaCount, 11);
     assert.equal(graph.referenceCount, 5_003);
     assert.equal(graph.includedReferenceCount, 0);
     assert.equal(graph.notIncludedReferenceCount, 5_003);
@@ -1811,11 +1817,14 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
     assert.equal(graph.references[0].toIdeaId, "external-00000");
     assert.equal(graph.references.at(-1).toIdeaId, "external-04999");
     assert.ok(graph.references.every(reference =>
-      reference.fromIdeaId === "reference-sample-source" &&
+      reference.fromIdeaId.startsWith("reference-sample-source-") &&
       reference.resolution === "missing-from-project"
     ));
-    assert.equal(graph.nodes[0].notIncludedOutgoingReferenceCount, 5_003);
-    assert.equal(graph.nodes[0].incomingReferenceCount, 0);
+    assert.equal(
+      graph.nodes.reduce((total, node) => total + node.notIncludedOutgoingReferenceCount, 0),
+      5_003
+    );
+    assert.ok(graph.nodes.every(node => node.incomingReferenceCount === 0));
   } finally {
     api.dispose();
   }
@@ -1823,20 +1832,23 @@ test("el muestreo de referencias mantiene contadores exactos al superar cinco mi
 
 test("los límites de muestras de ciclos y componentes no alteran los conteos completos", async () => {
   const ideas = Array.from({ length: 105 }, (_, index) => {
-    const id = `self-cycle-${String(index).padStart(3, "0")}`;
-    return {
+    const suffix = String(index).padStart(3, "0");
+    const leftId = `pair-cycle-${suffix}-a`;
+    const rightId = `pair-cycle-${suffix}-b`;
+    const common = {
       projectId,
-      id,
-      text: `motivo-literario-unico-${index}`,
       status: "IDEA",
       originDocumentId: "chapter",
       sourceProjectName: "Book",
       evidence: [],
-      relatedIdeaIds: [id],
       relatedEntityIds: [],
       statusHistory: [{ status: "IDEA", reason: "initial", changedAt: 1 }]
     };
-  });
+    return [
+      { ...common, id: leftId, text: `motivo-literario-unico-${index}-a`, relatedIdeaIds: [rightId] },
+      { ...common, id: rightId, text: `motivo-literario-unico-${index}-b`, relatedIdeaIds: [leftId] }
+    ];
+  }).flat();
   const api = new HostEngineApi({
     store: { ...store, documents: new Map(), ideas }
   });
@@ -1849,20 +1861,20 @@ test("los límites de muestras de ciclos y componentes no alteran los conteos co
   });
   try {
     const graph = (await api.analyzeLiteraryDocument("chapter")).ideaGraph;
-    assert.equal(graph.ideaCount, 105);
-    assert.equal(graph.referenceCount, 105);
-    assert.equal(graph.selfReferenceCount, 105);
+    assert.equal(graph.ideaCount, 210);
+    assert.equal(graph.referenceCount, 210);
+    assert.equal(graph.selfReferenceCount, 0);
     assert.equal(graph.cycleCount, 105);
     assert.equal(graph.omittedCycleCount, 5);
     assert.equal(graph.cycles.length, 100);
-    assert.equal(graph.cycles[0].ideaIds.length, 1);
-    assert.equal(graph.cycles.at(-1).ideaIds[0], "self-cycle-099");
+    assert.deepEqual(graph.cycles[0].ideaIds, ["pair-cycle-000-a", "pair-cycle-000-b"]);
+    assert.deepEqual(graph.cycles.at(-1).ideaIds, ["pair-cycle-099-a", "pair-cycle-099-b"]);
     assert.equal(graph.weakComponentCount, 105);
     assert.equal(graph.omittedWeakComponentCount, 5);
     assert.equal(graph.weakComponents.length, 100);
-    assert.equal(graph.largestWeakComponentSize, 1);
-    assert.deepEqual(graph.weakComponents[0].ideaIds, ["self-cycle-000"]);
-    assert.deepEqual(graph.weakComponents.at(-1).ideaIds, ["self-cycle-099"]);
+    assert.equal(graph.largestWeakComponentSize, 2);
+    assert.deepEqual(graph.weakComponents[0].ideaIds, ["pair-cycle-000-a", "pair-cycle-000-b"]);
+    assert.deepEqual(graph.weakComponents.at(-1).ideaIds, ["pair-cycle-099-a", "pair-cycle-099-b"]);
     assert.equal(graph.sourceNodeCount, 0);
     assert.equal(graph.terminalWithinSnapshotNodeCount, 0);
     assert.equal(graph.isolatedWithinSnapshotNodeCount, 0);

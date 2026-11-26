@@ -46,6 +46,17 @@ export interface NarrativeObservationCandidate {
     readonly marker: "a";
     readonly evidence: TextEvidence;
   };
+  /** Relación de transferencia explícita candidata; solo se emite con sujeto activo, objeto y destinatario inequívocos. */
+  readonly directedRelationCandidate?: {
+    readonly relation: "transfers-to";
+    readonly fromEntityId: string;
+    readonly toEntityId: string;
+    readonly objectEntityId: string;
+    readonly subjectEvidence: TextEvidence;
+    readonly objectEvidence: TextEvidence;
+    readonly recipientEvidence: TextEvidence;
+    readonly actionEvidence: TextEvidence;
+  };
   /** Referencia pronominal pendiente: nunca fusiona automáticamente el pronombre con una identidad. */
   readonly unresolvedReferences?: readonly {
     readonly pronoun: string;
@@ -425,7 +436,7 @@ export function discoverNarrativeObservationCandidates(
             const names = [entity.canonicalName, ...entity.aliases];
             return names.flatMap(name => {
               const mention = findNameMatch(afterVerb, name);
-              if (!mention || !/^\s+(?:(?:el|la|los|las|un|una|unos|unas)\s+)?$/iu.test(afterVerb.slice(0, mention.start))) return [];
+              if (!mention || !/(?:^|\s)a\s+$/iu.test(afterVerb.slice(0, mention.start))) return [];
               return [{ entity, mention }];
             });
           });
@@ -445,6 +456,27 @@ export function discoverNarrativeObservationCandidates(
           };
         })();
         const before = sentence.slice(0, match.index).match(/(?:\bno|\bnunca|\bjamás)\s*$/iu);
+        const directedRelationCandidate = signal.action === "entregar" &&
+          subjectCandidate?.voice === "active" &&
+          grammaticalObjectCandidate && personalObjectCandidate &&
+          subjectCandidate.entityId !== personalObjectCandidate.entityId
+          ? {
+              relation: "transfers-to" as const,
+              fromEntityId: subjectCandidate.entityId,
+              toEntityId: personalObjectCandidate.entityId,
+              objectEntityId: grammaticalObjectCandidate.entityId,
+              subjectEvidence: subjectCandidate.evidence,
+              objectEvidence: grammaticalObjectCandidate.evidence,
+              recipientEvidence: personalObjectCandidate.evidence,
+              actionEvidence: {
+                documentId: input.documentId,
+                revision: input.revision,
+                start: localStart,
+                end: localStart + surface.length,
+                excerpt: surface
+              }
+            }
+          : undefined;
         const id = `observation:${input.documentId}:${localStart}:${signal.action}`;
         results.set(id, {
           id,
@@ -459,6 +491,7 @@ export function discoverNarrativeObservationCandidates(
           ...(passiveAgentCandidate ? { passiveAgentCandidate } : {}),
           ...(personalObjectCandidate ? { personalObjectCandidate } : {}),
           ...(grammaticalObjectCandidate ? { grammaticalObjectCandidate } : {}),
+          ...(directedRelationCandidate ? { directedRelationCandidate } : {}),
           ...(mentionedCharacters.length === 1
             ? { singleMentionedCharacterId: mentionedCharacters[0]!.id } : {}),
           mentionedCharacterIds: mentionedCharacters.map(entity => entity.id).sort(),

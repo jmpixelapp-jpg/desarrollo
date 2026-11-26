@@ -79,7 +79,8 @@ test("convierte escritura y reemplazo de selección en deltas UTF-16 consecutivo
       baseRevision: 4,
       start: 5,
       end: 5,
-      replacement: "!"
+      replacement: "!",
+      activityKind: "typing"
     },
     {
       documentId: "chapter-1",
@@ -87,7 +88,8 @@ test("convierte escritura y reemplazo de selección en deltas UTF-16 consecutivo
       baseRevision: 5,
       start: 1,
       end: 3,
-      replacement: "X"
+      replacement: "X",
+      activityKind: "typing"
     }
   ]);
   assert.deepEqual(f.source.getState(), {
@@ -288,7 +290,8 @@ test("captura actualizaciones IME sucesivas como deltas consecutivos y cierra el
       baseRevision: 2,
       start: 3,
       end: 3,
-      replacement: "に"
+      replacement: "に",
+      activityKind: "typing"
     },
     {
       documentId: "chapter-1",
@@ -296,7 +299,8 @@ test("captura actualizaciones IME sucesivas como deltas consecutivos y cierra el
       baseRevision: 3,
       start: 3,
       end: 4,
-      replacement: "日本"
+      replacement: "日本",
+      activityKind: "typing"
     }
   ]);
   assert.equal(f.source.getState().compositionActive, true);
@@ -336,7 +340,7 @@ test("rechaza insertCompositionText fuera de composición y no inventa un rango"
   f.source.dispose();
 });
 
-test("exige resincronización si la composición termina sin el input asociado", () => {
+test("detecta una composición incompleta cuando llega otra operación antes del input final", () => {
   const f = fixture("abc");
   f.element.emitCompositionStart();
   f.element.selectionStart = 3;
@@ -344,10 +348,17 @@ test("exige resincronización si la composición termina sin el input asociado",
   f.element.emitBeforeInput("insertCompositionText", true);
   f.element.emitCompositionEnd();
 
+  // compositionend no invalida por sí solo el beforeinput: el input final aún puede llegar.
   assert.equal(f.changes.length, 0);
-  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.source.getState().needsResync, false);
   assert.equal(f.source.getState().compositionActive, false);
-  assert.equal(f.errors[0].code, "composition-state-mismatch");
+
+  // Un nuevo beforeinput antes del input anterior demuestra que se perdió el emparejamiento.
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+  f.element.emitBeforeInput("insertText", false);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors[0].code, "missing-input");
 
   // El input tardío se ignora hasta resincronizar.
   f.element.value = "abcx";
@@ -361,7 +372,7 @@ test("no confunde arrastrar/soltar ni yank con pegado o corrección", () => {
   const f = fixture("abcd", 0, 0);
   f.element.edit({ start: 4, end: 4, nextValue: "abcdD", inputType: "insertFromDrop" });
   f.element.edit({ start: 5, end: 5, nextValue: "abcdDY", inputType: "insertFromYank" });
-  f.element.edit({ start: 1, end: 2, nextValue: "aRbDY", inputType: "insertReplacementText" });
+  f.element.edit({ start: 1, end: 2, nextValue: "aRcdDY", inputType: "insertReplacementText" });
   assert.deepEqual(f.changes.map(change => change.activityKind), ["other", "other", "correction"]);
   assert.equal(f.source.getState().needsResync, false);
   f.stop();

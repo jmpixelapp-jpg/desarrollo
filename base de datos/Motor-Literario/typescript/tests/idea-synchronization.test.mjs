@@ -820,6 +820,42 @@ test("agota los tres intentos CAS sin perder cambios concurrentes y refresca la 
   api.dispose();
 });
 
+test("el presupuesto léxico del anfitrión incluye texto enlazado y limita el total a dos millones de unidades UTF-16", async () => {
+  const text = "narrativeterm".repeat(7_692) + "narrativ";
+  assert.equal(text.length, 100_000);
+  const projectIdeas = Array.from({ length: 21 }, (_, index) =>
+    idea(index === 0 ? "a-linked" : "idea-" + String(index).padStart(2, "0"), {
+      text,
+      relatedEntityIds: index === 0 ? ["entity-character"] : []
+    })
+  );
+  const store = new RacingStore(projectIdeas, [entity("entity-character", "Ana")]);
+  // Se conserva la lectura de fichas, pero se evita activar extracción asíncrona
+  // de conocimiento durante esta prueba específica del presupuesto.
+  store.saveEntity = undefined;
+  const api = createApi(store);
+
+  try {
+    await api.openDocument({
+      documentId: "chapter-budget",
+      text: "Una escena breve.",
+      revision: 0,
+      sequence: 0
+    });
+    const result = await api.analyzeLiteraryDocument("chapter-budget");
+    const lexical = result.ideaGraph.lexicalResonances;
+
+    assert.equal(lexical.inputIdeaCount, 21);
+    assert.equal(lexical.analyzedIdeaCount, 20);
+    assert.equal(lexical.omittedTextBudgetIdeaCount, 1);
+    assert.equal(lexical.ideasWithoutTextCount, 0);
+    assert.equal(lexical.tokenizedTextUnitCount, 2_000_000);
+  } finally {
+    api.dispose();
+  }
+});
+
+
 test("no crea vínculos colgantes si el destino desaparece durante un conflicto CAS", async () => {
   for (const targetKind of ["idea", "entity"]) {
     const store = new RacingStore(

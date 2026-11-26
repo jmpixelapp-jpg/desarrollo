@@ -796,7 +796,16 @@ export interface NarrativeSyncReplayResult {
   readonly processed: number;
   readonly remaining: number;
   readonly stoppedAtOperationId?: string;
-  readonly failure?: "invalid-envelope" | "apply-or-ack-failed" | "consumer-already-running";
+  readonly failure?: "invalid-envelope" | "apply-or-ack-failed" | "consumer-already-running" | "consumer-lock-failed";
+}
+
+/** Adaptador mínimo de Web Locks, inyectable para pruebas y runtimes alternativos. */
+export interface NarrativeSyncReplayLockManager {
+  request<T>(
+    name: string,
+    options: { readonly mode: "exclusive"; readonly ifAvailable: true },
+    callback: (lock: unknown | null) => Promise<T>
+  ): Promise<T>;
 }
 
 /**
@@ -812,7 +821,8 @@ export async function replayPendingNarrativeSyncOperations(
   journal: IndexedDbNarrativeSyncJournal,
   projectId: string,
   apply: (operation: NarrativeSyncOperationEnvelope) => Promise<void>,
-  writerId?: string
+  writerId?: string,
+  lockManager?: NarrativeSyncReplayLockManager
 ): Promise<NarrativeSyncReplayResult> {
   if (!journal || typeof apply !== "function") {
     throw new TypeError("Se requiere un diario y un procesador de operaciones.");
@@ -843,54 +853,85 @@ export async function replayPendingNarrativeSyncOperations(
     activeNarrativeSyncWriterReplays.set(projectId, locks);
   }
   try {
-  const pending = await journal.loadPendingOperations(projectId, writerId);
-  let processed = 0;
-  for (const operation of pending) {
-    // El registro añade receivedAt/appliedAt, que son metadatos locales y no
-    // forman parte del digest original de la envoltura recibida.
-    let envelope: NarrativeSyncOperationEnvelope;
+    const runReplay = async (): Promise<NarrativeSyncReplayResult> => {
+        const pending = await journal.loadPendingOperations(projectId, writerId);
+        let processed = 0;
+        for (const operation of pending) {
+          // El registro añade receivedAt/appliedAt, que son metadatos locales y no
+          // forman parte del digest original de la envoltura recibida.
+          let envelope: NarrativeSyncOperationEnvelope;
+          try {
+            envelope = {
+              schemaVersion: operation.schemaVersion,
+              algorithm: operation.algorithm,
+              operationId: operation.operationId,
+              projectId: operation.projectId,
+              writerId: operation.writerId,
+              sequence: operation.sequence,
+              createdAt: operation.createdAt,
+              kind: operation.kind,
+              // IndexedDB entrega un structured clone; normalizamos el payload al
+              // subconjunto JSON antes de verificar su representación canónica.
+              payload: JSON.parse(JSON.stringify(operation.payload)) as unknown,
+              digest: operation.digest
+            };
+          } catch {
+            const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+            return {
+              processed, remaining, stoppedAtOperationId: operation.operationId,
+              failure: "invalid-envelope"
+            };
+          }
+          if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
+            const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+            return {
+              processed, remaining, stoppedAtOperationId: operation.operationId,
+              failure: "invalid-envelope"
+            };
+          }
+          try {
+            await apply(envelope);
+            await journal.markApplied(projectId, operation.operationId, operation.digest);
+            processed++;
+          } catch {
+            const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+            return {
+              processed, remaining, stoppedAtOperationId: operation.operationId,
+              failure: "apply-or-ack-failed"
+            };
+          }
+        }
+        return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
+      
+    };
+    const runtimeLocks = (globalThis as typeof globalThis & {
+      navigator?: { locks?: NarrativeSyncReplayLockManager };
+    }).navigator?.locks;
+    const locks = lockManager ?? runtimeLocks;
+    if (!locks) return await runReplay();
     try {
-      envelope = {
-        schemaVersion: operation.schemaVersion,
-        algorithm: operation.algorithm,
-        operationId: operation.operationId,
-        projectId: operation.projectId,
-        writerId: operation.writerId,
-        sequence: operation.sequence,
-        createdAt: operation.createdAt,
-        kind: operation.kind,
-        // IndexedDB entrega un structured clone; normalizamos el payload al
-        // subconjunto JSON antes de verificar su representación canónica.
-        payload: JSON.parse(JSON.stringify(operation.payload)) as unknown,
-        digest: operation.digest
-      };
+      return await locks.request(
+        "motor-literario:narrative-sync:" + encodeURIComponent(projectId),
+        { mode: "exclusive", ifAvailable: true },
+        async lock => {
+          if (!lock) {
+            return {
+              processed: 0,
+              remaining: (await journal.loadPendingOperations(projectId, writerId)).length,
+              failure: "consumer-already-running"
+            };
+          }
+          return runReplay();
+        }
+      );
     } catch {
-      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
+      // Si Web Locks falla, nunca degradar silenciosamente a replay sin exclusión.
       return {
-        processed, remaining, stoppedAtOperationId: operation.operationId,
-        failure: "invalid-envelope"
+        processed: 0,
+        remaining: (await journal.loadPendingOperations(projectId, writerId)).length,
+        failure: "consumer-lock-failed"
       };
     }
-    if (!(await verifyNarrativeSyncOperationEnvelope(envelope))) {
-      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
-      return {
-        processed, remaining, stoppedAtOperationId: operation.operationId,
-        failure: "invalid-envelope"
-      };
-    }
-    try {
-      await apply(envelope);
-      await journal.markApplied(projectId, operation.operationId, operation.digest);
-      processed++;
-    } catch {
-      const remaining = (await journal.loadPendingOperations(projectId, writerId)).length;
-      return {
-        processed, remaining, stoppedAtOperationId: operation.operationId,
-        failure: "apply-or-ack-failed"
-      };
-    }
-  }
-  return { processed, remaining: (await journal.loadPendingOperations(projectId, writerId)).length };
   } finally {
     if (writerId === undefined) {
       activeNarrativeSyncProjectWideReplays.delete(projectId);

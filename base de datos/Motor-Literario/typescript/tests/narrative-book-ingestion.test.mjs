@@ -50,3 +50,35 @@ test("los IDs y resultados son deterministas para una misma revisión y fuente",
   const second = ingestNarrativeBookText(input);
   assert.deepEqual(first, second);
 });
+
+test("lee archivos TXT y Markdown UTF-8 mediante APIs estándar", async () => {
+  const text = "Capítulo I\\n\\nLa niña llegó al puerto. 🌊";
+  const bytes = new TextEncoder().encode(text);
+  const source = await readNarrativeBookFile({
+    name: "novela.md", type: "text/markdown", size: bytes.byteLength,
+    arrayBuffer: async () => bytes.buffer
+  });
+  assert.equal(source.mediaType, "text/markdown");
+  assert.equal(source.text, text);
+  assert.equal(source.byteLength, bytes.byteLength);
+  const parsed = ingestNarrativeBookText({
+    projectId: "p", documentId: "file-1", revision: 1, text: source.text
+  });
+  assert.equal(parsed.coverage.wordCount, 7);
+  assert.ok(parsed.signals.some(signal => signal.label === "arrival"));
+});
+
+test("rechaza extensiones no admitidas, MIME incompatibles y UTF-8 inválido", async () => {
+  const validBytes = new TextEncoder().encode("texto");
+  await assert.rejects(() => readNarrativeBookFile({
+    name: "novela.pdf", arrayBuffer: async () => validBytes.buffer
+  }));
+  await assert.rejects(() => readNarrativeBookFile({
+    name: "novela.txt", type: "application/pdf",
+    arrayBuffer: async () => validBytes.buffer
+  }));
+  const invalid = new Uint8Array([0xff, 0xfe]);
+  await assert.rejects(() => readNarrativeBookFile({
+    name: "novela.txt", arrayBuffer: async () => invalid.buffer
+  }));
+});

@@ -589,3 +589,14 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 **Validación:** pendiente de la ejecución del workflow `Live Author Monitor` generada por esta entrega. No se anticipa el resultado.
 
 **Límite:** es una integración multi-documento real de referencia con textarea. El callback de un editor enriquecido de producción externo sigue dependiendo de su anfitrión, ausente del repositorio.
+
+
+## 28. Carrera de secuencia pendiente durante persistencia asíncrona (25 de noviembre de 2026)
+
+**Defecto reproducido con Chromium multi-documento:** al persistir el primer delta, el motor preparaba el siguiente estado del documento antes de esperar `appendChange()`. Mientras IndexedDB resolvía, el editor podía admitir otras ediciones y elevar `pendingSequence`; al finalizar el primer commit, el motor instalaba una copia antigua que retrocedía el contador de admisiones. La prueba de navegador reprodujo el estado imposible `sequence: 39, pendingSequence: 2`.
+
+**Corrección:** el motor calcula el buffer y la revisión siguiente antes de persistir, pero instala el nuevo `LiveDocument` después del `await`. En ese momento toma el `pendingSequence` vivo de la instancia actual del documento, preservando todas las ediciones ya admitidas mientras la escritura durable estaba pendiente. Se mantiene un solo commit activo por documento y no se relaja ninguna validación de sincronización.
+
+**Regresión añadida:** `live-author-monitor-engine-pending-sequence.test.mjs` bloquea deliberadamente la primera escritura del journal, admite 40 ediciones consecutivas mientras está pendiente y verifica que `pendingSequence` no retroceda, que los 40 commits se completen y que el texto final sea íntegro.
+
+**Validación CI:** pendiente para este commit.

@@ -500,20 +500,13 @@ export class LiteraryEngine {
 
     const nextBuffer = document.buffer.clone();
     nextBuffer.replace(change.start, change.end, change.replacement);
-    const next: LiveDocument = {
-      documentId: document.documentId,
-      buffer: nextBuffer,
-      revision: document.revision + 1,
-      sequence: change.sequence,
-      pendingSequence: document.pendingSequence,
-      needsResync: false
-    };
+    const nextRevision = document.revision + 1;
     try {
       if (this.options.store.appendChange) {
         const journalEntry: StoredChange = {
           ...change,
           projectId: project.projectId,
-          committedRevision: next.revision,
+          committedRevision: nextRevision,
           committedAt: Date.now()
         };
         // El delta es el registro durable primario: una edición normal no
@@ -523,10 +516,10 @@ export class LiteraryEngine {
         // Compatibilidad con adaptadores antiguos que solo guardan snapshots.
         await this.options.store.saveDocument({
           projectId: project.projectId,
-          documentId: next.documentId,
-          text: next.buffer.toString(),
-          revision: next.revision,
-          sequence: next.sequence,
+          documentId: document.documentId,
+          text: nextBuffer.toString(),
+          revision: nextRevision,
+          sequence: change.sequence,
           updatedAt: Date.now()
         });
       }
@@ -539,6 +532,20 @@ export class LiteraryEngine {
         reason: error instanceof Error ? error.message : "persistence_error"
       };
     }
+
+    // appendChange/saveDocument puede resolver después de que el editor haya
+    // admitido más transacciones del mismo documento. Leer pendingSequence
+    // después del await evita reemplazar el estado vivo con una copia antigua.
+    // Solo hay un apply activo por documento, por lo que document sigue siendo
+    // la instancia actualmente registrada durante toda esta espera.
+    const next: LiveDocument = {
+      documentId: document.documentId,
+      buffer: nextBuffer,
+      revision: nextRevision,
+      sequence: change.sequence,
+      pendingSequence: Math.max(document.pendingSequence, change.sequence),
+      needsResync: false
+    };
     this.documents.set(change.documentId, next);
 
     // Snapshot cada 64 ediciones. El journal ya quedó confirmado; si falla

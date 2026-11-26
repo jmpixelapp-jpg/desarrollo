@@ -813,3 +813,10 @@ Antes de alternar el textarea activo, la aplicación espera la cola durable y lo
 La recuperación vuelve a cargar ambos snapshots y sus checkpoints desde IndexedDB. El test Chromium escribe en ambos, valida contadores separados, cambia entre ellos, cierra, recarga y reanuda la escritura después de la restauración.
 
 **Límite:** el ejemplo usa textarea nativo para hacer verificable el recorrido multi-documento en navegador; los editores enriquecidos externos deben publicar sus transacciones y eventos de historial reales.
+
+
+## 44. Preservación de pendingSequence al completar persistencia asíncrona
+
+Se corrige una carrera entre la admisión sincrónica y la persistencia asíncrona del motor. El objeto siguiente del documento ya no captura `pendingSequence` antes de esperar al almacén. Después de confirmar el delta, el motor lee el contador actual de la instancia viva y lo conserva al instalar el nuevo buffer/revisión/sequence. Así, una escritura lenta no puede hacer retroceder el número de cambios admitidos en el documento.
+
+**Prueba de regresión:** el primer `appendChange` queda retenido mientras se admiten 40 cambios sucesivos. Antes de liberarlo, la prueba ve `sequence=0, pendingSequence=40`; al finalizar, verifica `sequence=40, pendingSequence=40`, 40 commits aplicados y el texto completo.

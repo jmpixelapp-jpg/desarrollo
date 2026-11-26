@@ -177,3 +177,10 @@ La aplicación de referencia ahora conecta `mountLiveAuthorMonitorEditorIntegrat
 El anfitrión mantiene la responsabilidad sobre apertura, recuperación y cambio del editor. Antes de cambiar el textarea activo, confirma los deltas pendientes y desmonta solo el adaptador anterior; las sesiones de métricas de los otros capítulos permanecen vivas. La integración de paneles muestra el resumen global y cambia el panel detallado con el documento seleccionado.
 
 La prueba de navegador de referencia valida dos documentos persistidos en IndexedDB, métricas separadas y recuperación en ambos. El patrón puede reutilizarse con un editor enriquecido, siempre que su anfitrión conecte el callback real de transacciones para cada documento.
+
+
+## 13. Consistencia de la secuencia admitida durante escrituras asíncronas
+
+El motor puede recibir nuevas pulsaciones mientras el almacenamiento confirma el delta anterior. Al reemplazar el estado del documento tras cada commit, debe conservar el `pendingSequence` más reciente de la instancia viva, no el valor capturado antes de `appendChange()`. Una regresión bloquea la primera escritura del journal, admite 40 deltas y verifica que la secuencia pendiente permanezca monótona y que todos los commits se apliquen.
+
+Esta regla es esencial cuando el editor cambia de capítulo: el anfitrión debe poder comprobar que `pendingSequence === sequence` después de vaciar la cola sin que un commit atrasado reescriba un contador antiguo.

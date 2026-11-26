@@ -180,3 +180,19 @@ Se agregan pruebas para el recorrido «Mara llegó. Ella protegió a Elian. Desp
 - No decide qué versión es canónica, no corrige el texto y no interpreta automáticamente un cambio como error: una edad o ubicación diferente puede ser evolución legítima.
 
 **Límite:** la memoria anterior debe ser suministrada por la capa de biblioteca/persistencia; el pipeline no consulta ni modifica almacenes por su cuenta. La extracción sigue limitada a patrones lingüísticos explícitos de los atributos soportados.
+
+
+## Fase M: atribución temporal conservadora de afirmaciones
+
+La revisión de precisión detectó un riesgo: una fecha presente en cualquier parte de una línea podía terminar asociada a una afirmación de otro personaje o de otra oración.
+
+Correcciones:
+- La referencia temporal de una afirmación ahora se busca únicamente dentro de su misma oración.
+- Si no hay fecha o índice temporal explícito en esa oración, la afirmación queda sin referencia temporal.
+- Si hay más de una referencia temporal en la misma oración, el extractor no elige por proximidad: deja la atribución temporal sin resolver.
+- Se mantiene el fragmento de evidencia y los offsets UTF-16 absolutos de la afirmación original.
+- Se añadieron pruebas para fechas de oraciones vecinas, múltiples fechas ambiguas, offsets absolutos y aislamiento de proyecto.
+
+**Criterio de precisión:** es preferible conservar una afirmación sin fecha antes que inventar una asociación temporal. La falta de fecha no significa que el hecho carezca de tiempo; significa que el texto analizado no permite asignárselo con seguridad.
+
+**Límite pendiente:** el extractor de afirmaciones continúa cubriendo solo edad, ubicación y determinados cargos explícitos. No debe confundirse esta mejora de atribución temporal con una cobertura completa de hechos narrativos, ni con una comprensión semántica general.

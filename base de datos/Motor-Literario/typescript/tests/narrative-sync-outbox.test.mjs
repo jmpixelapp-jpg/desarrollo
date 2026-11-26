@@ -97,6 +97,14 @@ test("encola generaciones con secuencia de escritor y deduplica reintentos idén
     const entries = await outbox.loadEntries(projectId);
     assert.deepEqual(entries.map(entry => entry.generation), [1, 2]);
     assert.deepEqual(entries.map(entry => entry.sequence), [1, 2]);
+    const audit = await outbox.auditProject(projectId);
+    assert.equal(audit.intact, true);
+    assert.equal(audit.operationCount, 2);
+    assert.equal(audit.pendingCount, 2);
+    assert.equal(audit.writerCount, 1);
+    assert.equal(audit.firstGeneration, 1);
+    assert.equal(audit.lastGeneration, 2);
+    assert.deepEqual(audit.issues, []);
   } finally {
     outbox.close();
   }
@@ -507,5 +515,48 @@ test("dos instalaciones pueden enviar la misma generación al mismo diario sin c
     outboxA.close();
     outboxB.close();
     receiver.close();
+  }
+});
+
+
+test("auditProject detecta envolturas alteradas y reporta el digest inválido", async () => {
+  const name = databaseName();
+  const outbox = new IndexedDbNarrativeSyncOutbox({ databaseName: name });
+  const projectId = "outbox-audit-corrupt-" + randomUUID();
+
+  try {
+    await outbox.enqueueContinuityIndex({
+      index: makeIndex(projectId, 1, 100),
+      writerId: "replica-audit"
+    });
+    const database = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(name, 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction("outbox-operations", "readwrite");
+      const store = transaction.objectStore("outbox-operations");
+      const request = store.get([projectId, 1]);
+      request.onsuccess = () => {
+        const entry = request.result;
+        entry.envelope = {
+          ...entry.envelope,
+          digest: "sha256:" + "0".repeat(64)
+        };
+        store.put(entry);
+      };
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    database.close();
+
+    const audit = await outbox.auditProject(projectId);
+    assert.equal(audit.intact, false);
+    assert.ok(audit.issues.includes("INVALID_ENVELOPE_DIGEST"));
+  } finally {
+    outbox.close();
   }
 });

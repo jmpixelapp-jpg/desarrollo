@@ -191,3 +191,30 @@ test("reconoce acciones de movimiento y llegada en varios tiempos sin aceptar pr
   assert.deepEqual(actions.map(signal => signal.surface), ["camina", "llegará"]);
   assert.ok(actions.every(signal => signal.label === "movement" || signal.label === "arrival"));
 });
+
+test("la ingesta expone acontecimientos declarados y participantes con evidencia absoluta", () => {
+  const text = "Personaje Ana\\nACONTECIMIENTO: Ana desaparece mañana.";
+  const baseOffset = 240;
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "chapter-events", revision: 6,
+    text, baseOffset
+  });
+  assert.equal(result.entityCandidates.length, 1);
+  assert.equal(result.eventCandidates.length, 1);
+  const event = result.eventCandidates[0];
+  assert.equal(event.label, "Ana desaparece mañana.");
+  assert.deepEqual(event.participants, [result.entityCandidates[0].id]);
+  assert.equal(
+    text.slice(event.evidence[0].start - baseOffset, event.evidence[0].end - baseOffset),
+    event.label
+  );
+  assert.equal(event.evidence[0].start, baseOffset + text.indexOf(event.label));
+});
+
+test("la ingesta no inventa acontecimientos cuando falta la etiqueta explícita", () => {
+  const result = ingestNarrativeBookText({
+    projectId: "p", documentId: "ordinary-prose", revision: 1,
+    text: "Personaje Ana desaparece mañana."
+  });
+  assert.deepEqual(result.eventCandidates, []);
+});

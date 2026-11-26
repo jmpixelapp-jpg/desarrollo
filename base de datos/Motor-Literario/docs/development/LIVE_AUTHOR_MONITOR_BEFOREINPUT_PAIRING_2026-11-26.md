@@ -527,11 +527,12 @@ La prueba Chromium ejecuta automatización del pipeline DOM del navegador. No eq
 
 También se cerró el orden reentrante en que un listener posterior cancela beforeinput y desenfoca el textarea antes de que termine la propagación. Si handleBlur emitiera missing-input inmediatamente, se adelantaría a la microtarea que confirma defaultPrevented y produciría un falso positivo.
 
-Para operaciones no pertenecientes a una composición activa, handleBlur ahora captura la identidad del beforeinput pendiente y difiere una microtarea la decisión missing-input. La microtarea de cancelación, programada antes, se ejecuta primero: si el evento fue cancelado, libera la pareja y la comprobación de blur ya no encuentra la operación. Si no fue cancelado y el pending permanece, se exige snapshot con missing-input. Cuando compositionActive sigue true, la fuente se suspende inmediatamente con resync-required; no se espera a que una composición abierta sobreviva al cambio de foco.
+Para operaciones de texto ordinarias, handleBlur no declara por sí solo missing-input: el estándar HTML permite que el input de textarea se entregue como una tarea posterior. La fuente conserva el par y expone pendingInput=true en getState(), de modo que un input tardío todavía puede completar y publicar el delta. Si llega otro beforeinput sin completar el anterior, se confirma missing-input; pagehide, ocultación, freeze o retirada de la última suscripción invalidan la continuidad y liberan el estado. Cuando compositionActive sigue true, la fuente se suspende inmediatamente con resync-required porque una composición abierta no se conserva tras blur.
 
 Las pruebas cubren:
 - cancelación tardía y blur dentro del mismo listener posterior, sin error ni pérdida de continuidad;
-- beforeinput no cancelado seguido de blur, que sigue suspendiendo con missing-input;
+- beforeinput no cancelado seguido de blur y luego input tardío, que se acepta con el delta correcto;
+- beforeinput no cancelado seguido de blur y un segundo beforeinput sin input intermedio, que confirma missing-input;
 - composición activa que pierde el foco, suspendida de inmediato;
-- Chromium con teclado automatizado: el listener llama preventDefault() y element.blur() dentro de la misma propagación, verifica un blur y cero input, y confirma que pendingInput queda liberado sin diagnóstico.
+- Chromium con teclado automatizado: el listener llama preventDefault() y element.blur() dentro de la misma propagación, verifica un blur y cero input, y confirma que la microtarea libera pendingInput sin diagnóstico.
 

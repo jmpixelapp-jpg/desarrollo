@@ -50,3 +50,29 @@ test("la solicitud de almacenamiento persistente devuelve false cuando el navega
     else delete globalThis.navigator;
   }
 });
+
+
+test("el diagnóstico informa cuota estimada y respeta la decisión del navegador", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  try {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {
+        storage: {
+          estimate: async () => ({ usage: 128, quota: 1024 }),
+          persisted: async () => false,
+          persist: async () => true
+        }
+      }
+    });
+    const store = new IndexedDbProjectStore();
+    const report = await store.inspectStorageHealth();
+    assert.equal(report.usageBytes, 128);
+    assert.equal(report.quotaBytes, 1024);
+    assert.equal(report.persistentStorage, false);
+    assert.equal(await store.requestPersistentStorage(), true);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "navigator", original);
+    else delete globalThis.navigator;
+  }
+});

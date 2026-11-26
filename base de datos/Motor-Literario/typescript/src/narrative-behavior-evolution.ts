@@ -200,7 +200,6 @@ export function detectNarrativeBehaviorEvolution(
     groups.set(key, group);
   }
   const documentOrder = new Map((input.orderedDocumentIds ?? []).map((id, index) => [id, index]));
-  const actionsById = new Map(allActions.map(action => [action.id, action]));
   const output: NarrativeBehaviorShiftCandidate[] = [];
   const addShift = (previous: NarrativeActionCandidate, current: NarrativeActionCandidate,
                     chronology: NarrativeBehaviorShiftCandidate["chronology"]) => {
@@ -288,12 +287,14 @@ export function detectNarrativeBehaviorEvolution(
         const currentRevisions = new Set(currentSet.map(item => item.evidence.revision));
         // Varias revisiones del mismo documento no tienen orden narrativo garantizado.
         if (previousRevisions.size !== 1 || currentRevisions.size !== 1) continue;
-        const previous = [...previousSet].sort((a,b) =>
+        const previousOrdered = [...previousSet].sort((a,b) =>
           a.evidence.start-b.evidence.start || a.id.localeCompare(b.id)
-        ).at(-1)!;
-        const current = [...currentSet].sort((a,b) =>
+        );
+        const currentOrdered = [...currentSet].sort((a,b) =>
           a.evidence.start-b.evidence.start || a.id.localeCompare(b.id)
-        )[0]!;
+        );
+        const previous = previousOrdered[previousOrdered.length - 1]!;
+        const current = currentOrdered[0]!;
         addShift(previous, current, "explicit-document-order");
       }
     }

@@ -528,3 +528,12 @@ Se refuerza la continuidad de motivaciones entre capítulos sin interpretar auto
 Durante esta fase también se corrigieron dos expresiones regulares de la fase AD que tenían escapes duplicados y no reconocían límites de palabra. Se añadieron pruebas para motivos causales, propósitos compuestos, continuidad y sustitución explícita de motivaciones, incluida una integración completa del pipeline.
 
 **Límite:** «reemplazada» describe una relación textual entre candidatos, no demuestra que el personaje haya dejado de sentir realmente la motivación anterior. Todos los resultados continúan como candidatos revisables.
+
+## Fase AF: integridad de cláusulas motivacionales causales
+
+- Se corrigió el patrón de extracción de construcciones «porque quiere/desea/teme/necesita…» para conservar el verbo que expresa el estado motivacional.
+- Ejemplo: «Mara actúa porque teme perder a su familia» produce el contenido «teme perder a su familia», no solo «perder a su familia».
+- La evidencia continúa delimitando exactamente la cláusula extraída en offsets UTF-16 del documento.
+- Se añadió una prueba de integración del pipeline para impedir que futuras modificaciones eliminen el verbo causal.
+- Esta corrección no amplía la inferencia psicológica: solo conserva íntegra la formulación explícita del narrador.
+- La ejecución CI para el head actualizado sigue pendiente; no se declara aprobada la suite.

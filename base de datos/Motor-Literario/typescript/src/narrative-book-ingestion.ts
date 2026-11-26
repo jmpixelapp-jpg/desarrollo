@@ -1,4 +1,7 @@
-import type { NarrativeEntity } from "./narrative-knowledge";
+import {
+  extractNarrativeEntities,
+  type NarrativeEntity
+} from "./narrative-knowledge";
 import {
   discoverNarrativeObservationCandidates,
   MAX_NARRATIVE_OBSERVATION_TEXT_UNITS,
@@ -87,6 +90,8 @@ export interface NarrativeBookIngestionResult {
   readonly chapters: readonly NarrativeBookChapter[];
   readonly paragraphs: readonly NarrativeBookParagraph[];
   readonly signals: readonly NarrativeBookSignal[];
+  /** Entidades nombradas explícitamente con etiquetas como «Personaje Ana»; candidatas, no confirmadas. */
+  readonly entityCandidates: readonly NarrativeEntity[];
   /** Acciones vinculadas a entidades conocidas; siguen siendo candidatos revisables. */
   readonly observations: readonly NarrativeObservationCandidate[];
   /** Vínculos temporales/causales/contrastivos explícitos entre acciones; requieren revisión. */
@@ -379,9 +384,26 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
   }
 
   const totalWords = countWords(input.text);
-  const hasEntities = (input.entities?.length ?? 0) > 0;
-  const observationStatus = !hasEntities ? "no-entities" as const
-    : input.text.length > MAX_NARRATIVE_OBSERVATION_TEXT_UNITS ? "omitted-text-budget" as const
+  // Solo promueve nombres a candidatos cuando el propio texto aporta una etiqueta explícita.
+  // No intenta adivinar nombres propios a partir de mayúsculas aisladas.
+  const entityCandidates = (input.entities?.length ?? 0) === 0 &&
+      input.text.length <= MAX_NARRATIVE_OBSERVATION_TEXT_UNITS
+    ? extractNarrativeEntities(
+        input.projectId,
+        input.documentId,
+        input.revision,
+        input.text,
+        Date.now(),
+        input.baseOffset ?? 0
+      )
+    : [];
+  const entitiesForObservation = (input.entities?.length ?? 0) > 0
+    ? input.entities!
+    : entityCandidates;
+  const hasEntities = entitiesForObservation.length > 0;
+  const observationStatus = input.text.length > MAX_NARRATIVE_OBSERVATION_TEXT_UNITS
+    ? "omitted-text-budget" as const
+    : !hasEntities ? "no-entities" as const
     : "extracted" as const;
   const observations = observationStatus === "extracted"
     ? discoverNarrativeObservationCandidates({
@@ -389,7 +411,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
         documentId: input.documentId,
         revision: input.revision,
         text: input.text,
-        entities: input.entities ?? [],
+        entities: entitiesForObservation,
         baseOffset: input.baseOffset ?? 0
       })
     : [];
@@ -414,6 +436,7 @@ export function ingestNarrativeBookText(input: NarrativeBookIngestionInput): Nar
     chapters,
     paragraphs,
     signals,
+    entityCandidates,
     observations,
     actionLinks,
     observationStatus,

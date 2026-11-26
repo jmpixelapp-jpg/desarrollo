@@ -57,6 +57,114 @@ test("clasifica tiempo activo, pausas e inactividad con reloj monotónico", () =
   assert.ok(idle.estimatedWordsPerMinute > 0);
 });
 
+test("separa unidades typing de candidatos IME provisionales sin alterar los deltas brutos", () => {
+  const { monitor, setTime, open, change, queued } = fixture();
+  open("chapter-1", "abc");
+
+  const admit = (sequence, start, end, replacement, activityKind, ticketId) => {
+    const result = monitor.recordAdmission({
+      ...change(sequence, sequence - 1, start, end, replacement),
+      activityKind
+    }, queued(ticketId));
+    monitor.recordCommit({ ticketId, status: "applied", revision: sequence });
+    return result;
+  };
+
+  admit(1, 3, 3, "xy", "typing", "units-1");
+  // IME candidate 1, candidate 2 replacing candidate 1, then cancellation.
+  admit(2, 5, 5, "候", "composition", "units-2");
+  admit(3, 5, 6, "候補", "composition", "units-3");
+  admit(4, 5, 7, "", "composition", "units-4");
+  admit(5, 3, 3, "paste", "paste", "units-5");
+
+  const snapshot = monitor.getSnapshot("chapter-1");
+  assert.equal(snapshot.insertedCharacters, 8,
+    "the legacy raw total still counts every replacement applied, including provisional candidates");
+  assert.equal(snapshot.deletedCharacters, 3);
+  assert.equal(snapshot.typingInsertedCharacters, 2);
+  assert.equal(snapshot.compositionInsertedCharacters, 3);
+  assert.equal(snapshot.compositionDeletedCharacters, 3);
+  assert.equal(snapshot.activityUnitMetricsComplete, true);
+  assert.equal(snapshot.compositionChanges, 3);
+  assert.equal(snapshot.currentDocumentLength, 9);
+
+  setTime(5_000);
+  const timed = monitor.getSnapshot("chapter-1");
+  assert.ok(timed.estimatedWordsPerMinute > 0);
+  assert.equal(timed.insertedCharactersPerMinute,
+    timed.typingInsertedCharacters * 60_000 / timed.activeDurationMs,
+    "ordinary writing pace uses only explicitly classified typing units");
+
+  const checkpoint = monitor.createCheckpoint("chapter-1", 10_000);
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.typingInsertedCharacters, 2);
+  assert.equal(checkpoint.compositionInsertedCharacters, 3);
+  assert.equal(checkpoint.compositionDeletedCharacters, 3);
+  assert.equal(checkpoint.activityUnitMetricsComplete, true);
+
+  const restoredMonitor = fixture().monitor;
+  const restored = restoredMonitor.restoreCheckpoint(
+    checkpoint,
+    { documentId: "chapter-1", text: "abcpaste", revision: 5, sequence: 5 },
+    "book-1",
+    10_001
+  );
+  assert.equal(restored.typingInsertedCharacters, 2);
+  assert.equal(restored.compositionInsertedCharacters, 3);
+  assert.equal(restored.compositionDeletedCharacters, 3);
+  assert.equal(restored.activityUnitMetricsComplete, true);
+});
+
+test("restaurar un checkpoint antiguo marca incompleta la cobertura de unidades tipadas", () => {
+  const first = fixture();
+  first.open("chapter-1", "hello");
+  first.monitor.recordAdmission({
+    ...first.change(1, 0, 5, 5, "old"),
+    activityKind: "composition"
+  }, first.queued("legacy-composition"));
+  first.monitor.recordCommit({ ticketId: "legacy-composition", status: "applied", revision: 1 });
+  const modern = first.monitor.createCheckpoint("chapter-1", 100);
+  assert.ok(modern);
+
+  const {
+    typingInsertedCharacters,
+    compositionInsertedCharacters,
+    compositionDeletedCharacters,
+    activityUnitMetricsComplete,
+    ...legacyCheckpoint
+  } = modern;
+  void typingInsertedCharacters;
+  void compositionInsertedCharacters;
+  void compositionDeletedCharacters;
+  void activityUnitMetricsComplete;
+
+  const restoredMonitor = fixture().monitor;
+  const restored = restoredMonitor.restoreCheckpoint(
+    legacyCheckpoint,
+    { documentId: "chapter-1", text: "helloold", revision: 1, sequence: 1 },
+    "book-1",
+    101
+  );
+  assert.equal(restored.activityUnitMetricsComplete, false);
+  assert.equal(restored.typingInsertedCharacters, 0,
+    "legacy character totals cannot be reclassified as typing without evidence");
+  assert.equal(restored.insertedCharacters, 3);
+
+  restoredMonitor.recordAdmission({
+    documentId: "chapter-1",
+    sequence: 2,
+    baseRevision: 1,
+    start: 8,
+    end: 8,
+    replacement: "x",
+    activityKind: "typing"
+  }, { status: "queued", ticketId: "new-typing" });
+  const afterNewTyping = restoredMonitor.getSnapshot("chapter-1");
+  assert.equal(afterNewTyping.typingInsertedCharacters, 1);
+  assert.equal(afterNewTyping.activityUnitMetricsComplete, false,
+    "new observations do not retroactively complete missing historical metrics");
+});
+
 test("registra rechazos sin sumarlos a los caracteres aceptados", () => {
   const { monitor, open, change } = fixture();
   open();

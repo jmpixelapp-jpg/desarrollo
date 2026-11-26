@@ -178,3 +178,52 @@ test("el índice de metadatos enumera revisiones sin exponer cuerpos documentale
     await store.close();
   }
 });
+
+
+test("actualiza continuidad tras una edición aunque el adaptador no ofrezca extracción de entidades", async () => {
+  const store = new IndexedDbProjectStore();
+  // Elimina las capacidades de extracción clásica para ejercitar el camino
+  // independiente de documentos + índice de continuidad.
+  for (const name of [
+    "saveEntity", "loadEntities",
+    "saveRelation", "loadRelations",
+    "saveEvent", "loadEvents",
+    "saveIdea", "loadIdeas",
+    "saveAssertion", "loadAssertions"
+  ]) {
+    store[name] = undefined;
+  }
+  const id = projectId();
+  const api = new HostEngineApi({ store });
+  const firstText = "El tema central es la memoria compartida que une a dos ciudades.";
+  const changedText = "El tema central es la culpa compartida que divide a dos ciudades.";
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Continuidad independiente" });
+    await api.openDocument({
+      documentId: "chapter-1", text: firstText, revision: 0, sequence: 0
+    });
+    await api.flushPendingChanges();
+    const before = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(before);
+    const admission = api.onEditorChange({
+      documentId: "chapter-1",
+      sequence: 1,
+      baseRevision: 0,
+      start: 0,
+      end: firstText.length,
+      replacement: changedText
+    });
+    assert.equal(admission.status, "queued");
+    await api.flushPendingChanges();
+
+    const after = await store.loadNarrativeIdeaContinuityIndex(id);
+    assert.ok(after);
+    assert.ok(after.generation > before.generation);
+    assert.equal(after.sourceRevisions[0].revision, 1);
+    assert.equal(after.occurrences[0].text, "la culpa compartida que divide a dos ciudades");
+  } finally {
+    api.dispose();
+    await store.close();
+  }
+});

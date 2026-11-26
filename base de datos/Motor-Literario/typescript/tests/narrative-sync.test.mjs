@@ -104,6 +104,7 @@ test("un fallo de transporte registra el intento y conserva las operaciones", as
 
 test("valida el aislamiento del proyecto y los límites del lote", async () => {
   const outbox = createOutbox([operation("wrong-project", 1, { projectId: "project-b" })]);
+  outbox.loadPendingSyncOperations = async () => outbox.pending;
   const coordinator = new NarrativeSyncCoordinator(outbox, {
     async push() { throw new Error("no debe enviar"); }
   });

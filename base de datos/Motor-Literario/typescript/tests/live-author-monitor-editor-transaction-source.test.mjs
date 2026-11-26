@@ -678,3 +678,78 @@ test("rechaza activityKind fuera del contrato sin publicar métricas desconocida
     f.source.dispose();
   }
 });
+
+
+test("reintenta cerrar la suscripción fallida antes de reanudar el proveedor", () => {
+  const snapshot = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(snapshot);
+  let unsubscribeAttempts = 0;
+  const provider = {
+    getSnapshot: documentId => editor.getSnapshot(documentId),
+    subscribeTransactions(documentId, listener) {
+      const unsubscribe = editor.subscribeTransactions(documentId, listener);
+      return () => {
+        unsubscribeAttempts += 1;
+        if (unsubscribeAttempts === 1) throw new Error("first_provider_detach_failed");
+        unsubscribe();
+      };
+    }
+  };
+  const errors = [];
+  const source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: snapshot.documentId,
+    initialSnapshot: snapshot,
+    provider,
+    onError: error => errors.push(error)
+  });
+  const stop = source.subscribeChanges(() => {});
+
+  source.requireResynchronization("test provider detach retry");
+  assert.equal(source.getState().needsResync, true);
+  assert.equal(unsubscribeAttempts, 1);
+  assert.equal(editor.listeners.size, 1, "el handle fallido se conserva");
+
+  const state = source.resynchronize(snapshot);
+  assert.equal(state.needsResync, false);
+  assert.equal(unsubscribeAttempts, 2, "la suscripción anterior se cierra antes de abrir la nueva");
+  assert.equal(editor.subscribeCount, 2);
+  assert.equal(editor.listeners.size, 1, "solo queda activo el listener nuevo");
+  assert.equal(errors.some(error => /first_provider_detach_failed/.test(error.message)), true);
+
+  source.dispose();
+  assert.equal(unsubscribeAttempts, 3);
+  assert.equal(editor.listeners.size, 0);
+  stop();
+});
+
+test("dispose repetido vuelve a intentar liberar el listener del proveedor", () => {
+  const snapshot = { documentId: "chapter-1", text: "abc", revision: 0, sequence: 0 };
+  const editor = new FakeTransactionalEditor(snapshot);
+  let unsubscribeAttempts = 0;
+  const provider = {
+    getSnapshot: documentId => editor.getSnapshot(documentId),
+    subscribeTransactions(documentId, listener) {
+      const unsubscribe = editor.subscribeTransactions(documentId, listener);
+      return () => {
+        unsubscribeAttempts += 1;
+        if (unsubscribeAttempts === 1) throw new Error("dispose_detach_failed_once");
+        unsubscribe();
+      };
+    }
+  };
+  const source = new LiveAuthorMonitorEditorTransactionSource({
+    documentId: snapshot.documentId,
+    initialSnapshot: snapshot,
+    provider
+  });
+  source.subscribeChanges(() => {});
+
+  source.dispose();
+  assert.equal(unsubscribeAttempts, 1);
+  assert.equal(editor.listeners.size, 1, "el primer fallo no puede ocultarse borrando el disposer");
+  source.dispose();
+  assert.equal(unsubscribeAttempts, 2);
+  assert.equal(editor.listeners.size, 0);
+  source.dispose();
+  assert.equal(unsubscribeAttempts, 2, "una vez liberado, dispose sigue siendo idempotente");
+});

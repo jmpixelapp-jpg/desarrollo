@@ -264,3 +264,23 @@ La rama de trabajo sigue siendo `main`. El HEAD observado durante esta actualiza
 El PR #50 propone una base durable de bandeja de salida para sincronización remota, inspección del almacenamiento y nuevas regresiones de cronología. Sigue siendo trabajo en revisión: no debe describirse como sincronización multidispositivo completa ni como funcionalidad integrada en `main`. Sus límites declarados incluyen transporte, autenticación, protocolo de conflictos remotos y pruebas de integración entre dispositivos.
 
 La documentación debe seguir separando tres estados: implementación presente, cobertura de pruebas escrita y ejecución de pruebas confirmada. Son evidencias distintas.
+
+
+## 9. Coordinación del transporte de sincronización (26 de noviembre de 2026)
+
+Se añadió `typescript/src/narrative-sync.ts`, exportado desde el punto de entrada público. El módulo define los puertos `SyncOutboxPort` y `SyncTransport` y el coordinador `NarrativeSyncCoordinator`. Su responsabilidad es orquestar lotes pendientes sin acoplar el núcleo a HTTP, credenciales ni a un proveedor remoto.
+
+Garantías implementadas:
+- Lotes configurables de 1 a 500 operaciones (50 por defecto).
+- Validación del aislamiento por proyecto, IDs, secuencias por dispositivo, timestamps y contadores.
+- Coalescencia de llamadas simultáneas del mismo proyecto dentro de una instancia.
+- Validación de que el servidor solo clasifique IDs incluidos en el lote y que no haya clasificaciones duplicadas.
+- Registro de intentos antes de retirar operaciones aceptadas.
+- Retirada exclusivamente de IDs confirmados por `acknowledgedOperationIds`; conflictos y reintentos permanecen pendientes.
+- Ante fallo de transporte o respuesta inválida, se registra el intento y se propaga el error sin confirmar operaciones.
+
+Se añadió `tests/narrative-sync.test.mjs` con cobertura de acuses selectivos, conflictos, reintentos, IDs ajenos, coalescencia, errores de transporte, aislamiento de proyecto y tamaño máximo de lote. Se documentó el límite entre el coordinador y los adaptadores en `docs/development/NARRATIVE_SYNC_TRANSPORT_CONTRACT.md`.
+
+**Límite importante:** esta tanda implementa el coordinador y sus contratos, no el transporte remoto ni la sincronización multidispositivo completa. La rama principal observada todavía no contiene la bandeja durable propuesta por el PR #52; por tanto, la implementación de `SyncOutboxPort` debe conectarse a un almacenamiento que cumpla el contrato antes de activar el coordinador en producción. Siguen pendientes autenticación/autorización, API versionada, idempotencia del servidor, backoff, resolución interactiva de conflictos y pruebas reales entre dispositivos.
+
+La rama de esta tanda parte del commit `976d2b262ac0bf6ba79d39aac56dfbaee3aef744` de `main`. Los tests están escritos, pero todavía no se ha observado una ejecución de `npm run typecheck` ni `npm test` para esta rama; no se declara CI verde.

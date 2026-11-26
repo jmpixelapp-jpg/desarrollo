@@ -17,6 +17,9 @@ test("agrupa acciones de una oración y reúne participantes sin inferir causali
   assert.deepEqual(events[0].participantEntityIds, [
     "character:elian", "character:mara", "object:espada"
   ]);
+  assert.deepEqual(events[0].characterParticipantEntityIds, [
+    "character:elian", "character:mara"
+  ]);
   assert.equal(events[0].label, "Mara protegió a Elian y encontró la Espada Solar.");
   assert.equal(events[1].actionCandidateIds.length, 1);
   assert.equal(events.every(event => event.reviewStatus === "candidate"), true);

@@ -5,7 +5,7 @@ import { buildNarrativeLocationTrajectories } from "../dist/motor-literario.js";
 function movement({
   documentId, text, action, surface, location, transition,
   polarity = "affirmed", tense = "past-preterite",
-  effectStatus = "candidate", baseOffset = 0
+  effectStatus = "candidate", baseOffset = 0, actorId = "character:ana", actorName = "Ana"
 }) {
   const actionStart = text.indexOf(surface);
   const locationStart = text.indexOf(location);
@@ -19,11 +19,11 @@ function movement({
     observationId: "obs:" + documentId,
     locationEntityId: "location:" + location.toLowerCase().replace(/\s+/gu, "-"),
     transition,
-    actorEntityId: "character:ana",
+    actorEntityId: actorId,
     polarity, grammaticalTense: tense, effectStatus,
     actionEvidence: evidence(actionStart, actionStart + surface.length, surface),
     locationEvidence: evidence(locationStart, locationStart + location.length, location),
-    actorEvidence: evidence(0, 3, "Ana"),
+    actorEvidence: evidence(0, actorName.length, actorName),
     relationEvidence: evidence(
       actionStart + surface.length, locationStart,
       text.slice(actionStart + surface.length, locationStart)
@@ -79,15 +79,23 @@ test("no crea secuencia de viaje con salida negada, llegada futura o actor disti
     action: "llegar", surface: "llegará", location: "puerto", transition: "arrived",
     tense: "future", effectStatus: "prospective"
   });
-  const [trajectory] = buildNarrativeLocationTrajectories({
+  const differentActorArrival = movement({
+    documentId: "chapter-2", text: "Bruno llegó al puerto.",
+    action: "llegar", surface: "llegó", location: "puerto", transition: "arrived",
+    actorId: "character:bruno", actorName: "Bruno"
+  });
+  const result = buildNarrativeLocationTrajectories({
     projectId: "book-1",
     documentOrder: [
       { documentId: "chapter-1", chapterOrder: 0 },
       { documentId: "chapter-2", chapterOrder: 1 }
     ],
-    transitions: [departure, arrival]
+    transitions: [departure, arrival, differentActorArrival]
   });
-  assert.deepEqual(trajectory.movementSequences, []);
+  const anaTrajectory = result.find(item => item.actorEntityId === "character:ana");
+  const brunoTrajectory = result.find(item => item.actorEntityId === "character:bruno");
+  assert.deepEqual(anaTrajectory.movementSequences, []);
+  assert.deepEqual(brunoTrajectory.movementSequences, []);
 });
 
 test("rechaza evidencia fuera del contexto y órdenes editoriales duplicados", () => {

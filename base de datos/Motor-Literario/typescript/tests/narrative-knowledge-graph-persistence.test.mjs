@@ -336,3 +336,57 @@ test("rechaza reparar tombstones o manifiestos inexistentes sin mutar datos", as
   );
   assert.equal(tables.manifests.get(key).status, "deleted");
 });
+
+
+test("reconcilia referencias cruzadas rotas sin modificar el grafo", async () => {
+  const { store, tables } = createMemoryStore();
+  const snapshot = createNarrativeKnowledgeGraphSnapshot("novel-refs", [
+    { documentId: "chapter-refs", revision: 1, text: "personaje Mara aparece." }
+  ], { now: 900 });
+  await persistNarrativeKnowledgeGraphSnapshotWithManifests(store, snapshot, 901);
+  const entity = [...tables.entities.values()][0];
+  assert.ok(entity, "el snapshot debe aportar una entidad válida");
+  tables.relations.set("relation:broken", {
+    projectId: "novel-refs", id: "relation:broken",
+    fromEntityId: entity.id, toEntityId: "entity:missing",
+    relationType: "knows", evidence: []
+  });
+  tables.events.set("event:broken", {
+    projectId: "novel-refs", id: "event:broken", label: "Encuentro",
+    participants: ["entity:missing"], evidence: []
+  });
+  tables.assertions.set("assertion:broken", {
+    projectId: "novel-refs", id: "assertion:broken",
+    entityId: "entity:missing", entityName: "Desconocido",
+    attribute: "role", value: "test",
+    evidence: { documentId: "chapter-refs", revision: 1, start: 0, end: 1, excerpt: "x" },
+    capturedAt: 902
+  });
+  const idea = [...tables.ideas.values()][0];
+  if (idea) {
+    tables.ideas.set(idea.id, {
+      ...idea,
+      relatedEntityIds: ["entity:missing"],
+      relatedIdeaIds: ["idea:missing"]
+    });
+  } else {
+    tables.ideas.set("idea:broken", {
+      projectId: "novel-refs", id: "idea:broken", text: "Idea",
+      status: "IDEA", originDocumentId: "chapter-refs", sourceProjectName: "Novela",
+      evidence: [], relatedEntityIds: ["entity:missing"], relatedIdeaIds: ["idea:missing"]
+    });
+  }
+  const before = JSON.stringify([...tables.relations, ...tables.events, ...tables.assertions, ...tables.ideas]);
+  const report = await reconcileNarrativeDocumentProjections(store, "novel-refs");
+  const codes = new Set(report.issues.map(issue => issue.code));
+  assert.ok(codes.has("missing-relation-entity"));
+  assert.ok(codes.has("missing-event-participant"));
+  assert.ok(codes.has("missing-assertion-entity"));
+  assert.ok(codes.has("missing-related-entity"));
+  assert.ok(codes.has("missing-related-idea"));
+  assert.equal(
+    JSON.stringify([...tables.relations, ...tables.events, ...tables.assertions, ...tables.ideas]),
+    before,
+    "la reconciliación no debe mutar registros"
+  );
+});

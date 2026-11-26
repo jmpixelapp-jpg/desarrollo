@@ -418,3 +418,10 @@ Pruebas nuevas en `tests/epub-reader.test.mjs`: metadatos y spine, localizadores
 
 
 La inspección `EpubBookReader.inspect(source)` también recorre el spine y entrega `extractedBlocks`, `emptySpineItems` y advertencias de metadatos o documentos sin bloques textuales. Así, la importación puede evaluar si el archivo realmente produjo contenido antes de confirmar su incorporación al proyecto; no debe confundir un EPUB válido como ZIP con un libro cuya extracción textual sea completa.
+
+
+### Resolución de evidencias literarias al libro original
+
+El módulo `src/book-evidence.ts` exporta `resolveBookEvidence(book, chapter, start, end)`. Recibe un rango UTF-16 del capítulo (la misma convención que `String.slice` y el motor) y devuelve el fragmento exacto, la identidad de la fuente/libro/capítulo y los bloques originales que se solapan con el rango. Cada fragmento conserva ID, secuencia, tipo, offsets relativos al capítulo y al bloque, cita exacta y localizador (incluidas página/spine/sección cuando el lector las proporciona).
+
+Los separadores de párrafo introducidos por la ingesta no se atribuyen falsamente a un bloque de origen. Una evidencia que cruza varios párrafos devuelve varios fragmentos, permitiendo volver a cada pasaje. Esta API es la capa de trazabilidad para conectar entidades, escenas, ideas y acontecimientos del análisis con la fuente primaria; no altera ni sustituye los registros de conocimiento narrativo existentes.

@@ -353,3 +353,12 @@ Se implementó `applyNarrativeReferenceRepair`: exige aprobación explícita, re
 La operación devuelve un registro de auditoría con valores anterior/nuevo, campo modificado, IDs y fecha. **La persistencia durable de ese registro aún corresponde al llamador**, porque el contrato actual de `ProjectStore` no define un almacén de auditoría genérico. Se añadieron pruebas para aprobación, CAS, replay y procedencia obsoleta.
 
 **Pendiente:** ejecutar `npm run typecheck` y `npm test` en Node 22.13+ y, después, incorporar almacenamiento durable de auditoría al contrato del repositorio.
+
+
+## Auditoría durable de reparaciones
+
+Se amplió `ProjectStore` con operaciones append-only para guardar y consultar auditorías de reparación. IndexedDB incorpora el almacén `narrative-reference-repair-audits`, indexado por proyecto, y migra el esquema a versión 26. La inserción es idempotente por `operationId`; una reutilización del ID con contenido operativo distinto se rechaza.
+
+La API pública `applyNarrativeReferenceRepair` ahora exige soporte de auditoría durable, asigna un ID determinista a la operación y guarda el registro antes de devolver éxito. La escritura de la referencia y la auditoría no son una única transacción; si falla la auditoría después del CAS, el reintento completa el registro pendiente.
+
+Se añadieron pruebas de persistencia y consulta de la auditoría usando el almacén de memoria. **Pendiente:** validar typecheck, suite completa y migración IndexedDB real en navegador/Node 22.13+.

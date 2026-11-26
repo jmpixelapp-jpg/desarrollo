@@ -77,6 +77,10 @@ En construcciones pasivas, el extractor puede conservar por separado el sujeto p
 - Señales: 20.000; el resultado informa cuántas se omitieron.
 - No se trunca silenciosamente: `coverage.truncated` y `coverage.omittedSignals` exponen la cobertura limitada.
 
+### Decodificación y BOM UTF-8
+
+El lector acepta TXT y Markdown UTF-8 estricto. Si el texto comienza con BOM UTF-8 (`U+FEFF`), la segmentación lo omite al reconocer el primer encabezado, pero conserva el desplazamiento de una unidad UTF-16 para que las evidencias posteriores sigan apuntando al texto original sin desplazar offsets. No se modifica el contenido fuente devuelto por el lector.
+
 ### Complemento personal explícito
 
 El descubrimiento de observaciones puede conservar un candidato sintáctico para el patrón local «verbo + a + nombre de personaje conocido». Se guarda el ID de la entidad y la evidencia literal del nombre con offsets del documento. Esto no afirma por sí solo una relación semántica de víctima, destinatario, receptor o paciente. La coincidencia exige una entidad única registrada; una mención anterior al verbo no se reutiliza como objeto. Las pruebas cubren «Ana encontró a Bruno» y «Bruno encontró a Ana» para evitar invertir los participantes.

@@ -100,7 +100,7 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
     return fail("este entorno no ofrece DecompressionStream para entradas ZIP comprimidas.");
   }
   try {
-    const stream = new Blob([data]).stream().pipeThrough(
+    const stream = new Blob([data.slice().buffer as ArrayBuffer]).stream().pipeThrough(
       new DecompressionStream("deflate-raw" as CompressionFormat)
     );
     return new Uint8Array(await new Response(stream).arrayBuffer());
@@ -227,7 +227,7 @@ function blocksFromXhtml(xhtml: string, path: string, spineIndex: number, startS
   for (const token of tokens) {
     if (token.startsWith("<!--") || token.startsWith("<?") || token.startsWith("<!")) continue;
     if (!token.startsWith("<")) {
-      if (currentKind) current.push(token);
+      if (currentKind && !stack.some(item => ["script","style","svg","math"].includes(item))) current.push(token);
       continue;
     }
     const closing = /^<\s*\//u.test(token);

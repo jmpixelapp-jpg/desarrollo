@@ -92,10 +92,10 @@ function validateOccurrence(
 
 function normalizeExactPhrase(value: string): string {
   return value.normalize("NFKD")
-    .replace(/\\p{M}/gu, "")
+    .replace(/\p{M}/gu, "")
     .toLocaleLowerCase("es")
-    .replace(/[\\p{P}\\p{S}]+/gu, " ")
-    .replace(/\\s+/gu, " ")
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .replace(/\s+/gu, " ")
     .trim()
     .normalize("NFKC");
 }

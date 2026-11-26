@@ -44,3 +44,27 @@ test("conserva offsets UTF-16 de una ventana",()=>{
   const found=extractNarrativeCharacterIntentCandidates({...input(sentence),baseOffset:prefix.length});
   assert.equal(found[0].evidence.start,prefix.length+sentence.indexOf("encontrar"));
 });
+
+test("extrae un motivo indirecto cuando la causa está nombrada literalmente",()=>{
+  const text="Mara luchó por miedo a perder a su hermana.";
+  const found=extractNarrativeCharacterIntentCandidates(input(text));
+  assert.equal(found.length,1);
+  assert.equal(found[0].kind,"motivation");
+  assert.equal(found[0].evidenceBasis,"explicit-causal-motive");
+  assert.equal(found[0].text,"miedo a perder a su hermana");
+  assert.equal(text.slice(found[0].evidence.start,found[0].evidence.end),found[0].text);
+});
+test("extrae el propósito declarado sin presentarlo como motivación psicológica",()=>{
+  const text="Mara viajó al norte para encontrar la cura.";
+  const found=extractNarrativeCharacterIntentCandidates(input(text));
+  assert.equal(found.length,1);
+  assert.equal(found[0].kind,"goal");
+  assert.equal(found[0].evidenceBasis,"explicit-purpose");
+  assert.equal(found[0].text,"encontrar la cura");
+});
+test("no inventa una motivación a partir de una acción sin marcador causal",()=>{
+  assert.deepEqual(
+    extractNarrativeCharacterIntentCandidates(input("Mara luchó contra los guardianes.")),
+    []
+  );
+});

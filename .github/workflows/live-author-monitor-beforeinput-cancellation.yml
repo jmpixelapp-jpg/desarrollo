@@ -6,6 +6,7 @@ on:
     paths:
       - "base de datos/Motor-Literario/typescript/src/live-author-monitor-textarea-source.ts"
       - "base de datos/Motor-Literario/typescript/tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs"
+      - "base de datos/Motor-Literario/typescript/tests/live-author-monitor-ime-composition-browser.test.mjs"
       - "base de datos/Motor-Literario/typescript/tests/browser/live-author-monitor-ime-manual.html"
       - ".github/workflows/live-author-monitor-beforeinput-cancellation.yml"
   pull_request:
@@ -39,3 +40,5 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Test late beforeinput cancellation and next real edit
         run: node --test tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs
+      - name: Test trusted IME composition updates and cancellation
+        run: node --test tests/live-author-monitor-ime-composition-browser.test.mjs

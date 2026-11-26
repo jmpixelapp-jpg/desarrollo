@@ -6,6 +6,7 @@ export * from "./host-api";
 export * from "./text-buffer";
 export * from "./narrative-knowledge";
 export * from "./narrative-idea-discovery";
+export * from "./narrative-observation-discovery";
 
 export * from "./narrative-history";
 export * from "./dictionaries";

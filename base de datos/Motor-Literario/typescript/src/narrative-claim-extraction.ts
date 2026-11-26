@@ -13,6 +13,11 @@ export interface NarrativeAttributedClaim {
   readonly attribution: string;
   readonly kind: NarrativeAttributionKind;
   readonly content: string;
+  /** Negación del verbo de atribución: "no cree" no niega necesariamente el contenido. */
+  readonly attributionPolarity: "affirmed" | "negated";
+  /** Negación expresada dentro de la proposición atribuida. */
+  readonly contentPolarity: "affirmed" | "negated";
+  /** Compatibilidad: conserva el sentido histórico de la negación del verbo atributivo. */
   readonly polarity: "affirmed" | "negated";
   readonly reviewStatus: "candidate";
   readonly evidence: TextEvidence;
@@ -125,6 +130,9 @@ export function extractNarrativeAttributedClaims(
           attribution: verb,
           kind: definition.kind,
           content,
+          attributionPolarity: match[2] ? "negated" : "affirmed",
+          contentPolarity: /^(?:no\\b|nunca\\b|jamás\\b|jamas\\b|tampoco\\b)/iu.test(content)
+            ? "negated" : "affirmed",
           polarity: match[2] ? "negated" : "affirmed",
           reviewStatus: "candidate",
           evidence: {

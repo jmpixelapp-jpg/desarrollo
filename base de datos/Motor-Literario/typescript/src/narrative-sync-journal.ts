@@ -457,7 +457,7 @@ export async function inspectNarrativeSyncJournalIntegrity(
     if (!Number.isSafeInteger(cursor.lastSequence) || cursor.lastSequence < 1 ||
         !Number.isFinite(cursor.updatedAt) || cursor.updatedAt < 0 ||
         typeof cursor.lastOperationId !== "string" || !cursor.lastOperationId.trim() ||
-        cursor.projectId !== projectId || !cursor.writerId.trim()) {
+        cursor.projectId !== projectId || typeof cursor.writerId !== "string" || !cursor.writerId.trim()) {
       addCursorIssue("invalid-cursor", "El cursor contiene identidad, secuencia o marca temporal inválida.");
     }
     if (!last) {

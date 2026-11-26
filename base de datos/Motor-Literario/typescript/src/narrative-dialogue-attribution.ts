@@ -124,7 +124,7 @@ export function extractNarrativeDialogueAttributions(
     speakerStart: number,
     speakerEnd: number
   ) => {
-    const speech = input.text.slice(speechStart, speechEnd);
+    const speech = line.slice(speechStart, speechEnd);
     if (!speech.trim() || speech.length > 10_000) return;
     const absoluteStart = (input.baseOffset ?? 0) + lineStart + speakerStart;
     const id = `dialogue:${input.documentId}:${absoluteStart}:${entity.id}`;
@@ -139,7 +139,7 @@ export function extractNarrativeDialogueAttributions(
       speechEvidence: evidence(input, lineStart + speechStart, lineStart + speechEnd, speech),
       speakerEvidence: evidence(
         input, lineStart + speakerStart, lineStart + speakerEnd,
-        input.text.slice(lineStart + speakerStart, lineStart + speakerEnd)
+        line.slice(speakerStart, speakerEnd)
       )
     });
   };
@@ -192,11 +192,11 @@ export function extractNarrativeDialogueAttributions(
           ? line.toLocaleLowerCase("es").lastIndexOf(name.toLocaleLowerCase("es"))
           : pattern.form === "quote-after-dialogue"
             ? match.index + match[0].lastIndexOf(name)
-            : match.index + match[0].indexOf(name, match[0].indexOf(":"));
+            : match.index + match[0].indexOf(name);
         if (nameIndex < 0) continue;
         add(
           entity, pattern.form, lineStart, line,
-          speechIndex + (pattern.form === "speaker-before-dialogue" ? 0 : 0),
+          speechIndex,
           speechIndex + speech.length,
           nameIndex, nameIndex + name.length
         );

@@ -876,3 +876,11 @@ Un listener del editor puede cancelar beforeinput y desenfocar el textarea sincr
 Si el beforeinput de texto no fue cancelado, handleBlur y visibilitychange a oculto no invalidan inmediatamente el par: HTML permite que el input de textarea se entregue en una tarea posterior. El estado expone pendingInput=true hasta que llega input. Si llega, se completa normalmente incluso después del blur o al volver a mostrar la pestaña; si llega otro beforeinput antes, se confirma missing-input. pagehide, freeze y retirada de la última suscripción sí invalidan la continuidad y exigen snapshot. Una composición activa es distinta: perder el foco o ocultar el documento la suspende inmediatamente con resync-required.
 
 La regresión unitaria comprueba tanto input tardío válido después de blur como pérdida confirmada al llegar un segundo beforeinput. La prueba Chromium cancela y desenfoca dentro del mismo listener posterior, verifica un único blur, ausencia de input, pendingInput liberado y ningún falso missing-input.
+
+## 29. Cancelación de beforeinput seguida de otra edición sincrónica
+
+Antes de declarar missing-input al recibir un nuevo beforeinput, la fuente inspecciona el evento DOM que conserva provisionalmente en el par anterior. Si ese evento ya terminó con defaultPrevented=true, descarta la pareja anterior y admite la nueva operación. Así, un listener del editor puede cancelar una intención y generar otra edición en el mismo turno de JavaScript sin que el monitor informe una falsa pérdida.
+
+La limpieza posterior en microtarea está protegida por identidad: la tarea del primer evento no puede borrar el pending creado por el segundo. La misma resolución previa se aplica a compositionstart.
+
+La regresión unitaria cubre el orden exacto y comprueba que solo el segundo input produce un delta, sin error ni needsResync. El Event object y su data se mantienen solo en memoria; nunca se añaden al delta ni a los diagnósticos exportables.

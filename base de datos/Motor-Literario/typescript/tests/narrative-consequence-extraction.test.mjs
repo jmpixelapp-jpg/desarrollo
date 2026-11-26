@@ -83,3 +83,17 @@ test("rechaza evidencia cuyo fragmento no coincide con el documento", () => {
   events[1].evidence.excerpt = "Por eso Mara escapó.";
   assert.throws(() => extractNarrativeConsequenceCandidates(input(text, events)), /mismo documento y revisión/);
 });
+
+test("reconoce conectores causales explícitos adicionales sin convertir sucesión en causalidad",()=>{
+  for (const marker of ["Debido a ello","Debido a eso","A causa de ello","Por esa causa"]) {
+    const text="Mara encontró la llave. "+marker+" la puerta se abrió.";
+    const a=text.indexOf("Mara"), b=text.indexOf(marker);
+    const events=[
+      event("source-"+marker,a,text.indexOf(".")+1,"Mara encontró la llave."),
+      event("result-"+marker,b,text.length,text.slice(b))
+    ];
+    const [result]=extractNarrativeConsequenceCandidates(input(text,events));
+    assert.equal(result.marker,marker);
+    assert.equal(text.slice(result.evidence.start,result.evidence.end),marker);
+  }
+});

@@ -83,3 +83,15 @@ test("rechaza proyectos, identidades y evidencias inválidas", () => {
     observations: [{ ...observations[0], actionEvidence: { ...observations[0].actionEvidence, excerpt: "falso" } }]
   }));
 });
+
+test("rechaza grupos que exceden el presupuesto de comparaciones", () => {
+  const base = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana abrió la puerta."
+  })[0];
+  const oversized = Array.from({ length: 318 }, (_, index) => ({
+    ...base, id: "synthetic-observation-" + index
+  }));
+  assert.throws(() => compareNarrativeActionClaims({
+    projectId: "book-1", observations: oversized
+  }), /límite de parejas/);
+});

@@ -148,3 +148,35 @@ test("validador del handler rechaza payloads incompletos", () => {
   assert.equal(handler.validate({ idea: { ...idea(), evidence: "invalid" } }), false);
   assert.equal(handler.validate({ idea: null }), false);
 });
+
+
+test("idea-upsert rechaza referencias duplicadas e historiales de estado inválidos", () => {
+  const handler = createNarrativeIdeaUpsertHandler(createIdeaStore());
+  const base = idea();
+  assert.equal(handler.validate({ idea: { ...base, relatedEntityIds: ["entity-1", "entity-1"] } }), false);
+  assert.equal(handler.validate({ idea: { ...base, statusHistory: [
+    { status: "unknown", reason: "writer", changedAt: 10 }
+  ] } }), false);
+  assert.equal(handler.validate({ idea: { ...base, evidence: [{
+    documentId: "chapter-1", revision: -1, start: 0, end: 1, excerpt: "x"
+  }] } }), false);
+});
+
+test("idea-upsert no permite que un sobre escriba en un proyecto distinto", async () => {
+  const store = createIdeaStore();
+  const handler = createNarrativeIdeaUpsertHandler(store);
+  const candidate = idea({ projectId: "other-project" });
+  await assert.rejects(handler.apply({
+    projectId: "project-ideas",
+    operationId: "wrong-project-op",
+    writerId: "writer-1",
+    sequence: 1,
+    schemaVersion: 1,
+    algorithm: "SHA-256",
+    createdAt: 1,
+    kind: "idea-upsert",
+    payload: { idea: candidate },
+    digest: "sha256:" + "0".repeat(64)
+  }), /otro proyecto/u);
+  assert.equal(store.ideas.size, 0);
+});

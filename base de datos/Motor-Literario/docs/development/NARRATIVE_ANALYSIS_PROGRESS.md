@@ -624,3 +624,10 @@ El despachador saliente ahora solicita un Web Lock exclusivo por proyecto antes 
 La exclusión entre pestañas requiere Web Locks del mismo origen. En runtimes que no lo ofrecen, queda solamente la protección reentrante local y continúa siendo obligatorio que el servidor remoto deduplique por `operationId`/digest, porque la entrega es al menos una vez.
 
 Se agregan tres regresiones: lock ocupado sin envío, fallo del coordinador sin envío y retención del lock durante transporte y acuse.
+
+
+## Reconciliación de snapshots de journal al recuperar cursores (26 de noviembre de 2026)
+
+La rama DB28 incorpora la comparación canónica que ya está en `main` al revalidar el snapshot de operaciones dentro de la transacción de reconstrucción del cursor. Así, IndexedDB puede devolver el mismo objeto con orden distinto de propiedades sin producir un falso conflicto; los valores y tipos siguen teniendo que ser idénticos. Se agrega una regresión que reordena las propiedades del registro durable y exige un resultado `already-consistent`.
+
+También se portan las validaciones actuales de IDs históricos opcionales y se reubica dentro de su prueba una aserción de atomicidad de outbox que había quedado fuera del módulo.

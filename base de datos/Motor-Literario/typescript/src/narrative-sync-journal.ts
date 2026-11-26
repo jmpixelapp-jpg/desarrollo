@@ -1,4 +1,5 @@
 import {
+  areNarrativeSyncPayloadsEquivalent,
   verifyNarrativeSyncOperationEnvelope,
   type NarrativeSyncOperationEnvelope
 } from "./narrative-sync-integrity";
@@ -371,7 +372,7 @@ export class IndexedDbNarrativeSyncJournal {
         const sameSnapshot = currentWriterOperations.length === snapshot.length &&
           currentWriterOperations.every((entry, index) => {
             const expected = snapshot[index];
-            return JSON.stringify(entry) === JSON.stringify(expected);
+            return areNarrativeSyncPayloadsEquivalent(entry, expected);
           });
         if (!sameSnapshot) {
           abortWith("journal-changed");

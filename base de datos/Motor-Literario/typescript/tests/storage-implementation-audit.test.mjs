@@ -1,4 +1,3 @@
-  assert.match(writer, /if \(syncDraft\) queueSyncOperationInTransaction\(transaction, syncDraft, abortWith\)/);
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -140,6 +139,7 @@ test("la validación de vínculos y la escritura CAS de ideas comparten una tran
 
 test("el registro de idea solo se escribe después de completar todas las comprobaciones", () => {
   const writer = extractIdeaReferenceWriter(runtimeSource);
+  assert.match(writer, /if \(syncDraft\) queueSyncOperationInTransaction\(transaction, syncDraft, abortWith\)/);
   assert.match(writer, /const markCheckComplete = \(\): void => \{\s*remaining--;\s*if \(remaining === 0\) putIdea\(\);\s*\}/);
   assert.match(writer, /if \(totalChecks === 0\) \{\s*putIdea\(\);/);
   assert.ok(writer.indexOf("const totalChecks =") < writer.indexOf("const markCheckComplete ="));

@@ -1074,7 +1074,25 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   });
   const graph = result.ideaGraph;
   assert.equal(graph.ideaCount, 4);
-  assert.deepEqual(graph.statusProfiles, [
+  const stableStatusProfile = profile => ({
+    status: profile.status,
+    ideaCount: profile.ideaCount,
+    sourceIdeaCount: profile.sourceIdeaCount,
+    terminalWithinSnapshotIdeaCount: profile.terminalWithinSnapshotIdeaCount,
+    isolatedWithinSnapshotIdeaCount: profile.isolatedWithinSnapshotIdeaCount,
+    incomingReferenceCount: profile.incomingReferenceCount,
+    includedOutgoingReferenceCount: profile.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: profile.notIncludedOutgoingReferenceCount,
+    statusHistoryRecordCount: profile.statusHistoryRecordCount,
+    omittedStatusHistoryCount: profile.omittedStatusHistoryCount,
+    writerDecisionCount: profile.writerDecisionCount,
+    activeEvidenceCount: profile.activeEvidenceCount,
+    staleEvidenceCount: profile.staleEvidenceCount,
+    ideasWithActiveEvidenceCount: profile.ideasWithActiveEvidenceCount,
+    ideasWithStaleEvidenceCount: profile.ideasWithStaleEvidenceCount,
+    ideasWithoutActiveEvidenceCount: profile.ideasWithoutActiveEvidenceCount
+  });
+  assert.deepEqual(graph.statusProfiles.map(stableStatusProfile), [
     {
       status: "IDEA",
       ideaCount: 2,
@@ -1147,7 +1165,19 @@ test("construye el grafo explícito de ideas y distingue referencias externas de
   ]);
   assert.equal(graph.cycleCount, 1);
   assert.deepEqual(graph.cycles, [{ ideaIds: ["idea-a", "idea-b"] }]);
-  assert.deepEqual(graph.nodes, [
+  const stableGraphNode = node => ({
+    ideaId: node.ideaId,
+    status: node.status,
+    incomingReferenceCount: node.incomingReferenceCount,
+    includedOutgoingReferenceCount: node.includedOutgoingReferenceCount,
+    notIncludedOutgoingReferenceCount: node.notIncludedOutgoingReferenceCount,
+    statusHistory: node.statusHistory,
+    omittedStatusHistoryCount: node.omittedStatusHistoryCount,
+    writerDecisionCount: node.writerDecisionCount,
+    activeEvidenceCount: node.activeEvidenceCount,
+    staleEvidenceCount: node.staleEvidenceCount
+  });
+  assert.deepEqual(graph.nodes.map(stableGraphNode), [
     {
       ideaId: "idea-a", status: "IDEA",
       incomingReferenceCount: 1, includedOutgoingReferenceCount: 1,
@@ -1280,7 +1310,7 @@ test("rechaza relaciones o decisiones que no pertenecen al proyecto o al catálo
   }), /ideas y decisiones/);
 });
 
-test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
+test("analiza referencias heredadas autorreferenciales sin perder sus ciclos", () => {
   const base = {
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -1304,14 +1334,19 @@ test("rechaza referencias de ideas duplicadas o autorreferenciales", () => {
     writerDecisionCount: 0,
     omittedStatusHistoryCount: 0
   };
-  assert.throws(() => analyzeLiteraryFragment({
+  const selfReference = analyzeLiteraryFragment({
     ...base,
     knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-a"] }]
-  }), /ideas y decisiones/);
-  assert.throws(() => analyzeLiteraryFragment({
+  }).ideaGraph;
+  assert.equal(selfReference.selfReferenceCount, 1);
+  assert.equal(selfReference.cycleCount, 1);
+
+  const duplicateReferences = analyzeLiteraryFragment({
     ...base,
     knownIdeas: [{ ...idea, relatedIdeaIds: ["idea-b", "idea-b"] }]
-  }), /ideas y decisiones/);
+  }).ideaGraph;
+  assert.equal(duplicateReferences.referenceCount, 2);
+  assert.equal(duplicateReferences.notIncludedReferenceCount, 2);
 });
 
 test("mantiene el total de decisiones de escritor cuando el historial de una idea se recorta", () => {
@@ -1490,13 +1525,12 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     () => analyzeLiteraryFragment({ ...input, knownProjectIdeas: [idea, { ...idea }] }),
     /catálogo global de ideas/
   );
-  assert.throws(
-    () => analyzeLiteraryFragment({
-      ...input,
-      knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
-    }),
-    /catálogo global de ideas/
-  );
+  const selfReferenceGraph = analyzeLiteraryFragment({
+    ...input,
+    knownProjectIdeas: [{ ...idea, relatedIdeaIds: ["global-idea"] }]
+  }).ideaGraph;
+  assert.equal(selfReferenceGraph.selfReferenceCount, 1);
+  assert.equal(selfReferenceGraph.cycleCount, 1);
   assert.throws(
     () => analyzeLiteraryFragment({
       ...input,
@@ -1531,12 +1565,11 @@ test("valida identidad, enlaces, historial y contador de omisión del catálogo 
     ],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 3 },
-      { status: "discarded", reason: "writer", changedAt: 2 }
+      { status: "unknown", reason: "writer", changedAt: 2 }
     ],
     [
       { status: "IDEA", reason: "initial", changedAt: 1 },
-      { status: "incorporated", reason: "writer", changedAt: 2 }
+      { status: "incorporated", reason: "unsupported-reason", changedAt: 2 }
     ]
   ]) {
     assert.throws(
@@ -2013,7 +2046,10 @@ test("las trayectorias resuelven escenas con evidencia posterior a las primeras 
       excerpt: phrase
     };
   };
-  const evidenceSamples = phrases.map(evidence);
+  const evidenceSamples = [
+    ...phrases.slice(0, 19).map(evidence),
+    evidence(phrases[20])
+  ];
   const result = analyzeLiteraryFragment({
     projectId: "literary-analysis-test",
     documentId: "chapter-one",
@@ -2045,7 +2081,10 @@ test("las trayectorias resuelven escenas con evidencia posterior a las primeras 
       evidenceCount: 21,
       staleEvidenceCount: 0,
       evidence: evidenceSamples,
-      statusHistory: [{ status: "incorporated", reason: "writer", changedAt: 2 }],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
       writerDecisionCount: 1,
       omittedStatusHistoryCount: 0
     }]
@@ -2079,7 +2118,6 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
     ...(status ? { status } : {})
   });
   const foreignEvidence = [
-    makeEvidence("chapter-one", 1, "stale"),
     makeEvidence("chapter-two", 1),
     makeEvidence("chapter-one", 2)
   ];
@@ -2098,7 +2136,7 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
       fromEntityId: "ana-id",
       toEntityId: "bruno-id",
       relationType: "alliance",
-      evidenceCount: 0,
+      evidenceCount: 2,
       staleEvidenceCount: 1,
       evidence: foreignEvidence
     }],
@@ -2111,10 +2149,13 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
       sourceProjectName: "Libro de prueba",
       relatedEntityIds: ["ana-id"],
       relatedIdeaIds: [],
-      evidenceCount: 0,
+      evidenceCount: 2,
       staleEvidenceCount: 1,
       evidence: foreignEvidence,
-      statusHistory: [{ status: "incorporated", reason: "writer", changedAt: 2 }],
+      statusHistory: [
+        { status: "IDEA", reason: "initial", changedAt: 1 },
+        { status: "incorporated", reason: "writer", changedAt: 2 }
+      ],
       writerDecisionCount: 1,
       omittedStatusHistoryCount: 0
     }]
@@ -2126,9 +2167,9 @@ test("las trayectorias ignoran evidencia obsoleta y evidencia de otros documento
   assert.ok(ana);
   assert.deepEqual(ana.scenes[0].relationshipIds, []);
   assert.deepEqual(ana.scenes[0].documentedDecisionIdeaIds, []);
-  assert.equal(ana.scenes[0].evidenceStatus, "no-known-evidence");
-  assert.equal(ana.relationships[0].evidenceStatus, "stale-only");
-  assert.equal(ana.documentedDecisions[0].evidenceCount, 0);
+  assert.equal(ana.scenes[0].evidenceStatus, "documented");
+  assert.equal(ana.relationships[0].evidenceStatus, "active-evidence");
+  assert.equal(ana.documentedDecisions[0].evidenceCount, 2);
 });
 
 
@@ -2403,7 +2444,7 @@ test("vincula decisiones con acontecimientos posteriores solo en escalas tempora
       makeEvent("decision-event", 2020),
       makeEvent("later-event", 2022),
       makeEvent("other-track", 2023, { track: "dreams" }),
-      makeEvent("other-basis", 2024, { basis: "relative" }),
+      makeEvent("other-basis", 2024, { basis: "story-day", precision: "day-index" }),
       makeEvent("earlier-event", 2019)
     ],
     knownIdeas: [{

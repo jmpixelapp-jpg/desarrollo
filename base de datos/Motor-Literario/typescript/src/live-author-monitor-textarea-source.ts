@@ -8,6 +8,7 @@ export type LiveAuthorMonitorTextAreaErrorCode =
   | "invalid-selection"
   | "unsupported-input-type"
   | "composition-state-mismatch"
+  | "input-type-mismatch"
   | "inconsistent-length"
   | "resync-required";
 
@@ -143,6 +144,15 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     }
 
     const input = event as InputEvent;
+    if (typeof input.inputType === "string" && input.inputType &&
+        input.inputType !== before.inputType) {
+      this.fail(
+        "input-type-mismatch",
+        "El inputType de input no coincide con el beforeinput asociado; se requiere resincronización."
+      );
+      return;
+    }
+
     if ((before.inputType === "insertCompositionText" && !before.isComposing) ||
         (input.isComposing === true && !before.isComposing)) {
       this.fail(

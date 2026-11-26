@@ -173,3 +173,8 @@ La suite combinada de integración informó **196 pruebas aprobadas y 0 fallidas
 ## Normalización de adjetivo emocional singular
 
 La suite global detectó que el patrón emocional incluía `felices?`, que no cubría el singular español `feliz`. Se explicitó `feliz|felices`, conservando la frontera Unicode existente para impedir coincidencias parciales.
+
+## Liberación de la copia temporal durante suspensión
+
+La referencia `previousText` se limpia ahora inmediatamente cuando el adaptador entra en `needsResync` y también en `dispose()`. La instancia ya no retiene el contenido completo mientras espera un snapshot autoritativo o cuando el anfitrión mantiene una referencia a una instancia desmontada. Solo `resynchronize()` puede volver a cargar el texto desde un snapshot verificado. Se añadió una regresión que comprueba suspensión, recuperación y disposición.
+

@@ -1,4 +1,4 @@
-import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, Diagnostic } from "../contracts";
+import type { ProjectStore, StoredChange, StoredDocument, StoredDiagnostics, StoredProjectFinalizationReceipt, StoredLiveAuthorMonitorCheckpoint, StoredLiveAuthorMonitorLease, PersonalIdeaLibraryCursor, PersonalIdeaLibraryPage, Diagnostic } from "../contracts";
 import { normalizeEntityName, MAX_NARRATIVE_IDEA_REFERENCES } from "../narrative-knowledge";
 import type { NarrativeEntity, NarrativeRelation, NarrativeEvent, NarrativeIdea, PersonalIdeaLibraryEntry, PersonalIdeaLibraryContext, TextEvidence } from "../narrative-knowledge";
 import type { NarrativeAssertion } from "../narrative-history";
@@ -30,7 +30,7 @@ import { cloneProjectSetting, validateProjectSetting, type LanguageProfile, type
 } from "../project-data";
 
 const DATABASE_NAME = "motor-literario-local";
-const DATABASE_VERSION = 24;
+const DATABASE_VERSION = 25;
 const DOCUMENTS = "documents";
 const CHANGES = "changes";
 const CHANGE_INDEX = "by-document-sequence";
@@ -42,6 +42,7 @@ const PERSONAL_IDEAS = "personal-idea-library";
 const PERSONAL_IDEA_SOURCE_INDEX = "by-source-project";
 const FINALIZATION_RECEIPTS = "writer-library-finalization-receipts";
 const FINALIZATION_RECEIPT_ID = "finalization-v1";
+const WRITER_LIBRARY_VERSIONS = "writer-library-versions";
 const ASSERTIONS = "narrative-assertions";
 const DIAGNOSTICS = "document-diagnostics";
 const LIVE_AUTHOR_MONITOR_CHECKPOINTS = "live-author-monitor-checkpoints";
@@ -1529,6 +1530,44 @@ function validateLiveAuthorMonitorLeaseRequest(
 }
 
 /**
+ * Incrementa la generación de la biblioteca dentro de la misma transacción
+ * que modifica sus entradas. Así, una página posterior puede detectar
+ * cualquier cambio confirmado desde que se emitió su cursor.
+ */
+function advanceWriterLibraryVersion(transaction: IDBTransaction, writerId: string): void {
+  const names = transaction.objectStoreNames as DOMStringList | undefined;
+  if (!names || typeof names.contains !== "function" ||
+      !names.contains(WRITER_LIBRARY_VERSIONS)) {
+    try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+    return;
+  }
+  const versions = transaction.objectStore(WRITER_LIBRARY_VERSIONS);
+  const request = versions.get(writerId);
+  request.onsuccess = () => {
+    const current = request.result as {
+      readonly writerId?: unknown;
+      readonly version?: unknown;
+    } | undefined;
+    const version = current === undefined ? 0 : current.version;
+    if ((current !== undefined && current.writerId !== writerId) ||
+        !Number.isSafeInteger(version) || (version as number) < 0 ||
+        (version as number) >= Number.MAX_SAFE_INTEGER) {
+      try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+      return;
+    }
+    try {
+      versions.put({ writerId, version: (version as number) + 1 });
+    } catch {
+      try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+    }
+  };
+  request.onerror = () => {
+    try { transaction.abort(); } catch { /* La transacción pudo haber terminado. */ }
+  };
+}
+
+
+/**
  * Persistencia local mediante IndexedDB nativo del entorno.
  * No transmite manuscritos ni depende de servicios de terceros.
  */
@@ -1744,6 +1783,9 @@ export class IndexedDbProjectStore implements ProjectStore {
           });
           receipts.createIndex("by-writer", "writerId", { unique: false });
           receipts.createIndex("by-writer-source", ["writerId", "sourceProjectId"], { unique: false });
+        }
+        if (!db.objectStoreNames.contains(WRITER_LIBRARY_VERSIONS)) {
+          db.createObjectStore(WRITER_LIBRARY_VERSIONS, { keyPath: "writerId" });
         }
         if (!db.objectStoreNames.contains(ASSERTIONS)) {
           const assertions = db.createObjectStore(ASSERTIONS, { keyPath: ["projectId", "id"] });

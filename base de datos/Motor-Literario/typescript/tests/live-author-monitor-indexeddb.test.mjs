@@ -272,6 +272,92 @@ test("IndexedDB propaga QuotaExceededError del request y aborta sin reemplazar e
   }
 });
 
+test("IndexedDB aborta una transacción tras validar lease sin confirmar un checkpoint parcial", async () => {
+  const store = new IndexedDbProjectStore();
+  const projectId = "live-author-monitor-abort-" + randomUUID();
+  const documentId = "chapter-" + randomUUID();
+  const lease = await acquireLease(store, projectId, documentId);
+  const durable = checkpoint(projectId, documentId, Date.now());
+  await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
+
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open("motor-literario-local");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const probeTransaction = database.transaction("live-author-monitor-checkpoints", "readonly");
+  const storePrototype = Object.getPrototypeOf(
+    probeTransaction.objectStore("live-author-monitor-checkpoints")
+  );
+  const originalPut = storePrototype.put;
+
+  try {
+    storePrototype.put = function(value, ...keys) {
+      const request = originalPut.call(this, value, ...keys);
+      if (this.name === "live-author-monitor-checkpoints" &&
+          value?.projectId === projectId && value?.documentId === documentId) {
+        // Simula cierre/aborto de la tx después de encolar el put y antes del commit.
+        this.transaction.abort();
+      }
+      return request;
+    };
+
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint(
+        checkpoint(projectId, documentId, durable.savedAt + 1, {
+          sessionDurationMs: 150,
+          activeDurationMs: 75,
+          idleDurationMs: 75,
+          acceptedChanges: 2,
+          committedChanges: 2,
+          insertedCharacters: 6,
+          currentDocumentLength: 6,
+          revision: 2,
+          sequence: 2,
+          totalCommitLatencyMs: 10,
+          lastCommitLatencyMs: 5,
+          commitLatencies: [5, 5]
+        }),
+        lease
+      ),
+      error => error?.name === "AbortError" || /transacción|canceló/i.test(error?.message ?? "")
+    );
+  } finally {
+    storePrototype.put = originalPut;
+    database.close();
+  }
+
+  try {
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      durable,
+      "el aborto debe revertir el put y preservar el checkpoint anterior"
+    );
+    const recovered = checkpoint(projectId, documentId, durable.savedAt + 2, {
+      sessionDurationMs: 200,
+      activeDurationMs: 100,
+      idleDurationMs: 100,
+      acceptedChanges: 2,
+      committedChanges: 2,
+      insertedCharacters: 6,
+      currentDocumentLength: 6,
+      revision: 2,
+      sequence: 2,
+      totalCommitLatencyMs: 10,
+      lastCommitLatencyMs: 5,
+      commitLatencies: [5, 5]
+    });
+    await store.saveLiveAuthorMonitorCheckpoint(recovered, lease);
+    assert.deepEqual(
+      await store.loadLiveAuthorMonitorCheckpoint(projectId, documentId),
+      recovered,
+      "la instancia debe poder persistir normalmente después de una transacción abortada"
+    );
+  } finally {
+    await store.close();
+  }
+});
+
 test("migra IndexedDB v22 a v27 creando stores narrativos y checkpoints sin perder documentos", async () => {
   globalThis.indexedDB = new IDBFactory();
   const databaseName = "motor-literario-local";

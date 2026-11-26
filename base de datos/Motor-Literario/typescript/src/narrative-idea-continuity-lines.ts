@@ -383,7 +383,7 @@ export function buildNarrativeIdeaContinuityLines(
       : undefined;
     const chronology = !allOrdered ? (directedEdges.length ? "partial" : "unknown") :
       totalOrder ? "complete" : "partial";
-    const topology = topologyFor(occurrenceIds, directedEdges, chronology === "complete");
+    const topology = topologyFor(occurrenceIds, directedEdges, allOrdered);
 
     const exactRecurrenceCount = events.filter(event =>
       event.supportingRelation.relationType === "exact-recurrence"

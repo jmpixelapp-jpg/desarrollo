@@ -730,6 +730,122 @@ export async function applyNarrativeReferenceRepair(
   return result;
 }
 
+export interface NarrativeReferenceRepairAuditIntegrityIssue {
+  readonly code: "invalid-entry" | "operation-id-mismatch" | "duplicate-operation";
+  readonly operationId: string;
+  readonly detail: string;
+}
+
+export interface NarrativeReferenceRepairAuditRecordCheck {
+  readonly operationId: string;
+  readonly recordType: NarrativeReferenceRepairProposal["recordType"];
+  readonly recordId: string;
+  readonly status: "matches-current-state" | "record-missing" | "record-state-changed";
+}
+
+export interface NarrativeReferenceRepairAuditIntegrityReport {
+  readonly projectId: string;
+  readonly checkedEntries: number;
+  readonly integrityIssues: readonly NarrativeReferenceRepairAuditIntegrityIssue[];
+  readonly recordChecks: readonly NarrativeReferenceRepairAuditRecordCheck[];
+  readonly intact: boolean;
+}
+
+/**
+ * Verifica identidad y forma de cada entrada durable y contrasta su resultado
+ * con el estado actual del registro. Un estado posterior distinto se informa
+ * como histórico/cambiado, no como corrupción automática de la auditoría.
+ */
+export async function verifyNarrativeReferenceRepairAuditIntegrity(
+  store: ProjectStore,
+  projectId: string
+): Promise<NarrativeReferenceRepairAuditIntegrityReport> {
+  if (!store || typeof projectId !== "string" || !projectId.trim() ||
+      typeof store.loadNarrativeReferenceRepairAudits !== "function") {
+    throw new Error("El almacenamiento no permite verificar auditorías narrativas.");
+  }
+  const audits = await store.loadNarrativeReferenceRepairAudits(projectId);
+  const [relations, events, assertions, ideas] = await Promise.all([
+    typeof store.loadRelations === "function" ? store.loadRelations(projectId) : Promise.reject(new Error("Falta lectura de relaciones.")),
+    typeof store.loadEvents === "function" ? store.loadEvents(projectId) : Promise.reject(new Error("Falta lectura de acontecimientos.")),
+    typeof store.loadAssertions === "function" ? store.loadAssertions(projectId) : Promise.reject(new Error("Falta lectura de afirmaciones.")),
+    typeof store.loadIdeas === "function" ? store.loadIdeas(projectId) : Promise.reject(new Error("Falta lectura de ideas."))
+  ]);
+  const integrityIssues: NarrativeReferenceRepairAuditIntegrityIssue[] = [];
+  const recordChecks: NarrativeReferenceRepairAuditRecordCheck[] = [];
+  const seen = new Set<string>();
+  const isStringArray = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every(item => typeof item === "string");
+  for (const raw of audits as readonly unknown[]) {
+    if (!raw || typeof raw !== "object") {
+      integrityIssues.push({ code: "invalid-entry", operationId: "", detail: "La entrada no es un objeto." });
+      continue;
+    }
+    const entry = raw as Partial<NarrativeReferenceRepairAuditEntry>;
+    const operationId = typeof entry.operationId === "string" ? entry.operationId : "";
+    const validType = entry.recordType === "relation" || entry.recordType === "event" ||
+      entry.recordType === "assertion" || entry.recordType === "idea";
+    const expectedField = entry.recordType === "relation"
+      ? entry.referenceField === "fromEntityId" || entry.referenceField === "toEntityId"
+      : entry.recordType === "event" ? entry.referenceField === "participants"
+      : entry.recordType === "assertion" ? entry.referenceField === "entityId"
+      : entry.recordType === "idea" ? entry.referenceField === "relatedEntityIds" : false;
+    const validValues = entry.recordType === "relation" || entry.recordType === "assertion"
+      ? typeof entry.before === "string" && typeof entry.after === "string"
+      : isStringArray(entry.before) && isStringArray(entry.after);
+    const valid = entry.operation === "narrative-reference-repair" &&
+      entry.projectId === projectId && validType && expectedField &&
+      typeof entry.recordId === "string" && !!entry.recordId &&
+      typeof entry.missingReferenceId === "string" && !!entry.missingReferenceId &&
+      typeof entry.replacementEntityId === "string" && !!entry.replacementEntityId &&
+      Number.isFinite(entry.appliedAt) && (entry.appliedAt ?? -1) >= 0 &&
+      validValues;
+    if (!valid) {
+      integrityIssues.push({ code: "invalid-entry", operationId, detail: "La entrada no cumple el contrato de auditoría." });
+      continue;
+    }
+    const expectedOperationId = [
+      "reference-repair", projectId, entry.recordType, entry.recordId,
+      entry.referenceField, entry.missingReferenceId, entry.replacementEntityId
+    ].join("|");
+    if (operationId !== expectedOperationId) {
+      integrityIssues.push({ code: "operation-id-mismatch", operationId, detail: "El ID no corresponde a los datos de la operación." });
+    }
+    const duplicateKey = projectId + "\u0000" + operationId;
+    if (seen.has(duplicateKey)) {
+      integrityIssues.push({ code: "duplicate-operation", operationId, detail: "La operación aparece más de una vez." });
+    }
+    seen.add(duplicateKey);
+
+    let status: NarrativeReferenceRepairAuditRecordCheck["status"] = "record-missing";
+    if (entry.recordType === "relation") {
+      const record = relations.find(item => item.projectId === projectId && item.id === entry.recordId);
+      if (record) status = record[entry.referenceField as "fromEntityId" | "toEntityId"] === entry.replacementEntityId
+        ? "matches-current-state" : "record-state-changed";
+    } else if (entry.recordType === "event") {
+      const record = events.find(item => item.projectId === projectId && item.id === entry.recordId);
+      if (record) status = record.participants.includes(entry.replacementEntityId)
+        ? "matches-current-state" : "record-state-changed";
+    } else if (entry.recordType === "assertion") {
+      const record = assertions.find(item => item.projectId === projectId && item.id === entry.recordId);
+      if (record) status = record.entityId === entry.replacementEntityId
+        ? "matches-current-state" : "record-state-changed";
+    } else {
+      const record = ideas.find(item => item.projectId === projectId && item.id === entry.recordId);
+      if (record) status = (record.relatedEntityIds ?? []).includes(entry.replacementEntityId)
+        ? "matches-current-state" : "record-state-changed";
+    }
+    recordChecks.push({ operationId, recordType: entry.recordType, recordId: entry.recordId, status });
+  }
+  return {
+    projectId,
+    checkedEntries: audits.length,
+    integrityIssues,
+    recordChecks,
+    intact: integrityIssues.length === 0
+  };
+}
+
 export interface NarrativeKnowledgeGraphPersistenceResult {
   readonly projectId: string;
   readonly saved: {

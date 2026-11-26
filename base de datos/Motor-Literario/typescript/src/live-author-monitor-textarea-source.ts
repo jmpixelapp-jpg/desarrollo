@@ -63,6 +63,8 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
   private revision: number;
   private sequence: number;
   private documentLength: number;
+  /** Snapshot efímero en memoria para verificar prefijo/sufijo y detectar mutaciones externas. */
+  private previousText: string;
   private needsResync = false;
   private disposed = false;
   private compositionActive = false;
@@ -183,6 +185,11 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     }
 
     const value = this.element.value;
+    const previousText = this.previousText;
+    if (previousText.length !== before.previousLength || previousText.length !== this.documentLength) {
+      this.fail("inconsistent-length", "El snapshot efímero anterior no coincide con la longitud capturada.");
+      return;
+    }
     const deltaLength = value.length - before.previousLength;
     let start = before.start;
     let end = before.end;
@@ -232,6 +239,26 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       );
       return;
     }
+
+    // Verifica el texto completo fuera del rango editado. La longitud por sí sola
+    // no detecta una mutación externa de igual tamaño en otra zona del documento.
+    // Este snapshot es efímero y solo vive mientras el adaptador está montado.
+    if (previousText.slice(0, start) !== value.slice(0, start) ||
+        previousText.slice(end) !== value.slice(start + insertedLength)) {
+      this.fail(
+        "inconsistent-length",
+        "Se detectó una modificación fuera del rango anunciado por beforeinput; el delta no puede atribuirse con seguridad."
+      );
+      return;
+    }
+
+    if (before.inputType.startsWith("delete") && insertedLength !== 0) {
+      this.fail(
+        "inconsistent-length",
+        "Una operación delete modificó texto fuera del rango de eliminación esperado."
+      );
+      return;
+    }
     if (this.sequence >= Number.MAX_SAFE_INTEGER || this.revision >= Number.MAX_SAFE_INTEGER) {
       this.fail("resync-required", "La secuencia o revisión alcanzó el límite entero seguro de JavaScript.");
       return;
@@ -260,6 +287,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.sequence = change.sequence;
     this.revision++;
     this.documentLength = value.length;
+    this.previousText = value;
 
     for (const listener of [...this.listeners]) {
       try {
@@ -299,6 +327,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.revision = snapshot.revision;
     this.sequence = snapshot.sequence;
     this.documentLength = snapshot.text.length;
+    this.previousText = snapshot.text;
     this.onError = options.onError;
   }
 
@@ -363,6 +392,7 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
     this.revision = snapshot.revision;
     this.sequence = snapshot.sequence;
     this.documentLength = snapshot.text.length;
+    this.previousText = snapshot.text;
     this.pendingInput = undefined;
     this.compositionActive = false;
     this.needsResync = false;

@@ -5074,6 +5074,37 @@ test("relaciones, ideas y acontecimientos mantienen offsets UTF-16 con emoji y C
     .filter(item => item.kind === "character").map(item => item.id).sort());
 });
 
+
+test("las afirmaciones sobre personajes conservan offsets UTF-16 tras emojis y CRLF", async () => {
+  const { extractNarrativeAssertions } = await import("../dist/motor-literario.js");
+  const text = "😀\\r\\nAna tiene 30 años.\\r\\n";
+  const baseOffset = 509;
+  const entity = {
+    projectId: "assertion-unicode-offsets",
+    id: "entity:ana",
+    kind: "character",
+    canonicalName: "Ana",
+    normalizedName: "ana",
+    aliases: [],
+    evidence: [],
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    extractionVersion: 1
+  };
+  const assertions = extractNarrativeAssertions(
+    "assertion-unicode-offsets", "chapter", 2, text, [entity], baseOffset, 1234
+  );
+  const age = assertions.find(item => item.attribute === "age");
+  assert.ok(age);
+  const phrase = "Ana tiene 30 años";
+  assert.equal(age.evidence.start, baseOffset + text.indexOf(phrase));
+  assert.equal(age.evidence.end, baseOffset + text.indexOf(phrase) + phrase.length);
+  assert.equal(text.slice(
+    age.evidence.start - baseOffset,
+    age.evidence.end - baseOffset
+  ), phrase);
+});
+
 test("rechaza consolidaciones que crearían alias ambiguos con una tercera entidad", async () => {
   const store = new MemoryStore();
   const api = new HostEngineApi({ store });

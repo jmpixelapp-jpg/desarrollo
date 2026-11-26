@@ -15,6 +15,7 @@ export * from "./narrative-character-knowledge-discovery";
 export * from "./narrative-character-knowledge-timeline";
 export * from "./narrative-character-knowledge-comparison";
 export * from "./narrative-knowledge-dialogue-link";
+export * from "./narrative-information-reception-discovery";
 export * from "./narrative-information-exposure-discovery";
 export * from "./narrative-information-asymmetry";
 export * from "./narrative-information-concealment-discovery";

@@ -283,3 +283,65 @@ Queda cubierto en CI que Chromium:
 5. conserva el texto final después de la operación de confirmación de CDP, tratada aparte por la diferencia de confianza observada.
 
 La prueba no convierte esa confirmación de CDP en una edición capturada; el adaptador mantiene el rechazo de `compositionend` no confiable. Sigue pendiente validar commits con IME físicos en sistemas operativos, idiomas y navegadores reales. Esta es una limitación de cobertura de dispositivo, no un test fallido.
+
+
+## Corroboración doble del payload y validación manual de IME físicos
+
+### Comparación de `beforeinput.data` y `input.data`
+
+La fuente conserva el dato de `beforeinput` solo mientras espera el evento `input` asociado. Al recibir este último:
+- si ambos eventos proporcionan texto, los dos valores deben coincidir exactamente;
+- si solo uno proporciona texto, ese valor se compara con el segmento realmente insertado en el textarea;
+- si ambos proporcionan `null`, no se inventa contenido esperado y se mantienen las verificaciones de rango, longitud, prefijo y sufijo.
+
+Una discrepancia produce `input-data-mismatch`, suspende la fuente y exige un snapshot autoritativo. El diagnóstico no contiene el texto ni los payloads. La implementación y las regresiones cubren: ambos payloads iguales, solo `input.data` disponible, payloads de ambos eventos contradictorios y texto insertado que contradice únicamente `input.data`.
+
+Esta corroboración es conservadora. Si un navegador entrega valores diferentes por una peculiaridad de implementación, la fuente suspende la captura en lugar de adivinar cuál es correcto. La matriz manual permitirá decidir si se necesita una excepción documentada para un motor concreto; no se debe agregar una excepción sin un caso reproducible y versionado.
+
+### Página de validación manual
+
+Se añadió `tests/browser/live-author-monitor-ime-manual.html`, accesible con Vite en:
+
+`http://127.0.0.1:5173/tests/browser/live-author-monitor-ime-manual.html`
+
+Arranque desde `base de datos/Motor-Literario/typescript`:
+
+```bash
+npm ci
+npx vite --host 127.0.0.1 --port 5173
+```
+
+Procedimiento:
+1. Abre la URL en el mismo equipo donde está instalado y configurado el IME que vas a validar.
+2. Escribe una frase de referencia en el textarea **antes** de iniciar la captura. La frase es la base autoritativa y no se exporta.
+3. Pulsa **Iniciar captura** y realiza una composición con el IME real: escribe, cambia entre candidatos, confirma y repite una composición que canceles.
+4. Comprueba visualmente el contenido final del textarea. Revisa los contadores de inicio/actualización/fin, los pares `beforeinput`/`input`, los deltas `composition` y el estado `needsResync`.
+5. Pulsa **Exportar traza sin contenido**. El JSON se descarga localmente y no se envía a ningún endpoint.
+
+El export contiene marca temporal, navegador/plataforma/idioma declarados por el navegador, longitudes UTF-16, offsets, `inputType`, `isTrusted`, `isComposing`, presencia/longitud de `data`, categorías de delta y códigos de error. **No contiene el manuscrito, letras del teclado, texto de candidatos ni valores de `InputEvent.data`.** La traza conserva como máximo 2.000 entradas; si se supera el límite, elimina las más antiguas y registra cuántas se descartaron. La página no usa IndexedDB ni almacenamiento local para guardar el informe.
+
+### Matriz de dispositivos pendiente de ejecutar
+
+La página permite recopilar evidencia reproducible; no simula el proveedor de IME. Ejecuta la misma secuencia en cada combinación disponible y guarda una traza separada:
+
+| Sistema / navegador | IME e idioma a probar | Cobertura mínima |
+|---|---|---|
+| Windows 11 / Chrome o Edge | IME japonés y/o Microsoft Pinyin | candidatos sucesivos, commit, cancelación, selección |
+| macOS / Safari y Chrome | IME japonés o chino del sistema | candidatos, commit, cancelación, cambio de foco |
+| Linux / Firefox y Chromium | IBus con Mozc o motor chino disponible | candidatos, commit, cancelación, suspensión/reanudación |
+
+Anota también las versiones exactas del sistema operativo, navegador y proveedor IME. Las filas son una matriz sugerida; no implican que esas combinaciones ya se hayan probado ni que todos los proveedores estén instalados.
+
+### Criterios de aceptación por traza
+
+- Cada `beforeinput` aceptado debe tener su `input` asociado, con `inputType` coherente.
+- Cuando ambos valores `data` sean strings, deben coincidir; cuando alguno sea string, debe coincidir con el segmento insertado.
+- Los eventos nativos observados deben tener `isTrusted=true`. Un evento no confiable no se acepta como edición.
+- Las actualizaciones `insertCompositionText` deben producir deltas `composition`, no `typing`.
+- El candidato nuevo debe sustituir el anterior donde el IME así lo indique; el contenido final debe coincidir con lo que el usuario confirmó.
+- La cancelación no debe inventar texto confirmado. Registra los eventos y revisa el valor final; no presupongas que todos los IME cancelan de idéntica forma.
+- No debe aparecer `needsResync` en una secuencia válida y completamente emparejada. Si aparece, conserva la traza y el código de error; no desactives la barrera para forzar aceptación.
+
+### Validación de privacidad del export
+
+Se añadió una prueba Playwright que introduce un sentinel de manuscrito y una letra de prueba, inicia la captura, exporta el JSON y verifica que ambos contenidos están ausentes. A la vez verifica que el informe conserva longitudes, `inputType`, metadatos de confianza y longitud de reemplazo. La existencia de datos suficientes para diagnosticar el evento no requiere registrar el contenido literal.

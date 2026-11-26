@@ -467,3 +467,19 @@ Se añaden nueve pruebas unitarias y una prueba de integración del pipeline, in
 **Límites deliberados:** una meta diferente no sustituye por sí sola a una anterior; se considera coexistencia salvo marcador explícito. La retirada se detecta cuando el mismo objetivo aparece negado, no por inferencia psicológica. La señal de reemplazo requiere que el texto de la meta anterior aparezca en la misma evidencia. El sistema no jerarquiza metas, no deduce metas implícitas ni decide si una motivación es sincera. Los resultados siguen siendo candidatos revisables.
 
 **Validación:** cambios, exportación pública, pruebas y documentación publicados en la rama. No se afirma que build, type-check o suite hayan pasado; deben verificarse mediante CI sobre el head actual.
+
+## Fase AB: contraste entre objetivos expresos y acciones observables
+
+Se añade `narrative-intent-action-consistency.ts` con `compareNarrativeIntentsWithActions(input)`, integrado en `understandNarrativeFragment` como `intentActionConsistency`.
+
+La comparación:
+- Exige el mismo personaje como titular de la intención y actor de la acción.
+- Exige mismo proyecto, documento y revisión; además, la acción debe aparecer después del rango textual de la intención.
+- Busca un objetivo/personaje destinatario explícito en la frase de intención y lo contrasta con el objetivo de la acción.
+- Clasifica `supports-intent`, `opposes-intent`, `unrelated-action`, `intent-negated`, `conditional-intent`, `ambiguous-target` y `not-comparable`.
+- Usa un vocabulario limitado de equivalencias y oposiciones verbales expresas. No generaliza una contradicción a partir de verbos sin relación demostrable.
+- Conserva la evidencia de intención y acción por separado y deja todos los resultados como candidatos.
+
+Se agregan siete pruebas unitarias y una prueba de integración del pipeline para un objetivo de protección seguido por una acción explícita de traición.
+
+**Límites:** una acción opuesta no demuestra engaño, hipocresía, intención oculta ni que el personaje haya abandonado su meta. Una acción negada no se trata como realizada. La comparación no cruza capítulos ni revisiones en esta fase; tampoco evalúa acciones pronominales todavía. Type-check, build y suite completa requieren ejecución CI sobre el head actualizado.

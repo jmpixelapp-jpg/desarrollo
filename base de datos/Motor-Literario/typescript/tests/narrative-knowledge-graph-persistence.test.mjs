@@ -12,11 +12,17 @@ function createMemoryStore() {
   };
   const copy = value => structuredClone(value);
   const methods = {};
-  for (const name of Object.keys(tables)) {
-    const table = tables[name];
-    methods["load" + name[0].toUpperCase() + name.slice(1)] = async projectId =>
+  const contracts = [
+    ["entities", "loadEntities", "saveEntityIfUnchanged"],
+    ["relations", "loadRelations", "saveRelationIfUnchanged"],
+    ["events", "loadEvents", "saveEventIfUnchanged"],
+    ["ideas", "loadIdeas", "saveIdeaIfUnchanged"],
+    ["assertions", "loadAssertions", "saveAssertionIfUnchanged"]
+  ];
+  for (const [tableName, loadName, saveName] of contracts) {
+    const table = tables[tableName];
+    methods[loadName] = async projectId =>
       [...table.values()].filter(x => x.projectId === projectId).map(copy);
-    const saveName = "save" + name[0].toUpperCase() + name.slice(1) + "IfUnchanged";
     methods[saveName] = async (next, expected) => {
       const current = table.get(next.id);
       assert.deepEqual(current, expected, "la escritura debe respetar compare-and-swap");

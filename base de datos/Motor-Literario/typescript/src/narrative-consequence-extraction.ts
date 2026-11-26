@@ -11,6 +11,8 @@ export interface NarrativeConsequenceExtractionInput {
   readonly revision: number;
   readonly text: string;
   readonly events: readonly NarrativeEventCandidate[];
+  /** Offset UTF-16 absoluto de la ventana analizada. */
+  readonly baseOffset?: number;
 }
 
 export interface NarrativeConsequenceCandidate {
@@ -62,9 +64,13 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
       typeof input.documentId !== "string" || !input.documentId.trim() ||
       !Number.isSafeInteger(input.revision) || input.revision < 0 ||
       typeof input.text !== "string" || input.text.length > MAX_TEXT_UNITS ||
-      !Array.isArray(input.events) || input.events.length > 1000) {
+      !Array.isArray(input.events) || input.events.length > 1000 ||
+      (input.baseOffset !== undefined &&
+        (!Number.isSafeInteger(input.baseOffset) || input.baseOffset < 0 ||
+          input.baseOffset > Number.MAX_SAFE_INTEGER - input.text.length))) {
     throw new Error("Contexto inválido para extraer consecuencias narrativas.");
   }
+  const baseOffset = input.baseOffset ?? 0;
   for (const event of input.events) {
     if (!event || !event.evidence || event.projectId !== input.projectId ||
         event.evidence.documentId !== input.documentId ||
@@ -72,8 +78,9 @@ function validate(input: NarrativeConsequenceExtractionInput): void {
         !Number.isSafeInteger(event.evidence.start) ||
         !Number.isSafeInteger(event.evidence.end) ||
         event.evidence.start < 0 || event.evidence.end < event.evidence.start ||
-        event.evidence.end > input.text.length ||
-        input.text.slice(event.evidence.start, event.evidence.end) !== event.evidence.excerpt) {
+        event.evidence.start < baseOffset ||
+        event.evidence.end > baseOffset + input.text.length ||
+        input.text.slice(event.evidence.start - baseOffset, event.evidence.end - baseOffset) !== event.evidence.excerpt) {
       throw new Error("Los acontecimientos deben pertenecer al mismo documento y revisión.");
     }
   }
@@ -104,7 +111,7 @@ export function extractNarrativeConsequenceCandidates(
     if (source.evidence.end > consequence.evidence.start) continue;
     // Un salto de párrafo suele marcar cambio de escena o bloque narrativo;
     // no se debe enlazar a través de ese límite aunque aparezca un conector.
-    const gap = input.text.slice(source.evidence.end, consequence.evidence.start);
+    const gap = input.text.slice(source.evidence.end - (input.baseOffset ?? 0), consequence.evidence.start - (input.baseOffset ?? 0));
     if (/\r?\n[\t ]*\r?\n/u.test(gap)) continue;
     const match = connectorPattern.exec(consequence.evidence.excerpt);
     if (!match) continue;

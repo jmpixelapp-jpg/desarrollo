@@ -465,8 +465,20 @@ export interface ProjectStore {
     writerId?: string,
     syncOperation?: SyncOperationDraft
   ): Promise<void>;
-  /** Transfiere atómicamente ideas aún no incorporadas a la biblioteca privada del escritor. */
-  archiveUnincorporatedIdeas?(projectId: string, writerId: string, sourceProjectName: string, archivedAt: number): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
+  /**
+   * Transfiere ideas no incorporadas y su recibo mediante una sola transacción.
+   * Si expectedIdeaIds llega desde sincronización entrante, el store rechaza
+   * cualquier conjunto distinto antes de escribir. En el origen, syncOperation
+   * se incorpora a la outbox dentro de esa misma transacción.
+   */
+  archiveUnincorporatedIdeas?(
+    projectId: string,
+    writerId: string,
+    sourceProjectName: string,
+    archivedAt: number,
+    syncOperation?: SyncOperationDraft,
+    expectedIdeaIds?: readonly string[]
+  ): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadPersonalIdeas?(writerId: string): Promise<readonly import("./narrative-knowledge").PersonalIdeaLibraryEntry[]>;
   loadProjectFinalizationReceipt?(
     writerId: string,

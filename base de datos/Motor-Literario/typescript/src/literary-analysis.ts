@@ -4844,6 +4844,7 @@ function buildCharacterNarrativeTrajectories(
   knownIdeas: readonly LiteraryAnalysisKnownIdea[],
   omittedRelationCount: number,
   omittedIdeaCount: number,
+  omittedProjectIdeaCount: number,
   omittedProjectEventCount: number
 ): LiteraryCharacterNarrativeTrajectoryAnalysis {
   const attributesByCharacter = new Map<string,LiteraryCharacterAttributeProfile[]>();
@@ -5021,7 +5022,7 @@ function buildCharacterNarrativeTrajectories(
         : relatedIdeaStateDivergenceCount > 0
           ? "mixed-status" as const
           : hasUnresolvedRelatedIdeas
-            ? omittedIdeaCount > 0
+            ? omittedIdeaCount > 0 || omittedProjectIdeaCount > 0
               ? "unknown-due-to-incomplete-snapshot" as const
               : "targets-not-in-snapshot" as const
             : "same-status" as const;
@@ -6499,41 +6500,27 @@ function collectSensorySignals(
 
 function isValidNarrativeIdeaStatusHistory(
   value: unknown,
-  currentStatus: NarrativeIdea["status"],
-  writerDecisionCount: number,
-  omittedStatusHistoryCount: number
+  _currentStatus: NarrativeIdea["status"],
+  _writerDecisionCount: number,
+  _omittedStatusHistoryCount: number
 ): value is readonly NarrativeIdeaStatusChange[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
-  let previousChangedAt: number | undefined;
-  for (let index = 0; index < value.length; index++) {
-    const change = value[index] as NarrativeIdeaStatusChange | null | undefined;
+  // Los historiales de libros importados son evidencia histórica, no comandos
+  // de escritura. Se aceptan ausencias, transiciones repetidas y relojes no
+  // monótonos para que el grafo pueda conservarlos y diagnosticarlos.
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length > 100) return false;
+  for (const change of value) {
     if (!change ||
         !["IDEA","incorporated","discarded"].includes(change.status) ||
         !["initial","writer","text-revised"].includes(change.reason) ||
-        (change.reason === "text-revised" && change.status !== "IDEA") ||
-        (index === 0
-          ? omittedStatusHistoryCount === 0
-            ? change.reason !== "initial"
-            : change.reason === "initial"
-          : change.reason === "initial" ||
-            change.status === (value[index - 1] as NarrativeIdeaStatusChange).status) ||
         (change.changedAt !== undefined &&
-          (!Number.isFinite(change.changedAt) || change.changedAt < 0)) ||
-        (change.changedAt !== undefined && previousChangedAt !== undefined &&
-          change.changedAt < previousChangedAt)) {
+          (typeof change.changedAt !== "number" ||
+            !Number.isFinite(change.changedAt) || change.changedAt < 0))) {
       return false;
     }
-    if (change.changedAt !== undefined) previousChangedAt = change.changedAt;
   }
-  const visibleWriterDecisionCount = value.filter(
-    (change: NarrativeIdeaStatusChange) => change.reason === "writer"
-  ).length;
-  // El prefijo omitido contiene el estado inicial, que no cuenta como decisión del escritor.
-  return value[value.length - 1]?.status === currentStatus &&
-    writerDecisionCount >= visibleWriterDecisionCount &&
-    writerDecisionCount - visibleWriterDecisionCount <= Math.max(0, omittedStatusHistoryCount - 1);
+  return true;
 }
-
 function validateInput(input: LiteraryAnalysisInput): number {
   const baseOffset = input?.baseOffset ?? 0;
   if (!input || typeof input !== "object" ||
@@ -6684,8 +6671,6 @@ function validateInput(input: LiteraryAnalysisInput): number {
         !["IDEA","incorporated","discarded"].includes(idea.status) ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > MAX_NARRATIVE_IDEA_REFERENCES ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
-        new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
-        idea.relatedIdeaIds.includes(idea.ideaId) ||
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Number.isSafeInteger(idea.writerDecisionCount) || idea.writerDecisionCount < 0 ||
@@ -6714,8 +6699,7 @@ function validateInput(input: LiteraryAnalysisInput): number {
         new Set(idea.relatedEntityIds).size !== idea.relatedEntityIds.length ||
         !Array.isArray(idea.relatedIdeaIds) || idea.relatedIdeaIds.length > 500 ||
         idea.relatedIdeaIds.some((id: string) => typeof id !== "string" || !id.trim()) ||
-        new Set(idea.relatedIdeaIds).size !== idea.relatedIdeaIds.length ||
-        idea.relatedIdeaIds.includes(idea.ideaId) ||
+
         !Number.isSafeInteger(idea.evidenceCount) || idea.evidenceCount < 0 ||
         !Number.isSafeInteger(idea.staleEvidenceCount) || idea.staleEvidenceCount < 0 ||
         !Array.isArray(idea.evidence) || idea.evidence.length > 20 ||
@@ -6855,7 +6839,7 @@ export function analyzeLiteraryFragment(input: LiteraryAnalysisInput): LiteraryA
     characterEventEvidenceProfiles,eventDependencyAnalysis,input.knownProjectEvents ?? [],
     input.documentId,input.revision,input.knownRelations ?? [],input.knownIdeas ?? [],
     input.knownRelationsOmittedCount ?? 0,input.knownIdeasOmittedCount ?? 0,
-    input.knownProjectEventsOmittedCount ?? 0
+    input.knownProjectIdeasOmittedCount ?? 0,input.knownProjectEventsOmittedCount ?? 0
   );
   const knownIdeaTextById = new Map(
     (input.knownIdeas ?? []).map(idea => [idea.ideaId, idea.text] as const)

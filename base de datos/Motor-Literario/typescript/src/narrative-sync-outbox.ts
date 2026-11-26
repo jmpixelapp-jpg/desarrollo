@@ -33,6 +33,12 @@ export interface NarrativeSyncOutboxEntry {
   readonly lastError?: string;
 }
 
+interface OutboxProjectCursor {
+  readonly projectId: string;
+  readonly lastGeneration: number;
+  readonly updatedAt: number;
+}
+
 interface OutboxWriterCursor {
   readonly projectId: string;
   readonly writerId: string;
@@ -82,6 +88,7 @@ export interface NarrativeSyncOutboxOptions {
 
 const OPERATIONS = "outbox-operations";
 const WRITER_CURSORS = "outbox-writer-cursors";
+const PROJECT_CURSORS = "outbox-project-cursors";
 const MAX_BATCH_SIZE = 100;
 const MAX_WRITER_ID_UNITS = 256;
 const MAX_ERROR_UNITS = 1_024;
@@ -218,6 +225,13 @@ export class IndexedDbNarrativeSyncOutbox {
         return { status: "duplicate", entry: snapshot.existing };
       }
       validateOutboxCursor(snapshot.cursor, projectId, input.writerId);
+      if (snapshot.projectCursor &&
+          (generation !== snapshot.projectCursor.lastGeneration + 1 ||
+           expectedGeneration !== snapshot.projectCursor.lastGeneration)) {
+        throw new Error(
+          "El outbox exige generaciones consecutivas; primero debe encolarse la generación anterior del proyecto."
+        );
+      }
       const sequence = (snapshot.cursor?.lastSequence ?? 0) + 1;
       if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence >= Number.MAX_SAFE_INTEGER) {
         throw new Error("El escritor alcanzó el límite seguro de secuencias del outbox.");
@@ -251,7 +265,8 @@ export class IndexedDbNarrativeSyncOutbox {
       const result = await this.commitEnqueueSnapshot(
         database,
         entry,
-        snapshot.cursor?.lastSequence ?? 0
+        snapshot.cursor?.lastSequence ?? 0,
+        snapshot.projectCursor?.lastGeneration ?? 0
       );
       if (result.status === "retry") continue;
       validateStoredEntry(result.entry);
@@ -278,9 +293,7 @@ export class IndexedDbNarrativeSyncOutbox {
         entries = (request.result as NarrativeSyncOutboxEntry[])
           .filter(entry => status === undefined || entry.status === status)
           .sort((left, right) =>
-            left.createdAt - right.createdAt ||
-            left.writerId.localeCompare(right.writerId) ||
-            left.sequence - right.sequence
+            left.generation - right.generation
           );
         try { entries.forEach(validateStoredEntry); } catch (error) {
           reject(error);
@@ -330,22 +343,30 @@ export class IndexedDbNarrativeSyncOutbox {
               left.writerId.localeCompare(right.writerId) ||
               left.sequence - right.sequence
             );
-          for (const entry of entries) {
-            if (claimed.length >= limit) break;
-            const ready = entry.status === "pending"
-              ? entry.nextAttemptAt <= now
-              : entry.status === "leased" && (entry.leaseExpiresAt ?? Number.POSITIVE_INFINITY) <= now;
-            if (!ready) continue;
-            const next: NarrativeSyncOutboxEntry = {
-              ...entry,
-              status: "leased",
-              attempts: entry.attempts + 1,
-              lastAttemptAt: now,
-              leaseOwner: input.workerId,
-              leaseExpiresAt: now + leaseMs
-            };
-            store.put(next);
-            claimed.push(next);
+          // Una generación depende de la anterior. Solo se reclama la primera
+          // que aún no está entregada; nunca se adelanta mientras exista un
+          // lease activo o un retry pendiente de una generación más antigua.
+          const nextPending = entries.find(entry => entry.status !== "delivered");
+          if (nextPending) {
+            const ready = nextPending.status === "pending"
+              ? nextPending.nextAttemptAt <= now
+              : (nextPending.leaseExpiresAt ?? Number.POSITIVE_INFINITY) <= now;
+            if (ready) {
+              if (nextPending.attempts >= Number.MAX_SAFE_INTEGER ||
+                  !Number.isFinite(now + leaseMs)) {
+                throw new Error("La entrada del outbox agotó sus contadores o su ventana de lease.");
+              }
+              const next: NarrativeSyncOutboxEntry = {
+                ...nextPending,
+                status: "leased",
+                attempts: nextPending.attempts + 1,
+                lastAttemptAt: now,
+                leaseOwner: input.workerId,
+                leaseExpiresAt: now + leaseMs
+              };
+              store.put(next);
+              claimed.push(next);
+            }
           }
         } catch (error) {
           failure = error instanceof Error ? error : new Error("El outbox contiene una entrada inválida.");
@@ -440,13 +461,19 @@ export class IndexedDbNarrativeSyncOutbox {
     projectId: string,
     generation: number,
     writerId: string
-  ): Promise<{ readonly existing?: NarrativeSyncOutboxEntry; readonly cursor?: OutboxWriterCursor }> {
+  ): Promise<{
+    readonly existing?: NarrativeSyncOutboxEntry;
+    readonly cursor?: OutboxWriterCursor;
+    readonly projectCursor?: OutboxProjectCursor;
+  }> {
     return new Promise((resolve, reject) => {
-      const transaction = database.transaction([OPERATIONS, WRITER_CURSORS], "readonly");
+      const transaction = database.transaction([OPERATIONS, WRITER_CURSORS, PROJECT_CURSORS], "readonly");
       const operations = transaction.objectStore(OPERATIONS);
       const cursors = transaction.objectStore(WRITER_CURSORS);
+      const projectCursors = transaction.objectStore(PROJECT_CURSORS);
       let existing: NarrativeSyncOutboxEntry | undefined;
       let cursor: OutboxWriterCursor | undefined;
+      let projectCursor: OutboxProjectCursor | undefined;
       let operationsReady = false;
       let cursorReady = false;
       const finish = (): void => {
@@ -473,9 +500,17 @@ export class IndexedDbNarrativeSyncOutbox {
       cursorRequest.onerror = () => {
         try { transaction.abort(); } catch { /* abortada */ }
       };
+      const projectCursorRequest = projectCursors.get(projectId);
+      projectCursorRequest.onsuccess = () => {
+        projectCursor = projectCursorRequest.result as OutboxProjectCursor | undefined;
+      };
+      projectCursorRequest.onerror = () => {
+        try { transaction.abort(); } catch { /* abortada */ }
+      };
       transaction.oncomplete = () => resolve({
         ...(existing ? { existing } : {}),
-        ...(cursor ? { cursor } : {})
+        ...(cursor ? { cursor } : {}),
+        ...(projectCursor ? { projectCursor } : {})
       });
       transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo leer el estado de secuencia del outbox."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Se abortó la lectura de secuencia del outbox."));
@@ -485,23 +520,27 @@ export class IndexedDbNarrativeSyncOutbox {
   private async commitEnqueueSnapshot(
     database: IDBDatabase,
     entry: NarrativeSyncOutboxEntry,
-    expectedLastSequence: number
+    expectedLastSequence: number,
+    expectedLastGeneration: number
   ): Promise<{ readonly status: "queued" | "duplicate"; readonly entry: NarrativeSyncOutboxEntry } | { readonly status: "retry" }> {
     return new Promise((resolve, reject) => {
-      const transaction = database.transaction([OPERATIONS, WRITER_CURSORS], "readwrite");
+      const transaction = database.transaction([OPERATIONS, WRITER_CURSORS, PROJECT_CURSORS], "readwrite");
       const operations = transaction.objectStore(OPERATIONS);
       const cursors = transaction.objectStore(WRITER_CURSORS);
+      const projectCursors = transaction.objectStore(PROJECT_CURSORS);
       let currentEntry: NarrativeSyncOutboxEntry | undefined;
       let currentCursor: OutboxWriterCursor | undefined;
+      let currentProjectCursor: OutboxProjectCursor | undefined;
       let operationsReady = false;
       let cursorReady = false;
+      let projectCursorReady = false;
       let outcome:
         | { readonly status: "queued" | "duplicate"; readonly entry: NarrativeSyncOutboxEntry }
         | { readonly status: "retry" }
         | undefined;
       let failure: Error | undefined;
       const proceed = (): void => {
-        if (!operationsReady || !cursorReady || failure || outcome) return;
+        if (!operationsReady || !cursorReady || !projectCursorReady || failure || outcome) return;
         if (currentEntry) {
           try { validateStoredEntry(currentEntry); } catch (error) {
             failure = error instanceof Error ? error : new Error("Entrada duplicada inválida en outbox.");
@@ -522,12 +561,30 @@ export class IndexedDbNarrativeSyncOutbox {
           try { transaction.abort(); } catch { /* abortada */ }
           return;
         }
+        if ((currentProjectCursor?.lastGeneration ?? 0) !== expectedLastGeneration) {
+          outcome = { status: "retry" };
+          try { transaction.abort(); } catch { /* se vuelve a leer el cursor de proyecto */ }
+          return;
+        }
+        if (currentProjectCursor &&
+            (entry.generation !== currentProjectCursor.lastGeneration + 1 ||
+             entry.envelope.payload.expectedGeneration !== currentProjectCursor.lastGeneration)) {
+          failure = new Error("Conflicto de orden: una generación anterior del proyecto no está en el outbox.");
+          try { transaction.abort(); } catch { /* abortada */ }
+          return;
+        }
         if ((currentCursor?.lastSequence ?? 0) !== expectedLastSequence ||
             entry.sequence !== expectedLastSequence + 1) {
           outcome = { status: "retry" };
           try { transaction.abort(); } catch { /* se vuelve a leer cursor y reintentar */ }
           return;
         }
+        const nextProjectCursor: OutboxProjectCursor = {
+          projectId: entry.projectId,
+          lastGeneration: entry.generation,
+          updatedAt: Date.now()
+        };
+        projectCursors.put(nextProjectCursor);
         const nextCursor: OutboxWriterCursor = {
           projectId: entry.projectId,
           writerId: entry.writerId,
@@ -557,6 +614,16 @@ export class IndexedDbNarrativeSyncOutbox {
       };
       cursorRequest.onerror = () => {
         failure = cursorRequest.error ?? new Error("No se pudo leer el cursor del escritor.");
+        try { transaction.abort(); } catch { /* abortada */ }
+      };
+      const projectCursorRequest = projectCursors.get(entry.projectId);
+      projectCursorRequest.onsuccess = () => {
+        currentProjectCursor = projectCursorRequest.result as OutboxProjectCursor | undefined;
+        projectCursorReady = true;
+        proceed();
+      };
+      projectCursorRequest.onerror = () => {
+        failure = projectCursorRequest.error ?? new Error("No se pudo leer el cursor de generación del proyecto.");
         try { transaction.abort(); } catch { /* abortada */ }
       };
       transaction.oncomplete = () => {
@@ -635,6 +702,9 @@ export class IndexedDbNarrativeSyncOutbox {
             keyPath: ["projectId", "writerId"]
           });
           cursors.createIndex("by-project", "projectId", { unique: false });
+        }
+        if (!database.objectStoreNames.contains(PROJECT_CURSORS)) {
+          database.createObjectStore(PROJECT_CURSORS, { keyPath: "projectId" });
         }
       };
       request.onsuccess = () => {

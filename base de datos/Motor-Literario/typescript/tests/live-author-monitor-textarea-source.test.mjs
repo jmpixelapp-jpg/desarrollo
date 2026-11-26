@@ -395,7 +395,11 @@ test("pagehide y freeze suspenden la captura y exigen snapshot tras volver", () 
 
   // freeze duplicado no emite diagnósticos repetidos ni reanuda la fuente.
   documentTarget.emit("freeze");
+  viewTarget.emit("pageshow", { persisted: true });
+  documentTarget.emit("resume");
   assert.equal(f.errors.length, 1);
+  assert.equal(f.source.getState().needsResync, true,
+    "pageshow/resume solo restauran el contexto de página, no la continuidad del documento");
 
   f.element.value = "abc日本";
   f.element.selectionStart = 5;

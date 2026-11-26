@@ -256,8 +256,8 @@ export function discoverNarrativeLocationPresenceCandidates(
         evidence: evidence(
           input,
           character.start,
-          span.start + assertionEnd,
-          sentence.slice(character.start - span.start, assertionEnd)
+          span.end,
+          sentence.slice(character.start - span.start)
         ),
         reviewStatus: "candidate"
       });

@@ -248,7 +248,12 @@ export type NarrativeProjectionReconciliationIssueCode =
   | "missing-manifest"
   | "missing-inventory-id"
   | "stale-inventory-id"
-  | "tombstone-has-evidence";
+  | "tombstone-has-evidence"
+  | "missing-relation-entity"
+  | "missing-event-participant"
+  | "missing-assertion-entity"
+  | "missing-related-entity"
+  | "missing-related-idea";
 
 export interface NarrativeProjectionReconciliationIssue {
   readonly code: NarrativeProjectionReconciliationIssueCode;
@@ -361,6 +366,72 @@ export async function reconcileNarrativeDocumentProjections(
       }
     }
   }
+  const entityIds = new Set(entities.map(item => item.id));
+  const ideaIds = new Set(ideas.map(item => item.id));
+  const evidenceDocuments = (value: unknown): string[] => {
+    const entries = Array.isArray(value) ? value :
+      value && typeof value === "object" ? [value] : [];
+    return [...new Set(entries
+      .map(item => item && typeof item === "object"
+        ? (item as { documentId?: unknown }).documentId : undefined)
+      .filter((id): id is string => typeof id === "string" && !!id.trim()))].sort();
+  };
+  const emitReference = (
+    code: NarrativeProjectionReconciliationIssueCode,
+    recordType: NarrativeProjectionReconciliationIssue["recordType"],
+    recordId: string,
+    targetId: string,
+    documents: readonly string[],
+    description: string
+  ) => {
+    const scopes = documents.length ? documents : [""];
+    for (const documentId of scopes) {
+      emit(code, documentId, recordType, recordId,
+        description + " Referencia inexistente: " + targetId + ".");
+    }
+  };
+  for (const relation of relations) {
+    const documents = evidenceDocuments(relation.evidence);
+    if (!entityIds.has(relation.fromEntityId)) emitReference(
+      "missing-relation-entity", "relation", relation.id, relation.fromEntityId,
+      documents, "La relación no encuentra su entidad de origen."
+    );
+    if (!entityIds.has(relation.toEntityId)) emitReference(
+      "missing-relation-entity", "relation", relation.id, relation.toEntityId,
+      documents, "La relación no encuentra su entidad de destino."
+    );
+  }
+  for (const event of events) {
+    const documents = evidenceDocuments(event.evidence);
+    for (const participantId of event.participants) {
+      if (!entityIds.has(participantId)) emitReference(
+        "missing-event-participant", "event", event.id, participantId,
+        documents, "El acontecimiento referencia un participante inexistente."
+      );
+    }
+  }
+  for (const assertion of assertions) {
+    if (!entityIds.has(assertion.entityId)) emitReference(
+      "missing-assertion-entity", "assertion", assertion.id, assertion.entityId,
+      evidenceDocuments(assertion.evidence), "La afirmación no encuentra su entidad."
+    );
+  }
+  for (const idea of ideas) {
+    const documents = evidenceDocuments(idea.evidence);
+    for (const entityId of idea.relatedEntityIds ?? []) {
+      if (!entityIds.has(entityId)) emitReference(
+        "missing-related-entity", "idea", idea.id, entityId,
+        documents, "La idea referencia una entidad inexistente."
+      );
+    }
+    for (const relatedIdeaId of idea.relatedIdeaIds ?? []) {
+      if (!ideaIds.has(relatedIdeaId)) emitReference(
+        "missing-related-idea", "idea", idea.id, relatedIdeaId,
+        documents, "La idea referencia otra idea inexistente."
+      );
+    }
+  }
+
   return {
     projectId, checkedManifests: manifests.length,
     checkedRecords: entities.length + relations.length + events.length + ideas.length + assertions.length,

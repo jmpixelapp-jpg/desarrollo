@@ -1658,7 +1658,7 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Invariantes:** la identidad de un lease incluye proyecto y documento; los fencing tokens se incrementan por clave de documento, no como un contador global del proyecto. Perder A no libera, renueva ni invalida B.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [Live Author Monitor — run 45766548438](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766548438), checkout `7f9466d4343132d996c32ce1c2a722b5403e6d41`, terminó `success`. El test de leases A/B independientes aprobó como test 126; el cierre de A sin detener B aprobó como test 100. La suite host/editor/browser fue 181/181, monitor aislado 167/167, diagnósticos 17/17, Page Lifecycle Chromium 1/1. Benchmark 100.000 commits en 494,16 ms (~202.365 commits/s), heap de 4,39 MiB estable entre mitad y final y cero tickets pendientes.
 
 
 ## 108. Aislamiento de ciclo de vida al cerrar uno entre varios documentos (26 de noviembre de 2026)
@@ -1669,7 +1669,7 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Valor añadido:** complementa la prueba IndexedDB de aislamiento de fencing por documento; esta prueba cubre la coordinación de nivel host y la independencia de las colas automáticas de persistencia.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [run 45766548438](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766548438) terminó `success`; el test de host mult-documento pasó como test 100 (A se cierra, B mantiene lease/heartbeat y guarda nueva revisión). Suite host/editor/browser 181/181.
 
 
 ## 109. Reanudación de varios documentos con expiración parcial de leases (26 de noviembre de 2026)

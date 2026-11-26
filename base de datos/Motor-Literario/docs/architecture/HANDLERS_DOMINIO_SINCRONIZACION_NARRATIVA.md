@@ -158,3 +158,10 @@ El bloqueo es deliberadamente local al runtime: no coordina pestañas, procesos 
 Se añadieron pruebas con dos instancias independientes de `IndexedDbProjectStore` sobre la misma base de datos. Ambas intentan guardar la misma intención y la misma auditoría; el resultado esperado es una única entrada durable e idéntica al leer desde cualquiera de las instancias. También se prueba la eliminación idempotente concurrente de la intención.
 
 Estas pruebas verifican coordinación a través de la transacción compartida de IndexedDB para las operaciones cubiertas; no prueban un bloqueo global del proceso de recuperación ni sustituyen los CAS de cada registro narrativo.
+
+
+### Exclusión de recuperación entre pestañas
+
+La entrada pública de recuperación usa Web Locks API cuando está disponible. Solicita un bloqueo exclusivo con nombre determinista por proyecto (`motor-literario:narrative-reference-repair:<projectId>`) y mantiene dentro del bloqueo la lectura de intenciones, revalidación, CAS, auditoría y eliminación de cada intención. Así, pestañas del mismo origen que compartan el gestor Web Locks no ejecutan simultáneamente el replay de un mismo proyecto.
+
+La API Web Locks es una mejora de coordinación, no un requisito para la persistencia: si el entorno no la expone, se conserva la serialización dentro del runtime y el CAS por registro. En ese fallback no se afirma exclusión entre pestañas. Si el gestor existe pero rechaza la solicitud, el error se propaga; no se degrada silenciosamente a una recuperación sin bloqueo.

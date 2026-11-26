@@ -175,3 +175,109 @@ export function areNarrativeSyncPayloadsEquivalent(
   return canonicalizeNarrativeSyncPayload(left, limits) ===
     canonicalizeNarrativeSyncPayload(right, limits);
 }
+
+
+/** Sobre versionado para transportar una operación narrativa verificable entre réplicas. */
+export interface NarrativeSyncOperationEnvelope<T = unknown> {
+  readonly schemaVersion: 1;
+  readonly algorithm: "SHA-256";
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly writerId: string;
+  readonly sequence: number;
+  readonly createdAt: number;
+  readonly kind: string;
+  readonly payload: T;
+  readonly digest: string;
+}
+
+export interface CreateNarrativeSyncOperationEnvelopeInput<T = unknown> {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly writerId: string;
+  readonly sequence: number;
+  readonly createdAt?: number;
+  readonly kind: string;
+  readonly payload: T;
+}
+
+/** SHA-256 real mediante Web Crypto; no usa FNV ni bibliotecas específicas de Node. */
+async function sha256NarrativeSyncCanonicalPayload(
+  payload: unknown,
+  limits: NarrativeSyncCanonicalizationLimits = {}
+): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new Error("Este entorno no ofrece Web Crypto SHA-256; no se genera una envoltura degradada.");
+  }
+  const canonical = canonicalizeNarrativeSyncPayload(payload, limits);
+  const digest = await subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  return "sha256:" + Array.from(new Uint8Array(digest), byte =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+function validateNarrativeSyncEnvelopeInput(
+  input: CreateNarrativeSyncOperationEnvelopeInput
+): void {
+  for (const [name, value] of [
+    ["operationId", input?.operationId],
+    ["projectId", input?.projectId],
+    ["writerId", input?.writerId],
+    ["kind", input?.kind]
+  ] as const) {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new TypeError("La envoltura de sincronización requiere " + name + ".");
+    }
+  }
+  if (!Number.isSafeInteger(input.sequence) || input.sequence < 1) {
+    throw new RangeError("La secuencia de operación debe ser un entero positivo.");
+  }
+  const createdAt = input.createdAt ?? Date.now();
+  if (!Number.isFinite(createdAt) || createdAt < 0) {
+    throw new RangeError("La fecha de creación de la operación no es válida.");
+  }
+}
+
+/**
+ * Crea una envoltura con identidad, secuencia y digest SHA-256.
+ * El digest detecta corrupción accidental; no autentica al escritor ni evita replay.
+ */
+export async function createNarrativeSyncOperationEnvelope<T>(
+  input: CreateNarrativeSyncOperationEnvelopeInput<T>,
+  limits: NarrativeSyncCanonicalizationLimits = {}
+): Promise<NarrativeSyncOperationEnvelope<T>> {
+  validateNarrativeSyncEnvelopeInput(input);
+  const unsigned = {
+    schemaVersion: 1 as const,
+    algorithm: "SHA-256" as const,
+    operationId: input.operationId,
+    projectId: input.projectId,
+    writerId: input.writerId,
+    sequence: input.sequence,
+    createdAt: input.createdAt ?? Date.now(),
+    kind: input.kind,
+    payload: input.payload
+  };
+  const digest = await sha256NarrativeSyncCanonicalPayload(unsigned, limits);
+  return { ...unsigned, digest };
+}
+
+/** Valida forma, versión y digest; la autorización y deduplicación pertenecen al receptor. */
+export async function verifyNarrativeSyncOperationEnvelope(
+  envelope: NarrativeSyncOperationEnvelope,
+  limits: NarrativeSyncCanonicalizationLimits = {}
+): Promise<boolean> {
+  if (!envelope || envelope.schemaVersion !== 1 || envelope.algorithm !== "SHA-256" ||
+      typeof envelope.digest !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(envelope.digest)) {
+    return false;
+  }
+  try {
+    validateNarrativeSyncEnvelopeInput(envelope);
+    const { digest, ...unsigned } = envelope;
+    const expected = await sha256NarrativeSyncCanonicalPayload(unsigned, limits);
+    return digest === expected;
+  } catch {
+    return false;
+  }
+}

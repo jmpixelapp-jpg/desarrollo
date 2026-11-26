@@ -5077,7 +5077,7 @@ test("relaciones, ideas y acontecimientos mantienen offsets UTF-16 con emoji y C
 
 test("las afirmaciones sobre personajes conservan offsets UTF-16 tras emojis y CRLF", async () => {
   const { extractNarrativeAssertions } = await import("../dist/motor-literario.js");
-  const text = "😀\\r\\nAna tiene 30 años.\\r\\n";
+  const text = "😀\r\nAna tiene 30 años.\r\n";
   const baseOffset = 509;
   const entity = {
     projectId: "assertion-unicode-offsets",

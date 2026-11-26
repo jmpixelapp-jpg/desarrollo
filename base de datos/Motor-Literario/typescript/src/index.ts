@@ -55,3 +55,4 @@ export * from "./narrative-event-chain-discovery";
 export * from "./narrative-pronoun-reference-discovery";
 
 export * from "./narrative-dialogue-speaker-discovery";
+export * from "./narrative-elliptical-subject-discovery";

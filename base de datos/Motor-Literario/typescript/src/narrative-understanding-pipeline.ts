@@ -352,7 +352,9 @@ export function understandNarrativeFragment(
     projectId: input.projectId,
     entities: input.entities,
     intents: characterIntents,
-    actions: [...actions, ...pronounTargetActions]
+    priorIntents: input.priorCharacterIntents,
+    actions: [...actions, ...pronounTargetActions],
+    orderedDocumentIds: input.orderedDocumentIds
   });
   const interactions = extractNarrativeCharacterInteractions(
     [...actions, ...pronounTargetActions], input.entities, input.projectId

@@ -393,8 +393,21 @@ export function buildNarrativeIdeaContinuityLines(
         event.earlierOccurrence!.ideaCandidateId,
         event.laterOccurrence!.ideaCandidateId
       ]);
+    const occurrenceOrderEdges: [string, string][] = [...directedEdges];
+    for (let firstIndex = 0; firstIndex < lineOccurrences.length; firstIndex++) {
+      const first = lineOccurrences[firstIndex]!;
+      for (let secondIndex = firstIndex + 1; secondIndex < lineOccurrences.length; secondIndex++) {
+        const second = lineOccurrences[secondIndex]!;
+        if (first.documentId !== second.documentId || first.revision !== second.revision) continue;
+        if (first.evidence.end <= second.evidence.start) {
+          occurrenceOrderEdges.push([first.ideaCandidateId, second.ideaCandidateId]);
+        } else if (second.evidence.end <= first.evidence.start) {
+          occurrenceOrderEdges.push([second.ideaCandidateId, first.ideaCandidateId]);
+        }
+      }
+    }
     const totalOrder = allOrdered
-      ? uniqueTopologicalOrder(occurrenceIds, directedEdges)
+      ? uniqueTopologicalOrder(occurrenceIds, occurrenceOrderEdges)
       : undefined;
     const chronology = !allOrdered ? (directedEdges.length ? "partial" : "unknown") :
       totalOrder ? "complete" : "partial";

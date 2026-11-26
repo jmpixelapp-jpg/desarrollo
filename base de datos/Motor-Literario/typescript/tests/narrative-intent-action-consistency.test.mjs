@@ -85,9 +85,10 @@ test("conserva negación y condicionalidad de la intención sin reinterpretarlas
 });
 
 test("no compara como oposición una acción dirigida a otro objetivo", () => {
+  const extraEntity = {projectId:"novel",id:"nara",kind:"character",canonicalName:"Nara",normalizedName:"nara",aliases:[],evidence:[],firstSeenAt:1,lastSeenAt:1,extractionVersion:1};
   const [result] = compareNarrativeIntentsWithActions({
-    projectId:"novel",entities,intents:[intent("proteger a Elian")],
-    actions:[action("traicionó","affirmed",70,"mara","mara")]
+    projectId:"novel",entities:[...entities,extraEntity],intents:[intent("proteger a Elian")],
+    actions:[action("traicionó","affirmed",70,"mara","nara")]
   });
   assert.equal(result.relation,"unrelated-action");
 });
@@ -98,4 +99,14 @@ test("no usa evidencia marcada como obsoleta para declarar coherencia o contradi
     projectId:"novel",entities,intents:[staleIntent],actions:[action("traicionó")]
   });
   assert.equal(result.relation,"not-comparable");
+});
+
+test("conserva ambigüedad cuando el nombre objetivo pertenece a dos personajes", () => {
+  const duplicate = {...entities[1],id:"elian-2"};
+  const [result] = compareNarrativeIntentsWithActions({
+    projectId:"novel",entities:[...entities,duplicate],
+    intents:[intent("proteger a Elian")],actions:[action("protegió")]
+  });
+  assert.equal(result.relation,"ambiguous-target");
+  assert.equal(result.matchedTargetEntityId,undefined);
 });

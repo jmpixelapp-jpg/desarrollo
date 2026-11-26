@@ -9,6 +9,7 @@ export * from "./narrative-idea-discovery";
 export * from "./narrative-observation-discovery";
 export * from "./narrative-object-state-discovery";
 export * from "./narrative-character-state-discovery";
+export * from "./narrative-character-state-transition-discovery";
 export * from "./narrative-location-transition-discovery";
 export * from "./narrative-location-presence-discovery";
 export * from "./narrative-temporal-reference-discovery";

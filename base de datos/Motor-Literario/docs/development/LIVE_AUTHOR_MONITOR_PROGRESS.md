@@ -1696,6 +1696,8 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Validación CI dedicada:** [Live Author Monitor — run 45766901884](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45766901884), checkout `cfcd63966dbddd636ecd2973e609b648d0b6f890`, terminó `success`. La prueba de dos páginas Chromium con dos documentos pasó; la suite host/editor/browser completó **182/182**, monitor aislado 167/167, diagnósticos 17/17 y Page Lifecycle Chromium 1/1. El benchmark procesó 100.000 commits en **495,01 ms** (~202.015 commits/s), heap estable en 4,39 MiB entre mitad y final, 0,50 MiB retenidos y cero tickets pendientes.
 
 
+**Suite general:** run 45767262173 — estado `completed`, resultado `failure`, checkout `45b2b0f5233283ebe7cd3fea0116a32facb45c47`.
+
 ## 111. Coalescencia de eventos visibilitychange/pageshow en varios documentos (26 de noviembre de 2026)
 
 **Objetivo:** evitar tormentas de renovación cuando el navegador dispara eventos de reanudación próximos entre sí.
@@ -1704,4 +1706,4 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 
 **Invariante:** el coalescing es por `documentId`; un evento de uno o varios tipos no puede multiplicar solicitudes ni fusionar la renovación de documentos distintos. El test espera a que terminen las colas de checkpoint iniciales y reinicia sus contadores de renovación antes de disparar los eventos, para medir exclusivamente las solicitudes de reanudación.
 
-**Validación:** pendiente de GitHub Actions.
+**Validación CI dedicada:** [Live Author Monitor — run 45767262316](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45767262316), checkout `45b2b0f5233283ebe7cd3fea0116a32facb45c47`, terminó `success`. La regresión de coalescencia pasó como test 114; la reanudación A/B aprobó como test 113. Suites: diagnósticos 17/17, monitor aislado 167/167, Page Lifecycle Chromium 1/1 e integración host/editor/browser **183/183**. Benchmark 100.000 commits en **646,92 ms** (~154.579 commits/s), heap de 4,39 MiB a mitad y final, crecimiento medido 0 MiB, 0,50 MiB retenidos y cero tickets pendientes.

@@ -42,3 +42,12 @@ La aplicación anfitriona final del proyecto y el editor enriquecido de producci
 ## Validación CI de la entrega multi-documento
 
 La CI específica [45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764) aprobó **141/141 pruebas** y la suite general [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738) aprobó **718/718 pruebas**, con benchmark completado. Se incluyen las pruebas Chromium de dos capítulos, restauración independiente, continuidad tras recuperar y checkpoints inmediatos válidos.
+
+ 
+## Diagnóstico, clasificación y retención
+
+El panel individual y el tablero por capítulos muestran el estado de checkpoint y coordinación de pestañas. También ofrecen contadores separados de escritura, pegado, borrado, corrección, deshacer, rehacer y otras operaciones. Para las categorías que dependen del historial real (`undo`/`redo`), el editor anfitrión debe proporcionar transacciones reales.
+
+La política de retención configurable se explica en `docs/development/LIVE_AUTHOR_MONITOR_OPERATIONS.md`. Por defecto se conservan 90 días de checkpoints; el anfitrión puede cambiarlo mediante `liveAuthorMonitorCheckpointRetentionMs` o desactivar la limpieza con `0`. Los registros de fencing no se eliminan.
+
+La última CI integral aprobada corresponde al baseline anterior, no a las mejoras recientes. Los workflows más nuevos se detuvieron antes de ejecutar tests por `TS1002` en `src/narrative-history.ts:7`; consulta el registro de fase 3 y la guía operativa para ver los runs exactos.

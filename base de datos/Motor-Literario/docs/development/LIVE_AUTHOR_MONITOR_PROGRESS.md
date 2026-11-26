@@ -625,7 +625,7 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 
 **Benchmark del runner CI:** 40 ediciones a 10.000 palabras: commit p95 5,76 ms / extremo a extremo p95 6,29 ms; 100.000 palabras: 2,69 ms / 3,35 ms; 500.000 palabras: 4,11 ms / 4,71 ms. Línea única de 20.000 palabras: extremo a extremo p95 65,15 ms. Cuatro documentos con diez ediciones por documento: extremo a extremo p95 1,39 ms. Son mediciones de este runner, no garantías universales.
 
-## 8. Entrega — diagnóstico operativo visible (25 de noviembre de 2026)
+## 31. Nueva entrega — diagnóstico operativo visible (25 de noviembre de 2026)
 
 - Se añade el contrato LiveAuthorMonitorPersistenceDiagnostics, consultable por documento desde HostEngineApi.
 - El estado de checkpoint diferencia almacén no compatible, no guardado, espera de durabilidad, guardado en curso, éxito y error.
@@ -638,7 +638,7 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 
 **Validación:** pendiente de GitHub Actions para este commit. El resultado se añadirá en una entrada posterior tras comprobar el workflow.
 
-## 9. Entrega — pruebas de resistencia y recuperación de almacenamiento (25 de noviembre de 2026)
+## 32. Nueva entrega — pruebas de resistencia y recuperación de almacenamiento (25 de noviembre de 2026)
 
 - Se incorpora una prueba de sesión prolongada determinista: 8 documentos de 256 KiB iniciales, 40.000 commits confirmados y más de 8 horas simuladas. Se comprueba que cada documento termina sin pendientes, con ventana acotada de 32 muestras de latencia y sin filtrar el texto privado a los snapshots.
 - Se añade una prueba de recuperación tras una apertura de IndexedDB bloqueada por otra conexión. Primero se espera el error explícito; después de cerrar el bloqueo, una operación nueva debe abrir la base.
@@ -649,12 +649,12 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 
 **Validación:** pendiente de GitHub Actions. El workflow vigente también está bloqueado por un error de sintaxis ajeno al monitor en `src/narrative-history.ts` (TS1002); no se modifica ese archivo porque pertenece a trabajo paralelo.
 
-## 10. Entrega — clasificación de actividad de escritura (25 de noviembre de 2026)
+## 33. Nueva entrega — clasificación de actividad de escritura (25 de noviembre de 2026)
 
 - Se añade la clasificación tipada `EditorChange.activityKind`: escritura, pegado, borrado, corrección, deshacer, rehacer y otras operaciones.
 - El adaptador textarea identifica pegado, borrado y algunos tipos de reemplazo desde `InputEvent.inputType`; los editores nativos pueden informar categorías adicionales.
 - El adaptador transaccional conserva explícitamente los tipos reales `undo` y `redo` del historial.
-- El monitor agrega seis contadores por sesión, los presenta en panel y workspace, y los conserva en checkpoints.
+- El monitor agrega siete contadores por sesión (seis categorías específicas y `otherChanges`), los presenta en panel y workspace, y los conserva en checkpoints.
 - Los campos nuevos son opcionales en checkpoints v1 antiguos. La validación exige enteros no negativos y que la suma de categorías coincida con los cambios aceptados cuando esos campos están presentes.
 - Se añaden pruebas para las seis categorías, pegado desde textarea, historial nativo y recuperación desde checkpoint.
 
@@ -664,7 +664,7 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 
 - La restauración también admite checkpoints intermedios con los seis contadores clasificados pero todavía sin `otherChanges`; el residual se infiere como `acceptedChanges - suma(clasificados)`.
 
-## 11. Entrega — recuperación inmediata al volver de suspensión (25 de noviembre de 2026)
+## 34. Nueva entrega — recuperación inmediata al volver de suspensión (25 de noviembre de 2026)
 
 - HostEngineApi escucha `visibilitychange` y `pageshow`; al regresar una pestaña a estado visible, revalida de inmediato los leases de documentos monitoreados.
 - Si el lease expiró mientras el navegador suspendió o limitó los temporizadores, intenta adquirirlo de nuevo en ese mismo ciclo. Si otra pestaña gana la carrera, el heartbeat periódico conserva los reintentos.
@@ -673,7 +673,7 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 
 **Validación:** pendiente de CI.
 
-## 12. Entrega — retención configurable y limpieza segura (25 de noviembre de 2026)
+## 35. Nueva entrega — retención configurable y limpieza segura (25 de noviembre de 2026)
 
 - Se añade `liveAuthorMonitorCheckpointRetentionMs` a `HostEngineOptions`. El valor predeterminado es 90 días; `0` desactiva la limpieza automática y manual; el rango aceptado es de 0 a 3650 días.
 - `initializeProject()` programa una limpieza local no bloqueante y reporta errores mediante el callback de diagnóstico existente.
@@ -688,7 +688,7 @@ Los valores son mediciones del runner de CI y no una garantía universal de late
 
 - Se amplía la cobertura de retención en HostEngineApi: valor configurable, limpieza automática al iniciar, llamada manual, desactivación con `0` y rechazo de límites inválidos. La fixture de lease vencido conserva fechas internamente válidas para probar expiración real y no corrupción.
 
-## 13. Resultado de CI y protección conservadora (25 de noviembre de 2026)
+## 36. Resultado de CI y protección conservadora (25 de noviembre de 2026)
 
 La ejecución asociada al commit `ac86d54472e982148a3e7a818ac01b2b6024fc69` terminó con estos bloqueos:
 
@@ -699,3 +699,38 @@ La ejecución asociada al commit `ac86d54472e982148a3e7a818ac01b2b6024fc69` term
 El archivo que bloquea la compilación pertenece al área de historial narrativo y no se modifica en esta entrega para evitar interferir con el trabajo paralelo. Se añade además una prueba fail-safe: si el lease de un checkpoint es malformado, la limpieza conserva ese checkpoint en lugar de inferir que puede borrarlo.
 
 - Ajuste del harness Chromium: el lease expirado conserva `acquiredAt <= updatedAt <= expiresAt`; se simula un lease válido pero vencido, no una estructura malformada.
+
+ 
+## 37. Consolidación de fase 3 y documentación operativa (25 de noviembre de 2026)
+
+**Estado de rama:** `main` quedó en `481b0dde05b7878dce428b4778d7b828fa49af73` antes de esta consolidación. La entrega de fase 3 en esta serie incluye diagnósticos de checkpoint/lease, estrés multi-documento, clasificación de operaciones, recuperación al volver de suspensión, retención segura y pruebas de leases inválidos/cierre abrupto.
+
+**Cambios incluidos en la secuencia de commits del módulo:**
+
+| Commit | Alcance |
+|---|---|
+| `85a7ea9` | Diagnóstico de persistencia y coordinación visible en el panel. |
+| `053f455` | Soak determinista, IndexedDB bloqueado y recuperación con dos pestañas. |
+| `57bfbd0` | Clasificación de escritura, pegado, borrado, corrección, undo y redo. |
+| `8350190`, `45eae87` | Compatibilidad de checkpoints antiguos e intermedios. |
+| `976d2b2` | Recuperación del lease en `visibilitychange` y `pageshow`. |
+| `61cd0ef`, `ac86d54` | Retención configurable, protección por leases y pruebas de política. |
+| `f992787`, `481b0dd` | Protección de datos ante lease inválido y fixture Chromium de expiración válida. |
+
+**Validación real observada:**
+
+- [Motor Literario TypeScript — run 45742493582](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45742493582), sobre `481b0dde`: terminó en fallo en `Type-check` por `src/narrative-history.ts(7,41): TS1002 — Unterminated string literal`.
+- [Live Author Monitor — run 45742415506](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45742415506), sobre `f992787`: terminó en fallo en `Build runtime bundle` por `src/narrative-history.ts:7:40 — Unterminated string literal`.
+- Las pruebas específicas del monitor fueron omitidas después de fallar la compilación previa; no se deben interpretar como aprobadas ni como fallidas.
+- La última referencia verde anterior a esta fase sigue siendo [CI específica 45736377764](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377764) (141/141) y [CI general 45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738) (718/718), ambas sobre el commit anterior a estas nuevas mejoras. No validan los commits de esta fase.
+
+**Corrección del disparador:** se añade `typescript/tests/browser/**` a los filtros `push` y `pull_request` del workflow dedicado. Así, modificar el HTML del harness Chromium dispara la misma suite específica que su test Playwright.
+
+**Cobertura implementada frente a medición pendiente:**
+
+- Automatizado: error de cuota simulado con `QuotaExceededError`, apertura IndexedDB bloqueada y reintento, cierre de una página propietaria sin `release()`, expiración de lease, takeover mediante fencing token, recuperación al volver a visible, limpieza segura y prueba de 40.000 commits en 8 documentos.
+- Aún pendiente de validación CI: ejecutar todos esos tests después de corregir el error TypeScript externo.
+- Aún pendiente como medición física: cuota realmente agotada en un perfil de navegador, suspensión del sistema operativo durante horas y medición de heap/RAM real durante un soak prolongado. El test de ocho horas es simulado y no acredita por sí solo consumo de memoria en navegador.
+- Aún pendiente de integración: conectar el callback transaccional, historial y selección del editor enriquecido real de producción, que no se encuentra en este repositorio.
+
+**Documentación:** se añade `LIVE_AUTHOR_MONITOR_OPERATIONS.md` como guía operativa consolidada; el contrato v0.1 y la guía de adaptadores incorporan las nuevas garantías, parámetros y límites.

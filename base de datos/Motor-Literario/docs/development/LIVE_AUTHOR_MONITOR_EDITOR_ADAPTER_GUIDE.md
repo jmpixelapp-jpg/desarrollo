@@ -215,3 +215,13 @@ Los seis contadores se conservan en checkpoints versión 1 como campos opcionale
 La retención de métricas del monitor se configura al crear `HostEngineApi` mediante `liveAuthorMonitorCheckpointRetentionMs`. El valor predeterminado es 90 días; `0` desactiva la limpieza. El máximo configurable es 3650 días.
 
 La limpieza automática se programa al inicializar un proyecto y puede invocarse manualmente con `cleanupLiveAuthorMonitorCheckpoints()`. Solo elimina checkpoints anteriores al umbral de documentos sin lease vigente. Un lease malformado se trata de forma conservadora y protege el checkpoint. Los registros de lease expirados no se eliminan: son tombstones necesarios para preservar la monotonía de los fencing tokens. Esta tarea no carga ni lee el texto del manuscrito.
+
+## 11. Operación, diagnóstico y retención
+
+La guía consolidada de operación es `docs/development/LIVE_AUTHOR_MONITOR_OPERATIONS.md`. Describe los estados de checkpoint y lease, las métricas clasificadas, la política de retención local, las pruebas disponibles y las limitaciones de CI/medición.
+
+El adaptador debe entregar `activityKind` cuando conozca el tipo real de operación. Para deshacer y rehacer debe utilizar las transacciones reales del historial; no debe inferirlas de los atajos de teclado. Si no dispone de ese dato, el monitor aplica una clasificación por delta y registra la operación residual como `other`.
+
+El anfitrión puede configurar `liveAuthorMonitorCheckpointRetentionMs`: 90 días por defecto, `0` para desactivar la limpieza y un máximo de 3650 días. La limpieza automática y manual no inspecciona el manuscrito; conserva checkpoints con leases activos o malformados y nunca elimina el registro de fencing.
+
+La implementación de textarea y el puente transaccional son adaptadores de referencia. La integración con el editor enriquecido de producción continúa pendiente hasta que el anfitrión exponga sus callbacks reales.

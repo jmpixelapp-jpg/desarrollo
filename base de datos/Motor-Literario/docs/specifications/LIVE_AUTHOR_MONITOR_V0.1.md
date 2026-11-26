@@ -836,3 +836,34 @@ La regresión cubre una sesión de 3 ms, umbral de inactividad de 10 ms y downti
 **CI general TypeScript:** [45736377738](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45736377738): typecheck, build, **718 pruebas aprobadas, 0 fallidas y 0 omitidas** y benchmark correcto.
 
 La prueba multi-documento ejecuta escritura, cambio entre capítulos, persistencia, cierre, recuperación de ambos checkpoints y nueva edición posterior. Las regresiones separadas cubren la carrera entre secuencia admitida y persistencia asíncrona y la restauración inmediata de una sesión más corta que `idleAfterMs`.
+
+ 
+## 47. Diagnóstico visible, métricas clasificadas y retención local
+
+### Diagnóstico de persistencia
+
+`HostEngineApi.getLiveAuthorMonitorPersistenceDiagnostics(documentId)` expone metadatos locales sin contenido del manuscrito. El campo `checkpointState` puede ser `unavailable`, `not-saved`, `waiting-for-durability`, `saving`, `saved` o `error`. `leaseState` diferencia `unsupported`, `uninitialized`, `owner`, `observer`, `lost`, `expired`, `releasing` y `error`.
+
+Los códigos de error se normalizan al nombre de clase (por ejemplo `QuotaExceededError`); no se devuelven mensajes arbitrarios, stack traces, texto ni fragmentos del manuscrito. El panel individual y el workspace muestran esta información mediante regiones semánticas `role="status"` y `aria-live="polite"`.
+
+### Clasificación de actividad
+
+`EditorChange.activityKind` permite etiquetar `typing`, `paste`, `deletion`, `correction`, `undo`, `redo` y `other`. El monitor expone un contador por categoría. Si el tipo no se conoce, aplica inferencia conservadora por delta; los cambios históricos de checkpoints v1 antiguos sin categorías se restauran como `other`, preservando el total de ediciones aceptadas. Los checkpoints intermedios con seis categorías clasificadas y sin `otherChanges` calculan el residual por diferencia.
+
+### Suspensión y pérdida de lease
+
+Al volver a estado visible o recibir `pageshow`, el anfitrión revalida inmediatamente los leases observados. Si una pestaña perdió la titularidad, intenta recuperarla con un fencing token más reciente; el heartbeat sigue intentando si otra pestaña gana la carrera. El montaje retira listeners al ejecutar `dispose()`.
+
+### Retención de checkpoints
+
+`HostEngineOptions.liveAuthorMonitorCheckpointRetentionMs` configura la retención: 90 días por defecto, `0` para desactivar la limpieza automática/manual y un máximo de 3650 días. `HostEngineApi.cleanupLiveAuthorMonitorCheckpoints(now?)` permite ejecutarla manualmente.
+
+La limpieza IndexedDB queda limitada al proyecto solicitado y ejecuta checkpoint/lease en una transacción común. Elimina únicamente checkpoints anteriores al umbral que no estén protegidos por lease activo. Un lease malformado se considera protegido. Los registros de lease expirados se conservan como tombstones para no reiniciar los fencing tokens.
+
+### Pruebas y límites
+
+Las pruebas añadidas cubren error de cuota simulado, apertura IndexedDB bloqueada y reintento, cierre abrupto de una página propietaria, expiración/takeover con fencing, retorno a visible, retención por proyecto y una carga determinista de 40.000 commits en ocho documentos a lo largo de más de ocho horas simuladas.
+
+La carga simulada no equivale a ocho horas físicas ni a una medición real de RAM. Quedan pendientes el agotamiento real de cuota en navegador, suspensión real del sistema operativo y medición física prolongada de memoria. La validación integral de esta entrega está bloqueada por `TS1002` en `src/narrative-history.ts:7`, fuera de este módulo; véase `LIVE_AUTHOR_MONITOR_OPERATIONS.md`.
+
+La integración específica con un editor enriquecido de producción también continúa pendiente: el repositorio contiene textarea de referencia y contratos transaccionales genéricos, no el host visual final.

@@ -165,3 +165,18 @@ Esto conecta la extracción de acciones con información útil de escena: qué o
 
 La ingesta conserva las evidencias exactas del verbo, objeto y participantes con documento, revisión y offsets UTF-16 absolutos. Si no hay una entidad de objeto reconocida, no se inventa una transición a partir de un nombre común aislado. Los tests cubren una entrega con emisor y receptor explícitos, offsets desplazados por `baseOffset` y ausencia de transición cuando falta una ficha de objeto.
 
+### Cambios explícitos de condición de objetos
+
+La detección de trayectorias distingue ahora cambios de condición, además de descubrimiento, pérdida, entrega y recepción. Con una entidad de tipo objeto identificada y un sujeto activo candidato, reconoce estas clases verbales:
+
+| Verbo explícito | Transición candidata |
+|---|---|
+| abrir / cerrar | `opened` / `closed` |
+| romper / reparar | `broken` / `repaired` |
+| destruir | `destroyed` |
+| activar / desactivar | `activated` / `deactivated` |
+
+La extracción conserva la forma verbal exacta, el objeto identificado, el sujeto candidato y el contexto completo. Mantiene la polaridad y el tiempo gramatical: una acción negada produce `not-applied`; una forma futura produce `prospective`. No convierte automáticamente un participio adjetival aislado (por ejemplo, «la puerta está rota») en una acción ejecutada por un personaje.
+
+Estas etiquetas describen el tipo de cambio expresado por el verbo, no un estado global confirmado. «Intentó romper la espada» no demuestra que la espada se rompiera; «reparó la espada» no demuestra que quedara completamente funcional. Los resultados permanecen como candidatos y necesitan validación contextual. Se añadieron pruebas para los siete verbos, evidencia exacta y offsets, negación y futuro.
+

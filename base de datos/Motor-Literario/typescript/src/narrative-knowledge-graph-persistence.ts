@@ -846,7 +846,7 @@ export async function inspectNarrativeReferenceRepairPending(
         recordId: entry.recordId, status: "invalid-intent",
         detail: "La identidad o los datos de la intención no son válidos." };
     }
-    const record = records[entry.recordType].find(item => item.id === entry.recordId) as
+    const record = records[entry.recordType].find(item => item.id === entry.recordId) as unknown as
       (Record<string, unknown> & { readonly id: string }) | undefined;
     if (!record) {
       return { operationId: entry.operationId, recordType: entry.recordType,

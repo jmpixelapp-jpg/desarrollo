@@ -113,6 +113,22 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
       // Se registra después de la fuente: reproduce un listener anfitrión que
       // cancela el beforeinput después de que el monitor capturó el candidato.
       element.addEventListener("beforeinput", cancelFirstInsertion);
+      element.addEventListener("beforeinput", event => {
+        queueMicrotask(() => {
+          eventTrace.push({
+            type: "microtask-after-host-listener",
+            defaultPrevented: event.defaultPrevented === true,
+            pendingInput: source.getState().pendingInput
+          });
+        });
+        window.setTimeout(() => {
+          eventTrace.push({
+            type: "timer-after-host-listener",
+            defaultPrevented: event.defaultPrevented === true,
+            pendingInput: source.getState().pendingInput
+          });
+        }, 0);
+      });
       element.addEventListener("input", event => {
         eventTrace.push({
           type: event.type,

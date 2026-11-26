@@ -145,3 +145,18 @@ test("no compara metas de otros capítulos cuando no se declaró el orden docume
     projectId:"novel",entities,intents:[],priorIntents:[prior],actions:[laterAction]
   }),[]);
 });
+
+test("rechaza IDs duplicados entre objetivos actuales e históricos", () => {
+  const current = intent("proteger a Elian");
+  const prior = {...current,evidence:{...current.evidence,documentId:"chapter-0"}};
+  assert.throws(() => compareNarrativeIntentsWithActions({
+    projectId:"novel",entities,intents:[current],priorIntents:[prior],actions:[]
+  }));
+});
+
+test("rechaza órdenes documentales con identificadores repetidos", () => {
+  assert.throws(() => compareNarrativeIntentsWithActions({
+    projectId:"novel",entities,intents:[],actions:[],
+    orderedDocumentIds:["chapter-1","chapter-1"]
+  }));
+});

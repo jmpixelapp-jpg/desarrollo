@@ -35,6 +35,8 @@ export interface NarrativeCharacterStateTransitionCandidate {
   readonly currentEvidence: TextEvidence;
   readonly previousEpistemicEvidence?: TextEvidence;
   readonly currentEpistemicEvidence?: TextEvidence;
+  readonly previousSourceEvidence?: TextEvidence;
+  readonly currentSourceEvidence?: TextEvidence;
   readonly evidence: TextEvidence;
   readonly reviewStatus: "candidate";
 }
@@ -174,6 +176,8 @@ export function discoverNarrativeCharacterStateTransitions(
         currentEvidence: current.evidence,
         ...(previous?.epistemicFrameEvidence ? { previousEpistemicEvidence: previous.epistemicFrameEvidence } : {}),
         ...(current.epistemicFrameEvidence ? { currentEpistemicEvidence: current.epistemicFrameEvidence } : {}),
+        ...(previous?.epistemicSourceCandidate ? { previousSourceEvidence: previous.epistemicSourceCandidate.evidence } : {}),
+        ...(current.epistemicSourceCandidate ? { currentSourceEvidence: current.epistemicSourceCandidate.evidence } : {}),
         evidence,
         reviewStatus: "candidate"
       });

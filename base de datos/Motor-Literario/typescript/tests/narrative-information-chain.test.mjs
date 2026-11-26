@@ -90,3 +90,15 @@ test("no inventa origen para rumores ni acepta registros de otro proyecto", () =
     projectId:"book-1",currentRecords:[{...rumor,projectId:"other"}]
   }));
 });
+
+
+test("enlaza transmisiones sucesivas dentro del mismo fragmento en orden textual", () => {
+  const first = {...elianTellsMara, evidence:evidence("chapter-4",0,"Elian le contó a Mara que el puente había caído.")};
+  const second = {...maraTellsIvo, evidence:evidence("chapter-4",60,"Mara le contó a Ivo que el puente había caído.")};
+  const result = reconstructNarrativeInformationChain({
+    projectId:"book-1",currentRecords:[first,second]
+  });
+  assert.equal(result[0].linkStatus,"no-predecessor");
+  assert.equal(result[1].linkStatus,"linked");
+  assert.equal(result[1].predecessorRecordId,first.id);
+});

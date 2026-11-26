@@ -2509,10 +2509,14 @@ export class IndexedDbProjectStore implements ProjectStore {
   async saveNarrativeReferenceRepairPending(entry: NarrativeReferenceRepairPendingEntry): Promise<void> {
     if (!entry || typeof entry.projectId !== "string" || !entry.projectId.trim() ||
         typeof entry.operationId !== "string" || !entry.operationId.trim() ||
-        entry.operation !== "narrative-reference-repair" ||
+        typeof entry.issueCode !== "string" || !entry.issueCode ||
         !["relation", "event", "assertion", "idea"].includes(entry.recordType) ||
         !entry.recordId || !entry.referenceField || !entry.missingReferenceId ||
-        !entry.replacementEntityId || !Number.isFinite(entry.appliedAt) || entry.appliedAt < 0) {
+        !entry.replacementEntityId || !Number.isFinite(entry.appliedAt) || entry.appliedAt < 0 ||
+        (entry.recordType === "relation" && entry.referenceField !== "fromEntityId" && entry.referenceField !== "toEntityId") ||
+        (entry.recordType === "event" && entry.referenceField !== "participants") ||
+        (entry.recordType === "assertion" && entry.referenceField !== "entityId") ||
+        (entry.recordType === "idea" && entry.referenceField !== "relatedEntityIds")) {
       throw new Error("Intención pendiente de reparación narrativa inválida.");
     }
     const expectedId = ["reference-repair", entry.projectId, entry.recordType, entry.recordId,
@@ -2527,9 +2531,7 @@ export class IndexedDbProjectStore implements ProjectStore {
       request.onsuccess = () => {
         const current = request.result as NarrativeReferenceRepairPendingEntry | undefined;
         if (current) {
-          const { appliedAt: _currentAt, ...currentOperation } = current;
-          const { appliedAt: _entryAt, ...newOperation } = entry;
-          if (JSON.stringify(currentOperation) !== JSON.stringify(newOperation)) {
+          if (JSON.stringify(current) !== JSON.stringify(entry)) {
             failure = new Error("La intención pendiente ya existe con contenido diferente.");
             transaction.abort();
           }

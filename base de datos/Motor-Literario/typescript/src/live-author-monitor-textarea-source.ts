@@ -93,6 +93,19 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
       );
       return;
     }
+
+    // No basta con comparar la longitud: una mutación programática de igual
+    // tamaño dentro de la selección podría desaparecer al escribir encima.
+    // El snapshot debe coincidir íntegramente ANTES de capturar cada intención.
+    if (this.element.value !== this.previousText ||
+        this.element.value.length !== this.documentLength) {
+      this.fail(
+        "resync-required",
+        "El contenido del textarea cambió fuera de una secuencia observada completa; se requiere un snapshot autoritativo."
+      );
+      return;
+    }
+
     if (input.defaultPrevented) {
       this.pendingInput = undefined;
       return;
@@ -406,6 +419,14 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
 
     this.listeners.add(listener);
     if (this.listeners.size === 1) {
+      // La primera suscripción puede llegar después de una mutación ocurrida
+      // desde la construcción del adaptador. No se inicia sobre una base vieja.
+      if (!this.needsResync && this.element.value !== this.previousText) {
+        this.fail(
+          "resync-required",
+          "El textarea cambió antes de iniciar la observación; se requiere un snapshot autoritativo."
+        );
+      }
       this.element.addEventListener("beforeinput", this.handleBeforeInput);
       this.element.addEventListener("input", this.handleInput);
       this.element.addEventListener("compositionstart", this.handleCompositionStart);
@@ -422,8 +443,18 @@ export class LiveAuthorMonitorTextAreaSource implements LiveAuthorMonitorEditorC
         this.element.removeEventListener("input", this.handleInput);
         this.element.removeEventListener("compositionstart", this.handleCompositionStart);
         this.element.removeEventListener("compositionend", this.handleCompositionEnd);
-        this.pendingInput = undefined;
-        this.compositionActive = false;
+        const hadPendingInput = this.pendingInput !== undefined;
+        if (!this.disposed && !this.needsResync) {
+          this.fail(
+            hadPendingInput ? "missing-input" : "resync-required",
+            hadPendingInput
+              ? "La última suscripción terminó con un beforeinput sin su input correspondiente; se requiere resincronización."
+              : "La captura quedó sin observadores; cualquier edición durante ese intervalo exige un snapshot autoritativo antes de reanudar."
+          );
+        } else {
+          this.pendingInput = undefined;
+          this.compositionActive = false;
+        }
       }
     };
   }

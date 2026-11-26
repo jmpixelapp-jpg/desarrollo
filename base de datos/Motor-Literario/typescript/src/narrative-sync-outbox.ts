@@ -183,7 +183,8 @@ function validateStoredEntry(value: NarrativeSyncOutboxEntry): void {
   }
   validateIdentifier(value.writerId, "writerId", MAX_WRITER_ID_UNITS);
   if (value.operationId !==
-      "continuity-index:" + encodeURIComponent(value.projectId) + ":" + value.generation) {
+      "continuity-index:" + encodeURIComponent(value.projectId) + ":" +
+      encodeURIComponent(value.writerId) + ":" + value.generation) {
     throw new Error("El operationId del outbox no coincide con el proyecto y la generación.");
   }
   validateNarrativeIdeaContinuityIndex(envelope.payload.index);
@@ -250,7 +251,8 @@ export class IndexedDbNarrativeSyncOutbox {
 
     const generation = input.index.generation;
     const fingerprint = input.index.fingerprint;
-    const operationId = "continuity-index:" + encodeURIComponent(projectId) + ":" + generation;
+    const operationId = "continuity-index:" + encodeURIComponent(projectId) + ":" +
+      encodeURIComponent(input.writerId) + ":" + generation;
     const database = await this.open();
 
     for (let attempt = 0; attempt < 4; attempt++) {

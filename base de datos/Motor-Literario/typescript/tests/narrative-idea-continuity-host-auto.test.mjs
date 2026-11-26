@@ -733,3 +733,44 @@ test("exige un ID estable y distinto por instalación al configurar el outbox au
     await store.close();
   }
 });
+
+
+test("un callback auxiliar que falla sincrónicamente no impide persistir en el outbox", async () => {
+  const store = new IndexedDbProjectStore();
+  const outbox = new IndexedDbNarrativeSyncOutbox({
+    databaseName: "host-continuity-outbox-callback-error-" + projectId()
+  });
+  const id = projectId();
+  const errors = [];
+  const api = new HostEngineApi({
+    store,
+    continuityOutbox: outbox,
+    continuityOutboxWriterId: "replica-callback-error-" + randomUUID(),
+    callbacks: {
+      onKnowledgeError: error => errors.push(error),
+      onNarrativeIdeaContinuityIndexUpdated: () => {
+        throw new Error("callback auxiliar falló");
+      }
+    }
+  });
+
+  try {
+    api.initializeProject({ projectId: id, projectName: "Outbox resistente al callback" });
+    await api.openDocument({
+      documentId: "chapter-callback",
+      text: "El tema central es la memoria compartida que une a dos ciudades.",
+      revision: 0,
+      sequence: 0
+    });
+    await api.flushPendingChanges();
+
+    const entries = await outbox.loadEntries(id);
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].generation, 1);
+    assert.ok(errors.some(error => /callback auxiliar falló/u.test(error.message)));
+  } finally {
+    api.dispose();
+    outbox.close();
+    await store.close();
+  }
+});

@@ -225,3 +225,146 @@ Esta sección delimita qué significa que el núcleo de análisis literario e in
 - [ ] Medir memoria, latencia y tamaño de almacenamiento con proyectos reales anonimizados y fijar presupuestos operativos.
 
 **Criterio de cierre de ingeniería:** el paquete TypeScript supera su workflow integral en el HEAD documentado (718/718, sin omisiones, build, typecheck, esquemas y benchmark). Los puntos de la lista anterior son aceptación de despliegue e integración en entornos reales; no se declaran satisfechos por el CI actual ni bloquean afirmar que el núcleo de software y sus contratos automatizados están implementados.
+
+
+---
+
+## Ampliación del alcance: traducción editorial y representación visual de mundos
+**Estado: requisitos propuestos en definición; todavía no implementados ni verificados.**
+
+Esta sección registra nuevas capacidades solicitadas para la visión global del producto. Se incorpora como alcance futuro y no debe interpretarse como funcionalidad existente del motor actual.
+
+### 1. Traducción integral de libros con conservación editorial
+
+El sistema deberá poder recibir un libro en un idioma de origen, permitir seleccionar el idioma de destino y producir una edición traducida completa, estructuralmente organizada y lista para revisión o publicación.
+
+#### Entradas y salidas previstas
+
+- Entradas iniciales a evaluar: EPUB, DOCX, PDF, TXT, Markdown y HTML.
+- Salidas prioritarias: EPUB, DOCX y PDF; otros formatos podrán añadirse según viabilidad.
+- Distinguir PDF con texto seleccionable de PDF escaneado o compuesto por imágenes.
+- Para documentos escaneados, prever OCR, detección de orden de lectura y reconstrucción de bloques.
+- Conservar los originales y generar una nueva edición; nunca sobrescribir el documento fuente.
+
+#### Estructura y maquetación que se deben preservar o reconstruir
+
+- Partes, capítulos, secciones, títulos y subtítulos.
+- Párrafos, saltos, sangrías, espaciado y alineación.
+- Jerarquías tipográficas, fuentes disponibles, tamaños y estilos.
+- Márgenes, tamaño de página, orientación, encabezados y pies.
+- Diálogos, citas, epígrafes, notas al pie y notas finales.
+- Índices, tablas de contenido, numeración y referencias cruzadas.
+- Imágenes, pies de imagen, tablas, listas, enlaces y elementos gráficos.
+- Marcadores, metadatos editoriales y estructura de navegación EPUB.
+
+La paginación puede cambiar al traducir por diferencias de longitud entre idiomas. Por tanto, se debe conservar la configuración editorial cuando sea posible y recalcular correctamente páginas, índice y referencias cuando el nuevo texto lo exija; no se debe prometer identidad exacta de paginación entre idiomas.
+
+#### Calidad de traducción literaria
+
+La traducción deberá usar contexto global y local, no traducir cada segmento de forma aislada. Debe considerar:
+
+- Voz narrativa, tono, registro, época y género literario.
+- Voz individual, personalidad y evolución lingüística de cada personaje.
+- Modismos, metáforas, humor, ironía, juegos de palabras y dobles sentidos.
+- Referencias históricas, sociales y culturales.
+- Nombres propios y criterios coherentes para topónimos, títulos y tratamientos.
+- Terminología técnica, fantástica o inventada y vocabulario recurrente.
+- Continuidad de términos entre capítulos y libros de una misma saga.
+
+Se requiere un glosario por obra/proyecto, una memoria de decisiones terminológicas y reglas configurables para traducir, conservar o adaptar nombres y expresiones. Las decisiones no deben alterar silenciosamente el canon del autor.
+
+#### Control de calidad y trazabilidad
+
+- Registrar idioma detectado, idioma de destino y configuración de traducción.
+- Verificar cobertura: ningún capítulo, párrafo, nota o elemento traducible debe desaparecer sin un diagnóstico explícito.
+- Detectar segmentos sin traducir, duplicados, alteraciones de orden y errores de estructura.
+- Mantener correspondencia entre segmentos originales y traducidos para revisión bilingüe.
+- Permitir revisión humana, correcciones y regeneración selectiva sin rehacer todo el libro.
+- Informar de elementos no procesables o de fidelidad de maquetación limitada.
+- Comprobar que el archivo exportado se abre y conserva su estructura mediante pruebas por formato.
+
+### 2. Creación visual y cartográfica de mundos narrativos
+
+El sistema deberá convertir información narrativa confirmada en representaciones visuales y cartográficas coherentes. Las imágenes serán representaciones de un modelo de mundo compartido, no ilustraciones inconexas.
+
+#### Mapas y geografía
+
+- Planetas, continentes, archipiélagos, regiones y territorios.
+- Países, reinos, fronteras políticas e históricas.
+- Montañas, cordilleras, volcanes, ríos, lagos, mares, océanos, bosques y desiertos.
+- Climas, biomas, recursos naturales y zonas inhabitables.
+- Ciudades, pueblos, aldeas, asentamientos y ruinas.
+- Caminos, rutas comerciales, rutas marítimas y trayectos narrativos.
+- Mapas físicos, políticos, históricos, regionales, urbanos y temáticos.
+
+Cada elemento geográfico deberá disponer, cuando el texto lo permita, de identidad estable, ubicación o relación espacial, escala, fuente textual, nivel de certeza y vínculos con acontecimientos y personajes. Las ubicaciones inferidas deberán distinguirse de las explícitamente descritas por el autor.
+
+#### Asentamientos, arquitectura y espacios
+
+- Ciudades completas, barrios, calles, plazas, mercados y distritos.
+- Pueblos, aldeas, puertos, fortalezas y asentamientos temporales.
+- Casas de personajes, palacios, castillos, tabernas, bibliotecas, templos, escuelas y edificios públicos.
+- Interiores, habitaciones, sótanos, pasadizos, jardines y espacios subterráneos.
+- Planos urbanos, vistas aéreas, panorámicas, fachadas, interiores y detalles arquitectónicos.
+
+#### Vehículos, máquinas y objetos construidos
+
+- Carros, carruajes, barcos, trenes y vehículos terrestres.
+- Aeronaves, naves espaciales y transportes fantásticos.
+- Máquinas, mecanismos, artefactos, herramientas y tecnología propia de cada civilización.
+- Vistas generales, detalles, planos y variantes históricas o funcionales cuando sean relevantes.
+
+#### Coherencia visual y continuidad
+
+- Mantener identificadores y fichas canónicas para lugares, edificios, vehículos y objetos.
+- Reutilizar rasgos visuales establecidos en nuevas vistas e ilustraciones.
+- Respetar época, materiales, clima, cultura, tecnología y recursos disponibles en el mundo.
+- Evitar contradicciones entre mapa, distancias, rutas, arquitectura y acontecimientos.
+- Permitir varias escalas y perspectivas de un mismo lugar.
+- Registrar qué detalles proceden del texto, cuáles son inferencias y cuáles son decisiones creativas aprobadas.
+- Permitir al autor corregir, aceptar o descartar propuestas sin modificar automáticamente el canon.
+
+La generación de imágenes, planos o mapas ilustrados requerirá un componente de renderizado o un proveedor gráfico compatible. El núcleo TypeScript/JavaScript deberá orquestar solicitudes, aportar descripciones estructuradas, conservar referencias y validar coherencia; no se debe confundir la orquestación con la capacidad autónoma de dibujar imágenes sin un motor gráfico.
+
+### 3. Modelo compartido de conocimiento
+
+La traducción, los idiomas ficticios, los mapas y las ilustraciones deberán compartir un modelo de conocimiento del proyecto:
+
+- Entidades canónicas con identificadores estables.
+- Relaciones entre lugares, personajes, culturas, lenguas, objetos y acontecimientos.
+- Cronología e historia de cambios.
+- Coordenadas, regiones, escalas y restricciones espaciales cuando existan datos suficientes.
+- Glosarios y reglas lingüísticas.
+- Evidencias textuales y referencias a capítulos/fragmentos.
+- Procedencia y nivel de confianza de cada dato.
+- Separación entre hechos explícitos, inferencias y contenido creativo aprobado.
+- Versionado, historial de cambios y sincronización.
+
+El modelo compartido deberá evitar que una traducción cambie nombres canónicos sin autorización o que una ilustración introduzca detalles que luego se confundan con hechos establecidos en la obra.
+
+### 4. Criterios generales de aceptación futuros
+
+Una capacidad no se considerará terminada por generar una muestra atractiva. Deberá contar con:
+
+1. Contrato de entrada y salida documentado.
+2. Implementación integrada en la arquitectura existente.
+3. Pruebas unitarias, de integración y de regresión.
+4. Casos de prueba con libros y mundos de complejidad creciente.
+5. Métricas de cobertura, fidelidad, consistencia y errores.
+6. Manejo explícito de incertidumbre y revisión humana.
+7. Documentación de limitaciones, dependencias y formatos compatibles.
+8. Verificación reproducible en CI cuando corresponda.
+
+### 5. Decisiones pendientes para cerrar el alcance
+
+Estas cuestiones quedan abiertas para la conversación de definición:
+
+- ¿La traducción deberá ser literal, literaria/adaptativa o permitir elegir entre ambas por obra?
+- ¿Se desea conservar exactamente el diseño original o permitir una maquetación editorial mejorada?
+- ¿Qué formatos deben ser obligatorios en la primera versión?
+- ¿Los mapas deben ser principalmente ilustraciones, mapas editables con capas y coordenadas, o ambas cosas?
+- ¿Se desea que ciudades, casas y vehículos puedan generarse también como planos técnicos o modelos 3D, además de ilustraciones?
+- ¿El autor deberá aprobar toda inferencia visual antes de incorporarla al canon?
+- ¿Qué nivel de edición manual y exportación se espera para los resultados?
+
+**Nota de estado:** los requisitos de esta ampliación se documentan para definir el producto. No acreditan que existan ya los motores de traducción editorial, OCR, cartografía, generación visual o modelado 3D. Su implementación deberá planificarse por etapas y validarse individualmente.

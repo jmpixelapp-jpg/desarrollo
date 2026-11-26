@@ -318,6 +318,50 @@ function hydrateCompactIndex(
   return { summary: index.summary, lines };
 }
 
+function deriveUniqueStoredOrder(
+  occurrenceIds: readonly string[],
+  events: readonly StoredNarrativeIdeaContinuityEvent[]
+): readonly string[] | undefined {
+  const adjacency = new Map<string, Set<string>>();
+  const indegree = new Map<string, number>();
+  for (const id of occurrenceIds) {
+    adjacency.set(id, new Set());
+    indegree.set(id, 0);
+  }
+  for (const event of events) {
+    if (event.chronology !== "ordered") continue;
+    const from = event.earlierOccurrenceId!;
+    const to = event.laterOccurrenceId!;
+    if (!adjacency.has(from) || !adjacency.has(to) || from === to) {
+      throw new Error("El índice contiene un enlace cronológico fuera de la línea.");
+    }
+    const targets = adjacency.get(from)!;
+    if (targets.has(to)) continue;
+    targets.add(to);
+    indegree.set(to, indegree.get(to)! + 1);
+  }
+  const ready = occurrenceIds.filter(id => indegree.get(id) === 0).sort();
+  const order: string[] = [];
+  let unique = true;
+  while (ready.length) {
+    if (ready.length !== 1) unique = false;
+    const current = ready.shift()!;
+    order.push(current);
+    for (const next of adjacency.get(current)!) {
+      const degree = indegree.get(next)! - 1;
+      indegree.set(next, degree);
+      if (degree === 0) {
+        ready.push(next);
+        ready.sort((a, b) => a.localeCompare(b));
+      }
+    }
+  }
+  if (order.length !== occurrenceIds.length) {
+    throw new Error("El índice contiene un ciclo cronológico imposible.");
+  }
+  return unique ? order : undefined;
+}
+
 export function validateNarrativeIdeaContinuityIndex(
   value: NarrativeIdeaContinuityIndex
 ): void {
@@ -453,8 +497,25 @@ export function validateNarrativeIdeaContinuityIndex(
       exactCount ? "exact-recurrence-line" : "lexical-resonance-line";
     const modalityCount = lineEvents.filter(event => event.signals.includes("modality-change")).length;
     const kindChangeCount = lineEvents.filter(event => event.signals.includes("idea-kind-change")).length;
-    if (line.chronology === "complete" && !Array.isArray(line.orderedOccurrenceIds)) {
-      throw new Error("Una línea con cronología completa debe conservar su orden total.");
+    const uniqueStoredOrder = deriveUniqueStoredOrder(line.occurrenceIds, lineEvents);
+    if (line.chronology === "complete" &&
+        (!uniqueStoredOrder || !Array.isArray(line.orderedOccurrenceIds))) {
+      throw new Error("Una línea completa debe conservar el único orden total deducible de sus relaciones.");
+    }
+    if (line.chronology === "partial" && uniqueStoredOrder) {
+      throw new Error("Una cronología parcial no puede ocultar un orden total único ya deducible.");
+    }
+    if (line.chronology === "unknown" &&
+        (lineEvents.some(event => event.chronology !== "unknown") || uniqueStoredOrder)) {
+      throw new Error("La cronología desconocida contradice las relaciones ordenadas.");
+    }
+    if (line.chronology === "partial" &&
+        !lineEvents.some(event => event.chronology === "ordered")) {
+      throw new Error("Una cronología parcial necesita al menos un enlace ordenado.");
+    }
+    if (line.chronology === "complete" &&
+        JSON.stringify(uniqueStoredOrder) !== JSON.stringify(line.orderedOccurrenceIds)) {
+      throw new Error("El orden almacenado no coincide con el orden total único deducible.");
     }    if (line.chronology === "complete") {
       const orderPosition = new Map<string, number>();
       line.orderedOccurrenceIds!.forEach((id, index) => orderPosition.set(id, index));

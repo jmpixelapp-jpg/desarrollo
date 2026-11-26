@@ -505,6 +505,7 @@ export class LiveAuthorMonitor {
         !integerNonNegative(checkpoint.insertedCharacters) ||
         !integerNonNegative(checkpoint.deletedCharacters) ||
         !integerNonNegative(checkpoint.currentDocumentLength) ||
+        checkpoint.deletedCharacters > checkpoint.currentDocumentLength + checkpoint.insertedCharacters ||
         !integerNonNegative(checkpoint.revision) ||
         !integerNonNegative(checkpoint.sequence) ||
         !integerNonNegative(checkpoint.resynchronizations) ||

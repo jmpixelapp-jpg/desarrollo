@@ -1,0 +1,64 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { extractNarrativeConsequenceCandidates } from "../dist/motor-literario.js";
+
+function event(id, start, end, excerpt) {
+  return {
+    id, projectId: "book-1", label: excerpt,
+    participantEntityIds: [], actionCandidateIds: [],
+    reviewStatus: "candidate",
+    evidence: { documentId: "chapter-1", revision: 2, start, end, excerpt }
+  };
+}
+function input(text, events) {
+  return { projectId: "book-1", documentId: "chapter-1", revision: 2, text, events };
+}
+
+test("vincula dos acontecimientos consecutivos con un marcador explícito", () => {
+  const text = "Mara abrió la puerta. Por eso Elian escapó.";
+  const first = text.indexOf("Mara");
+  const second = text.indexOf("Por eso");
+  const events = [
+    event("event-1", first, text.indexOf(".") + 1, "Mara abrió la puerta."),
+    event("event-2", second, text.length, "Por eso Elian escapó.")
+  ];
+  const results = extractNarrativeConsequenceCandidates(input(text, events));
+  assert.equal(results.length, 1);
+  assert.equal(results[0].sourceEventId, "event-1");
+  assert.equal(results[0].consequenceEventId, "event-2");
+  assert.equal(results[0].marker, "Por eso");
+  assert.equal(results[0].reviewStatus, "candidate");
+  assert.equal(text.slice(results[0].evidence.start, results[0].evidence.end), "Por eso");
+});
+
+test("reconoce conectores compuestos y mantiene el texto de evidencia exacto", () => {
+  const text = "Mara encontró la llave. Como consecuencia de ello, la puerta se abrió.";
+  const a = text.indexOf("Mara"), b = text.indexOf("Como consecuencia");
+  const events = [
+    event("e1", a, text.indexOf(".") + 1, "Mara encontró la llave."),
+    event("e2", b, text.length, "Como consecuencia de ello, la puerta se abrió.")
+  ];
+  const result = extractNarrativeConsequenceCandidates(input(text, events));
+  assert.equal(result[0].marker, "Como consecuencia de ello");
+});
+
+test("no inventa causalidad cuando solo hay sucesión temporal", () => {
+  const text = "Mara abrió la puerta. Después Elian escapó.";
+  const a = text.indexOf("Mara"), b = text.indexOf("Después");
+  const events = [
+    event("e1", a, text.indexOf(".") + 1, "Mara abrió la puerta."),
+    event("e2", b, text.length, "Después Elian escapó.")
+  ];
+  assert.deepEqual(extractNarrativeConsequenceCandidates(input(text, events)), []);
+});
+
+test("rechaza acontecimientos de otro documento o revisión", () => {
+  const text = "Mara abrió la puerta. Por eso Elian escapó.";
+  const a = text.indexOf("Mara"), b = text.indexOf("Por eso");
+  const events = [
+    event("e1", a, text.indexOf(".") + 1, "Mara abrió la puerta."),
+    { ...event("e2", b, text.length, "Por eso Elian escapó."),
+      evidence: { ...event("e2", b, text.length, "Por eso Elian escapó.").evidence, revision: 1 } }
+  ];
+  assert.throws(() => extractNarrativeConsequenceCandidates(input(text, events)), /mismo documento y revisión/);
+});

@@ -45,7 +45,7 @@ export const MAX_NARRATIVE_DIALOGUE_SEGMENTS = 5_000;
 export const MAX_NARRATIVE_DIALOGUE_UTTERANCE_UNITS = 20_000;
 export const MAX_NARRATIVE_DIALOGUE_TEXT_UNITS = 2_000_000;
 
-const SPEECH_VERB = /(?<![\p{L}\p{M}\p{N}_])(?:dij(?:o|eron|e|eron)|dec(?:ía|ían|ir)|pregunt(?:ó|aba|aron|a|an)|respond(?:ió|ía|ieron|e|en)|contest(?:ó|aba|aron|a|an)|exclam(?:ó|aba|aron|a|an)|grit(?:ó|aba|aron|a|an)|susurr(?:ó|aba|aron|a|an)|murmur(?:ó|aba|aron|a|an)|añad(?:ió|ía|ieron|e|en)|replic(?:ó|aba|aron|a|an)|anunci(?:ó|aba|aron|a|an)|afirm(?:ó|aba|aron|a|an)|orden(?:ó|aba|aron|a|an)|respond(?:ió|ía|ieron|e|en)|coment(?:ó|aba|aron|a|an)|explic(?:ó|aba|aron|a|an)|advirti(?:ó|ó|eron|e|en)|balbuce(?:ó|aba|aron|a|an)|confes(?:ó|aba|aron|a|an)|prometi(?:ó|ó|eron|e|en))(?![\p{L}\p{M}\p{N}_])/iu;
+const SPEECH_VERB = /(?<![\p{L}\p{M}\p{N}_])(?:dij(?:o|eron|e|eron)|dec(?:ía|ían|ir)|pregunt(?:ó|aba|aron|a|an)|respond(?:ió|ía|ieron|e|en)|contest(?:ó|aba|aron|a|an)|exclam(?:ó|aba|aron|a|an)|grit(?:ó|aba|aron|a|an)|susurr(?:ó|aba|aron|a|an)|murmur(?:ó|aba|aron|a|an)|añad(?:ió|ía|ieron|e|en)|replic(?:ó|aba|aron|a|an)|anunci(?:ó|aba|aron|a|an)|afirm(?:ó|aba|aron|a|an)|orden(?:ó|aba|aron|a|an)|respond(?:ió|ía|ieron|e|en)|coment(?:ó|aba|aron|a|an)|explic(?:ó|aba|aron|a|an)|advirti(?:ó|ó|eron|e|en)|balbuce(?:ó|aba|aron|a|an)|confes(?:ó|aba|aron|a|an)|prometi(?:ó|ó|eron|e|en))(?![\p{L}\p{M}\p{N}_])/giu;
 
 interface Span {
   readonly start: number;

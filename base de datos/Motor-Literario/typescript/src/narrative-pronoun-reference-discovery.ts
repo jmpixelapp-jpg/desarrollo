@@ -44,6 +44,10 @@ export const DEFAULT_NARRATIVE_PRONOUN_WINDOW = 5_000;
 export const MAX_NARRATIVE_PRONOUN_WINDOW = 50_000;
 export const MAX_NARRATIVE_PRONOUN_REFERENCES = 2_000;
 export const MAX_NARRATIVE_PRONOUN_ANTECEDENTS = 20;
+export const MAX_NARRATIVE_PRONOUN_TEXT_UNITS = 2_000_000;
+export const MAX_NARRATIVE_PRONOUN_ENTITIES = 10_000;
+export const MAX_NARRATIVE_PRONOUN_ALIASES_PER_ENTITY = 100;
+export const MAX_NARRATIVE_PRONOUN_NAME_LENGTH = 256;
 
 const INITIAL_PERSONAL_PRONOUN =
   /^\s*(él|ella|ellos|ellas|usted|ustedes)\b/iu;
@@ -102,8 +106,8 @@ function validate(input: NarrativePronounReferenceDiscoveryInput): void {
       typeof input.projectId !== "string" || !input.projectId.trim() ||
       typeof input.documentId !== "string" || !input.documentId.trim() ||
       !Number.isSafeInteger(input.revision) || input.revision < 0 ||
-      typeof input.text !== "string" ||
-      !Array.isArray(input.entities) ||
+      typeof input.text !== "string" || input.text.length > MAX_NARRATIVE_PRONOUN_TEXT_UNITS ||
+      !Array.isArray(input.entities) || input.entities.length > MAX_NARRATIVE_PRONOUN_ENTITIES ||
       !Number.isSafeInteger(window) || window < 1 ||
       window > MAX_NARRATIVE_PRONOUN_WINDOW ||
       (input.baseOffset !== undefined &&
@@ -116,7 +120,12 @@ function validate(input: NarrativePronounReferenceDiscoveryInput): void {
     if (!entity || entity.projectId !== input.projectId ||
         typeof entity.id !== "string" || !entity.id.trim() ||
         ids.has(entity.id) || typeof entity.canonicalName !== "string" ||
-        !entity.canonicalName.trim() || !Array.isArray(entity.aliases)) {
+        !entity.canonicalName.trim() || entity.canonicalName.length > MAX_NARRATIVE_PRONOUN_NAME_LENGTH ||
+        typeof entity.kind !== "string" || !entity.kind.trim() ||
+        !Array.isArray(entity.aliases) ||
+        entity.aliases.length > MAX_NARRATIVE_PRONOUN_ALIASES_PER_ENTITY ||
+        entity.aliases.some(alias => typeof alias !== "string" || !alias.trim() ||
+          alias.length > MAX_NARRATIVE_PRONOUN_NAME_LENGTH)) {
       throw new Error("Las entidades deben ser únicas, válidas y pertenecer al mismo proyecto.");
     }
     ids.add(entity.id);

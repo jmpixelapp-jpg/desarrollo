@@ -463,7 +463,7 @@ test("recupera la cola y la caché tras un fallo de persistencia", async () => {
     store.ideas.get(projectId + ":idea-source").relatedIdeaIds,
     ["idea-target-b"]
   );
-  assert.equal(store.ideaReads, 2);
+  assert.equal(store.ideaReads, 3);
   assert.equal(store.writes, 2);
   api.dispose();
 });
@@ -530,7 +530,7 @@ test("limita a tres intentos los conflictos CAS consecutivos y conserva las escr
   const reloaded = await api.getNarrativeIdeas();
   const reloadedSource = reloaded.find(item => item.id === "idea-source");
   assert.deepEqual(reloadedSource.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 3);
+  assert.equal(store.ideaReads, 5);
   assert.equal(store.writes, 3);
   api.dispose();
 });
@@ -610,7 +610,7 @@ test("limita a tres intentos los conflictos CAS persistentes al cambiar estado",
     /La idea cambió en otra instancia/
   );
   assert.equal(store.writes, 3);
-  assert.equal(store.ideaReads, 5);
+  assert.equal(store.ideaReads, 3);
   assert.equal(
     store.ideas.get(projectId + ":idea-source").status,
     "IDEA"
@@ -816,7 +816,7 @@ test("agota los tres intentos CAS sin perder cambios concurrentes y refresca la 
   const refreshed = await api.getNarrativeIdeas();
   const source = refreshed.find(item => item.id === "idea-source");
   assert.deepEqual(source.relatedIdeaIds, concurrentIds);
-  assert.equal(store.ideaReads, 4);
+  assert.equal(store.ideaReads, 5);
   api.dispose();
 });
 

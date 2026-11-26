@@ -635,3 +635,83 @@ test("la convergencia a dos saltos declara el truncamiento al agotar su presupue
   assert.equal(graph.twoHopConvergentSourceCount, 1_000);
   assert.equal(graph.twoHopSharedDestinationCount, 500_000);
 });
+
+test("las referencias externas repetidas mantienen contadores y alineación desconocida en snapshots parciales", () => {
+  const graph = analyze([
+    idea("source", ["included", "outside", "outside", "outside-two"]),
+    idea("included")
+  ], 4);
+
+  const source = graph.nodes.find(node => node.ideaId === "source");
+  assert.equal(graph.projectCatalogComplete, false);
+  assert.equal(graph.ideaCount, 2);
+  assert.equal(graph.omittedIdeaCount, 4);
+  assert.equal(graph.referenceCount, 4);
+  assert.equal(graph.includedReferenceCount, 1);
+  assert.equal(graph.notIncludedReferenceCount, 3);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.deepEqual(
+    graph.references.map(reference => reference.resolution),
+    [
+      "included-in-snapshot",
+      "not-in-snapshot",
+      "not-in-snapshot",
+      "not-in-snapshot"
+    ]
+  );
+  assert.equal(source.includedOutgoingReferenceCount, 1);
+  assert.equal(source.notIncludedOutgoingReferenceCount, 3);
+  assert.equal(source.distinctOutgoingIdeaCount, 1);
+  assert.deepEqual(source.directReferenceStatusCounts, {
+    IDEA: 1,
+    incorporated: 0,
+    discarded: 0,
+    notInSnapshot: 3
+  });
+  assert.equal(source.directReferenceStatusAlignment, "unknown-incomplete-snapshot");
+});
+
+test("los estados conocidos mixtos no se ocultan por destinos adicionales fuera del snapshot", () => {
+  const graph = analyze([
+    idea("source", ["idea-target", "incorporated-target", "outside"]),
+    idea("idea-target"),
+    {
+      ...idea("incorporated-target"),
+      status: "incorporated"
+    }
+  ], 1);
+
+  const source = graph.nodes.find(node => node.ideaId === "source");
+  assert.equal(graph.referenceCount, 3);
+  assert.equal(graph.includedReferenceCount, 2);
+  assert.equal(graph.notIncludedReferenceCount, 1);
+  assert.deepEqual(source.directReferenceStatusCounts, {
+    IDEA: 1,
+    incorporated: 1,
+    discarded: 0,
+    notInSnapshot: 1
+  });
+  assert.equal(source.directReferenceStatusAlignment, "mixed-status");
+});
+
+test("el límite de muestras de referencias conserva totales completos y truncamiento exacto", () => {
+  const destinations = Array.from({ length: 5_001 }, (_, index) =>
+    "external-" + String(index).padStart(4, "0")
+  );
+  const graph = analyze([idea("source", destinations)], 2);
+
+  assert.equal(graph.referenceCount, 5_001);
+  assert.equal(graph.includedReferenceCount, 0);
+  assert.equal(graph.notIncludedReferenceCount, 5_001);
+  assert.equal(graph.missingFromProjectReferenceCount, 0);
+  assert.equal(graph.referenceSampleCount, 5_000);
+  assert.equal(graph.omittedReferenceSampleCount, 1);
+  assert.equal(graph.referencesTruncated, true);
+  assert.equal(graph.references.length, 5_000);
+  assert.equal(graph.references[0].toIdeaId, "external-0000");
+  assert.equal(graph.references.at(-1).toIdeaId, "external-4999");
+  const source = graph.nodes.find(node => node.ideaId === "source");
+  assert.equal(source.notIncludedOutgoingReferenceCount, 5_001);
+  assert.equal(source.distinctOutgoingIdeaCount, 0);
+  assert.equal(source.directReferenceStatusCounts.notInSnapshot, 5_001);
+});

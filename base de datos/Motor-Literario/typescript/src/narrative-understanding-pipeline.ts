@@ -10,6 +10,7 @@ import { discoverNarrativeIdeaCandidates } from "./narrative-idea-discovery";
 import { extractNarrativeActionCandidates } from "./narrative-action-extraction";
 import { extractNarrativeCharacterIntentCandidates, type NarrativeCharacterIntentCandidate } from "./narrative-character-intent-extraction";
 import { evolveNarrativeCharacterIntents, type NarrativeCharacterIntentEvolution } from "./narrative-character-intent-evolution";
+import { compareNarrativeIntentsWithActions, type NarrativeIntentActionConsistency } from "./narrative-intent-action-consistency";
 import { extractNarrativeAttributedClaims } from "./narrative-claim-extraction";
 import { extractNarrativeDialogueAttributions } from "./narrative-dialogue-attribution";
 import { extractNarrativeInformationProvenance } from "./narrative-information-provenance";
@@ -106,6 +107,7 @@ export interface NarrativeUnderstandingResult {
   readonly actions: ReturnType<typeof extractNarrativeActionCandidates>;
   readonly characterIntents: readonly NarrativeCharacterIntentCandidate[];
   readonly characterIntentEvolution: readonly NarrativeCharacterIntentEvolution[];
+  readonly intentActionConsistency: readonly NarrativeIntentActionConsistency[];
   readonly attributedClaims: ReturnType<typeof extractNarrativeAttributedClaims>;
   readonly dialogueAttributions: ReturnType<typeof extractNarrativeDialogueAttributions>;
   readonly informationProvenance: ReturnType<typeof extractNarrativeInformationProvenance>;
@@ -263,6 +265,10 @@ export function understandNarrativeFragment(
     currentIntents: characterIntents,
     orderedDocumentIds: input.orderedDocumentIds
   });
+  const intentActionConsistency = compareNarrativeIntentsWithActions({
+    projectId: input.projectId, entities: input.entities,
+    intents: characterIntents, actions
+  });
   const attributedClaims = extractNarrativeAttributedClaims(extractionContext);
   const dialogueAttributions = extractNarrativeDialogueAttributions(extractionContext);
   const informationProvenance = extractNarrativeInformationProvenance(extractionContext);
@@ -365,7 +371,7 @@ export function understandNarrativeFragment(
     documentId: input.documentId,
     revision: input.revision,
     analyzedRange: { start: baseOffset, end: baseOffset + input.text.length },
-    ideas, actions, characterIntents, characterIntentEvolution, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
+    ideas, actions, characterIntents, characterIntentEvolution, intentActionConsistency, attributedClaims, dialogueAttributions, informationProvenance, knowledgeEvolution, informationChain, informationInterpretations, characterKnowledgeStates, memoryEvents, characterMemoryTimelines, memoryActionLinks, events, consequences, scenes, interactions, interactionShifts, pronounResolutions, pronounActions, pronounTargetActions,
     skippedAmbiguousCharacterNames: detectedPronouns.skippedAmbiguousNames,
     assertions, consistencyFindings,
     sceneAssignments: {

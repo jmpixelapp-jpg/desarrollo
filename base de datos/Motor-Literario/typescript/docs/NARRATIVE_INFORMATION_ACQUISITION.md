@@ -59,7 +59,7 @@ Callback: `onNarrativeObservationCandidates(analysis, candidates)`.
 
 ## Limitaciones conocidas que deben guiar el siguiente trabajo
 
-- El vocabulario verbal es deliberadamente finito y debe ampliarse con pruebas por idioma y morfología.
+- El vocabulario verbal es deliberadamente finito y debe ampliarse con pruebas por idioma y morfología. Se han cubierto algunas formas de imperfecto plural y participios irregulares («abierta/abierto»), pero no existe todavía conjugación completa ni análisis morfológico general.
 - La extracción actual de entidades nuevas depende de expresiones de identificación explícitas (por ejemplo, "personaje Ana"). Una mención aislada de nombre propio no basta para crear una ficha automáticamente.
 - El callback de acciones consulta una ventana contextual de hasta 12.000 unidades UTF-16 alrededor del cambio, únicamente si el snapshot abierto coincide con la revisión analizada; mantiene offsets absolutos y usa el fragmento afectado como fallback.
 - El callback de acciones se ejecuta después de la extracción de conocimiento en el flujo que requiere un adaptador con `saveEntity` y `loadEntities`; sin ese contrato de almacenamiento, el flujo actual de extracción narrativa no se activa.

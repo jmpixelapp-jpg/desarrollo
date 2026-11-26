@@ -897,6 +897,28 @@ test("rechaza eventos de edición sintéticos aunque imiten inputType y cambien 
   inputSynthetic.source.dispose();
 });
 
+test("una misma discontinuidad solicita resincronización una sola vez", () => {
+  const f = fixture("PRIVATE_TEXT_FOR_RESYNC");
+  f.source.requireResynchronization("first reason");
+  assert.equal(f.errors.length, 1);
+  assert.equal(f.errors[0].code, "resync-required");
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.source.previousText, "");
+
+  // El binding puede repetir la solicitud durante el mismo rechazo permanente.
+  f.source.requireResynchronization("duplicate reason");
+  f.element.emitBlur();
+  f.element.ownerDocument.emit("freeze");
+  f.element.ownerDocument.defaultView.emit("pagehide");
+
+  assert.equal(f.errors.length, 1,
+    "un solo incidente debe producir un diagnóstico y una limpieza");
+  assert.equal(f.source.previousText, "");
+  assert.equal(f.source.pendingInput, undefined);
+  f.stop();
+  f.source.dispose();
+});
+
 test("libera la copia temporal del manuscrito al suspender y al disponer la captura", () => {
   const f = fixture("PRIVATE_MANUSCRIPT_SENTINEL");
   f.source.requireResynchronization("test privacy release");

@@ -1283,4 +1283,15 @@ El run general original `45747598008` permaneció sin actualizar durante la inst
 
 **Regresiones:** se añaden pruebas para (1) admisión reentrante y orden monotónico observado por un segundo panel, (2) alta/baja de suscriptores durante una notificación y (3) `dispose()` durante una publicación con una segunda notificación encolada.
 
-**Validación:** pendiente de la ejecución de GitHub Actions para este commit. No se afirma todavía que el type-check, la suite o el benchmark hayan pasado.
+**Validación observada en el commit \`7f167c93\`:** el build aislado del monitor pasó y las 17 regresiones de recuperación diagnóstica aprobaron. La lane se detuvo en la auditoría de almacenamiento antes de ejecutar el bundle runtime, las pruebas específicas nuevas y el benchmark: detectó \`DATABASE_VERSION_MISMATCH\` y el almacén \`narrative-reference-repair-audits\` sin mapear. El workflow general falló el type-check por tres errores en \`narrative-knowledge-graph-persistence.ts\` (líneas 434, 796 y 797), archivo ajeno al monitor. La cobertura de las nuevas tres pruebas queda pendiente de ejecutar en la lane dedicada.
+
+
+## 79. No bloquear las regresiones del monitor por fallos de auditoría compartida (26 de noviembre de 2026)
+
+**Hallazgo de CI:** el workflow del monitor ejecuta la auditoría de esquema antes de las pruebas del runtime. Un fallo simultáneo en el manifiesto IndexedDB impide ejecutar la suite específica y el benchmark del monitor, aun cuando el build aislado y la suite diagnóstica ya hayan pasado.
+
+**Cambio de CI:** los pasos de bundle runtime, pruebas del monitor y benchmark se ejecutan con \`if: \${{ !cancelled() }}\`. Una auditoría fallida conserva la conclusión global de fallo, pero ya no bloquea evidencia independiente de la implementación del monitor. La condición no continúa tras una cancelación y no convierte los fallos de auditoría en éxito.
+
+**Causa externa observada en \`7f167c93\`:** la auditoría reportó \`DATABASE_VERSION_MISMATCH\` y el almacén \`narrative-reference-repair-audits\` fuera de \`runtime.object_stores\`; el type-check global reportó errores en \`narrative-knowledge-graph-persistence.ts\`. Esos errores no pertenecen a los archivos modificados por la mejora FIFO.
+
+**Validación:** pendiente de la nueva ejecución de la lane disparada por el cambio del workflow.

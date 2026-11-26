@@ -260,6 +260,7 @@ export interface NarrativeProjectionReconciliationIssue {
   readonly documentId: string;
   readonly recordType: "document" | "entity" | "relation" | "event" | "idea" | "assertion";
   readonly recordId?: string;
+  readonly relatedId?: string;
   readonly detail: string;
 }
 
@@ -331,8 +332,9 @@ export async function reconcileNarrativeDocumentProjections(
     documentId: string,
     recordType: NarrativeProjectionReconciliationIssue["recordType"],
     recordId: string | undefined,
-    detail: string
-  ) => issues.push({ code, documentId, recordType, ...(recordId ? { recordId } : {}), detail });
+    detail: string,
+    relatedId?: string
+  ) => issues.push({ code, documentId, recordType, ...(recordId ? { recordId } : {}), ...(relatedId ? { relatedId } : {}), detail });
 
   for (const documentId of allDocumentIds) {
     const manifest = manifestByDocument.get(documentId);
@@ -387,7 +389,7 @@ export async function reconcileNarrativeDocumentProjections(
     const scopes = documents.length ? documents : [""];
     for (const documentId of scopes) {
       emit(code, documentId, recordType, recordId,
-        description + " Referencia inexistente: " + targetId + ".");
+        description + " Referencia inexistente: " + targetId + ".", targetId);
     }
   };
   for (const relation of relations) {
@@ -511,6 +513,57 @@ export async function repairNarrativeDocumentProjectionManifest(
   if (sameInventory) return { manifest: current, reused: true, changed: false };
   await store.saveNarrativeDocumentProjectionManifestIfUnchanged(candidate, current.generation);
   return { manifest: candidate, reused: false, changed: true };
+}
+
+
+export interface NarrativeReferenceRepairProposal {
+  readonly projectId: string;
+  readonly issueCode: NarrativeProjectionReconciliationIssueCode;
+  readonly recordType: "relation" | "event" | "assertion" | "idea";
+  readonly recordId: string;
+  readonly missingReferenceId: string;
+  readonly candidateEntityId?: string;
+  readonly resolution: "explicit-merge-match" | "manual-review";
+}
+
+/**
+ * Propone correcciones únicamente cuando la procedencia de una identidad
+ * fusionada demuestra una correspondencia exacta y única. No escribe datos.
+ */
+export async function proposeNarrativeReferenceRepairs(
+  store: ProjectStore,
+  report: NarrativeProjectionReconciliationReport
+): Promise<readonly NarrativeReferenceRepairProposal[]> {
+  if (!store || !report || typeof report.projectId !== "string" ||
+      !report.projectId.trim() || !Array.isArray(report.issues) ||
+      typeof store.loadEntities !== "function") {
+    throw new Error("Contexto inválido para proponer reparaciones de referencias.");
+  }
+  const entities = await store.loadEntities(report.projectId);
+  const proposals: NarrativeReferenceRepairProposal[] = [];
+  const supported = new Set<NarrativeProjectionReconciliationIssueCode>([
+    "missing-relation-entity", "missing-event-participant",
+    "missing-assertion-entity", "missing-related-entity"
+  ]);
+  for (const issue of report.issues) {
+    if (!supported.has(issue.code) || !issue.recordId || !issue.relatedId) continue;
+    if (!["relation", "event", "assertion", "idea"].includes(issue.recordType)) continue;
+    const matches = entities.filter(entity =>
+      entity.projectId === report.projectId &&
+      Array.isArray(entity.mergedFromIds) &&
+      entity.mergedFromIds.includes(issue.relatedId!)
+    );
+    proposals.push({
+      projectId: report.projectId,
+      issueCode: issue.code,
+      recordType: issue.recordType,
+      recordId: issue.recordId,
+      missingReferenceId: issue.relatedId,
+      ...(matches.length === 1 ? { candidateEntityId: matches[0]!.id } : {}),
+      resolution: matches.length === 1 ? "explicit-merge-match" : "manual-review"
+    });
+  }
+  return proposals;
 }
 
 export interface NarrativeKnowledgeGraphPersistenceResult {

@@ -1,7 +1,10 @@
 import type { NarrativeTimeReference, TextEvidence, NarrativeEntity } from "./narrative-knowledge";
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\export interface NarrativeAssertion {");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export interface NarrativeAssertion {");
 }
 
 export interface NarrativeAssertion {

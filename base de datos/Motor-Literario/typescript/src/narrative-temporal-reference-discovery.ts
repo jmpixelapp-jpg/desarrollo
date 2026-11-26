@@ -48,6 +48,8 @@ export interface NarrativeTemporalReferenceDiscoveryInput {
 
 export const MAX_NARRATIVE_TEMPORAL_REFERENCE_CANDIDATES = 500;
 export const MAX_NARRATIVE_TEMPORAL_TEXT_UNITS = 2_000_000;
+/** Límite interno de coincidencias intermedias antes de resolver solapamientos. */
+export const MAX_NARRATIVE_TEMPORAL_DISCOVERY_MATCHES = 20_000;
 
 interface Match {
   readonly start: number;
@@ -95,6 +97,7 @@ function discoverMatches(text: string): readonly Match[] {
     build: (match: RegExpMatchArray) => Omit<Match, "start" | "end">[]
   ) => {
     for (const match of text.matchAll(expression)) {
+      if (matches.length >= MAX_NARRATIVE_TEMPORAL_DISCOVERY_MATCHES) break;
       const start = match.index ?? 0;
       const end = start + match[0].length;
       for (const item of build(match)) matches.push({ start, end, ...item });

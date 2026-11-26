@@ -38,7 +38,9 @@ jobs:
       - name: Install development tools
         run: npm install --no-audit --no-fund
       - name: Install Chromium and system dependencies
-        run: npx playwright install --with-deps chromium
+        run: |
+          sudo apt-get update
+          npx playwright install --with-deps chromium
       - name: Test late beforeinput cancellation and next real edit
         run: node --test tests/live-author-monitor-beforeinput-cancellation-browser.test.mjs
       - name: Test trusted IME composition updates and cancellation

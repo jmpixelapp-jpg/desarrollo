@@ -537,3 +537,22 @@ Durante esta fase también se corrigieron dos expresiones regulares de la fase A
 - Se añadió una prueba de integración del pipeline para impedir que futuras modificaciones eliminen el verbo causal.
 - Esta corrección no amplía la inferencia psicológica: solo conserva íntegra la formulación explícita del narrador.
 - La ejecución CI para el head actualizado sigue pendiente; no se declara aprobada la suite.
+
+ 
+## Fase AG: separación de metas, motivos y propósitos en cláusulas coordinadas
+
+Se corrigió una pérdida de precisión detectada en oraciones con más de una relación narrativa explícita. Antes, una captura de objetivo podía absorber la cláusula causal o final completa («quiere proteger a Elian porque teme perderlo»).
+
+- El extractor separa la meta principal de una cláusula introducida por «porque», «ya que» o «puesto que».
+- También separa el objetivo del propósito introducido por «para», «a fin de» o «con el fin de».
+- Cada candidato conserva su propia clase, señal de evidencia y rango literal UTF-16.
+- Se permite más de un candidato por oración cuando el texto expresa relaciones distintas; candidatos duplicados con el mismo ID se consolidan.
+- Se agregan pruebas unitarias para meta + motivación y meta + propósito, además de integración en el pipeline.
+
+Ejemplos esperados:
+- «Mara quiere proteger a Elian porque teme perderlo»: objetivo «proteger a Elian» y motivación «teme perderlo».
+- «Mara quiere proteger a Elian para salvar el reino»: objetivo «proteger a Elian» y propósito «salvar el reino».
+
+Límite: la separación es lingüística y conservadora. No decide si el motivo declarado es verdadero, sincero, principal o suficiente; tampoco deduce motivos que no estén expresados.
+
+Validación: pruebas añadidas y publicadas; build, type-check y suite completa aún deben ejecutarse sobre el head actualizado.

@@ -1821,10 +1821,11 @@ Se añadieron regresiones unitarias y Chromium: no hay delta ni error por la can
 
 Se corrigió una carrera dentro de la misma propagación DOM: un listener posterior puede llamar preventDefault() y blur() antes de que termine beforeinput. La fuente ahora:
 - encola la inspección final de defaultPrevented después de la propagación;
-- si blur ocurre con una operación de texto pendiente, difiere missing-input una microtarea para permitir que se resuelva primero la cancelación;
+- si blur ocurre con un beforeinput de texto no cancelado, conserva el par pendiente y expone pendingInput=true, porque el input del textarea puede llegar en una tarea posterior;
+- si el input tardío llega, lo procesa normalmente; si llega otro beforeinput antes, confirma missing-input;
 - suspende inmediatamente si el foco se pierde durante una composición activa;
-- solo informa missing-input si la misma pareja no cancelada sigue pendiente después de ambas comprobaciones.
+- pagehide, ocultación, freeze y retirada de la última suscripción siguen invalidando la continuidad.
 
-Las pruebas unitarias verifican cancelación reentrante sin error y blur con beforeinput no cancelado con resync obligatorio. La regresión Chromium usa teclado automatizado confiable y ejecuta preventDefault()+blur() en el mismo listener posterior; comprueba cero input, pendingInput liberado y ausencia de un falso diagnóstico.
+Las pruebas unitarias verifican cancelación reentrante sin error, input tardío aceptado después de blur y pérdida confirmada cuando un segundo beforeinput llega sin el input anterior. La regresión Chromium usa teclado automatizado confiable y ejecuta preventDefault()+blur() en el mismo listener posterior; comprueba cero input, pendingInput liberado y ausencia de un falso diagnóstico.
 
 La política quedó documentada en LIVE_AUTHOR_MONITOR_BEFOREINPUT_PAIRING_2026-11-26.md y LIVE_AUTHOR_MONITOR_OPERATIONS.md, sección 28. CI sigue pendiente de confirmación; no se declara aprobada esta revisión.

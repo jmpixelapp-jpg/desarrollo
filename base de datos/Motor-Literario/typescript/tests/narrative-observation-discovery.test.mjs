@@ -212,3 +212,28 @@ test("reconoce futuro en acciones vinculadas a personajes sin convertirlo en fec
     assert.equal(found[0].singleMentionedCharacterId, character.id, text);
   }
 });
+
+test("detecta futuro regular en todo el inventario y formas irregulares frecuentes", () => {
+  const forms = [
+    ["Ana abrirá la puerta.", "abrir", "abrirá"],
+    ["Ana responderá mañana.", "responder", "responderá"],
+    ["Ana dirá la verdad.", "decir", "dirá"],
+    ["Ana saldrá al amanecer.", "salir", "saldrá"],
+    ["Ana protegerá a Bruno.", "proteger", "protegerá"]
+  ];
+  for (const [text, action, surface] of forms) {
+    const found = discoverNarrativeObservationCandidates({ ...context, text });
+    assert.equal(found.length, 1, text);
+    assert.equal(found[0].action, action, text);
+    assert.equal(found[0].surface, surface, text);
+    assert.equal(found[0].grammaticalTense, "future", text);
+  }
+});
+
+test("no reconoce futuros como prefijos de otras palabras", () => {
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana abrirá la puerta; el abrirámetro no existe."
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].surface, "abrirá");
+});

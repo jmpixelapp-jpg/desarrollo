@@ -146,6 +146,11 @@ export interface StoredProjectFinalizationReceipt {
 }
 
 export interface ProjectStore {
+  /** Bandeja de salida durable para sincronización; no implica transporte remoto. */
+  enqueueSyncOperation?(operation: StoredSyncOperation): Promise<void>;
+  loadPendingSyncOperations?(projectId: string, limit?: number): Promise<readonly StoredSyncOperation[]>;
+  recordSyncOperationAttempt?(operationId: string, attemptedAt: number, error?: string): Promise<void>;
+  acknowledgeSyncOperation?(operationId: string): Promise<boolean>;
   /** Escucha avisos locales de cambios narrativos confirmados en otras instancias. */
   subscribeNarrativeChanges?(listener: (projectId: string) => void): () => void;
   /** Relaciones genéricas enlazadas a fichas del mismo libro. */
@@ -437,6 +442,23 @@ export interface StoredChange extends EditorChange {
   readonly projectId: string;
   readonly committedRevision: number;
   readonly committedAt: number;
+}
+
+
+/** Operación durable pendiente de transmitir a un proveedor de sincronización externo. */
+export interface StoredSyncOperation {
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly deviceId: string;
+  /** Secuencia monotónica por dispositivo y proyecto. */
+  readonly sequence: number;
+  readonly kind: string;
+  /** Payload JSON validado; el adaptador remoto debe volver a validar antes de aplicarlo. */
+  readonly payload: string;
+  readonly createdAt: number;
+  readonly attemptCount: number;
+  readonly lastAttemptAt?: number;
+  readonly lastError?: string;
 }
 
 

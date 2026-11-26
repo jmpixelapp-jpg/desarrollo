@@ -250,7 +250,7 @@ test("el planificador reconoce un cursor coherente y no recomienda cambios", asy
     }]
   };
   const plan = await planNarrativeSyncJournalCursorRecovery(journal, "stable-project");
-  assert.equal(plan.safe, true);
+  assert.equal(plan.requiresManualReview, false);
   assert.equal(plan.proposedRebuildCount, 0);
   assert.equal(plan.manualReviewCount, 0);
   assert.equal(plan.items[0].action, "no-action");

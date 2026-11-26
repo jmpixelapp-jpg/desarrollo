@@ -569,7 +569,8 @@ test("rechaza retrocesos en la clasificación de actividad aunque el total acept
     const durable = checkpoint(projectId, documentId, Date.now(), {
       acceptedChanges: 5,
       committedChanges: 5,
-      typingChanges: 3,
+      typingChanges: 2,
+      compositionChanges: 1,
       pasteChanges: 2,
       deletionChanges: 0,
       correctionChanges: 0,
@@ -578,6 +579,10 @@ test("rechaza retrocesos en la clasificación de actividad aunque el total acept
       otherChanges: 0
     });
     await store.saveLiveAuthorMonitorCheckpoint(durable, lease);
+    await assert.rejects(
+      store.saveLiveAuthorMonitorCheckpoint({ ...durable, savedAt: durable.savedAt + 1, compositionChanges: -1 }, lease),
+      /activity-counts.values/
+    );
 
     // El total sigue siendo cinco, pero un checkpoint de la misma sesión
     // reclasifica retroactivamente un cambio de tecleo como "other".
@@ -586,6 +591,7 @@ test("rechaza retrocesos en la clasificación de actividad aunque el total acept
       acceptedChanges: 5,
       committedChanges: 5,
       typingChanges: 2,
+      compositionChanges: 0,
       pasteChanges: 2,
       deletionChanges: 0,
       correctionChanges: 0,
@@ -595,7 +601,7 @@ test("rechaza retrocesos en la clasificación de actividad aunque el total acept
     });
     await assert.rejects(
       store.saveLiveAuthorMonitorCheckpoint(regressed, lease),
-      /hace retroceder la métrica typingChanges/
+      /hace retroceder la métrica compositionChanges/
     );
 
     assert.deepEqual(

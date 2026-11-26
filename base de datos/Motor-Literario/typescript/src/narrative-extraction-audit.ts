@@ -52,7 +52,7 @@ function sentenceSpans(text: string): readonly Span[] {
       const trailing = raw.trimEnd().length;
       const candidate = raw.slice(leading, trailing).trim();
       const structuralHeading = /^(?:#{1,6}\s*)?(?:(?:cap[ií]tulo|chapter|parte|part|libro|book)\s+(?:[ivxlcdm]+|\d+|[a-záéíóúñ-]+)(?:\s*[:.—-].*)?|pr[oó]logo|ep[ií]logo|introducci[oó]n|interludio)$/iu.test(candidate);
-      if (leading < 0 || trailing <= leading || !/[\\p{L}\\p{N}]/u.test(raw) || structuralHeading) continue;
+      if (leading < 0 || trailing <= leading || !/[\p{L}\p{N}]/u.test(raw) || structuralHeading) continue;
       spans.push({
         start: lineStart + (match.index ?? 0) + leading,
         end: lineStart + (match.index ?? 0) + trailing

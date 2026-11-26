@@ -208,6 +208,8 @@ function validate(input: NarrativeUnderstandingInput): void {
         (!Array.isArray(input.priorKnowledgeEvolution) || input.priorKnowledgeEvolution.length > 5000)) ||
       (input.priorMemoryEvents !== undefined &&
         (!Array.isArray(input.priorMemoryEvents) || input.priorMemoryEvents.length > 5000)) ||
+      (input.priorActions !== undefined &&
+        (!Array.isArray(input.priorActions) || input.priorActions.length > 5000)) ||
       (input.priorCharacterIntents !== undefined &&
         (!Array.isArray(input.priorCharacterIntents) || input.priorCharacterIntents.length > 5000)) ||
       (input.orderedDocumentIds !== undefined && !Array.isArray(input.orderedDocumentIds))) {

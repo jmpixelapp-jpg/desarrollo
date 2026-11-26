@@ -217,3 +217,7 @@ La extracción no confunde «Bruno encontró a Ana herida» con «Ana está heri
 
 Los estados no se consolidan ni se sobrescriben entre sí. Dos afirmaciones distintas pueden corresponder a momentos diferentes, una corrección del autor o una contradicción real; decidirlo exige cronología y contexto narrativo. Los offsets UTF-16 absolutos y la revisión de origen permiten reconstruir esa procedencia. La cobertura es deliberadamente explícita y extensible: los estados no incluidos no se inventan ni se fuerzan a una categoría aproximada.
 
+La taxonomía se amplió para separar estados vitales, físicos, cognitivos, emocionales, sociales, de ubicación y otros cambios descritos explícitamente. La cobertura inicial incluye también dormido/despierto, agotado, asustado, enfadado, tranquilo, embarazada, encarcelado, envenenado, ciego, sordo, mudo, paralizado, transformado, atrapado, ausente, perdido y protegido. Cada salida incorpora `category`; el vocabulario es extensible y no pretende reducir todos los estados posibles a una lista cerrada.
+
+La categoría no se usa para inferir estados ausentes. Por ejemplo, que un personaje haya sido atacado no basta para clasificarlo como herido: hace falta una afirmación copulativa explícita respaldada por el texto. Las formas masculinas/femeninas y singulares/plurales contempladas se reconocen sin alterar el fragmento original de evidencia.
+

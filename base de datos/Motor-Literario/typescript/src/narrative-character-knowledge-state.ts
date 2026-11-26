@@ -19,7 +19,7 @@ export interface NarrativeCharacterKnowledgeItem {
   readonly evidence: TextEvidence;
   readonly interpretations: readonly NarrativeInformationInterpretation[];
   readonly evaluations: readonly NarrativeKnowledgeEvolution[];
-  readonly chronology: "ordered-within-document" | "cross-document-order-unknown";
+  readonly chronology: "explicit-document-order" | "same-document-position" | "cross-document-order-unknown";
 }
 export interface NarrativeCharacterKnowledgeState {
   readonly projectId: string;
@@ -74,13 +74,14 @@ export function buildNarrativeCharacterKnowledgeStates(
     entity && entity.projectId === input.projectId && entity.kind === "character" &&
     typeof entity.id === "string" && entity.id.trim()
   );
-  if (characters.length !== input.entities.length) {
-    throw new Error("Las entidades deben ser personajes válidos del proyecto.");
+  if (input.entities.some(entity => !entity || entity.projectId !== input.projectId ||
+      typeof entity.id !== "string" || !entity.id.trim())) {
+    throw new Error("Todas las entidades deben pertenecer al proyecto y tener identificadores válidos.");
   }
   const characterIds = new Set(characters.map(character => character.id));
   for (const record of input.information) {
     if (!record || record.projectId !== input.projectId ||
-        !record.informationHolderEntityId || !characterIds.has(record.informationHolderEntityId) ||
+        (record.informationHolderEntityId !== undefined && !characterIds.has(record.informationHolderEntityId)) ||
         typeof record.content !== "string" || !record.content.trim() ||
         !validateEvidence(record.evidence)) {
       throw new Error("La información debe tener titular, contenido y evidencia válidos del proyecto.");
@@ -127,8 +128,11 @@ export function buildNarrativeCharacterKnowledgeStates(
         interpretations,
         evaluations,
         chronology: order.has(record.evidence.documentId)
-          ? "ordered-within-document" as const
-          : "cross-document-order-unknown" as const
+          ? "explicit-document-order" as const
+          : (input.information.some(other => other.informationHolderEntityId === character.id &&
+              other.evidence.documentId === record.evidence.documentId) 
+              ? "same-document-position" as const
+              : "cross-document-order-unknown" as const)
       };
     }).sort((a, b) => {
       const aOrder = order.get(a.evidence.documentId);

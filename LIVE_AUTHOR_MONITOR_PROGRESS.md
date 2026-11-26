@@ -1818,3 +1818,21 @@ La suite general [run 45765001099](https://github.com/jmpixelapp-jpg/desarrollo/
 **Evidencia previa:** en el workflow integral posterior a la corrección FIFO, ejecución `45806648334`, el type-check aislado, bundle aislado, diagnósticos, esquema, suite unitaria/diagnóstica **191/191**, Page Lifecycle Chromium y benchmark terminaron correctamente. El build runtime falló por el error independiente `narrative-observation-discovery.ts:373:67`; por la condición del workflow, la integración host/editor/browser quedó `skipped`. Por ello, todavía no se cuenta esa ejecución como validación de la nueva prueba de teclado/cancelación.
 
 **Commits de esta entrega:** workflow aislado `11367cc`; documentación de la validación independiente `33e516d`. Resultado del nuevo workflow pendiente de consulta.
+## 118. Resultado de CI posterior a la corrección FIFO (26 de noviembre de 2026)
+
+**Ejecución:** [Live Author Monitor — run 45806648334](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45806648334), commit `381393f504e340b6d80bf1d80b087a52ed2da524`.
+
+**Capas aprobadas en esa ejecución:**
+- Type-check aislado del monitor y UI.
+- Bundle aislado del monitor.
+- Recuperación de diagnósticos: 17/17.
+- Validación de esquema MLDB y mapeo físico.
+- Suite unitaria/diagnóstica del monitor: **191/191, 0 fallos**. Esto verifica también la expectativa corregida de `onAdmission`.
+- Page Lifecycle Chromium: 1/1.
+- Benchmark: 100.000 commits en 385,81 ms (~259.192 commits/s); 8 documentos, crecimiento de heap de 0 MiB entre media y carga completa, 0,5 MiB retenidos por sesiones abiertas y 0 tickets pendientes.
+
+**Bloqueo residual de esa ejecución:** el build runtime general falló antes de la integración host/editor/browser por una cadena sin cerrar en `src/narrative-observation-discovery.ts:373:67`. El archivo es ajeno al monitor. Por la condición `runtime-build.outcome == success`, la suite completa host/editor/browser quedó `skipped`; no se atribuye esa ejecución como aprobación del nuevo test Chromium de cancelación.
+
+**Validación aislada nueva:** workflow [Live Author Monitor — beforeinput cancellation](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45806925554), commit `11367cc5c121c4ee5bd23e6d25e9b9a2fc2064a7`, estado `in_progress` en la última consulta durante instalación de Chromium. Su resultado debe consultarse antes de declarar aprobada la prueba de navegador de la entrada 115.
+
+**Conclusión:** la corrección FIFO sí quedó validada por la suite aislada de 191 pruebas. La nueva regresión de teclado/cancelación ya está integrada y tiene un workflow independiente, pero su ejecución específica aún no se marca como aprobada.

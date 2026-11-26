@@ -96,6 +96,16 @@ test("no presenta al único personaje mencionado como agente gramatical", () => 
   assert.equal("actorEntityId" in found[0], false);
 });
 
+test("reconoce participios pasivos sin atribuir el papel de agente al personaje", () => {
+  const found = discoverNarrativeObservationCandidates({
+    ...context, text: "Ana fue encontrada por el guardia."
+  });
+  assert.equal(found.length, 1);
+  assert.equal(found[0].action, "encontrar");
+  assert.equal(found[0].grammaticalTense, "participle");
+  assert.equal(found[0].singleMentionedCharacterId, character.id);
+});
+
 test("marca negación explícita sin convertirla en acción afirmada", () => {
   const found = discoverNarrativeObservationCandidates({
     ...context, text: "Ana no abrió la puerta."

@@ -159,3 +159,10 @@ La regresión añadida comprueba únicamente la invariante de no sobrescritura: 
 ## Secuencias de dispositivo: integridad frente a asignación
 
 La outbox recibe operaciones con `sequence` ya asignada; `enqueueSyncOperation` no calcula el siguiente valor ni reserva números. El índice único `by-project-device-sequence` impide duplicados para el mismo proyecto y dispositivo, incluso ante inserciones concurrentes, pero no constituye un asignador. Calcular el máximo mediante una lectura y sumar uno no es seguro entre pestañas. Una futura sustitución manual necesita un asignador durable y transaccional o una secuencia reservada por una autoridad externa fiable. La prueba concurrente incorporada comprueba que una colisión de secuencia se rechaza, no que el siguiente número se asigne automáticamente.
+
+
+### Asignación local de secuencia
+
+Los nuevos escritores pueden usar `ProjectStore.enqueueNextSyncOperation(draft)` / `IndexedDbProjectStore.enqueueNextSyncOperation(draft)`: el borrador omite `sequence` y el almacén devuelve la operación persistida con secuencia asignada. La comprobación idempotente del `operationId`, lectura de la última secuencia del dispositivo e inserción ocurren en una sola transacción `readwrite` sobre `SYNC_OUTBOX`. Dos conexiones IndexedDB competidoras del mismo origen quedan serializadas por el almacén y reciben secuencias consecutivas distintas. Repetir la misma identidad devuelve la secuencia ya asignada; reutilizar el ID con contenido distinto se rechaza.
+
+El método no requiere migración: utiliza el índice único existente y considera también operaciones legacy con secuencia explícita. El método antiguo `enqueueSyncOperation` se mantiene por compatibilidad, pero los nuevos escritores deben preferir el asignador. La garantía se limita a una base IndexedDB compartida en un mismo origen; no coordina dispositivos físicos independientes ni reemplaza la autoridad de secuencia del servidor para orden global.

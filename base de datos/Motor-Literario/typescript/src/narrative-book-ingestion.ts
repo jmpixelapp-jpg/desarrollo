@@ -178,8 +178,10 @@ function splitLines(text: string): Span[] {
   const result: Span[] = [];
   const expression = /[^\r\n]+/gu;
   for (const match of text.matchAll(expression)) {
-    const start = match.index ?? 0;
-    const value = match[0];
+    const rawStart = match.index ?? 0;
+    const hasBom = rawStart === 0 && match[0].startsWith("\uFEFF");
+    const start = rawStart + (hasBom ? 1 : 0);
+    const value = hasBom ? match[0].slice(1) : match[0];
     if (value.trim()) result.push({ start, end: start + value.length, text: value });
   }
   return result;

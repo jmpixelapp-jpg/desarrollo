@@ -4107,11 +4107,14 @@ export class IndexedDbProjectStore implements ProjectStore {
                 }
                 const target: IDBValidKey = [writerId, cursor.sourceProjectId, cursor.ideaId];
                 const comparison = indexedDbKeyCompare(primaryKey, target);
-                seekPending = false;
                 if (comparison < 0) {
+                  // Mantiene seekPending hasta alcanzar el cursor exacto o
+                  // el siguiente registro; así nunca se devuelve la última
+                  // entrada de la página anterior como primer elemento nuevo.
                   current.continuePrimaryKey(writerId, target);
                   return;
                 }
+                seekPending = false;
                 if (comparison === 0) {
                   current.continue();
                   return;

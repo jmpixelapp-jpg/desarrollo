@@ -560,12 +560,16 @@ test("propaga la negación a través de auxiliares sin negar la acción matriz",
   assert.equal(first.length, 1);
   assert.equal(first[0].action, "llegar");
   assert.equal(first[0].polarity, "negated");
+  assert.equal(first[0].grammaticalSubjectCandidate?.entityId, character.id);
+  assert.equal(first[0].grammaticalSubjectCandidate?.voice, "active");
 
   const secondText = "Ana no pudo abrir la puerta.";
   const second = discoverNarrativeObservationCandidates({ ...context, text: secondText });
   assert.equal(second.length, 1);
   assert.equal(second[0].action, "abrir");
   assert.equal(second[0].polarity, "negated");
+  assert.equal(second[0].grammaticalSubjectCandidate?.entityId, character.id);
+  assert.equal(second[0].grammaticalSubjectCandidate?.voice, "active");
 
   const matrixText = "Ana dijo que no había llegado.";
   const matrix = discoverNarrativeObservationCandidates({ ...context, text: matrixText });

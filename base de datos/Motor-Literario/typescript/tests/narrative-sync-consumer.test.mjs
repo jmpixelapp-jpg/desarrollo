@@ -8,10 +8,8 @@ import {
   IndexedDbNarrativeSyncJournal
 } from "../dist/motor-literario.js";
 
-function createJournal() {
-  return new IndexedDbNarrativeSyncJournal({
-    databaseName: "narrative-sync-consumer-" + Math.random().toString(36).slice(2)
-  });
+function createJournal(databaseName = "narrative-sync-consumer-" + Math.random().toString(36).slice(2)) {
+  return new IndexedDbNarrativeSyncJournal({ databaseName });
 }
 
 test("consumidor integra recepción durable, validación, despacho y acuse", async () => {
@@ -162,6 +160,8 @@ test("la sincronización protegida recupera referencias antes de reproducir oper
   const result = await consume("recovery-first-project", "remote-writer");
   assert.deepEqual(order, ["recover:recovery-first-project", "apply"]);
   assert.equal(result.blockedByPendingRepairs, false);
+  assert.equal(result.blockedByJournalIntegrity, false);
+  assert.equal(result.journalIntegrity.intact, true);
   assert.deepEqual(result.replay, { processed: 1, remaining: 0 });
   assert.equal(result.recovery.recovered, 0);
   journal.close();
@@ -202,9 +202,63 @@ test("la sincronización protegida retiene el replay si una reparación queda en
 
   const result = await consume("recovery-blocked-project", "remote-writer");
   assert.equal(result.blockedByPendingRepairs, true);
+  assert.equal(result.blockedByJournalIntegrity, false);
   assert.equal(result.recovery.pending.length, 1);
   assert.equal(result.replay, undefined);
   assert.equal(applied, 0);
   assert.equal((await journal.loadPendingOperations("recovery-blocked-project")).length, 1);
   journal.close();
+});
+
+
+test("la sincronización protegida bloquea replay ante digest corrupto del diario", async () => {
+  const databaseName = "recovery-corrupt-journal-" + Math.random().toString(36).slice(2);
+  const journal = createJournal(databaseName);
+  const envelope = await createNarrativeSyncOperationEnvelope({
+    operationId: "corrupt-sync-1",
+    projectId: "corrupt-journal-project",
+    writerId: "remote-writer",
+    sequence: 1,
+    kind: "note",
+    payload: { value: "must-not-apply" }
+  });
+  await journal.accept(envelope);
+  journal.close();
+
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction("operations", "readwrite");
+    const store = transaction.objectStore("operations");
+    const request = store.get(["corrupt-journal-project", "corrupt-sync-1"]);
+    request.onsuccess = () => store.put({ ...request.result, digest: "sha256:" + "0".repeat(64) });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+
+  const reopenedJournal = createJournal(databaseName);
+  let applied = 0;
+  const store = {
+    loadNarrativeReferenceRepairPending: async () => [],
+    appendNarrativeReferenceRepairAudit: async () => {},
+    deleteNarrativeReferenceRepairPending: async () => {}
+  };
+  const consume = createRecoveryFirstNarrativeSyncConsumer(store, reopenedJournal, [{
+    kind: "note",
+    validate: payload => Boolean(payload && typeof payload.value === "string"),
+    apply: async () => { applied++; }
+  }]);
+
+  const result = await consume("corrupt-journal-project", "remote-writer");
+  assert.equal(result.blockedByJournalIntegrity, true);
+  assert.equal(result.journalIntegrity.intact, false);
+  assert.ok(result.journalIntegrity.issues.some(issue => issue.code === "invalid-envelope"));
+  assert.equal(result.replay, undefined);
+  assert.equal(applied, 0);
+  assert.equal((await reopenedJournal.loadPendingOperations("corrupt-journal-project")).length, 1);
+  reopenedJournal.close();
 });

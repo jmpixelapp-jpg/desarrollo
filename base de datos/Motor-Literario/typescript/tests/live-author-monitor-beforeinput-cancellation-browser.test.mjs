@@ -160,9 +160,17 @@ test("Chromium recupera la captura cuando un listener posterior cancela beforein
     await page.locator("#trusted-input-editor").focus();
     await page.keyboard.type("x");
 
-    // keyboard.type termina después de la propagación DOM; cede una tarea para
-    // permitir que la microtarea de resolución de defaultPrevented se complete.
-    await page.waitForTimeout(0);
+    // No basta con ceder una tarea del runner: esperamos el estado observable
+    // de la fuente y la tarea del propio navegador que verifica el fallback.
+    await page.waitForFunction(() => {
+      const test = window.__beforeinputCancellationTest;
+      return test?.source.getState().pendingInput === false;
+    }, { timeout: 5_000 });
+    await page.waitForFunction(() =>
+      window.__beforeinputCancellationTest?.eventTrace.some(
+        event => event.type === "timer-after-host-listener"
+      ) === true
+    , { timeout: 5_000 });
 
     const afterCancellation = await page.evaluate(() => {
       const test = window.__beforeinputCancellationTest;

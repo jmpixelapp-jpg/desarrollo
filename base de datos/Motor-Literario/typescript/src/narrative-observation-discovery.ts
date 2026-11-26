@@ -352,7 +352,7 @@ export function discoverNarrativeObservationCandidates(
         const passiveAgentCandidate = subjectCandidate?.voice === "passive"
           ? (() => {
               const afterVerb = sentence.slice(match.index + surface.length);
-              const agentMatch = /\\bpor\\s+([\\p{Lu}ÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+(?:[ \\u00a0]+(?:de[ \\u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \\u00a0]*[\\p{Lu}ÁÉÍÓÚÜÑ][\\p{L}\\p{M}]+){0,3})/u.exec(afterVerb);
+              const agentMatch = /\bpor\s+([\p{Lu}ÁÉÍÓÚÜÑ][\p{L}\p{M}]+(?:[ \u00a0]+(?:de[ \u00a0]+(?:la|las|los)|de|del|la|las|los|el|y|san|santa)?[ \u00a0]*[\p{Lu}ÁÉÍÓÚÜÑ][\p{L}\p{M}]+){0,3})/u.exec(afterVerb);
               if (!agentMatch) return undefined;
               const matchedName = agentMatch[1]!;
               const candidates = characters.filter(entity =>

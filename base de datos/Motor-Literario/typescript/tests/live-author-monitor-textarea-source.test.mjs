@@ -27,8 +27,8 @@ class FakeTextArea {
     for (const listener of [...(this.listeners.get("beforeinput") ?? [])]) listener(event);
   }
 
-  emitInput(isComposing = false) {
-    const event = { inputType: "", isComposing };
+  emitInput(isComposing = false, inputType = "") {
+    const event = { inputType, isComposing };
     for (const listener of [...(this.listeners.get("input") ?? [])]) listener(event);
   }
 
@@ -386,6 +386,20 @@ test("reconstruye exactamente deltas con límites UTF-16, incluidos pares sustit
   assert.equal(f.changes.length, operations.length);
   assert.equal(f.source.getState().documentLength, previous.length);
   assert.equal(f.source.getState().needsResync, false);
+  f.stop();
+  f.source.dispose();
+});
+
+test("rechaza input cuyo inputType no coincide con el beforeinput asociado", () => {
+  const f = fixture("abc");
+  f.element.selectionStart = 3;
+  f.element.selectionEnd = 3;
+  f.element.emitBeforeInput("insertText");
+  f.element.value = "abcx";
+  f.element.emitInput(false, "insertFromPaste");
+  assert.equal(f.changes.length, 0);
+  assert.equal(f.source.getState().needsResync, true);
+  assert.equal(f.errors[0].code, "input-type-mismatch");
   f.stop();
   f.source.dispose();
 });

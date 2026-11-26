@@ -846,13 +846,29 @@ export class HostEngineApi {
           result.documentId, result.revision, result.affectedText, result.affectedStart
         );
         try {
+          const snapshot = this.getSnapshot(result.documentId);
+          // La ventana contextual permite resolver menciones repetidas entre frases
+          // cercanas sin analizar todo el manuscrito en cada pulsación. Los offsets
+          // siguen siendo absolutos dentro del documento.
+          const contextRadius = 12_000;
+          const snapshotMatchesRevision = snapshot?.revision === result.revision;
+          const contextStart = snapshotMatchesRevision
+            ? Math.max(0, result.affectedStart - contextRadius)
+            : result.affectedStart;
+          const affectedEnd = result.affectedStart + result.affectedText.length;
+          const contextEnd = snapshotMatchesRevision
+            ? Math.min(snapshot.text.length, affectedEnd + contextRadius)
+            : affectedEnd;
+          const contextText = snapshotMatchesRevision
+            ? snapshot.text.slice(contextStart, contextEnd)
+            : result.affectedText;
           const candidates = discoverNarrativeObservationCandidates({
             projectId: this.requireProject().projectId,
             documentId: result.documentId,
             revision: result.revision,
-            text: result.affectedText,
+            text: contextText,
             entities: [...this.narrativeEntities.values()],
-            baseOffset: result.affectedStart
+            baseOffset: contextStart
           });
           this.onNarrativeObservationCandidates?.(result, candidates);
         } catch { /* La observación narrativa nunca bloquea la escritura ni la extracción principal. */ }

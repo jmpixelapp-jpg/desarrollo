@@ -23,6 +23,14 @@ En `typescript/tests/live-author-monitor-textarea-source.test.mjs`:
 - Simula dos `beforeinput` consecutivos, seguidos de un único `input`.
 - Verifica que no se emite ningún cambio, que `needsResync` pasa a `true` y que el diagnóstico es `missing-input`.
 
+## Prueba de integración Chromium
+
+Se amplió `tests/live-author-monitor-browser.test.mjs` para ejecutar el adaptador sobre un `HTMLTextAreaElement` real en Chromium y despachar eventos `InputEvent` del navegador:
+
+- Comprueba que un par `beforeinput`/`input` válido produce un delta con offset y reemplazo exactos.
+- Comprueba que dos `beforeinput` consecutivos suspenden la captura con `missing-input` y sin publicar un segundo delta.
+- Esta prueba valida el comportamiento de los eventos DOM reales, pero no simula un teclado físico ni sustituye pruebas manuales/automatizadas con IME del sistema operativo.
+
 ## Criterio de seguridad
 
 La captura solo publica cambios cuando puede asociar el evento posterior con el estado previo inmediato. Ante pérdida de emparejamiento, prefiere perder temporalmente continuidad y recuperar desde un snapshot autoritativo antes que inventar offsets o texto.
@@ -30,7 +38,8 @@ La captura solo publica cambios cuando puede asociar el evento posterior con el 
 ## Commits
 
 - Adaptador: `d335584f9414819ab135189ca397da56c0b194e7`
-- Prueba: `81d09653bc9d4fa80f0382621653ecc46578216a`
+- Prueba unitaria: `81d09653bc9d4fa80f0382621653ecc46578216a`
+- Integración Chromium: `99237414236e03f649cb72cdf401949067e9a4cf`
 
 ## Estado de validación
 

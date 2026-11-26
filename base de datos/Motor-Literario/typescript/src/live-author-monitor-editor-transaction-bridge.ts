@@ -114,11 +114,7 @@ implements LiveAuthorMonitorEditorTransactionProvider {
 
     // Copia solo los metadatos y el delta de la transacción; nunca el documento.
     // El objeto congelado evita que un listener altere lo que reciben los demás.
-    const immutableTransaction = Object.freeze({
-      transactionId: transaction.transactionId,
-      kind: transaction.kind,
-      change: Object.freeze({ ...transaction.change })
-    });
+    const immutableTransaction = this.freezeTransaction(transaction);
     const targets = [...subscribers];
     this.pendingPublications.push({
       documentId,
@@ -129,6 +125,41 @@ implements LiveAuthorMonitorEditorTransactionProvider {
     // Cuenta los listeners registrados al encolar; una publicación reentrante
     // queda en cola y conserva el orden de la publicación exterior.
     return targets.length;
+  }
+
+  /**
+   * Convierte payloads dinámicos inválidos en un evento centinela. El source
+   * conectado lo reconoce como transacción inválida y pausa el stream; nunca
+   * dejamos que un plugin rompa el callback nativo del editor.
+   */
+  private freezeTransaction(
+    transaction: unknown
+  ): LiveAuthorMonitorEditorTransaction {
+    try {
+      if (!transaction || typeof transaction !== "object") {
+        return transaction as LiveAuthorMonitorEditorTransaction;
+      }
+      const candidate = transaction as {
+        readonly transactionId?: unknown;
+        readonly kind?: unknown;
+        readonly change?: unknown;
+      };
+      const rawChange = candidate.change;
+      const change = rawChange && typeof rawChange === "object"
+        ? Object.freeze({ ...rawChange })
+        : rawChange;
+      return Object.freeze({
+        transactionId: candidate.transactionId,
+        kind: candidate.kind,
+        change
+      }) as LiveAuthorMonitorEditorTransaction;
+    } catch {
+      return Object.freeze({
+        transactionId: "",
+        kind: "edit",
+        change: Object.freeze({})
+      }) as unknown as LiveAuthorMonitorEditorTransaction;
+    }
   }
 
   private drainPublications(): void {

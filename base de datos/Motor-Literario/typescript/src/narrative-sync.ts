@@ -23,6 +23,8 @@ export interface SyncOperation {
 }
 
 export interface SyncOutboxPort {
+  /** Crea una operación con secuencia asignada por el almacén en una transacción atómica. */
+  enqueueNextSyncOperation?(draft: Omit<SyncOperation, "sequence">): Promise<SyncOperation>;
   loadPendingSyncOperations(projectId: string, limit?: number): Promise<readonly SyncOperation[]>;
   recordSyncOperationAttempt(
     operationId: string,

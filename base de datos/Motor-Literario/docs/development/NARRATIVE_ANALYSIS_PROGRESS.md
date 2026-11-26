@@ -243,3 +243,28 @@ La integración reveló que un handler tipado como `NarrativeSyncOperationHandle
 - Se ajustó la validación de estado para preservar el estrechamiento literal de TypeScript sin ensanchar la unión a `string`.
 
 **CI del HEAD observado:** GitHub devuelve listas vacías tanto para workflow runs asociados al commit como para estados de commit. El typecheck, build y suite de estas modificaciones continúan pendientes de ejecución automatizada; no se infiere aprobación por el hecho de que los commits estén publicados.
+
+
+## Continuación: ampliación de handlers de dominio (2026-11-26)
+
+### Frente E — afirmaciones narrativas
+
+- Añadido `createNarrativeAssertionUpsertHandler` para `assertion-upsert`.
+- Valida identidad, atributo, valor, evidencia textual y referencias temporales explícitas.
+- Persiste con `saveAssertionIfUnchanged`, comprueba el proyecto del sobre y soporta reintentos idempotentes tras la escritura previa al acuse.
+- Pruebas en `tests/narrative-sync-assertion-handler.test.mjs`.
+
+### Frente F — relaciones y acontecimientos
+
+- Añadidos `createNarrativeRelationUpsertHandler` y `createNarrativeEventUpsertHandler`.
+- Ambos aplican mutaciones CAS y rechazan payloads de otro proyecto.
+- Se validan IDs, tipo/etiqueta, participantes únicos, evidencia no vacía, rangos UTF-16 y referencias temporales sin mezclar calendario con contador de día narrativo.
+- Pruebas en `tests/narrative-sync-relation-event-handlers.test.mjs`.
+
+### Cobertura actual del dispatcher de dominio
+
+Handlers implementados para `idea-upsert`, `assertion-upsert`, `relation-upsert` y `event-upsert`. El handler de entidades y la reconciliación/borrado seguro de contribuciones documentales siguen pendientes.
+
+**Límites:** estas operaciones siguen siendo entrega al menos una vez; CAS protege cada registro, no forma una transacción entre varias entidades. Los IDs referenciados deben validarse también contra el proyecto en la capa de aplicación o store, antes de habilitar el transporte remoto. La validación SHA-256 no sustituye autenticación.
+
+**Validación automatizada:** se añadieron pruebas de integración, pero GitHub no ha reportado todavía workflow runs ni estados para los commits nuevos. No se declara build/typecheck/suite en verde.

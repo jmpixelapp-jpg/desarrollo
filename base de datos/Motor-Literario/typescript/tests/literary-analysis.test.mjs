@@ -800,6 +800,44 @@ test("la cronología de acontecimientos conserva contadores cuando recorta evide
   assert.equal(timeline.points[0].evidenceTruncated, true);
 });
 
+test("la cronología limita las muestras de identificadores de eventos y conserva el total", () => {
+  const knownProjectEvents = Array.from({ length: 55 }, (_, index) => ({
+    projectId: "literary-analysis-test",
+    eventId: "event-" + String(index + 1).padStart(3, "0"),
+    label: "Acontecimiento " + (index + 1),
+    participants: ["ana-id"],
+    timeReference: {
+      basis: "calendar",
+      precision: "year",
+      raw: "año 2030",
+      orderValue: 300
+    },
+    evidenceCount: 0,
+    staleEvidenceCount: 0,
+    evidence: []
+  }));
+  const result = analyzeLiteraryFragment({
+    projectId: "literary-analysis-test",
+    documentId: "chapter-one",
+    revision: 1,
+    text: "Escena 1\\nAna cruzó el umbral.",
+    knownCharacters: [{ entityId: "ana-id", canonicalName: "Ana" }],
+    knownProjectEvents
+  });
+  const timeline = result.characterNarrativeTrajectories.trajectories[0].projectEventTimeline;
+
+  assert.equal(timeline.sourceEventCount, 55);
+  assert.equal(timeline.pointCount, 1);
+  assert.equal(timeline.points[0].eventCount, 55);
+  assert.equal(timeline.points[0].eventIds.length, 50);
+  assert.equal(timeline.points[0].omittedEventIdCount, 5);
+  assert.deepEqual(timeline.points[0].eventIds, Array.from(
+    { length: 50 },
+    (_, index) => "event-" + String(index + 1).padStart(3, "0")
+  ));
+});
+
+
 test("integra relaciones actuales y decisiones de ideas vinculadas en la trayectoria", () => {
   const text = [
     "Escena 1",

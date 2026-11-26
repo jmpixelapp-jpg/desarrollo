@@ -928,3 +928,15 @@ Los tres fallos se concentran en `restoreCheckpoint()` y devuelven `ReferenceErr
 **Archivos:** `src/live-author-monitor-panel.ts`, `tests/live-author-monitor-diagnostics-isolation.test.mjs`, guía operativa y registro de progreso.
 
 **Validación:** pendiente de CI para el commit de esta entrega.
+
+## 52. Compatibilidad de las pruebas aisladas con npm test (25 de noviembre de 2026)
+
+**Problema:** la suite de regresiones diagnósticas importaba de forma estática `dist-monitor/live-author-monitor.js`. La lane focalizada genera ese archivo, pero el flujo general `npm test` solo genera `dist/motor-literario.js`; por ello Node marcaba el archivo de pruebas completo como fallido por no encontrar el bundle aislado.
+
+**Corrección:** la suite usa importación dinámica con fallback: primero intenta `dist-monitor` y, si no existe, importa `dist/motor-literario.js`. No se duplican tests ni se modifica el comando general.
+
+**Resultado de CI anterior a este ajuste:** en [Live Author Monitor — run 45746448030](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45746448030), el bundle aislado y sus 8 pruebas pasaron; la suite general del monitor terminó con 163/167 aprobadas y 4 fallidas: dos pruebas de fencing/recuperación del lease y dos pruebas de conteo de tarjetas del workspace. El benchmark fue omitido tras fallar la suite.
+
+En [Motor Literario TypeScript — run 45746447994](https://github.com/jmpixelapp-jpg/desarrollo/actions/runs/45746447994), el typecheck pasó, pero la suite general terminó con 748/754 aprobadas y 6 fallidas: las cuatro anteriores, el archivo de regresiones de diagnóstico por la ruta del bundle y una regresión del módulo de integridad narrativa.
+
+**Coordinación:** después de esa ejecución, `main` recibió `df9750c` (revalidación de fencing y leases) y `daeb8bd` (conteo correcto de tarjetas frente a elementos de métricas). No se modifican esos archivos desde esta entrega. Esta corrección restaura compatibilidad de la misma suite de diagnóstico con `npm test`.

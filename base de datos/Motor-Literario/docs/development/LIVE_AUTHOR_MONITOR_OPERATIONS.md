@@ -279,3 +279,9 @@ La validación se completa antes de insertar el panel o workspace en el contened
 Se rechazan estados desconocidos, timestamps negativos/no finitos, fencing tokens que no sean enteros seguros no negativos y códigos de error vacíos o mayores de 64 caracteres. Una excepción de getter/proxy devuelve `undefined`; el panel y el workspace presentan diagnóstico no disponible y mantienen las métricas de actividad.
 
 La regresión aislada valida copia inmutable frente a mutación del origen, getter que lanza excepción, estado futuro y metadatos fuera de rango. Los valores se renderizan con `textContent`; no se interpretan como HTML.
+
+## 17. Ejecución de las regresiones de diagnóstico en ambos flujos
+
+`tests/live-author-monitor-diagnostics-isolation.test.mjs` intenta importar primero `dist-monitor/live-author-monitor.js`, creado por la lane focalizada. Si ese bundle no está presente (por ejemplo, durante `npm test`, que solo construye `dist/`), la suite cae al bundle general `dist/motor-literario.js`.
+
+Así se conserva una única fuente de regresiones sin exigir a `npm test` que altere sus artefactos o scripts. En CI focalizada, el primer import debe funcionar; en CI general se usa la salida principal.

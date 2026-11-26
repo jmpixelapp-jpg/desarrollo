@@ -1,6 +1,6 @@
 # Persistencia narrativa, biblioteca de ideas y sincronización
 
-**Versión documental:** 1.5  
+**Versión documental:** 1.6  
 **Revisión de código de referencia:** `main` en `f99278768abb4fd0ad2fbb01dcc4bf4c49f1ed1f`  
 **Ámbito:** núcleo `base de datos/Motor-Literario/typescript`  
 **Lenguaje de implementación:** TypeScript/JavaScript puro  
@@ -396,8 +396,9 @@ La suite actual ejecuta validación de esquema, auditoría de almacenamiento y p
 | Ciclos de vida append-only | Presentes |
 | Checkpoints y leases del monitor | Presentes |
 | Outbox durable de sincronización | Implementada en IndexedDB v25 en esta rama |
+| Cursor monotónico por proyecto/dispositivo | Implementado; se conserva después del acuse |
 | Encolado automático/atómico de todas las mutaciones de dominio | Pendiente |
-| Diagnóstico de cuota y solicitud de persistencia | Implementado en la rama de trabajo; pendiente de CI final e integración |
+| Diagnóstico de cuota y solicitud de persistencia | Implementado y cubierto por prueba IndexedDB; CI global aún tiene fallos ajenos a esta API |
 | Transporte remoto y autenticación | Pendiente |
 | Descarga y reconciliación | Pendiente |
 | Resolución de conflictos multidispositivo | Pendiente |

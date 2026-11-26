@@ -213,3 +213,15 @@ Ejemplos:
 Esto impide tratar ambas frases como si expresaran la misma estructura lógica.
 
 **Límites deliberados:** el detector de polaridad proposicional es léxico y reconoce marcadores al comienzo del contenido extraído. No resuelve todavía alcance de negación subordinada, doble negación, ironía, litotes, presuposiciones ni negación implícita. Los resultados siguen siendo candidatos y requieren revisión contextual.
+
+
+## Fase O: integración de atribuciones en el pipeline de comprensión
+
+- `understandNarrativeFragment` ahora ejecuta `extractNarrativeAttributedClaims` junto con los demás extractores y devuelve `attributedClaims`.
+- Las afirmaciones atribuidas quedan disponibles en el resultado coordinado con documento, revisión, evidencia y offsets compartidos.
+- La polaridad del acto de atribuir y la polaridad de la proposición se mantienen separadas también en la salida integrada.
+- Se añadió una prueba de integración con dos personajes y negaciones de distinto alcance.
+
+Esto evita que el extractor de atribuciones exista como capacidad aislada que la aplicación principal nunca consulta.
+
+**Límite actual:** los verbos y patrones de atribución siguen siendo un catálogo español acotado; la atribución de citas anidadas, discurso indirecto libre, ironía, narrador no fiable, diálogos sin etiqueta y cambios de hablante todavía requiere módulos específicos y no se debe inferir por proximidad.

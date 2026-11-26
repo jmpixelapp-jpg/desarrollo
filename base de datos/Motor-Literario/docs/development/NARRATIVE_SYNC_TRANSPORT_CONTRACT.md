@@ -48,6 +48,6 @@ El anfitrión no debe borrar una operación por timeout, respuesta ambigua o con
 
 ## Pruebas añadidas
 
-`tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, coalescencia concurrente, persistencia del intento ante fallo de transporte, aislamiento de proyecto y validación del tamaño de lote.
+`tests/narrative-sync.test.mjs` cubre acuse selectivo, conservación de conflictos/reintentos, rechazo de IDs ajenos, coalescencia concurrente por proyecto, ejecución paralela entre proyectos, persistencia del intento ante fallo de transporte, aislamiento de proyecto y validación del tamaño de lote.
 
 La existencia de estos tests acredita cobertura escrita, no ejecución satisfactoria. La validación requiere `npm run typecheck` y `npm test` desde `typescript/`.

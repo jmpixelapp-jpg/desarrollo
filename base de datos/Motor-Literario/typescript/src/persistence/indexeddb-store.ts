@@ -5949,6 +5949,46 @@ export class IndexedDbProjectStore implements ProjectStore {
   }
 
   /**
+   * Retira un conjunto de operaciones confirmadas en una única transacción.
+   * Si cualquier lectura o borrado falla, IndexedDB revierte el lote completo.
+   */
+  async acknowledgeSyncOperations(operationIds: readonly string[]): Promise<number> {
+    if (!Array.isArray(operationIds) ||
+        operationIds.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(operationIds).size !== operationIds.length) {
+      throw new Error("La lista de identificadores para confirmar debe ser válida y no contener duplicados.");
+    }
+    if (operationIds.length === 0) return 0;
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(SYNC_OUTBOX, "readwrite");
+      const store = transaction.objectStore(SYNC_OUTBOX);
+      let acknowledged = 0;
+      let remaining = operationIds.length;
+      let failure: Error | undefined;
+      for (const operationId of operationIds) {
+        const request = store.get(operationId);
+        request.onsuccess = () => {
+          if (request.result !== undefined) {
+            acknowledged++;
+            store.delete(operationId);
+          }
+          remaining--;
+        };
+        request.onerror = () => {
+          failure = request.error ?? new Error("No se pudo leer un acuse de sincronización.");
+          try { transaction.abort(); } catch { /* transacción ya abortada */ }
+        };
+      }
+      transaction.oncomplete = () => resolve(acknowledged);
+      transaction.onerror = () => reject(failure ?? transaction.error ??
+        new Error("No se pudo confirmar el lote de sincronización."));
+      transaction.onabort = () => reject(failure ?? transaction.error ??
+        new Error("Se canceló la confirmación del lote de sincronización."));
+    });
+  }
+
+  /**
    * Inspección de solo lectura para detectar crecimiento anómalo y presión de cuota.
    * Los conteos y la estimación de cuota son orientativos; no sustituyen una copia
    * de seguridad exportada ni garantizan que el navegador no vaya a desalojar datos.
